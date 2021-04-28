@@ -1,0 +1,84 @@
+!!!COM: Janáček, Leoš [Leo Eugen]
+!!!OTL: Věc Makropulos (The Makropulos Affair), Opera in Three Acts
+!!!OMV: Act I, Prelude
+!!!example: 144
+!!!work: Jan-47
+**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam
+*grp:A	*grp:A	*grp:B	*grp:B	*grp:B	*grp:B	*grp:B	*grp:B	*grp:B	*grp:B
+*part13	*	*part12	*	*part11	*	*part10	*	*part9	*
+*staff13	*	*staff12	*	*staff11	*	*staff10	*	*staff9	*
+*ICidio	*	*ICbras	*	*ICbras	*	*ICbras	*	*ICbras	*
+*Itimpa	*	*Itromp	*	*Itromp	*	*Icor	*	*Icor	*
+*I"Timpani	*	*I"Trumpet in F II	*	*I"Trumpet in F I	*	*I"Horn in F II	*	*I"Horn in F I	*
+*I'Timp.	*	*I'F Tpt. II	*	*I'F Tpt. I	*	*I'F Hn. II	*	*I'F Hn. I	*
+*clefF4	*	*clefG2	*	*clefG2	*	*clefG2	*	*clefG2	*
+*	*	*ITrd-3c-5	*	*ITrd-3c-5	*	*ITrd4c7	*	*ITrd4c7	*
+*k[]	*	*k[b-]	*	*k[b-]	*	*k[b-]	*	*k[b-]	*
+*C:	*	*F:	*	*F:	*	*F:	*	*F:	*
+*M3/8	*	*M3/8	*	*M3/8	*	*M3/8	*	*M3/8	*
+!!LO:REH:t=4
+=38	=38	=38	=38	=38	=38	=38	=38	=38	=38
+!	!LO:DY:ed=	!	!LO:DY:ed=	!	!LO:DY:ed=	!	!LO:DY:ed=	!	!LO:DY:ed=
+!	!	!	!	!	!	!	!	!LO:TX:a:B:t=Più mosso ([eighth]=145, [quarter-dot]=48)	!
+!	!	!	!	!	!	!	!	!LO:TX:a:t=[Banda Interna (Offstage)]	!
+!	!	!	!	!	!	!	!	!LO:TUP:r=4	!
+8.A-XL	f	24ccLL	f	24ccLL	f	24cLL	f	24cLL	f
+.	.	24f	.	24b-	.	24F	.	24B-	.
+.	.	24e-XJJ	.	24e-XJJ	.	24E-XJJ	.	24E-XJJ	.
+.	.	24e-LL	.	24e-LL	.	24E-LL	.	24E-LL	.
+.	.	24f	.	24b-	.	24F	.	24B-	.
+16E-XJ	.	.	.	.	.	.	.	.	.
+.	.	24a-XJJ	.	24ccJJ	.	24A-XJJ	.	24cJJ	.
+!LO:TX:t=P:problem:over the barline beaming needs to be added to timpani part	!	!	!	!	!	!	!	!	!
+[8A-	.	8b-^^	.	8ee-X^^	.	8B-^^	.	8e-X^^	.
+=39	=39	=39	=39	=39	=39	=39	=39	=39	=39
+16A-LL]	.	24ccLL	.	24ccLL	.	24cLL	.	24cLL	.
+.	.	24f	.	24b-	.	24F	.	24B-	.
+16E-XJJ	.	.	.	.	.	.	.	.	.
+.	.	24e-XJJ	.	24e-XJJ	.	24E-XJJ	.	24E-XJJ	.
+8.A-XL	.	24e-LL	.	24e-LL	.	24E-LL	.	24E-LL	.
+.	.	24f	.	24b-	.	24F	.	24B-	.
+.	.	24ccJJ	.	24ccJJ	.	24cJJ	.	24cJJ	.
+.	.	8f^^	.	8b-^^	.	8F^^	.	8B-^^	.
+16E-Jk	.	.	.	.	.	.	.	.	.
+=40	=40	=40	=40	=40	=40	=40	=40	=40	=40
+8.A-XL	.	24ccLL	.	24ccLL	.	24cLL	.	24cLL	.
+.	.	24f	.	24b-	.	24F	.	24B-	.
+.	.	24e-XJJ	.	24e-XJJ	.	24E-XJJ	.	24E-XJJ	.
+.	.	24e-LL	.	24e-LL	.	24E-LL	.	24E-LL	.
+.	.	24f	.	24b-	.	24F	.	24B-	.
+16E-XkJ	.	.	.	.	.	.	.	.	.
+.	.	24a-XJJ	.	24ccJJ	.	24A-XJJ	.	24cJJ	.
+[8A-	.	8b-^^	.	8ee-X^^	.	8B-^^	.	8e-X^^	.
+=41	=41	=41	=41	=41	=41	=41	=41	=41	=41
+16A-LL]	.	24ccLL	.	24ccLL	.	24cLL	.	24cLL	.
+.	.	24f	.	24b-	.	24F	.	24B-	.
+16E-XJJ	.	.	.	.	.	.	.	.	.
+.	.	24e-XJJ	.	24e-XJJ	.	24E-XJJ	.	24E-XJJ	.
+8.A-XL	.	24cLL	.	24cLL	.	24CLL	.	24CLL	.
+.	.	24e-	.	24a-X	.	24E-	.	24A-X	.
+.	.	24gJJ	.	24b-JJ	.	24GJJ	.	24B-JJ	.
+.	.	[8a-X^^	.	[8a-X^^	.	[8A-X^^	.	[8A-X^^	.
+16E-Jk	.	.	.	.	.	.	.	.	.
+=	=	=	=	=	=	=	=	=	=
+*-	*-	*-	*-	*-	*-	*-	*-	*-	*-
+!!!system-decoration: [(s1,s2,s3,s4,s5,s6,s7)][(s8)][(s9,s10,s11,s12)][(s13)][(s14,s15,s16,s17,s18)]
+!!!CDT: 1854/07/03-1928/08/12
+!!!CBL: Hukvaldy, Moravia
+!!!CDL: Moravaská Ostrava, Czech Republic
+!!!CNT: Czech
+!!!AGN: Stage; Opera
+!!!MCN: Neumann, František
+!!!MDT: 1926/12/18
+!!!MGN: Orchestra of the Janáček Opera of the National Theatre Brno
+!!!MLC: Brno, Czechia
+!!!MPD: 1926
+!!!MPN: Čvanová, Alexandra
+!!!ODT: 1925
+!!!PDT: 1970
+!!!excerpt-start-measure: 38
+!!!excerpt-end-measure: 41
+!!!excerpt-start-time: 1:08
+!!!excerpt-end-time: 1:13
+!!!EEV: 2020/07/28
+!!!ONB: Converted from MusicXML on 2020/07/28

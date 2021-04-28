@@ -1,0 +1,1054 @@
+# ------------------------------------------------------------------------------
+# Name:          HumdrumFileContent.py
+# Purpose:       Used to add content analysis to HumdrumFileStructure class,
+#                and do other higher-level processing of Humdrum data.
+#
+# Authors:       Greg Chapman <gregc@mac.com>
+#                Humdrum code derived/translated from humlib (authored by
+#                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
+#
+# Copyright:     (c) 2021 Greg Chapman
+# License:       BSD, see LICENSE
+# ------------------------------------------------------------------------------
+import re
+
+from humdrum.HumNum import HumNum
+from humdrum.Convert import Convert
+from humdrum.HumdrumToken import HumdrumToken
+from humdrum.HumdrumFileBase import TokenPair
+from humdrum.HumdrumFileStructure import HumdrumFileStructure
+
+# spineColors array will contains slots for this many subtracks
+MAXCOLORSUBTRACK = 30
+
+class HumdrumFileContent(HumdrumFileStructure):
+    # HumdrumFileContent has no private data to initialize, just a bunch more functions
+    # So... no __init__.  Well, OK, to keep pylint happy about attribute-defined-outside-init,
+    # a quick __init__ that sets a few attributes that are already set in HumdrumFileBase.py
+    def __init__(self, fileName: str = None):
+        super().__init__(fileName) # initialize the HumdrumFileBase fields
+        self._hasInformalBreaks: bool = False
+        self._hasFormalBreaks: bool = False
+        self._spineColor: [[str]] = [] # [track][subtrack]
+
+    def readString(self, contents: str) -> bool:
+        if not super().readString(contents):
+            return self.isValid
+        return self.isValid
+        # return self.analyzeNotation() only needed if doing a conversion, so HumdrumFile.createM21Stream should call it
+
+    def analyzeNotation(self) -> bool:
+        # This code originally was in verovio/iohumdrum.cpp (by Craig Sapp)
+        # Here I am consolidating this into one HumdrumFileContent method which
+        # can be called from any client that wants notation support.
+
+        # Might be worth adding to HumdrumFileContent at some point
+#         m_multirest = analyzeMultiRest(infile);
+
+        self.analyzeBreaks()
+        self.analyzeSlurs()
+        self.analyzePhrasings()
+        self.analyzeKernTies()
+        # self.analyzeKernStemLengths()  # Don't know why this is commented out in iohumdrum.cpp
+        self.analyzeRestPositions()
+        self.analyzeKernAccidentals()
+        self.analyzeTextRepetition()
+
+#         if (m_signifiers.terminallong) {
+#             hideTerminalBarlines(infile);
+#         }
+#         checkForColorSpine(infile); # interesting to move here
+        self.analyzeRScale()
+#         self.analyzeCrossStaffStemDirections(); # iohumdrum calls this but it belongs in engraving, not in import
+#         self.analyzeBarlines(); # iohumdrum calls this to deal with measure vs barline in MEI.
+#         analyzeClefNulls(infile); # necessary for MEI/Verovio, might not be necessary for music21
+#         if (infile.hasDifferentBarlines()) {
+#             adjustMeasureTimings(infile); # Interesting to move here, but confuses me (why?)
+#         }
+        self.initializeSpineColor()
+#         initializeIgnoreVector(infile); # interesting to move here
+
+#         extractNullInformation(m_nulls, infile); # might be interesting?  Perhaps very MEI-specific.
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::analyzeBreaks -- Returns true if there are page or
+    //   system breaks in the data.
+
+        Actually sets self._hasFormalBreaks and self._hasInformalBreaks
+    '''
+    def analyzeBreaks(self):
+        # check for informal breaking markers such as:
+        # !!pagebreak:original
+        # !!linebreak:original
+        for line in self._lines:
+            if not line.isGlobalComment:
+                continue
+
+            if line[0].text.startswith('!!pagebreak:'):
+                self._hasInformalBreaks = True
+                break
+
+            if line[0].text.startswith('!!linebreak:'):
+                self._hasInformalBreaks = True
+                break
+
+        # check for formal breaking markers such as:
+        # !!LO:PB:g=original
+        # !!LO:LB:g=original
+        # !LO:PB:g=original
+        # !LO:LB:g=original
+        for line in self._lines:
+            if not line.isComment:
+                continue
+
+            if '!LO:LB' in line[0].text:
+                self._hasFormalBreaks = True
+                break
+
+            if '!LO:PB' in line[0].text:
+                self._hasFormalBreaks = True
+                break
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeSlurs -- Link start and ends of
+    //    slurs to each other.
+    '''
+    def analyzeSlurs(self) -> bool:
+        if self._analyses.slursAnalyzed:
+            return False
+
+        self._analyses.slursAnalyzed = True
+
+        output: bool = True
+        output = output and self.analyzeSlursOrPhrases(HumdrumToken.SLUR, '**kern')
+        output = output and self.analyzeSlursOrPhrases(HumdrumToken.SLUR, '**mens')
+        return output
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzePhrasings -- Link start and ends of
+    //    phrases to each other.
+    '''
+    def analyzePhrasings(self) -> bool:
+        if self._analyses.phrasesAnalyzed:
+            return False
+
+        self._analyses.phrasesAnalyzed = True
+
+        output: bool = True
+        output = output and self.analyzeSlursOrPhrases(HumdrumToken.PHRASE, '**kern')
+        return output
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeMensSlurs -- Link start and ends of
+    //    slurs to each other.  They are the same as **kern, so borrowing
+    //    analyzeKernSlurs to do the analysis.
+
+        analyzeKernSlurs, analyzeMensSlurs, and analyzeKernPhrases (and their
+        support functions) are almost completely identical, so I am combining
+        them all into one parameterized set of functions. --gregc 17feb2021
+
+        analyzeSlursOrPhrases takes two params:
+            slurOrPhrase - HumdrumToken.SLUR or HumdrumToken.PHRASE
+            spineDataType - '**kern' or '**mens'
+
+            SLUR and PHRASE are defined (and used) in HumdrumToken.py, where I have
+            combined the {slur,phrase}{Start,End}ElisionLevel functions into the
+            startElisionLevel(slurOrPhrase, index) and
+            endElisionLevel(slurOrPhrase, index)
+    '''
+    def analyzeSlursOrPhrases(self, slurOrPhrase: str, spineDataType: str) -> bool:
+        # labels: first is previous label, last is next label
+        labels: [TokenPair] = [TokenPair(None, None)] * self.lineCount
+        l: [HumdrumToken] = [None] * self.lineCount
+
+        for i, line in enumerate(self._lines):
+            if not line.isInterpretation:
+                continue
+            token = line[0]
+            if token.text.startswith('*>') and '[' not in token.text:
+                l[i] = token
+
+        current: HumdrumToken = None
+        for i, label in enumerate(l):
+            if label is not None:
+                current = label
+            labels[i].first = current
+
+        current = None
+        for i, label in enumerate(reversed(l)):
+            if label is not None:
+                current = label
+            labels[i].last = current
+
+        endings: [int] = [0] * self.lineCount
+        ending: int = 0
+        for i, label in enumerate(l):
+            if label is not None:
+                ending = 0
+                lastChar = label.text[-1]
+                if lastChar.isdigit():
+                    ending = int(lastChar)
+            endings[i] = ending
+
+        spineStarts: [HumdrumToken] = self.spineStartListOfType(spineDataType)
+        output: bool = True
+        slurStarts: [HumdrumToken] = []
+        slurEnds: [HumdrumToken] = []
+        linkSignifier: str = self._signifiers.linked
+        for spineStart in spineStarts:
+            output = output and self.analyzeSpineSlursOrPhrases(slurOrPhrase,
+                                                  spineStart,
+                                                  slurStarts,
+                                                  slurEnds,
+                                                  labels,
+                                                  endings,
+                                                  linkSignifier)
+
+        self.createLinkedSlursOrPhrases(slurOrPhrase, slurStarts, slurEnds)
+        return output
+
+    def analyzeSpineSlursOrPhrases(self,
+                     slurOrPhrase: str,
+                     spineStart: HumdrumToken,
+                     linkStarts: [HumdrumToken],
+                     linkEnds: [HumdrumToken],
+                     labels: [TokenPair],
+                     endings: [int],
+                     linkSig: str) -> bool:
+        beginStr: str = ''
+        endStr: str = ''
+        endingBackTag: str = ''
+        sideTag: str = ''
+        durationTag: str = ''
+        hangingTag: str = ''
+        openIndexTag: str = ''
+
+        if slurOrPhrase == HumdrumToken.SLUR:
+            beginStr = '('
+            endStr = ')'
+            endingBackTag = 'endingSlurBack'
+            sideTag = 'slurSide'
+            durationTag = 'slurDuration'
+            hangingTag = 'hangingSlur'
+            openIndexTag = 'slurOpenIndex'
+        elif slurOrPhrase == HumdrumToken.PHRASE:
+            beginStr = '{'
+            endStr = '}'
+            endingBackTag = 'endingPhraseBack'
+            sideTag = 'phraseSide'
+            durationTag = 'phraseDuration'
+            hangingTag = 'hangingPhrase'
+            openIndexTag = 'phraseOpenIndex'
+        else:
+            return False
+
+        # linked phrases/slurs handled separately, so generate an ignore sequence:
+        ignoreBegin: str = linkSig + beginStr
+        ignoreEnd: str = linkSig + endStr
+
+        # tracktokens == the 2-D data list for the track,
+        # arranged in layers with the second dimension.
+        trackTokens: [[HumdrumToken]] = self.getTrackSequence(
+                                            startToken = spineStart,
+                                            options = self.OPT_DATA | self.OPT_NOEMPTY)
+
+        # opens == list of phrase/slur openings for each track and elision level
+        # first dimension: elision level (max: 4)
+        # second dimension: layer number (max: 8)
+        opens: [[[HumdrumToken]]] = [[[]] * 8] * 4
+
+        openCount: int = 0
+        closeCount: int = 0
+        elision: int = 0
+
+        for rowOfTokens in trackTokens:
+            for track, token in enumerate(rowOfTokens):
+                if not token.isData:
+                    continue
+                if token.isNull:
+                    continue
+                openCount = token.text.count('(')
+                closeCount = token.text.count(')')
+
+                for i in range(0, closeCount):
+                    if self._isLinkedSlurOrPhraseEnd(slurOrPhrase, token, i, ignoreEnd):
+                        linkEnds.append(token)
+                        continue
+
+                    elision = token.endElisionLevel(slurOrPhrase, i)
+                    if elision < 0:
+                        continue
+
+                    if opens[elision][track]: # not empty list of slur/phrase opens
+                        self._linkSlurOrPhraseEndpoints(slurOrPhrase, opens[elision][track][-1], token)
+                        # remove that last slur/phrase opening from buffer
+                        opens[elision][track] = opens[elision][track][:-1]
+                    else:
+                        # No starting slur/phrase marker to match to this slur/phrase end in the
+                        # given track.
+                        # search for an open slur/phrase in another track:
+                        found: bool = False
+                        for iTrack in range(0, len(opens[elision])):
+                            if opens[elision][iTrack]: # not empty list of slur/phrase opens
+                                self._linkSlurOrPhraseEndpoints(slurOrPhrase,
+                                                               opens[elision][iTrack][-1],
+                                                               token)
+                                # remove slur/phrase opening from buffer
+                                opens[elision][iTrack] = opens[elision][iTrack][:-1]
+                                found = True
+                                break
+                        if not found:
+                            lineIndex: int = token.lineIndex
+                            endNum: int = endings[lineIndex]
+                            pIndex: int = -1
+                            if labels[lineIndex].first is not None:
+                                pIndex = labels[lineIndex].first.lineIndex - 1
+
+                            endNumPre: int = -1
+                            if pIndex >= 0:
+                                endNumPre = endings[pIndex]
+
+                            if endNumPre > 0 and endNum > 0 and endNumPre != endNum:
+    							# This is a slur/phrase in an ending that start at the start of an ending.
+                                duration: HumNum = token.durationFromStart
+                                if labels[token.lineIndex].first is not None:
+                                    duration -= labels[token.getLineIndex].first.durationFromStart
+                                token.setValue('auto', endingBackTag, 'true')
+                                token.setValue('auto', sideTag, 'stop')
+                                token.setValue('auto', durationTag, token.durationToEnd)
+                            else:
+                                # This is a slur/phrase closing that does not have a matching opening.
+                                token.setValue('auto', hangingTag, 'true')
+                                token.setValue('auto', sideTag, 'stop')
+                                token.setValue('auto', openIndexTag, str(i))
+                                token.setValue('auto', durationTag, token.durationToEnd)
+
+                for i in range(0, openCount):
+                    if self._isLinkedSlurOrPhraseBegin(slurOrPhrase, token, i, ignoreBegin):
+                        linkStarts.append(token)
+                        continue
+                    elision = token.startElisionLevel(slurOrPhrase, i)
+                    if elision < 0:
+                        continue
+                    opens[elision][track].append(token)
+
+        # Mark unclosed slur/phrase starts:
+        for elisionOpens in opens:
+            for trackOpens in elisionOpens:
+                for openToken in trackOpens:
+                    openToken.setValue('', 'auto', hangingTag, 'true')
+                    openToken.setValue('', 'auto', sideTag, 'start')
+                    openToken.setValue('', 'auto', durationTag, openToken.durationFromStart)
+
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::createLinkedSlurs --  Currently assume that
+    //    start and ends are matched.
+    '''
+    def createLinkedSlursOrPhrases(self, slurOrPhrase: str, linkStarts: [HumdrumToken], linkEnds: [HumdrumToken]):
+        shortest: int = len(linkStarts)
+        if shortest > len(linkEnds):
+            shortest = len(linkEnds)
+        if shortest == 0:
+            # nothing to do
+            return
+
+        for i in range(0, shortest):
+            self._linkSlurOrPhraseEndpoints(slurOrPhrase, linkStarts[i], linkEnds[i])
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::isLinkedSlurEnd --
+    '''
+    @staticmethod
+    def _isLinkedSlurOrPhraseEnd(slurOrPhrase: str, token: HumdrumToken, index: int, pattern: str) -> bool:
+        endStr: str = ''
+        if slurOrPhrase == HumdrumToken.SLUR:
+            endStr = ')'
+        elif slurOrPhrase == HumdrumToken.PHRASE:
+            endStr = '}'
+        else:
+            return False
+
+        if pattern is None or len(pattern) <= 1:
+            return False
+
+        counter: int = -1
+        for i in range(0, len(token.text)):
+            if token.text[i] == endStr:
+                counter += 1
+
+            if i == 0:
+                # Can't have linked slur at starting index in string.
+                continue
+
+            if counter != index:
+                continue
+
+            startIndex: int = 1 - len(pattern) + 1
+            if token.text[startIndex:].startswith(pattern):
+                return True
+            return False
+
+        return False # I don't think you can get here, unless token.text = ''
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::isLinkedSlurBegin --
+    '''
+    @staticmethod
+    def _isLinkedSlurOrPhraseBegin(slurOrPhrase: str, token: HumdrumToken, index: int, pattern: str) -> bool:
+        startStr: str = slurOrPhrase
+
+        if pattern is None or len(pattern) <= 1:
+            return False
+
+        counter: int = -1
+        for i in range(0, len(token.text)):
+            if token.text[i] == startStr:
+                counter += 1
+
+            if i == 0:
+                continue
+
+            if counter != index:
+                continue
+
+            startIndex = i - len(pattern) + 1
+            if pattern in token.text[startIndex:]:
+                return True
+            return False
+        return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::linkSlurEndpoints --  Allow up to two slur starts/ends
+    //      on a note.
+    '''
+    @staticmethod
+    def _linkSlurOrPhraseEndpoints(slurOrPhrase: str, startTok: HumdrumToken, endTok: HumdrumToken):
+        if slurOrPhrase == HumdrumToken.SLUR:
+            prefix = 'slur'
+        else:
+            prefix = 'phrase'
+
+        durTag: str = prefix + 'Duration'
+        endTag: str = prefix + 'EndId'
+        startTag: str = prefix + 'StartId'
+        startNumberTag: str = prefix + 'StartNumber'
+        endNumberTag: str = prefix + 'EndNumber'
+        startCountTag: str = prefix + 'StartCount'
+        endCountTag: str = prefix + 'EndCount'
+
+
+
+        startCount: int = startTok.getValueInt('auto', startCountTag) + 1
+        openCount: int = startTok.text.count(slurOrPhrase)
+        openEnumeration = openCount - startCount + 1
+
+        if openEnumeration > 1:
+            suffix: str = str(openEnumeration)
+            endTag += suffix
+            durTag += suffix
+
+        endCount: int = endTok.getValueInt('auto', endCountTag) + 1
+        closeEnumeration: int = endCount
+        if closeEnumeration > 1:
+            suffix: str = str(closeEnumeration)
+            startTag += suffix
+            startNumberTag += suffix
+
+        duration: HumNum = endTok.durationFromStart - startTok.durationFromStart
+
+        startTok.setValue('auto', endTag, endTok)
+        startTok.setValue('auto', 'id', startTok)
+        startTok.setValue('auto', endNumberTag, closeEnumeration)
+        startTok.setValue('auto', durTag, duration)
+        startTok.setValue('auto', startCountTag, startCount)
+
+        endTok.setValue('auto', startTag, startTok)
+        endTok.setValue('auto', 'id', endTok)
+        endTok.setValue('auto', startNumberTag, openEnumeration)
+        endTok.setValue('auto', endCountTag, endCount)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeKernTies -- Link start and ends of
+    //    ties to each other.
+    '''
+    def analyzeKernTies(self) -> bool:
+        output: bool = True
+        linkedTieStarts: [tuple] = [] # each tuple is (HumdrumToken, int)
+        linkedTieEnds: [tuple] = [] # each tuple is (HumdrumToken, int)
+        linkSignifier: str = self._signifiers.linked
+
+        output = self.generateLinkedTieStartsAndEnds(linkedTieStarts, linkedTieEnds, linkSignifier)
+        self.createLinkedTies(linkedTieStarts, linkedTieEnds)
+        return output
+
+    '''
+    // Could be generalized to allow multiple grand-staff pairs by limiting
+    // the search spines for linking (probably with *part indications).
+    // Currently all spines are checked for linked ties.
+    '''
+
+    def generateLinkedTieStartsAndEnds(self,
+                                       linkedTieStarts: [tuple],
+                                       linkedTieEnds: [tuple],
+                                       linkSignifier: str) -> bool:
+        # Use this in the future to limit to grand-staff search (or 3 staves for organ):
+        # vector<vector<HTp> > tracktokens;
+        # this->getTrackSeq(tracktokens, spinestart, OPT_DATA | OPT_NOEMPTY);
+
+        # Only analyzing linked ties for now (others ties are handled without analysis in
+        # HumdrumFile.createMusic21Stream, for example).
+        if linkSignifier is None or linkSignifier == '':
+            return True
+
+        lstart: str     = linkSignifier + '['
+        lmiddle: str    = linkSignifier + '_'
+        lend: str       = linkSignifier + ']'
+
+        startDatabase: [tuple] = [(None,-1)] * 400
+
+        for line in self._lines:
+            if not line.isData:
+                continue
+
+            for tok in line.tokens():
+                if not tok.isKern:
+                    continue
+                if not tok.isData:
+                    continue
+                if tok.isNull:
+                    continue
+                if tok.isRest:
+                    continue
+
+                for subtokenIdx, subtokenStr in enumerate(tok.subtokens):
+                    if lstart in subtokenStr:
+                        b40: int = Convert.kernToBase40(subtokenStr)
+                        startDatabase[b40] = (tok, subtokenIdx)
+
+                    if lend in subtokenStr:
+                        b40: int = Convert.kernToBase40(subtokenStr)
+                        if startDatabase[b40][0] is not None:
+                            linkedTieStarts.append(startDatabase[b40])
+                            linkedTieEnds.append( (tok, subtokenIdx) )
+                            startDatabase[b40] = (None, -1)
+
+                    if lmiddle in subtokenStr:
+                        b40: int = Convert.kernToBase40(subtokenStr)
+                        if startDatabase[b40][0] is not None:
+                            linkedTieStarts.append(startDatabase[b40])
+                            linkedTieEnds.append( (tok, subtokenIdx) )
+                        startDatabase[b40] = (tok, subtokenIdx)
+
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::createLinkedTies --
+    '''
+    def createLinkedTies(self, linkStarts: [tuple], linkEnds: [tuple]): # tuples are (token, int)
+        shortest = len(linkStarts)
+        if shortest > len(linkEnds):
+            shortest = len(linkEnds)
+        if shortest == 0:
+            # nothing to do
+            return
+
+        for i in range(0, shortest):
+            self._linkTieEndpoints(linkStarts[i][0], linkStarts[i][1], linkEnds[i][0], linkEnds[i][1])
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::linkTieEndpoints --
+    '''
+    @staticmethod
+    def _linkTieEndpoints(tieStart: HumdrumToken, startSubtokenIdx: int,
+                          tieEnd: HumdrumToken,   endSubtokenIdx: int):
+        durTag: str         = 'tieDuration'
+        startTag: str       = 'tieStart'
+        endTag: str         = 'tieEnd'
+        startNumTag: str    = 'tieStartSubtokenNumber'
+        endNumTag: str      = 'tieEndSubtokenNumber'
+
+        startSubtokenNumber: int    = startSubtokenIdx + 1
+        endSubtokenNumber: int      = endSubtokenIdx + 1
+
+        if tieStart.isChord:
+            if startSubtokenNumber > 0:
+                suffix: str = str(startSubtokenNumber)
+                durTag += suffix
+                endNumTag += suffix
+                endTag += suffix
+
+        if tieEnd.isChord:
+            if endSubtokenNumber > 0:
+                suffix: str = str(endSubtokenNumber)
+                startTag += suffix
+                startNumTag += suffix
+
+        tieStart.setValue('auto', endTag, tieEnd)
+        tieStart.setValue('auto', 'id', tieStart)
+        if endSubtokenNumber > 0:
+            tieStart.setValue('auto', endNumTag, str(endSubtokenNumber))
+
+        tieEnd.setValue('auto', startTag, tieStart)
+        tieEnd.setValue('auto', 'id', tieEnd)
+        if startSubtokenNumber > 0:
+            tieEnd.setValue('auto', startNumTag, str(startSubtokenNumber))
+
+        duration: HumNum = tieEnd.durationFromStart - tieStart.durationFromStart
+        tieStart.setValue('auto', durTag, duration)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeRestPositions -- Calculate the vertical position
+    //    of rests on staves with two layers.
+    '''
+    def analyzeRestPositions(self):
+        # I will not be assigning implicit vertical rest positions to workaround
+        # verovio's subsequent adjustments.  I will just be noting explicit vertical
+        # rest positions.  --gregc
+        self.checkForExplicitVerticalRestPositions()
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::checkForExplicitVerticalRestPositions -- Starting at the
+    //     current layer, check all rests in the same track for vertical positioning.
+    '''
+    def checkForExplicitVerticalRestPositions(self):
+        defaultBaseline = Convert.kernClefToBaseline('*clefG2') # default to treble clef
+        baselines: [int] = [defaultBaseline] * (self.maxTrack + 1)
+        for line in self._lines:
+            if line.isInterpretation:
+                for tok in line.tokens():
+                    if not tok.isKern:
+                        continue
+                    if not tok.isClef:
+                        continue
+
+                    baselines[tok.track] = Convert.kernClefToBaseline(tok.text)
+
+            if not line.isData:
+                continue
+
+            for tok in line.tokens():
+                if not tok.isKern:
+                    continue
+                if not tok.isRest:
+                    continue
+
+                self._checkRestForVerticalPositioning(tok, baselines[tok.track])
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::checkRestForVerticalPositioning -- Read any pitch information attached to
+    //     a rest and convert to ploc/oloc values.
+
+        Instead of ploc and oloc for MEI (which humlib does), compute and save what the
+        absoluteY for music21 should be.
+    '''
+    @staticmethod
+    def _checkRestForVerticalPositioning(rest: HumdrumToken, baseline: int) -> bool:
+        m = re.search(r'([A-Ga-g]+)', rest.text)
+        if m is None:
+            return False
+
+        pitch: str = m.group(1)
+        b7: int = Convert.kernToBase7(pitch)
+
+        diff: int = (b7 - baseline) + 100
+        if diff % 2 != 0:
+            # force to every other diatonic step (staff lines)
+            if rest.duration > 1:
+                b7 -= 1
+            else:
+                b7 += 1
+
+        # Instead of ploc and oloc for MEI (which humlib does), compute and save what the
+        # absoluteY for music21 should be.
+        # absoluteY = 0 means "on the top line", -5 means "in the top space", -10 means
+        # "on the second line", etc.  Leger lines can be used as well: absoluteY = 10
+        # means "on the first leger line above the staff".
+        # baseline is the base7 pitch of the lowest line in the staff -> absoluteY = -40
+        # b7 is the base7 pitch (including octave) of where the rest should go, so:
+        topline: int = baseline + 8 # topline is 4 spaces + 4 lines (8 diatonic steps) above baseline
+        absoluteY = (b7 - topline) * 5 # 5 for each diatonic step because 10 for each line
+
+        rest.setValue('auto', 'absoluteY', str(absoluteY))
+
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeKernAccidentals -- Identify accidentals that
+    //    should be printed (only in **kern spines) as well as cautionary
+    //    accidentals (accidentals which are forced to be displayed but otherwise
+    //    would not be printed.  Algorithm assumes that all secondary tied notes
+    //    will not display their accidental across a system break.  Consideration
+    //    about grace-note accidental display still needs to be done.
+    '''
+    def analyzeKernAccidentals(self) -> bool:
+        # ottava marks must be analyzed first:
+        self.analyzeOttavas()
+
+        # We will mark a "visible accidental" in four (Humdrum) situations:
+        # 1. there is an 'n' specified with no "hidden" mark (a 'y' immediately
+        #    following the 'n', or a 'yy' anywhere in the token)
+        # 2. there is a single 'X' immediately following the '#', '-', or 'n'
+        # 3. There is an editorial accidental signifier character immediately following
+        #    the '#', '-', or 'n'.  We will also obey the edittype in the signifier.
+        # 4. There is a linked layout param (('N', 'acc') and ('A', 'vis')) to specify
+        #    display of a specific accidental (or combination, such as 'n#')
+
+        # These are a part of what Verovio does.  I believe the rest of what Verovio does
+        # is clearly about rendering decisions based on key signature and previous accidentals
+        # in the measure, and thus belong in a renderer, not in a converter.
+
+        for line in self._lines:
+            if not line.hasSpines:
+                continue
+
+            if not line.isData:
+                continue
+
+            for token in line.tokens():
+                if not token.isKern:
+                    continue
+
+                if token.isNull:
+                    continue
+
+                if token.isRest:
+                    continue
+
+                for k, subtok in enumerate(token.subtokens):
+                    accid: int = Convert.kernToAccidentalCount(subtok)
+                    isHidden = False
+                    if 'yy' not in subtok: # if note is hidden accidental hiding isn't necessary
+                        if 'ny' in subtok or \
+                            '#y' in subtok or \
+                            '-y' in subtok:
+                            isHidden = True
+
+                    if accid == 0 and 'n' in subtok and not isHidden:
+                        # if humdrum data specifies 'n', we'll put in a cautionary accidental
+                        token.setValue('auto', str(k), 'cautionaryAccidental', 'true')
+                        token.setValue('auto', str(k), 'visualAccidental', 'true')
+                    elif 'XX' not in subtok:
+                        # The accidental is not necessary. See if there is a single "X"
+                        # immediately after the accidental which means to force it to
+                        # display.
+                        if '#X' in subtok or '-X' in subtok or 'nX' in subtok:
+                            token.setValue('auto', str(k), 'cautionaryAccidental', 'true')
+                            token.setValue('auto', str(k), 'visualAccidental', 'true')
+
+                    # editorialAccidental analysis should go here...
+
+                    # layout parameters (('N', 'acc') and ('A', 'vis')) can also be used
+                    # to specify a specific accidental or combination to be made visible.
+                    # 'A', 'vis' takes priority over 'N', 'acc', if both are present
+                    layoutAccidental: str = token.layoutParameter('A', 'vis', k)
+                    if not layoutAccidental:
+                        layoutAccidental = token.layoutParameter('N', 'acc', k)
+                    if layoutAccidental:
+                        token.setValue('auto', str(k), 'cautionaryAccidental', layoutAccidental)
+                        token.setValue('auto', str(k), 'visualAccidental', layoutAccidental)
+
+
+        # Indicate that the accidental analysis has been done:
+        self.setValue('auto', 'accidentalAnalysis', 'true')
+
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeOttavas --
+
+        analyzeOttavas reads any 8va-type data, and makes a note of it in each affected token.
+        Q: octaveState assumes no nesting of ottavas, but activeOttava is all about
+        Q: handling nesting of ottavas. --gregc
+    '''
+    def analyzeOttavas(self):
+        trackCount:   int   = self.maxTrack
+        activeOttava: [int] = [0] * (trackCount+1) # 0th element goes unused
+        octaveState:  [int] = [0] * (trackCount+1) # ditto
+
+        for line in self._lines:
+            if line.isInterpretation:
+                for token in line.tokens():
+                    if not token.isKern:
+                        continue
+                    if token.text == '*8va':
+                        octaveState[token.track] = +1
+                        activeOttava[token.track] += 1
+                    elif token.text == '*X8va':
+                        octaveState[token.track] = 0
+                        activeOttava[token.track] -= 1
+                    elif token.text == '*8ba':
+                        octaveState[token.track] = -1
+                        activeOttava[token.track] += 1
+                    elif token.text == '*X8ba':
+                        octaveState[token.track] = 0
+                        activeOttava[token.track] -= 1
+                    elif token.text == '*15ma':
+                        octaveState[token.track] = +2
+                        activeOttava[token.track] += 1
+                    elif token.text == '*X15ma':
+                        octaveState[token.track] = 0
+                        activeOttava[token.track] -= 1
+                    elif token.text == '*15ba':
+                        octaveState[token.track] = -2
+                        activeOttava[token.track] += 1
+                    elif token.text == '*X15ba':
+                        octaveState[token.track] = 0
+                        activeOttava[token.track] -= 1
+            elif line.isData:
+                for token in line.tokens():
+                    if not token.isKern:
+                        continue
+                    if activeOttava[token.track] == 0: # if nesting level is 0
+                        continue
+                    if octaveState[token.track] == 0: # if octave adjustment is 0
+                        continue
+                    if token.isNull:
+                        continue
+                    # do not exclude rests, since the vertical placement of the rest
+                    # on the staff may need to be updated by the ottava mark.
+                    #if token.isRest:
+                        #continue
+
+                    token.setValue('auto', 'ottava', str(octaveState[token.track]))
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeTextRepetition -- Look for *ij and *Xij markers
+    //     that indicate repetition marks.  values added to text:
+    //      	auto/ij=true: the syllable is in an ij region.
+    //      	auto/ij-begin=true: the syllable is the first in an ij region.
+    //      	auto/ij-end=true: the syllable is the last in an ij region.
+    //
+    // Returns true if there are any *ij/*Xij markers in the data.
+    '''
+    def analyzeTextRepetition(self):
+        spineStarts: [HumdrumToken] = self.spineStartList
+
+        for start in spineStarts:
+            ijstate: bool = False
+            startij: bool = False
+            lastIJToken: HumdrumToken = None # last token seen in ij range
+
+            # BUGFIX: **sylb -> **silbe
+            if not start.isDataType('**text') and not start.isDataType('**silbe'):
+                continue
+
+            current: HumdrumToken = start
+            while current is not None:
+                if current.isNull:
+                    current = current.nextToken(0)
+                    continue
+
+                if current.isInterpretation:
+                    if current.text == '*ij':
+                        startij = True
+                        ijstate = True
+                    elif current.text == '*Xij':
+                        startij = False
+                        ijstate = False
+                        if lastIJToken is not None:
+                            lastIJToken.setValue('auto', 'ij-end', 'true')
+                            lastIJToken = None
+                    current = current.nextToken(0)
+                    continue
+
+                if current.isData:
+                    if ijstate:
+                        current.setValue('auto', 'ij', 'true')
+                        if startij:
+                            current.setValue('auto', 'ij-begin', 'true')
+                            startij = False
+                        lastIJToken = current
+
+                current = current.nextToken(0)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::analyzeRScale --
+    '''
+    def analyzeRScale(self) -> bool:
+        numActiveTracks: int = 0 # number of tracks currently having an active rscale parameter
+        rscales: [HumNum] = [HumNum(1)] * (self.maxTrack+1)
+
+        for line in self._lines:
+            if line.isInterpretation:
+                for token in line.tokens():
+                    if not token.isKern:
+                        continue
+
+                    if not token.text.startswith('*rscale:'):
+                        continue
+
+                    value: HumNum = HumNum(1)
+                    m = re.search(r'\*rscale:(\d+)/(\d+)', token.text)
+                    if m is not None:
+                        top: int = int(m.group(1))
+                        bot: int = int(m.group(2))
+                        value = HumNum(top, bot)
+                    else:
+                        m = re.search(r'\*rscale:(\d+)', token.text)
+                        if m is not None:
+                            top = int(m.group(1))
+                            value = HumNum(top, 1)
+
+                    if value == 1:
+                        if rscales[token.track] != 1:
+                            rscales[token.track] = HumNum(1)
+                            numActiveTracks -= 1
+                    else:
+                        if rscales[token.track] == 1:
+                            numActiveTracks += 1
+                        rscales[token.track] = value
+                continue
+
+            if numActiveTracks == 0:
+                continue
+
+            if not line.isData:
+                continue
+
+            for token in line.tokens():
+                if rscales[token.track] == 1:
+                    continue
+                if not token.isKern:
+                    continue
+                if token.isNull:
+                    continue
+                if token.duration < HumNum(0):
+                    continue
+
+                dur: HumNum = token.durationNoDots * rscales[token.track]
+                vis: str = Convert.durationToRecip(dur)
+                vis += '.' * token.dotCount
+                token.setValue('LO', 'N', 'vis', vis)
+                token.rscale = rscales[token.track] # in case we need to know later
+
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::initializeSpineColor -- Look for *color: interpretations before data.
+
+        This only looks at the beginning of the file, before any data tokens.
+        Later, we will update self._spineColor when necessary as we process the file.
+
+    '''
+    def initializeSpineColor(self):
+        self._spineColor = [[''] * MAXCOLORSUBTRACK] * (self.maxTrack + 1)
+        for line in self.lines():
+            if line.isData:
+                break
+
+            if not line.isInterpretation:
+                continue
+
+            if '*color:' not in line.text:
+                continue
+
+            for token in line.tokens():
+                self.setSpineColorFromColorInterpToken(token)
+
+    '''
+        setSpineColorFromColorInterpToken - factored from several places in HumdrumFileContent.py
+        and HumdrumFile.py
+    '''
+    def setSpineColorFromColorInterpToken(self, token: HumdrumToken):
+        m = re.search(r'^\*color:(.*)', token.text)
+        if m:
+            ctrack: int = token.track
+            strack: int = token.subtrack
+            if strack < MAXCOLORSUBTRACK:
+                self._spineColor[ctrack][strack] = m.group(1)
+                if strack == 1:
+                    # copy it to subtrack 0 as well
+                    self._spineColor[ctrack][0] = m.group(1)
+                elif strack == 0:
+                    # copy it to all subtracks
+                    for z in range(1, MAXCOLORSUBTRACK):
+                        self._spineColor[ctrack][z] = m.group(1)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileContent::hasPickup -- Return false if there is no pickup measure.
+    //   Return the barline index number if there is a pickup measure.  A pickup measure
+    //   is identified when the duration from the start of the file to the first
+    //   barline is not zero or equal to the duration of the starting time signature.
+    //   if there is not starting time signature, then there cannot be an identified
+    //   pickup measure.
+    '''
+    def hasPickup(self) -> int:
+        barlineIdx: int = -1
+        tsig: HumdrumToken = None
+
+        for i, line in enumerate(self._lines):
+            if line.isBarline:
+                if barlineIdx > 0:
+                    # second barline found, so stop looking for time signature
+                    break
+                barlineIdx = i
+                continue
+
+            if not line.isInterpretation:
+                continue
+
+            if tsig is not None:
+                continue
+
+            for token in line.tokens():
+                if token.isTimeSignature:
+                    tsig = token
+                    break
+
+        if tsig is None:
+            # no time signature so return 0
+            return 0
+
+        if barlineIdx < 0:
+            # no barlines in music
+            return 0
+
+        mdur: HumNum = self._lines[barlineIdx].durationFromStart
+        tdur: HumNum = Convert.timeSigToDuration(tsig)
+        if mdur == tdur:
+            # first measure is exactly as long as the time signature says: no pickup measure
+            return 0
+
+        return barlineIdx

@@ -1,0 +1,35 @@
+!!!COM: Palestrina, Giovanni Perluigi da
+!!!OPR: Missa De Beata Marie Virginis (I)
+!!!OTL: Kyrie
+**kern	**kern	**kern	**kern	**kern
+*Ibass	*Itenor	*Itenor	*Icalto	*Icant
+!Bassus	!Tenor 2	!Tenor 1	!Altus	!Cantus
+*clefF4	*clefGv2	*clefGv2	*clefG2	*clefG2
+*k[]	*k[]	*k[]	*k[]	*k[]
+*G:mix	*G:mix	*G:mix	*G:mix	*G:mix
+*M4/2	*M4/2	*M4/2	*M4/2	*M4/2
+=1	=1	=1	=1	=1
+0r	0r	0r	1c	1r
+.	.	.	2.e	1g
+!! split spine '2' into '(2)a' (.) and '(2)b' (4d)
+*	*^	*	*	*
+.	.	4d	.	4f	.
+!! join 2a and 2b back into 2, just before the measure marker
+*	*v	*v	*	*	*
+=2	=2	=2	=2	=2
+0r	0r	0r	2g	2b
+!! split track 1
+*^	*	*	*	*
+!! split track 2
+*	*	*^	*	*	*
+!! join spines 1a and 2b
+*v	*v	*	*	*	*	*
+!! join spines 2a and 2b
+*	*v	*v	*	*	*
+!! exchange spines 3 and 4
+*	*	*x	*x	*
+.	.	.	2a	2cc
+.	.	.	[1g	2dd
+.	.	.	.	2ee
+==	==	==	==	==
+*-	*-	*-	*-	*-

@@ -1,0 +1,21 @@
+Name                              Stmts   Miss Branch BrPart  Cover
+-------------------------------------------------------------------
+humdrum/Convert.py                  187     34    106     24    78%
+humdrum/HumAddress.py                81     12     18      6    80%
+humdrum/HumHash.py                  258    185    164     10    22%
+humdrum/HumNum.py                     4      1      0      0    75%
+humdrum/HumParamSet.py               89     32     32      3    58%
+humdrum/HumSignifiers.py            110     22     32      2    75%
+humdrum/HumdrumFile.py                3      0      0      0   100%
+humdrum/HumdrumFileBase.py          660    129    358     63    78%
+humdrum/HumdrumFileContent.py       527     93    310     27    80%
+humdrum/HumdrumFileStructure.py     480     72    296     43    81%
+humdrum/HumdrumLine.py              486    206    236     19    49%
+humdrum/HumdrumToken.py             782    315    306     20    51%
+tests/Utilities.py                  324     26     82      5    90%
+tests/test_HumSignifiers.py          14      0      0      0   100%
+tests/test_HumdrumFile.py            41      0      2      0   100%
+tests/test_HumdrumLine.py            18      0      0      0   100%
+tests/test_HumdrumToken.py           48      1     30      1    97%
+-------------------------------------------------------------------
+TOTAL                              4112   1128   1972    223    68%

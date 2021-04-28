@@ -1,0 +1,113 @@
+!!!COM: Messiaen, Olivier (Eugène Prosper Charles)
+!!!OTL: Les Corps glorieux (Glorious Bodies) for Organ
+!!!OMV: 3rd Fascicule, No. 6: Joie et clarté des corps glorieux (Joy and Brightness of Glorious Bodies)
+!!!example: 731
+!!!work: Mes-16
+**kern	**dynam	**kern	**dynam
+*grp:A	*grp:A	*grp:B	*grp:B
+*part1	*	*part1	*part1
+*staff2	*	*staff1	*
+*I"Organ	*	*	*
+*I'Org.	*	*	*
+*clefG2	*	*clefG2	*
+*k[b-e-a-d-g-]	*	*k[b-e-a-d-g-]	*
+*D-:	*	*D-:	*
+*M7/8	*	*M7/8	*
+=24	=24	=24	=24
+!	!	!LO:TX:t=[eighth]=82	!
+!	!	!LO:TX:a:B:t=Plus lent	!
+4d- 4g- 4a-	mf	4r	.
+[4.A- [4.d- [4.e-	.	16r	.
+.	.	(16a-LL	f
+.	.	16b-JJ	.
+.	.	16dd-LL	.
+.	.	16b-	.
+.	.	16dd-JJ	.
+4A-] 4d-] 4e-]	.	16ee-LL	.
+.	.	16dd-	.
+.	.	16gg-	.
+.	.	16dddnJJ	.
+=25	=25	=25	=25
+*M8/8	*	*M8/8	*
+8r	.	[4aa-X)	.
+8d-~ 8g- 8a-	.	.	.
+16B-~ 16e- 16f	.	16aa-X]	.
+[4.A-~ [4.d- [4.e-	.	16r	.
+.	.	(16gg-LL	mf
+.	.	16aa-JJ	.
+.	.	16gg-LL	.
+.	.	16ee-	.
+.	.	16gg-JJ	.
+4A-_ 4d-_ 4e-_	.	16ee-LL	.
+.	.	16dd-	.
+.	.	16b-	.
+.	.	16an	.
+16A-] 16d-] 16e-]	.	16ddnJJ	.
+=26	=26	=26	=26
+*M7/8	*	*M7/8	*
+8r	.	4a-X)	.
+8d-~ 8g- 8a-	.	.	.
+[4.A-~ [4.d- [4.e-	.	16r	.
+.	.	(>16a-LL	f
+.	.	16b-JJ	.
+.	.	16dd-XLL	.
+.	.	16b-	.
+.	.	16dd-JJ	.
+4A-] 4d-] 4e-]	.	16ee-LL	.
+.	.	16dd-	.
+.	.	16gg-	.
+.	.	16dddnJJ	.
+=27	=27	=27	=27
+*M8/8	*	*M8/8	*
+8r	.	[8aa-XL)	.
+8.d-~L 8.g- 8.a-	.	8.aa-XJ]	.
+8A-~ 8d- 8e-	.	16r	.
+.	.	(16gg-LL	mf
+8d-~ 8g- 8a-	.	16aa-	.
+.	.	16gg-	.
+16B-~Jk 16e- 16f	.	16ee-JJ	.
+4.A-~ 4.d- 4.e-	.	16gg-LL	.
+.	.	16ee-	.
+.	.	16dd-	.
+.	.	16b-	.
+.	.	16an	.
+.	.	16ddnJJ	.
+=28	=28	=28	=28
+*M11/16	*	*M11/16	*
+[8.d-~ [8.g- [8.a-	.	16a-XLL)	.
+.	.	(32anL	.
+.	.	32bnJ	.
+.	.	32ddnL	.
+.	.	32ggnJJJ	.
+16d-KL] 16g-] 16a-]	.	16dd-XLL	.
+8A-~J 8d- 8e-	.	16ee-	.
+.	.	16gg-XJJ	.
+8d-~L 8g- 8a-	.	16ee-LL	.
+.	.	16dd-	.
+16B-~Jk 16e- 16f	.	16b-XJJ	.
+8A-X~ 8d-X 8e-	.	16anLL	.
+.	.	16ddnJJ)	.
+=	=	=	=
+*-	*-	*-	*-
+!!!system-decoration: [({(s1,s2)})]
+!!!CDT: 1908/12/10-1992/04/27
+!!!CBL: Avignon, France
+!!!CDL: Paris, France
+!!!CNT: French
+!!!AGN: Instrumental; Keyboard
+!!!MCN:
+!!!MDT: 1943/11/15
+!!!MGN:
+!!!MLC: Paris, France
+!!!MPD: 1943
+!!!MPN: Messiaen, Olivier
+!!!ODT: 1939
+!!!PDT: 1942
+!!!excerpt-start-measure: 24
+!!!excerpt-end-measure: 28
+!!!excerpt-start-time: 1:12
+!!!excerpt-end-time: 1:38
+!!!EEV: 2020/07/28
+!!!ONB: Converted from MusicXML on 2020/07/28
+!!!RDF**kern: > = above
+!!!RDF**kern: < = below
