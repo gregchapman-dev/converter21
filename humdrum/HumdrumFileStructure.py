@@ -14,11 +14,11 @@
 import sys
 from operator import attrgetter
 
-from humdrum.HumNum import HumNum
-from humdrum.Convert import Convert
-from humdrum.HumdrumToken import HumdrumToken
-from humdrum.HumdrumLine import HumdrumLine
-from humdrum.HumdrumFileBase import HumdrumFileBase
+from humdrum import HumNum
+from humdrum import Convert
+from humdrum import HumdrumToken
+from humdrum import HumdrumLine
+from humdrum import HumdrumFileBase
 from humdrum.HumdrumFileBase import TokenPair
 
 class HumdrumFileStructure(HumdrumFileBase):

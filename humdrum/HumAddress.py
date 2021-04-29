@@ -222,7 +222,7 @@ class HumAddress:
     '''
     @property
     def dataType(self): # -> HumdrumToken
-        from humdrum.HumdrumToken import HumdrumToken
+        from humdrum import HumdrumToken
         if self.ownerLine is None:
             return HumdrumToken('')
 

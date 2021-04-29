@@ -177,7 +177,7 @@ class HumHash:
     # getValue variants that convert to requested type (might return None if conversion fails)
 
     def getValueString(self, *ns1ns2key) -> str:
-        from humdrum.HumdrumToken import HumdrumToken
+        from humdrum import HumdrumToken
         from music21 import Music21Object
         value = self.getValue(*ns1ns2key)
         if value is None:
@@ -195,7 +195,7 @@ class HumHash:
             return None
 
     def getValueToken(self, *ns1ns2key): # returns HumdrumToken
-        from humdrum.HumdrumToken import HumdrumToken
+        from humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
@@ -217,7 +217,7 @@ class HumHash:
         return None # can't convert to anything else
 
     def getValueInt(self, *ns1ns2key) -> int:
-        from humdrum.HumdrumToken import HumdrumToken
+        from humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return 0
@@ -231,8 +231,8 @@ class HumHash:
             return 0
 
     def getValueFraction(self, *ns1ns2key): # returns HumNum
-        from humdrum.HumdrumToken import HumdrumToken
-        from humdrum.HumNum import HumNum
+        from humdrum import HumdrumToken
+        from humdrum import HumNum
         value = self.getValue(*ns1ns2key)
         if value is None:
             return HumNum(0)
@@ -246,7 +246,7 @@ class HumHash:
             return HumNum(0)
 
     def getValueFloat(self, *ns1ns2key) -> float:
-        from humdrum.HumdrumToken import HumdrumToken
+        from humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return 0
@@ -262,7 +262,7 @@ class HumHash:
     def getValueBool(self, *ns1ns2key) -> float:
         # this one's weird.  We default to True (unless there's some fairly
         # obvious reason to interpret as False, e.g. string == '0', int = 0, etc)
-        from humdrum.HumdrumToken import HumdrumToken
+        from humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return False

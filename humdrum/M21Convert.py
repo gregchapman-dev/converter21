@@ -17,9 +17,9 @@ from typing import Union
 from fractions import Fraction
 import music21 as m21
 
-from humdrum.HumNum import HumNum
-from humdrum.HumdrumToken import HumdrumToken
-from humdrum.Convert import Convert
+from humdrum import HumNum
+from humdrum import HumdrumToken
+from humdrum import Convert
 
 # pylint: disable=protected-access
 

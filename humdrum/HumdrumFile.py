@@ -20,13 +20,13 @@ import copy
 
 import music21 as m21
 
-from humdrum.HumdrumFileContent import HumdrumFileContent
-from humdrum.HumdrumLine import HumdrumLine
-from humdrum.HumdrumToken import HumdrumToken
-from humdrum.HumNum import HumNum
-from humdrum.HumParamSet import HumParamSet
-from humdrum.Convert import Convert
-from humdrum.M21Convert import M21Convert
+from humdrum import HumdrumFileContent
+from humdrum import HumdrumLine
+from humdrum import HumdrumToken
+from humdrum import HumNum
+from humdrum import HumParamSet
+from humdrum import Convert
+from humdrum import M21Convert
 
 class HumdrumInternalError(Exception):
     # when internal expectations are not met

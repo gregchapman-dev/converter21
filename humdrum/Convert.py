@@ -13,7 +13,7 @@
 import sys
 import re
 import math
-from humdrum.HumNum import HumNum
+from humdrum import HumNum
 
 class Convert:
 

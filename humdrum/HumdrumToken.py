@@ -13,11 +13,11 @@
 import sys
 import re
 
-from humdrum.HumAddress import HumAddress
-from humdrum.HumNum import HumNum
-from humdrum.HumHash import HumHash
-from humdrum.HumParamSet import HumParamSet
-from humdrum.Convert import Convert
+from humdrum import HumAddress
+from humdrum import HumNum
+from humdrum import HumHash
+from humdrum import HumParamSet
+from humdrum import Convert
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
