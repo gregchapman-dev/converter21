@@ -60,7 +60,7 @@ class HumdrumToken(HumHash):
     PHRASE  = '{'
     SLUR    = '('
 
-    def __init__(self, token: str = '', ownerLine = None): # ownerLine: HumdrumLine
+    def __init__(self, token: str = ''):
         super().__init__() # initialize the HumHash fields
 
         '''
@@ -73,11 +73,6 @@ class HumdrumToken(HumHash):
 
         self._subtokens = []
         self._subtokensGenerated: bool = False
-
-        '''
-            _ownerLine: the line in which the token exists (can be None)
-        '''
-        self._ownerLine = ownerLine # self._ownerLine: HumdrumLine = ownerLine
 
         '''
         // address: The address contains information about the location of

@@ -79,6 +79,7 @@ disable=too-many-lines,
         bare-except,
         fixme,
         consider-using-enumerate,
+        cyclic-import,
         print-statement, # above this are mine
         parameter-unpacking,
         unpacking-in-except,

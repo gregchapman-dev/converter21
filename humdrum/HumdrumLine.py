@@ -43,6 +43,7 @@ def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> (str, str):
 
 class HumdrumLine(HumHash):
     def __init__(self, line: str = '', ownerFile = None): # ownerFile: HumdrumFile
+        from humdrum import HumdrumFile
         super().__init__() # initialize the HumHash fields
 
         '''
@@ -58,7 +59,7 @@ class HumdrumLine(HumHash):
         '''
         // owner: This is the HumdrumFile which manages the given line.
         '''
-        self._ownerFile = ownerFile # self._ownerFile: HumdrumFile
+        self._ownerFile: HumdrumFile = ownerFile
 
         '''
         // m_lineindex: Used to store the index number of the HumdrumLine in
@@ -619,8 +620,8 @@ class HumdrumLine(HumHash):
     @property
     def duration(self) -> HumNum:
         if not self._rhythmAnalyzed:
-            if self.ownerFile:
-                self.ownerFile.analyzeRhythmStructure()
+            if self._ownerFile:
+                self._ownerFile.analyzeRhythmStructure()
         return self._duration
 
     def scaledDuration(self, scale: HumNum) -> HumNum:
@@ -650,8 +651,8 @@ class HumdrumLine(HumHash):
         # If necessary (and possible), analyze rhythm structure of the whole file,
         # so we can answer the question
         if not self._rhythmAnalyzed:
-            if self.ownerFile:
-                self.ownerFile.analyzeRhythmStructure()
+            if self._ownerFile:
+                self._ownerFile.analyzeRhythmStructure()
 
         if self.isBarline:
             return self.durationToBarline
@@ -671,8 +672,8 @@ class HumdrumLine(HumHash):
     @property
     def durationFromStart(self) -> HumNum:
         if not self._rhythmAnalyzed:
-            if self.ownerFile:
-                self.ownerFile.analyzeRhythmStructure()
+            if self._ownerFile:
+                self._ownerFile.analyzeRhythmStructure()
 
         return self._durationFromStart
 
@@ -700,12 +701,12 @@ class HumdrumLine(HumHash):
     @property
     def durationToEnd(self) -> HumNum:
         if not self._rhythmAnalyzed:
-            if self.ownerFile:
-                self.ownerFile.analyzeRhythmStructure()
+            if self._ownerFile:
+                self._ownerFile.analyzeRhythmStructure()
             else:
                 return HumNum(0) # there's no owner, so we can't get the score duration
 
-        return self.ownerFile.scoreDuration -  self.durationFromStart
+        return self._ownerFile.scoreDuration -  self.durationFromStart
 
     def scaledDurationToEnd(self, scale: HumNum) -> HumNum:
         return self.durationToEnd * scale
@@ -720,8 +721,8 @@ class HumdrumLine(HumHash):
     @property
     def durationFromBarline(self) -> HumNum:
         if not self._rhythmAnalyzed:
-            if self.ownerFile:
-                self.ownerFile.analyzeRhythmStructure()
+            if self._ownerFile:
+                self._ownerFile.analyzeRhythmStructure()
 
         return self._durationFromBarline
 
@@ -748,8 +749,8 @@ class HumdrumLine(HumHash):
     @property
     def durationToBarline(self) -> HumNum:
         if not self._rhythmAnalyzed:
-            if self.ownerFile:
-                self.ownerFile.analyzeRhythmStructure()
+            if self._ownerFile:
+                self._ownerFile.analyzeRhythmStructure()
 
         return self._durationToBarline
 
@@ -774,10 +775,10 @@ class HumdrumLine(HumHash):
     //    for the given spine/track.
     '''
     def trackStart(self, track: int) -> HumdrumToken:
-        if self.ownerFile is None:
+        if self._ownerFile is None:
             return None
 
-        return self.ownerFile.trackStart(track)
+        return self._ownerFile.trackStart(track)
 
     '''
     //////////////////////////////
@@ -786,10 +787,10 @@ class HumdrumLine(HumHash):
     //    for the given spine/track.
     '''
     def trackEnd(self, track: int, subSpine: int) -> HumdrumToken:
-        if self.ownerFile is None:
+        if self._ownerFile is None:
             return None
 
-        return self.ownerFile.trackEnd(track, subSpine)
+        return self._ownerFile.trackEnd(track, subSpine)
 
     '''
     //////////////////////////////

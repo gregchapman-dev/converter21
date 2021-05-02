@@ -381,6 +381,20 @@ class HumdrumBeamAndTuplet:
         # for all
         self.token: HumdrumToken = None # the token for this note/rest
 
+
+class BeamAndTupletGroupState:
+    # A struct containing the current state of beams and tuplets as we walk the tokens in a layer
+    def __init__(self):
+        # for beams
+        self.inBeam: bool = False                # set to True when a beam starts, False when it ends
+        self.previousBeamTokenIdx: int = -1      # index (in layer) of the previous token in a beam
+        # for grace note beams
+        self.inGBeam: bool = False               # set to True when a gbeam starts, False when it ends
+        self.previousGBeamTokenIdx: int = -1     # index (in layer) of the previous token in a gbeam
+        # for tuplets
+        self.inTuplet: bool = False                # set to True when a tuplet starts, False when it ends
+        self.m21Tuplet: m21.duration.Tuplet = None # tuplet template for every note in the current tuplet
+
 MAXLAYERSFORCUESIZE = 100
 
 class StaffStateVariables:
@@ -1316,8 +1330,10 @@ class HumdrumFile(HumdrumFileContent):
         tgs: [HumdrumBeamAndTuplet] = self._prepareBeamAndTupletGroups(layerData)
 #        self._printGroupInfo(tgs) # for debug only
 
+        groupState: BeamAndTupletGroupState = BeamAndTupletGroupState()
+
         lastDataTok: HumdrumToken = None
-        for layerTok in layerData:
+        for tokenIdx, layerTok in enumerate(layerData):
             if layerTok.isData:
                 lastDataTok = layerTok
 
@@ -1348,13 +1364,15 @@ class HumdrumFile(HumdrumFileContent):
             # iohumdrum.cpp does tgs processing in a different order,
             # because it is generating MEI.  We are generating music21,
             # so instead of handleGroupStarts before processing the note,
-            # and then handleGroupEnds after, we have to do it all after.
+            # and then handleGroupEnds after, we have to do all group
+            # handling after processing the note, in _handleGroupState.
 
             if layerTok.getValueBool('auto', 'tremoloBeam'):
                 if 'L' not in layerTok.text:
                     # ignore the ending note of a beamed group
                     # of tremolos (a previous note in the tremolo
                     # replaces display of this note).
+                    groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
                     continue
 
             if layerTok.getValueBool('auto', 'suppress'):
@@ -1376,12 +1394,9 @@ class HumdrumFile(HumdrumFileContent):
                 # so print it as a space (invisible rest).
                 self._processOtherLayerToken(voice, layerTok, staffIndex)
 
-        # end loop over tokens
+            groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
 
-        # _handleBeamAndTupletGroups walks the tgs, layerData, and the m21 objects
-        # associated with some of the layerData tokens, adding beam and tuplet
-        # information to some of those m21 objects.
-        self._handleBeamAndTupletGroups(tgs, layerData, staffIndex)
+        # end loop over layer tokens
 
         self._processBarlinesInLayerData(voice, track, layerIndex)
 
@@ -1433,9 +1448,10 @@ class HumdrumFile(HumdrumFileContent):
 
     def _handleColorInterp(self, token: HumdrumToken):
         # TODO: *color (spine color)
-        if '*color:' not in token.text:
-            return
+        # if '*color:' not in token.text:
+        #     return
         # self.setSpineColorFromColorInterpToken(token)
+        pass
 
     def _handleClefChange(self, voice: m21.stream.Voice, token: HumdrumToken, lastDataTok: HumdrumToken):
         # TODO: clef changes
@@ -1638,125 +1654,105 @@ class HumdrumFile(HumdrumFileContent):
 
 
     '''
-        _handleBeamAndTupletGroups adds beams and tuplets to all the notes/rests in
-        the layer, as appropriate.  In music21, every note/chord/rest has a Tuplet (in its
-        Duration), that both describes the timing of that note, and the bracketing of
-        the tuplet in the score.  In music21, every note/chord has a Beams object that contains
-        0 or more Beam objects (e.g. beamed 16th notes have two Beam objects each).
-    '''
-    def _handleBeamAndTupletGroups(self, tgs: [HumdrumBeamAndTuplet], layerData: [HumdrumToken], staffIndex: int):
-        for startIdx in range(len(tgs)):
-            self._handleBeamAndTupletGroupStartingAt(tgs, layerData, startIdx, staffIndex)
+        _handleGroupState adds beams and tuplets to a note/rest in the layer, as appropriate.
 
+        In music21, every note/chord/rest has a Tuplet (in its Duration), that both describes
+        the timing of that note, and the bracketing of the tuplet in the score.  In music21,
+        every note/chord has a Beams object that contains 0 or more Beam objects (e.g. beamed
+        16th notes have two Beam objects each).
     '''
-        _handleBeamAndTupletGroupStartingAt
-    '''
-    def _handleBeamAndTupletGroupStartingAt(self, tgs: [HumdrumBeamAndTuplet], layerData: [HumdrumToken], startTokenIdx: int, staffIndex: int):
+    def _handleGroupState(self,
+                          currState: BeamAndTupletGroupState,
+                          tgs: [HumdrumBeamAndTuplet],
+                          layerData: [HumdrumToken],
+                          tokenIdx: int,
+                          staffIndex: int) -> BeamAndTupletGroupState:
         ss: StaffStateVariables = self._staffStates[staffIndex]
-        tokenStart: HumdrumToken = layerData[startTokenIdx]
-        tgStart: HumdrumBeamAndTuplet = tgs[startTokenIdx]
-
-        prevBeamTokenIdx: int = -1
-        prevGBeamTokenIdx: int = -1
+        token: HumdrumToken = layerData[tokenIdx]
+        tg: HumdrumBeamAndTuplet = tgs[tokenIdx]
+        newState: BeamAndTupletGroupState = copy.copy(currState)
 
         if ss.tremolo:
-            if 'L' in tokenStart.text:
-                success: bool = self._checkForTremolo(layerData, tgs, startTokenIdx, staffIndex)
+            if 'L' in token.text:
+                success: bool = self._checkForTremolo(layerData, tgs, tokenIdx, staffIndex)
                 if success:
                     # beamed group converted into tremolo
-                    return
+                    return newState
 
-        if tgStart.beamStart or tgStart.gbeamStart:
+        if tg.beamStart or tg.gbeamStart:
             direction: int = 0
             if self._signifiers.above:
                 pattern: str = '[LJKk]+' + self._signifiers.above
-                if re.search(pattern, tokenStart.text):
+                if re.search(pattern, token.text):
                     direction = 1
             if self._signifiers.below:
                 pattern: str = '[LJKk]+' + self._signifiers.below
-                if re.search(pattern, tokenStart.text):
+                if re.search(pattern, token.text):
                     direction = -1
             if direction != 0:
                 self._setBeamDirection(direction, tgs, layerData,
-                                       startTokenIdx, isGrace=tgStart.gbeamStart != 0)
+                                       tokenIdx, isGrace=tg.gbeamStart != 0)
 
         # tuplets first, because this can (temporarily) change the duration of a note,
         # which could remove any beams we set up, as no longer appropriate.  Note that
         # unlike iohumdrum.cpp, we don't need to nest tuplets and beams (that start or
         # end together) carefully, since music21, unlike MEI, doesn't require that.
-        if tgStart.tupletStart:
-            # process a tuplet group
 
+        # handle tuplet state
+        if tg.tupletStart:
+            # start a tuplet
             # we have our own Tuplet constructor to set defaults
-            tuplet: m21.duration.Tuplet = self._makeTuplet(
-                                            tgStart.numNotesActual,
-                                            tgStart.numNotesNormal,
-                                            tgStart.durationTupleNormal,
-                                            tgStart.numScale)
-            tupletStarted: bool = False
-            for i in range(startTokenIdx, len(tgs)):
-                tg: HumdrumBeamAndTuplet = tgs[i]
-                if i == startTokenIdx:
-                    # start the tuplet
-                    self._startTuplet(tgs, layerData, startTokenIdx, tuplet, staffIndex)
-                    tupletStarted = True
-                    continue
+            newState.m21Tuplet = self._makeTuplet(
+                                            tg.numNotesActual,
+                                            tg.numNotesNormal,
+                                            tg.durationTupleNormal,
+                                            tg.numScale)
+            # start the tuplet
+            self._startTuplet(layerData, tokenIdx, newState.m21Tuplet, staffIndex)
+            newState.inTuplet = True
+        elif newState.inTuplet and tg.tupletEnd:
+            # end the tuplet
+            self._endTuplet(layerData, tokenIdx, newState.m21Tuplet)
+            newState.inTuplet = False
+            newState.m21Tuplet = None
+        elif newState.inTuplet:
+            # continue the tuplet
+            self._continueTuplet(layerData, tokenIdx, newState.m21Tuplet)
 
-                if tupletStarted and tg.tupletEnd:
-                    # end the tuplet
-                    self._endTuplet(tgs, layerData, i, tuplet)
-                    break
+        # handle beam state
+        if tg.beamStart:
+            # start the beam
+            self._startBeam(layerData, tokenIdx)
+            newState.inBeam = True
+            newState.previousBeamTokenIdx = tokenIdx
+        elif newState.inBeam and tg.beamEnd:
+            # end the beam
+            self._endBeam(layerData, tokenIdx, newState.previousBeamTokenIdx)
+            newState.inBeam = False
+            newState.previousBeamTokenIdx = -1
+        elif newState.inBeam and not layerData[tokenIdx].isRest:
+            # continue the beam (but not if it's a rest, they can be within
+            # the beam duration, but they won't have beams, obviously)
+            self._continueBeam(layerData, tokenIdx, newState.previousBeamTokenIdx)
+            newState.previousBeamTokenIdx = tokenIdx
 
-                # continue the tuplet
-                if tupletStarted:
-                    self._continueTuplet(tgs, layerData, i, tuplet)
+        # handle gbeam state
+        if tg.gbeamStart:
+            # start the grace note beam
+            self._startGBeam(layerData, tokenIdx)
+            newState.inGBeam = True
+            newState.previousGBeamTokenIdx = tokenIdx
+        elif newState.inGBeam and tg.gbeamEnd:
+            # end the grace note beam
+            self._endGBeam(layerData, tokenIdx, newState.previousGBeamTokenIdx)
+            newState.inGBeam = False
+            newState.previousGBeamTokenIdx = -1
+        elif newState.inGBeam:
+            # continue the grace note beam
+            self._continueGBeam(layerData, tokenIdx, newState.previousGBeamTokenIdx)
+            newState.previousGBeamTokenIdx = tokenIdx
 
-        if tgStart.beamStart:
-            # process a beam group
-            beamStarted: bool = False
-            for i in range(startTokenIdx, len(tgs)):
-                tg: HumdrumBeamAndTuplet = tgs[i]
-                if i == startTokenIdx:
-                    # start the beam
-                    self._startBeam(layerData, startTokenIdx)
-                    prevBeamTokenIdx = i
-                    beamStarted = True
-                    continue
-
-                if beamStarted and tg.beamEnd:
-                    # end the beam
-                    self._endBeam(layerData, i, prevBeamTokenIdx)
-                    prevBeamTokenIdx = i
-                    break
-
-                # continue the beam (but just skip any rests, they can be within the beam
-                # duration, but they won't have beams, obviously)
-                if beamStarted and not layerData[i].isRest:
-                    self._continueBeam(layerData, i, prevBeamTokenIdx)
-                    prevBeamTokenIdx = i
-
-        if tgStart.gbeamStart:
-            # process a grace note beam group
-            gbeamStarted: bool = False
-            for i in range(startTokenIdx, len(tgs)):
-                tg: HumdrumBeamAndTuplet = tgs[i]
-                if i == startTokenIdx:
-                    # start the grace note beam
-                    self._startGBeam(layerData, startTokenIdx)
-                    prevGBeamTokenIdx = i
-                    gbeamStarted = True
-                    continue
-
-                if gbeamStarted and tg.gbeamEnd:
-                    # end the grace note beam
-                    self._endGBeam(layerData, i, prevGBeamTokenIdx)
-                    prevGBeamTokenIdx = i
-                    break
-
-                # continue the grace note beam
-                if gbeamStarted:
-                    self._continueGBeam(layerData, i, prevGBeamTokenIdx)
-                    prevGBeamTokenIdx = i
+        return newState
 
     @staticmethod
     def _makeTuplet(numberNotesActual: int,
@@ -1905,9 +1901,8 @@ class HumdrumFile(HumdrumFileContent):
     def _endGBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevGBeamTokenIdx: int):
         self._endBeam(layerData, tokenIdx, prevGBeamTokenIdx)
 
-    def _startTuplet(self, tgs: [HumdrumBeamAndTuplet], layerData: [HumdrumToken], startTokenIdx: int, tupletTemplate: m21.duration.Tuplet, staffIndex: int):
+    def _startTuplet(self, layerData: [HumdrumToken], startTokenIdx: int, tupletTemplate: m21.duration.Tuplet, staffIndex: int):
         ss: StaffStateVariables = self._staffStates[staffIndex]
-        tg: HumdrumBeamAndTuplet = tgs[startTokenIdx]
         startTok: HumdrumToken = layerData[startTokenIdx]
         startNote: m21.Music21Object = startTok.getValueM21Object('music21', 'objectWithDuration')
         if not startNote:
@@ -1945,12 +1940,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # Now figure out the rest of the tuplet fields (type, placement, bracket, etc)
 
-        if tg.forceStartStop:
-            # A forced merge/split ('!LO:TUP:r') or a forced break ('*tupbreak') has been
-            # specified explicitly by the Humdrum data. So we need to set tuplet.type
-            # to 'start' explicitly instead of letting music21's defaults have their
-            # way.
-            tuplet.type = 'start'
+        tuplet.type = 'start' # has to be set, or no-one cares about the placement, bracket, etc
 
         if self._hasAboveParameter(startTok, 'TUP'):
             tuplet.placement = 'above'
@@ -1993,11 +1983,10 @@ class HumdrumFile(HumdrumFileContent):
         # at an inopportune time).
         newQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
         if newQuarterLength != originalQuarterLength:
-            raise HumdrumInternalError
+            raise HumdrumInternalError('_startTuplet modified duration.quarterLength')
 
     @staticmethod
-    def _continueTuplet(tgs: [HumdrumBeamAndTuplet], layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
-        tg: HumdrumBeamAndTuplet = tgs[tokenIdx]
+    def _continueTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
         token: HumdrumToken = layerData[tokenIdx]
         note: m21.Music21Object = token.getValueM21Object('music21', 'objectWithDuration')
         if not note:
@@ -2037,9 +2026,6 @@ class HumdrumFile(HumdrumFileContent):
         if recomputeDuration:
             duration = M21Convert.m21DurationWithTuplet(token, tuplet)
 
-        if tg.forceStartStop:
-            raise HumdrumInternalError('tg.forceStartStop in _continueTuplet')
-
         # set the tuplet on the note duration.
         # If we recomputed the duration above, this has already been done
         if not recomputeDuration:
@@ -2050,11 +2036,10 @@ class HumdrumFile(HumdrumFileContent):
 
         newQuarterLength: HumNum = HumNum(note.duration.quarterLength)
         if newQuarterLength != originalQuarterLength:
-            raise HumdrumInternalError
+            raise HumdrumInternalError('_continueTuplet modified duration.quarterLength')
 
     @staticmethod
-    def _endTuplet(tgs: [HumdrumBeamAndTuplet], layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
-        tg: HumdrumBeamAndTuplet = tgs[tokenIdx]
+    def _endTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
         endToken: HumdrumToken = layerData[tokenIdx]
         endNote: m21.Music21Object = endToken.getValueM21Object('music21', 'objectWithDuration')
         if not endNote:
@@ -2091,12 +2076,7 @@ class HumdrumFile(HumdrumFileContent):
         if recomputeDuration:
             duration = M21Convert.m21DurationWithTuplet(endToken, tuplet)
 
-        if tg.forceStartStop:
-            # A forced merge/split ('!LO:TUP:r') or a forced break ('*tupbreak') has been
-            # specified explicitly by the Humdrum data. So we need to set tuplet.type
-            # to 'stop' explicitly instead of letting music21's defaults have their
-            # way.
-            tuplet.type = 'stop'
+        tuplet.type = 'stop'
 
         # Now set the tuplet in the duration to this one
         duration.tuplets = (tuplet,)
@@ -2106,7 +2086,7 @@ class HumdrumFile(HumdrumFileContent):
 
         newQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
         if newQuarterLength != originalQuarterLength:
-            raise HumdrumInternalError
+            raise HumdrumInternalError('_endTuplet modified duration.quarterLength')
 
     '''
     //////////////////////////////
@@ -2604,7 +2584,7 @@ class HumdrumFile(HumdrumFileContent):
         # different ratios in different portions of the group.
         numNotesActual: [int] = [-1] * len(tupletGroups)
         numNotesNormal: [int] = [-1] * len(tupletGroups)
-
+        tupletMultiplier: [HumNum] = [HumNum(1)] * len(tupletGroups)
         for i, tupletGroup in enumerate(tupletGroups):
             if tupletGroup == 0:
                 continue
@@ -2621,14 +2601,14 @@ class HumdrumFile(HumdrumFileContent):
                 # correction for duplets
                 nextPowOfTwo /= HumNum(2)
 
-            tupletMultiplier: HumNum = dotlessDur[i] / nextPowOfTwo
-            numNotesActual[i] = tupletMultiplier.denominator
-            numNotesNormal[i] = tupletMultiplier.numerator
+            tupletMultiplier[i] = dotlessDur[i] / nextPowOfTwo
+            numNotesActual[i] = tupletMultiplier[i].denominator
+            numNotesNormal[i] = tupletMultiplier[i].numerator
 
             # Reference tuplet breve to breve rather than whole.
             if dotlessDur[i].numerator == 4 and dotlessDur[i].denominator == 3:
                 numNotesNormal[i] = 2
-                tupletMultiplier = HumNum(2, tupletMultiplier.denominator)
+                tupletMultiplier[i] = HumNum(2, tupletMultiplier[i].denominator)
 
         # adjust tupletgroups based on tuplet ratio changes
         correction: int = 0
@@ -2744,7 +2724,7 @@ class HumdrumFile(HumdrumFileContent):
                 tgs[-1].group = tupletGroups[indexMapping2[i]]
                 tgs[-1].numNotesActual = numNotesActual[indexMapping2[i]]
                 tgs[-1].numNotesNormal = numNotesNormal[indexMapping2[i]]
-                tgs[-1].tupletMultiplier = tupletMultiplier
+                tgs[-1].tupletMultiplier = tupletMultiplier[indexMapping2[i]]
                 tgs[-1].durationTupleNormal = durationTupleNormal[indexMapping2[i]]
                 tgs[-1].forceStartStop = durForce[indexMapping2[i]]
 
@@ -2759,7 +2739,7 @@ class HumdrumFile(HumdrumFileContent):
                 tg.tupletEnd = tcounter
 
         self._mergeTupletsCuttingBeam(tgs)
-#        self._resolveTupletBeamTie(tgs) # this is MEI-specific; music21 don't care
+#        self._resolveTupletBeamTie(tgs) # this is MEI-specific; music21 doesn't care
         self._assignTupletScalings(tgs)
 
         # in iohumdrum.cpp this is called after return from prepareBeamAndTupletGroups()

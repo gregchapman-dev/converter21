@@ -132,7 +132,7 @@ else:
 s = converter.parse(args.inputFile, format=args.inputFormat, forceSource=args.forceSource)
 
 #s.show('text')
-#s.show('musicxml.pdf')
+s.show('musicxml.pdf')
 #s.show('lilypond.pdf')
 
 # check validity of outputFormat
