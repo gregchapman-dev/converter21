@@ -263,7 +263,11 @@ class HumdrumFileContent(HumdrumFileStructure):
         # opens == list of phrase/slur openings for each track and elision level
         # first dimension: elision level (max: 4)
         # second dimension: layer number (max: 8)
-        opens: [[[HumdrumToken]]] = [[[]] * 8] * 4
+        opens: [[[HumdrumToken]]] = []
+        for _el in range(0, 4):
+            opens.append([])
+            for _tr in range(0, 8):
+                opens[-1].append([])
 
         openCount: int = 0
         closeCount: int = 0
@@ -320,7 +324,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     							# This is a slur/phrase in an ending that start at the start of an ending.
                                 duration: HumNum = token.durationFromStart
                                 if labels[token.lineIndex].first is not None:
-                                    duration -= labels[token.getLineIndex].first.durationFromStart
+                                    duration -= labels[token.lineIndex].first.durationFromStart
                                 token.setValue('auto', endingBackTag, 'true')
                                 token.setValue('auto', sideTag, 'stop')
                                 token.setValue('auto', durationTag, token.durationToEnd)
@@ -484,6 +488,9 @@ class HumdrumFileContent(HumdrumFileStructure):
         endTok.setValue('auto', 'id', endTok)
         endTok.setValue('auto', startNumberTag, openEnumeration)
         endTok.setValue('auto', endCountTag, endCount)
+
+#         print('SLUR: starts at {} (lineNum:{}, fieldNum:{}), ends at {} (lineNum:{}, fieldNum:{})'.format(startTok.text, startTok.lineNumber, startTok.fieldNumber,
+#                      endTok.text, endTok.lineNumber, endTok.fieldNumber))
 
     '''
     //////////////////////////////

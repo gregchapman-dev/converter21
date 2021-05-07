@@ -597,6 +597,8 @@ class HumdrumToken(HumHash):
     '''
     @property
     def nextFieldToken(self): # -> HumdrumToken:
+        from humdrum import HumdrumLine
+        self.ownerLine: HumdrumLine
         if self.ownerLine is None:
             return None
         if self.fieldIndex >= self.ownerLine.tokenCount - 1:
@@ -2319,7 +2321,7 @@ class HumdrumToken(HumHash):
     //    return the slur start number that it pairs with.
     '''
     def getSlurStartNumber(self, number: int) -> int:
-        return self.getValueInt('auto', makeTag('slurStartNum', number))
+        return self.getValueInt('auto', makeTag('slurStartNumber', number))
 
     '''
     //////////////////////////////

@@ -1332,10 +1332,10 @@ class HumdrumFile(HumdrumFileContent):
 
         groupState: BeamAndTupletGroupState = BeamAndTupletGroupState()
 
-        lastDataTok: HumdrumToken = None
+#        lastDataTok: HumdrumToken = None # ignore for now, it's for sameas clef analysis
         for tokenIdx, layerTok in enumerate(layerData):
-            if layerTok.isData:
-                lastDataTok = layerTok
+#             if layerTok.isData:
+#                 lastDataTok = layerTok
 
             if layerTok.isNullData:
                 # print any global text directions attached to the null token
@@ -1344,7 +1344,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             if layerTok.isInterpretation:
-                self._processInterpretationLayerToken(voice, layerTok, layerIndex, staffIndex, lastDataTok)
+                self._processInterpretationLayerToken(voice, layerTok, layerIndex, staffIndex)
                 continue
 
             if layerTok.isBarline:
@@ -1406,8 +1406,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processInterpretationLayerToken(self, voice: m21.stream.Voice,
                                          layerTok: HumdrumToken,
                                          layerIndex: int,
-                                         staffIndex: int,
-                                         lastDataTok: HumdrumToken):
+                                         staffIndex: int):
         ss: StaffStateVariables = self._staffStates[staffIndex]
         if ss.hasLyrics:
             self._checkForVerseLabels(voice, layerTok)
@@ -1422,7 +1421,7 @@ class HumdrumFile(HumdrumFileContent):
         self._handleCustos(voice, layerTok)
         self._handleRepInterp(voice, layerTok) # new
         self._handleColorInterp(layerTok) # new
-        self._handleClefChange(voice, layerTok, lastDataTok) # new
+        self._handleClefChange(voice, layerTok, staffIndex)
         self._handleTimeSigChange(voice, layerTok, staffIndex) # new
 
     '''
@@ -1453,9 +1452,28 @@ class HumdrumFile(HumdrumFileContent):
         # self.setSpineColorFromColorInterpToken(token)
         pass
 
-    def _handleClefChange(self, voice: m21.stream.Voice, token: HumdrumToken, lastDataTok: HumdrumToken):
-        # TODO: clef changes
-        pass
+    def _handleClefChange(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+        forceClefChange: bool = False
+        if token.isClef:
+            if token.getValueBool('auto', 'clefChange'):
+                forceClefChange = True
+
+        if token.isMens:
+            return # LATER: support **mens (handleClefChange)
+
+        if forceClefChange or token.durationFromStart != 0:
+            if token.isClef:
+                clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+                voiceOffsetInMeasure: Union[Fraction, float] = \
+                    self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
+                clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
+                m21Clef: m21.clef.Clef = M21Convert.m21Clef(token)
+                voice.insert(clefOffsetInVoice, m21Clef)
+            elif token.isNull:
+                # Q: under certain circumstances, clefs are duplicated to secondary layers. Why?
+                pass
+
+
 
     def _handleTimeSigChange(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
         if token.isTimeSignature:
@@ -1807,7 +1825,7 @@ class HumdrumFile(HumdrumFileContent):
         noteDurationNoDots: HumNum = token.durationNoDots # unless we're in a tuplet
 
         if len(noteOrChord.duration.tuplets) > 1:
-            # TODO: support nested tuplets.
+            # LATER: support nested tuplets (music21 needs to support this first)
             return 0
 
         if len(noteOrChord.duration.tuplets) == 1:
@@ -3190,7 +3208,8 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Union[Fraction, float] = \
             self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
         chordOffsetInVoice: Union[Fraction, float] = chordOffsetInMeasure - voiceOffsetInMeasure
-        chord: m21.chord.Chord = M21Convert.createChord()
+        chord: m21.chord.Chord = M21Convert.createChord(layerTok.getValueM21Object(
+                                                            'music21', 'spannerHolder'))
 
         # if (m_hasTremolo && layerdata[i]->getValueBool("auto", "tremolo")) {
         # else if (m_hasTremolo && layerdata[i]->getValueBool("auto", "tremolo2")) {
@@ -3200,12 +3219,11 @@ class HumdrumFile(HumdrumFileContent):
 
         chord = self._convertChord(chord, layerTok, staffIndex, layerIndex)
 
-        # TODO: chord slurs, phrases, dynamics
-        #self._processSlurs(layerTok)
-        #self._processPhrases(layerTok)
+        self._processSlurs(chord, layerTok)
+        self._processPhrases(chord, layerTok)
         self._processDynamics(voice, layerTok, staffIndex)
 
-        # TODO: chord stem directions, articulations, ornaments, arpeggios, text directions
+        # TODO: chord stem directions, articulations, ornaments, arpeggios
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
 #         self._addArticulations(chord, layerTok)
 #         self._addOrnaments(chord, layerTok)
@@ -3264,7 +3282,8 @@ class HumdrumFile(HumdrumFileContent):
 #             if ((!allinvis) && (tstrings[j].find("yy") != std::string::npos)) {
 #                 continue;
 #             }
-            note = M21Convert.createNote()
+
+            note = M21Convert.createNote() # pass in no spannerHolder, that was for the entire chord
             note = self._convertNote(note, layerTok, 0, staffIndex, layerIndex, subTokenIdx)
             chord.add(note)
 
@@ -3330,13 +3349,14 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Union[Fraction, float] = \
             self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
         restOffsetInVoice: Union[Fraction, float] = restOffsetInMeasure - voiceOffsetInMeasure
-        rest: m21.note.Rest = M21Convert.createRest()
+        rest: m21.note.Rest = M21Convert.createRest(layerTok.getValueM21Object(
+                                                        'music21', 'spannerHolder'))
 
         rest = self._convertRest(rest, layerTok, staffIndex)
-        # TODO: rest colors, slurs, phrases
+        # TODO: rest colors
         #self._colorRest(rest, layerTok)
-        #self._processSlurs(layerTok)
-        #self._processPhrases(layerTok)
+        self._processSlurs(rest, layerTok)
+        self._processPhrases(rest, layerTok)
         self._processDynamics(voice, layerTok, staffIndex)
         self._processDirections(voice, layerTok, staffIndex)
 
@@ -3393,7 +3413,8 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Union[Fraction, float] = \
             self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
         noteOffsetInVoice: Union[Fraction, float] = noteOffsetInMeasure - voiceOffsetInMeasure
-        note: m21.note.Note = M21Convert.createNote()
+        note: m21.note.Note = M21Convert.createNote(layerTok.getValueM21Object(
+                                                        'music21', 'spannerHolder'))
 
         # TODO: tremolos
         # if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
@@ -3403,11 +3424,11 @@ class HumdrumFile(HumdrumFileContent):
         # else:
         note = self._convertNote(note, layerTok, 0, staffIndex, layerIndex)
 
-        # TODO: note slurs, phrases, dynamics, stem directions, no stem, hairpin accent, cue size
-        # TODO: note articulations, ornaments, arpeggio, text directions
-#             processSlurs(layerdata[i]);
-#             processPhrases(layerdata[i]);
-#             processDynamics(layerdata[i], staffindex);
+        self._processSlurs(note, layerTok)
+        self._processPhrases(note, layerTok)
+        self._processDynamics(voice, layerTok, staffIndex)
+        # TODO: note stem directions, no stem, hairpin accent, cue size
+        # TODO: note articulations, ornaments, arpeggio
 #             assignAutomaticStem(note, layerdata[i], staffindex);
 #             if (m_signifiers.nostem && layerdata[i]->find(m_signifiers.nostem) != std::string::npos) {
 #                 note->SetStemVisible(BOOLEAN_false);
@@ -3430,6 +3451,119 @@ class HumdrumFile(HumdrumFileContent):
 #             processDirections(layerdata[i], staffindex); # m21.expressions.TextExpression
         voice.insert(noteOffsetInVoice, note)
         layerTok.setValue('music21', 'objectWithDuration', note)
+
+    def _processSlurs(self, endNote: m21.note.GeneralNote, token: HumdrumToken):
+        slurEndCount: int = token.getValueInt('auto', 'slurEndCount')
+        if slurEndCount <= 0:
+            return # not a slur end
+
+        # slurstarts: indexed by slur end number (NB: 0 position not used).
+        # tuple contains the slur start enumeration (tuple[0]) and the start token (tuple[1])
+        slurStartList: [tuple] = [(-1, None)] * (slurEndCount + 1)
+        for i in range(1, slurEndCount+1):
+            slurStartList[i] = (token.getSlurStartNumber(i), token.getSlurStartToken(i))
+
+        for i in range(1, slurEndCount+1):
+            slurStartTok: HumdrumToken = slurStartList[i][1]
+            if not slurStartTok:
+                continue
+
+            slurStartNumber: int = slurStartList[i][0]
+            isInvisible: bool = self._checkIfSlurIsInvisible(slurStartTok, slurStartNumber)
+            if isInvisible:
+                continue
+
+            startNote: m21.note.GeneralNote = slurStartTok.getValueM21Object(
+                                                'music21', 'objectWithDuration')
+            if not startNote:
+                # startNote can sometimes not be there yet due to cross layer slurs.
+                # Here we make a placeholder GeneralNote, which createNote, createRest,
+                # and createChord can be passed, and they can transfer any slurs (etc)
+                # from when creating the actual note/rest/chord.
+                startNote = m21.note.GeneralNote()
+                slurStartTok.setValue('music21', 'spannerHolder', startNote)
+
+            slur: m21.spanner.Slur = m21.spanner.Slur(startNote, endNote)
+            self._addSlurLineStyle(slur, slurStartTok, slurStartNumber)
+
+            # set above/below from current layout parameter (if there is one)
+            self._setLayoutSlurDirection(slur, slurStartTok)
+
+            # Calculate if the slur should be forced above or below
+            # this is the case for doubly slured chords.  Only the first
+            # two slurs between a pair of notes/chords will be oriented
+            # (other slurs will need to be manually adjusted and probably
+            # linked to individual notes to avoid overstriking the first
+            # two slurs.
+            if slurEndCount > 1:
+                found: int = -1
+                for j in range(1, slurEndCount):
+                    if i == j:
+                        continue
+                    if slurStartList[i][1] == slurStartList[j][1]:
+                        found = j
+                        break
+                if found > 0:
+                    if found > i:
+                        slur.placement = 'above'
+                    else:
+                        slur.placement = 'below'
+
+            # If the token itself says above or below, that overrides everything
+            if self._signifiers.above or self._signifiers.below:
+                count: int = 0
+                for k in range(0, len(slurStartTok.text) - 1):
+                    if slurStartTok.text[k] == '(':
+                        count += 1
+                    if count == slurStartNumber:
+                        if slurStartTok.text[k+1] == self._signifiers.above:
+                            slur.placement = 'above'
+                        elif slurStartTok.text[k+1] == self._signifiers.below:
+                            slur.placement = 'below'
+                        break
+
+            # Put spanner in top-level stream, because it might contain notes
+            # that are in different Parts.
+            self.m21Stream.insert(0, slur)
+
+    def _setLayoutSlurDirection(self, slur: m21.spanner.Slur, token: HumdrumToken):
+        if self._hasAboveParameter(token, 'S'):
+            slur.placement = 'above'
+        elif self._hasBelowParameter(token, 'S'):
+            slur.placement = 'below'
+
+    @staticmethod
+    def _addSlurLineStyle(slur: m21.spanner.Slur, token: HumdrumToken, slurNumber: int):
+        if slurNumber < 1:
+            slurNumber = 1
+        slurIndex: int = slurNumber - 1
+        dashed: str = token.layoutParameter('S', 'dash', slurIndex)
+        dotted: str = token.layoutParameter('S', 'dot', slurIndex)
+        if dotted:
+            slur.lineType = 'dotted'
+        elif dashed:
+            slur.lineType = 'dashed'
+
+        color: str = token.layoutParameter('S', 'color', slurIndex)
+        if color:
+            slur.style.color = color
+
+    @staticmethod
+    def _checkIfSlurIsInvisible(token: HumdrumToken, number: int) -> bool:
+        tsize: int = len(token.text)
+        counter: int = 0
+        for i in range(0, tsize-1):
+            if token.text[i] == '(':
+                counter += 1
+            if counter == number:
+                if token.text[i+1] == 'y':
+                    return True
+                return False
+        return False
+
+    def _processPhrases(self, note: m21.note.GeneralNote, token: HumdrumToken):
+        # TODO: phrases
+        pass
 
     @staticmethod
     def _processGrace(noteOrChord: Union[m21.note.Note, m21.chord.Chord], tstring: str) -> Union[m21.note.Note, m21.chord.Chord]:
@@ -3488,7 +3622,7 @@ class HumdrumFile(HumdrumFileContent):
         octave: int = Convert.kernToOctaveNumber(tstring)
 
         if isUnpitched:
-            note = M21Convert.createUnpitched()
+            note = M21Convert.createUnpitched(note) # note is the potential spannerHolder now...
             note.displayOctave = octave
             note.displayStep = m21PitchName
         else:
@@ -4010,9 +4144,11 @@ class HumdrumFile(HumdrumFileContent):
         self._processDirections(voice, layerTok, staffIndex)
 
     def _processDynamics(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+        # TODO: dynamics
         pass
 
     def _processDirections(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+        # TODO: text directions
         pass
 
     '''
