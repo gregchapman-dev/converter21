@@ -24,6 +24,7 @@ from humdrum import HumdrumFileContent
 from humdrum import HumdrumLine
 from humdrum import HumdrumToken
 from humdrum import HumNum
+from humdrum import HumHash
 from humdrum import HumParamSet
 from humdrum import Convert
 from humdrum import M21Convert
@@ -436,8 +437,8 @@ class StaffStateVariables:
         self.numStaffLines: int = 5
 
         self.dynamPosDefined: bool = False
-        self.dynamPos: int = None
-        self.dynamStaffAdj: int = None
+        self.dynamPos: int = 0
+        self.dynamStaffAdj: int = 0
 
         # first info in part (we hang on to these here, waiting for a Measure to put them in)
         self.firstM21Clef: m21.clef.Clef = None
@@ -1843,7 +1844,7 @@ class HumdrumFile(HumdrumFileContent):
 
     def _startBeam(self, layerData: [HumdrumToken], startTokenIdx: int):
         token: HumdrumToken = layerData[startTokenIdx]
-        obj: m21.Music21Object = token.getValueM21Object('music21', 'objectWithDuration')
+        obj: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
 
         # We append explicitly (instead of with a single call to beams.fill(numBeams))
         # because we may need more than 6 (dur == 1/256), and 6 is beams.fill's hard-
@@ -1854,14 +1855,14 @@ class HumdrumFile(HumdrumFileContent):
 
     def _continueBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevBeamTokenIdx: int, beamType: str = 'continue'):
         token: HumdrumToken = layerData[tokenIdx]
-        obj: m21.Music21Object = token.getValueM21Object('music21', 'objectWithDuration')
+        obj: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
 
         if obj is None or 'Rest' in obj.classes:
             return
 
         prevToken: HumdrumToken = layerData[prevBeamTokenIdx]
-        prevObj: m21.Music21Object = prevToken.getValueM21Object('music21',
-                                                                 'objectWithDuration')
+        prevObj: m21.note.GeneralNote = prevToken.getValueM21Object('music21',
+                                                                 'generalNote')
 
         numBeams: int = self._getNumBeamsForNoteOrChord(token, obj)
         prevNumBeams: int = self._getNumBeamsForNoteOrChord(prevToken, prevObj)
@@ -1922,7 +1923,7 @@ class HumdrumFile(HumdrumFileContent):
     def _startTuplet(self, layerData: [HumdrumToken], startTokenIdx: int, tupletTemplate: m21.duration.Tuplet, staffIndex: int):
         ss: StaffStateVariables = self._staffStates[staffIndex]
         startTok: HumdrumToken = layerData[startTokenIdx]
-        startNote: m21.Music21Object = startTok.getValueM21Object('music21', 'objectWithDuration')
+        startNote: m21.note.GeneralNote = startTok.getValueM21Object('music21', 'generalNote')
         if not startNote:
             raise HumdrumInternalError('no note/chord/rest at start of tuplet')
 
@@ -2006,7 +2007,7 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _continueTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
         token: HumdrumToken = layerData[tokenIdx]
-        note: m21.Music21Object = token.getValueM21Object('music21', 'objectWithDuration')
+        note: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
         if not note:
             # This could be a *something interp token; just skip it.
             return
@@ -2059,7 +2060,7 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _endTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
         endToken: HumdrumToken = layerData[tokenIdx]
-        endNote: m21.Music21Object = endToken.getValueM21Object('music21', 'objectWithDuration')
+        endNote: m21.note.GeneralNote = endToken.getValueM21Object('music21', 'generalNote')
         if not endNote:
             raise HumdrumInternalError('no note/chord/rest at end of tuplet')
 
@@ -2147,7 +2148,7 @@ class HumdrumFile(HumdrumFileContent):
             # do it (directly to the music21 note or chord)
             # (too late to set stem.dir, the note/chord has already been created)
             # token.setValue('auto', 'stem.dir', str(direction))
-            obj: m21.Music21Object = token.getValueM21Object('music21', 'objectWithDuration')
+            obj: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
             if not obj:
                 continue # no durational object
 
@@ -3200,6 +3201,51 @@ class HumdrumFile(HumdrumFileContent):
         if layerData and layerData[-1].isBarline:
             self._processDirections(voice, layerData[-1], staffIndex)
 
+    def _createNote(self, infoHash: HumHash = None) -> m21.note.Note:
+        # infoHash is generally the token for which the note is being created,
+        # but we declare it as a HumHash, since the only thing we read is
+        # 'spannerHolder', and the only thing we write is 'generalNote'
+        # The actual construction of the note contents from the token is done elsewhere.
+        spannerHolder: m21.note.GeneralNote = None
+        if infoHash:
+            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+
+        note: m21.note.Note = M21Convert.createNote(spannerHolder)
+        if infoHash and note:
+            infoHash.setValue('music21', 'generalNote', note)
+
+        return note
+
+    def _createChord(self, infoHash: HumHash = None) -> m21.chord.Chord:
+        # infoHash is generally the token for which the chord is being created,
+        # but we declare it as a HumHash, since the only thing we read is
+        # 'spannerHolder', and the only thing we write is 'generalNote'
+        # The actual construction of the chord contents from the token is done elsewhere.
+        spannerHolder: m21.note.GeneralNote = None
+        if infoHash:
+            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+
+        chord: m21.chord.Chord = M21Convert.createChord(spannerHolder)
+        if infoHash and chord:
+            infoHash.setValue('music21', 'generalNote', chord)
+
+        return chord
+
+    def _createRest(self, infoHash: HumHash = None) -> m21.note.Rest:
+        # infoHash is generally the token for which the rest is being created,
+        # but we declare it as a HumHash, since the only thing we read is
+        # 'spannerHolder', and the only thing we write is 'generalNote'
+        # The actual construction of the rest contents from the token is done elsewhere.
+        spannerHolder: m21.note.GeneralNote = None
+        if infoHash:
+            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+
+        rest: m21.note.Rest = M21Convert.createRest(spannerHolder)
+        if infoHash and rest:
+            infoHash.setValue('music21', 'generalNote', rest)
+
+        return rest
+
     '''
         _processChordLayerToken
     '''
@@ -3208,8 +3254,7 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Union[Fraction, float] = \
             self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
         chordOffsetInVoice: Union[Fraction, float] = chordOffsetInMeasure - voiceOffsetInMeasure
-        chord: m21.chord.Chord = M21Convert.createChord(layerTok.getValueM21Object(
-                                                            'music21', 'spannerHolder'))
+        chord: m21.chord.Chord = self._createChord(layerTok)
 
         # if (m_hasTremolo && layerdata[i]->getValueBool("auto", "tremolo")) {
         # else if (m_hasTremolo && layerdata[i]->getValueBool("auto", "tremolo2")) {
@@ -3231,7 +3276,6 @@ class HumdrumFile(HumdrumFileContent):
         self._processDirections(voice, layerTok, staffIndex)
 
         voice.insert(chordOffsetInVoice, chord)
-        layerTok.setValue('music21', 'objectWithDuration', chord)
 
     '''
         _convertChord
@@ -3283,7 +3327,7 @@ class HumdrumFile(HumdrumFileContent):
 #                 continue;
 #             }
 
-            note = M21Convert.createNote() # pass in no spannerHolder, that was for the entire chord
+            note = self._createNote() # pass in no infoHash, since this is only part of the chord
             note = self._convertNote(note, layerTok, 0, staffIndex, layerIndex, subTokenIdx)
             chord.add(note)
 
@@ -3349,8 +3393,7 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Union[Fraction, float] = \
             self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
         restOffsetInVoice: Union[Fraction, float] = restOffsetInMeasure - voiceOffsetInMeasure
-        rest: m21.note.Rest = M21Convert.createRest(layerTok.getValueM21Object(
-                                                        'music21', 'spannerHolder'))
+        rest: m21.note.Rest = self._createRest(layerTok)
 
         rest = self._convertRest(rest, layerTok, staffIndex)
         # TODO: rest colors
@@ -3365,7 +3408,6 @@ class HumdrumFile(HumdrumFileContent):
             rest.style.hideObjectOnPrint = True
 
         voice.insert(restOffsetInVoice, rest)
-        layerTok.setValue('music21', 'objectWithDuration', rest)
 
     '''
     /////////////////////////////
@@ -3413,8 +3455,7 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Union[Fraction, float] = \
             self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
         noteOffsetInVoice: Union[Fraction, float] = noteOffsetInMeasure - voiceOffsetInMeasure
-        note: m21.note.Note = M21Convert.createNote(layerTok.getValueM21Object(
-                                                        'music21', 'spannerHolder'))
+        note: m21.note.Note = self._createNote(layerTok)
 
         # TODO: tremolos
         # if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
@@ -3450,7 +3491,6 @@ class HumdrumFile(HumdrumFileContent):
 #             addArpeggio(note, layerdata[i]);
 #             processDirections(layerdata[i], staffindex); # m21.expressions.TextExpression
         voice.insert(noteOffsetInVoice, note)
-        layerTok.setValue('music21', 'objectWithDuration', note)
 
     def _processSlurs(self, endNote: m21.note.GeneralNote, token: HumdrumToken):
         slurEndCount: int = token.getValueInt('auto', 'slurEndCount')
@@ -3474,12 +3514,11 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             startNote: m21.note.GeneralNote = slurStartTok.getValueM21Object(
-                                                'music21', 'objectWithDuration')
+                                                'music21', 'generalNote')
             if not startNote:
-                # startNote can sometimes not be there yet due to cross layer slurs.
-                # Here we make a placeholder GeneralNote, which createNote, createRest,
-                # and createChord can be passed, and they can transfer any slurs (etc)
-                # from when creating the actual note/rest/chord.
+                # startNote can sometimes not be there yet, due to cross layer slurs.
+                # Here we make a placeholder GeneralNote, from which createNote will
+                # transfer the spanners, when creating the actual note.
                 startNote = m21.note.GeneralNote()
                 slurStartTok.setValue('music21', 'spannerHolder', startNote)
 
@@ -3622,7 +3661,7 @@ class HumdrumFile(HumdrumFileContent):
         octave: int = Convert.kernToOctaveNumber(tstring)
 
         if isUnpitched:
-            note = M21Convert.createUnpitched(note) # note is the potential spannerHolder now...
+            note = self._createUnpitched(token)
             note.displayOctave = octave
             note.displayStep = m21PitchName
         else:
@@ -4144,12 +4183,435 @@ class HumdrumFile(HumdrumFileContent):
         self._processDirections(voice, layerTok, staffIndex)
 
     def _processDynamics(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
-        # TODO: dynamics
-        pass
+        dynamic: str = ''
+        isGrace: bool = token.isGrace
+        line: HumdrumLine = token.ownerLine
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
+        if not line:
+            return
+
+        dynamicOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+        voiceOffsetInMeasure: Union[Fraction, float] = \
+            self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
+        dynamicOffsetInVoice: Union[Fraction, float] = dynamicOffsetInMeasure - voiceOffsetInMeasure
+
+
+        track: int = token.track
+        lastTrack: int = track
+        ttrack: int = -1
+        startField: int = token.fieldIndex + 1
+
+#         forceAbove: bool = False
+#         forceBelow: bool = False
+#         forceCenter: bool = False
+        trackDiff: int = 0
+#         staffAdjust: int = ss.dynamStaffAdj
+#         force: bool = False
+
+#         if ss.dynamPos > 0:
+#             #force = True
+#             forceAbove = True
+#         elif ss.dynamPos < 0:
+#             #force = True
+#             forceBelow = True
+#         elif ss.dynamPos == 0 and ss.dynamPosDefined:
+#             forceCenter = True
+#         elif ss.hasLyrics:
+#             forceAbove = True # Q: is this something we shouldn't do (rendering decisions)?
+
+#         justification: bool = False
+#         if token.layoutParameter('DY', 'rj') == 'true':
+#             justification = True
+
+        dcolor: str = token.layoutParameter('DY', 'color')
+#         needsRend: bool = justification or dcolor
+
+        # Handle "z" for sforzando (sf), or "zz" for sfz
+        #   This seems to be at the wrong level, shouldn't it be inside the loop below? --gregc
+        if 'z' in token.text:
+            print('_processDynamics: "z" found in token.text at top level')
+
+        active: bool = True
+        for i in range(startField, line.tokenCount):
+            staffAdj = ss.dynamStaffAdj
+            dynTok: HumdrumToken = line[i]
+            exInterp: str = dynTok.dataType.text
+            if exInterp != '**kern' and 'kern' in exInterp:
+                active = False # will this ever be true? --gregc
+            if dynTok.isKern:
+                active = True
+                ttrack = dynTok.track
+                if ttrack != track:
+                    if ttrack != lastTrack:
+                        trackDiff += 1
+                        lastTrack = ttrack
+                    if isGrace:
+                        continue
+                    break
+                # Break if this is not the last layer for the current spine
+                if not dynTok.isNull:
+                    break
+            if not active:
+                continue
+            if not (dynTok.isDataType('**dynam') or dynTok.isDataType('**dyn')):
+                continue
+
+            # Don't skip NULL tokens, because this algorithm only prints dynamics
+            # after the last layer, and there could be notes in earlier layer
+            # that need the dynamic.
+            # if dynTok.isNull:
+            #     continue
+
+            dynTokStr: str = dynTok.text
+            if dynTok.getValueBool('auto', 'DY', 'processed'):
+                return
+            dynTok.setValue('auto', 'DY', 'processed', 'true')
+
+            # int pcount = dyntok->getLinkedParameterSetCount();
+
+            hairpins: str = ''
+            letters: str = ''
+            for ch in dynTokStr:
+                if ch.isalpha():
+                    letters += ch
+                else:
+                    hairpins += ch
+
+            if re.search('^[sr]?f+z?$', letters): # 'sf', 'sfz', 'f', 'fff', etc ('rfz'? really?)
+                dynamic = letters
+            elif re.search('^p+$', letters): # 'p', 'ppp', etc
+                dynamic = letters
+            elif re.search('^m?(f|p)$', letters): # 'mf', 'mp'
+                dynamic = letters
+            elif re.search('^s?f+z?p+$', letters): # 'fp', 'sfzp', 'ffp' etc
+                dynamic = letters
+
+            if dynamic:
+                staffAdj = ss.dynamStaffAdj
+
+                dynText: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 't', '', '')
+                if dynText:
+                    dynText = re.sub('%s', dynamic, dynText)
+                    dynamic = dynText
+
+                above: bool = self._hasAboveParameter(dynTok, 'DY') #, staffAdj)
+                below: bool = False
+                center: bool = False
+#                 showPlace: bool = above
+                if not above:
+                    below = self._hasBelowParameter(dynTok, 'DY') #, staffAdj)
+#                     showPlace = below
+                if not above and not below:
+                    hasCenter, staffAdj = self._hasCenterParameter(token, 'DY', staffAdj)
+                    if hasCenter:
+                        above = False
+                        below = False
+                        center = True
+#                         showPlace = center
+
+                # if pcount > 0, then search for prefix and postfix text
+                # to add to the dynamic.
+                # std::string prefix = "aaa ";
+                # std::string postfix = " bbb";
+                # See https://github.com/music-encoding/music-encoding/issues/540
+
+                rightJustified: bool = False
+                if dynTok.layoutParameter('DY', 'rj') == 'true':
+                    rightJustified = True
+
+                #editorial: bool = False
+                editStr: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 'ed', 'true', '')
+                if editStr:
+                    #editorial = True
+                    if 'brack' in editStr:
+                        dynamic = '[ ' + dynamic + ' ]'
+                    elif 'paren' in editStr:
+                        dynamic = '( ' + dynamic + ' )'
+                    elif 'curly' in editStr:
+                        dynamic = '{ ' + dynamic + ' }'
+                    elif 'angle' in editStr:
+                        dynamic = '< ' + dynamic + ' >'
+
+                dcolor: str = dynTok.layoutParameter('DY', 'color')
+                #needsRend: bool = justification or dcolor
+
+                # Here is where we create the music21 object for the dynamic
+                m21Dynamic: m21.dynamics.Dynamic = m21.dynamics.Dynamic(dynamic)
+                m21Dynamic.fontStyle = 'bold' # this is what verovio does
+                if dcolor:
+                    m21Dynamic.style.color = dcolor
+                if rightJustified:
+                    m21Dynamic.style.justify = 'right'
+
+                # verticalgroup: str = dyntok.layoutParameter('DY', 'vg')
+                # Q: is there a music21 equivalent to MEI's verticalgroup?
+                if above:
+                    m21Dynamic.style.absoluteY = 'above'
+                elif below:
+                    m21Dynamic.style.absoluteY = 'below'
+                elif center:
+                    m21Dynamic.style.absoluteY = -20
+#                 elif forceAbove:
+#                     m21Dynamic.style.absoluteY = 'above'
+#                 elif forceBelow:
+#                     m21Dynamic.style.absoluteY = 'below'
+#                 elif forceCenter:
+#                     m21Dynamic.style.absoluteY = -20
+
+                voice.insert(dynamicOffsetInVoice, m21Dynamic)
+
+            if hairpins:
+                self._processHairpin(voice, dynamicOffsetInVoice, hairpins, token, dynTok, staffIndex)
+
+        token = token.nextToken(0)
+        if not token:
+            return
+
+        while token and not token.isData:
+            token = token.nextToken(0)
+
+        if not token:
+            return
+        if not token.isNull:
+            return
+
+        # re-run this function on null tokens after the main note since
+        # there may be dynamics unattached to a note (for various often
+        # legitimate reasons).  Maybe make this more efficient later, such as
+        # do a separate parse of dynamics data in a different loop.
+        self._processDynamics(voice, token, staffIndex)
+
+
+    def _processHairpin(self, voice: m21.stream.Voice, dynamicOffsetInVoice: Union[Fraction, float],
+                        hairpins: str, token: HumdrumToken, dynTok: HumdrumToken, staffIndex: int):
+        if '<' in hairpins:
+            startHairpin = '<'
+            stopHairpin = '['
+        elif '>' in hairpins:
+            startHairpin = '>'
+            stopHairpin = ']'
+        else:
+            return
+
+        startStopHairpin1 = startHairpin + stopHairpin
+        startStopHairpin2 = startHairpin + ' ' + stopHairpin
+
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
+#         endLine: bool = False
+        endTok: HumdrumToken = None
+#         duration: HumNum = HumNum(0)
+        if startStopHairpin1 in hairpins or startStopHairpin2 in hairpins:
+#             duration = self._getLeftNoteDuration(token)
+            endTok = token
+#             endLine = True
+        else:
+            endTok = self._getHairpinEnd(dynTok, stopHairpin)
+
+        staffAdj = ss.dynamStaffAdj
+        above: bool = self._hasAboveParameter(dynTok, 'HP') #, staffAdj)
+        below: bool = False
+        center: bool = False
+#         showPlace: bool = above
+        if not above:
+            below = self._hasBelowParameter(dynTok, 'HP') #, staffAdj)
+#             showPlace = below
+        if not above and not below:
+            hasCenter, staffAdj = self._hasCenterParameter(dynTok, 'HP', staffAdj)
+            if hasCenter:
+                above = False
+                below = False
+                center = True
+#                 showPlace = center
+
+        if endTok:
+            # Here is where we create the music21 object for the crescendo/decrescendo
+            m21Hairpin: m21.dynamics.DynamicWedge
+            if startHairpin == '<':
+                m21Hairpin = m21.dynamics.Crescendo()
+            else:
+                m21Hairpin = m21.dynamics.Diminuendo()
+
+            # LATER: staff adjustments for dynamics and forcing position
+            if center and not above and not below:
+                m21Hairpin.style.absoluteY = -20
+            else:
+                if above:
+                    m21Hairpin.style.absoluteY = 'above'
+                elif below:
+                    m21Hairpin.style.absoluteY = 'below'
+#                 elif forceAbove:
+#                     m21Hairpin.style.absoluteY = 'above'
+#                 elif forceBelow:
+#                     m21Hairpin.style.absoluteY = 'below'
+
+            # Now I need to put the start and end "notes" into the Crescendo spanner.
+            # This is instead of all the timestamp stuff verovio does.
+            startNoteToken: HumdrumToken = self._getLeftNoteToken(token)
+            endNoteToken: HumdrumToken = self._getLeftNoteToken(endTok)
+            startNote: m21.note.GeneralNote = startNoteToken.getValueM21Object(
+                                                'music21', 'generalNote')
+            endNote: m21.note.GeneralNote = endNoteToken.getValueM21Object(
+                                                'music21', 'generalNote')
+            if not startNote:
+                # startNote can sometimes not be there yet, due to cross layer slurs.
+                # Here we make a placeholder GeneralNote, from which createNote will
+                # transfer the spanners, when creating the actual note.
+                startNote = m21.note.GeneralNote()
+                startNoteToken.setValue('music21', 'spannerHolder', startNote)
+            if not endNote:
+                # endNote can sometimes not be there yet, due to cross layer slurs.
+                # Here we make a placeholder GeneralNote, from which createNote will
+                # transfer the spanners, when creating the actual note.
+                endNote = m21.note.GeneralNote()
+                endNoteToken.setValue('music21', 'spannerHolder', endNote)
+
+            m21Hairpin.addSpannedElements(startNote, endNote)
+            self.m21Stream.insert(0, m21Hairpin)
+        else:
+            # no endpoint so print as the word "cresc."/"decresc." (modified by _signifiers and layout)
+            content: str = ''
+            fontStyle: str = ''
+
+            # default
+            if startHairpin == '<':
+                content = 'cresc.'
+            else:
+                content = 'decresc.'
+
+            # override with RDF signifiers
+            if startHairpin == '<' and self._signifiers.crescText:
+                content = self._signifiers.crescText
+                fontStyle = self._signifiers.crescFontStyle
+            elif startHairpin == '>' and self._signifiers.decrescText:
+                content = self._signifiers.decrescText
+                fontStyle = self._signifiers.decrescFontStyle
+
+            pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 't', '', '')
+            if pinText:
+                pinText = re.sub('%s', content, pinText)
+                content = pinText
+
+            m21TextExp: m21.expressions.TextExpression = m21.expressions.TextExpression(content)
+            if fontStyle:
+                m21TextExp.style.fontStyle = fontStyle
+
+            if center and not above and not below:
+                m21TextExp.style.absoluteY = -20
+            else:
+                if above:
+                    m21TextExp.style.absoluteY = 'above'
+                elif below:
+                    m21TextExp.style.absoluteY = 'below'
+#                 elif forceAbove:
+#                     m21TextExp.style.absoluteY = 'above'
+#                 elif forceBelow:
+#                     m21TextExp.style.absoluteY = 'below'
+            voice.insert(dynamicOffsetInVoice, m21TextExp)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getLeftNoteDuration --
+    '''
+    def _getLeftNoteDuration(self, token: HumdrumToken) -> HumNum:
+        output: HumNum = HumNum(0)
+        leftNote: HumdrumToken = self._getLeftNoteToken(token)
+        if leftNote:
+            output = Convert.recipToDuration(leftNote.text)
+        return output
+
+    @staticmethod
+    def _getLeftNoteToken(token: HumdrumToken) -> HumdrumToken:
+        output: HumdrumToken = None
+        current: HumdrumToken = token
+        while current:
+            if not current.isKern:
+                current = current.previousFieldToken
+                continue
+            if current.isNull:
+                current = current.previousFieldToken
+                continue
+            output = current
+            break
+        return output
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getHairpinEnd --
+    '''
+    @staticmethod
+    def _getHairpinEnd(token: HumdrumToken, endChar: str) -> HumdrumToken:
+        if not token:
+            return None
+
+        token = token.getNextNonNullDataToken(0)
+
+        while token:
+            isBadToken: bool = False
+            if endChar in token.text:
+                return token
+
+            for ch in token.text:
+                if ch.isalpha():
+                    isBadToken = True
+                elif ch == '<':
+                    isBadToken = True
+                elif ch == '>':
+                    isBadToken = True
+
+                if isBadToken:
+                    # maybe return the bad token for a weak ending
+                    # to a hairpin...
+                    return None
+
+            token = token.getNextNonNullDataToken(0)
+
+        return None
 
     def _processDirections(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
         # TODO: text directions
         pass
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getLayoutParameter -- Get an attached layout parameter
+    //   for a token.  Move this variant into HumdrumToken class at some point.
+    //
+    //     trueString = value to return if there is a parameter but the
+    //                  value is empty.
+    //     falseString = value to return if there is no parameter.
+    //                   default value = ""
+    '''
+    @staticmethod
+    def _getLayoutParameterWithDefaults(token: HumdrumToken, ns2: str, catKey: str,
+                                        existsButEmptyValue: str,
+                                        doesntExistValue: str = '') -> str:
+        lcount = token.linkedParameterSetCount
+        if lcount == 0:
+            return doesntExistValue
+
+        for p in range(0, lcount):
+            hps = token.getLinkedParameterSet(p)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != ns2:
+                continue
+
+            for q in range(0, hps.count):
+                key: str = hps.getParameterName(q)
+                if key == catKey:
+                    value: str = hps.getParameterValue(q)
+                    if value:
+                        return value
+                    return existsButEmptyValue
+
+        return doesntExistValue
 
     '''
     //////////////////////////////
@@ -5353,7 +5815,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             for q in range(0, hps.count):
-                paramKey = hps.getParameterName(q)
+                paramKey: str = hps.getParameterName(q)
                 if paramKey == 'a':
                     return True
                 if paramKey == 'Z':
@@ -5382,13 +5844,50 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             for q in range(0, hps.count):
-                paramKey = hps.getParameterName(q)
+                paramKey: str = hps.getParameterName(q)
                 if paramKey == 'b':
                     return True
                 if paramKey == 'Y':
                     return True
 
         return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::hasCenterParameter -- true if has a "c" parameter is present with optional staff adjustment.
+    '''
+    @staticmethod
+    def _hasCenterParameter(token: HumdrumToken, ns2: str, staffAdj: int) -> tuple: # (hasCenter, newStaffAdj))
+        lcount: int = token.linkedParameterSetCount
+        if lcount == 0:
+            return (False, staffAdj)
+
+        for p in range(0, lcount):
+            hps: HumParamSet = token.getLinkedParameterSet(p)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != ns2:
+                continue
+
+            for q in range(0, hps.count):
+                paramKey: str = hps.getParameterName(q)
+                paramVal: str = hps.getParameterValue(q)
+                if paramKey == 'c':
+                    if paramVal == 'true':
+                        # below the attached staff
+                        staffAdj = 0
+                    elif paramVal:
+                        staffAdj = int(paramVal)
+                        if staffAdj:
+                            staffAdj = -(staffAdj - 1)
+                    return (True, staffAdj)
+                if paramKey == 'Y':
+                    return (True, staffAdj)
+
+        return (False, staffAdj)
 
     '''
     //////////////////////////////

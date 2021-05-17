@@ -16,6 +16,7 @@ import os
 import sys
 
 from music21 import converter
+from music21._version import __version__
 from humdrum import HumdrumConverter
 
 def getInputFormatsList() -> [str]:
@@ -111,6 +112,7 @@ parser.add_argument("-of", "--outputFormat", required=True,
 parser.add_argument("-fs", "--forceSource", type=bool, default=True,
                     help="force complete parsing of input file, ignoring any cached parse")
 
+print('music21 version:', __version__)
 args = parser.parse_args()
 
 if args.inputFormat is None:
@@ -132,7 +134,7 @@ else:
 s = converter.parse(args.inputFile, format=args.inputFormat, forceSource=args.forceSource)
 
 #s.show('text')
-s.show('musicxml.pdf')
+s.show('musicxml.pdf', makeNotation=False)
 #s.show('lilypond.pdf')
 
 # check validity of outputFormat
@@ -151,5 +153,5 @@ if outFileExt not in validOutputExtList:
     # valid extension for it
     outputFile = outFileName + getValidOutputExtensionForFormat(args.outputFormat)
 
-s.write(fmt=args.outputFormat, fp=outputFile)
+s.write(fmt=args.outputFormat, fp=outputFile, makeNotation=False)
 print("Success!  Output can be found in", outputFile)

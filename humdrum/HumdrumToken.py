@@ -326,7 +326,7 @@ class HumdrumToken(HumHash):
     // @SEEALSO: isDataType
     '''
     @property
-    def dataType(self) -> str:
+    def dataType(self): # -> HumdrumToken:
         return self._address.dataType
 
     '''
