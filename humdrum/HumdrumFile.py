@@ -20,6 +20,8 @@ import copy
 
 import music21 as m21
 
+from humdrum import HumdrumSyntaxError
+from humdrum import HumdrumInternalError
 from humdrum import HumdrumFileContent
 from humdrum import HumdrumLine
 from humdrum import HumdrumToken
@@ -28,11 +30,6 @@ from humdrum import HumHash
 from humdrum import HumParamSet
 from humdrum import Convert
 from humdrum import M21Convert
-
-class HumdrumInternalError(Exception):
-    # when internal expectations are not met
-    pass
-
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -3201,7 +3198,8 @@ class HumdrumFile(HumdrumFileContent):
         if layerData and layerData[-1].isBarline:
             self._processDirections(voice, layerData[-1], staffIndex)
 
-    def _createNote(self, infoHash: HumHash = None) -> m21.note.Note:
+    @staticmethod
+    def _createNote(infoHash: HumHash = None) -> m21.note.Note:
         # infoHash is generally the token for which the note is being created,
         # but we declare it as a HumHash, since the only thing we read is
         # 'spannerHolder', and the only thing we write is 'generalNote'
@@ -3211,12 +3209,29 @@ class HumdrumFile(HumdrumFileContent):
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
         note: m21.note.Note = M21Convert.createNote(spannerHolder)
-        if infoHash and note:
+        if infoHash is not None and note is not None:
             infoHash.setValue('music21', 'generalNote', note)
 
         return note
 
-    def _createChord(self, infoHash: HumHash = None) -> m21.chord.Chord:
+    @staticmethod
+    def _createUnpitched(infoHash: HumHash = None) -> m21.note.Note:
+        # infoHash is generally the token for which the note is being created,
+        # but we declare it as a HumHash, since the only thing we read is
+        # 'spannerHolder', and the only thing we write is 'generalNote'
+        # The actual construction of the note contents from the token is done elsewhere.
+        spannerHolder: m21.note.GeneralNote = None
+        if infoHash:
+            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+
+        unpitched: m21.note.Unpitched = M21Convert.createUnpitched(spannerHolder)
+        if infoHash is not None and unpitched is not None:
+            infoHash.setValue('music21', 'generalNote', unpitched)
+
+        return unpitched
+
+    @staticmethod
+    def _createChord(infoHash: HumHash = None) -> m21.chord.Chord:
         # infoHash is generally the token for which the chord is being created,
         # but we declare it as a HumHash, since the only thing we read is
         # 'spannerHolder', and the only thing we write is 'generalNote'
@@ -3226,12 +3241,13 @@ class HumdrumFile(HumdrumFileContent):
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
         chord: m21.chord.Chord = M21Convert.createChord(spannerHolder)
-        if infoHash and chord:
+        if infoHash is not None and chord is not None:
             infoHash.setValue('music21', 'generalNote', chord)
 
         return chord
 
-    def _createRest(self, infoHash: HumHash = None) -> m21.note.Rest:
+    @staticmethod
+    def _createRest(infoHash: HumHash = None) -> m21.note.Rest:
         # infoHash is generally the token for which the rest is being created,
         # but we declare it as a HumHash, since the only thing we read is
         # 'spannerHolder', and the only thing we write is 'generalNote'
@@ -3241,7 +3257,7 @@ class HumdrumFile(HumdrumFileContent):
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
         rest: m21.note.Rest = M21Convert.createRest(spannerHolder)
-        if infoHash and rest:
+        if infoHash is not None and rest is not None:
             infoHash.setValue('music21', 'generalNote', rest)
 
         return rest
@@ -3270,7 +3286,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # TODO: chord stem directions, articulations, ornaments, arpeggios
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
-#         self._addArticulations(chord, layerTok)
+        self._addArticulations(chord, layerTok)
 #         self._addOrnaments(chord, layerTok)
 #         self._addArpeggio(chord, layerTok)
         self._processDirections(voice, layerTok, staffIndex)
@@ -3486,11 +3502,159 @@ class HumdrumFile(HumdrumFileContent):
 #             else if (m_staffstates.at(staffindex).cue_size.at(m_currentlayer)) {
 #                 note->SetCue(BOOLEAN_true);
 #             }
-#             addArticulations(note, layerdata[i]);
+        self._addArticulations(note, layerTok)
 #             addOrnaments(note, layerdata[i]);
 #             addArpeggio(note, layerdata[i]);
 #             processDirections(layerdata[i], staffindex); # m21.expressions.TextExpression
         voice.insert(noteOffsetInVoice, note)
+
+    def _addArticulations(self, note: m21.note.GeneralNote, token: HumdrumToken):
+        # store info about articulations in various dicts, keyed by humdrum articulation string
+        # which is usually a single character, but can be two (e.g. '^^')
+        articFound: dict = dict() # value is bool
+        articPlacement: dict = dict() # value is 'below', 'above', or ''
+        articIsGestural: dict = dict() # value is bool (gestural means "not printed on the page, but it's what the performer did")
+
+        tsize: int = len(token.text)
+        ch: str = ''
+        ch1: str = ''
+        ch2: str = ''
+        ch3: str = ''
+        skipNChars: int = 0
+
+        for i in range(0, tsize):
+            if skipNChars:
+                skipNChars -= 1
+                continue
+
+            ch = token.text[i]
+            if ch.isdigit():
+                continue
+
+            ch1 = ''
+            if i+1 < tsize:
+                ch1 = token.text[i+1]
+            if ch == '^' and ch1 == '^':
+                ch = '^^'
+                ch1 = ''
+                skipNChars = 1
+                if i+skipNChars+1 < tsize:
+                    ch1 = token.text[i+skipNChars+1]
+            elif ch == "'" and ch1 == "'":
+                # staccatissimo alternate (eventually remove)
+                ch = '`'
+                ch1 = ''
+                skipNChars = 1
+                if i+skipNChars+1 < tsize:
+                    ch1 = token.text[i+skipNChars+1]
+            # this will include a bunch of non-articulation characters as well, but we
+            # will only look for the ones we know, below.
+            articFound[ch] = True
+            articIsGestural[ch] = False
+            articPlacement[ch] = ''
+
+            if ch1:
+                # check for gestural (hidden) articulations
+                ch2 = ''
+                if i+skipNChars+2 < tsize:
+                    ch2 = token.text[i+skipNChars+2]
+                ch3 = ''
+                if i+skipNChars+3 < tsize:
+                    ch3 = token.text[i+skipNChars+3]
+
+                if ch1 == 'y' and ch2 != 'y':
+                    articIsGestural[ch] = True
+                elif self._signifiers.above and ch1 == self._signifiers.above \
+                        and ch2 == 'y' and ch3 != 'y':
+                    articIsGestural[ch] = True
+                elif self._signifiers.below and ch1 == self._signifiers.below \
+                        and ch2 == 'y' and ch3 != 'y':
+                    articIsGestural[ch] = True
+
+            if self._signifiers.above and ch1 == self._signifiers.above:
+                articPlacement[ch] = 'above'
+            elif self._signifiers.below and ch1 == self._signifiers.below:
+                articPlacement[ch] = 'below'
+
+
+        artics: [m21.articulations.Articulation] = []
+
+        # place articulations in stacking order (nearest to furthest from note)
+        # (not sure if that does anything for music21, but whatever --gregc)
+        if articFound.get("'", None):
+            staccato = m21.articulations.Staccato()
+            placement: str = articPlacement["'"]
+            if placement:
+                staccato.placement = placement
+            if articIsGestural["'"]:
+                staccato.style.hideObjectOnPrint = True
+            artics.append(staccato)
+
+        if articFound.get('`', None):
+            staccatissimo = m21.articulations.Staccatissimo()
+            placement: str = articPlacement['`']
+            if placement:
+                staccatissimo.placement = placement
+            if articIsGestural['`']:
+                staccatissimo.style.hideObjectOnPrint = True
+            artics.append(staccatissimo)
+
+        if articFound.get('~', None):
+            tenuto = m21.articulations.Tenuto()
+            placement: str = articPlacement['~']
+            if placement:
+                tenuto.placement = placement
+            if articIsGestural['~']:
+                tenuto.style.hideObjectOnPrint = True
+            artics.append(tenuto)
+
+        if articFound.get('^^', None):
+            strongAccent = m21.articulations.StrongAccent()
+            placement: str = articPlacement['^^']
+            if placement:
+                strongAccent.placement = placement
+            if articIsGestural['^^']:
+                strongAccent.style.hideObjectOnPrint = True
+            artics.append(strongAccent)
+
+        if articFound.get('^', None):
+            accent = m21.articulations.Accent()
+            placement: str = articPlacement['^']
+            if placement:
+                accent.placement = placement
+            if articIsGestural['^']:
+                accent.style.hideObjectOnPrint = True
+            artics.append(accent)
+
+        if articFound.get('o', None):
+            harmonic = m21.articulations.Harmonic()
+            placement: str = articPlacement['o']
+            if placement:
+                harmonic.placement = placement
+            if articIsGestural['o']:
+                harmonic.style.hideObjectOnPrint = True
+            artics.append(harmonic)
+
+        if articFound.get('v', None):
+            upBow = m21.articulations.UpBow()
+            placement: str = articPlacement['v']
+            if placement:
+                upBow.placement = placement
+            if articIsGestural['v']:
+                upBow.style.hideObjectOnPrint = True
+            artics.append(upBow)
+
+        if articFound.get('u', None):
+            downBow = m21.articulations.DownBow()
+            placement: str = articPlacement['u']
+            if placement:
+                downBow.placement = placement
+            if articIsGestural['u']:
+                downBow.style.hideObjectOnPrint = True
+            artics.append(downBow)
+
+        if artics:
+            note.articulations = artics
 
     def _processSlurs(self, endNote: m21.note.GeneralNote, token: HumdrumToken):
         slurEndCount: int = token.getValueInt('auto', 'slurEndCount')
@@ -4448,8 +4612,18 @@ class HumdrumFile(HumdrumFileContent):
 
             # Now I need to put the start and end "notes" into the Crescendo spanner.
             # This is instead of all the timestamp stuff verovio does.
-            startNoteToken: HumdrumToken = self._getLeftNoteToken(token)
-            endNoteToken: HumdrumToken = self._getLeftNoteToken(endTok)
+            startNoteToken: HumdrumToken = self._getAppropriateNearbyNoteToken(token, start=True)
+            endNoteToken: HumdrumToken = self._getAppropriateNearbyNoteToken(endTok, start=False)
+
+            if not startNoteToken and not endNoteToken:
+                # should never happen
+                raise HumdrumSyntaxError('no start or end note token for hairpin')
+
+            if not startNoteToken:
+                startNoteToken = endNoteToken
+            if not endNoteToken:
+                endNoteToken = startNoteToken
+
             startNote: m21.note.GeneralNote = startNoteToken.getValueM21Object(
                                                 'music21', 'generalNote')
             endNote: m21.note.GeneralNote = endNoteToken.getValueM21Object(
@@ -4530,12 +4704,112 @@ class HumdrumFile(HumdrumFileContent):
             if not current.isKern:
                 current = current.previousFieldToken
                 continue
-            if current.isNull:
+            if not current.isNonNullData:
                 current = current.previousFieldToken
                 continue
             output = current
             break
         return output
+
+    @staticmethod
+    def _getRightNoteToken(token: HumdrumToken) -> HumdrumToken:
+        output: HumdrumToken = None
+        current: HumdrumToken = token
+        while current:
+            if not current.isKern:
+                current = current.nextFieldToken
+                continue
+            if current.isNonNullData:
+                current = current.nextFieldToken
+                continue
+            output = current
+            break
+        return output
+
+    def _getAppropriateNearbyNoteToken(self, token: HumdrumToken, start: bool) -> HumdrumToken:
+        # look left, then right
+        # if start, look up (left and right) until you hit a barline, then down
+        # if not start, look down (left and right) first, then up
+        # a good token isKern and isNonNullData
+        output: HumdrumToken = self._getLeftNoteToken(token)
+        if output:
+            return output
+
+        output = self._getRightNoteToken(token)
+        if output:
+            return output
+
+        if start:
+            # start walking up the file until we hit a barline, looking left and right
+            current = token.previousToken(0)
+            while not current.isBarline:
+                if current.isInterpretation or current.isComment:
+                    current = current.previousToken(0)
+                    continue
+
+                output = self._getLeftNoteToken(current)
+                if output:
+                    return output
+
+                output = self._getRightNoteToken(current)
+                if output:
+                    return output
+
+                current = current.previousToken(0)
+
+            # didn't find anything earlier in the measure, try later in the measure
+            current = token.nextToken(0)
+            while not current.isBarline:
+                if current.isInterpretation or current.isComment:
+                    current = current.nextToken(0)
+                    continue
+
+                output = self._getLeftNoteToken(current)
+                if output:
+                    return output
+
+                output = self._getRightNoteToken(current)
+                if output:
+                    return output
+
+                current = current.nextToken(0)
+        else:
+            # start walking down the file until we hit a barline, looking left and right
+            current = token.nextToken(0)
+            while not current.isBarline:
+                if current.isInterpretation or current.isComment:
+                    current = current.nextToken(0)
+                    continue
+
+                output = self._getLeftNoteToken(current)
+                if output:
+                    return output
+
+                output = self._getRightNoteToken(current)
+                if output:
+                    return output
+
+                current = current.nextToken(0)
+
+            # didn't find anything later in the measure, try earlier in the measure
+            current = token.previousToken(0)
+            while not current.isBarline:
+                if current.isInterpretation or current.isComment:
+                    current = current.previousToken(0)
+                    continue
+
+                output = self._getLeftNoteToken(current)
+                if output:
+                    return output
+
+                output = self._getRightNoteToken(current)
+                if output:
+                    return output
+
+                current = current.previousToken(0)
+
+        return None
+
 
     '''
     //////////////////////////////

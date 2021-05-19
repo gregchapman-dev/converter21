@@ -9,8 +9,7 @@
 # Copyright:     (c) 2021 Greg Chapman
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
-class HumdrumSyntaxError(Exception):
-    pass
+from humdrum import HumdrumSyntaxError
 
 class HumAddress:
     def __init__(self):

@@ -11,6 +11,7 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 
+from .HumExceptions import HumdrumInternalError, HumdrumSyntaxError
 from .HumNum import HumNum
 from .Convert import Convert
 from .HumAddress import HumAddress

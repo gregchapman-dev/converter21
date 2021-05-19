@@ -492,6 +492,11 @@ class Convert:
     '''
     @staticmethod
     def isKernNote(text: str) -> bool:
+        # rests can have note values (for positioning) without being a note,
+        # so check if it's a rest before looking for note values.
+        if Convert.isKernRest(text):
+            return False
+
         for ch in text:
             if ch in 'abcdefgABCDEFG':
                 return True
