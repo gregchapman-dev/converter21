@@ -3892,7 +3892,7 @@ class HumdrumFile(HumdrumFileContent):
                     note.pitch.accidental = m21.pitch.Accidental('natural')
 
                 if hasEditorial:
-                    note.pitch.accidental.displayStatus = True # forces it to be displayed
+                    note.pitch.accidental.displayType = 'even-tied' # forces it to be displayed
                     if editorialStyle.startswith('brac'):
                         note.pitch.accidental.displayStyle = 'bracket'
                     elif editorialStyle.startswith('paren'):
@@ -3905,7 +3905,7 @@ class HumdrumFile(HumdrumFileContent):
                     # music21 can't deal with the combo overrides ('n#') or the
                     # alternate spelling overrides ('##' vs. 'x') at all.
                     # See todo.txt for a possible music21 cautionary override method.
-                    note.pitch.accidental.displayStatus = True # forces it to be displayed
+                    note.pitch.accidental.displayType = 'even-tied' # forces it to be displayed
 
         # we don't set the duration of notes in a chord.  The chord gets a duration
         # instead.
