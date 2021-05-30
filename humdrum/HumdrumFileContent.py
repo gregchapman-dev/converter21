@@ -786,6 +786,15 @@ class HumdrumFileContent(HumdrumFileStructure):
                         token.setValue('auto', str(k), 'cautionaryAccidental', layoutAccidental)
                         token.setValue('auto', str(k), 'visualAccidental', layoutAccidental)
 
+                    # check for accidentals on trills, mordents, and turns
+#                     if 't' in subtok:
+#                     elif 'T' in subtok:
+#                     elif 'M' in subtok:
+#                     elif 'm' in subtok:
+#                     elif 'W' in subtok:
+#                     elif 'w' in subtok:
+#                     elif '$' in subtok:
+#                     elif 'S' in subtok:
 
         # Indicate that the accidental analysis has been done:
         self.setValue('auto', 'accidentalAnalysis', 'true')

@@ -815,7 +815,7 @@ class HumdrumFile(HumdrumFileContent):
                 if ss.firstM21TimeSig:
                     measure.insert(0, ss.firstM21TimeSig)
 
-            # in verovio _nextLeftBarlineStartsRepeat is m_leftbarstyle (only ever set
+            # in C++ code _nextLeftBarlineStartsRepeat is m_leftbarstyle (only ever set
             # to BARRENDITION_rptstart or BARRENDITION_NONE, so for me it's a bool)
             if self._nextLeftBarlineStartsRepeat:
                 # The previous measure ended with a "start repeat" or "end/start repeat"
@@ -985,7 +985,7 @@ class HumdrumFile(HumdrumFileContent):
     //    which the change occurs.
 
         For music21, we add any changes to the appropriate systemMeasure (there is
-        one Measure per staff/Part). We also do something Verovio does not: we
+        one Measure per staff/Part). We also do something C++ code does not: we
         handle signature changes mid-Measure, and insert them at the appropriate
         time offset.
     '''
@@ -1312,7 +1312,7 @@ class HumdrumFile(HumdrumFileContent):
         if measureDuration == 0:
             return # empty layer, no need for it, not even for space (see comment below)
 
-        # Note that using offsetInMeasure means we can bypass all Verovio's prespace stuff.
+        # Note that using offsetInMeasure means we can bypass all C++ code's prespace stuff.
         # MEI (and maybe others) might need it, but that's for the various exporters to
         # deal with if necessary.  We have positioned this Voice correctly in the Measure.
         voice: m21.stream.Voice = m21.stream.Voice()
@@ -2667,13 +2667,13 @@ class HumdrumFile(HumdrumFileContent):
                 # third note of the first triplet, and the last two of those would be the first two
                 # notes of the second triplet.  Alternatively, this piece really seems to be better
                 # notated as one triplet of whole notes per measure (duration of triplet == breve).
-                # I would note that verovio renders this measure weirdly, by putting a triplet
+                # I would note that C++ code renders this measure weirdly, by putting a triplet
                 # bracket around the first two notes, and another "around" the last note. But we need
                 # to work around it, since the partial duration causes an inexpressible durationNormal
                 # and music21 really hates that. The workaround below seems OK, but the end result
                 # from export to MusicXML (or perhaps from the render by Musescore) adds rests to
                 # the tuplets to get them to be full duration. And that's even more wrong than what
-                # verovio does, since it makes the measure too long.
+                # C++ code does, since it makes the measure too long.
                 # Workaround:
                 # Let's see if the partial duration is 1/N or 2/N or 3/N... of a reasonable tuplet
                 # duration, where N is numNotesActual.  For example, for a triplet (numNotesActual
@@ -3043,7 +3043,7 @@ class HumdrumFile(HumdrumFileContent):
 
 
     def _checkForTremolo(self, layerData: [HumdrumToken], tgs: [HumdrumBeamAndTuplet], tokenIdx: int, staffIndex: int):
-        # test with Beethoven sonata20-2.krn
+        # test with Beethoven sonata20-2.krn or sonata08-1.krn
         pass
 
     '''
@@ -3158,10 +3158,6 @@ class HumdrumFile(HumdrumFileContent):
 
         if layerIndex == 0 and layerData and layerData[-1].isBarline:
             endBarline = layerData[-1]
-#             if ';' in endBarline.text:
-#                 self._addFermata(endBarline, None)
-#             if ',' in endBarline.text:
-#                 self._addBreath(endBarline, None)
 
             # check for rptend here, since the one for the last measure in
             # the music is missed by the inline processing.  But maybe limit
@@ -3170,6 +3166,15 @@ class HumdrumFile(HumdrumFileContent):
             if ':|' in endBarline.text or ':!' in endBarline.text:
                 if self._oneMeasurePerStaff[staffIndex]:
                     self._oneMeasurePerStaff[staffIndex].rightBarline = m21.bar.Repeat(direction='end')
+
+            if ';' in endBarline.text or ',' in endBarline.text:
+                if self._oneMeasurePerStaff[staffIndex]:
+                    if not self._oneMeasurePerStaff[staffIndex].rightBarline:
+                        self._oneMeasurePerStaff[staffIndex].rightBarline = m21.bar.Barline('normal')
+                    if ';' in endBarline.text:
+                        self._addFermata(self._oneMeasurePerStaff[staffIndex].rightBarline, endBarline)
+                    if ',' in endBarline.text:
+                        self._addBreath(self._oneMeasurePerStaff[staffIndex].rightBarline, endBarline)
 
         # Check for repeat start at beginning of music.  The data for the very
         # first measure starts at the exclusive interpretation so that clefs
@@ -3287,7 +3292,7 @@ class HumdrumFile(HumdrumFileContent):
         # TODO: chord stem directions, articulations, ornaments, arpeggios
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
         self._addArticulations(chord, layerTok)
-#         self._addOrnaments(chord, layerTok)
+        self._addOrnaments(chord, layerTok)
 #         self._addArpeggio(chord, layerTok)
         self._processDirections(voice, layerTok, staffIndex)
 
@@ -3336,7 +3341,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             # iohumdrum.cpp suppressed conversion of invisible notes in a chord, since
-            # Verovio doesn't properly suppress the stem that goes with the invisible note.
+            # C++ code doesn't properly suppress the stem that goes with the invisible note.
             # I'm not going to do that, since I want to describe exactly what is there, for
             # music21, and the exporters will each need to handle it correctly (or not!).
 #             if ((!allinvis) && (tstrings[j].find("yy") != std::string::npos)) {
@@ -3436,8 +3441,8 @@ class HumdrumFile(HumdrumFileContent):
 
         self._adjustStaff(rest, token, staffIndex)
 
-#         if ';' in token.text:
-#             self._addFermata(rest, token)
+        if ';' in token.text:
+            self._addFermata(rest, token)
 
         index: int = len(self._allMeasuresPerStaff) - 1
         token.setValue('music21', 'measureIndex', index)
@@ -3490,7 +3495,7 @@ class HumdrumFile(HumdrumFileContent):
 #             if (m_signifiers.nostem && layerdata[i]->find(m_signifiers.nostem) != std::string::npos) {
 #                 note->SetStemVisible(BOOLEAN_false);
 #             }
-#hairpinAccent should be part of processArticulations.  It's separate because MEI doesn't do hairpin accents, so verovio fakes it.
+#hairpinAccent should be part of processArticulations.  It's separate because MEI doesn't do hairpin accents, so C++ code fakes it.
 #             if (m_signifiers.hairpinAccent && layerdata[i]->find(m_signifiers.hairpinAccent) != std::string::npos) {
 #                 addHairpinAccent(layerdata[i]);
 #             }
@@ -3503,7 +3508,7 @@ class HumdrumFile(HumdrumFileContent):
 #                 note->SetCue(BOOLEAN_true);
 #             }
         self._addArticulations(note, layerTok)
-#             addOrnaments(note, layerdata[i]);
+        self._addOrnaments(note, layerTok)
 #             addArpeggio(note, layerdata[i]);
 #             processDirections(layerdata[i], staffindex); # m21.expressions.TextExpression
         voice.insert(noteOffsetInVoice, note)
@@ -3654,7 +3659,406 @@ class HumdrumFile(HumdrumFileContent):
             artics.append(downBow)
 
         if artics:
-            note.articulations = artics
+            note.articulations += artics
+
+    def _addOrnaments(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+        lowerText = token.text.lower()
+        if 't' in lowerText:
+            self._addTrill(gnote, token)
+        if ';' in lowerText:
+            self._addFermata(gnote, token)
+        if ',' in lowerText:
+            self._addBreath(gnote, token)
+        if 'w' in lowerText or 'm' in lowerText:
+            self._addMordent(gnote, token)
+        if 's' in lowerText or '$' in lowerText:
+            self._addTurn(gnote, token)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addTrill -- Add trill for note.
+    '''
+    def _addTrill(self, startNote: m21.note.GeneralNote, token: HumdrumToken):
+        endNote: m21.note.GeneralNote = None
+        subTokenIdx: int = 0
+        tpos: int = -1
+        for i, ch in enumerate(token.text):
+            if ch == ' ':
+                subTokenIdx += 1
+                continue
+            if ch in ('t', 'T'):
+                tpos = i
+                if i < len(token.text) - 1:
+                    # deal with TT or tt for trills with wavy lines
+                    if token.text[i+1] in ('t', 'T'):
+                        tpos += 1
+                break
+        if tpos == -1:
+            # no trill on a note
+            return
+
+        if 'TTT' in token.text or 'ttt' in token.text:
+            # continuation trill, so don't start a new one
+            return
+
+        if subTokenIdx == 0 and ' ' not in token.text:
+            subTokenIdx = -1
+
+        # music21 has a HalfStepTrill and a WholeStepTrill, which map to 't' and 'T', respectively,
+        # so there is no need to do the trill accidental analysis in HumdrumFileContent, or reference
+        # the results here.  Just make the right kind of trill.  I'm not sure what to do with the
+        # possibility of trill accidentals specified in layout parameters.  I'll probably need to
+        # use them to compute the "steppage" (trill.size: Interval) of the trill, and then set that
+        # size Interval directly on a Trill.
+        # TODO: handle trill accidental specified in !LO:TR:acc=## (or none, --, etc)
+        trill: m21.expressions.Trill = None
+        if 't' in token.text:
+            trill = m21.expressions.HalfStepTrill()
+        else:
+            trill = m21.expressions.WholeStepTrill()
+
+        startNote.expressions.append(trill)
+
+        # here the C++ code sets placement to 'below' if layer == 2
+        # if m_currentlayer == 2:
+        #     trill.placement = 'below'
+
+        if self._signifiers.above:
+            if tpos < len(token.text) - 1:
+                if token.text[tpos+1] == self._signifiers.above:
+                    trill.placement = 'above'
+        if self._signifiers.below:
+            if tpos < len(token.text) - 1:
+                if token.text[tpos+1] == self._signifiers.below:
+                    trill.placement = 'below'
+
+        if 'TT' not in token.text and 'tt' not in token.text:
+            # no TrillExtension
+            return
+
+        # Done with Trill, now on to TrillExtension
+
+        # Find the ending note after the trill line.  Multiple trill line extensions for chord notes
+        # are not handled by this algorithm, but these should be rare in notation.
+        # The music21 way to notate this is with a TrillExtension (a Spanner) that contains the
+        # startNote and the last trilled note (i.e. the note before the "ending note" which we
+        # are about to find.
+        endTok: HumdrumToken = token.nextToken(0)
+        lastNoteOrBar: HumdrumToken = token
+        nextToLastNote: HumdrumToken = token
+        justOneNote: bool = False
+
+        while endTok:
+            if endTok.isBarline:
+                if lastNoteOrBar.isData:
+                    nextToLastNote = lastNoteOrBar
+                lastNoteOrBar = endTok
+
+            if not endTok.isData:
+                endTok = endTok.nextToken(0)
+                continue
+
+            if endTok.isNull:
+                endTok = endTok.nextToken(0)
+                continue
+
+            # it's a note/chord/rest
+#             if endTok.isGrace:
+#                 # check to see if the next non-grace note/rest has a TTT or ttt on it.
+#                 # if so, then do not terminate the trill extension line at this
+#                 # grace notes.
+#                 ntok: HumdrumToken = endtok.nextToken(0)
+#                 while ntok:
+#                     if ntok.isBarline:
+#                         lastNoteOrBar = ntok
+#
+#                     if not ntok.isData:
+#                         ntok = ntok.nextToken(0)
+#                         continue
+#
+#                     if ntok.isGrace:
+#                         ntok = ntok.nextToken(0)
+#                         continue
+#
+#                     lastNoteOrBar = ntok
+#                     # at this point ntok is a durational note/chord/rest
+#                     # BUG: C++ code only breaks if 'TTT' and 'ttt' are NOT found,
+#                     # BUG: ... and it never sets endTok at all. I believe the end
+#                     # BUG: ... result is that this grace note loop is a (potentially
+#                     # BUG: ... expensive) no-op.
+#                     # TODO: Fix the isGrace loop when searching for end of trill extension
+#                     if 'TTT' in ntok or 'ttt' in ntok:
+#                         endTok = ntok
+#                     break
+
+            if lastNoteOrBar.isData:
+                nextToLastNote = lastNoteOrBar
+            lastNoteOrBar = endTok
+            if 'TTT' not in endTok.text and 'ttt' not in endTok.text:
+                break
+
+            endTok = endTok.nextToken(0)
+
+        if endTok and nextToLastNote:
+            endTok = nextToLastNote
+        elif not endTok and lastNoteOrBar and lastNoteOrBar.isData:
+            endTok = lastNoteOrBar
+        else:
+            justOneNote = True # it must start and end on the same note
+
+        trillExtension: m21.expressions.TrillExtension
+        if justOneNote:
+            trillExtension = m21.expressions.TrillExtension(startNote)
+        else:
+            endNote = endTok.getValueM21Object('music21', 'generalNote')
+            if not endNote:
+                # endNote will likely not have been created yet.
+                # Here we make a placeholder GeneralNote, from which createNote will
+                # transfer the spanners, when creating the actual note.
+                endNote = m21.note.GeneralNote()
+                endTok.setValue('music21', 'spannerHolder', endNote)
+            trillExtension = m21.expressions.TrillExtension(startNote, endNote)
+
+        self.m21Stream.insert(0, trillExtension)
+
+    def _addFermata(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+        if ';' not in token.text:
+            return
+        if 'yy' in token.text:
+            return
+
+        isBarlineFermata: bool = 'Barline' in gnote.classes
+        barline: m21.bar.Barline = gnote
+
+#         staffAdj: int = self._getStaffAdjustment(token)
+        fermata: m21.expressions.Fermata = m21.expressions.Fermata()
+        fermata.type = 'upright'
+
+        fermata2: m21.expressions.Fermata = None
+        if ';;' in token.text:
+            fermata2 = m21.expressions.Fermata()
+            fermata2.type = 'inverted'
+            fermata2.style.absoluteY = 'below'
+
+        if fermata2:
+            if isBarlineFermata:
+                barline.pause = fermata # music21 only allows one fermata on a barline
+            else:
+                gnote.expressions.append(fermata)
+                gnote.expressions.append(fermata2)
+            return
+
+        direction: int = self._getDirection(token, ';')
+        if direction < 0:
+            fermata.type = 'inverted'
+            fermata.style.absoluteY = 'below'
+        elif direction > 0:
+            fermata.type = 'upright'
+            fermata.style.absoluteY = 'above'
+        # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
+        # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
+
+        if isBarlineFermata:
+            barline.pause = fermata
+        else:
+            gnote.expressions.append(fermata)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addBreath -- Add floating breath for note/chord.
+    '''
+    def _addBreath(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+        if ',' not in token.text:
+            return
+
+        if 'yy' in token.text or ',y' in token.text:
+            return # the entire note is hidden, or the breath mark is hidden
+
+        breathMark = m21.articulations.BreathMark()
+        direction = self._getDirection(token, ',')
+        if direction < 0:
+            breathMark.placement = 'below'
+        elif direction > 0:
+            breathMark.placement = 'above'
+        # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
+        # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
+
+        # TODO: _addBreath might be passed a barline instead of a note.  BreathMark gets printed
+        # TODO: ... just after the note in question, so we could attach it to the previous note
+        # TODO: ... (if there is one)
+        gnote.articulations.append(breathMark)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addMordent -- Add mordent for note.
+    //      M  = upper mordent, major second interval
+    //      MM = double upper mordent, major second interval
+    //      m  = upper mordent, minor second interval
+    //      mm = double upper mordent, minor second interval
+    //      W  = lower mordent, major second interval
+    //      WW = double lower mordent, major second interval
+    //      w  = lower mordent, minor second interval
+    //      ww = double lower mordent, minor second interval
+    //  also:
+    //      Mm  = upper mordent with unknown interval
+    //      MMm = double upper mordent with unknown interval
+    //      Ww  = lower mordent with unknown interval
+    //      WWw = double lower mordent with unknown interval
+
+        There is much discussion about which mordent is normal, and which mordent is inverted.
+        Yay standards! The bottom line is that there is an 'upper' mordent and a 'lower' mordent,
+        and which one of these is considered to be inverted has changed over time.  music21 says
+        very clearly that their InvertedMordent type is the upper mordent, so the only question
+        then is whether 'W' or 'M' is Humdrum's upper mordent.  Verovio thinks 'M' is upper.
+        music21's humdrum/spineParser.py thinks the opposite (although it doesn't actually mention
+        upper and lower, it just maps 'W' to m21.expressions.InvertedMordent, which we know to be
+        upper).  I will be sticking to verovio's definition, since verovio's humdrum parser is
+        written by Craig Sapp, the author of humlib, and his code seems to be the closest thing to
+        thorough humdrum documentation that we have. Also, 'M' looks like it is pointing up,
+        so... --gregc
+
+    '''
+    def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+        isLower: bool = False
+        isHalfStep: bool = False
+        subTokenIdx: int = 0
+        tpos: int = -1
+        for i, chit in enumerate(token.text):
+            if chit == ' ':
+                subTokenIdx += 1
+                continue
+            if chit in ('w', 'W'):
+                tpos = i
+                isLower = True
+                isHalfStep = chit == 'w'
+                break
+            if chit in ('m', 'M'):
+                tpos = i
+                isHalfStep = chit == 'm'
+                break
+
+        if subTokenIdx == 0 and ' ' not in token.text:
+            subTokenIdx = -1
+
+        if tpos == -1:
+            # no mordent on note
+            return
+
+        if isLower:
+            if isHalfStep:
+                mordent = m21.expressions.HalfStepMordent()
+            else:
+                mordent = m21.expressions.WholeStepMordent()
+        else:
+            if isHalfStep:
+                mordent = m21.expressions.HalfStepInvertedMordent()
+            else:
+                mordent = m21.expressions.WholeStepInvertedMordent()
+
+        if self._signifiers.above:
+            query: str = '[Mm]+' + self._signifiers.above
+            if re.search(query, token.text):
+                mordent.placement = 'above'
+
+        if self._signifiers.below:
+            query: str = '[Mm]+' + self._signifiers.below
+            if re.search(query, token.text):
+                mordent.placement = 'below'
+
+        # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
+        # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
+
+        # LATER: long mordents ('MM', 'mm', 'WW', 'ww') are not supported by music21, so we
+        # LATER: ... can't really support them here.
+#         if 'mm' in token.text or 'MM' in token.text or 'ww' in token.text or 'WW' in token.text:
+#             mordent.isLong = True # or whatever
+        gnote.expressions.append(mordent)
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addTurn -- Add turn for note.
+    //  only one of these four possibilities:
+    //      S([Ss][Ss])?  = delayed turn
+    //      sS([Ss][Ss])? = undelayed turn
+    //      $([Ss][Ss])?  = delayed inverted turn
+    //      s$([Ss][Ss])? = undelayed inverted turn
+    //
+    //  Not used anymore:
+    //      SS = turn, centered between two notes
+    //      $$ = inverted turn, centered between two notes
+    //
+    // Assuming not in chord for now.
+    '''
+    def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+        tok: str = token.text
+        turnStart: int = -1
+        turnEnd: int = -1
+
+        for i, ch in enumerate(tok):
+            if ch in ('s', 'S', '$'):
+                turnStart = i
+                turnEnd = i
+                for j in range(i+1, len(tok)):
+                    if tok[j] not in ('s', 'S', '$'):
+                        turnEnd = j - 1
+                        break
+                    turnEnd = j
+                break
+
+        turnStr: str = tok[turnStart:turnEnd+1]
+        if turnStr == 's':
+            # invalid turn indication (leading 's' must be followed by 'S' or '$')
+            return
+
+        isDelayed: bool = turnStr[0] != 's'
+        isInverted: bool = False
+        if not isDelayed and turnStr[1] == '$':
+            isInverted = True
+        elif turnStr[0] == '$':
+            isInverted = True
+
+        if isInverted:
+            turn = m21.expressions.InvertedTurn()
+        else:
+            turn = m21.expressions.Turn()
+
+        if self._signifiers.above:
+            if turnEnd < len(tok) - 1:
+                if tok[turnEnd+1] == self._signifiers.above:
+                    turn.placement = 'above'
+
+        if self._signifiers.below:
+            if turnEnd < len(tok) - 1:
+                if tok[turnEnd+1] == self._signifiers.below:
+                    turn.placement = 'below'
+
+        # TODO: handle turn accidentals
+
+        # LATER: music21 doesn't explicitly handle delayed turns (positioned at end of note duration)
+        gnote.expressions.append(turn)
+
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getDirection --
+    //    0  = no direction specified
+    //    1  = place above
+    //    -1 = place below
+    '''
+    def _getDirection(self, token: HumdrumToken, target: str) -> int:
+        if self._signifiers.above:
+            if target + self._signifiers.above in token.text:
+                return +1
+
+        if self._signifiers.below:
+            if target + self._signifiers.below in token.text:
+                return -1
+
+        return 0
 
     def _processSlurs(self, endNote: m21.note.GeneralNote, token: HumdrumToken):
         slurEndCount: int = token.getValueInt('auto', 'slurEndCount')
@@ -3818,7 +4222,7 @@ class HumdrumFile(HumdrumFileContent):
             note = self._processGrace(note, tstring)
 
         # Add the pitch information
-        # This here is the point where Verovio transposes "transposing instruments"
+        # This here is the point where C++ code transposes "transposing instruments"
         # back to the written key, but we don't do that (music21 understands transposing
         # instruments just fine).
         m21PitchName: str = M21Convert.m21PitchName(tstring)
@@ -3926,7 +4330,7 @@ class HumdrumFile(HumdrumFileContent):
         # I don't think music21 can do it, so...
 
         # Q: Figure out why a note with duration zero is being displayed by
-        # Q: Verovio as a stemless quarter note.
+        # Q: C++ code as a stemless quarter note.
         # Q: I'm just going to put it in the music21 stream as a zero-duration note,
         # Q: and see what happens.
 #         if dur == 0:
@@ -4502,7 +4906,7 @@ class HumdrumFile(HumdrumFileContent):
 
                 # Here is where we create the music21 object for the dynamic
                 m21Dynamic: m21.dynamics.Dynamic = m21.dynamics.Dynamic(dynamic)
-                m21Dynamic.fontStyle = 'bold' # this is what verovio does
+                m21Dynamic.fontStyle = 'bold' # this is what C++ code does
                 if dcolor:
                     m21Dynamic.style.color = dcolor
                 if rightJustified:
@@ -4611,7 +5015,7 @@ class HumdrumFile(HumdrumFileContent):
 #                     m21Hairpin.style.absoluteY = 'below'
 
             # Now I need to put the start and end "notes" into the Crescendo spanner.
-            # This is instead of all the timestamp stuff verovio does.
+            # This is instead of all the timestamp stuff C++ code does.
             startNoteToken: HumdrumToken = self._getAppropriateNearbyNoteToken(token, start=True)
             endNoteToken: HumdrumToken = self._getAppropriateNearbyNoteToken(endTok, start=False)
 

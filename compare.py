@@ -62,19 +62,16 @@ if badExt:
     printSupportedInputFormats()
     sys.exit(1)
 
-print('stack limit =', resource.getrlimit(resource.RLIMIT_STACK))
-#lower, maximum = resource.getrlimit(resource.RLIMIT_STACK)
+#print('stack limit =', resource.getrlimit(resource.RLIMIT_STACK))
 print('recursion limit =', sys.getrecursionlimit())
-# sys.exit(0)
 
-#resource.setrlimit(resource.RLIMIT_STACK, (lower, maximum))
 sys.setrecursionlimit(1024*1024)
 
-print('new stack limit =', resource.getrlimit(resource.RLIMIT_STACK))
+#print('new stack limit =', resource.getrlimit(resource.RLIMIT_STACK))
 print('new recursion limit =', sys.getrecursionlimit())
 
-score1 = m21.converter.parse(args.file1)
-score2 = m21.converter.parse(args.file2)
+score1 = m21.converter.parse(args.file1, forceSource=True)
+score2 = m21.converter.parse(args.file2, forceSource=True)
 
 # build ScoreTrees
 score_lin1 = nlin.Score(score1)
