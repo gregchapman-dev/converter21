@@ -186,7 +186,7 @@ class HumParamSet:
                 continue
 
             piece.replace('&colon;', ':')
-            nameValueStrings = piece.split('=')
+            nameValueStrings = piece.split('=', 1) # splits only on first instance of '='
             if len(nameValueStrings) == 1:
                 name = nameValueStrings[0]
                 value = "true"

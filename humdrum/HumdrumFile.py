@@ -1216,7 +1216,7 @@ class HumdrumFile(HumdrumFileContent):
 #             self._addFiguredBassForMeasureStaves(startLineIdx, endLineIdx)
 
         # TODO: Metronome changes
-#         self._handleMetronomeChange()
+#         self._handleMetronomeChange() # checkForOmd?
 
         for i, startTok in enumerate(self._staffStarts):
             self._convertMeasureStaff(startTok.track, startLineIdx, endLineIdx, layerCounts[i])
@@ -3289,11 +3289,11 @@ class HumdrumFile(HumdrumFileContent):
         self._processPhrases(chord, layerTok)
         self._processDynamics(voice, layerTok, staffIndex)
 
-        # TODO: chord stem directions, articulations, ornaments, arpeggios
+        # TODO: chord stem directions
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
         self._addArticulations(chord, layerTok)
         self._addOrnaments(chord, layerTok)
-#         self._addArpeggio(chord, layerTok)
+        self._addArpeggio(chord, layerTok)
         self._processDirections(voice, layerTok, staffIndex)
 
         voice.insert(chordOffsetInVoice, chord)
@@ -3490,7 +3490,6 @@ class HumdrumFile(HumdrumFileContent):
         self._processPhrases(note, layerTok)
         self._processDynamics(voice, layerTok, staffIndex)
         # TODO: note stem directions, no stem, hairpin accent, cue size
-        # TODO: note articulations, ornaments, arpeggio
 #             assignAutomaticStem(note, layerdata[i], staffindex);
 #             if (m_signifiers.nostem && layerdata[i]->find(m_signifiers.nostem) != std::string::npos) {
 #                 note->SetStemVisible(BOOLEAN_false);
@@ -3509,9 +3508,13 @@ class HumdrumFile(HumdrumFileContent):
 #             }
         self._addArticulations(note, layerTok)
         self._addOrnaments(note, layerTok)
-#             addArpeggio(note, layerdata[i]);
-#             processDirections(layerdata[i], staffindex); # m21.expressions.TextExpression
+        self._addArpeggio(note, layerTok)
+        self._processDirections(voice, layerTok, staffIndex)
         voice.insert(noteOffsetInVoice, note)
+
+    def _addArpeggio(self, gnote, layerTok):
+        # TODO: arpeggios
+        pass
 
     def _addArticulations(self, note: m21.note.GeneralNote, token: HumdrumToken):
         # store info about articulations in various dicts, keyed by humdrum articulation string
@@ -5249,9 +5252,520 @@ class HumdrumFile(HumdrumFileContent):
 
         return None
 
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::processDirections --
+    '''
     def _processDirections(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
-        # TODO: text directions
-        pass
+        lcount = token.linkedParameterSetCount
+        for i in range(0, lcount):
+            self._processLinkedDirection(i, voice, token, staffIndex)
+
+        text: str = token.getValue('LO', 'TX', 't')
+        if not text:
+            return
+
+        # maybe add center justification as an option later
+        # justification == 0 means no explicit justification (mostly left justified)
+        # justification == 1 means right justified
+        justification: int = 0
+        if token.isDefined('LO', 'TX', 'rj'):
+            justification = 1
+
+        zparam: bool = token.isDefined('LO', 'TX', 'Z')
+        yparam: bool = token.isDefined('LO', 'TX', 'Y')
+
+        aparam: bool = token.isDefined('LO', 'TX', 'a') # place above staff
+        bparam: bool = False
+        cparam: bool = False
+        if not aparam:
+            bparam = token.isDefined('LO', 'TX', 'b') # place below staff
+        if not aparam and not bparam:
+            cparam = token.isDefined('LO', 'TX', 'c') # place below staff, centered with next one
+
+        # default font for text string (later check for embedded fonts)
+        italic: bool = False
+        bold: bool = False
+
+        vgroup: int = -1
+        if token.isDefine('LO', 'TX', 'vgrp'):
+            vgroup = token.getValueInt('LO', 'TX', 'vgrp')
+
+        if token.isDefined('LO', 'TX', 'i'): # italic
+            italic = True
+        if token.isDefined('LO', 'TX', 'B'): # bold
+            bold = True
+        if token.isDefined('LO', 'TX', 'bi'): # bold-italic
+            bold = True
+            italic = True
+        if token.isDefined('LO', 'TX', 'ib'): # bold-italic
+            bold = True
+            italic = True
+        if token.isDefined('LO', 'TX', 'Bi'): # bold-italic
+            bold = True
+            italic = True
+        if token.isDefined('LO', 'TX', 'iB'): # bold-italic
+            bold = True
+            italic = True
+
+        color: str = token.getValueString('LO', 'TX', 'color')
+
+        placement: str = ''
+        if aparam:
+            placement = 'above'
+        elif bparam:
+            placement = 'below'
+        elif cparam:
+            placement = 'between'
+        elif zparam:
+            Z: int = token.getValueInt('LO', 'TX', 'Z')
+            if Z > 0:
+                placement = 'above'
+            else:
+                placement = 'below'
+        elif yparam:
+            Y: int = token.getValueInt('LO', 'TX', 'Y')
+            if Y > 0:
+                placement = 'below'
+            else:
+                placement = 'above'
+        else:
+            placement = 'above'
+
+        self._addDirection(text, placement, bold, italic, voice, token, staffIndex, justification, color, vgroup)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::processLinkedDirection --
+    '''
+    def _processLinkedDirection(self, index: int, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+        direction: m21.expressions.TextExpression = None
+        tempo: m21.tempo.MetronomeMark = None
+
+        isGlobal: bool = token.linkedParameterIsGlobal(index)
+        isFirst: bool = True
+        if isGlobal:
+            isFirst = self._isFirstTokenOnStaff(token)
+
+        if not isFirst:
+            # Don't insert multiple global directions.
+            return
+
+        hps: HumParamSet = token.getLinkedParameterSet(index)
+        if not hps:
+            return
+
+        if hps.namespace1 != 'LO':
+            return
+
+        namespace2: str = hps.namespace2
+        isText: bool = namespace2 == 'TX'
+        isSic: bool = namespace2 == 'SIC'
+        vgroup: int = -1
+
+        if not isText and not isSic:
+            # not a text direction so ignore
+            return
+
+        # default font for text string (later check for embedded fonts)
+        italic: bool = False
+        bold: bool = False
+        zparam: bool = False
+        yparam: bool = False
+        aparam: bool = False
+        bparam: bool = False
+        cparam: bool = False
+
+        # maybe add center justification as an option later
+        # justification == 0 means no explicit justification (mostly left justified)
+        # justification == 1 means right justified
+        justification: int = 0
+
+        color: str = ''
+        if isSic:
+            # default color for sic text directions (set to black if not wanted)
+            color = 'limegreen'
+
+        isProblem: bool = False
+        isVerbose: bool = False
+        isTempo: bool = False
+        text: str = ''
+        key: str = ''
+        value: str = ''
+        typeValue: str = ''
+        verboseType: str = ''
+        ovalue: str = ''
+        svalue: str = ''
+        placement: str = ''
+
+        for i in range(0, hps.count):
+            key = hps.getParameterName(i)
+            value = hps.getParameterValue(i)
+            if key == 'a':
+                aparam = True
+            elif key == 'b':
+                bparam = True
+            elif key == 'c':
+                cparam = True
+            elif key == 't':
+                text = value
+                if not text:
+                    # nothing to display
+                    return
+            elif key == 'Y':
+                yparam = True
+            elif key == 'Z':
+                zparam = True
+            elif key == 'i':
+                italic = True
+            elif key == 'B':
+                bold = True
+            elif key == 'Bi':
+                italic = True
+                bold = True
+            elif key == 'iB':
+                italic = True
+                bold = True
+            elif key == 'ib':
+                italic = True
+                bold = True
+            elif key == 'rj':
+                justification = 1
+            elif key == 'color':
+                color = value
+            elif key == 'v':
+                isVerbose = True
+                verboseType = value
+            elif key == 'o':
+                ovalue = value
+            elif key == 's':
+                svalue = value
+            elif key == 'problem':
+                isProblem = True
+            elif key == 'type':
+                typeValue = value
+            elif key == 'tempo':
+                isTempo = True
+            elif key == 'vgrp':
+                if value and value[0].isdigit():
+                    vgroup = int(value)
+
+        if namespace2 == 'SIC' and not isVerbose:
+            return
+
+        if aparam:
+            placement = 'above'
+        elif bparam:
+            placement = 'below'
+        elif cparam:
+            placement = 'between'
+        elif zparam:
+            Z: int = token.getValueInt('LO', 'TX', 'Z')
+            if Z > 0:
+                placement = 'above'
+            else:
+                placement = 'below'
+        elif yparam:
+            Y: int = token.getValueInt('LO', 'TX', 'Y')
+            if Y > 0:
+                placement = 'below'
+            else:
+                placement = 'above'
+        else:
+            placement = 'above'
+
+        if isSic:
+            if verboseType == 'text':
+                if ovalue:
+                    text = ovalue
+                elif svalue:
+                    text = svalue
+                else:
+                    text = 'S'
+            else:
+                text = 'S'
+
+        maxStaff: int = len(self._staffStarts) - 1
+
+        if token.linkedParameterIsGlobal(index):
+            if placement == 'below' and staffIndex != maxStaff:
+                # For system-text, do not place on any staff except the bottom staff.
+                # This will probably change in the future to place at the bottom
+                # of each staff group only.
+                return
+            if placement == 'above' and staffIndex != 0:
+                # For system-text, do not place on any staff except the top staff.
+                # This will probably change in the future to place at the top
+                # of each staff group only.
+                return
+
+        tempoOrDirection: m21.Music21Object = None
+        if re.search(r'\[[^=]*\]\s*=\s*\d+', text):
+            tempo = self._createMetronomeMark(text, token)
+            tempoOrDirection = tempo
+        elif token.isTimeSignature:
+            tempo = self._createMetronomeMark(text, token)
+            tempoOrDirection = tempo
+        elif isTempo:
+            midiBPM: int = self._getMmTempo(token)
+            if midiBPM == 0:
+                # this is a redundant tempo message, so ignore (event as text dir)
+                return
+
+            tempo = m21.tempo.MetronomeMark(number=midiBPM)
+            tempoOrDirection = tempo
+        else:
+            direction = m21.expressions.TextExpression(text)
+            tempoOrDirection = direction
+
+        if direction:
+            direction.positionPlacement = placement
+        else:
+            if placement in ('above', 'below'):
+                tempo.style.absoluteY = placement
+            elif placement == 'between':
+                tempo.style.absoluteY = 'below'
+
+        if color:
+            tempoOrDirection.style.color = color
+        elif isProblem:
+            tempoOrDirection.style.color = 'red'
+        elif isSic:
+            tempoOrDirection.style.color = 'limegreen'
+
+        if italic:
+            tempoOrDirection.style.fontStyle = 'italic'
+
+        if bold:
+            tempoOrDirection.style.fontWeight = 'bold'
+
+        if justification:
+            tempoOrDirection.style.justify = 'right'
+
+        tempoOrDirectionOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+        voiceOffsetInMeasure: Union[Fraction, float] = \
+            self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
+        tempoOrDirectionOffsetInVoice: Union[Fraction, float] = tempoOrDirectionOffsetInMeasure - voiceOffsetInMeasure
+        voice.insert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::isFirstTokenOnStaff -- Used to control global
+    //     directions: only one token will be used to generate a direction.
+    '''
+    @staticmethod
+    def _isFirstTokenOnStaff(token: HumdrumToken) -> bool:
+        target: int = token.track
+        track: int = -1
+        tok: HumdrumToken = token.previousFieldToken
+        while tok is not None:
+            track = tok.track
+            if track != target:
+                return True
+            if tok.isNull:
+                # need to check further
+                pass
+            else:
+                return False
+            tok = tok.previousFieldToken
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addDirection --
+    //     default value: color = "";
+    //
+    //     token->getLayoutParameter() should not be used in this function.  Instead
+    //     paste the parameter set that generate a text direction (there could be multiple
+    //     text directions attached to the note, and using getPayoutParameter() will merge
+    //     all of their parameters incorrectly.
+    '''
+    def _addDirection(self, text: str, placement: str, bold: bool, italic: bool, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int, justification: int, color: str, vgroup: int):
+        tempo: m21.tempo.MetronomeMark = None
+        direction: m21.expressions.TextExpression = None
+        tempoOrDirection: m21.Music21Object = None
+
+        if re.search(r'\[[^=]*\]\s*=\s*\d+', text):
+            tempo = self._createMetronomeMark(text, token)
+            tempoOrDirection = tempo
+        elif token.isTimeSignature:
+            tempo = self._createMetronomeMark(text, token)
+            tempoOrDirection = tempo
+        else:
+            direction = m21.expressions.TextExpression(text)
+            tempoOrDirection = direction
+
+        isProblem: bool = False
+        problem: str = token.getLayoutParameter('TX', 'problem')
+        if problem == 'true':
+            isProblem = True
+
+        isSic: bool = False
+        sic: str = token.getLayoutParameter('SIC', 'sic')
+        if sic == 'true':
+            isSic = True
+
+        # convert to HPS input value in the future:
+        typeValue: str = token.getLayoutParameter('TX', 'type')
+        if typeValue:
+            pass # appendType(direction, typeValue)
+
+        if direction:
+            direction.positionPlacement = placement
+        else:
+            if placement in ('above', 'below'):
+                tempo.style.absoluteY = placement
+            elif placement == 'between':
+                tempo.style.absoluteY = 'below'
+
+        if color:
+            tempoOrDirection.style.color = color
+        elif isProblem:
+            tempoOrDirection.style.color = 'red'
+        elif isSic:
+            tempoOrDirection.style.color = 'limegreen'
+
+        if italic:
+            tempoOrDirection.style.fontStyle = 'italic'
+
+        if bold:
+            tempoOrDirection.style.fontWeight = 'bold'
+
+        if justification:
+            tempoOrDirection.style.justify = 'right'
+
+        tempoOrDirectionOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+        voiceOffsetInMeasure: Union[Fraction, float] = \
+            self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
+        tempoOrDirectionOffsetInVoice: Union[Fraction, float] = tempoOrDirectionOffsetInMeasure - voiceOffsetInMeasure
+        voice.insert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getMmTempo -- return any *MM# tempo value before or at the input token,
+    //     but before any data.
+    //     Returns 0 if no tempo is found.
+    '''
+    def _getMmTempo(self, token: HumdrumToken) -> int:
+        current: HumdrumToken = token
+
+        if current and current.isData:
+            current = current.previousToken(0)
+
+        while current and not current.isData:
+            if current.isInterpretation:
+                m = re.search(r'^\*MM(\d+\.?\d*)', current.text)
+                if m:
+#                     isLast: bool = self._isLastStaffTempo(current)
+#                     if not isLast:
+#                         return 0
+                    tempo: float = float(m.group(1))
+                    return int(tempo + 0.5)
+            current = current.previousToken(0)
+
+        return 0
+
+    def _createMetronomeMark(self, text: str, token: HumdrumToken):
+        metronomeMark: m21.tempo.MetronomeMark = None
+
+        m = re.search(r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)', text)
+
+        if not m:
+            # raw text
+            mmNumber: int = self._getMmTempo(token) # nearby (previous) *MM
+            if mmNumber <= 0:
+                mmNumber = None
+
+            mmText: str = text
+            if mmText == '':
+                mmText = None
+
+            if mmNumber or mmText:
+                metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText)
+            return metronomeMark
+
+        tempoName: str = m.group(1) # e.g. 'andante'
+        noteName: str = m.group(2)  # e.g. 'quarter'
+        bpmText: str = m.group(3)   # e.g. '88'
+
+        mmReferent: m21.duration.Duration = self._noteNameToDuration(noteName)
+        mmText: str = tempoName
+        if mmText and (mmText[-1] == '(' or mmText[-1] == '['):
+            mmText = mmText[0:-1]
+        mmText = mmText.strip() # strip leading and trailing whitespace
+        if mmText == '':
+            mmText = None
+
+        mmNumber: int = self._getMmTempo(token) # nearby (previous) *MM
+        if bpmText and (bpmText[-1] == ')' or bpmText[-1] == ']'):
+            bpmText = bpmText[0:-1]
+        if bpmText:
+            mmNumber = int(bpmText) # bpmText overrides nearby *MM
+        if mmNumber <= 0:
+            mmNumber = None
+
+        if mmNumber is not None or mmText is not None or mmReferent is not None:
+            metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText, referent=mmReferent)
+        return metronomeMark
+
+    @staticmethod
+    def _noteNameToDuration(noteName: str) -> m21.duration.Duration:
+        if not noteName:
+            return None
+
+        if noteName[0] == '[' and noteName[-1] == ']':
+            noteName = noteName[1:-1]
+
+        # remove styling qualifiers
+        noteName = noteName.split('|', 1)[0] # splits at first '|', or not at all
+
+        # generating rhythmic note with optional "-dot" after it.
+        dots: bool = 0
+        if re.search('-dot$', noteName):
+            dots = 1
+            noteName = noteName[0:-4]
+
+        if noteName in ('quarter', '4'):
+            return m21.duration.Duration(type='quarter', dots=dots)
+        if noteName in ('half', '2'):
+            return m21.duration.Duration(type='half', dots=dots)
+        if noteName in ('whole', '1'):
+            return m21.duration.Duration(type='whole', dots=dots)
+        if noteName in ('breve', 'double-whole', '0'):
+            return m21.duration.Duration(type='breve', dots=dots)
+        if noteName in ('eighth', '8', '8th'):
+            return m21.duration.Duration(type='eighth', dots=dots)
+        if noteName in ('sixteenth', '16', '16th'):
+            return m21.duration.Duration(type='16th', dots=dots)
+        if noteName in ('32', '32nd'):
+            return m21.duration.Duration(type='32nd', dots=dots)
+        if noteName in ('64', '64th'):
+            return m21.duration.Duration(type='64th', dots=dots)
+        if noteName in ('128', '128th'):
+            return m21.duration.Duration(type='128th', dots=dots)
+        if noteName in ('256', '256th'):
+            return m21.duration.Duration(type='256th', dots=dots)
+        if noteName in ('512', '512th'):
+            return m21.duration.Duration(type='512th', dots=dots)
+        if noteName in ('1024', '1024th'):
+            return m21.duration.Duration(type='1024th', dots=dots)
+
+        # the following are not supported by the C++ code, but seem reasonable, given music21's support
+        if noteName in ('2048', '2048th'):
+            return m21.duration.Duration(type='2048th', dots=dots)
+        if noteName in ('longa', '00'):
+            return m21.duration.Duration(type='longa', dots=dots)
+        if noteName in ('maxima', '000'):
+            return m21.duration.Duration(type='maxima', dots=dots)
+        if noteName in ('duplex-maxima', '0000'):
+            return m21.duration.Duration(type='duplex-maxima', dots=dots)
+
+        return None
 
     '''
     //////////////////////////////

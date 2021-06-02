@@ -2120,7 +2120,7 @@ class HumdrumToken(HumHash):
     def linkedParameterIsGlobal(self, index: int) -> bool:
         if index not in range(0, self.linkedParameterSetCount):
             return False
-        return self._linkedParameterTokens[index].isCommentGlobal
+        return self._linkedParameterTokens[index].isGlobalComment
 
     '''
     //////////////////////////////
