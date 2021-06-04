@@ -1339,13 +1339,14 @@ class HumdrumToken(HumHash):
         return True
 
     @property
-    def tempoBPM(self) -> float:
+    def tempoBPM(self) -> int:
         if not self.isTempo:
-            return 0.0
+            return 0
         m = re.match(r'^\*MM(\d+\.?\d*)', self.text)
         if m:
-            return float(m.group(1)) + 0.5
-        return 0.0
+            tempo: float = float(m.group(1))
+            return int(tempo + 0.5)
+        return 0
 
     @property
     def tempoName(self) -> str:

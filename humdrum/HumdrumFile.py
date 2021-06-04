@@ -719,7 +719,7 @@ class HumdrumFile(HumdrumFileContent):
         self.m21Stream = m21.stream.Score()
 
         # Initial tempo
-        self._createInitialTempo() # Q: why is initial tempo treated differently from other tempos?
+        self._createInitialTempo()
 
         # Info for each part (fillPartInfo)
         for i, startTok in enumerate(self._staffStarts):
@@ -1215,8 +1215,8 @@ class HumdrumFile(HumdrumFileContent):
 #         if self._hasFiguredBassSpine:
 #             self._addFiguredBassForMeasureStaves(startLineIdx, endLineIdx)
 
-        # TODO: Metronome changes
-#         self._handleMetronomeChange() # checkForOmd?
+        # Metronome changes
+        self._checkForOmd(startLineIdx, endLineIdx)
 
         for i, startTok in enumerate(self._staffStarts):
             self._convertMeasureStaff(startTok.track, startLineIdx, endLineIdx, layerCounts[i])
@@ -1412,7 +1412,7 @@ class HumdrumFile(HumdrumFileContent):
         # self._handleOttavaMark(voice, layerTok, staffIndex)
         # self._handleLigature(layerTok) # just for **mens
         # self._handleColoration(layerTok) # just for **mens
-        self._handleTempoChange(voice, layerTok) # needs replacement implementation
+        self._handleTempoChange(voice, layerTok, staffIndex)
         self._handlePedalMark(voice, layerTok)
         self._handleStaffStateVariables(layerTok, layerIndex, staffIndex)
         self._handleStaffDynamicsStateVariables(layerTok, staffIndex)
@@ -1648,26 +1648,187 @@ class HumdrumFile(HumdrumFileContent):
     //    long as there is no <tempo> text that will use the tempo *MM# as @midi.bpm.
     //    *MM at the start of the music is ignored (placed separately into scoreDef).
     '''
-    def _handleTempoChange(self, voice: m21.stream.Voice, token: HumdrumToken):
-        # tempo changes
-        pass
-#         if not token.isTempo:
-#             return
+    def _handleTempoChange(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+        if not token.isTempo:
+            return
 
-#         if token.durationFromStart == 0:
-#             # ignore starting tempo setting since it is handled
-#             # by scoreDef.
-#             return
+        tempoName: str = token.tempoName # *MM[Adagio] => tempoName == 'Adagio', tempoBPM == 0
+        tempoBPM: int = token.tempoBPM # *MM127.5 => tempoBPM == 128, tempoName == ''
 
-#         tempoName: str = token.tempoName
-#         tempoBPM: float = token.tempoBPM
-        # Q: During tempo handling in iohumdrum.cpp, things like
-        # Q: allegro [quarter] = 128 or allegro [quarter=128] are never
-        # Q: actually parsed and turned into reality, just added to
-        # Q: the MEI as text (with "quarter" turned nicely into a SMUFL
-        # Q: quarter note symbol).  I want to do better, and generate
-        # Q: a real m21.MetronomeMark for this.
+        if token.durationFromStart == 0:
+            # use the initial tempo we already parsed out (the initial tempo parsing falls back
+            # to any early !!!OMD, which the following code does not).
+            # LATER: C++ code doesn't handle tempo CHANGE via !!!OMD (see beethoven piano
+            # LATER: ... sonata21-3.krn for an example).
 
+            if self._initialTempoName:
+                tempoName = self._initialTempoName
+            if self._initialTempoBPM and self._initialTempoBPM > 0:
+                tempoBPM = self._initialTempoBPM
+
+        if not tempoName and tempoBPM <= 0:
+            return
+
+        # C++ code does this, but it doesn't seem right, since we don't actually do anything
+        # with that nearby !!!OMD (see LATER comment above). --gregc
+        # if self._isNearOmd(token):
+        #     return
+
+        # This one _does_ make sense because we do handle tempo text in LO:TX:t, and in so
+        # doing, we look back at this *MM as well.
+        if self._hasTempoTextAfter(token):
+            return
+
+        if not self._isLastStaffTempo(token):
+            return
+
+        mmText: str = tempoName
+        if mmText == '':
+            mmText = None
+        mmNumber: int = tempoBPM
+        if mmNumber <= 0:
+            mmNumber = None
+
+        if mmText is not None or mmNumber is not None:
+            tempo: m21.tempo.MetronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text = mmText)
+            tempo.style.absoluteY = 'above'
+            tempoOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+            voiceOffsetInMeasure: Union[Fraction, float] = \
+                self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
+            tempoOffsetInVoice: Union[Fraction, float] = tempoOffsetInMeasure - voiceOffsetInMeasure
+            voice.insert(tempoOffsetInVoice, tempo)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::isLastStaffTempo --
+    '''
+    @staticmethod
+    def _isLastStaffTempo(token: HumdrumToken) -> bool:
+        field: int = token.fieldIndex + 1
+        track: int = token.track
+        line: HumdrumLine = token.ownerLine
+        for i in range (field, line.tokenCount):
+            newTok: HumdrumToken = line[i]
+            newTrack: int = newTok.track
+            if track == newTrack:
+                continue
+            if not newTok.isStaffDataType: # kern or mens
+                continue
+            if newTok.isTempo:
+                return False
+        return True
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::hasTempoTextAfter -- Used to check of *MM# tempo change has potential <tempo>
+    //    text after it, but before any data.  Will not cross a measure boundary.
+    //    Input token is assumed to be a *MM interpertation (MIDI-like tempo change)
+    //    Algorithm: Find the first note after the input token and then check for a local
+    //    or global LO:TX parameter that applies to that note (for local LO:TX).
+    '''
+    def _hasTempoTextAfter(self, token: HumdrumToken) -> bool:
+        inFile: HumdrumFile = token.ownerLine.ownerFile
+        startLineIdx: int = token.lineIndex
+        current: HumdrumToken = token.nextToken(0)
+        if not current:
+            return False
+
+        # search for local LO:TX:
+        while current and not current.isData:
+            current = current.nextToken(0)
+        if not current:
+            # No more data: at the end of the music.
+            return False
+
+        data: HumdrumToken = current
+        dataLineIdx: int = data.lineIndex
+        # now work backwards through all null local comments and !LO: parameters searching
+        # for potential tempo text
+        texts: [HumdrumToken] = []
+
+        current = data.previousToken(0)
+        if not current:
+            return False
+
+        line: int = current.lineIndex
+        while current and line > startLineIdx:
+            if not current.isLocalComment:
+                break
+            if current.text.startswith('!LO:TX:'):
+                texts.append(current)
+            current = current.previousToken(0)
+            line = current.lineIndex
+
+        for text in texts:
+            if self._isTempoishText(text):
+                return True
+
+        # now check for global tempo text
+        texts = []
+        for i in reversed(range(startLineIdx+1, dataLineIdx-1)):
+            gtok: HumdrumToken = inFile[i][0] # token 0 of line i
+            if gtok.text.startswith('!!LO:TX:'):
+                texts.append(gtok)
+
+        for text in texts:
+            if self._isTempoishText(text):
+                return True
+
+        return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::isTempoishText -- Return true if the text is probably tempo indication.
+    '''
+    @staticmethod
+    def _isTempoishText(text: str) -> bool:
+        if re.search(':tempo:', text):
+            return True
+        if re.search(':temp$', text):
+            return True
+        m = re.search(':t=([^:]+)', text)
+        if not m:
+            return False
+
+        textStr: str = m.group(1)
+        if re.search(r'\[.*?\]\s*=.*\d\d', textStr):
+            return True
+
+        return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::isNearOmd -- Returns true of the line of the token is adjacent to
+    //    An OMD line, with the boundary being a data line (measures are included).
+    '''
+    @staticmethod
+    def _isNearOmd(token: HumdrumToken) -> bool:
+        tline: int = token.lineIndex
+        inFile: HumdrumFile = token.ownerLine.ownerFile
+
+        for i in reversed(range(0, tline-1)): # BUG: for (i = tline - 1; tline >= 0; --i)
+            ltok: HumdrumToken = inFile[i][0] # token 0 of line i
+            if ltok.isData:
+                break
+            if not inFile[i].isReference:
+                continue
+            if ltok.text.startswith('!!!OMD'):
+                return True
+
+        for i in range(tline+1, inFile.lineCount): # BUG: for (i = tline + 1; tline < infile.getLineCount(); ++tline)
+            ltok: HumdrumToken = inFile[i][0] # token 0 of line i
+            if ltok.isData:
+                break
+            if not inFile[i].isReference:
+                continue
+            if ltok.text.startswith('!!!OMD'):
+                return True
+
+        return False
 
     '''
         _handleGroupState adds beams and tuplets to a note/rest in the layer, as appropriate.
@@ -5661,9 +5822,9 @@ class HumdrumFile(HumdrumFileContent):
             if current.isInterpretation:
                 m = re.search(r'^\*MM(\d+\.?\d*)', current.text)
                 if m:
-#                     isLast: bool = self._isLastStaffTempo(current)
-#                     if not isLast:
-#                         return 0
+                    isLast: bool = self._isLastStaffTempo(current)
+                    if not isLast:
+                        return 0
                     tempo: float = float(m.group(1))
                     return int(tempo + 0.5)
             current = current.previousToken(0)
@@ -5818,6 +5979,9 @@ class HumdrumFile(HumdrumFileContent):
 #         for i, listOfLayersForStaff in enumerate(self._layerTokens):
 #             output[i] = len(listOfLayersForStaff)
 
+
+    def _checkForOmd(self, startLineIdx: int, endLineIdx: int):
+        pass
 
     '''
     //////////////////////////////
@@ -6834,38 +6998,24 @@ class HumdrumFile(HumdrumFileContent):
             foundTempo = self._initialTempoName != '' or self._initialTempoBPM > 0.0
             break
 
-        # if we didn't find a *MM, look  again for !!!OMD (tempo name)
-        if not foundTempo:
-            omdValue: str = None
-            for line in self._lines:
-                if line.isData:
-                    break
-                if line[0].text.startswith('!!!OMD:'):
-                    omdValue = line.referenceValue
-                    break
-
-            if omdValue:
-                # some !!!OMD values are not tempos, so convert to BPM to see if we get > 0
-                if Convert.tempoNameToBPM(omdValue, self._timeSignaturesWithLineIdx[0]) > 0:
-                    foundTempo = True
-                    self._initialTempoName = omdValue
-                    # don't imply the BPM number was specified, let others default as they will
-                    self._initialTempoBPM = 0.0
-
-        # set up music21 stuff
-        m21Tempo = None
         if foundTempo:
-            if self._initialTempoBPM > 0 and self._initialTempoName:
-                m21Tempo = m21.tempo.MetronomeMark(
-                                text = self._initialTempoName,
-                                number = self._initialTempoBPM)
-            elif self._initialTempoBPM > 0:
-                m21Tempo = m21.tempo.MetronomeMark(number = self._initialTempoBPM)
-            elif self._initialTempoName:
-                m21Tempo = m21.tempo.TempoText(self._initialTempoName)
+            return
 
-        if m21Tempo:
-            self.m21Stream.insert(0, m21Tempo)
+        # if we didn't find a *MM, look  again for !!!OMD (tempo name)
+        omdValue: str = None
+        for line in self._lines:
+            if line.isData:
+                break
+            if line[0].text.startswith('!!!OMD:'):
+                omdValue = line.referenceValue
+                break
+
+        if omdValue:
+            # some !!!OMD values are not tempos, so convert to BPM to see if we get > 0
+            if Convert.tempoNameToBPM(omdValue, self._timeSignaturesWithLineIdx[0]) > 0:
+                self._initialTempoName = omdValue
+                # don't imply the BPM number was specified, let others default as they will
+                self._initialTempoBPM = 0.0
 
     '''
     //////////////////////////////
