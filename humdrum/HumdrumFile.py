@@ -495,7 +495,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # initial state (after parsing the leading comments and interps)
         self._initialTempoName: str = ''
-        self._initialTempoBPM: float = 0.0
+        self._initialTempoBPM: int = 0
 
         # time signature info
         self._timeSigDurationsByLine: [HumNum] = None
@@ -536,6 +536,8 @@ class HumdrumFile(HumdrumFileContent):
         # _m21BreakAtStartOfNextMeasure: a SystemLayout or PageLayout object to be inserted
         # at start of the next measure
         self._m21BreakAtStartOfNextMeasure: [m21.Music21Object] = None # SystemLayout or PageLayout
+
+        self._currentOMDDurationFromStart: HumNum = HumNum(0)
 
         # _nextLeftBarlineStartsRepeat: a note to the next measure from the previous
         # measure, saying "please have your left barline start a repeat section"
@@ -651,10 +653,22 @@ class HumdrumFile(HumdrumFileContent):
             self._staffStates.append(StaffStateVariables())
 
     def _prepareMetadata(self):
+        # last of each key wins, but... I make an exception for OMD, because it
+        # is also used as a tempo change at start of any measure, so you really
+        # want the first OMD for the "movement name".  I give you beethoven
+        # piano sonata21-3.krn as an example.  First OMD is 'Rondo: Allegretto
+        # moderato', and last OMD (in a measure in the middle of the movement)
+        # is 'Prestissimo'.  The movement name is 'Rondo: Allegretto'. --gregc
+        alreadyHaveMovementName: bool = False
         for bibLine in self.referenceRecords():
             key = bibLine.referenceKey
             value = bibLine.referenceValue
-            self._biblio[key] = value
+            if key == 'OMD':
+                if not alreadyHaveMovementName:
+                    self._biblio[key] = value
+                    alreadyHaveMovementName = True
+            else:
+                self._biblio[key] = value
 
     '''
     //////////////////////////////
@@ -1215,7 +1229,7 @@ class HumdrumFile(HumdrumFileContent):
 #         if self._hasFiguredBassSpine:
 #             self._addFiguredBassForMeasureStaves(startLineIdx, endLineIdx)
 
-        # Metronome changes
+        # Tempo changes via !!!OMD
         self._checkForOmd(startLineIdx, endLineIdx)
 
         for i, startTok in enumerate(self._staffStarts):
@@ -1412,7 +1426,7 @@ class HumdrumFile(HumdrumFileContent):
         # self._handleOttavaMark(voice, layerTok, staffIndex)
         # self._handleLigature(layerTok) # just for **mens
         # self._handleColoration(layerTok) # just for **mens
-        self._handleTempoChange(voice, layerTok, staffIndex)
+        self._handleTempoChange(layerTok, staffIndex)
         self._handlePedalMark(voice, layerTok)
         self._handleStaffStateVariables(layerTok, layerIndex, staffIndex)
         self._handleStaffDynamicsStateVariables(layerTok, staffIndex)
@@ -1648,7 +1662,7 @@ class HumdrumFile(HumdrumFileContent):
     //    long as there is no <tempo> text that will use the tempo *MM# as @midi.bpm.
     //    *MM at the start of the music is ignored (placed separately into scoreDef).
     '''
-    def _handleTempoChange(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+    def _handleTempoChange(self, token: HumdrumToken, staffIndex: int):
         if not token.isTempo:
             return
 
@@ -1656,27 +1670,27 @@ class HumdrumFile(HumdrumFileContent):
         tempoBPM: int = token.tempoBPM # *MM127.5 => tempoBPM == 128, tempoName == ''
 
         if token.durationFromStart == 0:
-            # use the initial tempo we already parsed out (the initial tempo parsing falls back
-            # to any early !!!OMD, which the following code does not).
-            # LATER: C++ code doesn't handle tempo CHANGE via !!!OMD (see beethoven piano
-            # LATER: ... sonata21-3.krn for an example).
-
+            # use the initial tempo we already parsed out (the initial
+            # tempo parsing falls back to any early !!!OMD, which doesn't
+            # happen here).
             if self._initialTempoName:
                 tempoName = self._initialTempoName
-            if self._initialTempoBPM and self._initialTempoBPM > 0:
+            if self._initialTempoBPM > 0:
                 tempoBPM = self._initialTempoBPM
+        else:
+            # if not using self._initialTempo* (which takes early OMD into
+            # account), bail if you see a nearby OMD, since the processing
+            # of that non-initial OMD (see _checkForOmd) will handle this
+            # *MM for us.
+            if self._isNearOmd(token):
+                # we'll handle this *MM in _checkForOmd()
+                return
 
         if not tempoName and tempoBPM <= 0:
             return
 
-        # C++ code does this, but it doesn't seem right, since we don't actually do anything
-        # with that nearby !!!OMD (see LATER comment above). --gregc
-        # if self._isNearOmd(token):
-        #     return
-
-        # This one _does_ make sense because we do handle tempo text in LO:TX:t, and in so
-        # doing, we look back at this *MM as well.
         if self._hasTempoTextAfter(token):
+            # we'll handle this *MM during text direction processing
             return
 
         if not self._isLastStaffTempo(token):
@@ -1690,13 +1704,12 @@ class HumdrumFile(HumdrumFileContent):
             mmNumber = None
 
         if mmText is not None or mmNumber is not None:
+            # We insert this tempo at the beginning of the measure
             tempo: m21.tempo.MetronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text = mmText)
             tempo.style.absoluteY = 'above'
             tempoOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-            voiceOffsetInMeasure: Union[Fraction, float] = \
-                self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
-            tempoOffsetInVoice: Union[Fraction, float] = tempoOffsetInMeasure - voiceOffsetInMeasure
-            voice.insert(tempoOffsetInVoice, tempo)
+            self._oneMeasurePerStaff[staffIndex].insert(
+                                        tempoOffsetInMeasure, tempo)
 
     '''
     //////////////////////////////
@@ -1757,7 +1770,7 @@ class HumdrumFile(HumdrumFileContent):
             if not current.isLocalComment:
                 break
             if current.text.startswith('!LO:TX:'):
-                texts.append(current)
+                texts.append(current.text)
             current = current.previousToken(0)
             line = current.lineIndex
 
@@ -1770,7 +1783,7 @@ class HumdrumFile(HumdrumFileContent):
         for i in reversed(range(startLineIdx+1, dataLineIdx-1)):
             gtok: HumdrumToken = inFile[i][0] # token 0 of line i
             if gtok.text.startswith('!!LO:TX:'):
-                texts.append(gtok)
+                texts.append(gtok.text)
 
         for text in texts:
             if self._isTempoishText(text):
@@ -5831,6 +5844,30 @@ class HumdrumFile(HumdrumFileContent):
 
         return 0
 
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getMmTempoForward -- return any *MM# tempo value before or at the input token,
+    //     but before any data.
+    //     Returns 0.0 if no tempo is found.
+        Actually returns any *MM# tempo value at or after the input token, and returns 0 if nothing found.
+    '''
+    def _getMmTempoForward(self, token: HumdrumToken) -> int:
+        current: HumdrumToken = token
+        if current and current.isData:
+            current = current.nextToken(0)
+
+        while current.spineInfo == '':
+            line: int = token.lineIndex + 1
+            current = token.ownerLine.ownerFile[line][0] # first token on next line
+
+        while current and not current.isData:
+            if current.isTempo:
+                return current.tempoBPM
+            current = current.nextToken(0)
+
+        return 0
+
     def _createMetronomeMark(self, text: str, token: HumdrumToken):
         metronomeMark: m21.tempo.MetronomeMark = None
 
@@ -5872,6 +5909,22 @@ class HumdrumFile(HumdrumFileContent):
 
         if mmNumber is not None or mmText is not None or mmReferent is not None:
             metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText, referent=mmReferent)
+        return metronomeMark
+
+    def _createMetronomeMarkFromOmdTextAndBPM(self, omdText: str, bpm: int) -> m21.tempo.MetronomeMark:
+        metronomeMark: m21.tempo.MetronomeMark = None
+
+        # raw text
+        mmNumber: int = bpm
+        if mmNumber <= 0:
+            mmNumber = None
+
+        mmText: str = omdText
+        if mmText == '':
+            mmText = None
+
+        if mmNumber or mmText:
+            metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText)
         return metronomeMark
 
     @staticmethod
@@ -5981,7 +6034,53 @@ class HumdrumFile(HumdrumFileContent):
 
 
     def _checkForOmd(self, startLineIdx: int, endLineIdx: int):
-        pass
+        if self._currentOMDDurationFromStart > self._lines[startLineIdx].durationFromStart:
+            return
+
+        if len(self._staffStarts) == 0:
+            return
+
+        key: str = ''
+        value: str = ''
+        index: int = -1
+        for i in range(startLineIdx, endLineIdx):
+            line: HumdrumLine = self._lines[i]
+            if line.isData:
+                break
+
+            if line.isBarline:
+                token: HumdrumToken = line[0]
+                num: int = token.barlineNumber
+                if value and num > 1:
+                    # don't print initial OMD if a musical excerpt.
+                    return
+            if not line.isReference:
+                continue
+            key = line.referenceKey
+            if key == 'OMD':
+                index = i
+                value = line.referenceValue
+
+        if not value:
+            return
+
+        token: HumdrumToken = self._lines[index][0] # first token of line 'index'
+        self._currentOMDDurationFromStart = token.durationFromStart
+        if self._currentOMDDurationFromStart <= 0:
+            return # we handle initial OMD differently, in _createInitialTempo
+
+        # check for nearby *MM marker before OMD
+        midibpm: int = self._getMmTempo(token)
+        if midibpm <= 0:
+            # check for nearby *MM marker after OMD
+            midibpm = self._getMmTempoForward(token)
+
+        if midibpm > 0 or value:
+            # put the metronome mark in this measure of staff 0 (highest staff on the page)
+            staffIndex: int = 0
+            tempo: m21.tempo.MetronomeMark = self._createMetronomeMarkFromOmdTextAndBPM(value, midibpm)
+            tempo.style.absoluteY = 'above'
+            self._oneMeasurePerStaff[staffIndex].insert(0, tempo)
 
     '''
     //////////////////////////////
@@ -6995,7 +7094,7 @@ class HumdrumFile(HumdrumFileContent):
             # It's a tempo indication (*MM), so we're done
             self._initialTempoName = token.tempoName
             self._initialTempoBPM = token.tempoBPM
-            foundTempo = self._initialTempoName != '' or self._initialTempoBPM > 0.0
+            foundTempo = self._initialTempoName != '' or self._initialTempoBPM > 0
             break
 
         if foundTempo:
@@ -7015,7 +7114,7 @@ class HumdrumFile(HumdrumFileContent):
             if Convert.tempoNameToBPM(omdValue, self._timeSignaturesWithLineIdx[0]) > 0:
                 self._initialTempoName = omdValue
                 # don't imply the BPM number was specified, let others default as they will
-                self._initialTempoBPM = 0.0
+                self._initialTempoBPM = 0
 
     '''
     //////////////////////////////
