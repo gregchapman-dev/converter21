@@ -583,6 +583,11 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processHangingTieStarts()
 
+        # Transpose any transposing instrument parts to "written pitch"
+        for ss in self._staffStates:
+            if ss.m21Part:
+                ss.m21Part.toWrittenPitch(inPlace=True)
+
         # Do something so (e.g.) 'Piano'/'Pno.' ends up in the right place
         # between the two staves that are the piano grand staff, say, in a piece
         # for piano and orchestra...
@@ -1010,12 +1015,12 @@ class HumdrumFile(HumdrumFileContent):
         keySigToks:     [HumdrumToken] = [None] * self.staffCount
         timeSigToks:    [HumdrumToken] = [None] * self.staffCount
         meterSigToks:   [HumdrumToken] = [None] * self.staffCount
-#         iTransposeToks: [HumdrumToken] = [None] * self.staffCount
+        iTransposeToks: [HumdrumToken] = [None] * self.staffCount
 
         empty:          bool = True
         hasKeySig:      bool = False
         hasTimeSig:     bool = False
-#         hasITranspose:  bool = False
+        hasITranspose:  bool = False
 
         for i in range(startLineIdx, endLineIdx + 1): # inclusive of end
             line = self._lines[i]
@@ -1039,10 +1044,10 @@ class HumdrumFile(HumdrumFileContent):
                 elif token.isKeyDesignation:
                     keyToks[staffIndex] = token
                     empty = False
-#                 elif token.isInstrumentTranspose: # *ITr seems confused with *Tr in iohumdrum.cpp
-#                     iTransposeToks[staffIndex] = token
-#                     empty = False
-#                     hasITranspose = True
+                elif token.isInstrumentTranspose:
+                    iTransposeToks[staffIndex] = token
+                    empty = False
+                    hasITranspose = True
 
                 # Meter signature will only be used if immediately following
                 # a time signature, so do not set to nonempty by itself.
@@ -6734,6 +6739,7 @@ class HumdrumFile(HumdrumFileContent):
     def _createPart(self, partStartTok: HumdrumToken, partNum: int, partCount: int): # partNum is 1-based
         ss: StaffStateVariables = self._staffStates[partNum - 1]
         ss.m21Part = m21.stream.Part()
+        ss.m21Part.atSoundingPitch = True # we will insert notes at sounding pitch, and then convert them at the end to written pitch
         self.m21Stream.insert(0, ss.m21Part)
 
         group: int = self._getGroupNumberLabel(partStartTok)
@@ -6754,7 +6760,6 @@ class HumdrumFile(HumdrumFileContent):
         iClassCode: str = None
         iAbbrev: str = None
         iTranspose: str = None
-        iTrans40: int = None
 
         token: HumdrumToken = partStartTok
         while token and not token.ownerLine.isData: # just scan the interp/comments before first data
@@ -6866,7 +6871,7 @@ class HumdrumFile(HumdrumFileContent):
                 iName = getInstrumentNameFromClassCode(iClassCode)
             elif iAbbrev is not None:
                 iName = iAbbrev
-            elif iTrans40 is not None:
+            elif iTranspose is not None:
                 iName = 'UnknownTransposingInstrument'
 
         # create m21Instrument, and insert it into ss.m21Part
@@ -6880,8 +6885,11 @@ class HumdrumFile(HumdrumFileContent):
             m21Inst = m21.instrument.Instrument(iName)
             if iAbbrev and iAbbrev != iName:
                 m21Inst.instrumentAbbreviation = iAbbrev
-            if iTrans40:
-                m21Inst.transposition = m21.musedata.base40.base40DeltaToInterval(iTrans40)
+            if iTranspose:
+                transposeFromWrittenToSounding: m21.interval.Interval = M21Convert.m21IntervalFromTranspose(iTranspose)
+                # m21 Instrument transposition is from sounding to written (reverse of what we have)
+                if transposeFromWrittenToSounding:
+                    m21Inst.transposition = transposeFromWrittenToSounding.reverse()
             ss.m21Part.insert(0, m21Inst)
 
         # short-circuit *clef with *oclef for **mens data

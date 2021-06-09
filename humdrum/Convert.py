@@ -1037,3 +1037,10 @@ class Convert:
         if absNumer == 1:
             return (num.denominator & (num.denominator - 1)) == 0
         return False
+
+    @staticmethod
+    def transToDiatonicChromatic(trans: str) -> (int, int):
+        m = re.search(r'd(\d+)c(\d+)', trans) # will match *ITrdNcM and *TrdNcM and dNcM
+        if not m:
+            return (None, None)
+        return (int(m.group(1)), int(m.group(2)))

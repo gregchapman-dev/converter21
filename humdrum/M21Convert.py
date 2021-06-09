@@ -316,3 +316,23 @@ class M21Convert:
         if octaveShift == 0:
             octaveShift = - clefStr.count('v')
         return m21.clef.clefFromString(clefStrNoShift, octaveShift)
+
+    @staticmethod
+    def m21IntervalFromTranspose(transpose: str) -> m21.interval.Interval:
+        dia: int = None
+        chroma: int = None
+        dia, chroma = Convert.transToDiatonicChromatic(transpose)
+        if dia is None or chroma is None:
+            return None # we couldn't parse transpose string
+        if dia == 0 and chroma == 0:
+            return None # this is a no-op transposition, so ignore it
+
+        # diatonic step count can be used as a generic interval type here if
+        # shifted 1 away from zero (because a diatonic step count of 1 is a
+        # generic 2nd, for example).
+        if dia < 0:
+            dia -= 1
+        else:
+            dia += 1
+
+        return m21.interval.intervalFromGenericAndChromatic(dia, chroma)
