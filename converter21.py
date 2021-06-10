@@ -15,6 +15,8 @@ import argparse
 import os
 import sys
 
+# import cProfile
+
 from music21 import converter
 from music21._version import __version__
 from humdrum import HumdrumConverter
@@ -131,6 +133,9 @@ else:
         sys.exit(1)
 
 # parse the inputFile
+# cProfile.run('s = converter.parse(args.inputFile, format=args.inputFormat, forceSource=args.forceSource)',
+#              sort='cumulative')
+
 s = converter.parse(args.inputFile, format=args.inputFormat, forceSource=args.forceSource)
 
 #s.show('text')

@@ -13,12 +13,13 @@ from humdrum import HumdrumSyntaxError
 
 class HumAddress:
     def __init__(self):
-        self._track = None
+        self.trackNum = None
         self._subTrack = None
         self._subTrackCount = 0
         self._fieldIndex = None
         self._ownerLine = None # HumdrumLine
         self._spining = ''
+        self._dataTypeTokenCached = None # cache of self.ownerLine.trackStart(self.trackNum)
     '''
     //////////////////////////////
     //
@@ -51,7 +52,7 @@ class HumAddress:
     '''
     @property
     def track(self) -> int:
-        return self._track
+        return self.trackNum
 
     '''
     //////////////////////////////
@@ -68,7 +69,9 @@ class HumAddress:
             newTrack = None
         if newTrack > 1000:
             raise HumdrumSyntaxError("too many tracks (limit is 1000)")
-        self._track = newTrack
+        self.trackNum = newTrack
+        # blow away self._dataTypeTokenCached since it depends on self.trackNum
+        self._dataTypeTokenCached = None
 
     '''
     //////////////////////////////
@@ -201,6 +204,8 @@ class HumAddress:
     @ownerLine.setter
     def ownerLine(self, newOwnerLine): # newOwnerLine: HumdrumLine
         self._ownerLine = newOwnerLine
+        # blow away cache of dataType, because it depends on ownerLine
+        self._dataTypeTokenCached = None
 
     '''
     //////////////////////////////
@@ -221,6 +226,9 @@ class HumAddress:
     '''
     @property
     def dataType(self): # -> HumdrumToken
+        if self._dataTypeTokenCached:
+            return self._dataTypeTokenCached
+
         from humdrum import HumdrumToken
         if self.ownerLine is None:
             return HumdrumToken('')
@@ -228,6 +236,9 @@ class HumAddress:
         tok = self.ownerLine.trackStart(self.track)
         if tok is None:
             return HumdrumToken('')
+
+        # cache it
+        self._dataTypeTokenCached = tok
 
         return tok
 

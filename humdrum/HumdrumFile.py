@@ -584,9 +584,14 @@ class HumdrumFile(HumdrumFileContent):
         self._processHangingTieStarts()
 
         # Transpose any transposing instrument parts to "written pitch"
+        # For performance, check the instrument here, since stream.toWrittenPitch
+        # can be expensive, even if there is no transposing instrument.
         for ss in self._staffStates:
             if ss.m21Part:
-                ss.m21Part.toWrittenPitch(inPlace=True)
+                instruments: m21.iterator.StreamIterator = ss.m21Part.getElementsByClass(m21.instrument.Instrument)
+                for inst in instruments:
+                    if inst.transposition is not None and ss.m21Part.atSoundingPitch:
+                        ss.m21Part.toWrittenPitch(inPlace=True)
 
         # Do something so (e.g.) 'Piano'/'Pno.' ends up in the right place
         # between the two staves that are the piano grand staff, say, in a piece
@@ -2106,7 +2111,7 @@ class HumdrumFile(HumdrumFileContent):
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
-        originalQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
+#         originalQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
         duration: m21.duration.Duration = copy.deepcopy(startNote.duration)
         tuplet: m21.duration.Tuplet = copy.deepcopy(tupletTemplate)
 
@@ -2176,9 +2181,9 @@ class HumdrumFile(HumdrumFileContent):
         # Check to make sure we didn't change the actual duration of the note
         # (and generate the new quarterLength _now_ so the cache doesn't clear
         # at an inopportune time).
-        newQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
-        if newQuarterLength != originalQuarterLength:
-            raise HumdrumInternalError('_startTuplet modified duration.quarterLength')
+#         newQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
+#         if newQuarterLength != originalQuarterLength:
+#             raise HumdrumInternalError('_startTuplet modified duration.quarterLength')
 
     @staticmethod
     def _continueTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
@@ -2193,7 +2198,7 @@ class HumdrumFile(HumdrumFileContent):
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
-        originalQuarterLength: HumNum = HumNum(note.duration.quarterLength)
+#         originalQuarterLength: HumNum = HumNum(note.duration.quarterLength)
 
         duration: m21.duration.Duration = copy.deepcopy(note.duration)
         tuplet: m21.duration.Tuplet = copy.deepcopy(tupletTemplate)
@@ -2229,9 +2234,9 @@ class HumdrumFile(HumdrumFileContent):
         # And set this new duration on the note.
         note.duration = duration
 
-        newQuarterLength: HumNum = HumNum(note.duration.quarterLength)
-        if newQuarterLength != originalQuarterLength:
-            raise HumdrumInternalError('_continueTuplet modified duration.quarterLength')
+#         newQuarterLength: HumNum = HumNum(note.duration.quarterLength)
+#         if newQuarterLength != originalQuarterLength:
+#             raise HumdrumInternalError('_continueTuplet modified duration.quarterLength')
 
     @staticmethod
     def _endTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
@@ -2243,7 +2248,7 @@ class HumdrumFile(HumdrumFileContent):
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
-        originalQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
+#         originalQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
 
         duration: m21.duration.Duration = copy.deepcopy(endNote.duration)
         tuplet: m21.duration.Tuplet = copy.deepcopy(tupletTemplate)
@@ -2279,9 +2284,9 @@ class HumdrumFile(HumdrumFileContent):
         # And set this new duration on the endNote.
         endNote.duration = duration
 
-        newQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
-        if newQuarterLength != originalQuarterLength:
-            raise HumdrumInternalError('_endTuplet modified duration.quarterLength')
+#         newQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
+#         if newQuarterLength != originalQuarterLength:
+#             raise HumdrumInternalError('_endTuplet modified duration.quarterLength')
 
     '''
     //////////////////////////////
@@ -6888,7 +6893,7 @@ class HumdrumFile(HumdrumFileContent):
             if iTranspose:
                 transposeFromWrittenToSounding: m21.interval.Interval = M21Convert.m21IntervalFromTranspose(iTranspose)
                 # m21 Instrument transposition is from sounding to written (reverse of what we have)
-                if transposeFromWrittenToSounding:
+                if transposeFromWrittenToSounding is not None:
                     m21Inst.transposition = transposeFromWrittenToSounding.reverse()
             ss.m21Part.insert(0, m21Inst)
 
