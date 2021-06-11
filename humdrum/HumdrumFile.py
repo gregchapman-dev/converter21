@@ -584,14 +584,21 @@ class HumdrumFile(HumdrumFileContent):
         self._processHangingTieStarts()
 
         # Transpose any transposing instrument parts to "written pitch"
-        # For performance, check the instrument here, since stream.toWrittenPitch
+        # For performance, check the instruments here, since stream.toWrittenPitch
         # can be expensive, even if there is no transposing instrument.
         for ss in self._staffStates:
-            if ss.m21Part:
+            if ss.m21Part and ss.m21Part.atSoundingPitch == True:
                 instruments: m21.iterator.StreamIterator = ss.m21Part.getElementsByClass(m21.instrument.Instrument)
                 for inst in instruments:
-                    if inst.transposition is not None and ss.m21Part.atSoundingPitch:
-                        ss.m21Part.toWrittenPitch(inPlace=True)
+                    trans: m21.interval.Interval = inst.transposition
+                    if trans is None:
+                        continue # not a transposing instrument
+                    if trans.semitones == 0 and \
+                            trans.specifier == m21.interval.Specifier.PERFECT:
+                        continue # instrument transposition is a no-op
+                    ss.m21Part.toWrittenPitch(inPlace=True)
+                    break # you only need to transpose the part once
+
 
         # Do something so (e.g.) 'Piano'/'Pno.' ends up in the right place
         # between the two staves that are the piano grand staff, say, in a piece
