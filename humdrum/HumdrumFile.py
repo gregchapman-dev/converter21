@@ -3393,7 +3393,6 @@ class HumdrumFile(HumdrumFileContent):
         # Check for two-note tremolo case.
         # Allowing odd-length sequences (3, 5, 7, etc) which can in theory
         # be represented, but I have not seen such cases.
-        return False # for now, since I can't get music21's TremoloSpanner to work properly.
 
         if len(pitches) < 3:
             # a two-note tremolo that only lasts one or two notes doesn't make sense.
@@ -3862,18 +3861,8 @@ class HumdrumFile(HumdrumFileContent):
         # duration is set to an eighth note here.
         chord = self._processGrace(chord, layerTok.text)
 
-        # chord tremolos
-        if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
-            newTok: HumdrumToken = HumdrumToken(layerTok.getValue('auto', 'recip'))
-            self._convertRhythm(chord, newTok)
-        elif self._hasTremolo and layerTok.getValueBool('auto', 'tremolo2'):
-            newTok: HumdrumToken = HumdrumToken(layerTok.getValue('auto', 'recip'))
-            self._convertRhythm(chord, newTok)
-        elif self._hasTremolo and layerTok.getValueBool('auto', 'tremoloAux'):
-            newTok: HumdrumToken = HumdrumToken(layerTok.getValue('auto', 'recip'))
-            self._convertRhythm(chord, newTok)
-        else:
-            self._convertRhythm(chord, layerTok)
+        # chord tremolos are handled inside _convertRhythm
+        self._convertRhythm(chord, layerTok)
 
         # LATER: Support *2\right for scores where half-notes' stems are on the right
         # I don't think music21 can do it, so...
@@ -4818,17 +4807,8 @@ class HumdrumFile(HumdrumFileContent):
         # we don't set the duration of notes in a chord.  The chord gets a duration
         # instead.
         if not isChord:
-            if self._hasTremolo and token.getValueBool('auto', 'tremolo'):
-                newtok: HumdrumToken = HumdrumToken(token.getValue('auto', 'recip'))
-                self._convertRhythm(note, newtok, 0)
-            elif self._hasTremolo and token.getValueBool('auto', 'tremolo2'):
-                newtok: HumdrumToken = HumdrumToken(token.getValue('auto', 'recip'))
-                self._convertRhythm(note, newtok, 0)
-            elif self._hasTremolo and token.getValueBool('auto', 'tremoloAux'):
-                newtok: HumdrumToken = HumdrumToken(token.getValue('auto', 'recip'))
-                self._convertRhythm(note, newtok, 0)
-            else:
-                self._convertRhythm(note, token, subTokenIdx)
+            # note tremolos are handled inside _convertRhythm
+            self._convertRhythm(note, token, subTokenIdx)
 
         # LATER: Support *2\right for scores where half-notes' stems are on the right
         # I don't think music21 can do it, so...
@@ -5205,14 +5185,29 @@ class HumdrumFile(HumdrumFileContent):
         _convertRhythm: computes token/subtoken duration and sets it on obj
                         (note, rest, chord).  Returns the computed duration.
     '''
-    @staticmethod
-    def _convertRhythm(obj: m21.Music21Object, token: HumdrumToken, subTokenIdx: int = -1) -> HumNum:
+    def _convertRhythm(self, obj: m21.Music21Object, token: HumdrumToken, subTokenIdx: int = -1):
 #         if token.isMens:
 #             return self._convertMensuralRhythm(obj, token, subTokenIdx)
 
-        # instead of just doing dur = token.duration, we need to recompute
-        # it, because we need to get a real duration from grace notes (token.duration
-        # always returns 0 for grace notes)
+        tremoloNoteVisualDuration: HumNum = None
+        tremoloNoteGesturalDuration: HumNum = None
+        if self._hasTremolo and (token.isNote or token.isChord):
+            if token.getValueBool('auto', 'tremolo'):
+                tremoloNoteVisualDuration = Convert.recipToDuration(token.getValue('auto', 'recip'))
+            elif token.getValueBool('auto', 'tremolo2') or \
+                    token.getValueBool('auto', 'tremoloAux'):
+                # In two note tremolos, the two notes each look like they have the full duration
+                # of the tremolo sequence, but they actually each need to have half that duration
+                # internally, for the measure duration to make sense.
+                tremoloNoteVisualDuration = Convert.recipToDuration(token.getValue('auto', 'recip'))
+                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+            if tremoloNoteVisualDuration is not None:
+                obj.duration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                if tremoloNoteGesturalDuration is not None:
+                    obj.duration.linked = False # leave the note looking like visual duration
+                    obj.duration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                return
+
         tstring: str = token.text.lstrip(' ')
         if subTokenIdx >= 0:
             tstring = token.subtokens[subTokenIdx]
@@ -5221,21 +5216,20 @@ class HumdrumFile(HumdrumFileContent):
         if 'q' in tstring:
             tstring = re.sub('q', '', tstring)
 
-        # music21 does not support visual duration different from actual
-        # (gestural) duration.  Humdrum can do it via layout parameters,
-        # and MEI can do it, but music21 cannot.  So, if there is a visual
-        # duration, that's the one we encode (because that will cause it
-        # to be visible on the printed page).
         vstring: str = token.getVisualDuration(subTokenIdx)
-
+        vdur: HumNum = None
         if vstring:
-            dur = Convert.recipToDuration(vstring)
-        else:
-            dur = Convert.recipToDuration(tstring)
+            vdur = Convert.recipToDuration(vstring)
+
+        dur: HumNum = Convert.recipToDuration(tstring)
+
+        if vdur is not None and vdur != dur:
+            # set obj duration to vdur, and then unlink the duration, so the subsequent
+            # setting of gestural/actual duration doesn't change how the note looks.
+            obj.duration.quarterLength = Fraction(vdur)
+            obj.duration.linked = False
 
         obj.duration.quarterLength = Fraction(dur)
-
-        return dur
 
     '''
         _processOtherLayerToken
