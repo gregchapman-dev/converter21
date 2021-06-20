@@ -1290,7 +1290,6 @@ class HumdrumFile(HumdrumFileContent):
         layerData: [HumdrumToken] = self._layerTokens[staffIndex][layerIndex]
         if not layerData: # empty layer?!
             return
-
         self._fillContentsOfLayer(track, startLineIdx, endLineIdx, layerIndex)
 
     '''
@@ -4680,9 +4679,13 @@ class HumdrumFile(HumdrumFileContent):
     def _convertNote(self, note: m21.note.Note, token: HumdrumToken, staffAdjust: int, staffIndex: int, layerIndex: int, subTokenIdx: int = -1) -> m21.note.Note:
         # note is empty.  Fill it in.
         ss: StaffStateVariables = self._staffStates[staffIndex]
-        tstring: str = token.text
-        if subTokenIdx >= 0:
+        tstring: str = ''
+        stindex: int = 0
+        if subTokenIdx < 0:
+            tstring = token.text
+        else:
             tstring = token.subtokens[subTokenIdx]
+            stindex = subTokenIdx
 
         # TODO: scordatura
 
@@ -4774,13 +4777,13 @@ class HumdrumFile(HumdrumFileContent):
 
         # editorial and cautionary needs some work (and a revisiting of the iohumdrum.cpp code)
         # check for editorial or cautionary accidental
-        hasCautionary: bool = token.hasCautionaryAccidental(subTokenIdx)
+        hasCautionary: bool = token.hasCautionaryAccidental(stindex)
         # cautionaryOverride: str = None # e.g. 'n#', where the note just has '#'
-        hasEditorial: bool = token.hasEditorialAccidental(subTokenIdx)
+        hasEditorial: bool = token.hasEditorialAccidental(stindex)
         editorialStyle: str = ''
         if hasCautionary or hasEditorial:
-            # cautionaryOverride: str = token.cautionaryAccidental(subTokenIdx)
-            editorialStyle: str = token.editorialAccidentalStyle(subTokenIdx)
+            # cautionaryOverride: str = token.cautionaryAccidental(stindex)
+            editorialStyle: str = token.editorialAccidentalStyle(stindex)
 
 
         if not mensit and not isUnpitched:
