@@ -1290,6 +1290,7 @@ class HumdrumFile(HumdrumFileContent):
         layerData: [HumdrumToken] = self._layerTokens[staffIndex][layerIndex]
         if not layerData: # empty layer?!
             return
+
         self._fillContentsOfLayer(track, startLineIdx, endLineIdx, layerIndex)
 
     '''
@@ -4775,16 +4776,15 @@ class HumdrumFile(HumdrumFileContent):
 #             # note couldn't be expressed in base40 above
 #             accidCount = testaccid
 
-        # editorial and cautionary needs some work (and a revisiting of the iohumdrum.cpp code)
         # check for editorial or cautionary accidental
         hasCautionary: bool = token.hasCautionaryAccidental(stindex)
-        # cautionaryOverride: str = None # e.g. 'n#', where the note just has '#'
+        cautionaryOverride: str = '' # e.g. 'n#', where the note just has '#'
         hasEditorial: bool = token.hasEditorialAccidental(stindex)
         editorialStyle: str = ''
-        if hasCautionary or hasEditorial:
-            # cautionaryOverride: str = token.cautionaryAccidental(stindex)
-            editorialStyle: str = token.editorialAccidentalStyle(stindex)
-
+        if hasCautionary:
+            cautionaryOverride = token.cautionaryAccidental(stindex)
+        if hasEditorial:
+            editorialStyle = token.editorialAccidentalStyle(stindex)
 
         if not mensit and not isUnpitched:
             if hasEditorial or hasCautionary:
@@ -4800,12 +4800,54 @@ class HumdrumFile(HumdrumFileContent):
                     elif editorialStyle in ('a', 'above'):
                         note.pitch.accidental.displayLocation = 'above'
                 elif hasCautionary: # cautionary is ignored if we have editorial.
-                    # music21 can't deal with overrides unless I actually change
-                    # the value of the note (that ain't right)
-                    # music21 can't deal with the combo overrides ('n#') or the
-                    # alternate spelling overrides ('##' vs. 'x') at all.
-                    # See todo.txt for a possible music21 cautionary override method.
+                    # music21 doesn't really know how to deal with non-standard accidentals
+                    # here, but music21's MusicXML importer does, so we set them like it does,
+                    # with allowNonStandardValue=True, and spell them like MusicXML does, as well.
+                    # music21's 'standard' accidentals are:
+                    # 'natural': '',
+                    # 'sharp': '#',
+                    # 'double-sharp': '##',
+                    # 'triple-sharp': '###',
+                    # 'quadruple-sharp': '####',
+                    # 'flat': '-',
+                    # 'double-flat': '--',
+                    # 'triple-flat': '---',
+                    # 'quadruple-flat': '----',
+                    # 'half-sharp': '~',
+                    # 'one-and-a-half-sharp': '#~',
+                    # 'half-flat': '`',
+                    # 'one-and-a-half-flat': '-`',
+
                     note.pitch.accidental.displayType = 'even-tied' # forces it to be displayed
+
+                    # We can't actually do this, since none of the exporters understand, so
+                    # they fail to print the cautionary accidental entirely...
+                    # Once MusicXML export handles these, we can put it back in.
+                    # if cautionaryOverride and cautionaryOverride != 'true':
+                    #     if cautionaryOverride == 'n':
+                    #         note.pitch.accidental.set('natural')
+                    #     elif cautionaryOverride == '-':
+                    #         note.pitch.accidental.set('flat')
+                    #     elif cautionaryOverride == '#':
+                    #         note.pitch.accidental.set('sharp')
+                    #     elif cautionaryOverride == '--':
+                    #         note.pitch.accidental.set('double-flat')
+                    #     elif cautionaryOverride == 'x':
+                    #         note.pitch.accidental.set('double-sharp')
+                    #     elif cautionaryOverride == '##':
+                    #         note.pitch.accidental.set('sharp-sharp', allowNonStandardValue=True)
+                    #     elif cautionaryOverride == '---':
+                    #         note.pitch.accidental.set('triple-flat')
+                    #     elif cautionaryOverride == 'xs':
+                    #         note.pitch.accidental.set('double-sharp-sharp', allowNonStandardValue=True)
+                    #     elif cautionaryOverride == 'sx':
+                    #         note.pitch.accidental.set('sharp-double-sharp', allowNonStandardValue=True)
+                    #     elif cautionaryOverride == '###':
+                    #         note.pitch.accidental.set('sharp-sharp-sharp', allowNonStandardValue=True)
+                    #     elif cautionaryOverride == 'n-':
+                    #         note.pitch.accidental.set('natural-flat', allowNonStandardValue=True)
+                    #     elif cautionaryOverride == 'n#':
+                    #         note.pitch.accidental.set('natural-sharp', allowNonStandardValue=True)
 
         # we don't set the duration of notes in a chord.  The chord gets a duration
         # instead.

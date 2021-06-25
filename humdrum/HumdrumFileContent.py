@@ -774,14 +774,42 @@ class HumdrumFileContent(HumdrumFileStructure):
                             token.setValue('auto', str(k), 'cautionaryAccidental', 'true')
                             token.setValue('auto', str(k), 'visualAccidental', 'true')
 
-                    # editorialAccidental analysis should go here...
+                    # editorialAccidental analysis
+                    isEditorial: bool = False
+                    editType: str = ''
+                    for x, signifier in enumerate(self._signifiers.editorialAccidentals):
+                        if signifier in subtok:
+                            isEditorial = True
+                            editType = self._signifiers.editorialAccidentalTypes[x]
+                            break
+
+                    subTokenIdx: int = k
+                    if len(token.subtokens) == 1:
+                        subTokenIdx = -1
+                    editType2: str = token.layoutParameter('A', 'edit', subTokenIdx)
+                    if editType2 and not editType:
+                        isEditorial = True
+                        if editType2 == 'true':
+                            # default editorial accidental type
+                            editType = ''
+                            # use the first editorial accidental RDF style in file if present
+                            if self._signifiers.editorialAccidentalTypes:
+                                editType = self._signifiers.editorialAccidentalTypes[0]
+                        else:
+                            editType = editType2
+
+                    if isEditorial:
+                        token.setValue('auto', str(k), 'editorialAccidental', 'true')
+                        token.setValue('auto', str(k), 'visualAccidental', 'true')
+                        if editType:
+                            token.setValue('auto', str(k), 'editorialAccidentalStyle', editType)
 
                     # layout parameters (('N', 'acc') and ('A', 'vis')) can also be used
                     # to specify a specific accidental or combination to be made visible.
                     # 'A', 'vis' takes priority over 'N', 'acc', if both are present
-                    layoutAccidental: str = token.layoutParameter('A', 'vis', k)
+                    layoutAccidental: str = token.layoutParameter('A', 'vis', subTokenIdx)
                     if not layoutAccidental:
-                        layoutAccidental = token.layoutParameter('N', 'acc', k)
+                        layoutAccidental = token.layoutParameter('N', 'acc', subTokenIdx)
                     if layoutAccidental:
                         token.setValue('auto', str(k), 'cautionaryAccidental', layoutAccidental)
                         token.setValue('auto', str(k), 'visualAccidental', layoutAccidental)

@@ -1688,6 +1688,22 @@ class HumdrumToken(HumHash):
 
         return self.getValueBool('auto', str(subtokenIndex), 'cautionaryAccidental')
 
+    def cautionaryAccidental(self, subtokenIndex: int) -> str:
+        humLine = self.ownerLine
+        if humLine is None:
+            return None
+        humFile = humLine.ownerFile
+        if humFile is None:
+            return None
+
+        # make sure we've done the full accidental analysis on the whole file
+        if not humFile.getValueBool('auto', 'accidentalAnalysis'):
+            successful = humFile.analyzeKernAccidentals()
+            if not successful:
+                return None
+
+        return self.getValueString('auto', str(subtokenIndex), 'cautionaryAccidental')
+
     def hasEditorialAccidental(self, subtokenIndex: int) -> bool:
         humLine = self.ownerLine
         if humLine is None:
