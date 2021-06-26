@@ -854,6 +854,11 @@ class HumdrumFile(HumdrumFileContent):
                 # left barline style be set to 'startrpt'
                 measure.leftBarline = m21.bar.Repeat(direction='start')
 
+            # we insert page/line breaks at offset 0 in part 0's measure
+            if self._m21BreakAtStartOfNextMeasure and i == 0:
+                measure.insert(0, self._m21BreakAtStartOfNextMeasure)
+                self._m21BreakAtStartOfNextMeasure = None
+
         self._allMeasuresPerStaff.append(self._oneMeasurePerStaff)
 
         # We've handled it and should set it to False
