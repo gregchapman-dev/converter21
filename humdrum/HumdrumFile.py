@@ -7085,19 +7085,58 @@ class HumdrumFile(HumdrumFileContent):
         elif style and style[0] == '(':
             sg.barTogether = True
 
-        if groupNum > 0:
-            groupName = self._groupNames.get(groupNum)
-            #groupNameTok = self._groupNameTokens.get(groupNum)
-            groupAbbrev = self._groupAbbrevs.get(groupNum)
-            #groupAbbrevTok = self._groupAbbrevTokens.get(groupNum)
-            if groupAbbrev and groupAbbrevTok:
-                sg.abbreviation = groupAbbrev
-                # sg.abbreviation.humdrumLocation = groupAbbrevTok # for debugging...
-            if groupName and groupNameTok:
-                sg.name = groupName
-                #sg.name.humdrumLocation = groupNameTok # for debugging...
+        groupName = self._groupNames.get(groupNum)
+        #groupNameTok = self._groupNameTokens.get(groupNum)
+        groupAbbrev = self._groupAbbrevs.get(groupNum)
+        #groupAbbrevTok = self._groupAbbrevTokens.get(groupNum)
+        if groupAbbrev:
+            sg.abbreviation = groupAbbrev
+            # sg.abbreviation.humdrumLocation = groupAbbrevTok # for debugging...
+        if groupName:
+            sg.name = groupName
+            #sg.name.humdrumLocation = groupNameTok # for debugging...
+        if not groupName and not groupAbbrev:
+            # Look in the group's Parts to see if they all have the same instrument
+            # (it still counts if some parts have no instrument at all).
+            # If so,
+            #   (1) remove that instrument from the Part(s) or mark it as not-to-be-printed?
+            #   (2) set that instrument in the StaffGroup
+            self._promoteCommonInstrumentToStaffGroup(sg)
 
         return sg
+
+    def _promoteCommonInstrumentToStaffGroup(self, sg: m21.layout.StaffGroup):
+        # Note: MuseScore doesn't support StaffGroup.name/abbrev, but Finale does.
+        partsAndInstruments: [m21.instrument.Instrument] = []
+        commonInstrument: m21.instrument.Instrument = None
+        for part in sg.getSpannedElements():
+            inst = part.getInstrument(returnDefault=False)
+            if inst is None:
+                continue
+            if commonInstrument is None:
+                commonInstrument = inst
+                partsAndInstruments.append((part,inst))
+                continue
+            if inst.instrumentName == commonInstrument.instrumentName and \
+                    inst.instrumentAbbreviation == commonInstrument.instrumentAbbreviation:
+                partsAndInstruments.append((part,inst))
+                continue
+            # found a non-common instrument, get the heck out
+            commonInstrument = None
+            commonInstruments = []
+            break
+
+        if commonInstrument:
+            sg.name = commonInstrument.instrumentName
+            sg.abbreviation = commonInstrument.instrumentAbbreviation
+
+            # Maybe hide or remove the instruments in the Parts?
+            # We need to leave the instruments in place, and style.hideOnPrint
+            # doesn't do anything.  So we set the name/abbrev to ''.
+            for part, instrument in partsAndInstruments:
+                instrument.instrumentName = ''
+                instrument.instrumentAbbreviation = ''
+
 
     '''
     //////////////////////////////
