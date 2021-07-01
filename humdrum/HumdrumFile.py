@@ -1359,6 +1359,14 @@ class HumdrumFile(HumdrumFileContent):
             voiceOffsetInMeasure = 0 # durationFromBarline returns duration of previous bar in this case
         self._oneMeasurePerStaff[staffIndex].insert(voiceOffsetInMeasure, voice)
 
+# TODO: merge new iohumdrum.cpp changes --gregc 01July2021
+#     // Check for cases where there are only null interpretations in the measure
+#     // and insert a space in the measure (related to tied notes across barlines).
+#     if (layerOnlyContainsNullStuff(layerdata)) {
+#         fillEmptyLayer(staffindex, layerindex, elements, pointers);
+#         return true;
+#     }
+
         # Note: no special case for whole measure rests.
         # music21 can detect and deal with these without our help.
 
@@ -4050,6 +4058,23 @@ class HumdrumFile(HumdrumFileContent):
                 skipNChars = 1
                 if i+skipNChars+1 < tsize:
                     ch1 = token.text[i+skipNChars+1]
+
+# TODO: merge new iohumdrum.cpp changes --gregc 01July2021
+#         else if ((ch == '~') && (posch == '~')) {
+#             // textual tenuto
+#             textTenuto = true;
+#             ++i;
+#             posch = i < tsize - 1 ? token->at(i + 1) : 0;
+#             if (m_signifiers.below && (posch == m_signifiers.below)) {
+#                 textTenutoBelow = true;
+#             }
+#             continue;
+#         }
+#         if (m_signifiers.verticalStroke == ch) {
+#             // use 7 slot in array for vertical strokes
+#             ch = 7;
+#         }
+
             # this will include a bunch of non-articulation characters as well, but we
             # will only look for the ones we know, below.
             articFound[ch] = True
@@ -4079,6 +4104,21 @@ class HumdrumFile(HumdrumFileContent):
             elif self._signifiers.below and ch1 == self._signifiers.below:
                 articPlacement[ch] = 'below'
 
+# TODO: merge new iohumdrum.cpp changes --gregc 01July2021
+#     if (textTenuto) {
+#         std::string text = "ten.";
+#         std::string placement = "above";
+#         if (textTenutoBelow) {
+#             placement = "below";
+#         }
+#         bool bold = false;
+#         bool italic = true;
+#         int justification = 0;
+#         std::string color = "";
+#         int vgroup = 0;
+#         int staffindex = m_rkern[token->getTrack()];
+#         addDirection(text, placement, bold, italic, token, staffindex, justification, color, vgroup);
+#     }
 
         artics: [m21.articulations.Articulation] = []
 
@@ -4120,6 +4160,13 @@ class HumdrumFile(HumdrumFileContent):
                 strongAccent.style.hideObjectOnPrint = True
             artics.append(strongAccent)
 
+# TODO: merge new iohumdrum.cpp changes --gregc 01July2021
+#     if (articloc[7]) {
+#         artics.push_back(ARTICULATION_stroke);
+#         positions.push_back(articpos[7]);
+#         gestural.push_back(articges[7]);
+#         showingpositions.push_back(showpos[7]);
+#     }
         if articFound.get('^', None):
             accent = m21.articulations.Accent()
             placement: str = articPlacement['^']
@@ -4488,7 +4535,19 @@ class HumdrumFile(HumdrumFileContent):
     //      SS = turn, centered between two notes
     //      $$ = inverted turn, centered between two notes
     //
+    //  Layout parameters:
+    //      LO:TURN:facc[=true] = flip upper and lower accidentals
+    //      LO:TURN:uacc=[acc]  = upper [visible] accidental (or lower visual one if flip is active)
+    //      LO:TURN:lacc=[acc]  = lower [visible] accidental (or upper visual one if flip is active)
+    // 			[ul]acc = "none" = force the accidental not to show
+    // 			[ul]acc = "true" = force the accidental not to show ("LO:TURN:[ul]acc" hide an accidental)
+    //
+    // Deal with cases where the accidental should be hidden but different from sounding accidental.  This
+    // can be done when MEI allows @accidlower.ges and @accidupper.ges.
+    //
     // Assuming not in chord for now.
+
+    # TODO: merge new iohumdrum.cpp changes in addTurn/addMordent (accidental stuff) --gregc 01July2021
     '''
     def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
         tok: str = token.text
@@ -5865,13 +5924,13 @@ class HumdrumFile(HumdrumFileContent):
             placement = 'between'
         elif zparam:
             Z: int = token.getValueInt('LO', 'TX', 'Z')
-            if Z > 0:
+            if Z >= 0:
                 placement = 'above'
             else:
                 placement = 'below'
         elif yparam:
             Y: int = token.getValueInt('LO', 'TX', 'Y')
-            if Y > 0:
+            if Y >= 0:
                 placement = 'below'
             else:
                 placement = 'above'
@@ -5927,6 +5986,16 @@ class HumdrumFile(HumdrumFileContent):
         # justification == 0 means no explicit justification (mostly left justified)
         # justification == 1 means right justified
         justification: int = 0
+
+# TODO: merge new iohumdrum.cpp changes --gregc 01July2021
+#     if (token->isBarline()) {
+#         hum::HumNum startdur = token->getDurationFromStart();
+#         hum::HumdrumFile *hfile = token->getOwner()->getOwner();
+#         hum::HumNum totaldur = (*hfile)[hfile->getLineCount() - 1].getDurationFromStart();
+#         if (startdur == totaldur) {
+#             justification = 1;
+#         }
+#     }
 
         color: str = ''
         if isSic:
@@ -6008,13 +6077,13 @@ class HumdrumFile(HumdrumFileContent):
             placement = 'between'
         elif zparam:
             Z: int = token.getValueInt('LO', 'TX', 'Z')
-            if Z > 0:
+            if Z >= 0:
                 placement = 'above'
             else:
                 placement = 'below'
         elif yparam:
             Y: int = token.getValueInt('LO', 'TX', 'Y')
-            if Y > 0:
+            if Y >= 0:
                 placement = 'below'
             else:
                 placement = 'above'
@@ -6229,9 +6298,10 @@ class HumdrumFile(HumdrumFileContent):
         if current and current.isData:
             current = current.nextToken(0)
 
+        line: int = 0
         while current.spineInfo == '':
-            line: int = token.lineIndex + 1
-            current = token.ownerLine.ownerFile[line][0] # first token on next line
+            line = current.lineIndex + 1
+            current = current.ownerLine.ownerFile[line][0] # first token on next line
 
         while current and not current.isData:
             if current.isTempo:
@@ -6433,6 +6503,7 @@ class HumdrumFile(HumdrumFileContent):
             if key == 'OMD':
                 index = i
                 value = line.referenceValue
+                break
 
         if not value:
             return

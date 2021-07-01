@@ -686,7 +686,7 @@ class HumdrumToken(HumHash):
             return
 
         if self.hasRhythm:
-            if self.isData:
+            if self.isNonNullData:
                 if self.isKern:
                     self._duration = Convert.recipToDuration(self.text)
                 elif self.isRecip:
