@@ -5,7 +5,7 @@ My initial goal here is to make a really accurate (and thorough) Humdrum importe
 
 converter21.py is a general-purpose music21-based converter which also happens to use my Humdrum importer instead of music21's.
 
-Several examples of converter21.py usage can be seen below.
+Examples of converter21.py usage can be seen below.
 
 Convert humdrum file to musicxml format:
 
