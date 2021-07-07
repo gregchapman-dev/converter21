@@ -13,6 +13,7 @@
 #    All methods are static.  M21Convert is just a namespace for these conversion functions and
 #    look-up tables.
 
+import sys
 from typing import Union
 from fractions import Fraction
 import music21 as m21
@@ -251,7 +252,7 @@ class M21Convert:
         durNoDots: HumNum = token.scaledDurationNoDots(token.rscale) / tuplet.tupletMultiplier()
         numDots: int = token.dotCount
         durType: str = m21.duration.convertQuarterLengthToType(Fraction(durNoDots))
-        #print('m21DurationWithTuplet: type = "{}", dots={}'.format(durType, numDots))
+        #print('m21DurationWithTuplet: type = "{}", dots={}'.format(durType, numDots), file=sys.stderr)
         component: m21.duration.DurationTuple = m21.duration.durationTupleFromTypeDots(durType, numDots)
         output = m21.duration.Duration(components = (component,))
         output.tuplets = (tuplet,)

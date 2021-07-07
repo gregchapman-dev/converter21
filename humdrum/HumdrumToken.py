@@ -2719,7 +2719,7 @@ class HumdrumToken(HumHash):
     def getVisualDuration(self, subtokenIdx: int = -1) -> str:
         visDurStr = self.layoutParameter('N', 'vis', subtokenIdx)
         # if visDurStr:
-        #     print('visualDuration(recip) = {}, origDur(quarterLength) = {}'.format(visDurStr, self.duration))
+        #     print('visualDuration(recip) = {}, origDur(quarterLength) = {}'.format(visDurStr, self.duration), file=sys.stderr)
         return visDurStr
 
     '''

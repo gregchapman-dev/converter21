@@ -37,8 +37,8 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 //   be produced.
 '''
 def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str:
-    #print(funcName(), 'startSpine =', startSpine, 'numExtraSpines =', numExtraSpines)
-    #print(funcName(), 'info =', info)
+    #print(funcName(), 'startSpine =', startSpine, 'numExtraSpines =', numExtraSpines, file=sys.stderr)
+    #print(funcName(), 'info =', info, file=sys.stderr)
 
     output: str = ''
     if numExtraSpines < 1:
@@ -48,9 +48,9 @@ def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str
     if numExtraSpines == 1:
         # two-spine merge
         if info[startSpine][:-1] == info[startSpine+1][:-1]: # compare all but  trailing 'a' or 'b'
-            #print(funcName(), 'merged spineInfo =', info[startSpine][1:-2])
+            #print(funcName(), 'merged spineInfo =', info[startSpine][1:-2], file=sys.stderr)
             return info[startSpine][1:-2] # strip off leading '(' and the trailing ')a' or ')b'
-        #print(funcName(), 'merged spineInfo =', info[startSpine] + ' ' + info[startSpine+1])
+        #print(funcName(), 'merged spineInfo =', info[startSpine] + ' ' + info[startSpine+1], file=sys.stderr)
         return info[startSpine] + ' ' + info[startSpine+1]
     '''
     // Generalized code for simplifying up to N subspines at once
@@ -92,7 +92,7 @@ def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str
     for i in range(1, len(newInfo)):
         output += ' ' + newInfo[i]
 
-    #print(funcName(), 'merged spineInfo =', output)
+    #print(funcName(), 'merged spineInfo =', output, file=sys.stderr)
     return output
 
 '''
@@ -396,14 +396,14 @@ class HumdrumFileBase(HumHash):
             contents = contents[0:-1] # lose that last empty line (many editors add it)
 
         contentLines = contents.split('\n')
-        print(funcName(), 'len(contentLines) =', len(contentLines))
+        print(funcName(), 'len(contentLines) =', len(contentLines), file=sys.stderr)
         for contentLine in contentLines:
             line = HumdrumLine(contentLine)
             line.ownerFile = self
             self._lines.append(line)
 
         self.analyzeBaseFromLines()
-        print(funcName(), 'self.isValid =', self.isValid)
+        print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
         return self.isValid
 
     '''
@@ -667,7 +667,7 @@ class HumdrumFileBase(HumHash):
         mergeCount = 0
         for i, prevTok in enumerate(prevLine.tokens()):
             if skipOneToken:
-                #print('skip one token')
+                #print('skip one token', file=sys.stderr)
                 skipOneToken = False
                 continue
 
@@ -693,7 +693,7 @@ class HumdrumFileBase(HumHash):
                 # stop processing adjacent merge fields ('*v')
                 #(funcName(), 'last merge in adjacent group noticed at i = {}'.format(i))
                 if mergeCount == 1:
-                    #print(funcName(), 'bad *v count')
+                    #print(funcName(), 'bad *v count', file=sys.stderr)
                     return self.setParseError(
                         "Error: single spine merge indicator '*v' on line: {}\n{}".format(
                             prevLine.lineNumber, prevLine.text))
@@ -731,10 +731,10 @@ class HumdrumFileBase(HumHash):
                 # spine manipulators to the current next token.
                 # Here we do the first one, and the rest are done at the top of
                 # the prevTok loop.
-                #print(funcName(), 'prevLine {}: {}'.format(prevLine.lineNumber, prevLine.text))
-                #print(funcName(), 'nextLine {}: {}'.format(nextLine.lineNumber, nextLine.text))
-                #print(funcName(), 'found first adjacent merge at i={}'.format(i))
-                #print(funcName(), 'nextTokenIdx =', nextTokenIdx)
+                #print(funcName(), 'prevLine {}: {}'.format(prevLine.lineNumber, prevLine.text), file=sys.stderr)
+                #print(funcName(), 'nextLine {}: {}'.format(nextLine.lineNumber, nextLine.text), file=sys.stderr)
+                #print(funcName(), 'found first adjacent merge at i={}'.format(i), file=sys.stderr)
+                #print(funcName(), 'nextTokenIdx =', nextTokenIdx, file=sys.stderr)
                 if nextLine[nextTokenIdx] is not None:
                     prevTok.makeForwardLink(nextLine[nextTokenIdx])
                 else:
@@ -892,19 +892,19 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
         mergeCount: int = 0
         skipOneToken: bool = False
 
-        #print(funcName(), 'line {}: {}'.format(line.lineNumber, line.text))
-        #print(funcName(), 'starting dataType =', dataType)
-        #print(funcName(), 'starting spineInfo =', spineInfo)
+        #print(funcName(), 'line {}: {}'.format(line.lineNumber, line.text), file=sys.stderr)
+        #print(funcName(), 'starting dataType =', dataType, file=sys.stderr)
+        #print(funcName(), 'starting spineInfo =', spineInfo, file=sys.stderr)
 
         for i, token in enumerate(line.tokens()):
             if skipOneToken:
-                #print(funcName(), 'skipping one token')
+                #print(funcName(), 'skipping one token', file=sys.stderr)
                 skipOneToken = False
                 continue
 
             if mergeCount > 0 and token.isMergeInterpretation:
                 mergeCount += 1
-                #print(funcName(), 'found merge token #{} on this line at i = {}'.format(mergeCount, i))
+                #print(funcName(), 'found merge token #{} on this line at i = {}'.format(mergeCount, i), file=sys.stderr)
 
                 if i != line.tokenCount-1:
                     continue
@@ -912,22 +912,22 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
                 # we're on the last token of the line, so fall through to finish up the merge group
 
             if mergeCount > 0 and ((not token.isMergeInterpretation) or (i == line.tokenCount-1)):
-                #print(funcName(), 'end of merge token group on this line, count =', mergeCount)
+                #print(funcName(), 'end of merge token group on this line, count =', mergeCount, file=sys.stderr)
                 if mergeCount == 1:
-                    #print(funcName(), 'bad *v count')
+                    #print(funcName(), 'bad *v count', file=sys.stderr)
                     self.setParseError(
                         "Error: single spine merge indicator '*v' on line: {}\n{}".format(
                             line.lineNumber, line.text))
                     return (False, None, None)
 
-                #print('spineInfo = ', spineInfo, 'i-mergeCount =', i-mergeCount, 'mergeCount-1 =', mergeCount-1)
+                #print('spineInfo = ', spineInfo, 'i-mergeCount =', i-mergeCount, 'mergeCount-1 =', mergeCount-1, file=sys.stderr)
                 startSpine: int = i - mergeCount
                 if token.isMergeInterpretation: # we stopped at the end, so i is one less than usual
                     startSpine += 1
                 newInfo.append(getMergedSpineInfo(spineInfo, startSpine, mergeCount-1))
-                #print('mergedSpineInfo =', newInfo[-1])
+                #print('mergedSpineInfo =', newInfo[-1], file=sys.stderr)
                 newType.append(dataType[startSpine])
-                #print('new dataType =', newType[-1])
+                #print('new dataType =', newType[-1], file=sys.stderr)
                 # stop counting merges, and fall through to process this non-merge token
                 # if this was a merge token (i.e. it was last on the line), don't fall through
                 mergeCount = 0
@@ -941,7 +941,7 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
                 newInfo.append('(' + spineInfo[i] + ')b')
             elif token.isMergeInterpretation:
                 mergeCount = 1
-                #print(funcName(), 'line with merge at i = {}: {}'.format(i, line.text))
+                #print(funcName(), 'line with merge at i = {}: {}'.format(i, line.text), file=sys.stderr)
             elif token.isAddInterpretation:
                 newType.append(dataType[i])
                 newType.append('')
@@ -962,7 +962,7 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
                 skipOneToken = True # we already processed it here
             elif token.isTerminateInterpretation:
                 # store pointer to terminate token in trackends
-                #print(funcName(), 'trackStarts = {}, trackEnds = {}'.format(self._trackStarts, self._trackEnds))
+                #print(funcName(), 'trackStarts = {}, trackEnds = {}'.format(self._trackStarts, self._trackEnds), file=sys.stderr)
                 self._trackEnds[len(self._trackStarts) - 1].append(token)
             elif token.isExclusiveInterpretation:
                 newType.append(token.text)
@@ -979,8 +979,8 @@ Line: {}'''.format(line.lineNumber, i, line.text))
                 newType.append(dataType[i])
                 newInfo.append(spineInfo[i])
 
-        #print(funcName(), 'ending dataType =', newType)
-        #print(funcName(), 'ending spineInfo =', newInfo)
+        #print(funcName(), 'ending dataType =', newType, file=sys.stderr)
+        #print(funcName(), 'ending spineInfo =', newInfo, file=sys.stderr)
         return (True, newType, newInfo)
 
     '''

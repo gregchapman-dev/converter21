@@ -11,6 +11,7 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import re
+import sys
 
 from humdrum import HumNum
 from humdrum import Convert
@@ -490,7 +491,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         endTok.setValue('auto', endCountTag, endCount)
 
 #         print('SLUR: starts at {} (lineNum:{}, fieldNum:{}), ends at {} (lineNum:{}, fieldNum:{})'.format(startTok.text, startTok.lineNumber, startTok.fieldNumber,
-#                      endTok.text, endTok.lineNumber, endTok.fieldNumber))
+#                      endTok.text, endTok.lineNumber, endTok.fieldNumber), file=sys.stderr)
 
     '''
     //////////////////////////////

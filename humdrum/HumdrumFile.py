@@ -465,8 +465,8 @@ class StaffStateVariables:
         self.mostRecentlySeenClefTok: HumdrumToken = None
 
     def printState(self, prefix: str):
-        print('{}hasLyrics: {}'.format(prefix, self.hasLyrics))
-        print('{}lyricLabels: {}', self.lyricLabels)
+        print('{}hasLyrics: {}'.format(prefix, self.hasLyrics), file=sys.stderr)
+        print('{}lyricLabels: {}', self.lyricLabels, file=sys.stderr)
 
 
 class HumdrumFile(HumdrumFileContent):
@@ -1226,14 +1226,14 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::printMeasureTokens -- For debugging.
     '''
     def _printMeasureTokens(self):
-        print('self._layerTokens:')
+        print('self._layerTokens:', file=sys.stderr)
         for i, staff in enumerate(self._layerTokens):
-            print('STAFF {}\t'.format(i + 1), end = '', flush=True)
+            print('STAFF {}\t'.format(i + 1), end = '', flush=True, file=sys.stderr)
             for j, layer in enumerate(staff):
-                print('LAYER {}:\t'.format(j + 1), end = '', flush=True)
+                print('LAYER {}:\t'.format(j + 1), end = '', flush=True, file=sys.stderr)
                 for token in layer:
-                    print(' ', token.text, end = '', flush=True)
-                print('', flush=True)
+                    print(' ', token.text, end = '', flush=True, file=sys.stderr)
+                print('', flush=True, file=sys.stderr)
 
     '''
     //////////////////////////////
@@ -1306,18 +1306,18 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _printGroupInfo(tgs: [HumdrumBeamAndTuplet]):
         for tg in tgs:
-            print(tg.token.text, end='\t')
+            print(tg.token.text, end='\t', file=sys.stderr)
             if tg.token.text and len(tg.token.text) < 8:
-                print('', end='\t')
-            print('BS:{}'.format(tg.beamStart), end='\t')
-            print('BE:{}'.format(tg.beamEnd), end='\t')
-            print('GS:{}'.format(tg.gbeamStart), end='\t')
-            print('GE:{}'.format(tg.gbeamEnd), end='\t')
-            print('TS:{}'.format(tg.tupletStart), end='\t')
-            print('TE:{}'.format(tg.tupletEnd), end='\t')
-            print('TG:{}'.format(tg.group), end='\t')
-            print('TA/TN:{}/{}'.format(tg.numNotesActual, tg.numNotesNormal), end='\t')
-            print('TF:{}'.format(tg.forceStartStop))
+                print('', end='\t', file=sys.stderr)
+            print('BS:{}'.format(tg.beamStart), end='\t', file=sys.stderr)
+            print('BE:{}'.format(tg.beamEnd), end='\t', file=sys.stderr)
+            print('GS:{}'.format(tg.gbeamStart), end='\t', file=sys.stderr)
+            print('GE:{}'.format(tg.gbeamEnd), end='\t', file=sys.stderr)
+            print('TS:{}'.format(tg.tupletStart), end='\t', file=sys.stderr)
+            print('TE:{}'.format(tg.tupletEnd), end='\t', file=sys.stderr)
+            print('TG:{}'.format(tg.group), end='\t', file=sys.stderr)
+            print('TA/TN:{}/{}'.format(tg.numNotesActual, tg.numNotesNormal), end='\t', file=sys.stderr)
+            print('TF:{}'.format(tg.forceStartStop), file=sys.stderr)
 
     '''
     //////////////////////////////
@@ -2011,7 +2011,7 @@ class HumdrumFile(HumdrumFileContent):
         # None as False, which seems wrong, but not fatally so. --gregc
         tuplet.bracket = None
 
-        # print('_makeTuplet: tuplet =', tuplet)
+        # print('_makeTuplet: tuplet =', tuplet, file=sys.stderr)
         return tuplet
 
     '''
@@ -2907,7 +2907,7 @@ class HumdrumFile(HumdrumFileContent):
                         break
 
                 if not haveGoodDurationNormal:
-                    print('Cannot figure out a reasonable tuplet duration')
+                    print('Cannot figure out a reasonable tuplet duration', file=sys.stderr)
 
         tgs = []
         for i, layerTok in enumerate(layerData):
@@ -2977,7 +2977,7 @@ class HumdrumFile(HumdrumFileContent):
             if not (tgs[i].tupletStart == 2 and tgs[i].tupletEnd == 1):
                 continue
             if tgs[i-1].tupletStart == 1 and tgs[i-1].tupletEnd == 1:
-                print('two triplet-halfs + triplet-breve case')
+                print('two triplet-halfs + triplet-breve case', file=sys.stderr)
 
         # two triplet-halfs + triplet-breve case
         for i in range(2, len(tgs)):
@@ -2986,7 +2986,7 @@ class HumdrumFile(HumdrumFileContent):
             if not (tgs[i-1].tupletStart == 0 and tgs[i-1].tupletEnd == 1):
                 continue
             if tgs[i-2].tupletStart == 1 and tgs[i-1].tupletEnd == 0:
-                print('two triplet-halfs + triplet-breve case')
+                print('two triplet-halfs + triplet-breve case', file=sys.stderr)
 
         # two triplet-halfs + triplet-breve case + two triplet-halfs
         for i in range(2, len(tgs)):
@@ -2995,7 +2995,7 @@ class HumdrumFile(HumdrumFileContent):
             if not (tgs[i-1].tupletStart == 2 and tgs[i-1] == 0):
                 continue
             if tgs[i-2].tupletStart == 1 and tgs[i-2].tupletEnd == 1:
-                print('two triplet-halfs + triplet-breve case + two triplet-halfs')
+                print('two triplet-halfs + triplet-breve case + two triplet-halfs', file=sys.stderr)
 
     '''
     //////////////////////////////
@@ -5405,7 +5405,7 @@ class HumdrumFile(HumdrumFileContent):
         # Handle "z" for sforzando (sf), or "zz" for sfz
         #   This seems to be at the wrong level, shouldn't it be inside the loop below? --gregc
         if 'z' in token.text:
-            print('_processDynamics: "z" found in token.text at top level')
+            print('_processDynamics: "z" found in token.text at top level', file=sys.stderr)
 
         active: bool = True
         for i in range(startField, line.tokenCount):
@@ -6660,20 +6660,19 @@ class HumdrumFile(HumdrumFileContent):
                 contrib = m21.metadata.Contributor()
                 contrib.role = M21Convert.humdrumReferenceKeyToM21ContributorRole[k]
                 contrib.name = v
-                print('key: {} -> {}, value: {}'.format(k, contrib.role, contrib.name))
+                print('key: {} -> {}, value: {}'.format(k, contrib.role, contrib.name), file=sys.stderr)
                 m21Metadata.addContributor(contrib)
             elif k.lower() in m21Metadata.workIdAbbreviationDict:
-                print('key: {} -> {}, value: {}'.format(k, m21Metadata.workIdAbbreviationDict[k.lower()], v))
+                print('key: {} -> {}, value: {}'.format(k, m21Metadata.workIdAbbreviationDict[k.lower()], v), file=sys.stderr)
                 m21Metadata.setWorkId(k, v)
             elif k == 'YEC': # electronic edition copyright
-                print('key: {} -> {}, value: {}'.format(k, 'metadata.Copyright', v))
+                print('key: {} -> {}, value: {}'.format(k, 'metadata.Copyright', v), file=sys.stderr)
                 m21Metadata.copyright = m21.metadata.Copyright(v)
             else:
                 # We could add it to the m21Stream in some non-standard way (perhaps with a
                 # Music21Object that is what we wish m21.metadata.Metadata was, with language
                 # codes, all keys allowed, etc)
                 pass
-#                 print('unrecognized referenceKey: {}, value: {}'.format(k, v))
 #                 print('unrecognized referenceKey: {}, value: {}'.format(k, v), file=sys.stderr)
 
     def _createStaffGroups(self):
@@ -6977,7 +6976,7 @@ class HumdrumFile(HumdrumFileContent):
         '''
         # print analysis:
         for i, ch in enumerate(d):
-            print("d[{}] =\t{} pairing: {}".format(i, ch, pairing[i]))
+            print("d[{}] =\t{} pairing: {}".format(i, ch, pairing[i]), file=sys.stderr)
         '''
 
         if not isValid:
@@ -7065,12 +7064,12 @@ class HumdrumFile(HumdrumFileContent):
             barGroups.pop() # remove that last empty barGroup
 
         '''
-        print('BAR GROUPS')
+        print('BAR GROUPS', file=sys.stderr)
         for i, barGroup in enumerate(barGroups):
-            print('\tgroupStyle[]={}\tgroup={}:\t'.format(groupStyle[i], i), end='')
+            print('\tgroupStyle[]={}\tgroup={}:\t'.format(groupStyle[i], i), end='', file=sys.stderr)
             for val in barGroup:
-                print(' {}'.format(val), end='')
-            print('') # endLine
+                print(' {}'.format(val), end='', file=sys.stderr)
+            print('', file=sys.stderr) # endLine
         '''
 
         # Pull out all non-zero staff groups:
@@ -7083,12 +7082,12 @@ class HumdrumFile(HumdrumFileContent):
             newStyles.append(groupStyle[i])
 
         '''
-        print('NEW GROUPS')
+        print('NEW GROUPS', file=sys.stderr)
         for i, newGroup in enumerate(newGroups):
-            print('\tgroupStyle[]={}\tgroup={}:\t'.format(newStyles[i], i), end='')
+            print('\tgroupStyle[]={}\tgroup={}:\t'.format(newStyles[i], i), end='', file=sys.stderr)
             for val in newGroup:
-                print(' {}'.format(val), end='')
-            print('') # endLine
+                print(' {}'.format(val), end='', file=sys.stderr)
+            print('', file=sys.stderr) # endLine
         '''
 
         # Check to see that all staffstarts are represented in system decoration;
@@ -7110,7 +7109,7 @@ class HumdrumFile(HumdrumFileContent):
         if not isValid:
             print("DECORATION IS INVALID:", decoration, file=sys.stderr)
             if d != decoration:
-                print("\tSTAFF VERSION:", d)
+                print("\tSTAFF VERSION:", d, file=sys.stderr)
 
             # iohumdrum.cpp unconditionally adds a full-score brace here, but I'm going
             # to fail instead, and let the failure handling put some default bracing

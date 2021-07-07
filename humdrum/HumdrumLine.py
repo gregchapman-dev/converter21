@@ -1069,13 +1069,13 @@ class HumdrumLine(HumHash):
     '''
     def printTrackInfo(self):
         if self.isManipulator:
-            print(self.text)
+            print(self.text, file=sys.stderr)
             return
 
         for i, token in enumerate(self._tokens):
-            print(token.trackString, end='')
+            print(token.trackString, end='', file=sys.stderr)
             if i < len(self._tokens) - 1:
-                print('\t', end='')
+                print('\t', end='', file=sys.stderr)
 
 
     '''

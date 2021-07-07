@@ -5,12 +5,14 @@ My initial goal here is to make a really accurate (and thorough) Humdrum importe
 
 converter21.py is a general-purpose music21-based converter which also happens to use my Humdrum importer instead of music21's.
 
-Usage of CLI script (converter21.py):
+Several examples of converter21.py usage can be seen below.
 
-python3 converter21.py inputfile outputfile -of outputformat
+Convert humdrum file to musicxml format:
 
-Example (convert humdrum file to musicxml format):
+python3 converter21.py --output-to musicxml infile.krn outfile.musicxml
 
-python3 converter21.py infile.krn outfile.xml -of musicxml
+Same but specifying stdin and stdout (with '-'):
+
+cat infile.krn | python3 converter21.py --input-from humdrum --output-to musicxml - - > outfile.musicxml
 
 The Humdrum portion of this software is derived/translated from the C++ code in https://github.com/craigsapp/humlib, by Craig Stuart Sapp.
