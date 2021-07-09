@@ -69,6 +69,12 @@ def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_mazurkas_FromFile()
         in ~/Documents/test/humdrum_chopin_mazurkas'''
     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_chopin_mazurkas')
 
+# @pytest.mark.slow
+# def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_first_editions_FromFile():
+#     '''Test HumdrumFile('blah.krn') for every krn file
+#         in ~/Documents/test/humdrum-chopin-first-editions'''
+#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum-chopin-first-editions')
+
 @pytest.mark.slow
 def test_HumdrumFile_read_all_test_files_from_humdrum_joplin_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file

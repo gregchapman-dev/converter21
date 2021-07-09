@@ -312,6 +312,13 @@ class M21Convert:
             return m21PercussionClef
 
         # not no clef, not a percussion clef, do the octave shift math
+        # but first remove any weird characters (not in 'GFC^v12345')
+        # because that's what iohumdrum.cpp:insertClefElement ends up doing
+        # (it just ignores them by searching for whatever it is looking for).
+        # This is particularly for supporting things like '*clefF-4' as an
+        # alternate spelling for '*clefF4'.
+        # For now, I'm just going to delete any '-'s I see. --gregc
+        clefStr = clefStr.replace('-', '')
         clefStrNoShift: str = clefStr.replace('^', '').replace('v', '')
         octaveShift: int = clefStr.count('^')
         if octaveShift == 0:
@@ -337,3 +344,9 @@ class M21Convert:
             dia += 1
 
         return m21.interval.intervalFromGenericAndChromatic(dia, chroma)
+
+    @staticmethod
+    def m21FontStyleFromFontStyle(fontStyle: str) -> str:
+        if fontStyle == 'bold-italic':
+            return 'bolditalic'
+        return fontStyle

@@ -13,7 +13,7 @@ def test_HumdrumToken_default_init():
     CheckHumdrumToken(token)
     token1 = HumdrumToken(None)
     CheckHumdrumToken(token1)
-    
+
 def test_HumdrumToken_exinterp_kern():
     token = HumdrumToken('**kern')
     CheckHumdrumToken(token,
@@ -41,11 +41,11 @@ def test_HumdrumToken_global_param():
 ==
 *-''')
     for lineIdx, line in enumerate(hf.lines()):
-        print('line: {}'.format(line.text))
+        #print('line: {}'.format(line.text))
         for tokenIdx, token in enumerate(line.tokens()):
-            print('line[{}]: {}'.format(tokenIdx, token))
+            #print('line[{}]: {}'.format(tokenIdx, token))
             assert tokenIdx == 0 # this file has only one token per line
-            
+
             if lineIdx == 0:
                 # **kern
                 CheckHumdrumToken(token,

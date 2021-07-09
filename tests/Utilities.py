@@ -349,7 +349,7 @@ def CheckHumdrumToken( token: HumdrumToken,
                         expectedDuration: str = HumNum(-1)
                         ):
 
-    print('CheckHumdrumToken: token = "{}"'.format(token))
+    #print('CheckHumdrumToken: token = "{}"'.format(token))
 
     # set up some derived expectations
     expectedIsData = expectedTokenType == TOKENTYPE_DATA

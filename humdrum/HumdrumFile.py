@@ -3304,6 +3304,7 @@ class HumdrumFile(HumdrumFileContent):
                 if len(pitches[i]) != len(pitches[i-1]):
                     allPitchesEqual = False
                     nextSame[i-1] = False
+                    break
 
                 # Check if each note in the successive chords is the same.
                 # The ordering of notes in each chord is assumed to be the same
@@ -3313,6 +3314,10 @@ class HumdrumFile(HumdrumFileContent):
                     if pitches[i][j] != pitches[i-1][j]:
                         allPitchesEqual = False
                         nextSame[i-1] = False
+                        break
+
+                if not allPitchesEqual:
+                    break
 
         if allPitchesEqual:
             # beam group should be converted into a single note (bowed) tremolo
@@ -5513,7 +5518,7 @@ class HumdrumFile(HumdrumFileContent):
 
                 # Here is where we create the music21 object for the dynamic
                 m21Dynamic: m21.dynamics.Dynamic = m21.dynamics.Dynamic(dynamic)
-                m21Dynamic.fontStyle = 'bold' # this is what C++ code does
+                m21Dynamic.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold') # this is what C++ code does
                 if dcolor:
                     m21Dynamic.style.color = dcolor
                 if rightJustified:
@@ -5680,7 +5685,7 @@ class HumdrumFile(HumdrumFileContent):
 
             m21TextExp: m21.expressions.TextExpression = m21.expressions.TextExpression(content)
             if fontStyle:
-                m21TextExp.style.fontStyle = fontStyle
+                m21TextExp.style.fontStyle = M21Convert.m21FontStyleFromFontStyle(fontStyle)
 
             if center and not above and not below:
                 m21TextExp.style.absoluteY = -20
@@ -6150,7 +6155,7 @@ class HumdrumFile(HumdrumFileContent):
             tempoOrDirection.style.color = 'limegreen'
 
         if italic:
-            tempoOrDirection.style.fontStyle = 'italic'
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
 
         if bold:
             tempoOrDirection.style.fontWeight = 'bold'
@@ -6244,7 +6249,7 @@ class HumdrumFile(HumdrumFileContent):
             tempoOrDirection.style.color = 'limegreen'
 
         if italic:
-            tempoOrDirection.style.fontStyle = 'italic'
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
 
         if bold:
             tempoOrDirection.style.fontWeight = 'bold'
@@ -6345,7 +6350,7 @@ class HumdrumFile(HumdrumFileContent):
         if bpmText and (bpmText[-1] == ')' or bpmText[-1] == ']'):
             bpmText = bpmText[0:-1]
         if bpmText:
-            mmNumber = int(bpmText) # bpmText overrides nearby *MM
+            mmNumber = int(float(bpmText) + 0.5) # bpmText overrides nearby *MM
         if mmNumber <= 0:
             mmNumber = None
 
