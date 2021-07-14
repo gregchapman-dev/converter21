@@ -448,6 +448,16 @@ class Convert:
 
         return output
 
+    METRONOME_MARK_PATTERN : str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)'
+
+    @staticmethod
+    def getMetronomeMarkInfo(text: str) -> (str, str, str):
+        # takes strings like "Andante [quarter = 88]" and returns
+        # returns (tempoName, refNoteName, bpmText) -> ('Andante', 'quarter', '88)
+        m = re.search(Convert.METRONOME_MARK_PATTERN, text)
+        if m:
+            return (m.group(1), m.group(2), m.group(3))
+        return (None, None, None)
 
     '''
         *** Math ***

@@ -16,6 +16,7 @@ import sys
 import math
 from fractions import Fraction
 from typing import Union
+import html
 import copy
 
 import music21 as m21
@@ -439,7 +440,7 @@ class StaffStateVariables:
 
         # first info in part (we hang on to these here, waiting for a Measure to put them in)
         self.firstM21Clef: m21.clef.Clef = None
-        self.firstM21KeySig: m21.key.KeySignature = None # will be m21.key.Key if we can
+        self.firstM21KeySig: Union[m21.key.Key, m21.key.KeySignature] = None # will be m21.key.Key if we can, it has more info
         self.firstM21TimeSig: m21.meter.TimeSignature = None
 
         # ties (list of starts that we search when we see an end)
@@ -494,8 +495,6 @@ class HumdrumFile(HumdrumFileContent):
         self._hasTremolo: bool = False # *tremolo interpretation has been seen somewhere
 
         # initial state (after parsing the leading comments and interps)
-        self._initialTempoName: str = ''
-        self._initialTempoBPM: int = 0
 
         # time signature info
         self._timeSigDurationsByLine: [HumNum] = None
@@ -679,8 +678,15 @@ class HumdrumFile(HumdrumFileContent):
         for bibLine in self.referenceRecords():
             key = bibLine.referenceKey
             value = bibLine.referenceValue
+            if value:
+                value = html.unescape(value)
             if key == 'OMD':
+                # only take the first OMD for the movement name
                 if not alreadyHaveMovementName:
+                    # strip off any [quarter = 128] suffix
+                    tempoName, _noteName, _bpmText = Convert.getMetronomeMarkInfo(value)
+                    if tempoName:
+                        value = tempoName
                     self._biblio[key] = value
                     alreadyHaveMovementName = True
             else:
@@ -747,9 +753,6 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _createInitialScore(self):
         self.m21Stream = m21.stream.Score()
-
-        # Initial tempo
-        self._createInitialTempo()
 
         # Info for each part (fillPartInfo)
         for i, startTok in enumerate(self._staffStarts):
@@ -1704,25 +1707,15 @@ class HumdrumFile(HumdrumFileContent):
         if not token.isTempo:
             return
 
+        # bail if you see a nearby OMD, since the processing
+        # of that non-initial OMD (see _checkForOmd) will handle this
+        # *MM for us.
+        if self._isNearOmd(token):
+            # we'll handle this *MM in _checkForOmd()
+            return
+
         tempoName: str = token.tempoName # *MM[Adagio] => tempoName == 'Adagio', tempoBPM == 0
         tempoBPM: int = token.tempoBPM # *MM127.5 => tempoBPM == 128, tempoName == ''
-
-        if token.durationFromStart == 0:
-            # use the initial tempo we already parsed out (the initial
-            # tempo parsing falls back to any early !!!OMD, which doesn't
-            # happen here).
-            if self._initialTempoName:
-                tempoName = self._initialTempoName
-            if self._initialTempoBPM > 0:
-                tempoBPM = self._initialTempoBPM
-        else:
-            # if not using self._initialTempo* (which takes early OMD into
-            # account), bail if you see a nearby OMD, since the processing
-            # of that non-initial OMD (see _checkForOmd) will handle this
-            # *MM for us.
-            if self._isNearOmd(token):
-                # we'll handle this *MM in _checkForOmd()
-                return
 
         if not tempoName and tempoBPM <= 0:
             return
@@ -6121,7 +6114,7 @@ class HumdrumFile(HumdrumFileContent):
                 return
 
         tempoOrDirection: m21.Music21Object = None
-        if re.search(r'\[[^=]*\]\s*=\s*\d+', text):
+        if re.search(Convert.METRONOME_MARK_PATTERN, text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
         elif token.isTimeSignature:
@@ -6208,7 +6201,7 @@ class HumdrumFile(HumdrumFileContent):
         direction: m21.expressions.TextExpression = None
         tempoOrDirection: m21.Music21Object = None
 
-        if re.search(r'\[[^=]*\]\s*=\s*\d+', text):
+        if re.search(Convert.METRONOME_MARK_PATTERN, text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
         elif token.isTimeSignature:
@@ -6315,16 +6308,29 @@ class HumdrumFile(HumdrumFileContent):
 
         return 0
 
-    def _createMetronomeMark(self, text: str, token: HumdrumToken):
+    def _createMetronomeMark(self, text: str, tokenOrBPM: Union[HumdrumToken, int]):
+        token: HumdrumToken = None
+        midiBPM: int = 0
+        if isinstance(tokenOrBPM, HumdrumToken):
+            token = tokenOrBPM
+        elif isinstance(tokenOrBPM, int):
+            midiBPM = tokenOrBPM
+
         metronomeMark: m21.tempo.MetronomeMark = None
 
-        m = re.search(r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)', text)
+        tempoName: str = None # e.g. 'andante'
+        noteName: str = None  # e.g. 'quarter'
+        bpmText: str = None   # e.g. '88'
 
-        if not m:
+        tempoName, noteName, bpmText = Convert.getMetronomeMarkInfo(text)
+
+        if not tempoName and not noteName and not bpmText:
             # raw text
-            mmNumber: int = self._getMmTempo(token) # nearby (previous) *MM
+            mmNumber: int = midiBPM
             if mmNumber <= 0:
-                mmNumber = None
+                mmNumber = self._getMmTempo(token) # nearby (previous) *MM
+                if mmNumber <= 0:
+                    mmNumber = None
 
             mmText: str = text
             if mmText == '':
@@ -6334,10 +6340,7 @@ class HumdrumFile(HumdrumFileContent):
                 metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText)
             return metronomeMark
 
-        tempoName: str = m.group(1) # e.g. 'andante'
-        noteName: str = m.group(2)  # e.g. 'quarter'
-        bpmText: str = m.group(3)   # e.g. '88'
-
+        # at least one of tempoName, noteName, and bpmText are present
         mmReferent: m21.duration.Duration = self._noteNameToDuration(noteName)
         mmText: str = tempoName
         if mmText and (mmText[-1] == '(' or mmText[-1] == '['):
@@ -6346,33 +6349,20 @@ class HumdrumFile(HumdrumFileContent):
         if mmText == '':
             mmText = None
 
-        mmNumber: int = self._getMmTempo(token) # nearby (previous) *MM
+        mmNumber: int = midiBPM
+        if mmNumber <= 0:
+            self._getMmTempo(token) # nearby (previous) *MM
+
         if bpmText and (bpmText[-1] == ')' or bpmText[-1] == ']'):
             bpmText = bpmText[0:-1]
         if bpmText:
-            mmNumber = int(float(bpmText) + 0.5) # bpmText overrides nearby *MM
+            # bpmText overrides nearby *MM and passed in midiBPM
+            mmNumber = int(float(bpmText) + 0.5)
         if mmNumber <= 0:
             mmNumber = None
 
         if mmNumber is not None or mmText is not None or mmReferent is not None:
             metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText, referent=mmReferent)
-        return metronomeMark
-
-    @staticmethod
-    def _createMetronomeMarkFromOmdTextAndBPM(omdText: str, bpm: int) -> m21.tempo.MetronomeMark:
-        metronomeMark: m21.tempo.MetronomeMark = None
-
-        # raw text
-        mmNumber: int = bpm
-        if mmNumber <= 0:
-            mmNumber = None
-
-        mmText: str = omdText
-        if mmText == '':
-            mmText = None
-
-        if mmNumber or mmText:
-            metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText)
         return metronomeMark
 
     @staticmethod
@@ -6384,7 +6374,7 @@ class HumdrumFile(HumdrumFileContent):
             noteName = noteName[1:-1]
 
         # remove styling qualifiers
-        noteName = noteName.split('|', 1)[0] # splits at first '|', or not at all
+        noteName = noteName.split('|', 1)[0] # splits at first '|' only, or not at all
 
         # generating rhythmic note with optional "-dot" after it.
         dots: bool = 0
@@ -6508,15 +6498,13 @@ class HumdrumFile(HumdrumFileContent):
             if key == 'OMD':
                 index = i
                 value = line.referenceValue
-                break
+                # break # Don't break: search for the last OMD in a non-data region
 
         if not value:
             return
 
         token: HumdrumToken = self._lines[index][0] # first token of line 'index'
         self._currentOMDDurationFromStart = token.durationFromStart
-        if self._currentOMDDurationFromStart <= 0:
-            return # we handle initial OMD differently, in _createInitialTempo
 
         # check for nearby *MM marker before OMD
         midibpm: int = self._getMmTempo(token)
@@ -6527,7 +6515,7 @@ class HumdrumFile(HumdrumFileContent):
         if midibpm > 0 or value:
             # put the metronome mark in this measure of staff 0 (highest staff on the page)
             staffIndex: int = 0
-            tempo: m21.tempo.MetronomeMark = self._createMetronomeMarkFromOmdTextAndBPM(value, midibpm)
+            tempo: m21.tempo.MetronomeMark = self._createMetronomeMark(value, midibpm)
             tempo.style.absoluteY = 'above'
             self._oneMeasurePerStaff[staffIndex].insert(0, tempo)
 
@@ -7567,44 +7555,6 @@ class HumdrumFile(HumdrumFileContent):
             break
 
         return firstSubspine
-
-    '''
-    //////////////////////////////
-    //
-    // HumdrumInput::addMidiTempo --
-    '''
-    def _createInitialTempo(self):
-        foundTempo: bool = False
-        token = self._staffStarts[0]
-        while token is not None and not token.isData: # just looking at the first interps and comments
-            if not token.isTempo:
-                token = token.nextToken(0)
-                continue
-
-            # It's a tempo indication (*MM), so we're done
-            self._initialTempoName = token.tempoName
-            self._initialTempoBPM = token.tempoBPM
-            foundTempo = self._initialTempoName != '' or self._initialTempoBPM > 0
-            break
-
-        if foundTempo:
-            return
-
-        # if we didn't find a *MM, look  again for !!!OMD (tempo name)
-        omdValue: str = None
-        for line in self._lines:
-            if line.isData:
-                break
-            if line[0].text.startswith('!!!OMD:'):
-                omdValue = line.referenceValue
-                break
-
-        if omdValue:
-            # some !!!OMD values are not tempos, so convert to BPM to see if we get > 0
-            if Convert.tempoNameToBPM(omdValue, self._timeSignaturesWithLineIdx[0]) > 0:
-                self._initialTempoName = omdValue
-                # don't imply the BPM number was specified, let others default as they will
-                self._initialTempoBPM = 0
 
     '''
     //////////////////////////////
