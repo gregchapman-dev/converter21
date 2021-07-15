@@ -5295,7 +5295,7 @@ class HumdrumFile(HumdrumFileContent):
     def _convertRhythm(self, obj: m21.Music21Object, token: HumdrumToken, subTokenIdx: int = -1):
 #         if token.isMens:
 #             return self._convertMensuralRhythm(obj, token, subTokenIdx)
-
+        isGrace: bool = False
         tremoloNoteVisualDuration: HumNum = None
         tremoloNoteGesturalDuration: HumNum = None
         if self._hasTremolo and (token.isNote or token.isChord):
@@ -5321,6 +5321,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # Remove grace note information (for generating printed duration)
         if 'q' in tstring:
+            isGrace = True
             tstring = re.sub('q', '', tstring)
 
         vstring: str = token.getVisualDuration(subTokenIdx)
@@ -5336,7 +5337,14 @@ class HumdrumFile(HumdrumFileContent):
             obj.duration.quarterLength = Fraction(vdur)
             obj.duration.linked = False
 
-        obj.duration.quarterLength = Fraction(dur)
+        if isGrace:
+            # set duration.type, not duration.quarterLength
+            # if dur == 0 (e.g. token.text == 'aaq' with no recip data),
+            # we'll just leave the default type of 'eighth' as we set it earlier.
+            if dur != 0:
+                obj.duration.type = m21.duration.convertQuarterLengthToType(Fraction(dur))
+        else:
+            obj.duration.quarterLength = Fraction(dur)
 
     '''
         _processOtherLayerToken
