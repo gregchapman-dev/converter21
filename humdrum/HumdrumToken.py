@@ -1206,13 +1206,33 @@ class HumdrumToken(HumHash):
         if not self.isInterpretation:
             return False
 
-        return self.text.startswith('*clef')
+        if self.text.startswith('*clef'):
+            return True
+
+        # check for 'auto', 'clef' (added by HumdrumFile.py)
+        autoClef: str = self.getValueString('auto', 'clef')
+        if autoClef and autoClef.startswith('*clef'):
+            return True
+
+        return False
+
 
     @property
     def clef(self) -> str:
-        if not self.isClef:
+        if not self.isKern or self.isMens:
             return ''
-        return self.text[5:]
+        if not self.isInterpretation:
+            return ''
+
+        if self.text.startswith('*clef'):
+            return self.text[5:]
+
+        # check for 'auto', 'clef' (added by HumdrumFile.py)
+        autoClef: str = self.getValueString('auto', 'clef')
+        if autoClef:
+            return autoClef[5:]
+
+        return ''
 
     '''
     //////////////////////////////

@@ -1391,7 +1391,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             if layerTok.isInterpretation:
-                self._processInterpretationLayerToken(voice, layerTok, layerIndex, staffIndex)
+                self._processInterpretationLayerToken(voice, layerData, tokenIdx, layerIndex, staffIndex)
                 continue
 
             if layerTok.isBarline:
@@ -1457,10 +1457,13 @@ class HumdrumFile(HumdrumFileContent):
         _processInterpretationLayerToken
     '''
     def _processInterpretationLayerToken(self, voice: m21.stream.Voice,
-                                         layerTok: HumdrumToken,
+                                         layerData: [HumdrumToken],
+                                         tokenIdx: int,
                                          layerIndex: int,
                                          staffIndex: int):
         ss: StaffStateVariables = self._staffStates[staffIndex]
+        layerTok: HumdrumToken = layerData[tokenIdx]
+
         if ss.hasLyrics:
             self._checkForVerseLabels(voice, layerTok)
         # TODO: ottava marks
@@ -1474,7 +1477,7 @@ class HumdrumFile(HumdrumFileContent):
         self._handleCustos(voice, layerTok)
         self._handleRepInterp(voice, layerTok) # new
         self._handleColorInterp(layerTok) # new
-        self._handleClefChange(voice, layerTok, staffIndex)
+        self._handleClefChange(voice, layerData, tokenIdx, staffIndex)
         self._handleTimeSigChange(voice, layerTok, staffIndex) # new
 
     '''
@@ -1505,7 +1508,8 @@ class HumdrumFile(HumdrumFileContent):
         # self.setSpineColorFromColorInterpToken(token)
         pass
 
-    def _handleClefChange(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
+    def _handleClefChange(self, voice: m21.stream.Voice, layerData: [HumdrumToken], tokenIdx: int, staffIndex: int):
+        token: HumdrumToken = layerData[tokenIdx]
         forceClefChange: bool = False
         if token.isClef:
             if token.getValueBool('auto', 'clefChange'):
@@ -1523,10 +1527,24 @@ class HumdrumFile(HumdrumFileContent):
                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(token)
                 voice.insert(clefOffsetInVoice, m21Clef)
             elif token.isNull:
-                # Q: under certain circumstances, clefs are duplicated to secondary layers. Why?
-                pass
-
-
+                if tokenIdx > 0 and token.lineIndex == layerData[tokenIdx-1].lineIndex:
+                    pass # do nothing: duplicate layer clefs are handled elsewhere
+                else:
+                    # duplicate clef changes in secondary layers
+                    xtrack: int = token.track
+                    tok: HumdrumToken = token.previousFieldToken
+                    while tok is not None:
+                        ttrack: int = tok.track
+                        if ttrack == xtrack:
+                            if tok.isClef:
+                                clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+                                voiceOffsetInMeasure: Union[Fraction, float] = \
+                                    self._oneMeasurePerStaff[staffIndex].elementOffset(voice)
+                                clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
+                                m21Clef: m21.clef.Clef = M21Convert.m21Clef(tok)
+                                voice.insert(clefOffsetInVoice, m21Clef)
+                                break
+                        tok = tok.previousFieldToken
 
     def _handleTimeSigChange(self, voice: m21.stream.Voice, token: HumdrumToken, staffIndex: int):
         if token.isTimeSignature:
@@ -7250,7 +7268,7 @@ class HumdrumFile(HumdrumFileContent):
                     else:
                         # mark clef as a clef change to print in the layer
                         token.setValue('auto', 'clefChange', True)
-#Q:                        self._markOtherClefsAsChange(token) might be a no-op for music21
+                        self._markOtherClefsAsChange(token)
 
                     token = token.nextToken(0) # stay left if there's a split
                     continue
@@ -7447,6 +7465,36 @@ class HumdrumFile(HumdrumFileContent):
 #                 # music21 doesn't (yet) really support black mensural notation
 #             else:
 #                 # music21 doesn't (yet) really support white mensural notation, either
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::markOtherClefsAsChange -- There is a case
+    //     where spine splits at the start of the music miss a clef
+    //     change that needs to be added to a secondary layer.  This
+    //     function will mark the secondary clefs so that they will
+    //     be converted as clef changes.
+    '''
+    def _markOtherClefsAsChange(self, clef: HumdrumToken):
+        ctrack: int = clef.track
+        track: int = 0
+
+        current: HumdrumToken = clef.nextFieldToken
+        while current is not None:
+            track = current.track
+            if track != ctrack:
+                break
+            current.setValue('auto', 'clefChange', 1)
+            current = current.nextFieldToken
+
+        current = clef.previousFieldToken
+        while current is not None:
+            track = current.track
+            if track != ctrack:
+                break
+            current.setValue('auto', 'clefChange', 1)
+            current = current.previousFieldToken
+
     '''
     //////////////////////////////
     //

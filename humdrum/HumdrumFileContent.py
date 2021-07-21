@@ -62,7 +62,8 @@ class HumdrumFileContent(HumdrumFileStructure):
         self.analyzeRScale()
 #         self.analyzeCrossStaffStemDirections(); # iohumdrum calls this but it belongs in engraving, not in import
 #         self.analyzeBarlines(); # iohumdrum calls this to deal with measure vs barline in MEI.
-#         analyzeClefNulls(infile); # necessary for MEI/Verovio, might not be necessary for music21
+        self.analyzeClefNulls()
+
 #         if (infile.hasDifferentBarlines()) {
 #             adjustMeasureTimings(infile); # Interesting to move here, but confuses me (why?)
 #         }
@@ -70,6 +71,56 @@ class HumdrumFileContent(HumdrumFileStructure):
 #         initializeIgnoreVector(infile); # interesting to move here
 
 #         extractNullInformation(m_nulls, infile); # might be interesting?  Perhaps very MEI-specific.
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::analyzeClefNulls -- Mark all null interpretations
+    //    that are in the same track as a clef interpretation.
+    '''
+    def analyzeClefNulls(self):
+        for line in self.lines():
+            if not line.isInterpretation:
+                continue
+
+            for token in line.tokens():
+                if not token.isKern:
+                    continue
+                if not token.isClef:
+                    continue
+                self.markAdjacentNullsWithClef(token)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::markAdjacentNullsWithClef -- Input is a clef token,
+    //     and all null interpretations in the same spine will be marked
+    //     as being the same clef, since verovio/MEI requires clef changes
+    //     to be present in all layers.
+        ... and music21 likes this, too. --gregc
+    '''
+    @staticmethod
+    def markAdjacentNullsWithClef(clef: HumdrumToken):
+        ctrack: int = clef.track
+        track: int = 0
+
+        current: HumdrumToken = clef.nextFieldToken
+        while current is not None:
+            track = current.track
+            if track != ctrack:
+                break
+            if current.text == '*':
+                current.setValue('auto', 'clef', clef.text)
+            current = current.nextFieldToken
+
+        current = clef.previousFieldToken
+        while current is not None:
+            track = current.track
+            if track != ctrack:
+                break
+            if current.text == '*':
+                current.setValue('auto', 'clef', clef.text)
+            current = current.previousFieldToken
 
     '''
     //////////////////////////////
