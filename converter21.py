@@ -18,7 +18,7 @@ import sys
 # import cProfile
 
 from music21 import converter
-from music21._version import __version__
+from music21.base import VERSION_STR
 from humdrum import HumdrumConverter
 
 def getInputFormatsList() -> [str]:
@@ -115,7 +115,7 @@ parser.add_argument("-t", "--output-to", required=True,
 parser.add_argument("-c", "--cached-parse-ok", action='store_true', default=False,
                     help="use cached parse of input file if it exists")
 
-print('music21 version:', __version__, file=sys.stderr)
+print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
 
 if args.input_from is None:

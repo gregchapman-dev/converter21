@@ -615,7 +615,10 @@ class HumdrumFile(HumdrumFileContent):
         # and previous accidentals in the bar, and...) and write pitch.displayStatus, which
         # is the end result of all the decision-making.  Any subsequent write()/show() will
         # simply obey pitch.displayStatus.
-        self._makeAccidentals()
+        if m21.base.VERSION[0] >= 7:
+            # for now, only add this risk to version 7, since version 6 will call
+            # makeAccidentals during export (it ignores makeNotation=False).
+            self._makeAccidentals()
         return self.m21Stream
 
     def _makeAccidentals(self):
