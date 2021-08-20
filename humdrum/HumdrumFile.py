@@ -609,7 +609,42 @@ class HumdrumFile(HumdrumFileContent):
         # that staff instrument name/abbrev to the StaffGroup group name/abbrev.
         # TODO: Promote instrument name/abbrev (Organ) to m21.layout.StaffGroup object (grand staff)
 
+        # the score we have created has all the accidentals marked properly for display,
+        # using pitch.displayType.  We now call makeAccidentals() to do the standard
+        # accidental display decisions, which will read pitch.displayType (and key signatures,
+        # and previous accidentals in the bar, and...) and write pitch.displayStatus, which
+        # is the end result of all the decision-making.  Any subsequent write()/show() will
+        # simply obey pitch.displayStatus.
+        self._makeAccidentals()
         return self.m21Stream
+
+    def _makeAccidentals(self):
+        # call on each part, or it doesn't work right.
+        for part in self.m21Stream.parts:
+        # I'm not too happy with one feature here:
+        # Example, key of F (one flat).  If there is a B-natural in one measure, the first
+        # B-flat in the _next_ measure will have a printed flat accidental (cautionary).
+        # To stop that happening, I would have to iterate over all the measures in each
+        # part myself, always passing pitchPastMeasure=None.  The code is below, commented
+        # out, because it has other side effects that I like even worse.
+            part.makeAccidentals(inPlace=True)
+            # measureStream = part.getElementsByClass('Measure')
+            # ksLast = None
+            # for m in measureStream:
+            #     if m.keySignature is not None:
+            #         ksLast = m.keySignature
+            #     m.makeAccidentals(
+            #         pitchPastMeasure=None,
+            #         useKeySignature=ksLast,
+            #         alteredPitches=None,
+            #         searchKeySignatureByContext=False,
+            #         cautionaryPitchClass=True,
+            #         cautionaryAll=False,
+            #         inPlace=True,
+            #         overrideStatus=False,
+            #         cautionaryNotImmediateRepeat=True,
+            #         tiePitchSet=None
+            #         )
 
     '''
     //////////////////////////////
@@ -4858,11 +4893,11 @@ class HumdrumFile(HumdrumFileContent):
 
         # check for editorial or cautionary accidental
         hasCautionary: bool = token.hasCautionaryAccidental(stindex)
-        cautionaryOverride: str = '' # e.g. 'n#', where the note just has '#'
+#        cautionaryOverride: str = '' # e.g. 'n#', where the note just has '#'
         hasEditorial: bool = token.hasEditorialAccidental(stindex)
         editorialStyle: str = ''
         if hasCautionary:
-            cautionaryOverride = token.cautionaryAccidental(stindex)
+            pass # cautionaryOverride = token.cautionaryAccidental(stindex)
         if hasEditorial:
             editorialStyle = token.editorialAccidentalStyle(stindex)
 
