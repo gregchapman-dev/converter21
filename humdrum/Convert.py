@@ -1050,7 +1050,7 @@ class Convert:
 
     @staticmethod
     def transToDiatonicChromatic(trans: str) -> (int, int):
-        m = re.search(r'd(\d+)c(\d+)', trans) # will match *ITrdNcM and *TrdNcM and dNcM
+        m = re.search(r'd([+-]?\d+)c([+-]?\d+)', trans) # will match *ITrdNcM and *TrdNcM and dNcM
         if not m:
             return (None, None)
         return (int(m.group(1)), int(m.group(2)))
