@@ -546,8 +546,8 @@ class HumdrumFileBase(HumHash):
             return self.isValid
         if not self.analyzeTracks():
             return self.isValid
-        if not self.fixupKernRecipOnlyTokens():
-            return self.isValid
+#         if not self.fixupKernRecipOnlyTokens(): # this was working around bad content
+#             return self.isValid
         return self.isValid
 
     '''
@@ -1235,7 +1235,7 @@ Line: {}'''.format(line.lineNumber, i, line.text))
     //                        extracted subspines contains null tokens.
     //                        Includes null interpretations and comments as well.
     // * OPT_NONULL     => don't include any null tokens in extracted list.
-    // * OPT_NOINTERP   => don't include interprtation tokens.
+    // * OPT_NOINTERP   => don't include interpretation tokens.
     // * OPT_NOMANIP    => don't include spine manipulators (*^, *v, *x, *+,
     //                        but still keep ** and *0).
     // * OPT_NOCOMMENT  => don't include comment tokens.
@@ -1297,7 +1297,7 @@ Line: {}'''.format(line.lineNumber, i, line.text))
                     continue
 
                 foundTrack = True
-                if optionNoInterp and (token.isManipulator or token.isExclusive):
+                if optionNoInterp and token.isInterpretation:
                     continue
                 if optionNoManip and token.isManipulator:
                     continue
@@ -1431,13 +1431,13 @@ Line: {}'''.format(line.lineNumber, i, line.text))
             if token.isNonNullData:
                 nexts = token
 
-            token = token.previousToken(0)
+            token = token.previousToken0
             while token is not None:
                 if nexts is not None:
                     token.addNextNonNullDataToken(nexts)
                 if token.isNonNullData:
                     nexts = token
-                token = token.previousToken(0)
+                token = token.previousToken0
 
         return True
 
@@ -1458,10 +1458,10 @@ Line: {}'''.format(line.lineNumber, i, line.text))
                 if not self.processNonNullDataTokensForTrackBackward(token.previousToken(i), ptokens):
                     return False
 
-            prevToken = token.previousToken(0)
+            prevToken = token.previousToken0
             if prevToken.isSplitInterpretation:
                 addUniqueTokens(prevToken.nextNonNullDataTokens, ptokens)
-                if token != prevToken.nextToken(0):
+                if token != prevToken.nextToken0:
                     # terminate if not most primary subspine
                     return True
             elif token.isData:
@@ -1470,7 +1470,7 @@ Line: {}'''.format(line.lineNumber, i, line.text))
                     ptokens = [token] # nukes the existing ptokens list
 
             # Follow previous data token 0 since 1 and higher are handled above.
-            token = token.previousToken(0)
+            token = token.previousToken0
             tcount = token.previousTokenCount
 
         return True
@@ -1493,9 +1493,9 @@ Line: {}'''.format(line.lineNumber, i, line.text))
                     if not self.processNonNullDataTokensForTrackForward(token.nextToken(i), ptokens):
                         return False
             elif token.isMergeInterpretation:
-                nextToken = token.nextToken(0)
+                nextToken = token.nextToken0
                 addUniqueTokens(nextToken.previousNonNullDataTokens, ptokens)
-                if token != nextToken.previousToken(0):
+                if token != nextToken.previousToken0:
                     # terminate if not most primary subspine
                     return True
             else:
@@ -1505,7 +1505,7 @@ Line: {}'''.format(line.lineNumber, i, line.text))
 
             # Data tokens can only be followed by up to one next token,
             # so no need to check for more than one next token.
-            token = token.nextToken(0)
+            token = token.nextToken0
             tcount = token.nextTokenCount
 
         return True

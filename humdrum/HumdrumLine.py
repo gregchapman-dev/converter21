@@ -83,7 +83,6 @@ class HumdrumLine(HumHash):
         // a HumdrumLine object.
         '''
         self._tokens: [str] = []
-        self.createTokensFromLine()
 
         '''
         // m_tabs: Used to store a count of the number of tabs between
@@ -178,9 +177,6 @@ class HumdrumLine(HumHash):
 
     # generator, so you can do: for token in line.tokens()
     def tokens(self):
-        if len(self._tokens) == 0:
-            self.createTokensFromLine()
-
         for tokenIdx in range(0, len(self._tokens)):
             yield self._tokens[tokenIdx]
 
@@ -256,9 +252,9 @@ class HumdrumLine(HumHash):
             if not token.isKern:
                 continue
 
-            ntok = token.nextToken(0)
+            ntok = token.nextToken0
             while ntok is not None and not ntok.isData:
-                ntok = ntok.nextToken(0)
+                ntok = ntok.nextToken0
 
             if ntok is None:
                 continue
@@ -910,22 +906,29 @@ class HumdrumLine(HumHash):
             self._numTabsAfterToken = [0]
             return 1
 
-        for m in re.finditer(r'([^\t]+)(\t*)', self.text):
-            # m is a match object containing two groups: first the token, then any trailing tabs
-            tokenStr = m.group(1)
-            if tokenStr is None:
-                break
-
-            tabsStr = m.group(2)
-            if tabsStr is None:
-                numTabsAfterThisToken = 0
-            else:
-                numTabsAfterThisToken = len(tabsStr)
-
+        tokenStrList: [str] = self.text.split('\t')
+        for tokenStr in tokenStrList:
             token = HumdrumToken(tokenStr)
             token.ownerLine = self
             self._tokens.append(token)
-            self._numTabsAfterToken.append(numTabsAfterThisToken)
+            self._numTabsAfterToken.append(1)
+
+#         for m in re.finditer(r'([^\t]+)(\t*)', self.text):
+#             # m is a match object containing two groups: first the token, then any trailing tabs
+#             tokenStr = m.group(1)
+#             if tokenStr is None:
+#                 break
+#
+#             tabsStr = m.group(2)
+#             if tabsStr is None:
+#                 numTabsAfterThisToken = 0
+#             else:
+#                 numTabsAfterThisToken = len(tabsStr)
+#
+#             token = HumdrumToken(tokenStr)
+#             token.ownerLine = self
+#             self._tokens.append(token)
+#             self._numTabsAfterToken.append(numTabsAfterThisToken)
 
         return len(self._tokens)
 
@@ -1037,9 +1040,10 @@ class HumdrumLine(HumHash):
             subTracks[token.track] += 1
 
         for token in self._tokens:
-            if subTracks[token.track] > 1:
-                currSubTrack[token.track] += 1
-                token.subTrack = currSubTrack[token.track]
+            tokenTrack: int = token.track
+            if subTracks[tokenTrack] > 1:
+                currSubTrack[tokenTrack] += 1
+                token.subTrack = currSubTrack[tokenTrack]
             else:
                 token.subTrack = 0
 

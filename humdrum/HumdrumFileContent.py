@@ -217,6 +217,10 @@ class HumdrumFileContent(HumdrumFileStructure):
             endElisionLevel(slurOrPhrase, index)
     '''
     def analyzeSlursOrPhrases(self, slurOrPhrase: str, spineDataType: str) -> bool:
+        spineStarts: [HumdrumToken] = self.spineStartListOfType(spineDataType)
+        if not spineStarts:
+            return
+
         # labels: first is previous label, last is next label
         labels: [TokenPair] = [TokenPair(None, None)] * self.lineCount
         l: [HumdrumToken] = [None] * self.lineCount
@@ -250,7 +254,6 @@ class HumdrumFileContent(HumdrumFileStructure):
                     ending = int(lastChar)
             endings[i] = ending
 
-        spineStarts: [HumdrumToken] = self.spineStartListOfType(spineDataType)
         output: bool = True
         slurStarts: [HumdrumToken] = []
         slurEnds: [HumdrumToken] = []
@@ -900,37 +903,39 @@ class HumdrumFileContent(HumdrumFileStructure):
                 for token in line.tokens():
                     if not token.isKern:
                         continue
+                    ttrack: int = token.track
                     if token.text == '*8va':
-                        octaveState[token.track] = +1
-                        activeOttava[token.track] += 1
+                        octaveState[ttrack] = +1
+                        activeOttava[ttrack] += 1
                     elif token.text == '*X8va':
-                        octaveState[token.track] = 0
-                        activeOttava[token.track] -= 1
+                        octaveState[ttrack] = 0
+                        activeOttava[ttrack] -= 1
                     elif token.text == '*8ba':
-                        octaveState[token.track] = -1
-                        activeOttava[token.track] += 1
+                        octaveState[ttrack] = -1
+                        activeOttava[ttrack] += 1
                     elif token.text == '*X8ba':
-                        octaveState[token.track] = 0
-                        activeOttava[token.track] -= 1
+                        octaveState[ttrack] = 0
+                        activeOttava[ttrack] -= 1
                     elif token.text == '*15ma':
-                        octaveState[token.track] = +2
-                        activeOttava[token.track] += 1
+                        octaveState[ttrack] = +2
+                        activeOttava[ttrack] += 1
                     elif token.text == '*X15ma':
-                        octaveState[token.track] = 0
-                        activeOttava[token.track] -= 1
+                        octaveState[ttrack] = 0
+                        activeOttava[ttrack] -= 1
                     elif token.text == '*15ba':
-                        octaveState[token.track] = -2
-                        activeOttava[token.track] += 1
+                        octaveState[ttrack] = -2
+                        activeOttava[ttrack] += 1
                     elif token.text == '*X15ba':
-                        octaveState[token.track] = 0
-                        activeOttava[token.track] -= 1
+                        octaveState[ttrack] = 0
+                        activeOttava[ttrack] -= 1
             elif line.isData:
                 for token in line.tokens():
                     if not token.isKern:
                         continue
-                    if activeOttava[token.track] == 0: # if nesting level is 0
+                    ttrack: int = token.track
+                    if activeOttava[ttrack] == 0: # if nesting level is 0
                         continue
-                    if octaveState[token.track] == 0: # if octave adjustment is 0
+                    if octaveState[ttrack] == 0: # if octave adjustment is 0
                         continue
                     if token.isNull:
                         continue
@@ -939,7 +944,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                     #if token.isRest:
                         #continue
 
-                    token.setValue('auto', 'ottava', str(octaveState[token.track]))
+                    token.setValue('auto', 'ottava', str(octaveState[ttrack]))
 
     '''
     //////////////////////////////
@@ -967,7 +972,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             current: HumdrumToken = start
             while current is not None:
                 if current.isNull:
-                    current = current.nextToken(0)
+                    current = current.nextToken0
                     continue
 
                 if current.isInterpretation:
@@ -980,7 +985,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if lastIJToken is not None:
                             lastIJToken.setValue('auto', 'ij-end', 'true')
                             lastIJToken = None
-                    current = current.nextToken(0)
+                    current = current.nextToken0
                     continue
 
                 if current.isData:
@@ -991,7 +996,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                             startij = False
                         lastIJToken = current
 
-                current = current.nextToken(0)
+                current = current.nextToken0
 
     '''
     //////////////////////////////
@@ -1023,14 +1028,15 @@ class HumdrumFileContent(HumdrumFileStructure):
                             top = int(m.group(1))
                             value = HumNum(top, 1)
 
+                    ttrack: int = token.track
                     if value == 1:
-                        if rscales[token.track] != 1:
-                            rscales[token.track] = HumNum(1)
+                        if rscales[ttrack] != 1:
+                            rscales[ttrack] = HumNum(1)
                             numActiveTracks -= 1
                     else:
-                        if rscales[token.track] == 1:
+                        if rscales[ttrack] == 1:
                             numActiveTracks += 1
-                        rscales[token.track] = value
+                        rscales[ttrack] = value
                 continue
 
             if numActiveTracks == 0:
@@ -1040,7 +1046,8 @@ class HumdrumFileContent(HumdrumFileStructure):
                 continue
 
             for token in line.tokens():
-                if rscales[token.track] == 1:
+                ttrack: int = token.track
+                if rscales[ttrack] == 1:
                     continue
                 if not token.isKern:
                     continue
@@ -1049,11 +1056,11 @@ class HumdrumFileContent(HumdrumFileStructure):
                 if token.duration < HumNum(0):
                     continue
 
-                dur: HumNum = token.durationNoDots * rscales[token.track]
+                dur: HumNum = token.durationNoDots * rscales[ttrack]
                 vis: str = Convert.durationToRecip(dur)
                 vis += '.' * token.dotCount
                 token.setValue('LO', 'N', 'vis', vis)
-                token.rscale = rscales[token.track] # in case we need to know later
+                token.rscale = rscales[ttrack] # in case we need to know later
 
         return True
 

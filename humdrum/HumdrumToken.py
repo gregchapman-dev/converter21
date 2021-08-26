@@ -98,6 +98,7 @@ class HumdrumToken(HumHash):
         // spine terminating token (*-).
         '''
         self._nextTokens: [HumdrumToken] = []
+        self._nextToken0: HumdrumToken = None # always contains nextToken(0), for speed
 
         '''
         // previousTokens: Simiar to nextTokens, but for the immediately
@@ -107,6 +108,7 @@ class HumdrumToken(HumHash):
         // have no tokens preceding them.
         '''
         self._previousTokens: [HumdrumToken] = []
+        self._previousToken0: HumdrumToken = None # always contains previousToken(0), for speed
 
         '''
         // nextNonNullDataTokens: This is a list of non-null tokens in the spine
@@ -173,7 +175,8 @@ class HumdrumToken(HumHash):
         '''
         self.prefix = '!'
 
-        self.clearCachedProperties()
+        self._atLeastOneCachedTokenTextPropertyExists = False
+        self._atLeastOneCachedDataTypePropertyExists = False
 
     # In C++ a HumdrumToken is also a string().  Deriving a mutable class from an immutable
     # base class in Python is trickier than I can manage. So we have a standard "conversion"
@@ -182,34 +185,62 @@ class HumdrumToken(HumHash):
     def __str__(self) -> str:
         return self.text
 
-    def clearCachedProperties(self):
-        self._isDataCached = None
-        self._isInterpretationCached = None
-        self._isNonNullDataCached = None
-        self._isNullDataCached = None
-        self._isNullCached = None
-        self._isLabelCached = None
-        self._isChordCached = None
-        self._isExclusiveInterpretationCached = None
-        self._isSplitInterpretationCached = None
-        self._isMergeInterpretationCached = None
-        self._isExchangeInterpretationCached = None
-        self._isTerminateInterpretationCached = None
-        self._isAddInterpretationCached = None
-        self._isKernCached = None
-        self._isRecipCached = None
-        self._isMensCached = None
-        self._isManipulatorCached = None
-        self._isRecipOnlyCached = None
-        self._hasRhythmCached = None
-        self._hasBeamCached = None
-        self._hasFermataCached = None
-        self._isStaffDataTypeCached = None
-        self._isStaffInterpretationCached = None
-        self._isPartCached = None
-        self._isGroupCached = None
-
     # Now the actual HumdrumToken APIs/properties
+
+    cachedTokenTextProperties: [str] = ['_isDataCached',
+                                        '_isInterpretationCached',
+                                        '_isNonNullDataCached',
+                                        '_isNullDataCached',
+                                        '_isNullCached',
+                                        '_isBarlineCached',
+                                        '_isCommentCached',
+                                        '_isLocalCommentCached',
+                                        '_isGlobalCommentCached',
+                                        '_isLabelCached',
+                                        '_isChordCached',
+                                        '_isExclusiveInterpretationCached',
+                                        '_isSplitInterpretationCached',
+                                        '_isMergeInterpretationCached',
+                                        '_isExchangeInterpretationCached',
+                                        '_isTerminateInterpretationCached',
+                                        '_isAddInterpretationCached',
+                                        '_isManipulatorCached',
+                                        '_isRecipOnlyCached',
+                                        '_hasBeamCached',
+                                        '_hasFermataCached',
+                                        '_isStaffInterpretationCached',
+                                        '_isPartCached',
+                                        '_isGroupCached',
+                                        '_isRestCached',
+                                        '_isNoteCached']
+
+    cachedDataTypeProperties: [str] =  ['_isKernCached',
+                                        '_isRecipCached',
+                                        '_isMensCached',
+                                        '_hasRhythmCached',
+                                        '_isStaffDataTypeCached',
+                                        '_isRestCached',
+                                        '_isNoteCached']
+
+    # Note that _isRestCached/_isNoteCached is in both lists, since it is a TokenText property,
+    # but it also is parsed differently for different dataTypes.
+    def _clearCachedTokenTextProperties(self):
+        # we delete these attributes instead of setting them to None, to
+        # avoid the cost of clearing cached properties during __init__
+        # (the attributes do not exist, by default)
+        if self._atLeastOneCachedTokenTextPropertyExists:
+            for attrib in self.cachedTokenTextProperties:
+                self.__dict__.pop(attrib, None)
+            self._atLeastOneCachedTokenTextPropertyExists = False
+
+    def _clearCachedDataTypeProperties(self):
+        # we delete these attributes instead of setting them to None, to
+        # avoid the cost of clearing cached properties during __init__
+        # (the attributes do not exist, by default)
+        if self._atLeastOneCachedDataTypePropertyExists:
+            for attrib in self.cachedDataTypeProperties:
+                self.__dict__.pop(attrib, None)
+            self._atLeastOneCachedDataTypePropertyExists = False
 
     '''
     //////////////////////////////
@@ -229,7 +260,8 @@ class HumdrumToken(HumHash):
     def text(self, newText: str):
         self._text = newText
         self._subtokensGenerated = False
-        self.clearCachedProperties()
+        if self._atLeastOneCachedTokenTextPropertyExists:
+            self._clearCachedTokenTextProperties()
 
     '''
     //////////////////////////////
@@ -258,15 +290,22 @@ class HumdrumToken(HumHash):
     def insertTokenAfter(self, newToken):
         if self._nextTokens == []:
             self._nextTokens.append(newToken)
+            self.updateNextToken0()
         else:
             oldNextToken: HumdrumToken = self.nextTokens[0]
             self.nextTokens[0] = newToken
+            self.updateNextToken0()
+
             newToken.previousTokens = [self]
+            newToken.updatePreviousToken0()
             newToken.nextTokens = [oldNextToken]
+            newToken.updateNextToken0()
+
             if oldNextToken.previousTokens == []:
                 oldNextToken.previousTokens.append(newToken)
             else:
                 oldNextToken.previousTokens[0] = newToken
+            oldNextToken.updatePreviousToken0()
 
     '''
     //////////////////////////////
@@ -381,9 +420,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isKern(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isKernCached is None:
+        # cache the result for performance
+        try:
+            return self._isKernCached
+        except AttributeError:
             self._isKernCached = self.isDataType('**kern')
+            self._atLeastOneCachedDataTypePropertyExists = True
         return self._isKernCached
 
     '''
@@ -391,9 +433,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isRecip(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isRecipCached is None:
+        # cache the result for performance
+        try:
+            return self._isRecipCached
+        except AttributeError:
             self._isRecipCached = self.isDataType('**recip')
+            self._atLeastOneCachedDataTypePropertyExists = True
         return self._isRecipCached
 
     '''
@@ -405,9 +450,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isMens(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isMensCached is None:
+        # cache the result for performance
+        try:
+            return self._isMensCached
+        except AttributeError:
             self._isMensCached = self.isDataType('**mens')
+            self._atLeastOneCachedDataTypePropertyExists = True
         return self._isMensCached
 
     '''
@@ -500,8 +548,9 @@ class HumdrumToken(HumHash):
     @track.setter
     def track(self, track: int):
         self._address.track = track # here we set the track property because it has checking code.
-        self.clearCachedProperties() # some cached properties depend on dataType, which depends on
-                                     # ownerLine and track
+        if self._atLeastOneCachedDataTypePropertyExists:
+            self._clearCachedDataTypeProperties() # some cached properties depend on dataType,
+                                                 # which depends on ownerLine and track
 
     '''
     //////////////////////////////
@@ -561,8 +610,9 @@ class HumdrumToken(HumHash):
         All clients currently will simply call it with a one-element list. --gregc
     '''
     @nextTokens.setter
-    def nextTokens(self, newNextTokens): # newTokens: [HumdrumToken]
+    def nextTokens(self, newNextTokens): # newNextTokens: [HumdrumToken]
         self._nextTokens = newNextTokens
+        self.updateNextToken0()
 
     '''
     //////////////////////////////
@@ -578,6 +628,13 @@ class HumdrumToken(HumHash):
         if 0 <= index < len(self._nextTokens):
             return self._nextTokens[index]
         return None
+
+    @property
+    def nextToken0(self): # -> HumdrumToken
+        return self._nextToken0
+
+    def updateNextToken0(self):
+        self._nextToken0 = self.nextToken(0)
 
     '''
     //////////////////////////////
@@ -606,6 +663,13 @@ class HumdrumToken(HumHash):
             return self._previousTokens[index]
         return None
 
+    @property
+    def previousToken0(self):
+        return self._previousToken0
+
+    def updatePreviousToken0(self):
+        self._previousToken0 = self.previousToken(0)
+
     '''
     //////////////////////////////
     //
@@ -629,6 +693,7 @@ class HumdrumToken(HumHash):
     @previousTokens.setter
     def previousTokens(self, newPreviousTokens): # newPreviousTokens: [HumdrumToken]
         self._previousTokens = newPreviousTokens
+        self.updatePreviousToken0()
 
     '''
     //////////////////////////////
@@ -673,15 +738,15 @@ class HumdrumToken(HumHash):
             self._duration = HumNum(-1)
             return
 
-        if self.text.startswith('!'):
+        if self.isComment:
             self._duration = HumNum(-1)
             return
 
-        if self.text.startswith('*'):
+        if self.isInterpretation:
             self._duration = HumNum(-1)
             return
 
-        if self.text.startswith('='):
+        if self.isBarline:
             self._duration = HumNum(-1)
             return
 
@@ -714,14 +779,17 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isManipulator(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isManipulatorCached is None:
+        # cache the result for performance
+        try:
+            return self._isManipulatorCached
+        except AttributeError:
             self._isManipulatorCached = self.isSplitInterpretation or \
                                         self.isMergeInterpretation or \
                                         self.isExchangeInterpretation or \
                                         self.isAddInterpretation or \
                                         self.isTerminateInterpretation or \
                                         self.isExclusiveInterpretation
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isManipulatorCached
 
     '''
@@ -734,10 +802,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isRecipOnly(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isRecipOnlyCached is None:
-            self._isRecipOnlyCached = re.search(r'^[\d]+[.]*$', self.text) or \
-                                        re.search(r'^[\d]+%[\d]+[.]*$', self.text)
+        # cache the result for performance
+        try:
+            return self._isRecipOnlyCached
+        except AttributeError:
+            self._isRecipOnlyCached = re.match(r'^[\d]+(%[\d]+)?[.]*$', self.text)
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isRecipOnlyCached
 
     '''
@@ -922,11 +992,14 @@ class HumdrumToken(HumHash):
     '''
     @property
     def hasRhythm(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._hasRhythmCached is None:
+        # cache the result for performance
+        try:
+            return self._hasRhythmCached
+        except AttributeError:
             self._hasRhythmCached = self.dataType.text == '**kern' or \
                                     self.dataType.text == '**recip' or \
                                     self.dataType.text == '**mens'
+            self._atLeastOneCachedDataTypePropertyExists = True
         return self._hasRhythmCached
 
     '''
@@ -936,12 +1009,15 @@ class HumdrumToken(HumHash):
     '''
     @property
     def hasBeam(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._hasBeamCached is None:
+        # cache the result for performance
+        try:
+            return self._hasBeamCached
+        except AttributeError:
             self._hasBeamCached = 'L' in self.text or \
                                     'J' in self.text or \
                                     'K' in self.text or \
                                     'k' in self.text
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._hasBeamCached
 
     '''
@@ -951,9 +1027,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def hasFermata(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._hasFermataCached is None:
+        # cache the result for performance
+        try:
+            return self._hasFermataCached
+        except AttributeError:
             self._hasFermataCached = ';' in self.text
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._hasFermataCached
 
     '''
@@ -964,16 +1043,22 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isStaffDataType(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isStaffDataTypeCached is None:
+        # cache the result for performance
+        try:
+            return self._isStaffDataTypeCached
+        except AttributeError:
             self._isStaffDataTypeCached = self.isKern or self.isMens
+            self._atLeastOneCachedDataTypePropertyExists = True
         return self._isStaffDataTypeCached
 
     @property
     def isStaffInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isStaffInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isStaffInterpretationCached
+        except AttributeError:
             self._isStaffInterpretationCached = self.text.startswith('*staff')
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isStaffInterpretationCached
 
     @property
@@ -995,9 +1080,12 @@ class HumdrumToken(HumHash):
 
     @property
     def isPart(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isPartCached is None:
+        # cache the result for performance
+        try:
+            return self._isPartCached
+        except AttributeError:
             self._isPartCached = self.text.startswith('*part')
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isPartCached
 
     @property
@@ -1011,9 +1099,12 @@ class HumdrumToken(HumHash):
 
     @property
     def isGroup(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isGroupCached is None:
+        # cache the result for performance
+        try:
+            return self._isGroupCached
+        except AttributeError:
             self._isGroupCached = self.text.startswith('*group')
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isGroupCached
 
     @property
@@ -1066,19 +1157,26 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isRest(self) -> bool:
-        token = self
-        if self.isNull:
-            token = self.nullResolution
+        # assumption: isRest will only be called after self.nullResolution has been set once and for all
+        try:
+            return self._isRestCached
+        except AttributeError:
+            tokenText: str = self.text
+            if self.isNull:
+                tokenText = self.nullResolution.text
 
-        if not self.isData: # BUGFIX: Without this "if", isRest('**kern') returns True (there's an 'r')
-            return False
+            self._isRestCached = False
+            if self.isData: # BUGFIX: Without this "if", isRest('**kern') returns True (there's an 'r')
+                if self.isKern:
+                    self._isRestCached = Convert.isKernRest(tokenText)
+                elif self.isMens:
+                    self._isRestCached = Convert.isMensRest(tokenText)
 
-        if self.isKern:
-            return Convert.isKernRest(token.text)
-        if self.isMens:
-            return Convert.isMensRest(token.text)
+            # isRest changes if tokenText changes, and also if dataType changes
+            self._atLeastOneCachedTokenTextPropertyExists = True
+            self._atLeastOneCachedDataTypePropertyExists = True
 
-        return False
+        return self._isRestCached
 
     '''
     //////////////////////////////
@@ -1089,16 +1187,17 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isNote(self) -> bool:
-        if not self.isData or self.isNull:
-            return False
+        try:
+            return self._isNoteCached
+        except AttributeError:
+            if not self.isData or self.isNull:
+                self._isNoteCached = False
+            elif self.isKern:
+                self._isNoteCached = Convert.isKernNote(self.text)
+            elif self.isMens:
+                self._isNoteCached = Convert.isMensNote(self.text)
 
-        if self.isKern:
-            return Convert.isKernNote(self.text)
-
-        if self.isMens:
-            return Convert.isMensNote(self.text)
-
-        return False
+        return self._isNoteCached
 
     '''
     //////////////////////////////
@@ -1201,7 +1300,7 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isClef(self) -> bool:
-        if not self.isKern or self.isMens:
+        if not (self.isKern or self.isMens):
             return False
         if not self.isInterpretation:
             return False
@@ -1219,7 +1318,7 @@ class HumdrumToken(HumHash):
 
     @property
     def clef(self) -> str:
-        if not self.isKern or self.isMens:
+        if not (self.isKern or self.isMens):
             return ''
         if not self.isInterpretation:
             return ''
@@ -1241,7 +1340,7 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isModernClef(self) -> bool:
-        if not self.isKern or self.isMens:
+        if not (self.isKern or self.isMens):
             return False
         if not self.isInterpretation:
             return False
@@ -1261,7 +1360,7 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isOriginalClef(self) -> bool:
-        if not self.isKern or self.isMens:
+        if not (self.isKern or self.isMens):
             return False
         if not self.isInterpretation:
             return False
@@ -1868,7 +1967,13 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isBarline(self) -> bool:
-        return self.text.startswith('=')
+        # cache the result for performance
+        try:
+            return self._isBarlineCached
+        except AttributeError:
+            self._isBarlineCached = self.text.startswith('=')
+            self._atLeastOneCachedTokenTextPropertyExists = True
+        return self._isBarlineCached
 
     '''
         barlineNumber returns the first number found.
@@ -1909,7 +2014,13 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isGlobalComment(self) -> bool:
-        return self.text.startswith('!!')
+        # cache the result for performance
+        try:
+            return self._isGlobalCommentCached
+        except AttributeError:
+            self._isGlobalCommentCached = self.text.startswith('!!')
+            self._atLeastOneCachedTokenTextPropertyExists = True
+        return self._isGlobalCommentCached
 
     '''
     //////////////////////////////
@@ -1919,7 +2030,13 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isLocalComment(self) -> bool:
-        return self.text.startswith('!') and not self.text.startswith('!!')
+        # cache the result for performance
+        try:
+            return self._isLocalCommentCached
+        except AttributeError:
+            self._isLocalCommentCached = self.isComment and not self.isGlobalComment
+            self._atLeastOneCachedTokenTextPropertyExists = True
+        return self._isLocalCommentCached
 
     '''
     //////////////////////////////
@@ -1928,7 +2045,13 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isComment(self) -> bool:
-        return self.text.startswith('!')
+        # cache the result for performance
+        try:
+            return self._isCommentCached
+        except AttributeError:
+            self._isCommentCached = self.text.startswith('!')
+            self._atLeastOneCachedTokenTextPropertyExists = True
+        return self._isCommentCached
 
     '''
     //////////////////////////////
@@ -1940,9 +2063,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isData(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isDataCached is None:
+        # cache the result for performance
+        try:
+            return self._isDataCached
+        except AttributeError:
             self._isDataCached = not self.isInterpretation and not self.isComment and not self.isBarline
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isDataCached
 
     '''
@@ -1952,9 +2078,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isInterpretationCached
+        except AttributeError:
             self._isInterpretationCached = self.text.startswith('*')
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isInterpretationCached
 
     '''
@@ -1965,9 +2094,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isNonNullData(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isNonNullDataCached is None:
+        # cache the result for performance
+        try:
+            return self._isNonNullDataCached
+        except AttributeError:
             self._isNonNullDataCached = self.isData and not self.isNull
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isNonNullDataCached
 
     '''
@@ -1978,9 +2110,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isNullData(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isNullDataCached is None:
+        # cache the result for performance
+        try:
+            return self._isNullDataCached
+        except AttributeError:
             self._isNullDataCached = self.isData and self.isNull
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isNullDataCached
 
     '''
@@ -1990,9 +2125,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isLabel(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isLabelCached is None:
+        # cache the result for performance
+        try:
+            return self._isLabelCached
+        except AttributeError:
             self._isLabelCached = self.text.startswith('*>') and '[' not in self.text
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isLabelCached
 
     '''
@@ -2005,9 +2143,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isChord(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isChordCached is None:
+        # cache the result for performance
+        try:
+            return self._isChordCached
+        except AttributeError:
             self._isChordCached = ' ' in self.text
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isChordCached
 
     '''
@@ -2018,9 +2159,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isExclusiveInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isExclusiveInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isExclusiveInterpretationCached
+        except AttributeError:
             self._isExclusiveInterpretationCached = self.text.startswith('**')
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isExclusiveInterpretationCached
 
     '''
@@ -2030,9 +2174,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isSplitInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isSplitInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isSplitInterpretationCached
+        except AttributeError:
             self._isSplitInterpretationCached = self.text == SPLIT_TOKEN
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isSplitInterpretationCached
 
     '''
@@ -2042,9 +2189,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isMergeInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isMergeInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isMergeInterpretationCached
+        except AttributeError:
             self._isMergeInterpretationCached = self.text == MERGE_TOKEN
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isMergeInterpretationCached
 
     '''
@@ -2054,9 +2204,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isExchangeInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isExchangeInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isExchangeInterpretationCached
+        except AttributeError:
             self._isExchangeInterpretationCached = self.text == EXCHANGE_TOKEN
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isExchangeInterpretationCached
 
     '''
@@ -2066,9 +2219,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isTerminateInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isTerminateInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isTerminateInterpretationCached
+        except AttributeError:
             self._isTerminateInterpretationCached = self.text == TERMINATE_TOKEN
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isTerminateInterpretationCached
 
     '''
@@ -2078,9 +2234,12 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isAddInterpretation(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isAddInterpretationCached is None:
+        # cache the result for performance
+        try:
+            return self._isAddInterpretationCached
+        except AttributeError:
             self._isAddInterpretationCached = self.text == ADD_TOKEN
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isAddInterpretationCached
 
     '''
@@ -2092,11 +2251,14 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isNull(self) -> bool:
-        # cache the result for performance, this is called a TON
-        if self._isNullCached is None:
+        # cache the result for performance
+        try:
+            return self._isNullCached
+        except AttributeError:
             self._isNullCached = self.text == NULL_DATA or \
                                     self.text == NULL_INTERPRETATION or \
                                     self.text == NULL_COMMENT_LOCAL
+            self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isNullCached
 
     '''
@@ -2116,10 +2278,11 @@ class HumdrumToken(HumHash):
         if self.ownerLine is None:
             return False
 
+        track: int = self.track
         # loops from field-1 to 0 (end index -1 is exclusive), incrementing by -1
         for i in range(self.fieldIndex-1, -1, -1):
             xtoken = self.ownerLine.token[i]
-            if xtoken.track != self.track:
+            if xtoken.track != track:
                 return False
             if xtoken.isNull:
                 continue
@@ -2298,7 +2461,9 @@ class HumdrumToken(HumHash):
     '''
     def makeForwardLink(self, nextToken):
         self.nextTokens.append(nextToken)
+        self.updateNextToken0()
         nextToken.previousTokens.append(self)
+        nextToken.updatePreviousToken0()
 
     '''
     //////////////////////////////
@@ -2308,8 +2473,9 @@ class HumdrumToken(HumHash):
     '''
     def makeBackwardLink(self, previousToken):
         self.previousTokens.append(previousToken)
+        self.updatePreviousToken0()
         previousToken.nextTokens.append(self)
-
+        previousToken.updateNextToken0()
 
     '''
     //////////////////////////////
@@ -2329,8 +2495,9 @@ class HumdrumToken(HumHash):
     @ownerLine.setter
     def ownerLine(self, newOwnerLine): # newOwnerLine: HumdrumLine
         self._address.ownerLine = newOwnerLine
-        self.clearCachedProperties() # some cached properties depend on dataType, which depends on
-                                     # ownerLine and track
+        if self._atLeastOneCachedDataTypePropertyExists:
+            self._clearCachedDataTypeProperties() # some cached properties depend on dataType,
+                                                 # which depends on ownerLine and track
 
     '''
     //////////////////////////////

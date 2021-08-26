@@ -38,11 +38,17 @@ class Convert:
     // default value: scale = 4 (duration in terms of quarter notes)
     // default value: separator = " " (sub-token separator)
     '''
+    _knownRecipDurationCache = dict() # key is recip, value is duration: HumNum
+
     @staticmethod
     def recipToDuration(recip: str, scale: HumNum = HumNum(4)) -> HumNum:
+        if recip in Convert._knownRecipDurationCache:
+            return Convert._knownRecipDurationCache[recip]
+
         output: HumNum = HumNum(0)
         if 'q' in recip:
             # grace note, ignore printed rhythm
+            Convert._knownRecipDurationCache[recip] = output
             return output # 0
 
         subToken = recip.split(' ')[0] # we're only interested in the first subtoken
@@ -56,6 +62,7 @@ class Convert:
             m = re.search(r'([\d]+)', subToken)
             if m is None:
                 # no rhythm found
+                # Convert._knownRecipDurationCache[recip] = output # don't fill cache with bad strings
                 return output # 0
 
             if m.group(1).startswith('0'):
@@ -78,7 +85,9 @@ class Convert:
             #                   2^dotCount
             dotFactor = HumNum(pow(2, dotCount+1)-1, pow(2, dotCount))
 
-        return output * dotFactor * scale
+        output *= dotFactor * scale
+        Convert._knownRecipDurationCache[recip] = output
+        return output
 
     '''
     //////////////////////////////

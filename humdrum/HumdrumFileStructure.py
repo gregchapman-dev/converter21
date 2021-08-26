@@ -172,17 +172,17 @@ class HumdrumFileStructure(HumdrumFileBase):
         currTok: HumdrumToken = spineStart
         while currTok is not None:
             if not currTok.isData:
-                currTok = currTok.nextToken(0)
+                currTok = currTok.nextToken0
                 continue
 
             if currTok.isNull:
                 # This should not occur in a well-formed **recip spine, but
                 # treat as a zero duration.
-                currTok = currTok.nextToken(0)
+                currTok = currTok.nextToken0
                 continue
 
             currTok.ownerLine.duration = Convert.recipToDuration(currTok.text)
-            currTok = currTok.nextToken(0)
+            currTok = currTok.nextToken0
 
         # now go back and set the absolute position from the start of the file.
         totalDurSoFar: HumNum = HumNum(0)
@@ -442,7 +442,7 @@ class HumdrumFileStructure(HumdrumFileBase):
                 reservoir.append(t)
                 startDurs.append(durSum)
 
-            token = token.nextToken(0)
+            token = token.nextToken0
             if state != token.rhythmAnalysisState:
                 break
 
@@ -518,7 +518,7 @@ Line: {}'''.format(token.lineNumber, durSum, line.durationFromStart, line.text))
                     break
                 if token.duration > 0:
                     durSum += token.duration
-                token = token.nextToken(0)
+                token = token.nextToken0
 
         if foundDur == HumNum(0):
             return self.setParseError('Error: cannot link floating spine to score.')
@@ -651,7 +651,7 @@ Line: {}'''.format(line.durationFromStart, line.text))
                 token.duration = current.durationFromStart - token.durationFromStart
                 current = token
 
-            token = token.previousToken(0)
+            token = token.previousToken0
 
         return self.isValid
 
@@ -683,7 +683,7 @@ Line: {}'''.format(line.durationFromStart, line.text))
             if tok == sStart:
                 break
 
-            tok = tok.previousToken(0)
+            tok = tok.previousToken0
 
     '''
     //////////////////////////////
@@ -732,13 +732,13 @@ Line: {}'''.format(line.durationFromStart, line.text))
             strandEnd: HumdrumToken = strandPair.last
             while token != strandEnd:
                 if not token.isData:
-                    token = token.nextToken(0)
+                    token = token.nextToken0
                     continue
 
                 if data is None:
                     data = token
                     token.nullResolution = data
-                    token = token.nextToken(0)
+                    token = token.nextToken0
                     continue
 
                 if token.isNull:
@@ -746,7 +746,7 @@ Line: {}'''.format(line.durationFromStart, line.text))
                 else:
                     data = token
 
-                token = token.nextToken(0)
+                token = token.nextToken0
 
     '''
     //////////////////////////////
@@ -760,7 +760,7 @@ Line: {}'''.format(line.durationFromStart, line.text))
             tok: HumdrumToken = strandPair.first
             while tok is not None:
                 tok.strandIndex = i
-                tok = tok.nextToken(0)
+                tok = tok.nextToken0
 
     '''
     //////////////////////////////
@@ -782,7 +782,7 @@ Line: {}'''.format(line.durationFromStart, line.text))
                     newStrand.last = tok
                     return
 
-                tok = tok.nextToken(0)
+                tok = tok.nextToken0
                 continue
 
             if tok.isTerminateInterpretation:
@@ -794,7 +794,7 @@ Line: {}'''.format(line.durationFromStart, line.text))
                 for j in range(1, tok.nextTokenCount):
                     self.analyzeSpineStrands(ends, tok.nextToken(j))
 
-            tok = tok.nextToken(0)
+            tok = tok.nextToken0
 
         print('Should not get here in analyzeSpineStrands()', file=sys.stderr)
 
