@@ -1190,8 +1190,9 @@ class HumdrumToken(HumHash):
         try:
             return self._isNoteCached
         except AttributeError:
+            self._isNoteCached = False
             if not self.isData or self.isNull:
-                self._isNoteCached = False
+                pass
             elif self.isKern:
                 self._isNoteCached = Convert.isKernNote(self.text)
             elif self.isMens:
