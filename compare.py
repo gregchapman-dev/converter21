@@ -98,15 +98,20 @@ op_list, cost = scl.complete_scorelin_diff(score_lin1, score_lin2)
 end = timer()
 print('complete_scorelin_diff took:', end - start, 'seconds')
 
-# annotate the scores to show differences
-start = timer()
-sv.annotate_differences(score1, score2, op_list)
-end = timer()
-print('annotate_differences took:', end - start, 'seconds')
+numDiffs = len(op_list)
+print(f'number of differences = {numDiffs}')
 
-# display the two annotated scores
-start = timer()
-sv.show_differences(score1, score2)
-end = timer()
-print('show_differences (both scores) took:', end - start, 'seconds')
+if numDiffs > 0:
+    # annotate the scores to show differences
+    start = timer()
+    sv.annotate_differences(score1, score2, op_list)
+    end = timer()
+    print('annotate_differences took:', end - start, 'seconds')
+
+    # display the two annotated scores
+    start = timer()
+    sv.show_differences(score1, score2)
+    end = timer()
+    print('show_differences (both scores) took:', end - start, 'seconds')
+
 print('')
