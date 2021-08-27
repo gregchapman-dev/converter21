@@ -13,7 +13,7 @@
 #    All methods are static.  M21Convert is just a namespace for these conversion functions and
 #    look-up tables.
 
-import sys
+#import sys
 from typing import Union
 from fractions import Fraction
 import music21 as m21

@@ -476,7 +476,7 @@ class HumdrumFile(HumdrumFileContent):
     def __init__(self, fileName: str = None):
         super().__init__(fileName) # initialize the HumdrumFileBase fields
 
-        self.m21Stream: m21.stream.Score = None
+        self.m21Score: m21.stream.Score = None
 
         self._staffStarts: [HumdrumToken] = None    # len = staffCount
         self._staffStartsIndexByTrack: [int] = None # len = staffCount + 1 a.k.a. rkern, or "ReverseKernIndex"
@@ -552,8 +552,8 @@ class HumdrumFile(HumdrumFileContent):
 
         if not self._staffStarts: # if empty list or None
             # No parts in file, give up.  Return an empty score.
-            self.m21Stream = m21.stream.Score()
-            return self.m21Stream
+            self.m21Score = m21.stream.Score()
+            return self.m21Score
 
         # init some lists of staff info
         self._initializeStaffStates()
@@ -571,7 +571,7 @@ class HumdrumFile(HumdrumFileContent):
         self._prepareMetadata() # pull standard biblio keys/values out of reference records
         self._prepareTimeSignatures() # gather time signature info
 
-        # set up m21Stream high-level structure (Score:Parts, StaffGroups layout, Metadata, Tempo, etc)
+        # set up m21Score high-level structure (Score:Parts, StaffGroups layout, Metadata, Tempo, etc)
         self._createInitialScore()
 
         # all the measures
@@ -621,11 +621,12 @@ class HumdrumFile(HumdrumFileContent):
             # for now, only add this risk to version 7, since version 6 will call
             # makeAccidentals during export (it ignores makeNotation=False).
             self._makeAccidentals()
-        return self.m21Stream
+
+        return self.m21Score
 
     def _makeAccidentals(self):
         # call on each part, or it doesn't work right.
-        for part in self.m21Stream.parts:
+        for part in self.m21Score.parts:
         # I'm not too happy with one feature here:
         # Example, key of F (one flat).  If there is a B-natural in one measure, the first
         # B-flat in the _next_ measure will have a printed flat accidental (cautionary).
@@ -787,12 +788,12 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::prepareStaffGroups --  Add information about each part and
     //    group by brackets/bar groupings
 
-        Set up m21Stream high-level structure (Score: Parts, StaffGroups layout, Metadata, Tempo, etc).
+        Set up m21Score high-level structure (Score: Parts, StaffGroups layout, Metadata, Tempo, etc).
         _createInitialScore is not called unless there is at least one staff.
 
     '''
     def _createInitialScore(self):
-        self.m21Stream = m21.stream.Score()
+        self.m21Score = m21.stream.Score()
 
         # Info for each part (fillPartInfo)
         for i, startTok in enumerate(self._staffStarts):
@@ -876,17 +877,36 @@ class HumdrumFile(HumdrumFileContent):
             ss: StaffStateVariables = self._staffStates[i]
             measure: m21.stream.Measure = m21.stream.Measure(measureNumber)
             self._oneMeasurePerStaff.append(measure)
-            ss.m21Part.append(measure)
+            ss.m21Part.coreAppend(measure)
+            ss.m21Part.coreElementsChanged()
 
+            # start coreInserting into measure
+            insertedIntoMeasure: bool = False
             if self._lines[startLineIdx].durationFromStart <= 0:
                 # first measure... we already have the clef, keysig, and timesig
                 # for this measure waiting for us in _staffState[i]
                 if ss.firstM21Clef:
-                    measure.insert(0, ss.firstM21Clef)
+                    measure.coreInsert(0, ss.firstM21Clef)
+                    insertedIntoMeasure = True
                 if ss.firstM21KeySig:
-                    measure.insert(0, ss.firstM21KeySig)
+                    measure.coreInsert(0, ss.firstM21KeySig)
+                    insertedIntoMeasure = True
                 if ss.firstM21TimeSig:
-                    measure.insert(0, ss.firstM21TimeSig)
+                    measure.coreInsert(0, ss.firstM21TimeSig)
+                    insertedIntoMeasure = True
+
+            # we insert page/line breaks at offset 0 in part 0's measure
+            if self._m21BreakAtStartOfNextMeasure and i == 0:
+                measure.coreInsert(0, self._m21BreakAtStartOfNextMeasure)
+                insertedIntoMeasure = True
+                self._m21BreakAtStartOfNextMeasure = None
+
+            # if we insertedIntoMeasure at all, we must call coreElementsChanged()
+            if insertedIntoMeasure:
+                measure.coreElementsChanged()
+
+            # Setting leftBarline has to come after coreElementsChanged(), because
+            # internally it does an insert (not a coreInsert).
 
             # in C++ code _nextLeftBarlineStartsRepeat is m_leftbarstyle (only ever set
             # to BARRENDITION_rptstart or BARRENDITION_NONE, so for me it's a bool)
@@ -896,11 +916,6 @@ class HumdrumFile(HumdrumFileContent):
                 # the next measure. The previous measure has requested that this measure's
                 # left barline style be set to 'startrpt'
                 measure.leftBarline = m21.bar.Repeat(direction='start')
-
-            # we insert page/line breaks at offset 0 in part 0's measure
-            if self._m21BreakAtStartOfNextMeasure and i == 0:
-                measure.insert(0, self._m21BreakAtStartOfNextMeasure)
-                self._m21BreakAtStartOfNextMeasure = None
 
         self._allMeasuresPerStaff.append(self._oneMeasurePerStaff)
 
@@ -1103,7 +1118,7 @@ class HumdrumFile(HumdrumFileContent):
                 elif token.isKeyDesignation:
                     keyToks[staffIndex] = token
                     empty = False
-# TODO: transposing instrument change (e.g. Bb Clarinet to Eb Clarinet)
+# TODO: transposing instrument change (e.g. Bb Clarinet to A Clarinet)
 #                 elif token.isInstrumentTranspose:
 #                     iTransposeToks[staffIndex] = token
 #                     empty = False
@@ -1118,23 +1133,34 @@ class HumdrumFile(HumdrumFileContent):
             # No transposition, key or time signature changes.
             return
 
-        if hasTimeSig:
-            for i, timeSigTok in enumerate(timeSigToks):
-                if timeSigTok is None:
-                    continue
-                m21OffsetInMeasure: Fraction = \
-                    M21Convert.m21Offset(timeSigTok.durationFromBarline)
-                m21TimeSig = M21Convert.m21TimeSignature(timeSigTok, meterSigToks[i])
-                self._oneMeasurePerStaff[i].insert(m21OffsetInMeasure, m21TimeSig)
+        if hasTimeSig or hasKeySig:
+            for measure, timeSigTok, meterSigTok, keySigTok, keyTok in zip(
+                    self._oneMeasurePerStaff, timeSigToks, meterSigToks, keySigToks, keyToks):
+
+                insertedIntoMeasure: bool = False
+
+                if timeSigTok is not None:
+                    m21TimeSig = M21Convert.m21TimeSignature(timeSigTok, meterSigTok)
+                    if m21TimeSig is not None:
+                        m21OffsetInMeasure = M21Convert.m21Offset(timeSigTok.durationFromBarline)
+                        measure.coreInsert(m21OffsetInMeasure, m21TimeSig)
+                        insertedIntoMeasure = True
+
+                if keySigTok is not None:
+                    m21KeySig = M21Convert.m21KeySignature(keySigTok, keyTok)
+                    if m21KeySig is not None:
+                        m21OffsetInMeasure = M21Convert.m21Offset(keySigTok.durationFromBarline)
+                        measure.coreInsert(m21OffsetInMeasure, m21KeySig)
+                        insertedIntoMeasure = True
+
+                if insertedIntoMeasure:
+                    measure.coreElementsChanged()
 
         if hasKeySig:
             for i, keySigTok in enumerate(keySigToks):
                 if keySigTok is None:
                     continue
-                m21KeySig = M21Convert.m21KeySignature(keySigTok, keyToks[i])
-                if m21KeySig:
-                    m21OffsetInMeasure: Fraction = M21Convert.m21Offset(keySigTok.durationFromBarline)
-                    self._oneMeasurePerStaff[i].insert(m21OffsetInMeasure, m21KeySig)
+
 
     '''
     //////////////////////////////
@@ -1402,7 +1428,8 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: Fraction = M21Convert.m21Offset(layerData[0].durationFromBarline)
         if layerData[0].isBarline:
             voiceOffsetInMeasure = 0 # durationFromBarline returns duration of previous bar in this case
-        self._oneMeasurePerStaff[staffIndex].insert(voiceOffsetInMeasure, voice)
+        self._oneMeasurePerStaff[staffIndex].coreInsert(voiceOffsetInMeasure, voice)
+        self._oneMeasurePerStaff[staffIndex].coreElementsChanged()
 
 # TODO: merge new iohumdrum.cpp changes --gregc 01July2021
 #     // Check for cases where there are only null interpretations in the measure
@@ -1422,6 +1449,7 @@ class HumdrumFile(HumdrumFileContent):
         groupState: BeamAndTupletGroupState = BeamAndTupletGroupState()
 
 #        lastDataTok: HumdrumToken = None # ignore for now, it's for sameas clef analysis
+        insertedIntoVoice: bool = False
         for tokenIdx, layerTok in enumerate(layerData):
 #             if layerTok.isData:
 #                 lastDataTok = layerTok
@@ -1429,16 +1457,19 @@ class HumdrumFile(HumdrumFileContent):
             if layerTok.isNullData:
                 # print any global text directions attached to the null token
                 # and then skip to next token.
-                self._processDirections(voice, voiceOffsetInMeasure, layerTok, staffIndex)
+                if self._processDirections(voice, voiceOffsetInMeasure, layerTok, staffIndex):
+                    insertedIntoVoice = True
                 continue
 
             if layerTok.isInterpretation:
-                self._processInterpretationLayerToken(voice, voiceOffsetInMeasure, layerData, tokenIdx, layerIndex, staffIndex)
+                if self._processInterpretationLayerToken(voice, voiceOffsetInMeasure, layerData, tokenIdx, layerIndex, staffIndex):
+                    insertedIntoVoice = True
                 continue
 
             if layerTok.isBarline:
                 # TODO: barline formatting (partially implemented)
-#                self._processBarlineLayerToken(voice, layerTok, staffIndex)
+#               if self._processBarlineLayerToken(voice, layerTok, staffIndex):
+#                   insertedIntoVoice = True
                 continue
 
             if not layerTok.isData:
@@ -1447,7 +1478,8 @@ class HumdrumFile(HumdrumFileContent):
             # layerTok.isData...
 
 #             if layerTok.isMens:
-#                 self._convertMensuralToken(...)
+#                 if self._convertMensuralToken(...):
+#                     insertedIntoVoice = True
 #                 continue
 
             # iohumdrum.cpp does tgs processing in a different order,
@@ -1474,7 +1506,8 @@ class HumdrumFile(HumdrumFileContent):
                 # This element is not supposed to be printed,
                 # probably due to being in a tremolo.
                 # But there are some things we have to do anyway...
-                self._processSuppressedLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex)
+                if self._processSuppressedLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex):
+                    insertedIntoVoice = True
                 continue
 
             # conversion of **kern data to music21
@@ -1484,70 +1517,88 @@ class HumdrumFile(HumdrumFileContent):
             # so if you call isNote first, chords will look like notes, and positioned rests
             # will look like notes.
             if layerTok.isChord:
-                self._processChordLayerToken(voice, voiceOffsetInMeasure, layerData, tokenIdx, staffIndex, layerIndex)
+                if self._processChordLayerToken(voice, voiceOffsetInMeasure, layerData, tokenIdx, staffIndex, layerIndex):
+                    insertedIntoVoice = True
             elif layerTok.isRest:
-                self._processRestLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex)
+                if self._processRestLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex):
+                    insertedIntoVoice = True
             elif layerTok.isNote:
-                self._processNoteLayerToken(voice, voiceOffsetInMeasure, layerData, tokenIdx, staffIndex, layerIndex)
+                if self._processNoteLayerToken(voice, voiceOffsetInMeasure, layerData, tokenIdx, staffIndex, layerIndex):
+                    insertedIntoVoice = True
             else:
                 # this is probably a **recip value without note or rest information
                 # so print it as a space (invisible rest).
-                self._processOtherLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex)
+                if self._processOtherLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex):
+                    insertedIntoVoice = True
 
             groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
 
         # end loop over layer tokens
 
-        self._processBarlinesInLayerData(voice, voiceOffsetInMeasure, track, layerIndex)
+        if self._processBarlinesInLayerData(voice, voiceOffsetInMeasure, track, layerIndex):
+            insertedIntoVoice = True
+
+        if insertedIntoVoice:
+            voice.coreElementsChanged()
 
     '''
         _processInterpretationLayerToken
+            returns whether or not anything was inserted into the voice
     '''
     def _processInterpretationLayerToken(self, voice: m21.stream.Voice,
                                          voiceOffsetInMeasure: Union[Fraction, float],
                                          layerData: [HumdrumToken],
                                          tokenIdx: int,
                                          layerIndex: int,
-                                         staffIndex: int):
+                                         staffIndex: int) -> bool:
         ss: StaffStateVariables = self._staffStates[staffIndex]
         layerTok: HumdrumToken = layerData[tokenIdx]
+        insertedIntoVoice: bool = False
 
         if ss.hasLyrics:
-            self._checkForVerseLabels(voice, voiceOffsetInMeasure, layerTok)
+            if self._checkForVerseLabels(voice, voiceOffsetInMeasure, layerTok):
+                insertedIntoVoice = True
         # TODO: ottava marks
         # self._handleOttavaMark(voice, layerTok, staffIndex)
         # self._handleLigature(layerTok) # just for **mens
         # self._handleColoration(layerTok) # just for **mens
         self._handleTempoChange(layerTok, staffIndex)
-        self._handlePedalMark(voice, voiceOffsetInMeasure, layerTok)
+        if self._handlePedalMark(voice, voiceOffsetInMeasure, layerTok):
+            insertedIntoVoice = True
         self._handleStaffStateVariables(layerTok, layerIndex, staffIndex)
         self._handleStaffDynamicsStateVariables(layerTok, staffIndex)
-        self._handleCustos(voice, voiceOffsetInMeasure, layerTok)
-        self._handleRepInterp(voice, voiceOffsetInMeasure, layerTok) # new
+        if self._handleCustos(voice, voiceOffsetInMeasure, layerTok):
+            insertedIntoVoice = True
+        if self._handleRepInterp(voice, voiceOffsetInMeasure, layerTok): # new
+            insertedIntoVoice = True
         self._handleColorInterp(layerTok) # new
-        self._handleClefChange(voice, voiceOffsetInMeasure, layerData, tokenIdx)
-        self._handleTimeSigChange(voice, voiceOffsetInMeasure, layerTok, staffIndex) # new
+        if self._handleClefChange(voice, voiceOffsetInMeasure, layerData, tokenIdx):
+            insertedIntoVoice = True
+        if self._handleTimeSigChange(voice, voiceOffsetInMeasure, layerTok, staffIndex): # new
+            insertedIntoVoice = True
+
+        return insertedIntoVoice
 
     '''
     //////////////////////////////
     //
     // HumdrumInput::checkForVerseLabels --
     '''
-    def _checkForVerseLabels(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken):
+    def _checkForVerseLabels(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken) -> bool:
         # TODO: verse labels
-        pass
+        pass # returns None, which will evaluate to False appropriately
 
-    def _handlePedalMark(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken):
+    def _handlePedalMark(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken) -> bool:
         # TODO: pedal marks
-        pass
+        pass # returns None, which will evaluate to False appropriately
 
-    def _handleCustos(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken):
+    def _handleCustos(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken) -> bool:
         # TODO: *custos
-        pass
+        pass # returns None, which will evaluate to False appropriately
 
-    def _handleRepInterp(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken):
+    def _handleRepInterp(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken) -> bool:
         # TODO: *rep (repetition element)
-        pass
+        pass # returns None, which will evaluate to False appropriately
 
     def _handleColorInterp(self, token: HumdrumToken):
         # TODO: *color (spine color)
@@ -1557,7 +1608,7 @@ class HumdrumFile(HumdrumFileContent):
         pass
 
     @staticmethod
-    def _handleClefChange(voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int):
+    def _handleClefChange(voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int) -> bool:
         token: HumdrumToken = layerData[tokenIdx]
         forceClefChange: bool = False
         if token.isClef:
@@ -1565,38 +1616,43 @@ class HumdrumFile(HumdrumFileContent):
                 forceClefChange = True
 
         if token.isMens:
-            return # LATER: support **mens (handleClefChange)
+            return False # LATER: support **mens (handleClefChange)
 
         if forceClefChange or token.durationFromStart != 0:
             if token.isClef:
                 clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
                 clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(token)
-                voice.insert(clefOffsetInVoice, m21Clef)
-            elif token.isNull:
-                if tokenIdx > 0 and token.lineIndex == layerData[tokenIdx-1].lineIndex:
-                    pass # do nothing: duplicate layer clefs are handled elsewhere
-                else:
-                    # duplicate clef changes in secondary layers
-                    xtrack: int = token.track
-                    tok: HumdrumToken = token.previousFieldToken
-                    while tok is not None:
-                        ttrack: int = tok.track
-                        if ttrack == xtrack:
-                            if tok.isClef:
-                                clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-                                clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
-                                m21Clef: m21.clef.Clef = M21Convert.m21Clef(tok)
-                                voice.insert(clefOffsetInVoice, m21Clef)
-                                break
-                        tok = tok.previousFieldToken
+                voice.coreInsert(clefOffsetInVoice, m21Clef)
+                return True
 
-    def _handleTimeSigChange(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int):
+#             elif token.isNull:
+#                 if tokenIdx > 0 and token.lineIndex == layerData[tokenIdx-1].lineIndex:
+#                     pass # do nothing: duplicate layer clefs are handled elsewhere
+#                 else:
+#                     # duplicate clef changes in secondary layers
+#                     xtrack: int = token.track
+#                     tok: HumdrumToken = token.previousFieldToken
+#                     while tok is not None:
+#                         ttrack: int = tok.track
+#                         if ttrack == xtrack:
+#                             if tok.isClef:
+#                                 clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+#                                 clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
+#                                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(tok)
+#                                 voice.coreInsert(clefOffsetInVoice, m21Clef)
+#                                 insertedIntoVoice = True
+#                                 break
+#                         tok = tok.previousFieldToken
+        return False
+
+    def _handleTimeSigChange(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int) -> bool:
         if token.isTimeSignature:
             # Now done at the measure level.  This location might
             # be good for time signatures which change in the
             # middle of measures.
-            self._processDirections(voice, voiceOffsetInMeasure, token, staffIndex)
+            return self._processDirections(voice, voiceOffsetInMeasure, token, staffIndex)
+        return False
 
     '''
     //////////////////////////////
@@ -1802,8 +1858,9 @@ class HumdrumFile(HumdrumFileContent):
             tempo: m21.tempo.MetronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text = mmText)
             tempo.style.absoluteY = 'above'
             tempoOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-            self._oneMeasurePerStaff[staffIndex].insert(
+            self._oneMeasurePerStaff[staffIndex].coreInsert(
                                         tempoOffsetInMeasure, tempo)
+            self._oneMeasurePerStaff[staffIndex].coreElementsChanged()
 
     '''
     //////////////////////////////
@@ -3608,15 +3665,16 @@ class HumdrumFile(HumdrumFileContent):
     '''
         _processBarlinesInLayerData
     '''
-    def _processBarlinesInLayerData(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], track: int, layerIndex: int):
+    def _processBarlinesInLayerData(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], track: int, layerIndex: int) -> bool:
+        insertedIntoVoice: bool = False
         staffIndex: int = self._staffStartsIndexByTrack[track]
         if staffIndex < 0:
             # not a kern/mens spine
-            return
+            return insertedIntoVoice
 
         layerData: [HumdrumToken] = self._layerTokens[staffIndex][layerIndex]
         if not layerData: # empty layer?!
-            return
+            return insertedIntoVoice
 
         if layerIndex == 0 and layerData and layerData[-1].isBarline:
             endBarline = layerData[-1]
@@ -3663,7 +3721,9 @@ class HumdrumFile(HumdrumFileContent):
                     self._oneMeasurePerStaff[staffIndex].leftBarline = m21.bar.Repeat(direction='start')
 
         if layerData and layerData[-1].isBarline:
-            self._processDirections(voice, voiceOffsetInMeasure, layerData[-1], staffIndex)
+            insertedIntoVoice = self._processDirections(voice, voiceOffsetInMeasure, layerData[-1], staffIndex)
+
+        return insertedIntoVoice
 
     @staticmethod
     def _createNote(infoHash: HumHash = None) -> m21.note.Note:
@@ -3740,7 +3800,7 @@ class HumdrumFile(HumdrumFileContent):
             # numberOfMarks out of range (1..8)
             return
 
-    def _processTremolo2(self, noteOrChord: m21.note.NotRest, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int, staffIndex: int, layerIndex: int):
+    def _processTremolo2(self, noteOrChord: m21.note.NotRest, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int, staffIndex: int, layerIndex: int) -> bool:
         layerTok: HumdrumToken = layerData[tokenIdx]
         tremolo2: m21.expressions.TremoloSpanner = m21.expressions.TremoloSpanner()
         beams: int = layerTok.getValueInt('auto', 'beams')
@@ -3754,10 +3814,12 @@ class HumdrumFile(HumdrumFileContent):
                     break
         except m21.expressions.TremoloException:
             # numberOfMarks out of range (1..8)
-            return
+            return False
 
+        insertedIntoVoice: bool = False
         if second:
-            self.m21Stream.insert(0, tremolo2)
+            self.m21Score.coreInsert(0, tremolo2)
+            self.m21Score.coreElementsChanged()
 
             # ignoring slurs, ties, ornaments, articulations
             if second.isChord:
@@ -3765,18 +3827,22 @@ class HumdrumFile(HumdrumFileContent):
                 chord2 = self._convertChord(chord2, second, staffIndex, layerIndex)
                 chord2OffsetInMeasure: Fraction = M21Convert.m21Offset(second.durationFromBarline)
                 chord2OffsetInVoice: Union[Fraction, float] = chord2OffsetInMeasure - voiceOffsetInMeasure
-                voice.insert(chord2OffsetInVoice, chord2)
+                voice.coreInsert(chord2OffsetInVoice, chord2)
+                insertedIntoVoice = True
                 tremolo2.addSpannedElements(noteOrChord, chord2)
             else:
                 note2: m21.note.Note = self._createNote(second)
                 note2 = self._convertNote(note2, second, 0, staffIndex, layerIndex)
                 note2OffsetInMeasure: Fraction = M21Convert.m21Offset(second.durationFromBarline)
                 note2OffsetInVoice: Union[Fraction, float] = note2OffsetInMeasure - voiceOffsetInMeasure
-                voice.insert(note2OffsetInVoice, note2)
+                voice.coreInsert(note2OffsetInVoice, note2)
+                insertedIntoVoice = True
                 tremolo2.addSpannedElements(noteOrChord, note2)
 
             self._addSlurToTremoloSpanner(tremolo2, layerTok, second)
             self._addExplicitStemDirectionToTremoloSpanner(tremolo2, layerTok)
+
+        return insertedIntoVoice
 
     '''
     //////////////////////////////
@@ -3838,8 +3904,11 @@ class HumdrumFile(HumdrumFileContent):
     '''
         _processChordLayerToken
     '''
-    def _processChordLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int, staffIndex: int, layerIndex: int):
+    def _processChordLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int, staffIndex: int, layerIndex: int) -> bool:
         layerTok: HumdrumToken = layerData[tokenIdx]
+
+        # insertedIntoVoice: bool = False # don't bother computing this since we _always_ insert into
+        #                                   the voice ourselves, unconditionally
 
         chordOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
         chordOffsetInVoice: Union[Fraction, float] = chordOffsetInMeasure - voiceOffsetInMeasure
@@ -3866,7 +3935,8 @@ class HumdrumFile(HumdrumFileContent):
         self._addArpeggio(chord, layerTok)
         self._processDirections(voice, voiceOffsetInMeasure, layerTok, staffIndex)
 
-        voice.insert(chordOffsetInVoice, chord)
+        voice.coreInsert(chordOffsetInVoice, chord)
+        return True # we inserted into the voice
 
     '''
         _convertChord
@@ -3966,7 +4036,9 @@ class HumdrumFile(HumdrumFileContent):
     '''
         _processRestLayerToken
     '''
-    def _processRestLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerTok: HumdrumToken, staffIndex: int):
+    def _processRestLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerTok: HumdrumToken, staffIndex: int) -> bool:
+        # insertedIntoVoice: bool = False # don't bother computing this since we _always_ insert into
+        #                                   the voice ourselves, unconditionally
         restOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
         restOffsetInVoice: Union[Fraction, float] = restOffsetInMeasure - voiceOffsetInMeasure
         rest: m21.note.Rest = self._createRest(layerTok)
@@ -3983,7 +4055,8 @@ class HumdrumFile(HumdrumFileContent):
             # Invisible rest
             rest.style.hideObjectOnPrint = True
 
-        voice.insert(restOffsetInVoice, rest)
+        voice.coreInsert(restOffsetInVoice, rest)
+        return True # we did insert into the voice
 
     '''
     /////////////////////////////
@@ -4026,7 +4099,9 @@ class HumdrumFile(HumdrumFileContent):
     '''
         _processNoteLayerToken
     '''
-    def _processNoteLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: HumdrumToken, tokenIdx: int, staffIndex: int, layerIndex: int):
+    def _processNoteLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: HumdrumToken, tokenIdx: int, staffIndex: int, layerIndex: int) -> bool:
+        # insertedIntoVoice: bool = False # don't bother computing this since we _always_ insert into
+        #                                   the voice ourselves, unconditionally
         layerTok: HumdrumToken = layerData[tokenIdx]
         noteOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
         noteOffsetInVoice: Union[Fraction, float] = noteOffsetInMeasure - voiceOffsetInMeasure
@@ -4064,7 +4139,8 @@ class HumdrumFile(HumdrumFileContent):
         self._addOrnaments(note, layerTok)
         self._addArpeggio(note, layerTok)
         self._processDirections(voice, voiceOffsetInMeasure, layerTok, staffIndex)
-        voice.insert(noteOffsetInVoice, note)
+        voice.coreInsert(noteOffsetInVoice, note)
+        return True # we did insert into the voice
 
     def _addArpeggio(self, gnote, layerTok):
         # TODO: arpeggios
@@ -4416,7 +4492,8 @@ class HumdrumFile(HumdrumFileContent):
                 endTok.setValue('music21', 'spannerHolder', endNote)
             trillExtension = m21.expressions.TrillExtension(startNote, endNote)
 
-        self.m21Stream.insert(0, trillExtension)
+        self.m21Score.coreInsert(0, trillExtension)
+        self.m21Score.coreElementsChanged()
 
     def _addFermata(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
         if ';' not in token.text:
@@ -4739,7 +4816,8 @@ class HumdrumFile(HumdrumFileContent):
 
             # Put spanner in top-level stream, because it might contain notes
             # that are in different Parts.
-            self.m21Stream.insert(0, slur)
+            self.m21Score.coreInsert(0, slur)
+            self.m21Score.coreElementsChanged()
 
     def _setLayoutSlurDirection(self, slur: m21.spanner.Slur, token: HumdrumToken):
         if self._hasAboveParameter(token, 'S'):
@@ -5402,28 +5480,34 @@ class HumdrumFile(HumdrumFileContent):
     '''
         _processOtherLayerToken
     '''
-    def _processOtherLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerTok: HumdrumToken, staffIndex: int):
-        pass
+    def _processOtherLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerTok: HumdrumToken, staffIndex: int) -> bool:
+        pass # returns None, which will evaluate to False appropriately
 
     '''
         _processSuppressedLayerToken
     '''
-    def _processSuppressedLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerTok: HumdrumToken, staffIndex: int):
+    def _processSuppressedLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerTok: HumdrumToken, staffIndex: int) -> bool:
         # This element is not supposed to be printed,
         # probably due to being in a tremolo.
         # But first check for dynamics and text, which
         # should not be suppressed:
-        self._processDynamics(voice, voiceOffsetInMeasure, layerTok, staffIndex)
-        self._processDirections(voice, voiceOffsetInMeasure, layerTok, staffIndex)
+        insertedIntoVoice: bool = False
+        if self._processDynamics(voice, voiceOffsetInMeasure, layerTok, staffIndex):
+            insertedIntoVoice = True
+        if self._processDirections(voice, voiceOffsetInMeasure, layerTok, staffIndex):
+            insertedIntoVoice = True
 
-    def _processDynamics(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int):
+        return insertedIntoVoice
+
+    def _processDynamics(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int) -> bool:
+        insertedIntoVoice: bool = False
         dynamic: str = ''
         isGrace: bool = token.isGrace
         line: HumdrumLine = token.ownerLine
         ss: StaffStateVariables = self._staffStates[staffIndex]
 
         if not line:
-            return
+            return insertedIntoVoice
 
         dynamicOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
         dynamicOffsetInVoice: Union[Fraction, float] = dynamicOffsetInMeasure - voiceOffsetInMeasure
@@ -5497,7 +5581,7 @@ class HumdrumFile(HumdrumFileContent):
 
             dynTokStr: str = dynTok.text
             if dynTok.getValueBool('auto', 'DY', 'processed'):
-                return
+                return insertedIntoVoice
             dynTok.setValue('auto', 'DY', 'processed', 'true')
 
             # int pcount = dyntok->getLinkedParameterSetCount();
@@ -5591,32 +5675,39 @@ class HumdrumFile(HumdrumFileContent):
 #                 elif forceCenter:
 #                     m21Dynamic.style.absoluteY = -20
 
-                voice.insert(dynamicOffsetInVoice, m21Dynamic)
+                voice.coreInsert(dynamicOffsetInVoice, m21Dynamic)
+                insertedIntoVoice = True
 
             if hairpins:
-                self._processHairpin(voice, dynamicOffsetInVoice, hairpins, token, dynTok, staffIndex)
+                if self._processHairpin(voice, dynamicOffsetInVoice,
+                                         hairpins, token, dynTok, staffIndex):
+                    insertedIntoVoice = True
 
         token = token.nextToken0
         if not token:
-            return
+            return insertedIntoVoice
 
         while token and not token.isData:
             token = token.nextToken0
 
         if not token:
-            return
+            return insertedIntoVoice
         if not token.isNull:
-            return
+            return insertedIntoVoice
 
         # re-run this function on null tokens after the main note since
         # there may be dynamics unattached to a note (for various often
         # legitimate reasons).  Maybe make this more efficient later, such as
         # do a separate parse of dynamics data in a different loop.
-        self._processDynamics(voice, voiceOffsetInMeasure, token, staffIndex)
+        if self._processDynamics(voice, voiceOffsetInMeasure, token, staffIndex):
+            insertedIntoVoice = True
 
+        return insertedIntoVoice
 
     def _processHairpin(self, voice: m21.stream.Voice, dynamicOffsetInVoice: Union[Fraction, float],
-                        hairpins: str, token: HumdrumToken, dynTok: HumdrumToken, staffIndex: int):
+                        hairpins: str, token: HumdrumToken, dynTok: HumdrumToken, staffIndex: int) -> bool:
+        insertedIntoVoice: bool = False
+
         if '<' in hairpins:
             startHairpin = '<'
             stopHairpin = '['
@@ -5624,7 +5715,7 @@ class HumdrumFile(HumdrumFileContent):
             startHairpin = '>'
             stopHairpin = ']'
         else:
-            return
+            return insertedIntoVoice
 
         startStopHairpin1 = startHairpin + stopHairpin
         startStopHairpin2 = startHairpin + ' ' + stopHairpin
@@ -5710,7 +5801,8 @@ class HumdrumFile(HumdrumFileContent):
                 endNoteToken.setValue('music21', 'spannerHolder', endNote)
 
             m21Hairpin.addSpannedElements(startNote, endNote)
-            self.m21Stream.insert(0, m21Hairpin)
+            self.m21Score.coreInsert(0, m21Hairpin)
+            self.m21Score.coreElementsChanged()
         else:
             # no endpoint so print as the word "cresc."/"decresc." (modified by _signifiers and layout)
             content: str = ''
@@ -5750,7 +5842,10 @@ class HumdrumFile(HumdrumFileContent):
 #                     m21TextExp.style.absoluteY = 'above'
 #                 elif forceBelow:
 #                     m21TextExp.style.absoluteY = 'below'
-            voice.insert(dynamicOffsetInVoice, m21TextExp)
+            voice.coreInsert(dynamicOffsetInVoice, m21TextExp)
+            insertedIntoVoice = True
+
+        return insertedIntoVoice
 
     '''
     //////////////////////////////
@@ -5917,15 +6012,19 @@ class HumdrumFile(HumdrumFileContent):
     //////////////////////////////
     //
     // HumdrumInput::processDirections --
+        returns whether or not it inserted something in the voice
     '''
-    def _processDirections(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int):
+    def _processDirections(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int) -> bool:
+        insertedIntoVoice: bool = False
+
         lcount = token.linkedParameterSetCount
         for i in range(0, lcount):
-            self._processLinkedDirection(i, voice, voiceOffsetInMeasure, token, staffIndex)
+            if self._processLinkedDirection(i, voice, voiceOffsetInMeasure, token, staffIndex):
+                insertedIntoVoice = True
 
         text: str = token.getValue('LO', 'TX', 't')
         if not text:
-            return
+            return insertedIntoVoice
 
         # maybe add center justification as an option later
         # justification == 0 means no explicit justification (mostly left justified)
@@ -5950,7 +6049,7 @@ class HumdrumFile(HumdrumFileContent):
         bold: bool = False
 
         vgroup: int = -1
-        if token.isDefine('LO', 'TX', 'vgrp'):
+        if token.isDefined('LO', 'TX', 'vgrp'):
             vgroup = token.getValueInt('LO', 'TX', 'vgrp')
 
         if token.isDefined('LO', 'TX', 'i'): # italic
@@ -5994,14 +6093,20 @@ class HumdrumFile(HumdrumFileContent):
         else:
             placement = 'above'
 
-        self._addDirection(text, placement, bold, italic, voice, voiceOffsetInMeasure, token, justification, color, vgroup)
+        if self._addDirection(text, placement, bold, italic, voice, voiceOffsetInMeasure,
+                              token, justification, color, vgroup):
+            insertedIntoVoice = True
+
+        return insertedIntoVoice
 
     '''
     //////////////////////////////
     //
     // HumdrumInput::processLinkedDirection --
     '''
-    def _processLinkedDirection(self, index: int, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int):
+    def _processLinkedDirection(self, index: int, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int) -> bool:
+        insertedIntoVoice: bool = False
+
         direction: m21.expressions.TextExpression = None
         tempo: m21.tempo.MetronomeMark = None
 
@@ -6012,14 +6117,14 @@ class HumdrumFile(HumdrumFileContent):
 
         if not isFirst:
             # Don't insert multiple global directions.
-            return
+            return insertedIntoVoice
 
         hps: HumParamSet = token.getLinkedParameterSet(index)
         if not hps:
-            return
+            return insertedIntoVoice
 
         if hps.namespace1 != 'LO':
-            return
+            return insertedIntoVoice
 
         namespace2: str = hps.namespace2
         isText: bool = namespace2 == 'TX'
@@ -6028,7 +6133,7 @@ class HumdrumFile(HumdrumFileContent):
 
         if not isText and not isSic:
             # not a text direction so ignore
-            return
+            return insertedIntoVoice
 
         # default font for text string (later check for embedded fonts)
         italic: bool = False
@@ -6084,7 +6189,7 @@ class HumdrumFile(HumdrumFileContent):
                 text = value
                 if not text:
                     # nothing to display
-                    return
+                    return insertedIntoVoice
             elif key == 'Y':
                 yparam = True
             elif key == 'Z':
@@ -6124,7 +6229,7 @@ class HumdrumFile(HumdrumFileContent):
                     _vgroup = int(value)
 
         if namespace2 == 'SIC' and not isVerbose:
-            return
+            return insertedIntoVoice
 
         if aparam:
             placement = 'above'
@@ -6165,12 +6270,12 @@ class HumdrumFile(HumdrumFileContent):
                 # For system-text, do not place on any staff except the bottom staff.
                 # This will probably change in the future to place at the bottom
                 # of each staff group only.
-                return
+                return insertedIntoVoice
             if placement == 'above' and staffIndex != 0:
                 # For system-text, do not place on any staff except the top staff.
                 # This will probably change in the future to place at the top
                 # of each staff group only.
-                return
+                return insertedIntoVoice
 
         tempoOrDirection: m21.Music21Object = None
         if re.search(Convert.METRONOME_MARK_PATTERN, text):
@@ -6183,7 +6288,7 @@ class HumdrumFile(HumdrumFileContent):
             midiBPM: int = self._getMmTempo(token)
             if midiBPM == 0:
                 # this is a redundant tempo message, so ignore (event as text dir)
-                return
+                return insertedIntoVoice
 
             tempo = m21.tempo.MetronomeMark(number=midiBPM)
             tempoOrDirection = tempo
@@ -6217,7 +6322,10 @@ class HumdrumFile(HumdrumFileContent):
 
         tempoOrDirectionOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
         tempoOrDirectionOffsetInVoice: Union[Fraction, float] = tempoOrDirectionOffsetInMeasure - voiceOffsetInMeasure
-        voice.insert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
+        voice.coreInsert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
+        insertedIntoVoice = True
+
+        return insertedIntoVoice
 
     '''
     //////////////////////////////
@@ -6253,7 +6361,7 @@ class HumdrumFile(HumdrumFileContent):
     //     text directions attached to the note, and using getPayoutParameter() will merge
     //     all of their parameters incorrectly.
     '''
-    def _addDirection(self, text: str, placement: str, bold: bool, italic: bool, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, justification: int, color: str, _vgroup: int):
+    def _addDirection(self, text: str, placement: str, bold: bool, italic: bool, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, justification: int, color: str, _vgroup: int) -> bool:
         tempo: m21.tempo.MetronomeMark = None
         direction: m21.expressions.TextExpression = None
         tempoOrDirection: m21.Music21Object = None
@@ -6309,7 +6417,8 @@ class HumdrumFile(HumdrumFileContent):
 
         tempoOrDirectionOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
         tempoOrDirectionOffsetInVoice: Union[Fraction, float] = tempoOrDirectionOffsetInMeasure - voiceOffsetInMeasure
-        voice.insert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
+        voice.coreInsert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
+        return True
 
     '''
     //////////////////////////////
@@ -6569,10 +6678,10 @@ class HumdrumFile(HumdrumFileContent):
 
         if midibpm > 0 or value:
             # put the metronome mark in this measure of staff 0 (highest staff on the page)
-            staffIndex: int = 0
             tempo: m21.tempo.MetronomeMark = self._createMetronomeMark(value, midibpm)
             tempo.style.absoluteY = 'above'
-            self._oneMeasurePerStaff[staffIndex].insert(0, tempo)
+            self._oneMeasurePerStaff[0].coreInsert(0, tempo)
+            self._oneMeasurePerStaff[0].coreElementsChanged()
 
     '''
     //////////////////////////////
@@ -6701,7 +6810,7 @@ class HumdrumFile(HumdrumFileContent):
             return # there is no metadata to be had
 
         m21Metadata = m21.metadata.Metadata()
-        self.m21Stream.metadata = m21Metadata
+        self.m21Score.metadata = m21Metadata
         for k in self._biblio:
             v = self._biblio[k]
             if k in M21Convert.humdrumReferenceKeyToM21ContributorRole:
@@ -6717,7 +6826,7 @@ class HumdrumFile(HumdrumFileContent):
                 print('key: {} -> {}, value: {}'.format(k, 'metadata.Copyright', v), file=sys.stderr)
                 m21Metadata.copyright = m21.metadata.Copyright(v)
             else:
-                # We could add it to the m21Stream in some non-standard way (perhaps with a
+                # We could add it to the m21Score in some non-standard way (perhaps with a
                 # Music21Object that is what we wish m21.metadata.Metadata was, with language
                 # codes, all keys allowed, etc)
                 pass
@@ -7173,10 +7282,16 @@ class HumdrumFile(HumdrumFileContent):
             staffGroups[i] = self._processStaffGroupDecoration(
                                         groupNum, newGroup, newStyles[i])
 
+        insertedIntoScore: bool = False
+
         for staffGroup in staffGroups:
             if staffGroup is None: # we've reached the end (the array is longer than it needs to be)
                 break
-            self.m21Stream.insert(0, staffGroup)
+            self.m21Score.coreInsert(0, staffGroup)
+            insertedIntoScore = True
+
+        if insertedIntoScore:
+            self.m21Score.coreElementsChanged()
 
         return True
 
@@ -7266,7 +7381,8 @@ class HumdrumFile(HumdrumFileContent):
         ss: StaffStateVariables = self._staffStates[partNum - 1]
         ss.m21Part = m21.stream.Part()
         ss.m21Part.atSoundingPitch = True # we will insert notes at sounding pitch, and then convert them at the end to written pitch
-        self.m21Stream.insert(0, ss.m21Part)
+        self.m21Score.coreInsert(0, ss.m21Part)
+        self.m21Score.coreElementsChanged()
 
         group: int = self._getGroupNumberLabel(partStartTok)
 
@@ -7416,7 +7532,8 @@ class HumdrumFile(HumdrumFileContent):
                 # m21 Instrument transposition is from sounding to written (reverse of what we have)
                 if transposeFromWrittenToSounding is not None:
                     m21Inst.transposition = transposeFromWrittenToSounding.reverse()
-            ss.m21Part.insert(0, m21Inst)
+            ss.m21Part.coreInsert(0, m21Inst)
+            ss.m21Part.coreElementsChanged()
 
         # short-circuit *clef with *oclef for **mens data
         if partStartTok.isMens:

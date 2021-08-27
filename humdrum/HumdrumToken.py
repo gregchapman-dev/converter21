@@ -54,6 +54,8 @@ def makeTag(string: str, num: int) -> str:
         return string + str(num)
     return string
 
+# We use conditionally defined attributes to implement property caching, so make pylint shut up about it
+# pylint: disable=attribute-defined-outside-init
 
 class HumdrumToken(HumHash):
     # phrase vs. slur

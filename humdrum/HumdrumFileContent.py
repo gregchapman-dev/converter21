@@ -11,7 +11,7 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import re
-import sys
+#import sys
 
 from humdrum import HumNum
 from humdrum import Convert
@@ -219,7 +219,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     def analyzeSlursOrPhrases(self, slurOrPhrase: str, spineDataType: str) -> bool:
         spineStarts: [HumdrumToken] = self.spineStartListOfType(spineDataType)
         if not spineStarts:
-            return
+            return True
 
         # labels: first is previous label, last is next label
         labels: [TokenPair] = [TokenPair(None, None)] * self.lineCount
