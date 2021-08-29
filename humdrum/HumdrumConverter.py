@@ -14,6 +14,7 @@ from music21 import converter
 from music21 import environment
 
 from humdrum import HumdrumFile
+# from humdrum import HumdrumWriter
 
 _MOD = 'converter21.HumdrumConverter'
 environLocal = environment.Environment(_MOD)
@@ -76,13 +77,19 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         self.humdrumFile = hf
         return self.stream
 
-    def write(self, obj, fmt, fp=None, subformats=None, **keywords):
+    # pylint: disable=arguments-differ
+    def write(self, obj, fmt, fp=None, subformats=None,
+                    makeNotation=True, addRecipSpine=False,
+                    **keywords):
         print("writing to krn file", file=sys.stderr)
 
         if fp is None:
             fp = environLocal.getTempFile('.krn')
 
+# Doesn't work yet, so don't call it yet.
 #         hdw = HumdrumWriter(obj)
+#         hdw.makeNotation = makeNotation
+#         hdw.addRecipSpine = addRecipSpine
 #         hdw.write(fp)
 
         return fp
