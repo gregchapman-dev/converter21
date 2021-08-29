@@ -13,8 +13,8 @@ import sys
 from music21 import converter
 from music21 import environment
 
-from humdrum import HumdrumFile
-# from humdrum import HumdrumWriter
+from converter21.humdrum import HumdrumFile
+# from converter21.humdrum import HumdrumWriter
 
 _MOD = 'converter21.HumdrumConverter'
 environLocal = environment.Environment(_MOD)

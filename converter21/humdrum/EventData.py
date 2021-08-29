@@ -14,9 +14,9 @@ import sys
 from typing import Union
 import music21 as m21
 
-from humdrum import HumNum
-from humdrum import M21Convert
-from humdrum import M21Utilities
+from converter21.humdrum import HumNum
+from converter21.humdrum import M21Convert
+from converter21.humdrum import M21Utilities
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

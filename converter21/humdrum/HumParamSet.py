@@ -18,7 +18,7 @@ class HumParamSet:
     // HumParamSet::HumParamSet --
     '''
     def __init__(self, token = None): # token can be HumdrumToken, or str, or None
-        from humdrum import HumdrumToken
+        from converter21.humdrum import HumdrumToken
         self._token: HumdrumToken = None
         self._ns1: str = ''
         self._ns2: str = ''

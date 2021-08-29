@@ -13,8 +13,8 @@
 import sys
 import re
 import math
-from humdrum import HumNum
-from humdrum import HumdrumInternalError
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumdrumInternalError
 
 class Convert:
 

@@ -1,7 +1,8 @@
 import pytest
 
 # The things we're testing
-from humdrum.HumSignifiers import *
+from converter21.humdrum import HumSignifiers
+from converter21.humdrum import HumSignifier
 
 from tests.Utilities import CheckHumSignifier, CheckHumSignifiers
 

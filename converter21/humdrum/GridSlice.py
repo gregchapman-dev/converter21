@@ -14,21 +14,21 @@
 import sys
 from typing import Union
 
-from humdrum import HumdrumInternalError
-from humdrum import HumNum
-from humdrum import HumdrumToken
-from humdrum import HumdrumLine
-from humdrum import HumdrumFile
+from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import HumdrumLine
+from converter21.humdrum import HumdrumFile
 
-from humdrum import SliceType
-from humdrum import GridSide
-from humdrum import GridVoice
-from humdrum import GridStaff
-from humdrum import GridPart
-from humdrum import GridMeasure
-from humdrum import HumGrid
+from converter21.humdrum import SliceType
+from converter21.humdrum import GridSide
+from converter21.humdrum import GridVoice
+from converter21.humdrum import GridStaff
+from converter21.humdrum import GridPart
+from converter21.humdrum import GridMeasure
+from converter21.humdrum import HumGrid
 
-from humdrum import ScoreData
+from converter21.humdrum import ScoreData
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

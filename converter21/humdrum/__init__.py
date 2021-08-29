@@ -1,7 +1,7 @@
 # ------------------------------------------------------------------------------
 # Name:          humdrum/__init__.py
-# Purpose:       Allows "from humdrum import HumdrumFile" et al instead
-#                of "from humdrum.HumdrumFile import HumdrumFile".
+# Purpose:       Allows "from converter21.humdrum import HumdrumFile" et al instead
+#                of "from converter21.humdrum.HumdrumFile import HumdrumFile".
 #
 # Authors:       Greg Chapman <gregc@mac.com>
 #                Humdrum code derived/translated from humlib (authored by
@@ -21,8 +21,8 @@ from .HumdrumToken import HumdrumToken
 from .M21Convert import M21Convert
 from .M21Utilities import M21Utilities
 from .HumdrumLine import HumdrumLine
-from .HumSignifiers import HumSignifiers
-from .HumdrumFileBase import HumdrumFileBase
+from .HumSignifiers import HumSignifiers, HumSignifier
+from .HumdrumFileBase import HumdrumFileBase, TokenPair
 from .HumdrumFileStructure import HumdrumFileStructure
 from .HumdrumFileContent import HumdrumFileContent
 from .HumdrumFile import HumdrumFile
@@ -42,5 +42,3 @@ from .HumdrumFile import HumdrumFile
 # from .GridMeasure import GridMeasure
 # from .HumGrid import HumGrid
 # from .HumdrumWriter import HumdrumWriter
-
-from .HumdrumConverter import HumdrumConverter

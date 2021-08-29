@@ -13,10 +13,10 @@
 import sys
 import re
 
-from humdrum import HumNum
-from humdrum import HumHash
-from humdrum import Convert
-from humdrum import HumdrumToken
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumHash
+from converter21.humdrum import Convert
+from converter21.humdrum import HumdrumToken
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -43,7 +43,7 @@ def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> (str, str):
 
 class HumdrumLine(HumHash):
     def __init__(self, line: str = '', ownerFile = None): # ownerFile: HumdrumFile
-        from humdrum import HumdrumFile
+        from converter21.humdrum import HumdrumFile
         super().__init__() # initialize the HumHash fields
 
         '''

@@ -21,7 +21,7 @@ if __name__ == '__main__':
         url='https://github.com/gregchapman-dev/converter21',
         license='BSD',
         python_requires='>=3.7',
-        description='music21-based converter tool with a new Humdrum converter',
+        description='music21-based score converter tool with a new Humdrum converter',
         long_description=open('README.md').read(),
         packages=setuptools.find_packages(),
         install_requires=[

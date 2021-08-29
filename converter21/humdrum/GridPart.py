@@ -14,8 +14,8 @@
 # ------------------------------------------------------------------------------
 import sys
 
-from humdrum import GridStaff
-from humdrum import GridSide
+from converter21.humdrum import GridStaff
+from converter21.humdrum import GridSide
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

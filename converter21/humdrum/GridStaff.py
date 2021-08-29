@@ -15,12 +15,12 @@
 # ------------------------------------------------------------------------------
 import sys
 
-from humdrum import HumdrumInternalError
-from humdrum import HumNum
-from humdrum import HumdrumToken
-from humdrum.GridCommon import SliceType
-from humdrum import GridVoice
-from humdrum import GridSide
+from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import SliceType
+from converter21.humdrum import GridVoice
+from converter21.humdrum import GridSide
 
 
 ### For debug or unit test print, a simple way to get a string which is the current function name

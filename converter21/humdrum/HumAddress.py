@@ -9,7 +9,7 @@
 # Copyright:     (c) 2021 Greg Chapman
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
-from humdrum import HumdrumSyntaxError
+from converter21.humdrum import HumdrumSyntaxError
 
 class HumAddress:
     def __init__(self):
@@ -229,7 +229,7 @@ class HumAddress:
         if self._dataTypeTokenCached:
             return self._dataTypeTokenCached
 
-        from humdrum import HumdrumToken
+        from converter21.humdrum import HumdrumToken
         if self.ownerLine is None:
             return HumdrumToken('')
 

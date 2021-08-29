@@ -19,9 +19,9 @@ from typing import Union
 from fractions import Fraction
 import music21 as m21
 
-from humdrum import HumNum
-from humdrum import HumdrumToken
-from humdrum import Convert
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import Convert
 
 class M21Convert:
     humdrumMensurationSymbolToM21TimeSignatureSymbol = {

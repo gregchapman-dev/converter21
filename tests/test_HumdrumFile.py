@@ -2,8 +2,9 @@ import pytest
 from pathlib import Path
 
 # The things we're testing
-from humdrum.HumdrumFileBase import *
-from humdrum.HumdrumFile import *
+from converter21.humdrum import HumdrumFileBase
+from converter21.humdrum import HumdrumFile
+from converter21.humdrum.HumdrumFileBase import getMergedSpineInfo
 
 
 # The check routine that every test calls at least once

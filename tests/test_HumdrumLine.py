@@ -1,7 +1,7 @@
 import pytest
 
 # The things we're testing
-from humdrum.HumdrumLine import *
+from converter21.humdrum import HumdrumLine
 
 # test utilities
 from tests.Utilities import *

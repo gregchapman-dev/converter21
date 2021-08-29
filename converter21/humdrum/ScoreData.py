@@ -15,8 +15,8 @@
 import sys
 import music21 as m21
 
-from humdrum import HumdrumInternalError
-from humdrum import PartData
+from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import PartData
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

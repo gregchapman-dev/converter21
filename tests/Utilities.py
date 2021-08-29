@@ -1,10 +1,13 @@
-from humdrum.HumHash import HumHash
-from humdrum.HumNum import HumNum
-from humdrum.HumAddress import HumAddress
-from humdrum.HumSignifiers import *
-from humdrum.HumdrumToken import HumdrumToken
-from humdrum.HumdrumLine import HumdrumLine
-from humdrum.HumdrumFile import HumdrumFile
+from converter21.humdrum import HumHash
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumAddress
+from converter21.humdrum import *
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import HumdrumLine
+from converter21.humdrum import HumdrumFile
+from converter21.humdrum import HumSignifier
+from converter21.humdrum import HumSignifiers
+
 from fractions import Fraction
 import random
 import json

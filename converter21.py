@@ -19,7 +19,7 @@ import sys
 
 from music21 import converter
 from music21.base import VERSION_STR
-from humdrum import HumdrumConverter
+from converter21 import HumdrumConverter
 
 def getInputFormatsList() -> [str]:
     c = converter.Converter()

@@ -13,11 +13,11 @@
 import re
 #import sys
 
-from humdrum import HumNum
-from humdrum import Convert
-from humdrum import HumdrumToken
-from humdrum import HumdrumFileStructure
-from humdrum.HumdrumFileBase import TokenPair
+from converter21.humdrum import HumNum
+from converter21.humdrum import Convert
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import HumdrumFileStructure
+from converter21.humdrum import TokenPair
 
 # spineColors array will contains slots for this many subtracks
 MAXCOLORSUBTRACK = 30

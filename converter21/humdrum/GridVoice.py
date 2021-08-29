@@ -17,9 +17,9 @@
 import sys
 from typing import Union
 
-from humdrum.HumExceptions import HumdrumInternalError
-from humdrum import HumNum
-from humdrum import HumdrumToken
+from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumdrumToken
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

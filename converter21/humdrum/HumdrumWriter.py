@@ -16,23 +16,23 @@ from collections import OrderedDict
 from typing import List, Tuple
 import music21 as m21
 
-from humdrum import HumdrumExportError
-from humdrum import HumNum
-from humdrum import M21Convert
+from converter21.humdrum import HumdrumExportError
+from converter21.humdrum import HumNum
+from converter21.humdrum import M21Convert
 
-from humdrum import EventData
-from humdrum import MeasureData, SimultaneousEvents
-from humdrum import ScoreData
+from converter21.humdrum import EventData
+from converter21.humdrum import MeasureData, SimultaneousEvents
+from converter21.humdrum import ScoreData
 
-from humdrum import GridStaff
-from humdrum import GridPart
-from humdrum import SliceType
-from humdrum import GridSlice
-from humdrum import GridMeasure
-from humdrum import HumGrid
+from converter21.humdrum import GridStaff
+from converter21.humdrum import GridPart
+from converter21.humdrum import SliceType
+from converter21.humdrum import GridSlice
+from converter21.humdrum import GridMeasure
+from converter21.humdrum import HumGrid
 
-from humdrum import HumdrumToken
-from humdrum import HumdrumFile
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import HumdrumFile
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

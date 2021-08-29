@@ -14,12 +14,12 @@
 import sys
 from operator import attrgetter
 
-from humdrum import HumNum
-from humdrum import Convert
-from humdrum import HumdrumToken
-from humdrum import HumdrumLine
-from humdrum import HumdrumFileBase
-from humdrum.HumdrumFileBase import TokenPair
+from converter21.humdrum import HumNum
+from converter21.humdrum import Convert
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import HumdrumLine
+from converter21.humdrum import HumdrumFileBase
+from converter21.humdrum import TokenPair
 
 class HumdrumFileStructure(HumdrumFileBase):
     # HumdrumFileStructure has no private data to initialize, just a bunch more functions

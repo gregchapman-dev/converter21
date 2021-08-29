@@ -21,17 +21,17 @@ import copy
 
 import music21 as m21
 
-from humdrum import HumdrumSyntaxError
-from humdrum import HumdrumInternalError
-from humdrum import HumdrumFileContent
-from humdrum import HumdrumLine
-from humdrum import HumdrumToken
-from humdrum import HumNum
-from humdrum import HumHash
-from humdrum import HumParamSet
-from humdrum import Convert
-from humdrum import M21Convert
-from humdrum import M21Utilities
+from converter21.humdrum import HumdrumSyntaxError
+from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import HumdrumFileContent
+from converter21.humdrum import HumdrumLine
+from converter21.humdrum import HumdrumToken
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumHash
+from converter21.humdrum import HumParamSet
+from converter21.humdrum import Convert
+from converter21.humdrum import M21Convert
+from converter21.humdrum import M21Utilities
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.

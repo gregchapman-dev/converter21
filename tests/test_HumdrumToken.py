@@ -1,9 +1,9 @@
 import pytest
 
 # The things we're testing
-from humdrum.HumdrumFile import HumdrumFile
-from humdrum.HumdrumLine import HumdrumLine
-from humdrum.HumdrumToken import *
+from converter21.humdrum import HumdrumFile
+from converter21.humdrum import HumdrumLine
+from converter21.humdrum import *
 
 # Test utilities
 from tests.Utilities import *

@@ -13,11 +13,11 @@
 import sys
 import re
 
-from humdrum import HumAddress
-from humdrum import HumNum
-from humdrum import HumHash
-from humdrum import HumParamSet
-from humdrum import Convert
+from converter21.humdrum import HumAddress
+from converter21.humdrum import HumNum
+from converter21.humdrum import HumHash
+from converter21.humdrum import HumParamSet
+from converter21.humdrum import Convert
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -705,7 +705,7 @@ class HumdrumToken(HumHash):
     '''
     @property
     def nextFieldToken(self): # -> HumdrumToken:
-        from humdrum import HumdrumLine
+        from converter21.humdrum import HumdrumLine
         self.ownerLine: HumdrumLine
         if self.ownerLine is None:
             return None

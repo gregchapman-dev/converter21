@@ -15,7 +15,7 @@ import sys
 from typing import Union
 import music21 as m21
 
-from humdrum import StaffData
+from converter21.humdrum import StaffData
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -30,7 +30,7 @@ class PartData:
     def __init__(self, partStaves: [Union[m21.stream.Part, m21.stream.PartStaff]],
                        ownerScore,
                        partIndex: int):
-        from humdrum import ScoreData
+        from converter21.humdrum import ScoreData
         ownerScore: ScoreData
         self.ownerScore = ownerScore
         self._partIndex = partIndex
