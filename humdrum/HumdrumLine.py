@@ -1165,14 +1165,11 @@ class HumdrumLine(HumHash):
 
         Q: shouldn't this also set ownerLine on the token? especially if it was a string
     '''
-    def appendToken(self, token, tabCount: int): # token can be HumdrumToken or str
-        if isinstance(token, HumdrumToken):
-            self._tokens.append(token)
-            self._numTabsAfterToken.append(tabCount)
-            return
+    def appendToken(self, token, tabCount: int = 0): # token can be HumdrumToken or str
         if isinstance(token, str):
-            self._tokens.append(HumdrumToken(token))
-            self._numTabsAfterToken.append(tabCount)
+            token = HumdrumToken(token)
+        self._tokens.append(token)
+        self._numTabsAfterToken.append(tabCount)
 
     '''
     //////////////////////////////

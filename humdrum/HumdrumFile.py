@@ -31,6 +31,7 @@ from humdrum import HumHash
 from humdrum import HumParamSet
 from humdrum import Convert
 from humdrum import M21Convert
+from humdrum import M21Utilities
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -3735,7 +3736,7 @@ class HumdrumFile(HumdrumFileContent):
         if infoHash:
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
-        note: m21.note.Note = M21Convert.createNote(spannerHolder)
+        note: m21.note.Note = M21Utilities.createNote(spannerHolder)
         if infoHash is not None and note is not None:
             infoHash.setValue('music21', 'generalNote', note)
 
@@ -3751,7 +3752,7 @@ class HumdrumFile(HumdrumFileContent):
         if infoHash:
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
-        unpitched: m21.note.Unpitched = M21Convert.createUnpitched(spannerHolder)
+        unpitched: m21.note.Unpitched = M21Utilities.createUnpitched(spannerHolder)
         if infoHash is not None and unpitched is not None:
             infoHash.setValue('music21', 'generalNote', unpitched)
 
@@ -3767,7 +3768,7 @@ class HumdrumFile(HumdrumFileContent):
         if infoHash:
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
-        chord: m21.chord.Chord = M21Convert.createChord(spannerHolder)
+        chord: m21.chord.Chord = M21Utilities.createChord(spannerHolder)
         if infoHash is not None and chord is not None:
             infoHash.setValue('music21', 'generalNote', chord)
 
@@ -3783,7 +3784,7 @@ class HumdrumFile(HumdrumFileContent):
         if infoHash:
             spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
 
-        rest: m21.note.Rest = M21Convert.createRest(spannerHolder)
+        rest: m21.note.Rest = M21Utilities.createRest(spannerHolder)
         if infoHash is not None and rest is not None:
             infoHash.setValue('music21', 'generalNote', rest)
 
@@ -4085,16 +4086,16 @@ class HumdrumFile(HumdrumFileContent):
         pass
 
     '''
-        _positionRestVertically: uses the style.absoluteY value which was
+        _positionRestVertically: uses the stepShift value which was
             computed by HumdrumFileContent.analyzeRestPositions
     '''
     @staticmethod
     def _positionRestVertically(rest: m21.note.Rest, token: HumdrumToken):
         # I don't use getValueInt here because the default is 0, and I
-        # need the default to be "don't set rest.style.absoluteY at all" --gregc
-        absoluteYStr: str = token.getValue('auto', 'absoluteY')
-        if absoluteYStr:
-            rest.style.absoluteY = int(absoluteYStr)
+        # need the default to be "don't set rest.stepShift at all" --gregc
+        stepShiftStr: str = token.getValue('auto', 'stepShift')
+        if stepShiftStr:
+            rest.stepShift = int(stepShiftStr)
 
     '''
         _processNoteLayerToken
@@ -6387,8 +6388,8 @@ class HumdrumFile(HumdrumFileContent):
             isSic = True
 
         # convert to HPS input value in the future:
-        typeValue: str = token.getLayoutParameter('TX', 'type')
-        if typeValue:
+        _typeValue: str = token.getLayoutParameter('TX', 'type')
+        if _typeValue:
             pass # appendType(direction, typeValue)
 
         if direction:
@@ -6505,7 +6506,7 @@ class HumdrumFile(HumdrumFileContent):
             return metronomeMark
 
         # at least one of tempoName, noteName, and bpmText are present
-        mmReferent: m21.duration.Duration = self._noteNameToDuration(noteName)
+        mmReferent: m21.duration.Duration = M21Convert.durationFromHumdrumTempoNoteName(noteName)
         mmText: str = tempoName
         if mmText and (mmText[-1] == '(' or mmText[-1] == '['):
             mmText = mmText[0:-1]
@@ -6528,60 +6529,6 @@ class HumdrumFile(HumdrumFileContent):
         if mmNumber is not None or mmText is not None or mmReferent is not None:
             metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText, referent=mmReferent)
         return metronomeMark
-
-    @staticmethod
-    def _noteNameToDuration(noteName: str) -> m21.duration.Duration:
-        if not noteName:
-            return None
-
-        if noteName[0] == '[' and noteName[-1] == ']':
-            noteName = noteName[1:-1]
-
-        # remove styling qualifiers
-        noteName = noteName.split('|', 1)[0] # splits at first '|' only, or not at all
-
-        # generating rhythmic note with optional "-dot" after it.
-        dots: bool = 0
-        if re.search('-dot$', noteName):
-            dots = 1
-            noteName = noteName[0:-4]
-
-        if noteName in ('quarter', '4'):
-            return m21.duration.Duration(type='quarter', dots=dots)
-        if noteName in ('half', '2'):
-            return m21.duration.Duration(type='half', dots=dots)
-        if noteName in ('whole', '1'):
-            return m21.duration.Duration(type='whole', dots=dots)
-        if noteName in ('breve', 'double-whole', '0'):
-            return m21.duration.Duration(type='breve', dots=dots)
-        if noteName in ('eighth', '8', '8th'):
-            return m21.duration.Duration(type='eighth', dots=dots)
-        if noteName in ('sixteenth', '16', '16th'):
-            return m21.duration.Duration(type='16th', dots=dots)
-        if noteName in ('32', '32nd'):
-            return m21.duration.Duration(type='32nd', dots=dots)
-        if noteName in ('64', '64th'):
-            return m21.duration.Duration(type='64th', dots=dots)
-        if noteName in ('128', '128th'):
-            return m21.duration.Duration(type='128th', dots=dots)
-        if noteName in ('256', '256th'):
-            return m21.duration.Duration(type='256th', dots=dots)
-        if noteName in ('512', '512th'):
-            return m21.duration.Duration(type='512th', dots=dots)
-        if noteName in ('1024', '1024th'):
-            return m21.duration.Duration(type='1024th', dots=dots)
-
-        # the following are not supported by the C++ code, but seem reasonable, given music21's support
-        if noteName in ('2048', '2048th'):
-            return m21.duration.Duration(type='2048th', dots=dots)
-        if noteName in ('longa', '00'):
-            return m21.duration.Duration(type='longa', dots=dots)
-        if noteName in ('maxima', '000'):
-            return m21.duration.Duration(type='maxima', dots=dots)
-        if noteName in ('duplex-maxima', '0000'):
-            return m21.duration.Duration(type='duplex-maxima', dots=dots)
-
-        return None
 
     '''
     //////////////////////////////
@@ -7364,13 +7311,10 @@ class HumdrumFile(HumdrumFileContent):
             staffGroup.name = commonInstrument.instrumentName
             staffGroup.abbreviation = commonInstrument.instrumentAbbreviation
 
-            # Maybe hide or remove the instruments in the Parts?
-            # We need to leave the instruments in place, and style.hideOnPrint
-            # doesn't do anything.  So we set the name/abbrev to ''.
+            # Hide the instruments when printing, or they'll print on each staff
+            # of the group, too.
             for part, instrument in partsAndInstruments:
-                instrument.instrumentName = ''
-                instrument.instrumentAbbreviation = ''
-
+                instrument.style.hideObjectOnPrint = True
 
     '''
     //////////////////////////////

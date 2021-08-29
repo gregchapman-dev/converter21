@@ -731,7 +731,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     //     a rest and convert to ploc/oloc values.
 
         Instead of ploc and oloc for MEI (which humlib does), compute and save what the
-        absoluteY for music21 should be.
+        stepShift for a music21 rest should be.
     '''
     @staticmethod
     def _checkRestForVerticalPositioning(rest: HumdrumToken, baseline: int) -> bool:
@@ -751,16 +751,14 @@ class HumdrumFileContent(HumdrumFileStructure):
                 b7 += 1
 
         # Instead of ploc and oloc for MEI (which humlib does), compute and save what the
-        # absoluteY for music21 should be.
-        # absoluteY = 0 means "on the top line", -5 means "in the top space", -10 means
-        # "on the second line", etc.  Leger lines can be used as well: absoluteY = 10
-        # means "on the first leger line above the staff".
-        # baseline is the base7 pitch of the lowest line in the staff -> absoluteY = -40
+        # stepShift for a music21 rest should be.
+        # stepShift = 0 means "on the middle line", -1 means "in the first space below the
+        # midline", +2 means "on the line above the midline", etc.
+        # baseline is the base7 pitch of the lowest line in the staff -> stepShift = -4
         # b7 is the base7 pitch (including octave) of where the rest should go, so:
-        topline: int = baseline + 8 # topline is 4 spaces + 4 lines (8 diatonic steps) above baseline
-        absoluteY = (b7 - topline) * 5 # 5 for each diatonic step because 10 for each line
-
-        rest.setValue('auto', 'absoluteY', str(absoluteY))
+        midline: int = baseline + 4 # midline is 2 spaces + 2 lines (4 diatonic steps) above baseline
+        stepShift: int = b7 - midline
+        rest.setValue('auto', 'stepShift', str(stepShift))
 
         return True
 

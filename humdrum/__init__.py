@@ -11,7 +11,7 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 
-from .HumExceptions import HumdrumInternalError, HumdrumSyntaxError
+from .HumExceptions import HumdrumInternalError, HumdrumSyntaxError, HumdrumExportError
 from .HumNum import HumNum
 from .Convert import Convert
 from .HumAddress import HumAddress
@@ -19,6 +19,7 @@ from .HumHash import HumHash
 from .HumParamSet import HumParamSet
 from .HumdrumToken import HumdrumToken
 from .M21Convert import M21Convert
+from .M21Utilities import M21Utilities
 from .HumdrumLine import HumdrumLine
 from .HumSignifiers import HumSignifiers
 from .HumdrumFileBase import HumdrumFileBase

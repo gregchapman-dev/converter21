@@ -14,6 +14,7 @@ import sys
 import re
 import math
 from humdrum import HumNum
+from humdrum import HumdrumInternalError
 
 class Convert:
 
@@ -1003,6 +1004,92 @@ class Convert:
     '''
     //////////////////////////////
     //
+    // Convert::base7ToBase40 -- Convert a base7 value to a base-40 value
+    //   (without accidentals).  Negative values are not allowed, but not
+    //   checked for.
+    '''
+    @staticmethod
+    def base7ToBase40(base7: int) -> int:
+        octave: int = base7 / 7
+        b7pc: int = base7 % 7
+        b40pc: int = 0
+
+        if b7pc == 0:
+            b40pc = 0 # C
+        elif b7pc == 1:
+            b40pc = 6 # D
+        elif b7pc == 2:
+            b40pc = 12 # E
+        elif b7pc == 3:
+            b40pc = 17 # F
+        elif b7pc == 4:
+            b40pc = 23 # G
+        elif b7pc == 5:
+            b40pc = 29 # A
+        elif b7pc == 6:
+            b40pc = 35 # B
+
+        return (octave * 40) + 2 + b40pc # +2, I assume, because 0 is C-double-flat --gregc
+
+    '''
+    //////////////////////////////
+    //
+    // Convert::base40ToKern -- Convert Base-40 integer pitches into
+    //   **kern pitch representation.
+    '''
+    @staticmethod
+    def base40ToKern(b40: int) -> str:
+        octave: int = b40 / 40
+        accidental: int = Convert.base40ToAccidental(b40)
+        diatonic: int = Convert.base40ToDiatonic(b40) % 7
+        base: str = 'a'
+        if diatonic == 0:
+            base = 'c'
+        elif diatonic == 1:
+            base = 'd'
+        elif diatonic == 2:
+            base = 'e'
+        elif diatonic == 3:
+            base = 'f'
+        elif diatonic == 4:
+            base = 'g'
+        elif diatonic == 5:
+            base = 'a'
+        elif diatonic == 6:
+            base = 'b'
+
+        if octave < 4:
+            base = base.upper()
+
+        repeat: int = 0
+        if octave < 4:
+            repeat = octave - 4
+        elif octave < 3:
+            repeat = 3 - octave
+
+        if repeat > 12:
+            raise HumdrumInternalError('Error: unreasonable octave value: {} for {}'.format(octave, b40))
+
+        output: str = base * repeat
+        if accidental > 0:
+            output += '#' * accidental
+        elif accidental < 0:
+            output += '-' * -accidental
+
+        return output
+
+    '''
+        base7ToKern -- Convert a base-7 integer to a **kern pitch
+    '''
+    @staticmethod
+    def base7ToKern(base7: int) -> str:
+        base40: int = Convert.base7ToBase40(base7)
+        output: str = Convert.base40ToKern(base40)
+        return output
+
+    '''
+    //////////////////////////////
+    //
     // Convert::base40ToDiatonic -- find the diatonic pitch of the
     //   given base-40 pitch.  Output pitch classes: 0=C, 1=D, 2=E,
     //   3=F, 4=G, 5=A, 6=B.  To this the diatonic octave is added.
@@ -1036,6 +1123,103 @@ class Convert:
 
         # found an empty slot, so return rest:
         return -1
+
+    '''
+    //////////////////////////////
+    //
+    // Convert::base40ToAccidental -- +1 = 1 sharp, +2 = double sharp, 0 = natural
+    //	-1 = 1 flat, -2 = double flat
+    '''
+    @staticmethod
+    def base40ToAccidental(b40: int) -> int:
+        if b40 < 0:
+            # not considering low pitches.  If so then the mod operator
+            # below would need fixing.
+            return 0
+
+        b40pc: int = b40 % 40 # get rid of octave
+        if b40pc == 0:
+            return -2       # C-double-flat
+        if b40pc == 1:
+            return -1       # C-flat
+        if b40pc == 2:
+            return 0        # C
+        if b40pc == 3:
+            return 1        # C-sharp
+        if b40pc == 4:
+            return 2        # C-double-sharp
+        if b40pc == 5:
+            return 1000     # no note for this b40pc
+        if b40pc == 6:
+            return -2
+        if b40pc == 7:
+            return -1
+        if b40pc == 8:
+            return 0        # D
+        if b40pc == 9:
+            return 1
+        if b40pc == 10:
+            return 2
+        if b40pc == 11:
+            return 1000     # no note for this b40pc
+        if b40pc == 12:
+            return -2
+        if b40pc == 13:
+            return -1
+        if b40pc == 14:
+            return 0        # E
+        if b40pc == 15:
+            return 1
+        if b40pc == 16:
+            return 2
+        if b40pc == 17:
+            return -2
+        if b40pc == 18:
+            return -1
+        if b40pc == 19:
+            return 0        # F
+        if b40pc == 20:
+            return 1
+        if b40pc == 21:
+            return 2
+        if b40pc == 22:
+            return 1000     # no note for this b40pc
+        if b40pc == 23:
+            return -2
+        if b40pc == 24:
+            return -1
+        if b40pc == 25:
+            return 0        # G
+        if b40pc == 26:
+            return 1
+        if b40pc == 27:
+            return 2
+        if b40pc == 28:
+            return 1000     # no note for this b40pc
+        if b40pc == 29:
+            return -2
+        if b40pc == 30:
+            return -1
+        if b40pc == 31:
+            return 0        # A
+        if b40pc == 32:
+            return 1
+        if b40pc == 33:
+            return 2
+        if b40pc == 34:
+            return 1000     # no note for this b40pc
+        if b40pc == 35:
+            return -2
+        if b40pc == 36:
+            return -1
+        if b40pc == 37:
+            return 0        # B
+        if b40pc == 38:
+            return 1
+        if b40pc == 39:
+            return 2
+
+        return 0
 
     '''
         Math stuff
