@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Name:          converter.py
+# Name:          convertscore.py
 # Purpose:       Command-line app to convert from any music file format to any another,
 #                using music21's converter architecture.  Replaces music21's built-in
 #                humdrum subconverter with ours, prior to doing any conversion.

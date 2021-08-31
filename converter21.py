@@ -92,6 +92,10 @@ def getOutputExtensionsListForFormat(form: str) -> [str]:
 '''
     main entry point (parse arguments and do conversion)
 '''
+
+# print warning about using converter21.py (it's going away soon)
+print('DANGER, WILL ROBINSON!!! converter21/converter21.py is going away soon, please use converter21/convertscore.py instead.', file=sys.stderr)
+
 # unregister built-in Humdrum converter, and replace with our better one
 converter.unregisterSubconverter(converter.subConverters.ConverterHumdrum)
 converter.registerSubconverter(HumdrumConverter)
