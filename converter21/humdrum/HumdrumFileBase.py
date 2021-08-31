@@ -546,8 +546,8 @@ class HumdrumFileBase(HumHash):
             return self.isValid
         if not self.analyzeTracks():
             return self.isValid
-#         if not self.fixupKernRecipOnlyTokens(): # this was working around bad content
-#             return self.isValid
+        if not self.fixupKernRecipOnlyTokens():
+            return self.isValid
         return self.isValid
 
     '''
@@ -558,7 +558,7 @@ class HumdrumFileBase(HumHash):
         are actually annotated in other humdrum staffs.  iohumdrum.cpp
         just ignores these, but while that might work for MEI and/or
         verovio, music21 gets very confused if those "rests" are missing
-        from a measure.  Here, we fix this up by converting them to
+        from a measure/voice.  Here, we fix this up by converting them to
         invisible rests.
     '''
     def fixupKernRecipOnlyTokens(self) -> bool:
