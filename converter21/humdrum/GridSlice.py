@@ -25,8 +25,10 @@ from converter21.humdrum import GridSide
 from converter21.humdrum import GridVoice
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridPart
-from converter21.humdrum import GridMeasure
-from converter21.humdrum import HumGrid
+
+# you can't import these here, or the import recursion will cause really weird issues
+#from converter21.humdrum import GridMeasure
+#from converter21.humdrum import HumGrid
 
 from converter21.humdrum import ScoreData
 
@@ -40,18 +42,21 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class GridSlice:
-    def __init__(self, measure: GridMeasure, timestamp: HumNum, sliceType: SliceType,
-                       partCount: int = 0, oldSlice = None):
+    def __init__(self, ownerMeasure, timestamp: HumNum, sliceType: SliceType,
+                       partCount: int = 0, fromSlice = None):
+        from converter21.humdrum import GridMeasure
+        from converter21.humdrum import HumGrid
+        ownerMeasure: GridMeasure
         self._timestamp: HumNum = timestamp
         self._type: SliceType = sliceType
         self._ownerGrid: HumGrid = None
         self._measure: GridMeasure = None # enclosing measure
-        if measure:
-            self._ownerGrid = measure.ownerGrid   # measure's enclosing grid
-            self._measure = measure
+        if ownerMeasure:
+            self._ownerGrid = ownerMeasure.ownerGrid   # measure's enclosing grid
+            self._measure = ownerMeasure
 
         self.parts: [GridPart] = []
-        if oldSlice is None:
+        if fromSlice is None:
             # GridSlice::GridSlice -- Constructor.  If partcount is positive, then
             #    allocate the desired number of parts (still have to allocate staves
             #    in part before using).
@@ -64,18 +69,18 @@ class GridSlice:
                 staff.voices.append(voice)
         else:
             # This constructor allocates the matching part and staff count of the
-            # input oldSlice parameter.  There will be no GridVoices allocated inside
+            # input fromSlice parameter.  There will be no GridVoices allocated inside
             # the GridStaffs (they will be required to have at least one).
-            for oldPart in oldSlice.parts:
+            for fromPart in fromSlice.parts:
                 part = GridPart()
                 self.parts.append(part)
-                for _ in oldPart.staves:
+                for _ in fromPart.staves:
                     staff = GridStaff()
                     part.staves.append(staff)
                     # don't create voices here
 
     def __str__(self) -> str:
-        output: str = 'TS=' + self.timestamp + ' '
+        output: str = f'TS={self.timestamp} '
 
         for p, part in enumerate(self.parts):
             output += '(p' + str(p) + ':)'
@@ -102,10 +107,10 @@ class GridSlice:
                         output += voice.token.text
 
                 # staff side
-                output += ' sside:' + str(staff.side)
+                output += ' sside:' + str(staff.sides)
 
             # part side
-            output += ' pside:' + str(part.side)
+            output += ' pside:' + str(part.sides)
 
         return output
 
@@ -342,22 +347,23 @@ class GridSlice:
                     token = None
 
         # extract the Tokens from each part/staff
-        for p, part in enumerate(reversed(self.parts)):
+        for p in range(len(self.parts)-1, -1, -1):
+            part = self.parts[p]
             if not self.hasSpines and p != 0:
                 continue
-            for s, staff in enumerate(reversed(part.staves)):
+            for s in range(len(part.staves)-1, -1, -1):
+                staff = part.staves[s]
                 if not self.hasSpines and s != 0:
                     continue
                 if len(staff.voices) == 0:
-                    # LATER: fix this later.  For now if there are no notes
-                    # LATER: ... on the staff, add a null token.  Fix so that
-                    # LATER: ... all open voices are given null tokens.
+                    # 888: fix this later.  For now if there are no notes
+                    # 888: ... on the staff, add a null token.  Fix so that
+                    # 888: ... all open voices are given null tokens.
                     line.appendToken(HumdrumToken(emptyStr))
                 else:
                     for voice in reversed(staff.voices):
                         if voice is not None and voice.token is not None:
                             line.appendToken(voice.token)
-                            voice.forgetToken()
                         else:
                             line.appendToken(HumdrumToken(emptyStr))
 
@@ -366,24 +372,19 @@ class GridSlice:
                     continue
 
                 maxxcount: int = self.getXmlIdCount(p, s)
+                maxdcount: int = self.getDynamicsCount(p, s)
                 maxvcount: int = self.getVerseCount(p, s)
-                maxhcount: int = self.getHarmonyCount(p, s)
-                maxfcount: int = self.getFiguredBassCount(p, s)
                 self.transferSidesFromStaff(line, staff, emptyStr,
-                                   maxxcount, maxvcount, maxhcount, maxfcount)
+                                   maxxcount, maxdcount, maxvcount)
 
             if not self.hasSpines:
                 # Don't add sides to non-spined lines
                 continue
 
-            maxxcount: int = self.getXmlIdCount(p)
-            maxvcount: int = self.getVerseCount(p)
-            maxhcount: int = self.getHarmonyCount(p, -1)
-            maxdcount: int = self.getDynamicsCount(p)
+            maxhcount: int = self.getHarmonyCount(p)
             maxfcount: int = self.getFiguredBassCount(p)
-            self.transferSidesFromPart(line, part, p, emptyStr,
-                               maxxcount, maxvcount, maxhcount,
-                               maxdcount, maxfcount)
+            self.transferSidesFromPart(line, part, emptyStr,
+                               maxhcount, maxfcount)
 
         outFile.appendLine(line)
 
@@ -405,11 +406,12 @@ class GridSlice:
     // GridSlice::getVerseCount --
     '''
     def getVerseCount(self, partIndex: int, staffIndex: int = -1) -> int:
+        from converter21.humdrum import HumGrid
         grid: HumGrid = self.ownerGrid
         if grid is None:
             return 0
 
-        return grid.getVerseCount(partIndex, staffIndex)
+        return grid.verseCount(partIndex, staffIndex)
 
     '''
     //////////////////////////////
@@ -419,6 +421,7 @@ class GridSlice:
     //        harmony data attached directly to staff (only to part.)
     '''
     def getHarmonyCount(self, partIndex: int, staffIndex: int = -1) -> int:
+        from converter21.humdrum import HumGrid
         grid: HumGrid = self.ownerGrid
         if grid is None:
             return 0
@@ -427,21 +430,22 @@ class GridSlice:
             # ignoring staff-level harmony
             return 0
 
-        return grid.getHarmonyCount(partIndex)
+        return grid.harmonyCount(partIndex)
 
     '''
     //////////////////////////////
     //
     // GridSlice::getXmlidCount --
     //    default value: staffindex = -1; (currently not looking for
-    //        harmony data attached directly to staff (only to part.)
+    //        xmlid attached directly to staff (only to part.)
     '''
     def getXmlIdCount(self, partIndex: int, _unusedstaffIndex: int = -1) -> int:
+        from converter21.humdrum import HumGrid
         grid: HumGrid = self.ownerGrid
         if grid is None:
             return 0
         # should probably adjust to staffindex later:
-        return grid.getXmlIdCount(partIndex)
+        return grid.xmlIdCount(partIndex)
 
     '''
     //////////////////////////////
@@ -449,15 +453,12 @@ class GridSlice:
     // GridSlice::getDynamicsCount -- Return 0 if no dynamics, otherwise typically returns 1.
     '''
     def getDynamicsCount(self, partIndex: int, staffIndex: int = -1) -> int:
+        from converter21.humdrum import HumGrid
         grid: HumGrid = self.ownerGrid
         if grid is None:
             return 0
 
-        if staffIndex >= 0:
-            # ignoring staff-level dynamics
-            return 0
-
-        return grid.getDynamicsCount(partIndex)
+        return grid.dynamicsCount(partIndex, staffIndex)
 
     '''
     //////////////////////////////
@@ -466,6 +467,7 @@ class GridSlice:
     //     typically returns 1.
     '''
     def getFiguredBassCount(self, partIndex: int, staffIndex: int = -1) -> int:
+        from converter21.humdrum import HumGrid
         grid: HumGrid = self.ownerGrid
         if grid is None:
             return 0
@@ -474,7 +476,7 @@ class GridSlice:
             # ignoring staff-level figured bass
             return 0
 
-        return grid.getFiguredBassCount(partIndex)
+        return grid.figuredBassCount(partIndex)
 
     '''
     //////////////////////////////
@@ -484,88 +486,50 @@ class GridSlice:
 
     # this version is used to transfer Sides from the Part
     @staticmethod
-    def transferSidesFromPart(line: HumdrumLine, part: GridPart, _unusedpartIndex: int,
-                              emptyStr: str, _unusedmaxxcount: int, maxvcount: int,
-                              maxhcount: int, maxdcount: int, maxfcount: int):
+    def transferSidesFromPart(line: HumdrumLine, part: GridPart, emptyStr: str,
+                              maxhcount: int, maxfcount: int):
         sides: GridSide = part.sides
-        xcount: int = sides.xmlIdCount
         hcount: int = sides.harmonyCount
-        vcount: int = sides.verseCount
-
-        # XMLID
-        if xcount > 0:
-            xmlId: HumdrumToken = sides.xmlId
-            if xmlId is not None:
-                line.appendToken(xmlId)
-                sides.xmlId = None
-            else:
-                line.appendToken(HumdrumToken(emptyStr))
-
-        # VERSES
-        for i in range(0, vcount):
-            verse: HumdrumToken = sides.getVerse(i)
-            if verse is not None:
-                line.appendToken(verse)
-                sides.setVerse(i, None) # BUG: was sides.detachHarmony
-            else:
-                line.appendToken(HumdrumToken(emptyStr))
-
-        for i in range(vcount, maxvcount):
-            line.appendToken(HumdrumToken(emptyStr))
-
-        # DYNAMICS
-        if maxdcount > 0:
-            dynamics: HumdrumToken = sides.dynamics
-            if dynamics is not None:
-                line.appendToken(dynamics)
-                sides.dynamics = None
-            else:
-                line.appendToken(HumdrumToken(emptyStr))
 
         # FIGURED BASS
         if maxfcount > 0:
             figuredBass: HumdrumToken = sides.figuredBass
             if figuredBass is not None:
                 line.appendToken(figuredBass)
-                sides.figuredBass = None
             else:
                 line.appendToken(HumdrumToken(emptyStr))
 
         # HARMONY
-        for i in range(0, hcount):
+        for _ in range(0, hcount):
             harmony: HumdrumToken = sides.harmony
             if harmony is not None:
                 line.appendToken(harmony)
-                sides.harmony = None
             else:
                 line.appendToken(HumdrumToken(emptyStr))
 
-        for i in range(hcount, maxhcount):
+        for _ in range(hcount, maxhcount):
             line.appendToken(HumdrumToken(emptyStr))
 
     # this version is used to transfer Sides from the Staff
     @staticmethod
     def transferSidesFromStaff(line: HumdrumLine, staff: GridStaff, emptyStr: str,
-                               maxxcount: int, maxvcount: int,
-                               _unusedmaxhcount: int, maxfcount: int):
+                               maxxcount: int, maxdcount: int, maxvcount: int):
         sides: GridSide = staff.sides
-
-        # existing verses:
         vcount: int = sides.verseCount
-
-        # xcount: int = sides.xmlIdCount
-        fcount: int = sides.figuredBassCount
-
-        # there should not be any harmony attached to staves
-        # (only to parts, so hcount should only be zero):
-        hcount: int = sides.harmonyCount
 
         # XMLID
         if maxxcount > 0:
             xmlId: HumdrumToken = sides.xmlId
             if xmlId is not None:
                 line.appendToken(xmlId)
-                sides.xmlId = None
+            else:
+                line.appendToken(HumdrumToken(emptyStr))
+
+        # DYNAMICS
+        if maxdcount > 0:
+            dynamics: HumdrumToken = sides.dynamics
+            if dynamics is not None:
+                line.appendToken(dynamics)
             else:
                 line.appendToken(HumdrumToken(emptyStr))
 
@@ -574,32 +538,10 @@ class GridSlice:
             verse: HumdrumToken = sides.getVerse(i)
             if verse is not None:
                 line.appendToken(verse)
-                sides.setVerse(i, None)
             else:
                 line.appendToken(HumdrumToken(emptyStr))
 
         for i in range(vcount, maxvcount):
-            line.appendToken(HumdrumToken(emptyStr))
-
-        # HARMONY
-        for i in range(0, hcount):
-            harmony: HumdrumToken = sides.harmony
-            if harmony is not None:
-                line.appendToken(harmony)
-                sides.harmony = None
-            else:
-                line.appendToken(HumdrumToken(emptyStr))
-
-        # FIGURED BASS
-        for i in range(0, fcount):
-            figuredBass: HumdrumToken = sides.figuredBass
-            if figuredBass is not None:
-                line.appendToken(figuredBass)
-                sides.figuredBass = None
-            else:
-                line.appendToken(HumdrumToken(emptyStr))
-
-        for i in range(fcount, maxfcount):
             line.appendToken(HumdrumToken(emptyStr))
 
     '''
@@ -696,7 +638,7 @@ class GridSlice:
     // GridSlice::setOwner --
     '''
     @property
-    def ownerGrid(self) -> HumGrid:
+    def ownerGrid(self): # -> HumGrid:
         return self._ownerGrid
 
     '''
@@ -705,7 +647,7 @@ class GridSlice:
     // GridSlice::getOwner --
     '''
     @ownerGrid.setter
-    def ownerGrid(self, newOwnerGrid: HumGrid):
+    def ownerGrid(self, newOwnerGrid):
         self._ownerGrid = newOwnerGrid
 
     '''
@@ -714,7 +656,7 @@ class GridSlice:
     // GridSlice::getMeasure --
     '''
     @property
-    def measure(self) -> GridMeasure:
+    def measure(self): # -> GridMeasure:
         return self._measure
 
     '''

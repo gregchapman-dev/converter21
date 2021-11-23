@@ -11,13 +11,10 @@
 # ------------------------------------------------------------------------------
 import sys
 from music21 import converter
-from music21 import environment
+from music21 import common
 
 from converter21.humdrum import HumdrumFile
-# from converter21.humdrum import HumdrumWriter
-
-_MOD = 'converter21.HumdrumConverter'
-environLocal = environment.Environment(_MOD)
+from converter21.humdrum import HumdrumWriter
 
 class HumdrumConverter(converter.subConverters.SubConverter):
     '''
@@ -81,15 +78,19 @@ class HumdrumConverter(converter.subConverters.SubConverter):
     def write(self, obj, fmt, fp=None, subformats=None,
                     makeNotation=True, addRecipSpine=False,
                     **keywords):
-        print("writing to krn file", file=sys.stderr)
-
         if fp is None:
-            fp = environLocal.getTempFile('.krn')
+            fp = self.getTemporaryFile()
+        else:
+            fp = common.cleanpath(fp, returnPathlib=True)
 
-# Doesn't work yet, so don't call it yet.
-#         hdw = HumdrumWriter(obj)
-#         hdw.makeNotation = makeNotation
-#         hdw.addRecipSpine = addRecipSpine
-#         hdw.write(fp)
+        if not fp.suffix:
+            fp = fp.with_suffix('.krn')
+
+        hdw = HumdrumWriter(obj)
+        hdw.makeNotation = makeNotation
+        hdw.addRecipSpine = addRecipSpine
+
+        with open(fp, 'w') as f:
+            hdw.write(f)
 
         return fp

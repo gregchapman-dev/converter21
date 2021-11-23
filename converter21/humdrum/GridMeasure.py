@@ -13,21 +13,24 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+from typing import List
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum
 from converter21.humdrum import HumdrumToken
-from converter21.humdrum import HumdrumLine
+#from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumFile
 
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import SliceType
-#from converter21.humdrum import GridVoice
+from converter21.humdrum import GridVoice
 #from converter21.humdrum import GridSide
-#from converter21.humdrum import GridStaff
+from converter21.humdrum import GridStaff
 #from converter21.humdrum import GridPart
 from converter21.humdrum import GridSlice
-from converter21.humdrum import HumGrid
+
+# you can't import this here, because the recursive import causes very weird issues.
+#from converter21.humdrum import HumGrid
 
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
@@ -40,17 +43,21 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class GridMeasure:
-    def __init__(self, ownerGrid: HumGrid):
-        self._ownerGrid = ownerGrid
+    def __init__(self, ownerGrid):
+        from converter21.humdrum import HumGrid
+        ownerGrid: HumGrid
+        self._ownerGrid: HumGrid = ownerGrid
         self.slices: [GridSlice] = []
-        self._timestamp: HumNum = HumNum(-1)
-        self._duration: HumNum = HumNum(-1)
-        self._timeSigDur: HumNum = HumNum(-1)
-        self._measureStyle: MeasureStyle = MeasureStyle.Plain
-        self._barNum: int = -1
+        self.timestamp: HumNum = HumNum(-1)
+        self.duration: HumNum = HumNum(-1)
+        self.timeSigDur: HumNum = HumNum(-1)
+        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.measureStyle: MeasureStyle = MeasureStyle.Regular
+        self.measureNumberString: str = ''
 
     def __str__(self) -> str:
-        output: str = ''
+        output: str = f'MEASURE({self.measureNumberString}):'
         for gridSlice in self.slices:
             output += str(gridSlice) + '\n'
         return output
@@ -348,26 +355,27 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addLabelToken(self, tok: str, timestamp: HumNum,
-                      part: int, _staff: int, voice: int, maxPart: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int,
+                      maxPart: int) -> GridSlice:
         gs: GridSlice = None
         if not self.slices or self.slices[-1].timestamp < timestamp:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
             gs = GridSlice(self, timestamp, SliceType.Labels, maxPart)
-            gs.addToken(tok, part, maxStaff-1, voice)
+            gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
         # search for existing line with same timestamp and the same slice type
         for gridSlice in self.slices:
             if gridSlice.timestamp == timestamp and gridSlice.isLabelSlice:
-                gridSlice.addToken(tok, part, maxStaff-1, voice)
+                gridSlice.addToken(tok, part, staff, voice)
                 gs = gridSlice
                 return gs
 
         # Couldn't find a place for the label, so place at beginning of measure
         gs = GridSlice(self, timestamp, SliceType.Labels, maxPart)
-        gs.addToken(tok, part, maxStaff-1, voice)
+        gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
 
@@ -379,26 +387,27 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addLabelAbbrToken(self, tok: str, timestamp: HumNum,
-                      part: int, _staff: int, voice: int, maxPart: int, maxStaff: int) -> GridSlice:
+                          part: int, staff: int, voice: int,
+                          maxPart: int) -> GridSlice:
         gs: GridSlice = None
         if not self.slices or self.slices[-1].timestamp < timestamp:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
             gs = GridSlice(self, timestamp, SliceType.LabelAbbrs, maxPart)
-            gs.addToken(tok, part, maxStaff-1, voice)
+            gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
         # search for existing line with same timestamp and the same slice type
         for gridSlice in self.slices:
             if gridSlice.timestamp == timestamp and gridSlice.isLabelAbbrSlice:
-                gridSlice.addToken(tok, part, maxStaff-1, voice)
+                gridSlice.addToken(tok, part, staff, voice)
                 gs = gridSlice
                 return gs
 
         # Couldn't find a place for the label abbr, so place at beginning of measure
         gs = GridSlice(self, timestamp, SliceType.LabelAbbrs, maxPart)
-        gs.addToken(tok, part, maxStaff-1, voice)
+        gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
 
@@ -452,9 +461,8 @@ class GridMeasure:
     //////////////////////////////
     //
     // GridMeasure::transferTokens --
-    //    default value: startbarnum = 0
     '''
-    def transferTokens(self, outFile: HumdrumFile, recip: bool, addBar: bool, startBarNum: int = 0) -> bool:
+    def transferTokens(self, outFile: HumdrumFile, recip: bool, firstBar: bool=False) -> bool:
         # If the last data slice duration is zero, then calculate
         # the true duration from the duration of the measure.
         if self.slices:
@@ -474,8 +482,13 @@ class GridMeasure:
                 sliceDur: HumNum = (mts + mdur) - sts
                 gridSlice.duration = sliceDur
 
-        foundData: bool = False
-        addedBar: bool = False
+        # in the first bar, we delay the initial barline until after all the clef, keysig, etc
+        doFirstBarlineNow: bool = False
+        didFirstBarline: bool = False
+        firstBarlineSlice: GridSlice = None
+
+        if self.duration == 0:
+            firstBar = False # don't reposition the first barline if the first bar has no notes
 
         for gridSlice in self.slices:
             if gridSlice.isInvalidSlice:
@@ -483,68 +496,67 @@ class GridMeasure:
                 # e.g. removing redundant clef slices).
                 continue
 
-            if addBar and not addedBar:
+            if firstBar:
                 if gridSlice.isDataSlice:
-                    foundData = True
+                    doFirstBarlineNow = True
+                elif gridSlice.isLocalLayoutSlice:
+                    doFirstBarlineNow = True
+                elif gridSlice.isManipulatorSlice:
+                    doFirstBarlineNow = True
 
-                if gridSlice.isLayoutSlice:
-                    # didn't actually find data, but barline should
-                    # not cross this line.
-                    foundData = True
+                if doFirstBarlineNow and not didFirstBarline:
+                    firstBarlineSlice.transferTokens(outFile, recip)
+                    didFirstBarline = True
+                    # and the slice that made us do the first barline now...
+                    gridSlice.transferTokens(outFile, recip)
+                    continue
 
-                if gridSlice.isManipulatorSlice:
-                    # didn't acutally find data, but the barline should
-                    # be placed before any manipulator (a spine split), since
-                    # that is more a property of the data than of the header
-                    # interpretations.
-                    foundData = True
-
-                if foundData:
-                    if self.duration == 0:
-                        # do nothing
-                        pass
-                    else:
-                        self.appendInitialBarline(outFile, startBarNum)
-                        addedBar = True
-
-            gridSlice.transferTokens(outFile, recip)
+                # assumption: there's only one measure slice in the first measure, and
+                # we'll see it well before we run into something that will make us do it.
+                if gridSlice.isMeasureSlice:
+                    firstBarlineSlice = gridSlice
+                else:
+                    gridSlice.transferTokens(outFile, recip)
+            else:
+                gridSlice.transferTokens(outFile, recip)
 
         return True
 
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::appendInitialBarline -- The barline will be
-    //    duplicated to all spines later.
-        Looks like it actually gets duplicated to all (current) spines here --gregc
-    '''
-    def appendInitialBarline(self, outFile: HumdrumFile, startBarline: int = 0):
-        if outFile.lineCount == 0:
-            # strange case which should never happen
-            return
-
-        if self.measureNumber > 0:
-            startBarline = self.measureNumber
-
-        fieldCount: int = outFile[-1].fieldCount
-        line: HumdrumLine = HumdrumLine()
-        tstring: str = '='
-        # TODO: humdrum writer needs to properly emit initial barline number
-        # TODO: ... for now just put in the barline.
-        tstring += str(startBarline)
-
-        # probably best not to start with an invisible barline since
-        # a plain barline would not be shown before the first measure anyway.
-        # TODO: humdrum writer needs to properly emit hidden initial barline
-        # TODO: ... for now, make it invisible if measure number is 0
-        if startBarline == 0:
-            tstring += '-'
-
-        for _ in range(0, fieldCount):
-            token: HumdrumToken = HumdrumToken(tstring)
-            line.appendToken(token)
-
-        outFile.append(line)
+#     '''
+#     //////////////////////////////
+#     //
+#     // GridMeasure::appendInitialBarline -- The barline will be
+#     //    duplicated to all spines later.
+#         Looks like it actually gets duplicated to all (current) spines here --gregc
+#     '''
+#     def appendInitialBarline(self, outFile: HumdrumFile, startBarline: int = 0):
+#         if outFile.lineCount == 0:
+#             # strange case which should never happen
+#             return
+#
+#         startBarlineString = str(startBarline)
+#         if self.measureNumberString:
+#             startBarlineString = self.measureNumberString
+#
+#         fieldCount: int = outFile[-1].tokenCount
+#         line: HumdrumLine = HumdrumLine()
+#         tstring: str = '='
+#         # TODO: humdrum writer needs to properly emit initial barline number
+#         # TODO: ... for now just put in the barline.
+#         tstring += startBarlineString
+#
+#         # probably best not to start with an invisible barline since
+#         # a plain barline would not be shown before the first measure anyway.
+#         # TODO: humdrum writer needs to properly emit hidden initial barline
+#         # TODO: ... for now, make it invisible if measure number is 0
+#         if startBarline == 0:
+#             tstring += '-'
+#
+#         for _ in range(0, fieldCount):
+#             token: HumdrumToken = HumdrumToken(tstring)
+#             line.appendToken(token)
+#
+#         outFile.appendLine(line)
 
     '''
     //////////////////////////////
@@ -552,7 +564,7 @@ class GridMeasure:
     // GridMeasure::getOwner --
     '''
     @property
-    def ownerGrid(self) -> HumGrid:
+    def ownerGrid(self): # -> HumGrid:
         return self._ownerGrid
 
     '''
@@ -561,73 +573,118 @@ class GridMeasure:
     // GridMeasure::setOwner --
     '''
     @ownerGrid.setter
-    def ownerGrid(self, newOwnerGrid: HumGrid):
+    def ownerGrid(self, newOwnerGrid):
         self._ownerGrid = newOwnerGrid
 
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::getDuration --
-    '''
-    @property
-    def duration(self) -> HumNum:
-        return self._duration
+    # _getIndexedVoice_AppendingIfNecessary appends enough new voices to the list to
+    # accommodate voiceIndex, then returns voices[voiceIndex]
+    @staticmethod
+    def _getIndexedVoice_AppendingIfNecessary(voices: List[GridVoice], voiceIndex: int) -> GridVoice:
+        additionalVoicesNeeded: int = voiceIndex + 1 - len(voices)
+        for _ in range(0, additionalVoicesNeeded):
+            voices.append(GridVoice())
+        return voices[voiceIndex]
 
     '''
     //////////////////////////////
     //
-    // GridMeasure::setDuration --
+    // GridMeasure::addLayoutParameter --
     '''
-    @duration.setter
-    def duration(self, newDuration: HumNum):
-        self._duration = newDuration
+    def addLayoutParameter(self, associatedSlice: GridSlice,
+                           partIndex: int, staffIndex: int, voiceIndex: int,
+                           locomment: str):
+        # add this '!LO:' string just before this associatedSlice
+        if len(self.slices) == 0:
+		    # something strange happened: expecting at least one item in measure.
+            return # associatedSlice is supposed to already be in the measure
+
+        # find owning line (associatedSlice)
+        foundIt: bool = False
+        associatedSliceIdx: int = None
+        for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
+            gridSlice: GridSlice = self.slices[associatedSliceIdx]
+            if gridSlice is associatedSlice:
+                foundIt = True
+                break
+        if not foundIt:
+            # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
+            return
+
+        # see if the previous slice is a layout slice we can use
+        prevIdx: int = associatedSliceIdx-1
+        prevSlice: GridSlice = self.slices[prevIdx]
+        if prevSlice.isLocalLayoutSlice:
+            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
+            prevVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(prevStaff.voices,
+                                                                              voiceIndex)
+            if prevVoice.token is None or prevVoice.token.text == '!':
+                prevVoice.token = HumdrumToken(locomment)
+                return
+
+        # if we get here, we couldn't use the previous slice, so we need to insert
+        # a new Layout slice to use, just before the associated slice.
+        insertPoint: int = associatedSliceIdx
+        newSlice: GridSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Layouts)
+        newSlice.initializeBySlice(associatedSlice)
+        self.slices.insert(insertPoint, newSlice)
+
+        newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
+        newVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(newStaff.voices,
+                                                                         voiceIndex)
+        newVoice.token = HumdrumToken(locomment)
 
     '''
     //////////////////////////////
     //
-    // GridMeasure::getTimestamp --
+    // GridMeasure::addDynamicsLayoutParameters --
     '''
-    @property
-    def timestamp(self) -> HumNum:
-        return self._timestamp
+    def addDynamicsLayoutParameters(self, associatedSlice: GridSlice,
+                                    partIndex: int, staffIndex: int,
+                                    locomment: str):
+        if len(self.slices) == 0:
+		    # something strange happened: expecting at least one item in measure.
+            return # associatedSlice is supposed to already be in the measure
 
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::setTimestamp --
-    '''
-    @timestamp.setter
-    def timestamp(self, newTimestamp: HumNum):
-        self._timestamp = newTimestamp
+        # find owning line (associatedSlice)
+        foundIt: bool = False
+        associatedSliceIdx: int = None
+        for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
+            gridSlice: GridSlice = self.slices[associatedSliceIdx]
+            if gridSlice is associatedSlice:
+                foundIt = True
+                break
+        if not foundIt:
+            # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
+            return
 
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::getTimeSigDur --
-    '''
-    @property
-    def timeSigDur(self) -> HumNum:
-        return self._timeSigDur
+        # see if the previous slice is a layout slice we can use
+        prevIdx: int = associatedSliceIdx-1
+        prevSlice: GridSlice = self.slices[prevIdx]
+        if prevSlice.isLocalLayoutSlice:
+            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
+            if prevStaff.dynamics is None:
+                prevStaff.dynamics = HumdrumToken(locomment)
+                return
 
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::setTimeSigDur --
-    '''
-    @timeSigDur.setter
-    def timeSigDur(self, newTimeSigDur: HumNum):
-        self._timeSigDur = newTimeSigDur
+        # if we get here, we couldn't use the previous slice, so we need to insert
+        # a new Layout slice to use, just before the associated slice.
+        insertPoint: int = associatedSliceIdx
+        newSlice: GridSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Layouts)
+        newSlice.initializeBySlice(associatedSlice)
+        self.slices.insert(insertPoint, newSlice)
+
+        newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
+        newStaff.dynamics = HumdrumToken(locomment)
 
     '''
     //////////////////////////////
     //
     // GridMeasure::getFirstSpinedSlice --
     '''
-    def firstSpinedSlice(self):
+    def firstSpinedSlice(self) -> GridSlice:
         for tslice in self.slices:
-            if not tslice.hasSpines:
-                continue
-            return tslice
+            if tslice is not None and tslice.hasSpines:
+                return tslice
         return None
 
     '''
@@ -637,31 +694,6 @@ class GridMeasure:
     '''
     def lastSpinedSlice(self):
         for tslice in reversed(self.slices):
-            if tslice is None:
-                continue
-            if tslice.isGlobalLayout:
-                continue
-            if tslice.isGlobalComment:
-                continue
-            if tslice.isReferenceRecord:
-                continue
-            return tslice
+            if tslice is not None and tslice.hasSpines:
+                return tslice
         return None
-
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::getMeasureNumber --
-    '''
-    @property
-    def measureNumber(self) -> int:
-        return self._barNum
-
-    '''
-    //////////////////////////////
-    //
-    // GridMeasure::setMeasureNumber --
-    '''
-    @measureNumber.setter
-    def measureNumber(self, newMeasureNumber: int):
-        self._barNum = newMeasureNumber

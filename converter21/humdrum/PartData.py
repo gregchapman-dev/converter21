@@ -12,7 +12,7 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+from typing import Union, List
 import music21 as m21
 
 from converter21.humdrum import StaffData
@@ -27,7 +27,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class PartData:
-    def __init__(self, partStaves: [Union[m21.stream.Part, m21.stream.PartStaff]],
+    def __init__(self, partStaves: List[Union[m21.stream.Part, m21.stream.PartStaff]],
                        ownerScore,
                        partIndex: int):
         from converter21.humdrum import ScoreData
@@ -44,9 +44,6 @@ class PartData:
 
         self._partName = self._findPartName(partStaves)
         self._partAbbrev = self._findPartAbbrev(partStaves)
-
-        self._hasEditorialAccidental = False
-        self._editorialAccidentalStyle = ''
 
     @property
     def partIndex(self) -> int:
@@ -65,7 +62,7 @@ class PartData:
         return len(self.staves)
 
     @staticmethod
-    def _findPartName(partStaves: [Union[m21.stream.Part, m21.stream.PartStaff]]) -> str:
+    def _findPartName(partStaves: List[Union[m21.stream.Part, m21.stream.PartStaff]]) -> str:
         if len(partStaves) == 0:
             return ''
 
@@ -80,20 +77,25 @@ class PartData:
         return ''
 
     @staticmethod
-    def _findPartAbbrev(partStaves: [Union[m21.stream.Part, m21.stream.PartStaff]]) -> str:
+    def _findPartAbbrev(partStaves: List[Union[m21.stream.Part, m21.stream.PartStaff]]) -> str:
         if len(partStaves) == 0:
             return ''
 
         if len(partStaves) == 1:
-            return partStaves[0].partAbbrev
+            return partStaves[0].partAbbreviation
 
-        possibleAbbrevs: [str] = [partStaff.partAbbrev for partStaff in partStaves]
+        possibleAbbrevs: [str] = [partStaff.partAbbreviation for partStaff in partStaves]
         for possibleAbbrev in possibleAbbrevs:
             if possibleAbbrev: # skip any '' or None partAbbrevs
                 return possibleAbbrev # return the first real abbrev you see
 
         return ''
 
-    def receiveEditorialAccidental(self, editorialStyle: str):
-        self._hasEditorialAccidental = True
-        self._editorialAccidentalStyle = editorialStyle
+    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
+        return self.ownerScore.reportEditorialAccidentalToOwner(editorialStyle)
+
+    def reportCaesuraToOwner(self) -> str:
+        return self.ownerScore.reportCaesuraToOwner()
+
+    def reportLinkedSlurToOwner(self) -> str:
+        return self.ownerScore.reportLinkedSlurToOwner()

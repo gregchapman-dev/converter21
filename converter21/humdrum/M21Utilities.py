@@ -15,9 +15,11 @@
 
 # import sys
 # import re
-# from typing import Union
+from typing import List, Tuple, Set, Dict
 # from fractions import Fraction
 import music21 as m21
+
+from converter21.humdrum import HumdrumInternalError
 
 # pylint: disable=protected-access
 
@@ -139,9 +141,155 @@ class M21Utilities:
         return rest
 
     @staticmethod
-    def getTextExpressionsFromGeneralNote(gnote: m21.note.GeneralNote) -> [m21.expressions.TextExpression]:
-        pass
+    def getTextExpressionsFromGeneralNote(gnote: m21.note.GeneralNote) -> List[m21.expressions.TextExpression]:
+        output: List[m21.expressions.TextExpression] = []
+        for exp in gnote.expressions:
+            if isinstance(exp, m21.expressions.TextExpression):
+                output.append(exp)
+
+        return output
+
+    # getAllExpressionsFromGeneralNote returns a list of expression gleaned from
+    # both gnote.expressions as well as a few expressions spanners the note might
+    # be in.
+    @staticmethod
+    def getAllExpressionsFromGeneralNote(gnote: m21.note.GeneralNote,
+                                         spannerBundle: m21.spanner.SpannerBundle
+                                         ) -> List[m21.expressions.Expression]:
+        expressions: List[m21.expressions.Expression] = []
+
+        # start with the expression spanners (TrillExtension and TremoloSpanner)
+        spanners: [m21.spanner.Spanner] = gnote.getSpannerSites()
+        for spanner in spanners:
+            if spanner not in spannerBundle:
+                continue
+            if isinstance(spanner, m21.expressions.TrillExtension):
+                expressions.append(spanner)
+                continue
+            if isinstance(spanner, m21.expressions.TremoloSpanner):
+                expressions.append(spanner)
+                continue
+
+        # finish up with gnote.expressions
+        expressions += gnote.expressions
+        return expressions
 
     @staticmethod
-    def getDynamicWedgesFromGeneralNote(gnote: m21.note.GeneralNote) -> [m21.dynamics.DynamicWedge]:
-        pass
+    def getDynamicWedgesFromGeneralNote(gnote: m21.note.GeneralNote,
+                                        spannerBundle: m21.spanner.SpannerBundle) -> [m21.dynamics.DynamicWedge]:
+        output: List[m21.dynamics.DynamicWedge] = []
+        spanners: List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+        for spanner in spanners:
+            if spanner not in spannerBundle:
+                continue
+            if isinstance(spanner, m21.dynamics.DynamicWedge):
+                output.append(spanner)
+        return output
+
+    @staticmethod
+    def hasMeterSymbol(timeSig: m21.meter.TimeSignature) -> bool:
+        if not isinstance(timeSig, m21.meter.TimeSignature):
+            return False
+        if timeSig.symbol in ('common', 'cut'):
+            return True
+        return False
+
+    @staticmethod
+    def isTransposingInstrument(inst: m21.instrument.Instrument) -> bool:
+        if not isinstance(inst, m21.instrument.Instrument):
+            return False # not an instrument
+
+        trans: m21.interval.Interval = inst.transposition
+        if trans is None:
+            return False  # not a transposing instrument
+
+        if (trans.semitones == 0 and
+            trans.specifier == m21.interval.Specifier.PERFECT):
+            return False # instrument transposition is a no-op
+
+        return True
+
+    @staticmethod
+    def m21VersionIsAtLeast(neededVersion: Tuple[int, int, int, str]) -> bool:
+        #m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
+        if len(m21.VERSION) == 0:
+            raise HumdrumInternalError('music21 version must be set!')
+
+        # compare element 0
+        if m21.VERSION[0] < neededVersion[0]:
+            return False
+        if m21.VERSION[0] > neededVersion[0]:
+            return True
+
+        # element 0 is equal... go on to next element
+        if len(m21.VERSION) == 1 or len(neededVersion) == 1:
+            # there is no next element to compare, so we are done.
+            # result is True only if m21 version has >= elements of needed version.
+            # if neededVersion has more elements, then result is False
+            return len(m21.VERSION) >= len(neededVersion)
+
+        # compare element 1
+        if m21.VERSION[1] < neededVersion[1]:
+            return False
+        if m21.VERSION[1] > neededVersion[1]:
+            return True
+
+        # element 1 is equal... go on to next element
+        if len(m21.VERSION) == 2 or len(neededVersion) == 2:
+            # there is no next element to compare, so we are done.
+            # result is True only if m21 version has >= elements of needed version.
+            # if neededVersion has more elements, then result is False
+            return len(m21.VERSION) >= len(neededVersion)
+
+        # compare element 2
+        if m21.VERSION[2] < neededVersion[2]:
+            return False
+        if m21.VERSION[2] > neededVersion[2]:
+            return True
+
+        # element 2 is equal... go on to next element
+        if len(m21.VERSION) == 3 or len(neededVersion) == 3:
+            # there is no next element to compare, so we are done.
+            # result is True only if m21 version has >= elements of needed version.
+            # if neededVersion has more elements, then result is False
+            return len(m21.VERSION) >= len(neededVersion)
+
+        # compare element 3 (probably a string)
+        if m21.VERSION[3] < neededVersion[3]:
+            return False
+        if m21.VERSION[3] > neededVersion[3]:
+            return True
+
+        return True # four elements equal, that's all we care about
+
+
+class M21StaffGroupTree:
+    def __init__(self, sg: m21.layout.StaffGroup, staffNumbersByM21Part: Dict[m21.stream.Part, int]):
+        # about this staff group
+        self.staffGroup: m21.layout.StaffGroup = sg
+        self.staffNums: Set[int] = set(staffNumbersByM21Part[m21Part]
+                                            for m21Part in
+                                                sg.spannerStorage.elements)
+        self.numStaves: int = len(self.staffNums)
+        self.lowestStaffNumber: int = min(self.staffNums)
+
+        # tree links
+        self.children: List[M21StaffGroupTree] = []
+
+class M21StaffGroupDescriptionTree:
+    def __init__(self):
+        # about this group description
+        self.groupNum: int = 0
+        self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
+        self.barTogether: bool = False  # see m21.layout.StaffGroup.barTogether
+        # staves referenced by this group (includes staves in subgroups).
+        # staffIndices is in staff order.
+        self.staffIndices: List[int] = []
+        # staves actually in this group (i.e. not in a subgroup).
+        # ownedStaffIndices is in staff order.
+        self.ownedStaffIndices: List[int] = []
+
+        # tree links:
+        # children == subgroups, parent = enclosing group (None for top)
+        self.children: List[M21StaffGroupDescriptionTree] = []
+        self.parent: M21StaffGroupDescriptionTree = None

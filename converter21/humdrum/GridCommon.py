@@ -9,7 +9,7 @@
 # Copyright:     (c) 2021 Greg Chapman
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
-from enum import IntEnum, unique, auto
+from enum import IntEnum, Enum, unique, auto
 
 # SliceType is a list of various Humdrum line types.  Groupings are
 # segmented by categories which are prefixed with an underscore.
@@ -85,14 +85,68 @@ class SliceType(IntEnum):
     Other_ = auto()
     Invalid = auto()
 
-# MeasureType is a list of the style types for a measure (ending type for now)
 
 @unique
-class MeasureStyle(IntEnum):
+class MeasureVisualStyle(IntEnum):
+    Double = auto()
+    HeavyHeavy = auto()
+    HeavyLight = auto()
+    Final = auto()      # In MusicXML, this is called 'light-heavy'
+    Short = auto()
+    Tick = auto()
     Invisible = auto()
-    Plain = auto()
+    Regular = auto()
+    Heavy = auto()
+    # some special ones only used with RepeatBoth
+    HeavyLightHeavy = auto()
+    LightHeavyLight = auto()
+
+
+@unique
+class MeasureType(IntEnum):
+    NotRepeat = auto()
     RepeatBackward = auto()
     RepeatForward = auto()
     RepeatBoth = auto()
-    Double = auto()
-    Final = auto()
+
+# Each MeasureStyle enum value is a tuple = (MeasureVisualStyle, MeasureType)
+class MeasureStyle(Enum):
+    Double      = (MeasureVisualStyle.Double,       MeasureType.NotRepeat)
+    HeavyHeavy  = (MeasureVisualStyle.HeavyHeavy,   MeasureType.NotRepeat)
+    HeavyLight  = (MeasureVisualStyle.HeavyLight,   MeasureType.NotRepeat)
+    Final       = (MeasureVisualStyle.Final,        MeasureType.NotRepeat) # aka. 'light-heavy'
+    Short       = (MeasureVisualStyle.Short,        MeasureType.NotRepeat)
+    Tick        = (MeasureVisualStyle.Tick,         MeasureType.NotRepeat)
+    Invisible   = (MeasureVisualStyle.Invisible,    MeasureType.NotRepeat)
+    Regular     = (MeasureVisualStyle.Regular,      MeasureType.NotRepeat)
+    Heavy       = (MeasureVisualStyle.Heavy,        MeasureType.NotRepeat)
+
+    RepeatBackwardRegular       = (MeasureVisualStyle.Regular,      MeasureType.RepeatBackward)
+    RepeatBackwardHeavy         = (MeasureVisualStyle.Heavy,        MeasureType.RepeatBackward)
+    RepeatBackwardHeavyLight    = (MeasureVisualStyle.HeavyLight,   MeasureType.RepeatBackward)
+    RepeatBackwardFinal         = (MeasureVisualStyle.Final,        MeasureType.RepeatBackward)
+    RepeatBackwardHeavyHeavy    = (MeasureVisualStyle.HeavyHeavy,   MeasureType.RepeatBackward)
+    RepeatBackwardDouble        = (MeasureVisualStyle.Double,       MeasureType.RepeatBackward)
+
+    RepeatForwardRegular        = (MeasureVisualStyle.Regular,      MeasureType.RepeatForward)
+    RepeatForwardHeavy          = (MeasureVisualStyle.Heavy,        MeasureType.RepeatForward)
+    RepeatForwardHeavyLight     = (MeasureVisualStyle.HeavyLight,   MeasureType.RepeatForward)
+    RepeatForwardFinal          = (MeasureVisualStyle.Final,        MeasureType.RepeatForward)
+    RepeatForwardHeavyHeavy     = (MeasureVisualStyle.HeavyHeavy,   MeasureType.RepeatForward)
+    RepeatForwardDouble         = (MeasureVisualStyle.Double,       MeasureType.RepeatForward)
+
+    RepeatBothRegular           = (MeasureVisualStyle.Regular,          MeasureType.RepeatBoth)
+    RepeatBothHeavy             = (MeasureVisualStyle.Heavy,            MeasureType.RepeatBoth)
+    RepeatBothHeavyLight        = (MeasureVisualStyle.HeavyLight,       MeasureType.RepeatBoth)
+    RepeatBothFinal             = (MeasureVisualStyle.Final,            MeasureType.RepeatBoth)
+    RepeatBothHeavyHeavy        = (MeasureVisualStyle.HeavyHeavy,       MeasureType.RepeatBoth)
+    RepeatBothDouble            = (MeasureVisualStyle.Double,           MeasureType.RepeatBoth)
+
+    RepeatBothHeavyLightHeavy   = (MeasureVisualStyle.HeavyLightHeavy,  MeasureType.RepeatBoth)
+    RepeatBothLightHeavyLight   = (MeasureVisualStyle.LightHeavyLight,  MeasureType.RepeatBoth)
+
+    # This is just here so clients can do blah.measureType and blah.measureVisualType instead
+    # of having to know the layout of the tuple.
+    def __init__(self, vStyle: MeasureVisualStyle, mType: MeasureType):
+        self.vStyle = vStyle
+        self.mType = mType

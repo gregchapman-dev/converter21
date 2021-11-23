@@ -29,7 +29,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 class GridPart:
     def __init__(self):
         self.staves: [GridStaff] = []
-        self.side: GridSide = None
+        self.sides: GridSide = GridSide()
         self._partName: str = ''
 
     def __str__(self):
@@ -48,5 +48,5 @@ class GridPart:
                     output += '{n}'
                 else:
                     output += voice.token.text
-        output += ' ppp ' + str(self.side)
+        output += ' ppp ' + str(self.sides)
         return output

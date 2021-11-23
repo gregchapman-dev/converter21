@@ -81,6 +81,7 @@ disable=too-many-lines,
         consider-using-enumerate,
         cyclic-import,
         invalid-name,
+        duplicate-code,
         print-statement, # above this are mine
         parameter-unpacking,
         unpacking-in-except,

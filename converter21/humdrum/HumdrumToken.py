@@ -54,6 +54,13 @@ def makeTag(string: str, num: int) -> str:
         return string + str(num)
     return string
 
+# used to generate invisible rests to fill gaps.  Not a real HumdrumToken, but can be put
+# in arrays of layerTokens, and will be specially treated.
+class FakeRestToken:
+    def __init__(self, duration: HumNum, durationFromBarline: HumNum = HumNum(0)):
+        self.duration = duration
+        self.durationFromBarline = durationFromBarline
+
 # We use conditionally defined attributes to implement property caching, so make pylint shut up about it
 # pylint: disable=attribute-defined-outside-init
 
@@ -91,6 +98,11 @@ class HumdrumToken(HumHash):
         // list in the token for a graphical display duration.
         '''
         self._duration: HumNum = HumNum(-1)
+
+        # graceVisualDuration: only set for grace notes that have recip in their token
+        # e.g. '16qqcc'.  self._duration is 0 (because it's a grace note), but the grace
+        # note will have two flags because of the '16'.
+        self._graceVisualDuration: HumNum = HumNum(-1)
 
         '''
         // nextTokens: This is a list of all previous tokens in the spine which
@@ -756,6 +768,9 @@ class HumdrumToken(HumHash):
             if self.isNonNullData:
                 if self.isKern:
                     self._duration = Convert.recipToDuration(self.text)
+                    if self.isGrace:
+                        recipWithoutQsOrDots: str = self.text.replace('q', '').replace('.', '')
+                        self._graceVisualDuration = Convert.recipToDuration(recipWithoutQsOrDots)
                 elif self.isRecip:
                     self._duration = Convert.recipToDuration(self.text)
                 elif self.isMens:
@@ -841,6 +856,13 @@ class HumdrumToken(HumHash):
     def duration(self, newDuration: HumNum):
         self._rhythmAnalyzed = True # bugfix, although current clients probably won't care --gregc
         self._duration = newDuration
+
+    @property
+    def graceVisualDuration(self) -> HumNum:
+        if not self._rhythmAnalyzed:
+            self.analyzeDuration()
+
+        return self._graceVisualDuration
 
     '''
     //////////////////////////////
@@ -1220,8 +1242,8 @@ class HumdrumToken(HumHash):
     '''
     //////////////////////////////
     //
-    // HumdrumToken::isUnpitched -- True if has an unpitched marker (could be a rest)
-        Q: isUnpitched isn't "not isPitched". It doesn't even check for 'r', just 'R'.  Why? --gregc
+    // HumdrumToken::isUnpitched -- True if has an unpitched marker
+        This is checking for an unpitched note (e.g. in a percussion part), not a rest.
     '''
     @property
     def isUnpitched(self) -> bool:

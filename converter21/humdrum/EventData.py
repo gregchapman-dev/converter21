@@ -11,7 +11,7 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+from typing import Union, List, Tuple
 import music21 as m21
 
 from converter21.humdrum import HumNum
@@ -31,8 +31,9 @@ class EventData:
     def __init__(self, element: m21.base.Music21Object,
                        elementIndex: int,
                        voiceIndex: int,
-                       ownerMeasure):
-        from Humdrum import MeasureData
+                       ownerMeasure,
+                       offsetInScore: HumNum = None):
+        from converter21.humdrum import MeasureData
         ownerMeasure: MeasureData
         self.ownerMeasure: MeasureData = ownerMeasure
         self._startTime: HumNum = HumNum(-1)
@@ -43,15 +44,22 @@ class EventData:
         self._name: str = ''
         self._texts: [m21.expressions.TextExpression] = []
         self._tempos: [m21.tempo.TempoIndication] = []
-        self._dynamics: [Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
+        self._dynamics: List[Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
         self._myTextsComputed: bool = False
         self._myDynamicsComputed: bool = False
 
-        self._parseEvent(element)
+        self._parseEvent(element, offsetInScore)
 
-    def _parseEvent(self, element: m21.base.Music21Object):
-        ownerScore = self.ownerMeasure.ownerStaff.ownerPart.ownerScore
-        self._startTime = ownerScore.getSemiFlatScore().elementOffset(element)
+    def __str__(self) -> str:
+        return self.kernTokenString(None)
+
+    def _parseEvent(self, element: m21.base.Music21Object, offsetInScore: HumNum):
+        if offsetInScore is not None:
+            self._startTime = offsetInScore
+        else:
+            ownerScore = self.ownerMeasure.ownerStaff.ownerPart.ownerScore
+            self._startTime = HumNum(ownerScore.getSemiFlatScore().elementOffset(element))
+
         self._duration = HumNum(element.duration.quarterLength)
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
@@ -65,20 +73,40 @@ class EventData:
         return self._elementIndex
 
     @property
+    def elementNumber(self) -> int:
+        return self.elementIndex + 1
+
+    @property
     def voiceIndex(self) -> int:
         return self._voiceIndex
+
+    @property
+    def voiceNumber(self) -> int:
+        return self.voiceIndex + 1
 
     @property
     def measureIndex(self) -> int:
         return self.ownerMeasure.measureIndex
 
     @property
+    def measureNumber(self) -> int:
+        return self.measureIndex + 1
+
+    @property
     def staffIndex(self) -> int:
         return self.ownerMeasure.staffIndex
 
     @property
+    def staffNumber(self) -> int:
+        return self.staffIndex + 1
+
+    @property
     def partIndex(self) -> int:
         return self.ownerMeasure.partIndex
+
+    @property
+    def partNumber(self) -> int:
+        return self.partIndex + 1
 
     @property
     def startTime(self) -> HumNum:
@@ -97,21 +125,20 @@ class EventData:
         return self._element
 
     @property
-    def texts(self) -> [m21.expressions.TextExpression]:
+    def texts(self) -> List[m21.expressions.TextExpression]:
         if not self._myTextsComputed:
             self._texts = M21Utilities.getTextExpressionsFromGeneralNote(self.m21Object)
             self._myTextsComputed = True
         return self._texts
 
-    @property
-    def dynamics(self) -> [Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]]:
+    def dynamics(self, spannerBundle: m21.spanner.SpannerBundle) -> List[m21.dynamics.DynamicWedge]:
         if not self._myDynamicsComputed:
-            self._dynamics = M21Utilities.getDynamicWedgesFromGeneralNote(self.m21Object)
+            self._dynamics = M21Utilities.getDynamicWedgesFromGeneralNote(self.m21Object, spannerBundle)
             self._myDynamicsComputed = True
         return self._dynamics
 
     @property
-    def tempos(self) -> [m21.tempo.TempoIndication]:
+    def tempos(self) -> List[m21.tempo.TempoIndication]:
         return self._tempos
 
     '''
@@ -121,16 +148,39 @@ class EventData:
         If event is a Chord, we return a space-delimited token string containing all the
         appropriate subtokens, and a list of all the layouts for the chord.
     '''
-    def getNoteKernTokenString(self) -> (str, [str]):
+    def getNoteKernTokenStringAndLayouts(self, spannerBundle: m21.spanner.SpannerBundle) -> Tuple[str, List[str]]:
         # We pass in self to get reports of the existence of editorial accidentals, ornaments,
         # etc. These reports get passed up the EventData.py/MeasureData.py reporting chain up
         # to PartData.py, where they are stored and/or acted upon.
-        return M21Convert.kernTokenStringFromM21GeneralNote(self.m21Object, self)
+        return M21Convert.kernTokenStringAndLayoutsFromM21GeneralNote(self.m21Object, spannerBundle, self)
+
+    def kernTokenString(self, spannerBundle: m21.spanner.SpannerBundle) -> str:
+        # for debugging output; real code uses getNoteKernTokenStringAndLayouts() above
+        tokenString: str = ''
+        tokenString, _ignore = self.getNoteKernTokenStringAndLayouts(spannerBundle)
+        return tokenString
 
     '''
     //////////////////////////////
     //
     // MxmlEvent::reportEditorialAccidentalToOwner --
+        The RDF signifier (chosen well above us) is returned, so we know what to put in the token
     '''
-    def reportEditorialAccidentalToOwner(self, editorialStyle: str):
-        self.ownerMeasure.receiveEditorialAccidentalFromChild(editorialStyle)
+    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
+        return self.ownerMeasure.reportEditorialAccidentalToOwner(editorialStyle)
+
+    '''
+    //////////////////////////////
+    //
+    // MxmlEvent::reportCaesuraToOwner -- inform the owner that there is a caesura
+    //    that needs an RDF marker.
+        The RDF signifier (chosen well above us) is returned, so we know what to put in the token
+    '''
+    def reportCaesuraToOwner(self) -> str:
+        return self.ownerMeasure.reportCaesuraToOwner()
+
+    def reportLinkedSlurToOwner(self) -> str:
+        return self.ownerMeasure.reportLinkedSlurToOwner()
+
+    def reportDynamicToOwner(self):
+        self.ownerMeasure.reportDynamicToOwner()

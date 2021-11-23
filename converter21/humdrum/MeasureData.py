@@ -11,11 +11,15 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
-import music21 as m21
+from typing import Union, List
+#from fractions import Fraction
 
+import music21 as m21
 from converter21.humdrum import HumNum
+from converter21.humdrum import MeasureStyle
 from converter21.humdrum import EventData
+from converter21.humdrum import Convert
+from converter21.humdrum import M21Convert
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -36,43 +40,54 @@ class SimultaneousEvents:
 class MeasureData:
     def __init__(self, measure: m21.stream.Measure,
                        ownerStaff,
-                       measureIndex: int):
+                       measureIndex: int,
+                       prevMeasData): # prevMeasData: Optional[MeasureData]
         from converter21.humdrum import StaffData
         ownerStaff: StaffData
         self.m21Measure: m21.stream.Measure = measure
         self.ownerStaff: StaffData = ownerStaff
+        self._prevMeasData = prevMeasData
         self._measureIndex: int = measureIndex
         self._startTime: HumNum = HumNum(-1)
         self._duration: HumNum = HumNum(-1)
-        self._events: [EventData] = []
-        self._sortedEvents: [SimultaneousEvents] = [] # list of startTime-binned events
-        self._parseMeasure() # generates _events and then _sortedEvents
+        self._timeSigDur: HumNum = HumNum(-1)
+        # leftBarlineStyle describes the left barline of this measure
+        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        # _rightBarlineStyle describes the right barline of this measure
+        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        # _measureStyle is a combination of this measure's leftBarlineStyle and
+        # the previous measure's rightBarlineStyle.  It's the style we use when
+        # writing a barline ('=') token.
+        self.measureStyle: MeasureStyle = MeasureStyle.Regular
+        self._measureNumberString: str = ''
+        self.events: [EventData] = []
+        self.sortedEvents: [SimultaneousEvents] = [] # public list of startTime-binned events
+
+        self._parseMeasure() # generates _events and then sortedEvents (also barlines)
 
     @property
     def measureIndex(self) -> int:
         return self._measureIndex
 
     @property
+    def measureNumberString(self) -> str:
+        return self._measureNumberString
+
+    @property
     def staffIndex(self) -> int:
         return self.ownerStaff.staffIndex
+
+    @property
+    def staffNumber(self) -> int:
+        return self.staffIndex + 1
 
     @property
     def partIndex(self) -> int:
         return self.ownerStaff.partIndex
 
     @property
-    def previousMeasure(self): # -> MeasureData:
-        prevIndex: int = self.measureIndex - 1
-        if 0 <= prevIndex < self.ownerStaff.measureCount:
-            return self.ownerStaff.measures[prevIndex]
-        return None
-
-    @property
-    def nextMeasure(self): # -> MeasureData:
-        nextIndex: int = self.measureIndex + 1
-        if 0 <= nextIndex < self.ownerStaff.measureCount:
-            return self.ownerStaff.measures[nextIndex]
-        return None
+    def partNumber(self) -> int:
+        return self.partIndex + 1
 
     '''
     //////////////////////////////
@@ -95,13 +110,60 @@ class MeasureData:
     '''
     //////////////////////////////
     //
+    // MxmlMeasure::getTimeSigDur --
+    '''
+    @property
+    def timeSigDur(self) -> HumNum:
+        return self._timeSigDur
+
+    '''
+    //////////////////////////////
+    //
     // MxmlMeasure::parseMeasure -- Reads music21 data for one staff's measure.
     '''
     def _parseMeasure(self):
         self._setStartTimeOfMeasure()
-        self._duration = HumNum(self.m21Measure.duration)
+        self._duration = HumNum(self.m21Measure.duration.quarterLength)
+
         # m21 tracks timesigdur for us in barDuration, which is always the latest timeSig duration
-        self._timeSigDur = self.m21Measure.barDuration
+        # But it can be ridiculously slow if it has to search back in the score for a timesignature,
+        # so we only call it if the measure has a timesignature. If it doesn't have one, we
+        # just use the _timeSigDur of the previous measure.
+        if self.m21Measure.timeSignature is None and self._prevMeasData is not None:
+            self._timeSigDur = self._prevMeasData.timeSigDur
+        else:
+            self._timeSigDur = HumNum(self.m21Measure.barDuration.quarterLength)
+
+        self._measureNumberString = self.m21Measure.measureNumberWithSuffix()
+        if self._measureNumberString == '0':
+            self._measureNumberString = ''
+
+        # In humdrum, measure style is a combination of this measure's left barline and the
+        # previous measure's right barline.  (For example, ':|!|:' in a humdrum barline comes
+        # from the previous right barline being an end-repeat (light-heavy) and the current
+        # left barline being a start repeat (heavy-light)).
+        # The very last humdrum barline (last measure's right barline) is handled as a special
+        # case at a higher level, not here.
+
+        # Compute our left and right barline style
+        self.leftBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.leftBarline)
+        self.rightBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.rightBarline)
+
+        # Grab the previous measure's right barline style (if there is one) and
+        # combine it with our left barline style, giving our measureStyle.
+        prevRightMeasureStyle: MeasureStyle = MeasureStyle.Regular
+        if self._prevMeasData is not None:
+            prevRightMeasureStyle = self._prevMeasData.rightBarlineStyle
+        self.measureStyle = M21Convert.combineTwoMeasureStyles(self.leftBarlineStyle,
+                                                               prevRightMeasureStyle)
+
+        # measure index 0 only: add events for any Instruments found in ownerStaff.m21PartStaff
+        if self.measureIndex == 0:
+            for elementIndex, inst in enumerate(
+                    self.ownerStaff.m21PartStaff.getElementsByClass(m21.instrument.Instrument)):
+                event: EventData = EventData(inst, elementIndex, -1, self)
+                if event is not None:
+                    self.events.append(event)
 
         if len(list(self.m21Measure.voices)) == 0:
             # treat the measure itself as voice 0
@@ -111,17 +173,47 @@ class MeasureData:
             self._parseEventsAtTopLevelOf(self.m21Measure)
             # ... then parse the voices
             for voiceIndex, voice in enumerate(self.m21Measure.voices):
-                self._parseEventsIn(voice, voiceIndex)
+                emptyStartDuration: HumNum = HumNum(voice.offset)
+                emptyEndDuration: HumNum = HumNum(self.duration - (HumNum(voice.offset) + HumNum(voice.duration.quarterLength)))
+                self._parseEventsIn(voice, voiceIndex, emptyStartDuration, emptyEndDuration)
 
         self._sortEvents()
 
     def _parseEventsIn(self, m21Stream: Union[m21.stream.Voice, m21.stream.Measure],
-                             voiceIndex: int):
+                             voiceIndex: int,
+                             emptyStartDuration: HumNum = HumNum(0),
+                             emptyEndDuration: HumNum = HumNum(0)):
+        if emptyStartDuration > 0:
+            # make m21 hidden rests totalling this duration, and pretend they
+            # were at the beginning of m21Stream
+            durations: List[HumNum] = Convert.getPowerOfTwoDurationsWithDotsAddingTo(emptyStartDuration)
+            startTime: HumNum = self.startTime
+            for duration in durations:
+                m21StartRest: m21.note.Rest = m21.note.Rest(duration=m21.duration.Duration(duration))
+                m21StartRest.style.hideObjectOnPrint = True
+                event: EventData = EventData(m21StartRest, -1, voiceIndex, self, offsetInScore=startTime)
+                if event is not None:
+                    self.events.append(event)
+                startTime += duration
+
         m21FlatStream: Union[m21.stream.Voice, m21.stream.Measure] = m21Stream.flat
         for elementIndex, element in enumerate(m21FlatStream):
             event: EventData = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
-                self._events.append(event)
+                self.events.append(event)
+
+        if emptyEndDuration > 0:
+            # make m21 hidden rests totalling this duration, and pretend they
+            # were at the end of m21Stream
+            durations: List[HumNum] = Convert.getPowerOfTwoDurationsWithDotsAddingTo(emptyEndDuration)
+            startTime: HumNum = self.startTime + self.duration - emptyEndDuration
+            for duration in durations:
+                m21EndRest: m21.note.Rest = m21.note.Rest(duration=m21.duration.Duration(duration))
+                m21EndRest.style.hideObjectOnPrint = True
+                event: EventData = EventData(m21EndRest, -1, voiceIndex, self, offsetInScore=startTime)
+                if event is not None:
+                    self.events.append(event)
+                startTime += duration
 
     def _parseEventsAtTopLevelOf(self, m21Stream: m21.stream.Measure):
         for elementIndex, element in enumerate(m21Stream):
@@ -131,7 +223,7 @@ class MeasureData:
 
             event: EventData = EventData(element, elementIndex, -1, self)
             if event is not None:
-                self._events.append(event)
+                self.events.append(event)
 
     '''
     //////////////////////////////
@@ -145,39 +237,40 @@ class MeasureData:
     //   same situation).
     '''
     def _sortEvents(self):
-        times = set()
-        for event in self._events:
-            times.add(event.startTime)
+        self.events.sort(key=lambda event: event.startTime)
+        times: [HumNum] = [] # sorted same as self.events (by time)
+        for event in self.events:
+            if not times or event.startTime != times[-1]: # don't add duplicated entries (like a set)
+                times.append(event.startTime)
 
-        self._sortedEvents = []
+        self.sortedEvents = []
         for val in times:
-            self._sortedEvents.append(SimultaneousEvents())
-            self._sortedEvents[-1].startTime = val
+            self.sortedEvents.append(SimultaneousEvents())
+            self.sortedEvents[-1].startTime = val
 
         # setup sorted access:
         mapping = dict()
-        for sortedEvent in self._sortedEvents:
+        for sortedEvent in self.sortedEvents:
             mapping[sortedEvent.startTime] = sortedEvent
 
-        for event in self._events:
+        for event in self.events:
             startTime: HumNum = event.startTime
             duration: HumNum = event.duration
-            if event.isFloating:
-                mapping[startTime].nonZeroDur.append(event)
-            elif duration == 0:
+            if duration == 0:
                 mapping[startTime].zeroDur.append(event)
             else:
                 mapping[startTime].nonZeroDur.append(event)
 
         # debugging
-        for e in self._sortedEvents:
+        '''
+        for e in self.sortedEvents:
             if len(e.zeroDur) > 0:
                 print(e.startTime, 'z\t', end='', file=sys.stderr)
                 for z in e.zeroDur:
                     print(' ', z.name, end='', file=sys.stderr)
-                    print('(', z.partNumber, end='', file=sys.stderr)
-                    print(',', z.staffNumber, end='', file=sys.stderr)
-                    print(',', z.voiceNumber, end='', file=sys.stderr)
+                    print('(', z.partIndex, end='', file=sys.stderr)
+                    print(',', z.staffIndex, end='', file=sys.stderr)
+                    print(',', z.voiceIndex, end='', file=sys.stderr)
                     print(')', end='', file=sys.stderr)
                 print('', file=sys.stderr)
 
@@ -185,12 +278,12 @@ class MeasureData:
                 print(e.startTime, 'n\t', end='', file=sys.stderr)
                 for nz in e.nonZeroDur:
                     print(' ', nz.name, end='', file=sys.stderr)
-                    print('(', nz.partNumber, end='', file=sys.stderr)
-                    print(',', nz.staffNumber, end='', file=sys.stderr)
-                    print(',', nz.voiceNumber, end='', file=sys.stderr)
+                    print('(', nz.partIndex, end='', file=sys.stderr)
+                    print(',', nz.staffIndex, end='', file=sys.stderr)
+                    print(',', nz.voiceIndex, end='', file=sys.stderr)
                     print(')', end='', file=sys.stderr)
                 print('', file=sys.stderr)
-
+        '''
     '''
     //////////////////////////////
     //
@@ -201,17 +294,38 @@ class MeasureData:
             self._startTime = HumNum(0)
             return
 
-        prev: MeasureData = self.previousMeasure
-        if prev is None:
+        if self._prevMeasData is None:
             self._startTime = HumNum(0)
             return
 
-        self._startTime = prev.startTime + prev.duration
+        self._startTime = self._prevMeasData.startTime + self._prevMeasData.duration
 
     '''
     //////////////////////////////
     //
-    // MxmlMeasure::receiveEditorialAccidentalFromChild --
+    // MxmlMeasure::reportEditorialAccidentalToOwner --
+        The RDF signifier is returned, so we know what to put in the token
+    //
     '''
-    def receiveEditorialAccidentalFromChild(self, editorialStyle: str):
-        self.ownerStaff.recieveEditorialAccidental(editorialStyle)
+    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
+        return self.ownerStaff.reportEditorialAccidentalToOwner(editorialStyle)
+
+    '''
+    //////////////////////////////
+    //
+    // MxmlMeasure::reportCaesuraToOwner --
+        The RDF signifier is returned, so we know what to put in the token
+    '''
+    def reportCaesuraToOwner(self) -> str:
+        return self.ownerStaff.reportCaesuraToOwner()
+
+    def reportLinkedSlurToOwner(self) -> str:
+        return self.ownerStaff.reportLinkedSlurToOwner()
+
+    '''
+    //////////////////////////////
+    //
+    // MxmlMeasure::reportDynamicToOwner --
+    '''
+    def reportDynamicToOwner(self):
+        self.ownerStaff.receiveDynamic()

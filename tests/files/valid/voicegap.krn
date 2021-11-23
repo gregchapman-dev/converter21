@@ -1,0 +1,33 @@
+**kern	**dynam	**kern	**dynam
+=1	=1	=1	=1
+*^	*	*	*
+2.G/ 2.Bn	8C\L	.	(4cc\	.
+.	8C\	.	.	.
+*v	*v	*	*	*
+.	.	8qbn/	.
+.	.	8qcc/)	.
+*^	*	*	*
+!! The '8C\' on the next line is started at time=3 (3 quarter notes), which is wrong.  It should
+!! not be started at the end of '2.G/', but rather somewhere in the middle of it (time=1).  But
+!! HumdrumFileStructure::prepareDurations() doesn't put the right durSum value in the reservoir,
+!! since durSum is already set to 3 due to '2.G/'s token duration.
+.	8C\	.	8en'/	.
+.	8C\	.	8r	.
+.	8C\	.	4r	.
+.	8C\J	.	.	.
+=2	=2	=2	=2	=2
+!! Error: Inconsistent rhythm analysis occurring near line 22
+!! Expected durationFromStart to be: 5 but found it to be 3
+!! Line: 4F/ 4An	8C\\L	.	16cc/LL	.
+4F/ 4An	8C\L	.	16cc/LL	.
+.	.	.	16d/JJ	.
+.	8C\	.	8r	.
+4F/ 4A-X	8C\	.	16cc/LL	.
+.	.	.	16d/JJ	.
+.	8C\	.	8r	.
+4F/ 4G	8C\	.	16bn/LL	.
+.	.	.	16d/JJ	.
+.	8C\J	.	8r	.
+*v	*v	*	*	*
+==	==	==	==
+*-	*-	*-	*-

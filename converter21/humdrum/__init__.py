@@ -12,14 +12,19 @@
 # ------------------------------------------------------------------------------
 
 from .HumExceptions import HumdrumInternalError, HumdrumSyntaxError, HumdrumExportError
+from .GridCommon import SliceType, MeasureStyle, MeasureType, MeasureVisualStyle
+
 from .HumNum import HumNum
 from .Convert import Convert
 from .HumAddress import HumAddress
 from .HumHash import HumHash
 from .HumParamSet import HumParamSet
 from .HumdrumToken import HumdrumToken
-from .M21Convert import M21Convert
+from .HumdrumToken import FakeRestToken
 from .M21Utilities import M21Utilities
+from .M21Convert import M21Convert
+from .M21Utilities import M21StaffGroupTree
+from .M21Utilities import M21StaffGroupDescriptionTree
 from .HumdrumLine import HumdrumLine
 from .HumSignifiers import HumSignifiers, HumSignifier
 from .HumdrumFileBase import HumdrumFileBase, TokenPair
@@ -27,18 +32,18 @@ from .HumdrumFileStructure import HumdrumFileStructure
 from .HumdrumFileContent import HumdrumFileContent
 from .HumdrumFile import HumdrumFile
 
-# from .EventData import EventData
-# from .MeasureData import MeasureData, SimultaneousEvents
-# from .StaffData import StaffData
-# from .PartData import PartData
-# from .ScoreData import ScoreData
+from .EventData import EventData
+from .MeasureData import MeasureData, SimultaneousEvents
+from .StaffData import StaffData
+from .PartData import PartData
+from .ScoreData import ScoreData
 
-# from .GridCommon import SliceType, MeasureStyle
-# from .GridSide import GridSide
-# from .GridVoice import GridVoice
-# from .GridStaff import GridStaff
-# from .GridPart import GridPart
-# from .GridSlice import GridSlice
-# from .GridMeasure import GridMeasure
-# from .HumGrid import HumGrid
-# from .HumdrumWriter import HumdrumWriter
+from .GridVoice import GridVoice
+from .GridSide import GridSide
+from .GridStaff import GridStaff
+from .GridPart import GridPart
+from .GridSlice import GridSlice
+from .GridMeasure import GridMeasure
+
+from .HumGrid import HumGrid
+from .HumdrumWriter import HumdrumWriter

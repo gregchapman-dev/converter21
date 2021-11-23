@@ -30,13 +30,16 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # TODO: pass StaffGroup into PartData() so we have another source of partName/partAbbrev
 
 class ScoreData:
-    def __init__(self, score: m21.stream.Score):
+    def __init__(self, score: m21.stream.Score, ownerWriter):
+        from converter21.humdrum import HumdrumWriter
+        self.ownerWriter: HumdrumWriter = ownerWriter
+
         if 'Score' not in score.classes:
             raise HumdrumInternalError('ScoreData must be initialized with a music21 Score object')
 
         self.m21Score: m21.stream.Score = score
         self.m21Metadata: m21.metadata.Metadata = score.metadata
-        # other score-level stuff (above the parts) goes here
+        self._semiFlat: m21.stream.Score = None
 
         self.parts: [PartData] = []
 
@@ -105,4 +108,15 @@ class ScoreData:
     def getSemiFlatScore(self) -> m21.stream.Stream:
         if self.m21Score is None:
             return None
-        return self.m21Score.semiFlat() # music21 computes this once, and caches it
+        if self._semiFlat is None:
+            self._semiFlat = self.m21Score.semiFlat
+        return self._semiFlat
+
+    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
+        return self.ownerWriter.reportEditorialAccidentalToOwner(editorialStyle)
+
+    def reportCaesuraToOwner(self) -> str:
+        return self.ownerWriter.reportCaesuraToOwner()
+
+    def reportLinkedSlurToOwner(self) -> str:
+        return self.ownerWriter.reportLinkedSlurToOwner()

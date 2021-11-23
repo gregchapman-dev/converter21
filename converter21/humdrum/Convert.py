@@ -13,6 +13,9 @@
 import sys
 import re
 import math
+from typing import Dict, List
+
+from converter21.humdrum import MeasureStyle
 from converter21.humdrum import HumNum
 from converter21.humdrum import HumdrumInternalError
 
@@ -39,7 +42,7 @@ class Convert:
     // default value: scale = 4 (duration in terms of quarter notes)
     // default value: separator = " " (sub-token separator)
     '''
-    _knownRecipDurationCache = dict() # key is recip, value is duration: HumNum
+    _knownRecipDurationCache: Dict[str, HumNum] = dict() # key is recip, value is duration: HumNum
 
     @staticmethod
     def recipToDuration(recip: str, scale: HumNum = HumNum(4)) -> HumNum:
@@ -1010,7 +1013,7 @@ class Convert:
     '''
     @staticmethod
     def base7ToBase40(base7: int) -> int:
-        octave: int = base7 / 7
+        octave: int = base7 // 7
         b7pc: int = base7 % 7
         b40pc: int = 0
 
@@ -1039,7 +1042,7 @@ class Convert:
     '''
     @staticmethod
     def base40ToKern(b40: int) -> str:
-        octave: int = b40 / 40
+        octave: int = b40 // 40
         accidental: int = Convert.base40ToAccidental(b40)
         diatonic: int = Convert.base40ToDiatonic(b40) % 7
         base: str = 'a'
@@ -1062,7 +1065,7 @@ class Convert:
             base = base.upper()
 
         repeat: int = 0
-        if octave < 4:
+        if octave > 4:
             repeat = octave - 4
         elif octave < 3:
             repeat = 3 - octave
@@ -1070,7 +1073,7 @@ class Convert:
         if repeat > 12:
             raise HumdrumInternalError('Error: unreasonable octave value: {} for {}'.format(octave, b40))
 
-        output: str = base * repeat
+        output: str = base * (1 + repeat)
         if accidental > 0:
             output += '#' * accidental
         elif accidental < 0:
@@ -1242,8 +1245,113 @@ class Convert:
         return False
 
     @staticmethod
+    def isPowerOfTwoWithDots(quarterLength: HumNum) -> bool:
+        if Convert.isPowerOfTwo(quarterLength):
+            # power of two + no dots
+            return True
+        if Convert.isPowerOfTwo(quarterLength * 2 / 3):
+            # power of two + 1 dot
+            return True
+        if Convert.isPowerOfTwo(quarterLength * 4 / 7):
+            # power of two + 2 dots
+            return True
+        if Convert.isPowerOfTwo(quarterLength * 8 / 15):
+            # power of two + 3 dots
+            return True
+        return False
+
+    @staticmethod
+    def computeDurationNoDotsAndNumDots(quarterLength: HumNum) -> (HumNum, int):
+        attemptedPowerOfTwo: HumNum = quarterLength
+        if Convert.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + no dots
+            return (attemptedPowerOfTwo, 0)
+
+        attemptedPowerOfTwo = quarterLength * 2 / 3
+        if Convert.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 1 dot
+            return (attemptedPowerOfTwo, 1)
+
+        attemptedPowerOfTwo = quarterLength * 4 / 7
+        if Convert.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 2 dots
+            return (attemptedPowerOfTwo, 2)
+
+        attemptedPowerOfTwo = quarterLength * 8 / 15
+        if Convert.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 3 dots
+            return (attemptedPowerOfTwo, 3)
+
+        raise HumdrumInternalError('Cannot split out dots from dur={quarterLength}')
+
+    @staticmethod
+    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNum) -> List[HumNum]:
+        output: List[HumNum] = []
+        ql: HumNum = quarterLength
+        if Convert.isPowerOfTwoWithDots(ql):
+            # power of two + maybe some dots
+            output.append(ql)
+            return output
+
+        powerOfTwoQLAttempt: HumNum = HumNum(4) # start with whole note
+        while powerOfTwoQLAttempt >= HumNum(1, 2048):
+            if ql >= powerOfTwoQLAttempt:
+                output.append(powerOfTwoQLAttempt)
+                ql -= powerOfTwoQLAttempt
+            else:
+                powerOfTwoQLAttempt /= 2
+
+            if Convert.isPowerOfTwoWithDots(ql):
+                # power of two + maybe some dots
+                output.append(ql)
+                return output
+
+        return [quarterLength] # we couldn't compute a full list so just return the original param
+
+    @staticmethod
     def transToDiatonicChromatic(trans: str) -> (int, int):
         m = re.search(r'd([+-]?\d+)c([+-]?\d+)', trans) # will match *ITrdNcM and *TrdNcM and dNcM
         if not m:
             return (None, None)
         return (int(m.group(1)), int(m.group(2)))
+
+    @staticmethod
+    def diatonicChromaticToTrans(d: int, c: int) -> str:
+        return 'd' + str(d) + 'c' + str(c)
+
+    humdrumBarlineStyleFromMeasureStyle: dict = {
+        MeasureStyle.Double                      : '||',
+        MeasureStyle.HeavyHeavy                  : '!!',
+        MeasureStyle.HeavyLight                  : '!|',
+        MeasureStyle.Final                       : '=', # actually '==', but first '=' is already there
+        MeasureStyle.Short                       : "'",
+        MeasureStyle.Tick                        : '`',
+        MeasureStyle.Invisible                   : '-',
+        MeasureStyle.Regular                     : '',
+        MeasureStyle.Heavy                       : '!',
+        MeasureStyle.RepeatBackwardRegular       : ':|',
+        MeasureStyle.RepeatBackwardHeavy         : ':!',
+        MeasureStyle.RepeatBackwardHeavyLight    : ':!|',
+        MeasureStyle.RepeatBackwardFinal         : ':|!',
+        MeasureStyle.RepeatBackwardHeavyHeavy    : ':!!',
+        MeasureStyle.RepeatBackwardDouble        : ':||',
+        MeasureStyle.RepeatForwardRegular        : '|:',
+        MeasureStyle.RepeatForwardHeavy          : '!:',
+        MeasureStyle.RepeatForwardHeavyLight     : '!|:',
+        MeasureStyle.RepeatForwardFinal          : '|!:',
+        MeasureStyle.RepeatForwardHeavyHeavy     : '!!:',
+        MeasureStyle.RepeatForwardDouble         : '||:',
+        MeasureStyle.RepeatBothRegular           : ':|:',
+        MeasureStyle.RepeatBothHeavy             : ':!:',
+        MeasureStyle.RepeatBothHeavyLight        : ':!|:', # unexpected asymmetry
+        MeasureStyle.RepeatBothFinal             : ':|!:', # unexpected asymmetry
+        MeasureStyle.RepeatBothHeavyHeavy        : ':!!:',
+        MeasureStyle.RepeatBothDouble            : ':||:',
+        MeasureStyle.RepeatBothHeavyLightHeavy   : ':!|!:',
+        MeasureStyle.RepeatBothLightHeavyLight   : ':|!|:'
+    }
+
+    @staticmethod
+    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> str:
+        output: str = Convert.humdrumBarlineStyleFromMeasureStyle[measureStyle]
+        return output

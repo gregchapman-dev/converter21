@@ -396,14 +396,14 @@ class HumdrumFileBase(HumHash):
             contents = contents[0:-1] # lose that last empty line (many editors add it)
 
         contentLines = contents.split('\n')
-        print(funcName(), 'len(contentLines) =', len(contentLines), file=sys.stderr)
+        #print(funcName(), 'len(contentLines) =', len(contentLines), file=sys.stderr)
         for contentLine in contentLines:
             line = HumdrumLine(contentLine)
             line.ownerFile = self
             self._lines.append(line)
 
         self.analyzeBaseFromLines()
-        print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
+        #print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
         return self.isValid
 
     '''
@@ -999,9 +999,9 @@ Line: {}'''.format(line.lineNumber, i, line.text))
     // HumdrumFileBase::appendLine -- Add a line to the file's contents.  The file's
     //    spine and rhythmic structure should be recalculated after an append.
     '''
-    def appendLine(self, line): # line can be HumdrumLine or str
+    def appendLine(self, line, asGlobalToken=False): # line can be HumdrumLine or str
         if isinstance(line, str):
-            line = HumdrumLine(line)
+            line = HumdrumLine(line, asGlobalToken=asGlobalToken)
         if not isinstance(line, HumdrumLine):
             raise TypeError("appendLine must receive either line: str or line: HumdrumLine")
         self._lines.append(line)
@@ -1012,9 +1012,9 @@ Line: {}'''.format(line.lineNumber, i, line.text))
     // HumdrumFileBase::insertLine -- Add a line to the file's contents.  The file's
     //    spine and rhythmic structure should be recalculated after an append.
     '''
-    def insertLine(self, index: int, aLine): # aLine can be HumdrumLine or str
+    def insertLine(self, index: int, aLine, asGlobalToken=False): # aLine can be HumdrumLine or str
         if isinstance(aLine, str):
-            aLine = HumdrumLine(aLine)
+            aLine = HumdrumLine(aLine, asGlobalToken=asGlobalToken)
         if not isinstance(aLine, HumdrumLine):
             raise TypeError("appendLine must receive either line: str or line: HumdrumLine")
         self._lines.insert(index, aLine)
@@ -1022,7 +1022,7 @@ Line: {}'''.format(line.lineNumber, i, line.text))
         # update line indexes for this line and the following ones
         for i, line in enumerate(self._lines):
             if i >= index:
-                line.setLineIndex(i)
+                line.lineIndex = i
 
     '''
     ////////////////////////////
@@ -1509,3 +1509,15 @@ Line: {}'''.format(line.lineNumber, i, line.text))
             tcount = token.nextTokenCount
 
         return True
+
+    '''
+    //////////////////////////////
+    //
+    // operator<< -- Default method of printing HumdrumFiles.  This printing method
+    //    assumes that the HumdrumLine string is correct.  If a token is changed
+    //    in the file, the HumdrumFileBase::createLinesFromTokens() before printing
+    //    the contents of the line.
+    '''
+    def write(self, fp):
+        for line in self._lines:
+            line.write(fp)

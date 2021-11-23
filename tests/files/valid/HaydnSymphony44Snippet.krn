@@ -1,0 +1,19 @@
+!!!COM: Joseph, Franz
+!!!OTL: Sinfonia No. 44 in E minor, Hob.I:44
+**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**dynam	**kern	**kern	**dynam
+*part9	*part9	*part8	*part8	*part7	*part7	*part6	*part6	*part5	*part5	*part4	*part4	*part3	*part3	*part2	*part2	*part1	*part1	*part1
+*staff10	*	*staff9	*	*staff8	*	*staff7	*	*staff6	*	*staff5	*	*staff4	*	*staff3	*	*staff2	*staff1	*
+*I"(bassoon)	*	*I"(double bass)	*	*I"Basso Continuo	*	*I"Viola	*	*I"Violin II	*	*I"Violin I	*	*I"Horn II in G	*	*I"Horn I in E	*	*I"2 Oboes	*	*
+*clefF4	*	*clefF4	*	*clefF4	*	*clefC3	*	*clefG2	*	*clefG2	*	*clefG2	*	*clefG2	*	*clefG2	*clefG2	*
+*	*	*ITrd0c0	*	*	*	*	*	*	*	*	*	*ITrd3c5	*	*ITrd5c8	*	*	*	*
+*k[f#]	*	*k[f#]	*	*k[f#]	*	*k[f#]	*	*k[f#]	*	*k[f#]	*	*k[f#]	*	*k[f#]	*	*k[f#]	*k[f#]	*
+*M4/4	*	*M4/4	*	*M4/4	*	*M4/4	*	*M4/4	*	*M4/4	*	*M4/4	*	*M4/4	*	*M4/4	*M4/4	*
+*met(c)	*	*met(c)	*	*met(c)	*	*met(c)	*	*met(c)	*	*met(c)	*	*met(c)	*	*met(c)	*	*met(c)	*met(c)	*
+=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1	=1
+2E	f	2E	f	2E	f	2e	f	2e	f	2e	f	1r	.	2e	f	1r	2e	f
+2B	.	2B	.	2B	.	2b	.	2b	.	2b	.	.	.	2r	.	.	2b	.
+==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==
+*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-
+!!!system-decoration: [({(s1,s2)}[(s3,s4)][(s5,s6)]s7,s8)]s9,s10
+!!!YEM: Creative Commons BY NC SA
+!!!system-decoration-new: [(s1,s2){s3,s4}{(s5,s6)}s7,s8]s9,s10

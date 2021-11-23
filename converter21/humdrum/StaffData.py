@@ -13,10 +13,11 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+#from typing import Union
 import music21 as m21
 
 from converter21.humdrum import MeasureData
+from converter21.humdrum import M21Utilities
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -28,19 +29,36 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class StaffData:
-    def __init__(self, partStaff: Union[m21.stream.Part, m21.stream.PartStaff],
+    def __init__(self, partStaff: m21.stream.Part, # could be PartStaff, which is derived from Part
                        ownerPart,
                        staffIndex: int):
         from converter21.humdrum import PartData
         ownerPart: PartData
         self.ownerPart: PartData = ownerPart
-        self.m21PartStaff: Union[m21.stream.Part, m21.stream.PartStaff] = partStaff
+        self.m21PartStaff: m21.stream.Part = partStaff
+        self._transposeWrittenToSounding(partStaff)
         self._staffIndex: int = staffIndex
+        self._hasDynamics: bool = False
         self.measures: [MeasureData] = []
 
-        for m, measure in enumerate(partStaff.measures):
-            measData: MeasureData = MeasureData(measure, self, m)
+        prevMeasData: MeasureData = None
+        for m, measure in enumerate(partStaff.getElementsByClass('Measure')):
+            measData: MeasureData = MeasureData(measure, self, m, prevMeasData)
             self.measures.append(measData)
+            prevMeasData = measData
+
+    @staticmethod
+    def _transposeWrittenToSounding(partStaff: m21.stream.Part):
+        # Transpose any transposing instrument parts to "sounding pitch" (a.k.a. concert pitch).
+        # For performance, check the instruments here, since stream.toSoundingPitch
+        # can be expensive, even if there is no transposing instrument.
+        # pylint: disable=singleton-comparison
+        if partStaff and partStaff.atSoundingPitch == False: # might be 'unknown' or True
+            # pylint: enable=singleton-comparison
+            for inst in partStaff.getElementsByClass(m21.instrument.Instrument):
+                if M21Utilities.isTransposingInstrument(inst):
+                    partStaff.toSoundingPitch(inPlace=True)
+                    break # you only need to transpose the part once
 
     @property
     def measureCount(self) -> int:
@@ -54,5 +72,18 @@ class StaffData:
     def staffIndex(self) -> int:
         return self._staffIndex
 
-    def receiveEditorialAccidental(self, editorialStyle: str):
-        self.ownerPart.receiveEditorialAccidental(editorialStyle)
+    @property
+    def hasDynamics(self) -> bool:
+        return self._hasDynamics
+
+    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
+        return self.ownerPart.reportEditorialAccidentalToOwner(editorialStyle)
+
+    def reportCaesuraToOwner(self) -> str:
+        return self.ownerPart.reportCaesuraToOwner()
+
+    def reportLinkedSlurToOwner(self) -> str:
+        return self.ownerPart.reportLinkedSlurToOwner()
+
+    def receiveDynamic(self):
+        self._hasDynamics = True # don't propagate up to PartData, we do per-staff dynamics

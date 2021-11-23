@@ -8,6 +8,9 @@ from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumSignifier
 from converter21.humdrum import HumSignifiers
 
+import music21 as m21
+
+from typing import Tuple
 from fractions import Fraction
 import random
 import json
@@ -600,3 +603,131 @@ def CheckHumSignifiers(hss: HumSignifiers, **kw):
             print('CheckHumSignifiers does not support "{}" yet. Add test support!'.format(key))
             assert False
 
+def CheckM21DateSingle(dateSingle, expectedYear=None, expectedMonth=None, expectedDay=None,
+                                   expectedHour=None, expectedMinute=None, expectedSecond=None,
+                                   expectedYearError=None, expectedMonthError=None,
+                                   expectedDayError=None, expectedHourError=None,
+                                   expectedMinuteError=None, expectedSecondError=None,
+                                   expectedRelevance='certain'):
+    assert isinstance(dateSingle, m21.metadata.DateSingle)
+    assert dateSingle.relevance == expectedRelevance
+    assert dateSingle._data[0].year == expectedYear
+    assert dateSingle._data[0].yearError == expectedYearError
+    assert dateSingle._data[0].month == expectedMonth
+    assert dateSingle._data[0].monthError == expectedMonthError
+    assert dateSingle._data[0].day == expectedDay
+    assert dateSingle._data[0].dayError == expectedDayError
+    assert dateSingle._data[0].hour == expectedHour
+    assert dateSingle._data[0].hourError == expectedHourError
+    assert dateSingle._data[0].minute == expectedMinute
+    assert dateSingle._data[0].minuteError == expectedMinuteError
+    assert dateSingle._data[0].second == expectedSecond
+    assert dateSingle._data[0].secondError == expectedSecondError
+
+def CheckM21DateRelative(dateRelative, expectedYear=None, expectedMonth=None, expectedDay=None,
+                                   expectedHour=None, expectedMinute=None, expectedSecond=None,
+                                   expectedYearError=None, expectedMonthError=None,
+                                   expectedDayError=None, expectedHourError=None,
+                                   expectedMinuteError=None, expectedSecondError=None,
+                                   expectedRelevance=None): # expectedRelevance=None is never right
+    assert isinstance(dateRelative, m21.metadata.DateRelative)
+    assert dateRelative.relevance == expectedRelevance
+    assert dateRelative._data[0].year == expectedYear
+    assert dateRelative._data[0].yearError == expectedYearError
+    assert dateRelative._data[0].month == expectedMonth
+    assert dateRelative._data[0].monthError == expectedMonthError
+    assert dateRelative._data[0].day == expectedDay
+    assert dateRelative._data[0].dayError == expectedDayError
+    assert dateRelative._data[0].hour == expectedHour
+    assert dateRelative._data[0].hourError == expectedHourError
+    assert dateRelative._data[0].minute == expectedMinute
+    assert dateRelative._data[0].minuteError == expectedMinuteError
+    assert dateRelative._data[0].second == expectedSecond
+    assert dateRelative._data[0].secondError == expectedSecondError
+
+def _checkM21DateBetweenOrSelection(dateBetweenOrSelection,
+                                    expectedNumDates,
+                                    expectedYear, expectedMonth, expectedDay,
+                                    expectedHour, expectedMinute, expectedSecond,
+                                    expectedYearError, expectedMonthError,
+                                    expectedDayError, expectedHourError,
+                                    expectedMinuteError, expectedSecondError):
+    assert len(dateBetweenOrSelection._data) == expectedNumDates
+    if not isinstance(expectedYear, Tuple):
+        expectedYear = (expectedYear,) * expectedNumDates
+    if not isinstance(expectedMonth, Tuple):
+        expectedMonth = (expectedMonth,) * expectedNumDates
+    if not isinstance(expectedDay, Tuple):
+        expectedDay = (expectedDay,) * expectedNumDates
+    if not isinstance(expectedHour, Tuple):
+        expectedHour = (expectedHour,) * expectedNumDates
+    if not isinstance(expectedMinute, Tuple):
+        expectedMinute = (expectedMinute,) * expectedNumDates
+    if not isinstance(expectedSecond, Tuple):
+        expectedSecond = (expectedSecond,) * expectedNumDates
+    if not isinstance(expectedYearError, Tuple):
+        expectedYearError = (expectedYearError,) * expectedNumDates
+    if not isinstance(expectedMonthError, Tuple):
+        expectedMonthError = (expectedMonthError,) * expectedNumDates
+    if not isinstance(expectedDayError, Tuple):
+        expectedDayError = (expectedDayError,) * expectedNumDates
+    if not isinstance(expectedHourError, Tuple):
+        expectedHourError = (expectedHourError,) * expectedNumDates
+    if not isinstance(expectedMinuteError, Tuple):
+        expectedMinuteError = (expectedMinuteError,) * expectedNumDates
+    if not isinstance(expectedSecondError, Tuple):
+        expectedSecondError = (expectedSecondError,) * expectedNumDates
+
+    for i in range(0, expectedNumDates):
+        assert dateBetweenOrSelection._data[i].year == expectedYear[i]
+        assert dateBetweenOrSelection._data[i].yearError == expectedYearError[i]
+        assert dateBetweenOrSelection._data[i].month == expectedMonth[i]
+        assert dateBetweenOrSelection._data[i].monthError == expectedMonthError[i]
+        assert dateBetweenOrSelection._data[i].day == expectedDay[i]
+        assert dateBetweenOrSelection._data[i].dayError == expectedDayError[i]
+        assert dateBetweenOrSelection._data[i].hour == expectedHour[i]
+        assert dateBetweenOrSelection._data[i].hourError == expectedHourError[i]
+        assert dateBetweenOrSelection._data[i].minute == expectedMinute[i]
+        assert dateBetweenOrSelection._data[i].minuteError == expectedMinuteError[i]
+        assert dateBetweenOrSelection._data[i].second == expectedSecond[i]
+        assert dateBetweenOrSelection._data[i].secondError == expectedSecondError[i]
+
+def CheckM21DateBetween(dateBetween,
+                                    expectedNumDates=2,
+                                    expectedYear=None, expectedMonth=None, expectedDay=None,
+                                    expectedHour=None, expectedMinute=None, expectedSecond=None,
+                                    expectedYearError=None, expectedMonthError=None,
+                                    expectedDayError=None, expectedHourError=None,
+                                    expectedMinuteError=None, expectedSecondError=None,
+                                    expectedRelevance='between'):
+    assert isinstance(dateBetween, m21.metadata.DateBetween)
+    assert dateBetween.relevance == expectedRelevance
+    _checkM21DateBetweenOrSelection(dateBetween,
+                                    expectedNumDates,
+                                    expectedYear, expectedMonth, expectedDay,
+                                    expectedHour, expectedMinute, expectedSecond,
+                                    expectedYearError, expectedMonthError,
+                                    expectedDayError, expectedHourError,
+                                    expectedMinuteError, expectedSecondError)
+
+def CheckM21DateSelection(dateSelection,
+                                    expectedNumDates,
+                                    expectedYear=None, expectedMonth=None, expectedDay=None,
+                                    expectedHour=None, expectedMinute=None, expectedSecond=None,
+                                    expectedYearError=None, expectedMonthError=None,
+                                    expectedDayError=None, expectedHourError=None,
+                                    expectedMinuteError=None, expectedSecondError=None,
+                                    expectedRelevance='or'):
+    assert isinstance(dateSelection, m21.metadata.DateSelection)
+    assert dateSelection.relevance == expectedRelevance
+    _checkM21DateBetweenOrSelection(dateSelection,
+                                    expectedNumDates,
+                                    expectedYear, expectedMonth, expectedDay,
+                                    expectedHour, expectedMinute, expectedSecond,
+                                    expectedYearError, expectedMonthError,
+                                    expectedDayError, expectedHourError,
+                                    expectedMinuteError, expectedSecondError)
+
+def CheckString(string, expectedString):
+    assert isinstance(string, str)
+    assert string == expectedString

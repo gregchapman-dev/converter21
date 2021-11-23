@@ -34,7 +34,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
     from the resulting strings.
 '''
 def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> (str, str):
-    keyAndValueStrList = keyValueStr.split(delimiter)
+    keyAndValueStrList = keyValueStr.split(delimiter, 1) # ignore ':' in value
     if len(keyAndValueStrList) == 1:
         return (keyAndValueStrList.strip(), None)
 
@@ -42,7 +42,7 @@ def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> (str, str):
 
 
 class HumdrumLine(HumHash):
-    def __init__(self, line: str = '', ownerFile = None): # ownerFile: HumdrumFile
+    def __init__(self, line: str = '', asGlobalToken=False, ownerFile = None): # ownerFile: HumdrumFile
         from converter21.humdrum import HumdrumFile
         super().__init__() # initialize the HumHash fields
 
@@ -54,7 +54,9 @@ class HumdrumLine(HumHash):
         elif len(line) > 0 and line[-1] == '\n':
             line = line[:-1] # strip off any trailing LF
 
-        self._text: str = line
+        self._text = ''
+        if not asGlobalToken:
+            self._text: str = line
 
         '''
         // owner: This is the HumdrumFile which manages the given line.
@@ -82,7 +84,9 @@ class HumdrumLine(HumHash):
         // The contents of this vector should be deleted when deconstructing
         // a HumdrumLine object.
         '''
-        self._tokens: [str] = []
+        self._tokens: [HumdrumToken] = []
+        if asGlobalToken:
+            self._tokens = [HumdrumToken(line)]
 
         '''
         // m_tabs: Used to store a count of the number of tabs between
@@ -90,6 +94,8 @@ class HumdrumLine(HumHash):
         // token at the given index (so no tabs before the first token).
         '''
         self._numTabsAfterToken: [int] = []
+        if asGlobalToken:
+            self._numTabsAfterToken = [0]
 
         '''
         // m_duration: This is the "duration" of a line.  The duration is
@@ -1244,3 +1250,11 @@ class HumdrumLine(HumHash):
     @property
     def allSameBarlineStyle(self) -> bool:
         return not self.getValueBool('auto', 'barlinesDifferent')
+
+    '''
+    //////////////////////////////
+    //
+    // operator<< -- Print a HumdrumLine.
+    '''
+    def write(self, fp):
+        fp.write(self._text + '\n')

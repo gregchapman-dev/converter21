@@ -16,6 +16,7 @@
 import sys
 
 from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import SliceType
@@ -35,7 +36,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 class GridStaff():
     def __init__(self):
         self.voices: [GridVoice] = []
-        self.side: GridSide = None
+        self.sides: GridSide = GridSide()
 
     def __str__(self):
         output: str = ''
@@ -52,25 +53,25 @@ class GridStaff():
             if i < len(self.voices) - 1:
                 output += '\t'
 
-        if self.side is not None:
-            output += '\t' + str(self.side)
+        if self.sides is not None:
+            output += '\t' + str(self.sides)
 
         return output
 
     # side property pass-thrus
     @property
     def dynamicsCount(self) -> int:
-        if self.side.dynamics is None:
+        if self.sides.dynamics is None:
             return 0
         return 1
 
     @property
     def dynamics(self) -> HumdrumToken:
-        return self.side.dynamics
+        return self.sides.dynamics
 
     @dynamics.setter
     def dynamics(self, newDynamics: HumdrumToken):
-        self.side.dynamics = newDynamics
+        self.sides.dynamics = newDynamics
 
 
     '''
@@ -116,13 +117,13 @@ class GridStaff():
             raise HumdrumInternalError('!!STRANGE ERROR: {}, SLICE TYPE: {}'.format(self, sliceType))
 
         if layerIndex < len(self.voices):
-            if self.voices[layerIndex] is not None and \
-                    self.voices[layerIndex].token is not None:
+            if (self.voices[layerIndex] is not None
+                    and self.voices[layerIndex].token is not None):
                 if self.voices[layerIndex].token.text == nullStr:
 				    # there is already a null data token here, so don't
 				    # replace it.
                     return
-                print('Warning, replacing existing token: "{}" with a null token'.format(
+                raise HumdrumExportError('Warning, existing token: "{}" where a null token should be.'.format(
                             self.voices[layerIndex].token.text))
 
         token: HumdrumToken = HumdrumToken(nullStr)

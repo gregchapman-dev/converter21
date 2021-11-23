@@ -45,7 +45,7 @@ class GridSide:
                 if i < self.verseCount:
                     outstr += '; '
         if self.dynamicsCount > 0:
-            outstr += 'dyn:' + self.dynamics
+            outstr += 'dyn:' + self.dynamics.text
         if self.harmonyCount > 0:
             outstr += 'harm:' + self.harmony
         outstr += '] '

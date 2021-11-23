@@ -7,7 +7,7 @@ from pathlib import Path
 
 import music21 as m21
 import lib.score_visualization as sv
-import lib.m21utils as m21u
+#import lib.m21utils as m21u
 import lib.NotationLinear as nlin
 import lib.score_comparison_lib as scl
 from timeit import default_timer as timer

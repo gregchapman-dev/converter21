@@ -1,0 +1,58 @@
+!!!COM: Messiaen, Olivier (Eugène Prosper Charles)
+!!!COM2: Chapman, Greg
+!!!OTL@@FR: Les Corps glorieux pour orgue
+!!!OTL-sub@@FR: French subtitle
+!!!OTL@EN: Glorious Bodies for Organ
+!!!OTL-sub@EN: English subtitle
+!!!OMV@@FR: 3rd Fascicule, No. 6: Joie et clarté des corps glorieux
+!!!OMV@EN: 3rd Section, No. 6: Joy and Brightness of Glorious Bodies
+!!!example: 731
+!!!work: Mes-16
+**kern	**dynam	**kern	**dynam
+*part1	*part1	*part1	*part1
+*staff2	*staff2	*staff1	*staff1
+*I"Organ	*	*	*
+*I'Org.	*	*	*
+*clefG2	*	*clefG2	*
+*k[b-e-a-d-g-]	*	*k[b-e-a-d-g-]	*
+*D-:	*	*D-:	*
+*M4/4	*	*M4/4	*
+=24	=24	=24	=24
+4d-	mf	4e-	.
+4A-	.	4r	.
+4A-	.	4e-	mp
+4A-	.	4r	.
+=	=	=	=
+*-	*-	*-	*-
+!!!system-decoration: [({(s1,s2)})]
+!!!CDT: 1908/12/10-1992/04/27
+!!!CBL: Avignon, France
+!!!CDL: Paris, France (goes into editorial)
+!!!CDL: Example of supernumary (unnumbered) key whose original is in editorial
+!!!CDL1: Example of supernumary (numbered) key whose original is in editorial
+!!!CNT: French
+!!!AGN: Instrumental; Keyboard
+!!!MCN:
+!!!MDT: 1943/11/15
+!!!MGN:
+!!!MLC: Paris, France
+!!!MPD: 1943
+!!!MPN: Messiaen, Olivier
+!! The following ODT keys are an example of supernumaries (like CDL above),
+!! but the original is in metadata
+!!!ODT: 1939
+!!!ODT: 1940
+!!!ODT1: 1941
+!!!ODT3: 1943
+!!!ODT5: 1945
+!!!PDT: 1942
+!!!excerpt-start-measure: 24
+!!!excerpt-end-measure: 28
+!!!excerpt-start-time: 1:12
+!!!excerpt-end-time: 1:38
+!!!EEV: 2020/07/28
+!!!ONB: Converted from MusicXML on 2020/07/28
+!!!ONB3: nota bene number 3
+!!!ONB2: nota bene number 2
+!!!RDF**kern: > = above
+!!!RDF**kern: < = below
