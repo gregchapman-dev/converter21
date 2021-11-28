@@ -67,7 +67,12 @@ def runTheFullTest(krnPath: Path):
     assert(score2 is not None)
     assert(score2.isWellFormedNotation())
 
-    # here we could check against results, or even compare the two music21 scores
+    # compare the two music21 scores
+
+    # first with bbdiff:
+#    subprocess.run(['bbdiff', str(krnPath), str(fp)])
+
+    # next with music-score-diff:
     print('comparing the two m21 scores')
     score_lin1 = nlin.Score(score1)
     print('loaded first score')
@@ -83,10 +88,6 @@ def runTheFullTest(krnPath: Path):
         print('annotated the scores to show differences')
         sv.show_differences(score1, score2)
         print('displayed both annotated scores')
-
-    # bring up a BBEdit diff of the two humdrum files (even if the scores
-    # compared equal)
-    subprocess.run(['bbdiff', str(krnPath), str(fp)])
 
 # ------------------------------------------------------------------------------
 
