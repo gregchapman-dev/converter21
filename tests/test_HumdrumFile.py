@@ -164,6 +164,13 @@ def ReadAllTestFilesInFolder(folder: str):
                 'sonata11-2.krn',
                 'sonata29-4.krn',
                 'sonata09-2.krn',
+                'sonata30-3.krn',
+                                                            ):
+            print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
+            continue
+
+        if 'rds-scores' in str(krnPath) and krnPath.name in (
+                'R255_Ive-w35p12m19-24.krn',
                                                             ):
             print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
             continue
@@ -178,6 +185,7 @@ def ReadAllTestFilesInFolder(folder: str):
                 'sonata12-2.krn',
                 'sonata09-2.krn',
                 'sonata09-3.krn',
+                'sonata13-2.krn',
                                                          ):
             print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
             continue

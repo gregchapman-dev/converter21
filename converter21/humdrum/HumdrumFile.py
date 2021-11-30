@@ -1335,7 +1335,13 @@ class HumdrumFile(HumdrumFileContent):
     def _convertMeasureStaff(self, track: int, startLineIdx: int, endLineIdx: int, layerCount: int):
         # do the layers backward, so highest in the score (right-most in humdrum)
         # comes first in the m21Score
-        for layerIndex in range(layerCount-1, -1, -1):
+        # There are a lot of humdrum scores where this is not correct ordering, so I'm
+        # reverting this change (back to doing the layers forward).  We might want an
+        # option (for import here, and export elsewhere) to allow the user to specify
+        #their preference.
+
+        # for layerIndex in range(layerCount-1, -1, -1):
+        for layerIndex in range(0, layerCount):
             self._convertStaffLayer(track, startLineIdx, endLineIdx, layerIndex)
 
         # Q: what about checkClefBufferForSameAs... sounds like it is (mostly?) undoing
