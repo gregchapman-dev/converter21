@@ -70,7 +70,7 @@ def runTheFullTest(krnPath: Path):
     # compare the two music21 scores
 
     # first with bbdiff:
-#    subprocess.run(['bbdiff', str(krnPath), str(fp)])
+    subprocess.run(['bbdiff', str(krnPath), str(fp)])
 
     # next with music-score-diff:
     print('comparing the two m21 scores')

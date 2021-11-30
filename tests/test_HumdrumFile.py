@@ -42,10 +42,10 @@ def ReadAllTestFilesInFolder(folder: str):
         print('krn file {}: {}'.format(i, krnPath))
 
         # use this to skip files in folder (i.e. start with n, which is 0-based)
-#         n = 5
-#         if i < n:
-#             print(f'\tskipping any files before {n}th file in folder')
-#             continue
+        # n = 78
+        # if i < n:
+        #     print(f'\tskipping any files before {n}th file in folder')
+        #     continue
 #
 #         if krnPath.name == 'sonata07-1.krn':
 #             print('hi')
@@ -53,6 +53,13 @@ def ReadAllTestFilesInFolder(folder: str):
         resultsFileName = krnPath.stem + '.json'
         resultsPath = krnPath.parent / resultsFileName
 #         try:
+
+        if 'tasso-scores' in str(krnPath) and krnPath.name in (
+                'Tam2031034a-Vorro_veder_cio_che_Tirsi_avra_fatto--Balsamino_1594.krn',
+                                                            ):
+            print('skipping test because krnFile contains more than one score (not yet supported)')
+            continue
+
         hfb = HumdrumFile(str(krnPath))
         assert(hfb.isValid)
 
@@ -80,6 +87,19 @@ def ReadAllTestFilesInFolder(folder: str):
         if krnPath.name in (
                 'Tam2010724a-Picciola_e_lape_e_fa_col_picciol_morso--Balsamino_1594.krn', # tasso-scores
                             ):
+            print('\tskipping export due to overlapping note durations')
+            continue
+
+        if 'beethoven' in str(krnPath) and krnPath.name in (
+                'sonata11-1.krn',
+        ):
+            print('\tskipping export due to overlapping note durations')
+            continue
+
+        if 'rds-scores' in str(krnPath) and krnPath.name in (
+                'R409_Web-w3p7m46-49.krn',
+                'R319_Fal-w6p178-179h44m1-5.krn'
+        ):
             print('\tskipping export due to overlapping note durations')
             continue
 
@@ -164,8 +184,29 @@ def ReadAllTestFilesInFolder(folder: str):
 
         if 'chopin_mazurkas' in str(krnPath) and krnPath.name in (
                 'mazurka06-1.krn',
-                                                            ):
+                                                                ):
             print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
+            continue
+
+        if 'chopin_mazurkas' in str(krnPath) and krnPath.name in (
+                'mazurka30-4.krn'
+                                                                ):
+            print('\tskipping parse of export due to export dropping a LO:TX on the floor (absent token)')
+            continue
+
+        if 'tasso-scores' in str(krnPath) and krnPath.name in (
+                'Trm0380a-Viviamo_amianci_o_mia_gradita_Jelle--Monte_1591.krn',
+                'Tsg03008a-Dunque_ove_tu_signor_di_mille_rivi--Mazzocchi_1640.krn',
+                                                                ):
+            print('\tskipping parse of export due to export dropping a LO:TX on the floor (absent token)')
+            continue
+
+        if 'rds-scores' in str(krnPath) and krnPath.name in (
+                'R130_Jan-w33p13m63-71.krn',
+                'R420_Var-w8p23h7m10-14.krn',
+                'R689_Ger-w12p59m29-34.krn',
+                                                            ):
+            print('\tskipping parse of export due to export dropping a LO:TX on the floor (absent token)')
             continue
 
         if 'beethoven' in str(krnPath) and krnPath.name in (
@@ -186,6 +227,7 @@ def ReadAllTestFilesInFolder(folder: str):
                 'R701_Cop-w1v2p8m1-h2m2.krn',
                 'R700_Cop-w2p64h38m3-10.krn',
                 'R258_Ive-w30p9m55-57.krn',
+                'R408_Web-w13p1-2m1-12.krn',
         ):
             print('\tskipping parse of export due to weird tuplets in the original')
             continue

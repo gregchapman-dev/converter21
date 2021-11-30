@@ -55,7 +55,9 @@ class HumGrid:
         self._partNames: [str] = [] # grows as necessary
 
         # indexed by part,staff (max == 100 parts, max = 4 staves per part)
-        self._dynamics: [[bool]] = [[False] * 4] * 100
+        self._dynamics: [[bool]] = []
+        for _ in range(0, 100):
+            self._dynamics.append([False] * 4)
 
         # options:
         self._pickup: bool = False

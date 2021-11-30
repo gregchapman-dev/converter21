@@ -912,29 +912,29 @@ class HumdrumLine(HumHash):
             self._numTabsAfterToken = [0]
             return 1
 
-        tokenStrList: [str] = self.text.split('\t')
-        for tokenStr in tokenStrList:
+        # tokenStrList: [str] = self.text.split('\t')
+        # for tokenStr in tokenStrList:
+        #     token = HumdrumToken(tokenStr)
+        #     token.ownerLine = self
+        #     self._tokens.append(token)
+        #     self._numTabsAfterToken.append(1)
+
+        for m in re.finditer(r'([^\t]+)(\t*)', self.text):
+            # m is a match object containing two groups: first the token, then any trailing tabs
+            tokenStr = m.group(1)
+            if tokenStr is None:
+                break
+
+            tabsStr = m.group(2)
+            if tabsStr is None:
+                numTabsAfterThisToken = 0
+            else:
+                numTabsAfterThisToken = len(tabsStr)
+
             token = HumdrumToken(tokenStr)
             token.ownerLine = self
             self._tokens.append(token)
-            self._numTabsAfterToken.append(1)
-
-#         for m in re.finditer(r'([^\t]+)(\t*)', self.text):
-#             # m is a match object containing two groups: first the token, then any trailing tabs
-#             tokenStr = m.group(1)
-#             if tokenStr is None:
-#                 break
-#
-#             tabsStr = m.group(2)
-#             if tabsStr is None:
-#                 numTabsAfterThisToken = 0
-#             else:
-#                 numTabsAfterThisToken = len(tabsStr)
-#
-#             token = HumdrumToken(tokenStr)
-#             token.ownerLine = self
-#             self._tokens.append(token)
-#             self._numTabsAfterToken.append(numTabsAfterThisToken)
+            self._numTabsAfterToken.append(numTabsAfterThisToken)
 
         return len(self._tokens)
 

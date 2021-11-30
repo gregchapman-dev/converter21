@@ -1555,14 +1555,15 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             self._addTempos(outSlice, outgm, self._currentTempos)
             self._currentTempos = [] # they've all been added
 
-        if event.dynamics or self._currentDynamics:
+        if event.dynamics(self._spannerBundle) or self._currentDynamics:
             # self._currentDynamics contains any zero-duration (unassociated) dynamics ('pp' et al)
             # that could be in any part/staff.
-            # event.dynamics contains any "durational" dynamics (multi-note wedges starts or stops)
+            # event.dynamics() contains any "durational" dynamics (multi-note wedges starts or stops)
             # associated with this note, in this part/staff.
             self._addDynamics(outSlice, outgm, event, self._currentDynamics)
             self._currentDynamics = []
-            event.reportDynamicToOwner() # reports that dynamics exist in this part/staff
+            if event.dynamics(self._spannerBundle):
+                event.reportDynamicToOwner() # reports that dynamics exist in this part/staff
 
         # 888 might need special hairpin ending processing here (or might be musicXML-specific).
 

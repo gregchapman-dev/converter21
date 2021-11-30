@@ -14,6 +14,7 @@ from typing import Tuple
 from fractions import Fraction
 import random
 import json
+import re
 
 TOKENTYPE_DATA                  = 'data'
 TOKENTYPE_BARLINE               = 'barline'
@@ -270,9 +271,21 @@ class HumdrumFileTestResults:
         for line in allLines:
             if line.startswith('!!'): # because (e.g. beethoven.../sonata04-1.krn) someone might have commented out a
                 tokens.append([line])   # line with '!!', so we can't use the presence of tabs to mean there are spines
+            elif line == '': # blank line
+                tokens.append(['']) # single empty token
             else:
-                tokens.append(line.split('\t'))
+                tokens.append(self.splitIntoTokens(line))
         return tokens
+
+    def splitIntoTokens(self, line: str) -> [str]:
+        output: [str] = []
+        for m in re.finditer(r'([^\t]+)(\t*)', line):
+            # m is a match object containing two groups: first the token, then any trailing tabs
+            tokenStr = m.group(1)
+            if tokenStr is None:
+                break
+            output.append(tokenStr)
+        return output
 
     def getExpectedLineType(self, line: str) -> str:
         if line is None or line == '':
