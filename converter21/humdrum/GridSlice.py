@@ -361,7 +361,7 @@ class GridSlice:
                     # 888: ... all open voices are given null tokens.
                     line.appendToken(HumdrumToken(emptyStr))
                 else:
-                    for voice in reversed(staff.voices):
+                    for voice in staff.voices: # NOT reversed (voices different from parts/staves)
                         if voice is not None and voice.token is not None:
                             line.appendToken(voice.token)
                         else:
