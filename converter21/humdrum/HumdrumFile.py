@@ -5458,6 +5458,8 @@ class HumdrumFile(HumdrumFileContent):
                 staffAdj = ss.dynamStaffAdj
 
                 dynText: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 't', '', '')
+                if not dynText:
+                    dynText = self._getLayoutParameterWithDefaults(dynTok, 'DY', 'tx', '', '')
                 if dynText:
                     dynText = re.sub('%s', dynamic, dynText)
                     dynamic = dynText
@@ -5686,9 +5688,13 @@ class HumdrumFile(HumdrumFileContent):
                 fontStyle = self._signifiers.decrescFontStyle
 
             pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 't', '', '')
+            if not pinText:
+                pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 'tx', '', '')
             if pinText:
-                pinText = re.sub('%s', content, pinText)
-                content = pinText
+                html.unescape(pinText)
+                if pinText:
+                    pinText = re.sub('%s', content, pinText)
+                    content = pinText
 
             m21TextExp: m21.expressions.TextExpression = m21.expressions.TextExpression(content)
             if fontStyle:
@@ -5893,9 +5899,13 @@ class HumdrumFile(HumdrumFileContent):
 
         text: str = token.getValue('LO', 'TX', 't')
         if not text:
+            text = token.getValue('LO', 'TX', 'tx')
+        if not text:
             return insertedIntoVoice
 
         text = html.unescape(text)
+        if not text:
+            return insertedIntoVoice
 
         # maybe add center justification as an option later
         # justification == 0 means no explicit justification (mostly left justified)
@@ -6056,7 +6066,7 @@ class HumdrumFile(HumdrumFileContent):
                 bparam = True
             elif key == 'c':
                 cparam = True
-            elif key == 't':
+            elif key in ('t', 'tx'): # I've seen 'tx=' in mazurka30-4.krn as well as others --gregc
                 text = value
                 if not text:
                     # nothing to display
@@ -6246,6 +6256,8 @@ class HumdrumFile(HumdrumFileContent):
         tempo: m21.tempo.MetronomeMark = None
         direction: m21.expressions.TextExpression = None
         tempoOrDirection: m21.Music21Object = None
+
+        text = html.unescape(text)
 
         if re.search(Convert.METRONOME_MARK_PATTERN, text):
             tempo = self._createMetronomeMark(text, token)

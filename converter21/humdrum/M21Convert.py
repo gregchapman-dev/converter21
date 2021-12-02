@@ -680,7 +680,7 @@ class M21Convert:
         layouts: [str] = []
 
         # rest postfix possibility 0: fermata
-        expressionStr = M21Convert._getHumdrumStringFromM21Expressions(m21Rest.expressions)
+        postfix += M21Convert._getHumdrumStringFromM21Expressions(m21Rest.expressions)
 
         # rest postfix possibility 1: pitch (for vertical positioning)
         if m21Rest.stepShift != 0:
@@ -688,7 +688,7 @@ class M21Convert:
             clef: m21.clef.Clef = m21Rest.getContextByClass('Clef')
             if clef is not None:
                 baseline: int = clef.lowestLine
-                midline: int = baseline + 4
+                midline: int = baseline + 4 # TODO: handle other than 5-line staves
                 pitchNum: int = midline + m21Rest.stepShift
                 # m21 pitch numbers (e.g. clef.lowestLine) are base7+1 for some reason
                 # (despite documentation saying that C0 == 0) so subtract 1 before passing
@@ -1055,18 +1055,15 @@ class M21Convert:
                                          absoluteY: Optional[float],
                                          fontStyle: Optional[str],
                                          fontWeight: Optional[str]) -> str:
-        if not content:
-            # no text to display
-            return ''
-
         placementString: str = ''
         styleString: str = ''
         contentString: str = M21Convert._cleanSpacesAndColons(content)
 
-        if not contentString:
-            # no text to display after cleaning
-            return ''
-
+        # We are perfectly happy to deal with empty contentString.  The result will be:
+        # '!LO:TX:i:t=' or something like that.
+        # The bottom line is that we can't return an invalid token string (e.g. '') or
+        # that will go into the exported file, and a '' will show up on parse as a missing
+        # spine. --gregc
         if placement is not None:
             if placement == 'above':
                 placementString = ':a'

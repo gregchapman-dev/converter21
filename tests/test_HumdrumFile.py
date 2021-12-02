@@ -197,27 +197,6 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
             continue
 
-        if 'chopin_mazurkas' in str(krnPath) and krnPath.name in (
-                'mazurka30-4.krn'
-                                                                ):
-            print('\tskipping parse of export due to export dropping a LO:TX on the floor (absent token)')
-            continue
-
-        if 'tasso-scores' in str(krnPath) and krnPath.name in (
-                'Trm0380a-Viviamo_amianci_o_mia_gradita_Jelle--Monte_1591.krn',
-                'Tsg03008a-Dunque_ove_tu_signor_di_mille_rivi--Mazzocchi_1640.krn',
-                                                                ):
-            print('\tskipping parse of export due to export dropping a LO:TX on the floor (absent token)')
-            continue
-
-        if 'rds-scores' in str(krnPath) and krnPath.name in (
-                'R130_Jan-w33p13m63-71.krn',
-                'R420_Var-w8p23h7m10-14.krn',
-                'R689_Ger-w12p59m29-34.krn',
-                                                            ):
-            print('\tskipping parse of export due to export dropping a LO:TX on the floor (absent token)')
-            continue
-
         if 'beethoven' in str(krnPath) and krnPath.name in (
                 'sonata20-2.krn',
                                                             ):
