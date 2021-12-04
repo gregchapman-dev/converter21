@@ -877,13 +877,13 @@ class M21Convert:
             # getting the info from each note.
             if noteIdx == 0:
                 articStr:str = M21Convert._getHumdrumStringFromM21Articulations(m21Chord.articulations, owner)
-                # 888: other notations (fermata, breath-mark, trills, tremolos, mordents, caesura)
+                exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(m21Chord.expressions, owner)
                 stemStr: str = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21Chord)
                 beamStr: str = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21Chord)
                 slurStarts, slurStops = M21Convert._getKernSlurStartsAndStopsFromGeneralNote(m21Chord, spannerBundle)
 
                 prefix = slurStarts + prefix
-                postfix = articStr + postfix + stemStr + beamStr + slurStops
+                postfix = articStr + exprStr + postfix + stemStr + beamStr + slurStops
 
             # put them in prefixPerNote, postFixPerNote, and layoutsForNotes
             prefixPerNote.append(prefix)
@@ -1471,7 +1471,6 @@ class M21Convert:
         # also the following two Spanners: TrillExtension and TremoloSpanner (multiple notes)
         output: str = ''
         for expr in m21Expressions:
-            humdrumString: str = ''
             if isinstance(expr, m21.expressions.Trill):
                 # TODO: print('export of Trill not implemented')
                 continue
@@ -1491,11 +1490,7 @@ class M21Convert:
                 # TODO: print('export of TrillExtension not implemented')
                 continue
             if isinstance(expr, m21.expressions.Fermata):
-                humdrumString = ';'
-                continue
-
-            if humdrumString:
-                output += humdrumString
+                output += ';'
                 continue
 
         return output
