@@ -133,7 +133,7 @@ class EventData:
 
     def dynamics(self, spannerBundle: m21.spanner.SpannerBundle) -> List[m21.dynamics.DynamicWedge]:
         if not self._myDynamicsComputed:
-            self._dynamics = M21Utilities.getDynamicWedgesFromGeneralNote(self.m21Object, spannerBundle)
+            self._dynamics = M21Utilities.getDynamicWedgesStartedWithGeneralNote(self.m21Object, spannerBundle)
             self._myDynamicsComputed = True
         return self._dynamics
 

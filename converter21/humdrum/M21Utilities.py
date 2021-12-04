@@ -175,12 +175,15 @@ class M21Utilities:
         return expressions
 
     @staticmethod
-    def getDynamicWedgesFromGeneralNote(gnote: m21.note.GeneralNote,
-                                        spannerBundle: m21.spanner.SpannerBundle) -> [m21.dynamics.DynamicWedge]:
+    def getDynamicWedgesStartedWithGeneralNote(gnote: m21.note.GeneralNote,
+                                               spannerBundle: m21.spanner.SpannerBundle
+                                              ) -> [m21.dynamics.DynamicWedge]:
         output: List[m21.dynamics.DynamicWedge] = []
         spanners: List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
+                continue
+            if not spanner.isFirst(gnote): # not started with general note, forget it
                 continue
             if isinstance(spanner, m21.dynamics.DynamicWedge):
                 output.append(spanner)
