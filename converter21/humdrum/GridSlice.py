@@ -126,11 +126,10 @@ class GridSlice:
 
         if not 0 <= parti < len(self.parts):
             raise HumdrumInternalError(
-                'Error: part index {} is out of range(0, {})'.format(
-                            parti, len(self.parts)))
+                f'Error: part index {parti} is out of range(0, {len(self.parts)})')
 
         if staffi < 0:
-            raise HumdrumInternalError('Error: staff index {} < 0'.format(staffi))
+            raise HumdrumInternalError(f'Error: staff index {staffi} < 0')
 
         part: GridPart = self.parts[parti]
 

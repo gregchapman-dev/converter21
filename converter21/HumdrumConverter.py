@@ -90,7 +90,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         hdw.makeNotation = makeNotation
         hdw.addRecipSpine = addRecipSpine
 
-        with open(fp, 'w') as f:
+        with open(fp, 'w', encoding='utf8') as f:
             hdw.write(f)
 
         return fp

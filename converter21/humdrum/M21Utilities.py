@@ -28,7 +28,7 @@ TUPLETDEBUG = 1
 BEAMDEBUG = 1
 
 def durationWithTupletDebugReprInternal(self: m21.duration.Duration) -> str:
-    output: str = 'dur.qL={}'.format(self.quarterLength)
+    output: str = f'dur.qL={self.quarterLength}'
     if len(self.tuplets) >= 1:
         tuplet: m21.duration.Tuplet = self.tuplets[0]
         output += ' tuplets[0]: ' + tuplet._reprInternal()
@@ -277,7 +277,7 @@ class M21StaffGroupTree:
         self.lowestStaffNumber: int = min(self.staffNums)
 
         # tree links
-        self.children: List[M21StaffGroupTree] = []
+        self.children = [] # List[M21StaffGroupTree]
 
 class M21StaffGroupDescriptionTree:
     def __init__(self):
@@ -294,5 +294,5 @@ class M21StaffGroupDescriptionTree:
 
         # tree links:
         # children == subgroups, parent = enclosing group (None for top)
-        self.children: List[M21StaffGroupDescriptionTree] = []
-        self.parent: M21StaffGroupDescriptionTree = None
+        self.children = [] # List[M21StaffGroupDescriptionTree]
+        self.parent = None # M21StaffGroupDescriptionTree

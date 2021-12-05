@@ -208,7 +208,7 @@ class HumSignifiers:
             # actual signifier
 
             # lyrics tracks
-            if rdf.exInterp == '**silbe' or rdf.exInterp == '**text':
+            if rdf.exInterp in ('**silbe', '**text'):
                 if 'marked text' in rdf.definition or 'matched text' in rdf.definition:
                     self.textMarks.append(rdf.signifier)
                     m = re.search('color' + EQUALSVALUE_PATTERN, rdf.definition)

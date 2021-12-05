@@ -524,11 +524,11 @@ class HumGrid:
                             gs.voices[voicei] is not None and
                             gs.voices[voicei].token is not None and
                             gs.voices[voicei].token.text != '.'):
-                        raise HumdrumInternalError(f'Note ({token.text}) duration overlaps next note in voice ({gs.voices[voicei].token.text})'.format(token.text, ))
+                        raise HumdrumInternalError(f'Note ({token.text}) duration overlaps next note in voice ({gs.voices[voicei].token.text})')
                     gs.setNullTokenLayer(voicei, sliceType, sliceDur)
                     timeLeft -= sliceDur
                 elif sSlice.isInvalidSlice:
-                    print('THIS IS AN INVALID SLICE({}) {}'.format(s, sSlice), file=sys.stderr)
+                    print(f'THIS IS AN INVALID SLICE({s}) {sSlice}', file=sys.stderr)
                 else:
                     # store a null token for the non-data slice, but probably skip
                     # if there is a token already there (such as a clef-change).
@@ -590,24 +590,22 @@ class HumGrid:
 
         for p, part in enumerate(theSlice.parts):
             for s, staff in enumerate(part.staves):
-                v1count:  int = 1 # default, if lastSpined is None
+                v1Count:  int = 1 # default, if lastSpined is None
                 if lastSpined is not None:
-                    v1count = len(lastSpined.parts[p].staves[s].voices)
-                v2count:  int = len(nextSpined.parts[p].staves[s].voices)
+                    v1Count = len(lastSpined.parts[p].staves[s].voices)
+                v2Count:  int = len(nextSpined.parts[p].staves[s].voices)
                 theCount: int = len(theSlice.parts[p].staves[s].voices)
 
-                if v1count < 1:
-                    v1count = 1
-                if v2count < 1:
-                    v2count = 1
+                v1Count = max(v1Count, 1)
+                v2Count = max(v2Count, 1)
 
                 # If spined slices are expanding or contracting, do
                 # not try to adjust the slice between them.
                 # These will get filled in properly during manipulator
                 # processing.
-                if v1count == v2count:
+                if v1Count == v2Count:
                     # Extend the array of voices to match the surrounding voice count.
-                    for _ in range(0, v1count - theCount):
+                    for _ in range(0, v1Count - theCount):
                         staff.voices.append(None)
 
                 # But no matter what, fill in any missing voices and/or tokens
@@ -659,10 +657,10 @@ class HumGrid:
                 firstSliceOfThisMeasure = thisMeasure.slices[0]
 
             if firstSliceOfThisMeasure is None:
-                print('Warning: GridSlice is None in GridMeasure[{}]'.format(i), file=sys.stderr)
+                print(f'Warning: GridSlice is None in GridMeasure[{i}]', file=sys.stderr)
                 continue
             if not firstSliceOfThisMeasure.parts:
-                print('Warning: GridSlice is empty in GridMeasure[{}]'.format(i), file=sys.stderr)
+                print(f'Warning: GridSlice is empty in GridMeasure[{i}]', file=sys.stderr)
                 continue
             if not firstSliceOfThisMeasure.isClefSlice:
                 continue
@@ -854,7 +852,7 @@ class HumGrid:
 
             if timestamp > target:
                 print('Cannot deal with this slice addition case yet for invisible rests...', file=sys.stderr)
-                print('\tTIMESTAMP = {}\t>\t{}'.format(timestamp, target), file=sys.stderr)
+                print(f'\tTIMESTAMP = {timestamp}\t>\t{target}', file=sys.stderr)
                 nextEvent[p][s] = starting
                 return
 
@@ -922,9 +920,9 @@ class HumGrid:
                     voiceCount: int = len(firstSpined.parts[p].staves[s].voices)
                     prevVoiceCount: int = 1 # default, if there is no previous measure
                     if prevLastSpined is not None:
-                        prevVoiceCount: int = len(prevLastSpined.parts[p].staves[s].voices)
-                    if voiceCount > prevVoiceCount:
-                        voiceCount = prevVoiceCount
+                        prevVoiceCount = len(prevLastSpined.parts[p].staves[s].voices)
+
+                    voiceCount = min(voiceCount, prevVoiceCount)
 
                     if voiceCount == 0:
                         voiceCount = 1
@@ -1193,10 +1191,10 @@ class HumGrid:
         p2Count: int = len(ice2.parts)
         if p1Count != p2Count:
             print('Warning: Something weird happened here', file=sys.stderr)
-            print('p1Count = {}'.format(p1Count), file=sys.stderr)
-            print('p2Count = {}'.format(p2Count), file=sys.stderr)
-            print('ICE1 = {}'.format(ice1), file=sys.stderr)
-            print('ICE2 = {}'.format(ice2), file=sys.stderr)
+            print(f'p1Count = {p1Count}', file=sys.stderr)
+            print(f'p2Count = {p2Count}', file=sys.stderr)
+            print(f'ICE1 = {ice1}', file=sys.stderr)
+            print(f'ICE2 = {ice2}', file=sys.stderr)
             print('p1Count and p2Count should be the same', file=sys.stderr)
             return None
 
@@ -1211,12 +1209,10 @@ class HumGrid:
                 v1Count: int = len(staff1.voices)
                 # the voice count always must be at least 1.  This case
                 # is related to inserting clefs in other parts.
-                if v1Count < 1:
-                    v1Count = 1
+                v1Count = max(v1Count, 1)
 
                 v2Count: int = len(staff2.voices)
-                if v2Count < 1:
-                    v2Count = 1
+                v2Count = max(v2Count, 1)
 
                 if v1Count == v2Count:
                     continue
@@ -1247,12 +1243,9 @@ class HumGrid:
                 mpart.staves[s] = mstaff
                 v1Count = len(staff1.voices)
                 v2Count = len(staff2.voices)
-                if v2Count < 1:
-                    # empty spines will be filled in with at least one null token.
-                    v2Count = 1
-                if v1Count < 1:
-                    # empty spines will be filled in with at least one null token.
-                    v1Count = 1
+                # empty spines will be filled in with at least one null token.
+                v2Count = max(v2Count, 1)
+                v1Count = max(v1Count, 1)
 
                 if v1Count == v2Count:
                     # no manipulation here: null token

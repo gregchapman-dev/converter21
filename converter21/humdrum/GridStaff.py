@@ -84,7 +84,7 @@ class GridStaff():
     '''
     def setTokenLayer(self, layerIndex: int, token: HumdrumToken, duration: HumNum) -> GridVoice:
         if layerIndex < 0:
-            raise HumdrumInternalError('Error: layer index is {} for {}'.format(layerIndex, token))
+            raise HumdrumInternalError(f'Error: layer index is {layerIndex} for {token}')
 
         if layerIndex > len(self.voices) - 1:
             for _ in range(len(self.voices), layerIndex + 1): # range includes layerIndex
@@ -114,7 +114,7 @@ class GridStaff():
         elif sliceType <= SliceType.Spined_:
             nullStr = '!'
         else:
-            raise HumdrumInternalError('!!STRANGE ERROR: {}, SLICE TYPE: {}'.format(self, sliceType))
+            raise HumdrumInternalError(f'!!STRANGE ERROR: {self}, SLICE TYPE: {sliceType}')
 
         if layerIndex < len(self.voices):
             if (self.voices[layerIndex] is not None
@@ -123,8 +123,7 @@ class GridStaff():
 				    # there is already a null data token here, so don't
 				    # replace it.
                     return
-                raise HumdrumExportError('Warning, existing token: "{}" where a null token should be.'.format(
-                            self.voices[layerIndex].token.text))
+                raise HumdrumExportError('Warning, existing token: \'{self.voices[layerIndex].token.text}\' where a null token should be.')
 
         token: HumdrumToken = HumdrumToken(nullStr)
         self.setTokenLayer(layerIndex, token, nextDur)

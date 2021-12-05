@@ -102,7 +102,7 @@ class HumdrumWriter:
 
         # _rdfKernSignifierLookup will be computed from what is needed in the score,
         # taking into account any reservedRDFKernSignifiers set by the user
-        self._rdfKernSignifierLookup: dict = dict() # key: definition, value: signifier
+        self._rdfKernSignifierLookup: dict = {} # key: definition, value: signifier
 
         # private data, computed along the way...
         self._forceRecipSpine: bool = False # set to true sometimes in figured bass, harmony code
@@ -146,7 +146,7 @@ class HumdrumWriter:
                     chosenSignifier = ch
                     self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
                     self._assignedRDFKernSignifiers += chosenSignifier
-                    print('Too many reserved RDF signifiers for this score, using reserved signifier \'{chosenSignifier}\' for \'{rdfDefinition}\'', file=sys.stderr)
+                    print(f'Too many reserved RDF signifiers for this score, using reserved signifier \'{chosenSignifier}\' for \'{rdfDefinition}\'', file=sys.stderr)
                     break
 
         if not chosenSignifier:
@@ -157,7 +157,7 @@ class HumdrumWriter:
     def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
         humdrumStyle: str = self._m21EditorialStyleToHumdrumEditorialStyle.get(editorialStyle, '')
         if not humdrumStyle:
-            print('Unrecognized music21 editorial accidental style \'{editorialStyle}\': treating as parentheses.',
+            print(f'Unrecognized music21 editorial accidental style \'{editorialStyle}\': treating as parentheses.',
                     file=sys.stderr)
             humdrumStyle = 'paren'
 
@@ -704,7 +704,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
     @staticmethod
     def _getGlobalStaffNumbersForM21Parts(scoreData: ScoreData) -> Dict[m21.stream.Part, int]:
-        output: Dict[m21.stream.Part, int] = dict()
+        output: Dict[m21.stream.Part, int] = {}
         staffNumber: int = 0 # global staff numbers are 1-based
         for partData in scoreData.parts:
             for staffData in partData.staves:
@@ -779,7 +779,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 if token is None:
                     continue
 
-                if token.text == '!!linebreak:original' or token.text == '!!pagebreak:original':
+                if token.text in ('!!linebreak:original', '!!pagebreak:original'):
                     gmlast.slices.append(gridSlice)
                     gm.slices.pop(sliceIdx)
                     # there can be only one break, so quit the slice loop now.
@@ -893,12 +893,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             if self.VoiceDebug:
                 for event in events:
                     print('!!ELEMENT: ', end='', file=sys.stderr)
-                    print('\tTIME:  {}'.format(event.startTime), end='', file=sys.stderr)
-                    print('\tSTi:   {}'.format(event.staffIndex), end='', file=sys.stderr)
-                    print('\tVi:    {}'.format(event.voiceIndex), end='', file=sys.stderr)
-                    print('\tDUR:   {}'.format(event.duration), end='', file=sys.stderr)
-                    print('\tTOKEN: {}'.format(event.kernTokenString(self._spannerBundle)), end='', file=sys.stderr)
-                    print('\tNAME:  {}'.format(event.name), end='', file=sys.stderr)
+                    print(f'\tTIME:  {event.startTime}', end='', file=sys.stderr)
+                    print(f'\tSTi:   {event.staffIndex}', end='', file=sys.stderr)
+                    print(f'\tVi:    {event.voiceIndex}', end='', file=sys.stderr)
+                    print(f'\tDUR:   {event.duration}', end='', file=sys.stderr)
+                    print(f'\tTOKEN: {event.kernTokenString(self._spannerBundle)}',
+                                end='', file=sys.stderr)
+                    print(f'\tNAME:  {event.name}', end='', file=sys.stderr)
                     print('', file=sys.stderr) # line feed (one line per event)
                 print('======================================', file=sys.stderr)
 
@@ -1586,8 +1587,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if extraDynamics:
             dynamics += extraDynamics
 
-        dynTokens: Dict[Tuple[int, int], HumdrumToken] = dict()
-        moreThanOneDynamic: Dict[Tuple[int, int], bool] = dict()
+        dynTokens: Dict[Tuple[int, int], HumdrumToken] = {}
+        moreThanOneDynamic: Dict[Tuple[int, int], bool] = {}
         for partIndex, staffIndex, dynamic in dynamics:
             dstring: str = ''
             if isinstance(dynamic, m21.dynamics.Dynamic):

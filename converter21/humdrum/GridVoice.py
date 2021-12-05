@@ -38,7 +38,7 @@ class GridVoice:
         elif isinstance(token, str):
             self._token = HumdrumToken(token)
         else:
-            raise HumdrumInternalError('invalid type of token: {}'.format(type(token)))
+            raise HumdrumInternalError(f'invalid type of token: {token}')
 
         self._nextDur = duration
 #         self._prevDur = HumNum(0) # appears to be unused (never set to anything but zero)
@@ -91,7 +91,7 @@ class GridVoice:
         elif isinstance(newToken, str):
             self._token = HumdrumToken(newToken)
         else:
-            raise HumdrumInternalError('invalid type of token: {}'.format(type(newToken)))
+            raise HumdrumInternalError(f'invalid type of token: {newToken}')
 
         self._isTransfered = False
 

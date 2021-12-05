@@ -484,9 +484,10 @@ class HumdrumFileStructure(HumdrumFileBase):
             line.durationFromStart = durSum
         elif line.durationFromStart != durSum:
             if not token.isTerminateInterpretation:
-                return self.setParseError('''Error: Inconsistent rhythm analysis occurring near line {}
-Expected durationFromStart to be: {} but found it to be {}
-Line: {}'''.format(token.lineNumber, durSum, line.durationFromStart, line.text))
+                return self.setParseError(
+f'''Error: Inconsistent rhythm analysis occurring near line {token.lineNumber}
+Expected durationFromStart to be: {durSum} but found it to be {line.durationFromStart}
+Line: {line.text}''')
             line.durationFromStart = max(line.durationFromStart, durSum)
 
         return self.isValid
@@ -555,8 +556,9 @@ Line: {}'''.format(token.lineNumber, durSum, line.durationFromStart, line.text))
 
             if line.durationFromStart is None:
                 if line.isData:
-                    return self.setParseError('''Error: found an unexpected negative duration on line {}
-Line: {}'''.format(line.durationFromStart, line.text))
+                    return self.setParseError(
+f'''Error: found an unexpected negative duration on line {line.durationFromStart}
+Line: {line.text}''')
                 continue
 
             nextLine = line

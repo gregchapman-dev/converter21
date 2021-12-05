@@ -128,9 +128,9 @@ class GridMeasure:
         for idx, gridSlice in enumerate(self.slices):
             if timestamp < gridSlice.timestamp:
                 raise HumdrumInternalError(
-'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
-\tGRACE TIMESTAMP: {}
-\tTEST  TIMESTAMP: {}'''.format(timestamp, gridSlice.timestamp))
+f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
+\tGRACE TIMESTAMP: {timestamp}
+\tTEST  TIMESTAMP: {gridSlice.timestamp}''')
 
             if gridSlice.isDataSlice:
                 if gridSlice.timestamp == timestamp:

@@ -26,7 +26,7 @@ def generateManipulatorLineNumbers(hf: HumdrumFile) -> list:
     return result
 
 def generateTokenDataTypeChanges(hf: HumdrumFile) -> dict:
-    result = dict()
+    result = {}
     currTokenDataTypes: [str] = []
     for line in hf.lines():
         newTokenDataTypes = [token.dataType.text for token in line.tokens()]
@@ -36,7 +36,7 @@ def generateTokenDataTypeChanges(hf: HumdrumFile) -> dict:
     return result
 
 def generateSpineInfoChanges(hf: HumdrumFile) -> dict:
-    result = dict()
+    result = {}
     currSpineInfos: [str] = []
     for line in hf.lines():
         newSpineInfos = [token.spineInfo for token in line.tokens()]

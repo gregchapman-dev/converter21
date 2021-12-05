@@ -649,9 +649,7 @@ class HumdrumFileBase(HumHash):
         if not prevLine.isInterpretation and not nextLine.isInterpretation:
             if prevLine.tokenCount != nextLine.tokenCount:
                 return self.setParseError(
-                    'Error lines {} and {} not same length.\nLine {}: {}\nLine {}: {}\n'
-                    .format(prevLine.lineNumber, nextLine.lineNumber, prevLine.lineNumber, prevLine.text,
-                            nextLine.lineNumber, nextLine.text))
+                    f'Error lines {prevLine.lineNumber} and {nextLine.lineNumber} not same length.\nLine {prevLine.lineNumber}: {prevLine.text}\nLine {nextLine.lineNumber}: {nextLine.text}\n')
 
             for i, prevTok in enumerate(prevLine.tokens()):
                 if nextLine[i] is not None:
@@ -695,8 +693,7 @@ class HumdrumFileBase(HumHash):
                 if mergeCount == 1:
                     #print(funcName(), 'bad *v count', file=sys.stderr)
                     return self.setParseError(
-                        "Error: single spine merge indicator '*v' on line: {}\n{}".format(
-                            prevLine.lineNumber, prevLine.text))
+                        f'Error: single spine merge indicator \'*v\' on line: {prevLine.lineNumber}\n{prevLine.text}')
                 nextTokenIdx += 1
                 # stop counting merges, and fall through to process this non-merge token
                 # if this was a merge token (i.e. it was last on the line), don't fall through
@@ -746,8 +743,7 @@ class HumdrumFileBase(HumHash):
                 # swapping the order of two spines.
                 if prevLine[i+1] is None or not prevLine[i+1].isExchangeInterpretation:
                     return self.setParseError(
-                        "Error: single spine exchange indicator '*x' on line: {}\n{}".format(
-                        prevLine.lineNumber, prevLine.text))
+                        f'Error: single spine exchange indicator \'*x\' on line: {prevLine.lineNumber}\n{prevLine.text}')
                 if nextLine[nextTokenIdx] is not None:
                     prevLine[i+1].makeForwardLink(nextLine[nextTokenIdx])
                 else:
@@ -769,8 +765,7 @@ class HumdrumFileBase(HumHash):
                 # should be an exclusive interpretation.
                 if not nextLine[nextTokenIdx+1].isExclusiveInterpretation:
                     return self.setParseError(
-                    'Error: expecting exclusive interpretation on line {} at token {}, but got {}'.format
-                            (nextLine.lineNumber, i, nextLine[nextTokenIdx].text))
+                        f'Error: expecting exclusive interpretation on line {nextLine.lineNumber} at token {i}, but got {nextLine[nextTokenIdx].text}')
                 if nextLine[nextTokenIdx] is not None:
                     prevTok.makeForwardLink(nextLine[nextTokenIdx])
                     nextTokenIdx += 1
@@ -788,12 +783,10 @@ class HumdrumFileBase(HumHash):
 
         if nextTokenIdx != nextLine.tokenCount:
             return self.setParseError(
-'''Error: cannot stitch lines together due to alignment problem.
-Line {}: {}
-Line {}: {}
-nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevLine.text,
-                                                  nextLine.lineNumber, nextLine.text,
-                                                  nextTokenIdx, nextLine.tokenCount))
+f'''Error: cannot stitch lines together due to alignment problem.
+Line {prevLine.lineNumber}: {prevLine.text}
+Line {nextLine.lineNumber}: {nextLine.text}
+nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}''')
 
         return self.isValid
 
@@ -819,8 +812,7 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
 
             if not seenFirstExInterp and not line.isExclusiveInterpretation:
                 return self.setParseError(
-            'Error on line: {}:\n   Data found before exclusive interpretation\n   LINE: {}'.format(
-                                i+1, line.text))
+            f'Error on line: {i+1}:\n   Data found before exclusive interpretation\n   LINE: {line.text}')
 
             if not seenFirstExInterp and line.isExclusiveInterpretation:
                 # first line of data in file
@@ -837,10 +829,9 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
                 continue
 
             if len(dataType) != line.tokenCount:
-                err ='Error on line {}:\n   Expected {} fields,    but found {}\nLine is: {}'.format(
-                        line.lineNumber, len(dataType), line.tokenCount, line.text)
+                err = f'Error on line {line.lineNumber}:\nExpected {len(dataType)} fields, but found {line.tokenCount}\nLine is: {line.text}'
                 if i > 0:
-                    err += '\nPrevious line is {}'.format(self._lines[i-1].text)
+                    err += f'\nPrevious line is {self._lines[i-1].text}'
                 return self.setParseError(err)
 
             for j, token in enumerate(line.tokens()):
@@ -916,8 +907,7 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
                 if mergeCount == 1:
                     #print(funcName(), 'bad *v count', file=sys.stderr)
                     self.setParseError(
-                        "Error: single spine merge indicator '*v' on line: {}\n{}".format(
-                            line.lineNumber, line.text))
+                        f'Error: single spine merge indicator \'*v\' on line: {line.lineNumber}\n{line.text}')
                     return (False, None, None)
 
                 #print('spineInfo = ', spineInfo, 'i-mergeCount =', i-mergeCount, 'mergeCount-1 =', mergeCount-1, file=sys.stderr)
@@ -969,8 +959,8 @@ nextTokenIdx = {}, nextLine.tokenCount = {}'''.format(prevLine.lineNumber, prevL
                 newInfo.append(spineInfo[i])
                 if not (len(self._trackStarts) > 1 and self._trackStarts[-1] is None):
                     self.setParseError(
-'''Error: Exclusive interpretation with no preparation on line {} spine index {}
-Line: {}'''.format(line.lineNumber, i, line.text))
+f'''Error: Exclusive interpretation with no preparation on line {line.lineNumber} spine index {i}
+Line: {line.text}''')
                     return (False, None, None)
                 if self._trackStarts[-1] is None:
                     self.addToTrackStarts(token)

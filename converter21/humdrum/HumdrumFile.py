@@ -473,8 +473,8 @@ class StaffStateVariables:
         self.mostRecentlySeenClefTok: HumdrumToken = None
 
     def printState(self, prefix: str):
-        print('{}hasLyrics: {}'.format(prefix, self.hasLyrics), file=sys.stderr)
-        print('{}lyricLabels: {}', self.lyricLabels, file=sys.stderr)
+        print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
+        print(f'{prefix}lyricLabels: {self.lyricLabels}', file=sys.stderr)
 
 
 class HumdrumFile(HumdrumFileContent):
@@ -518,10 +518,10 @@ class HumdrumFile(HumdrumFileContent):
         self._numberlessLabels: [HumdrumToken] = None
 
         # staff group names and abbreviations
-        self._groupNames: dict = dict()         # {int, str}
-        self._groupNameTokens: dict = dict()    # {int, HumdrumToken}
-        self._groupAbbrevs: dict = dict()       # {int, str}
-        self._groupAbbrevTokens: dict = dict()  # {int, HumdrumToken}
+        self._groupNames: dict = {}         # {int, str}
+        self._groupNameTokens: dict = {}    # {int, HumdrumToken}
+        self._groupAbbrevs: dict = {}       # {int, str}
+        self._groupAbbrevTokens: dict = {}  # {int, HumdrumToken}
 
         # metadata (from biblio records)
         # We use a list of key/value pairs instead of a dictionary
@@ -1215,8 +1215,8 @@ class HumdrumFile(HumdrumFileContent):
                     prevDataToken: HumdrumToken = self._findLastNonNullDataToken(self._layerTokens[staffIndex][layerIndex])
                     if prevDataToken is not None:
                         prevDuration: HumNum = prevDataToken.duration
-                        if prevDuration < 0: # e.g. barlines have duration == -1
-                            prevDuration = 0
+                        # e.g. barlines have duration == -1, use 0 instead
+                        prevDuration = max(prevDuration, 0)
                         prevEndTime: HumNum = prevDataToken.durationFromStart + prevDuration
                         gapDuration: HumNum = token.durationFromStart - prevEndTime
                         if gapDuration > 0:
@@ -1287,9 +1287,9 @@ class HumdrumFile(HumdrumFileContent):
     def _printMeasureTokens(self):
         print('self._layerTokens:', file=sys.stderr)
         for i, staff in enumerate(self._layerTokens):
-            print('STAFF {}\t'.format(i + 1), end = '', flush=True, file=sys.stderr)
+            print(f'STAFF {i+1}\t', end = '', flush=True, file=sys.stderr)
             for j, layer in enumerate(staff):
-                print('LAYER {}:\t'.format(j + 1), end = '', flush=True, file=sys.stderr)
+                print(f'LAYER {j+1}:\t', end = '', flush=True, file=sys.stderr)
                 for token in layer:
                     print(' ', token.text, end = '', flush=True, file=sys.stderr)
                 print('', flush=True, file=sys.stderr)
@@ -1376,15 +1376,15 @@ class HumdrumFile(HumdrumFileContent):
             print(tg.token.text, end='\t', file=sys.stderr)
             if tg.token.text and len(tg.token.text) < 8:
                 print('', end='\t', file=sys.stderr)
-            print('BS:{}'.format(tg.beamStart), end='\t', file=sys.stderr)
-            print('BE:{}'.format(tg.beamEnd), end='\t', file=sys.stderr)
-            print('GS:{}'.format(tg.gbeamStart), end='\t', file=sys.stderr)
-            print('GE:{}'.format(tg.gbeamEnd), end='\t', file=sys.stderr)
-            print('TS:{}'.format(tg.tupletStart), end='\t', file=sys.stderr)
-            print('TE:{}'.format(tg.tupletEnd), end='\t', file=sys.stderr)
-            print('TG:{}'.format(tg.group), end='\t', file=sys.stderr)
-            print('TA/TN:{}/{}'.format(tg.numNotesActual, tg.numNotesNormal), end='\t', file=sys.stderr)
-            print('TF:{}'.format(tg.forceStartStop), file=sys.stderr)
+            print(f'BS:{tg.beamStart}', end='\t', file=sys.stderr)
+            print(f'BE:{tg.beamEnd}', end='\t', file=sys.stderr)
+            print(f'GS:{tg.gbeamStart}', end='\t', file=sys.stderr)
+            print(f'GE:{tg.gbeamEnd}', end='\t', file=sys.stderr)
+            print(f'TS:{tg.tupletStart}', end='\t', file=sys.stderr)
+            print(f'TE:{tg.tupletEnd}', end='\t', file=sys.stderr)
+            print(f'TG:{tg.group}', end='\t', file=sys.stderr)
+            print(f'TA/TN:{tg.numNotesActual}/{tg.numNotesNormal}', end='\t', file=sys.stderr)
+            print(f'TF:{tg.forceStartStop}', file=sys.stderr)
 
     '''
     //////////////////////////////
@@ -1749,7 +1749,7 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _handleStaffStateVariables(self, token: HumdrumToken, layerIndex: int, staffIndex: int):
         ss: StaffStateVariables = self._staffStates[staffIndex]
-        if token.text == '*Xbeamtup' or token.text == '*Xtuplet':
+        if token.text in ('*Xbeamtup', '*Xtuplet'):
             ss.suppressTupletNumber = True
             return
         if token.text == '*beamtup' or token.text.startswith('*tuplet'):
@@ -1894,7 +1894,7 @@ class HumdrumFile(HumdrumFileContent):
     //    or global LO:TX parameter that applies to that note (for local LO:TX).
     '''
     def _hasTempoTextAfter(self, token: HumdrumToken) -> bool:
-        inFile: HumdrumFile = token.ownerLine.ownerFile
+        inFile = token.ownerLine.ownerFile # it's a HumdrumFile, but pylint doesn't like it
         startLineIdx: int = token.lineIndex
         current: HumdrumToken = token.nextToken0
         if not current:
@@ -1973,7 +1973,7 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _isNearOmd(token: HumdrumToken) -> bool:
         tline: int = token.lineIndex
-        inFile: HumdrumFile = token.ownerLine.ownerFile
+        inFile = token.ownerLine.ownerFile # it's a HumdrumFile, but pylint doesn't like it
 
         for i in reversed(range(0, tline-1)): # BUG: for (i = tline - 1; tline >= 0; --i)
             ltok: HumdrumToken = inFile[i][0] # token 0 of line i
@@ -3183,7 +3183,7 @@ class HumdrumFile(HumdrumFileContent):
         for tg in tggroup:
             tg.numScale = 1
 
-        durCounts: dict = dict() # key: HumNum, value: int
+        durCounts: dict = {} # key: HumNum, value: int
         for tg in tggroup:
             durNoDots: HumNum = tg.durationNoDots
             if durNoDots in durCounts:
@@ -3569,7 +3569,7 @@ class HumdrumFile(HumdrumFileContent):
         beams: int = -math.log(float(duration)) / math.log(2.0)
         if beams <= 0:
             # something went wrong calculating durations.
-            raise HumdrumInternalError('Problem with tremolo2 beams calculation: {}'.format(beams))
+            raise HumdrumInternalError(f'Problem with tremolo2 beams calculation: {beams}')
 
         notes[0].setValue('auto', 'tremolo2', '1')
         notes[0].setValue('auto', 'recip', recip)
@@ -4680,8 +4680,7 @@ class HumdrumFile(HumdrumFileContent):
 
     @staticmethod
     def _addSlurLineStyle(slur: m21.spanner.Slur, token: HumdrumToken, slurNumber: int):
-        if slurNumber < 1:
-            slurNumber = 1
+        slurNumber = max(slurNumber, 1) # never let it be < 1
         slurIndex: int = slurNumber - 1
         dashed: str = token.layoutParameter('S', 'dash', slurIndex)
         dotted: str = token.layoutParameter('S', 'dot', slurIndex)
@@ -6940,18 +6939,18 @@ class HumdrumFile(HumdrumFileContent):
         # that no-one uses bare spine numbers in decorations, since they do not work well.
 
         staffList = []          # just a list of staff numbers found in *staff interps
-        trackToStaff = dict()   # key is track num, value is staff num
-        trackToStaffStartIndex = dict() # key is track num, value is index into self._staffStarts
+        trackToStaff = {}   # key is track num, value is staff num
+        trackToStaffStartIndex = {} # key is track num, value is index into self._staffStarts
 
-        classToStaves = dict()  # key is instrument class name, value is list of staff nums
-        groupToStaves = dict()  # key is group num, value is list of staff nums
-        partToStaves = dict()   # key is part num, value is list of staff nums
+        classToStaves = {}  # key is instrument class name, value is list of staff nums
+        groupToStaves = {}  # key is group num, value is list of staff nums
+        partToStaves = {}   # key is part num, value is list of staff nums
 
-        staffToClass = dict()   # key is staff num, value is instrument class name
-        staffToGroup = dict()   # key is staff num, value is group num
-        staffStartIndexToGroup = dict() # key is index into self._staffStarts, value is group num
-        staffToPart = dict()    # key is staff num, value is part num
-        staffToStaffStartIndex = dict() # key is staff num, value is index into self._staffStarts
+        staffToClass = {}   # key is staff num, value is instrument class name
+        staffToGroup = {}   # key is staff num, value is group num
+        staffStartIndexToGroup = {} # key is index into self._staffStarts, value is group num
+        staffToPart = {}    # key is staff num, value is part num
+        staffToStaffStartIndex = {} # key is staff num, value is index into self._staffStarts
 
         for staffStartIndex, (ss, startTok) in enumerate(zip(self._staffStates, self._staffStarts)):
             staffNum: int = self._getStaffNumberLabel(startTok)
@@ -7012,11 +7011,11 @@ class HumdrumFile(HumdrumFileContent):
         # Instrument class expansion to staves:
         # e.g. '{(bras)}' might expand to '{(s3,s4,s5)}'
         if classToStaves:
-            for iClassPattern in classToStaves:
+            for iClassPattern, staves in classToStaves.items():
                 replacement: str = ''
-                for i, sNum in enumerate(classToStaves[iClassPattern]):
+                for i, sNum in enumerate(staves):
                     replacement += 's' + str(sNum)
-                    if i < len(classToStaves[iClassPattern]) - 1:
+                    if i < len(staves) - 1:
                         replacement += ','
                 d = re.sub(iClassPattern, replacement, d)
 
@@ -7024,12 +7023,12 @@ class HumdrumFile(HumdrumFileContent):
         if groupToStaves:
             # example:   {(g1}} will be expanded to {(s1,s2,s3)} if
             # group1 is given to staff1, staff2, and staff3.
-            for gNum in groupToStaves:
+            for gNum, staves in groupToStaves.items():
                 gNumStr: str = 'g' + str(gNum)
                 replacement: str = ''
-                for i, sNum in enumerate(groupToStaves[gNum]):
+                for i, sNum in enumerate(staves):
                     replacement += 's' + str(sNum)
-                    if i < len(groupToStaves[gNum]) - 1:
+                    if i < len(staves) - 1:
                         replacement += ','
                 d = re.sub(gNumStr, replacement, d)
 
@@ -7037,12 +7036,12 @@ class HumdrumFile(HumdrumFileContent):
         if partToStaves:
             # example:   {(p1}} will be expanded to {(s1,s2)} if
             # part1 is given to staff1 and staff2.
-            for pNum in partToStaves:
+            for pNum, staves in partToStaves.items():
                 pNumStr: str = 'p' + str(pNum)
                 replacement: str = ''
-                for i, sNum in enumerate(partToStaves[pNum]):
+                for i, sNum in enumerate(staves):
                     replacement += 's' + str(sNum)
-                    if i < len(partToStaves[pNum]) - 1:
+                    if i < len(staves) - 1:
                         replacement += ','
                 d = re.sub(pNumStr, replacement, d)
 
@@ -7221,8 +7220,7 @@ class HumdrumFile(HumdrumFileContent):
                 isTrackIndicator = True
 
             elif dCharI.isdigit():
-                if value < 0:
-                    value = 0
+                value = max(value, 0) # never leave it < 0
                 value = (value * 10) + int(dCharI)
                 if i == len(d) - 1 or not d[i + 1].isdigit(): # if end of digit chars
                     staffStartIndex: int = -1

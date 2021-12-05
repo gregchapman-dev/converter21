@@ -111,8 +111,8 @@ class HumdrumToken(HumHash):
         // token is *^, and there will be zero following tokens after a
         // spine terminating token (*-).
         '''
-        self._nextTokens: [HumdrumToken] = []
-        self._nextToken0: HumdrumToken = None # always contains nextToken(0), for speed
+        self._nextTokens = []   # [HumdrumToken]
+        self._nextToken0 = None     # HumdrumToken, always contains nextToken(0), for speed
 
         '''
         // previousTokens: Simiar to nextTokens, but for the immediately
@@ -121,20 +121,20 @@ class HumdrumToken(HumHash):
         // line has *v merge tokens for the spine.  Exclusive interpretations
         // have no tokens preceding them.
         '''
-        self._previousTokens: [HumdrumToken] = []
-        self._previousToken0: HumdrumToken = None # always contains previousToken(0), for speed
+        self._previousTokens = []   # [HumdrumToken]
+        self._previousToken0 = None     # HumdrumToken, always contains previousToken(0), for speed
 
         '''
         // nextNonNullDataTokens: This is a list of non-null tokens in the spine
         // that follow this one.
         '''
-        self._nextNonNullDataTokens: [HumdrumToken] = []
+        self._nextNonNullDataTokens = []   # [HumdrumToken]
 
         '''
         // previousNonNullDataTokens: This is a list of non-null tokens in the spine
         // that precede this one.
         '''
-        self._previousNonNullDataTokens: [HumdrumToken] = []
+        self._previousNonNullDataTokens = []   # [HumdrumToken]
 
         '''
         // rhycheck: Used to perform HumdrumFileStructure::analyzeRhythm
@@ -159,7 +159,7 @@ class HumdrumToken(HumHash):
         // m_linkedParameterTokens: List of Humdrum tokens which are parameters
         // (mostly only layout parameters at the moment).
         '''
-        self._linkedParameterTokens: [HumdrumToken] = []
+        self._linkedParameterTokens = []   # [HumdrumToken]
 
         '''
         // m_parameterSet: A single parameter encoded in the text of the
@@ -176,7 +176,7 @@ class HumdrumToken(HumHash):
         // m_strophe: Starting point of a strophe that the token belongs to.
         // NULL means that it is not in a strophe.
         '''
-        self._strophe: HumdrumToken = None
+        self._strophe = None # HumdrumToken
 
         '''
             rscale: the rscale that applies to this token
@@ -306,7 +306,7 @@ class HumdrumToken(HumHash):
             self._nextTokens.append(newToken)
             self.updateNextToken0()
         else:
-            oldNextToken: HumdrumToken = self.nextTokens[0]
+            oldNextToken = self.nextTokens[0] # HumdrumToken
             self.nextTokens[0] = newToken
             self.updateNextToken0()
 
@@ -1020,9 +1020,7 @@ class HumdrumToken(HumHash):
         try:
             return self._hasRhythmCached
         except AttributeError:
-            self._hasRhythmCached = self.dataType.text == '**kern' or \
-                                    self.dataType.text == '**recip' or \
-                                    self.dataType.text == '**mens'
+            self._hasRhythmCached = self.dataType.text in ('**kern', '**recip', '**mens')
             self._atLeastOneCachedDataTypePropertyExists = True
         return self._hasRhythmCached
 
@@ -1262,7 +1260,7 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isSustainedNote(self) -> bool:
-        token: HumdrumToken = self
+        token = self # HumdrumToken
         if self.isNull:
             token = self.nullResolution
         return token.isSecondaryTiedNote
@@ -1276,7 +1274,7 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isNoteAttack(self) -> bool:
-        token: HumdrumToken = self
+        token = self # HumdrumToken
         if self.isNull:
             token = self.nullResolution
 
@@ -2280,9 +2278,7 @@ class HumdrumToken(HumHash):
         try:
             return self._isNullCached
         except AttributeError:
-            self._isNullCached = self.text == NULL_DATA or \
-                                    self.text == NULL_INTERPRETATION or \
-                                    self.text == NULL_COMMENT_LOCAL
+            self._isNullCached = self.text in (NULL_DATA, NULL_INTERPRETATION, NULL_COMMENT_LOCAL)
             self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isNullCached
 
@@ -2414,7 +2410,7 @@ class HumdrumToken(HumHash):
             if linkedToken == token:
                 return i
 
-        if self._linkedParameterTokens == []:
+        if not self._linkedParameterTokens:
             self._linkedParameterTokens.append(token)
             return 0
 

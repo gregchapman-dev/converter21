@@ -347,9 +347,9 @@ class M21Convert:
         # as well.
         # store info about articulations in various dicts, keyed by humdrum articulation string
         # which is usually a single character, but can be two (e.g. '^^')
-        articFound: dict = dict() # value is bool
-        articPlacement: dict = dict() # value is 'below', 'above', or ''
-        articIsGestural: dict = dict() # value is bool (gestural means "not printed on the page, but it's what the performer did")
+        articFound: dict = {} # value is bool
+        articPlacement: dict = {} # value is 'below', 'above', or ''
+        articIsGestural: dict = {} # value is bool (gestural means "not printed on the page, but it's what the performer did")
 
         tsize: int = len(tokenStr)
         ch: str = ''
@@ -900,7 +900,7 @@ class M21Convert:
         # split at colons
         params: [str] = layout.split(':')
         insertAtIndex: int = len(params) - 2
-        params.insert(insertAtIndex, 'n={}'.format(noteNum))
+        params.insert(insertAtIndex, f'n={noteNum}')
         output: str = ':'.join(params)
         return output
 
@@ -984,7 +984,7 @@ class M21Convert:
         if m21Accid is not None:
             alter = int(m21Accid.alter)
             if alter != m21Accid.alter:
-                print('WARNING: Ignoring microtonal accidental: {}.'.format(m21Accid), file=sys.stderr)
+                print(f'WARNING: Ignoring microtonal accidental: {m21Accid}.', file=sys.stderr)
                 # replace microtonal accidental with explicit natural sign
                 alter = 0
                 isExplicit = True
@@ -1440,7 +1440,7 @@ class M21Convert:
             return None
 
         keyStr: str = '*' + keySig.tonicPitchNameWithCase + ':'
-        if keySig.mode == 'major' or keySig.mode == 'minor':
+        if keySig.mode in ('major', 'minor'):
             # already indicated via uppercase (major) or lowercase (minor)
             return HumdrumToken(keyStr)
 
@@ -1589,7 +1589,7 @@ class M21Convert:
 
     @staticmethod
     def _setupRepeatBothStyleComboLookup():
-        theLookup: dict = dict()
+        theLookup: dict = {}
 
         # both the same = same (don't add them together)
         # Example: if you want heavy-heavy, don't put heavy on both, put heavy-heavy on both.
@@ -1680,7 +1680,7 @@ class M21Convert:
 
     @staticmethod
     def _computeMeasureStyleLookup():
-        theLookup: dict = dict()
+        theLookup: dict = {}
 
         for style in MeasureStyle:
             theLookup[(style.vStyle, style.mType)] = style
@@ -1784,7 +1784,7 @@ class M21Convert:
             raise HumdrumInternalError(f'measureString does not contain right barline repeat: {measureString}')
 
         # should not ever get here
-        raise HumdrumInternalError(f'side should be "left" or "right", not {side}')
+        raise HumdrumInternalError(f'side should be "left" or "right", not "{side}"')
 
     @staticmethod
     def m21BarlineFromHumdrumString(measureString: str, side: str) -> m21.bar.Barline: # could be m21.bar.Repeat
@@ -1982,7 +1982,7 @@ class M21Convert:
         elif isinstance(m21Date, m21.metadata.DateRelative):
             # one date, prefixed by '<' or '>' for 'prior'/'onorbefore' or 'after'/'onorafter'
             output = '<' # assume before
-            if m21Date.relevance == 'after' or m21Date.relevance == 'onorafter':
+            if m21Date.relevance in ('after', 'onorafter'):
                 output = '>'
 
             dateString: str = M21Convert._stringFromDate(m21Date._data[0])

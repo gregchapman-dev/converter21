@@ -249,7 +249,7 @@ class MeasureData:
             self.sortedEvents[-1].startTime = val
 
         # setup sorted access:
-        mapping = dict()
+        mapping: dict = {}
         for sortedEvent in self.sortedEvents:
             mapping[sortedEvent.startTime] = sortedEvent
 

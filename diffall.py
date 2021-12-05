@@ -16,7 +16,7 @@ import lib.score_comparison_lib as scl
 
 def oplistSummary(op_list: List[Tuple[str]]) -> str:
     output: str = ''
-    counts: dict = dict()
+    counts: dict = {}
 
     counts['measure'] = 0
     counts['voice'] = 0
@@ -30,51 +30,49 @@ def oplistSummary(op_list: List[Tuple[str]]) -> str:
 
     for op in op_list:
         # measure
-        if (op[0] == 'insbar' or
-                op[0] == 'delbar'):
+        if op[0] in ('insbar', 'delbar'):
             counts['measure'] += 1
         # voice
-        elif (op[0] == 'voiceins' or
-                op[0] == 'voicedel'):
+        elif op[0] in ('voiceins', 'voicedel'):
             counts['voice'] += 1
         # note
-        elif (op[0] == 'noteins' or
-                op[0] == 'notedel' or
-                op[0] == 'pitchnameedit' or
-                op[0] == 'inspitch' or
-                op[0] == 'delpitch' or
-                op[0] == 'headedit' or
-                op[0] == 'dotins' or
-                op[0] == 'dotdel'):
+        elif op[0] in ('noteins',
+                        'notedel',
+                        'pitchnameedit',
+                        'inspitch',
+                        'delpitch',
+                        'headedit',
+                        'dotins',
+                        'dotdel'):
             counts['note'] += 1
         # beam
-        elif (op[0] == 'insbeam' or
-                op[0] == 'delbeam' or
-                op[0] == 'editbeam'):
+        elif op[0] in ('insbeam',
+                        'delbeam',
+                        'editbeam'):
             counts['beam'] += 1
         # accidental
-        elif (op[0] == 'accidentins' or
-                op[0] == 'accidentdel' or
-                op[0] == 'accidentedit'):
+        elif op[0] in ('accidentins',
+                        'accidentdel',
+                        'accidentedit'):
             counts['accidental'] += 1
         # tuplet
-        elif (op[0] == 'instuplet' or
-                op[0] == 'deltuplet' or
-                op[0] == 'edittuplet'):
+        elif op[0] in ('instuplet',
+                        'deltuplet',
+                        'edittuplet'):
             counts['tuplet'] += 1
         # tie
-        elif (op[0] == 'tieins' or
-                op[0] == 'tiedel'):
+        elif op[0] in ('tieins',
+                        'tiedel'):
             counts['tie'] += 1
         # expression
-        elif (op[0] == 'insexpression' or
-                op[0] == 'delexpression' or
-                op[0] == 'editexpression'):
+        elif op[0] in ('insexpression',
+                        'delexpression',
+                        'editexpression'):
             counts['expression'] += 1
         # articulation
-        elif (op[0] == 'insarticulation' or
-                op[0] == 'delarticulation' or
-                op[0] == 'editarticulation'):
+        elif op[0] in ('insarticulation',
+                        'delarticulation',
+                        'editarticulation'):
             counts['articulation'] += 1
 
     firstDone: bool = False
@@ -151,7 +149,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
     try:
         success: bool = True
         fp = Path(tempfile.gettempdir()) / krnPath.name
-        with open(fp, 'w') as f:
+        with open(fp, 'w', encoding='utf-8') as f:
             success = hdw.write(f)
         if not success:
             print('export failed')
@@ -261,9 +259,9 @@ with open(listPath, encoding='utf-8') as listf:
     s: str = listf.read()
     fileList = s.split('\n')
 
-with open(goodPath, 'w') as goodf:
-    with open(badPath, 'w') as badf:
-        with open(resultsPath, 'w') as resultsf:
+with open(goodPath, 'w', encoding='utf-8') as goodf:
+    with open(badPath, 'w', encoding='utf-8') as badf:
+        with open(resultsPath, 'w', encoding='utf-8') as resultsf:
             for i, file in enumerate(fileList):
                 if not file or file[0] == '#':
                     # blank line, or commented out

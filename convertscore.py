@@ -54,14 +54,14 @@ def printSupportedFormats(whichList: str): # whichList should be 'input' or 'out
     c = converter.Converter()
     if whichList == 'input':
         inList = c.subconvertersList('input')
-        print("Supported input formats are:", file=sys.stderr)
+        print('Supported input formats are:', file=sys.stderr)
         for subc in inList:
             if subc.registerInputExtensions:
                 print('\tformats   : ' + ', '.join(subc.registerFormats)
                         + '\textensions: ' + ', '.join(subc.registerInputExtensions), file=sys.stderr)
     else:
         outList = c.subconvertersList('output')
-        print("Supported output formats are:", file=sys.stderr)
+        print('Supported output formats are:', file=sys.stderr)
         for subc in outList:
             if subc.registerOutputExtensions:
                 print('\tformats   : ' + ', '.join(subc.registerFormats)
@@ -99,21 +99,21 @@ converter.registerSubconverter(HumdrumConverter)
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file',
                     help=
-'''input music file to convert from (extension is used to determine "
-                        + "input format if --input-from/-f is not specified)''')
-parser.add_argument("output_file",
-                    help="output music file to convert to (extension is NOT used to "
-                        + "determine/validate output format, so if you're not careful "
-                        + "you'll end up with contents not matching extension)")
-parser.add_argument("-f", "--input-from",
+'input music file to convert from (extension is used to determine '
+                        + 'input format if --input-from/-f is not specified)')
+parser.add_argument('output_file',
+                    help='output music file to convert to (extension is NOT used to '
+                        + 'determine/validate output format, so if you\'re not careful '
+                        + 'you\'ll end up with contents not matching extension)')
+parser.add_argument('-f', '--input-from',
                     choices=getInputFormatsList(),
-                    help="format of the input file (only necessary if input file has no "
-                        + "supported extension)")
-parser.add_argument("-t", "--output-to", required=True,
+                    help='format of the input file (only necessary if input file has no '
+                        + 'supported extension)')
+parser.add_argument('-t', '--output-to', required=True,
                     choices=getOutputFormatsList(),
-                    help="format of the output file (required)")
-parser.add_argument("-c", "--cached-parse-ok", action='store_true', default=False,
-                    help="use cached parse of input file if it exists")
+                    help='format of the output file (required)')
+parser.add_argument('-c', '--cached-parse-ok', action='store_true', default=False,
+                    help='use cached parse of input file if it exists')
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
@@ -121,19 +121,19 @@ args = parser.parse_args()
 if args.input_from is None:
     # can't parse stdin without input_from
     if args.input_file == '-':
-        print("Input from stdin not supported unless input-from/-f specified", file=sys.stderr)
+        print('Input from stdin not supported unless input-from/-f specified', file=sys.stderr)
         sys.exit(1)
 
     # validate inputFile extension
     _, fileExt = os.path.splitext(args.input_file)
     if fileExt not in getInputExtensionsList():
-        print("Input file extension '{}' not supported unless input-from/-f specified.".format(fileExt), file=sys.stderr)
+        print(f'Input file extension \'{fileExt}\' not supported unless input-from/-f specified.', file=sys.stderr)
         printSupportedFormats('input')
         sys.exit(1)
 else:
     # validate inputFormat
     if args.input_from not in getInputFormatsList():
-        print("Input file format '{}' not supported.".format(args.input_from), file=sys.stderr)
+        print(f'Input file format \'{args.input_from}\' not supported.', file=sys.stderr)
         printSupportedFormats('input')
         sys.exit(1)
 
@@ -154,7 +154,7 @@ s = converter.parse(args.input_file, format=args.input_from, forceSource = not a
 
 # check validity of outputFormat
 if args.output_to not in getOutputFormatsList():
-    print("Output format '{}' not supported.".format(args.output_to), file=sys.stderr)
+    print('Output format \'{args.output_to}\' not supported.', file=sys.stderr)
     printSupportedFormats('output')
     sys.exit(1)
 
@@ -175,8 +175,8 @@ else:
 actualOutFile = s.write(fmt=args.output_to, fp=outputFile, makeNotation=False)
 if outputFile is None:
     # read actualOutFile (a temp file in this case) into a string, and then write it to stdout
-    with open(actualOutFile) as f:
+    with open(actualOutFile, encoding='utf-8') as f:
         outStr: str = f.read()
         sys.stdout.write(outStr)
 else:
-    print("Success!  Output can be found in", outputFile, file=sys.stderr)
+    print('Success!  Output can be found in', outputFile, file=sys.stderr)

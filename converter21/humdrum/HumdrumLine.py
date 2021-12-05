@@ -1034,8 +1034,7 @@ class HumdrumLine(HumHash):
                 if trackStr is not None:
                     track = int(trackStr)
 
-            if maxTrack < track:
-                maxTrack = track
+            maxTrack = max(maxTrack, track)
 
             token.track = track
 

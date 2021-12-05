@@ -42,7 +42,7 @@ class Convert:
     // default value: scale = 4 (duration in terms of quarter notes)
     // default value: separator = " " (sub-token separator)
     '''
-    _knownRecipDurationCache: Dict[str, HumNum] = dict() # key is recip, value is duration: HumNum
+    _knownRecipDurationCache: Dict[str, HumNum] = {} # key is recip, value is duration: HumNum
 
     @staticmethod
     def recipToDuration(recip: str, scale: HumNum = HumNum(4)) -> HumNum:
@@ -425,9 +425,9 @@ class Convert:
 
         output: float = 0.0
 
-        for namePatt in Convert.namedTempoPatterns:
+        for namePatt, nameValue in Convert.namedTempoPatterns.items():
             if re.match(namePatt, lowerName):
-                output = float(Convert.namedTempoPatterns[namePatt])
+                output = float(nameValue)
                 break
 
         if output <= 0:
@@ -1071,7 +1071,7 @@ class Convert:
             repeat = 3 - octave
 
         if repeat > 12:
-            raise HumdrumInternalError('Error: unreasonable octave value: {} for {}'.format(octave, b40))
+            raise HumdrumInternalError(f'Error: unreasonable octave value: {octave} for {b40}')
 
         output: str = base * (1 + repeat)
         if accidental > 0:
