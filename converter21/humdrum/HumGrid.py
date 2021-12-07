@@ -422,8 +422,10 @@ class HumGrid:
     '''
     def addNullTokens(self):
         self.addNullTokensForNoteDurations() # make sure every note has enough '.'s to cover duration
-        self.addNullTokensForSpinedSlices() # fill in null tokens in empty voices
-        self.checkForMissingNullTokens() # for debugging only, raises exception if expected voice or token is None
+        self.addNullTokensForGraceNotes()
+        self.addNullTokensForClefChanges()
+        self.addNullTokensForLayoutComments()
+#        self.checkForMissingNullTokens() # for debugging only, raises exception if expected voice or token is None
         self.checkForNullDataHoles()
 
     '''
@@ -546,35 +548,69 @@ class HumGrid:
         # a token (likely a grace note which should not be erased)
 
     '''
-        addNullTokensForSpinedSlices
+    //////////////////////////////
+    //
+    // HumGrid::addNullTokensForGraceNotes -- Avoid grace notes at
+    //     starts of measures from contracting the subspine count.
     '''
-    def addNullTokensForSpinedSlices(self):
+    def addNullTokensForGraceNotes(self):
+        # add null tokens for grace notes in other voices
+        self._addNullTokensForSliceType(SliceType.GraceNotes)
+
+    '''
+    //////////////////////////////
+    //
+    // HumGrid::addNullTokensForLayoutComments -- Avoid layout in multi-subspine
+    //     regions from contracting to a single spine.
+    '''
+    def addNullTokensForLayoutComments(self):
+        # add null tokens for layout comments in other voices
+        self._addNullTokensForSliceType(SliceType.Layouts)
+
+    '''
+    //////////////////////////////
+    //
+    // HumGrid::addNullTokensForClefChanges -- Avoid clef in multi-subspine
+    //     regions from contracting to a single spine.
+    '''
+    def addNullTokensForClefChanges(self):
+        # add null tokens for clef changes in other voices
+        self._addNullTokensForSliceType(SliceType.Clefs)
+
+    '''
+        _addNullTokensForSliceType
+    '''
+    def _addNullTokensForSliceType(self, sliceType: SliceType):
         # add null tokens in other voices in slices of this type
-        lastSpined: GridSlice = None
-        nextSpined: GridSlice = None
         for i, theSlice in enumerate(self._allSlices):
-            if not theSlice.hasSpines:
+            if theSlice.sliceType != sliceType:
                 continue
 
-            # theSlice is of the sliceType we are looking for
+            # theSlice is of the sliceType we are looking for.
+            # Find the last note and next note.
+            lastNote: GridSlice = None
+            nextNote: GridSlice = None
+
             for j in range(i+1, len(self._allSlices)):
-                if self._allSlices[j].hasSpines:
-                    nextSpined = self._allSlices[j]
+                if self._allSlices[j].isNoteSlice:
+                    nextNote = self._allSlices[j]
                     break
 
-            if nextSpined is None:
+            if nextNote is None:
                 continue
 
             for j in reversed(range(0, i)): # starts at i-1, ends at 0
-                if self._allSlices[j].hasSpines:
-                    lastSpined = self._allSlices[j]
+                if self._allSlices[j].isNoteSlice:
+                    lastNote = self._allSlices[j]
                     break
 
-            # lastSpined might be None; if so, we'll assume one voice per staff
-            self._fillInNullTokensForSlice(theSlice, lastSpined, nextSpined)
+            if lastNote is None:
+                continue
+
+            self._fillInNullTokensForSlice(theSlice, lastNote, nextNote)
 
     '''
-        _fillInNullTokensForSliceType fills in null tokens in a slice to avoid
+        _fillInNullTokensForSlice fills in null tokens in a slice to avoid
             contracting to a single spine
     '''
     @staticmethod
@@ -585,27 +621,27 @@ class HumGrid:
             return
         if nextSpined is None:
             return
+        if lastSpined is None:
+            return
 
         nullChar: str = theSlice.nullTokenStringForSlice()
 
         for p, part in enumerate(theSlice.parts):
             for s, staff in enumerate(part.staves):
-                v1Count:  int = 1 # default, if lastSpined is None
-                if lastSpined is not None:
-                    v1Count = len(lastSpined.parts[p].staves[s].voices)
-                v2Count:  int = len(nextSpined.parts[p].staves[s].voices)
-                theCount: int = len(theSlice.parts[p].staves[s].voices)
+                lastCount:  int = len(lastSpined.parts[p].staves[s].voices)
+                nextCount:  int = len(nextSpined.parts[p].staves[s].voices)
+                thisCount: int = len(theSlice.parts[p].staves[s].voices)
 
-                v1Count = max(v1Count, 1)
-                v2Count = max(v2Count, 1)
+                lastCount = max(lastCount, 1)
+                nextCount = max(nextCount, 1)
 
                 # If spined slices are expanding or contracting, do
                 # not try to adjust the slice between them.
                 # These will get filled in properly during manipulator
                 # processing.
-                if v1Count == v2Count:
+                if lastCount == nextCount:
                     # Extend the array of voices to match the surrounding voice count.
-                    for _ in range(0, v1Count - theCount):
+                    for _ in range(0, lastCount - thisCount):
                         staff.voices.append(None)
 
                 # But no matter what, fill in any missing voices and/or tokens
