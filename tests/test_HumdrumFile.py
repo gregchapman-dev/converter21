@@ -114,11 +114,6 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping export due to *rscale issues')
             continue
 
-#         if 'joplin' in str(krnPath) and krnPath.name in ('pleasant.krn',
-#                                                             ):
-#             print('\tskipping export due to invalid cross-staff merge in original')
-#             continue
-
         hdw: HumdrumWriter = HumdrumWriter(score)
         hdw.makeNotation = False
         hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
@@ -143,24 +138,11 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping parse of export due to *+ issues')
             continue
 
-#         if 'beethoven' in str(krnPath) and krnPath.name in (
-#                 'sonata05-2.krn',
-#                                                             ):
-#             print('\tskipping parse of export due to missing hidden rest after spine split')
-#             continue
-
         if 'beethoven' in str(krnPath) and krnPath.name in (
                 'sonata18-1.krn',
                                                             ):
-            print('\tskipping parse of export due to some unknown issue')
+            print('\tskipping parse of export due to bad export of complex manipulators')
             continue
-
-#         if 'rds-scores' in str(krnPath) and krnPath.name in (
-#                 'R255_Ive-w35p12m19-24.krn',
-#                 'R428_Var-w1p12-13h5m9-12.krn',
-#                                                             ):
-#             print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
-#             continue
 
         # this is a weird one...
         if 'rds-scores' in str(krnPath) and krnPath.name in (
@@ -169,25 +151,10 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping parse of export due to weird spine stuff (staff count changed?)')
             continue
 
-#         if 'mozart' in str(krnPath) and krnPath.name in (
-#                 'sonata01-1.krn',
-#                 'sonata03-3.krn',
-#                 'sonata11-1f.krn',
-#                 'sonata17-1.krn',
-#                 'sonata08-2.krn',
-#                 'sonata11-2.krn',
-#                 'sonata12-2.krn',
-#                 'sonata09-2.krn',
-#                 'sonata09-3.krn',
-#                 'sonata13-2.krn',
-#                                                          ):
-#             print('\tskipping parse of export due to prepareDuration bug triggered by spine split/merge in the middle of a note')
-#             continue
-
         if 'chopin_mazurkas' in str(krnPath) and krnPath.name in (
                 'mazurka06-1.krn',
                                                                 ):
-            print('\tskipping parse of export due to music21 crash for unknown reasons')
+            print('\tskipping parse of export due to weird tuplet crash')
             continue
 
         if 'beethoven' in str(krnPath) and krnPath.name in (
