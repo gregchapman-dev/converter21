@@ -151,12 +151,6 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping parse of export due to weird spine stuff (staff count changed?)')
             continue
 
-        if 'chopin_mazurkas' in str(krnPath) and krnPath.name in (
-                'mazurka06-1.krn',
-                                                                ):
-            print('\tskipping parse of export due to weird tuplet crash')
-            continue
-
         if 'beethoven' in str(krnPath) and krnPath.name in (
                 'sonata20-2.krn',
                                                             ):
@@ -171,13 +165,16 @@ def ReadAllTestFilesInFolder(folder: str):
 
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R714_Cop-w32p117-118m110-112.krn',
-                'R453_Ber-w15p362-363m118-121.krn',
-                'R701_Cop-w1v2p8m1-h2m2.krn',
-                'R700_Cop-w2p64h38m3-10.krn',
-                'R258_Ive-w30p9m55-57.krn',
                 'R408_Web-w13p1-2m1-12.krn',
-        ):
-            print('\tskipping parse of export due to weird tuplets in the original')
+                'R258_Ive-w30p9m55-57.krn',
+                                                            ):
+            print('\tskipping parse of export due to crazy manipulators in the original')
+            continue
+
+        if 'rds-scores' in str(krnPath) and krnPath.name in (
+                'R408_Web-w13p1-2m1-12.krn',
+                                                            ):
+            print('\tskipping parse of export due to tremolo with triplets in the original')
             continue
 
         hfb = HumdrumFile(str(fp))

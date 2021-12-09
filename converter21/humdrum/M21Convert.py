@@ -471,6 +471,8 @@ class M21Convert:
         durNoDots: HumNum = None
         numDots: int = None
         durNoDots, numDots = Convert.computeDurationNoDotsAndNumDots(dur)
+        if numDots is None:
+            print(f'Cannot figure out durNoDots + numDots from {token.text}, tuplet={tuplet}, about to crash in convertQuarterLengthToType()...', file=sys.stderr)
         durType: str = m21.duration.convertQuarterLengthToType(Fraction(durNoDots))
         #print('m21DurationWithTuplet: type = "{}", dots={}'.format(durType, numDots), file=sys.stderr)
         component: m21.duration.DurationTuple = m21.duration.durationTupleFromTypeDots(durType, numDots)
@@ -914,63 +916,75 @@ class M21Convert:
     @staticmethod
     def kernRecipFromM21Duration(m21Duration: m21.duration.Duration) -> str:
         dur: HumNum = None
+        dots: Optional[str] = None
+        inTuplet: bool = False
+
         if m21Duration.isGrace:
             # It's a grace note, so we want to generate real recip (printed duration)
             # even though quarterLength is (correctly) zero. m21Duration.type is 'eighth'
             # or '16th' or whatever, so use that.  This way the grace notes will keep
             # the correct number of flags/beams.
             dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
+            dots = ''
+        elif m21Duration.tuplets and len(m21Duration.tuplets) == 1:
+            dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
+            dur *= HumNum(m21Duration.tuplets[0].tupletMultiplier())
+            dots = '.' * m21Duration.dots
+            inTuplet = True
         else:
+            # no tuplet, or nested tuplets (which we will ignore, since music21 doesn't really
+            # support nested tuplets, and neither do we)
             dur = HumNum(m21Duration.quarterLength)
 
         dur /= 4 # convert to whole-note units
 
-        dots: str = ''
-        percentExists = False
-
-        # compute number of dots from dur
-        if dur.numerator != 1: # if it's 1 we don't need any dots
-            # otherwise check up to three dots
-            oneDotDur: HumNum = dur * 2 / 3
-            if oneDotDur.numerator == 1:
-                dur = oneDotDur
-                dots = '.'
-            else:
-                twoDotDur: HumNum = dur * 4 / 7
-                if twoDotDur.numerator == 1:
-                    dur = twoDotDur
-                    dots = '..'
+        if dots is None:
+            # compute number of dots from dur (and shrink dur to match)
+            if dur.numerator != 1: # if it's 1 we don't need any dots
+                # otherwise check up to three dots
+                oneDotDur: HumNum = dur * 2 / 3
+                if oneDotDur.numerator == 1:
+                    dur = oneDotDur
+                    dots = '.'
                 else:
-                    threeDotDur: HumNum = dur * 8 / 15
-                    if threeDotDur.numerator == 1:
-                        dur = threeDotDur
-                        dots = '...'
+                    twoDotDur: HumNum = dur * 4 / 7
+                    if twoDotDur.numerator == 1:
+                        dur = twoDotDur
+                        dots = '..'
+                    else:
+                        threeDotDur: HumNum = dur * 8 / 15
+                        if threeDotDur.numerator == 1:
+                            dur = threeDotDur
+                            dots = '...'
 
+        percentExists: bool = False
         out: str = str(dur.denominator)
         if dur.numerator != 1:
             out += '%' + str(dur.numerator)
             percentExists = True
-        out += dots
+        if dots:
+            out += dots
 
         # Check for a few specific 'n%m' recips that can be converted to '00' etc
         if percentExists:
-            m = re.search(out, r'(\d+)%(\d+)(\.*)')
+            m = re.search(r'(\d+)%(\d+)(\.*)', out)
             if m:
                 first: int = int(m.group(1))
                 second: int = int(m.group(2))
-                dots: str = m.group(3)
-                if not dots:
+                someDots: str = m.group(3)
+                if not someDots:
                     if first == 1 and second == 2:
-                        out.replace('1%2', '0')
+                        out = out.replace('1%2', '0')
                     elif first == 1 and second == 4:
-                        out.replace('1%4', '00')
-                    elif first == 1 and second == 3:
-                        out.replace('1%3', '0.')
+                        out = out.replace('1%4', '00')
+                    elif first == 1 and second == 3 and not inTuplet:
+                        # don't add a dot if you're in a tuplet, we have the exact dot count we want
+                        out = out.replace('1%3', '0.')
                 else:
                     if first == 1 and second == 2:
-                        original: str = '1%2' + dots
-                        replacement: str = '0' + dots
-                        out.replace(original, replacement)
+                        original: str = '1%2' + someDots
+                        replacement: str = '0' + someDots
+                        out = out.replace(original, replacement)
 
         return out
 

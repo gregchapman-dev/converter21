@@ -1261,28 +1261,28 @@ class Convert:
         return False
 
     @staticmethod
-    def computeDurationNoDotsAndNumDots(quarterLength: HumNum) -> (HumNum, int):
-        attemptedPowerOfTwo: HumNum = quarterLength
+    def computeDurationNoDotsAndNumDots(durWithDots: HumNum) -> (HumNum, int):
+        attemptedPowerOfTwo: HumNum = durWithDots
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + no dots
             return (attemptedPowerOfTwo, 0)
 
-        attemptedPowerOfTwo = quarterLength * 2 / 3
+        attemptedPowerOfTwo = durWithDots * 2 / 3
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + 1 dot
             return (attemptedPowerOfTwo, 1)
 
-        attemptedPowerOfTwo = quarterLength * 4 / 7
+        attemptedPowerOfTwo = durWithDots * 4 / 7
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + 2 dots
             return (attemptedPowerOfTwo, 2)
 
-        attemptedPowerOfTwo = quarterLength * 8 / 15
+        attemptedPowerOfTwo = durWithDots * 8 / 15
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + 3 dots
             return (attemptedPowerOfTwo, 3)
 
-        raise HumdrumInternalError('Cannot split out dots from dur={quarterLength}')
+        return (durWithDots, None) # None signals that we couldn't actually find a power-of-two duration
 
     @staticmethod
     def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNum) -> List[HumNum]:

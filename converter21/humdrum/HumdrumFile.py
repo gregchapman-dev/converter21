@@ -2102,7 +2102,8 @@ class HumdrumFile(HumdrumFileContent):
             # dived durNormal by numScale
             numActual *= numScale
             numNormal *= numScale
-            durNormal = m21.duration.durationTupleFromQuarterLength(durNormal.quarterLength / Fraction(numScale))
+            if durNormal is not None:
+                durNormal = m21.duration.durationTupleFromQuarterLength(durNormal.quarterLength / Fraction(numScale))
 
         tuplet: m21.duration.Tuplet = m21.duration.Tuplet(
                                         numberNotesActual=numActual,
