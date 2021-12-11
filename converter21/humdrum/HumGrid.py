@@ -1382,7 +1382,7 @@ class HumGrid:
                 # multiple lines.
                 newSlices: [GridSlice] = self.cleanManipulator(currSlice)
                 if newSlices:
-                    for newSlice in newSlices:
+                    for newSlice in reversed(newSlices): #BUGFIX reversed loop because insert(i) reverses
                         measure.slices.insert(i, newSlice)
                 i += 1
 
@@ -1443,7 +1443,7 @@ class HumGrid:
     //
     // HumGrid::cleanManipulator --
     '''
-    def cleanManipulator(self, currSlice: GridSlice):
+    def cleanManipulator(self, currSlice: GridSlice) -> [GridSlice]:
         newSlices: [GridSlice] = []
         output: GridSlice = None
 
