@@ -138,12 +138,6 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping parse of export due to *+ issues')
             continue
 
-        if 'beethoven' in str(krnPath) and krnPath.name in (
-                'sonata18-1.krn',
-                                                            ):
-            print('\tskipping parse of export due to bad export of complex manipulators')
-            continue
-
         # this is a weird one...
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R262x_Ive-w33b4p26.krn',
