@@ -649,7 +649,9 @@ class M21Convert:
                                                   spannerBundle: m21.spanner.SpannerBundle,
                                                   owner=None) -> Tuple[str, List[str]]:
         prefix: str = ''
-        recip: str = M21Convert.kernRecipFromM21Duration(m21Unpitched.duration)
+        recip: str = ''
+        vdurRecip: str = ''
+        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Unpitched.duration)
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Unpitched.duration)
         pitch: str = M21Convert.kernPitchFromM21Unpitched(m21Unpitched, owner)
         postfix: str = ''
@@ -661,18 +663,27 @@ class M21Convert:
                                                 spannerBundle=spannerBundle)
 
         token: str = prefix + recip + graceType + pitch + postfix
+
+        if vdurRecip:
+            layouts.append('!LO:N:vis=' + vdurRecip)
+
         return (token, layouts)
 
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Rest(m21Rest: m21.note.Rest, spannerBundle: m21.spanner.SpannerBundle) -> Tuple[str, List[str]]:
         pitch: str = 'r' # "pitch" of a rest is 'r'
-        recip: str = M21Convert.kernRecipFromM21Duration(m21Rest.duration)
+        recip: str = ''
+        vdurRecip: str = ''
+        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Rest.duration)
         postfixAndLayouts: Tuple[str, List[str]] = M21Convert.kernPostfixAndLayoutsFromM21Rest(m21Rest,
                                                                                                spannerBundle)
         postfix: str = postfixAndLayouts[0]
         layouts: [str] = postfixAndLayouts[1]
 
         token: str = recip + pitch + postfix
+
+        if vdurRecip:
+            layouts.append('!LO:N:vis=' + vdurRecip)
 
         return (token, layouts)
 
@@ -706,7 +717,9 @@ class M21Convert:
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Note(m21Note: m21.note.Note, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
         prefix: str = ''
-        recip: str = M21Convert.kernRecipFromM21Duration(m21Note.duration)
+        recip: str = ''
+        vdurRecip: str = ''
+        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Note.duration)
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Note.duration)
         pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
         postfix: str = ''
@@ -718,6 +731,10 @@ class M21Convert:
                                                 spannerBundle=spannerBundle)
 
         token: str = prefix + recip + graceType + pitch + postfix
+
+        if vdurRecip:
+            layouts.append('!LO:N:vis=' + vdurRecip)
+
         return (token, layouts)
 
     @staticmethod
@@ -833,7 +850,9 @@ class M21Convert:
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
         pitchPerNote: [str] = M21Convert.kernPitchesFromM21Chord(m21Chord, owner)
-        recip: str = M21Convert.kernRecipFromM21Duration(m21Chord.duration) # same for each
+        recip: str = ''
+        vdurRecip: str = ''
+        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Chord.duration) # same for each
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Chord.duration)
         prefixPerNote: [str] = []
         postfixPerNote: [str] = []
@@ -847,6 +866,9 @@ class M21Convert:
             if i > 0:
                 token += ' '
             token += prefix + recip + graceType + pitch + postfix
+
+        if vdurRecip:
+            layoutsForChord.append('!LO:N:vis=' + vdurRecip)
 
         return token, layoutsForChord
 
@@ -912,10 +934,12 @@ class M21Convert:
     // MxmlEvent::getRecip -- return **recip value for note/rest.
     //   e.g. recip == '4' for a quarter note duration, recip == '2' for a half note duration.
         Code that converts to '00' etc came from Tool_musicxml2hum::addEvent. --gregc
+        Also returns any visual duration recip as a second string.
     '''
     @staticmethod
-    def kernRecipFromM21Duration(m21Duration: m21.duration.Duration) -> str:
+    def kernRecipFromM21Duration(m21Duration: m21.duration.Duration) -> (str, str):
         dur: HumNum = None
+        vdur: HumNum = None
         dots: Optional[str] = None
         inTuplet: bool = False
 
@@ -926,6 +950,14 @@ class M21Convert:
             # the correct number of flags/beams.
             dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
             dots = ''
+        elif not m21Duration.linked:
+            # There's a real duration and a visual duration
+            # Real duration is quarterLength, visual duration is components[0].quarterLength (assuming only 1 component)
+            dur = HumNum(m21Duration.quarterLength)
+            if len(m21Duration.components) == 1:
+                vdur = HumNum(m21Duration.components[0].quarterLength)
+            else:
+                print('visual duration unusable, ignoring it', file=sys.stderr)
         elif m21Duration.tuplets and len(m21Duration.tuplets) == 1:
             dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
             dur *= HumNum(m21Duration.tuplets[0].tupletMultiplier())
@@ -986,7 +1018,11 @@ class M21Convert:
                         replacement: str = '0' + someDots
                         out = out.replace(original, replacement)
 
-        return out
+        if vdur:
+            m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+            vdurRecip: str = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
+            return out, vdurRecip
+        return out, None
 
     @staticmethod
     def accidentalInfo(m21Accid: m21.pitch.Accidental) -> (int, bool, bool, str):
