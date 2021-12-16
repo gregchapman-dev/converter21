@@ -467,7 +467,7 @@ class M21Convert:
 
     @staticmethod
     def m21DurationWithTuplet(token: HumdrumToken, tuplet: m21.duration.Tuplet) -> m21.duration.Duration:
-        dur: HumNum = token.scaledDuration(token.rscale) / HumNum(tuplet.tupletMultiplier())
+        dur: HumNum = token.duration / HumNum(tuplet.tupletMultiplier())
         durNoDots: HumNum = None
         numDots: int = None
         durNoDots, numDots = Convert.computeDurationNoDotsAndNumDots(dur)
@@ -950,7 +950,7 @@ class M21Convert:
             # the correct number of flags/beams.
             dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
             dots = ''
-        elif not m21Duration.linked:
+        elif m21Duration.linked is False:
             # There's a real duration and a visual duration
             # Real duration is quarterLength, visual duration is components[0].quarterLength (assuming only 1 component)
             dur = HumNum(m21Duration.quarterLength)
@@ -1009,14 +1009,31 @@ class M21Convert:
                         out = out.replace('1%2', '0')
                     elif first == 1 and second == 4:
                         out = out.replace('1%4', '00')
+                    elif first == 1 and second == 8:
+                        out = out.replace('1%8', '000')
+                    elif first == 1 and second == 16:
+                        out = out.replace('1%16', '0000')
                     elif first == 1 and second == 3 and not inTuplet:
                         # don't add a dot if you're in a tuplet, we have the exact dot count we want
                         out = out.replace('1%3', '0.')
+                    elif first == 1 and second == 6 and not inTuplet:
+                        # don't add a dot if you're in a tuplet, we have the exact dot count we want
+                        out = out.replace('1%6', '00.')
+                    elif first == 1 and second == 12 and not inTuplet:
+                        # don't add a dot if you're in a tuplet, we have the exact dot count we want
+                        out = out.replace('1%12', '000.')
+                    elif first == 1 and second == 24 and not inTuplet:
+                        # don't add a dot if you're in a tuplet, we have the exact dot count we want
+                        out = out.replace('1%24', '0000.')
                 else:
                     if first == 1 and second == 2:
-                        original: str = '1%2' + someDots
-                        replacement: str = '0' + someDots
-                        out = out.replace(original, replacement)
+                        out = out.replace('1%2' + someDots, '0' + someDots)
+                    elif first == 1 and second == 4:
+                        out = out.replace('1%4' + someDots, '00' + someDots)
+                    elif first == 1 and second == 8:
+                        out = out.replace('1%8' + someDots, '000' + someDots)
+                    elif first == 1 and second == 16:
+                        out = out.replace('1%16' + someDots, '0000' + someDots)
 
         if vdur:
             m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))

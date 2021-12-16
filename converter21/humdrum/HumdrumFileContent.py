@@ -1058,7 +1058,6 @@ class HumdrumFileContent(HumdrumFileStructure):
                 vis: str = Convert.durationToRecip(dur)
                 vis += '.' * token.dotCount
                 token.setValue('LO', 'N', 'vis', vis)
-                token.rscale = rscales[ttrack] # in case we need to know later
 
         return True
 

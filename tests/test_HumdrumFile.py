@@ -12,11 +12,6 @@ from converter21.humdrum.HumdrumFileBase import getMergedSpineInfo
 # The check routine that every test calls at least once
 from tests.Utilities import CheckHumdrumFile, HumdrumFileTestResults
 
-def test_HumdrumFile_default_init():
-    f = HumdrumFile()
-    results = HumdrumFileTestResults()
-    CheckHumdrumFile(f, results)
-
 # def test_ParticularFile():
 #     f = HumdrumFile('/Users/gregc/Documents/test/humdrum_test_files_from_humlib/test-manipulators.krn') # put particular file to test's full pathstr there
 #     results = HumdrumFileTestResults('') # put particular file to test's results file there
@@ -31,8 +26,13 @@ def test_getMergedSpineInfo():
     assert getMergedSpineInfo(['(1)a', '(((1)b)a)a', '(((1)b)a)b', '(((1)b)b)a', '(((1)b)b)b', '(2)a', '(2)b', '3'], 5, 1) == '2'
     assert getMergedSpineInfo(['(1)a', '((((1)b)a)a)a', '((((1)b)a)a)b', '((((1)b)a)b)a', '((((1)b)a)b)b', '((((1)b)b)a)a', '((((1)b)b)a)b', '((((1)b)b)b)a', '((((1)b)b)b)b', '(2)a', '(2)b', '3'], 0, 8) == '1'
 
+def test_HumdrumFile_default_init():
+    f = HumdrumFile()
+    results = HumdrumFileTestResults()
+    CheckHumdrumFile(f, results)
+
 def ReadAllTestFilesInFolder(folder: str):
-    krnPaths: [Path] = list(Path(folder).glob('**/*.krn'))
+    krnPaths: [Path] = sorted(list(Path(folder).glob('**/*.krn')), key=str)
     print('numTestFiles in', folder, ' =', len(krnPaths))
     assert len(krnPaths) > 0
 
@@ -58,6 +58,14 @@ def ReadAllTestFilesInFolder(folder: str):
                 'Tam2031034a-Vorro_veder_cio_che_Tirsi_avra_fatto--Balsamino_1594.krn',
                                                             ):
             print('skipping test because krnFile contains more than one score (not yet supported)')
+            continue
+
+        if 'jrp-scores' in str(krnPath) and krnPath.name in (
+                'Agr1001c-Missa_In_myne_zin-Sanctus.krn',
+                'Agr1001d-Missa_In_myne_zin-Agnus.krn',
+                'Mar2085-Salve_regina.krn',
+                                                            ):
+            print('skipping test because krnFile does not parse (inexpressible duration in tuplet)')
             continue
 
         hfb = HumdrumFile(str(krnPath))
@@ -87,31 +95,26 @@ def ReadAllTestFilesInFolder(folder: str):
         if krnPath.name in (
                 'Tam2010724a-Picciola_e_lape_e_fa_col_picciol_morso--Balsamino_1594.krn', # tasso-scores
                             ):
-            print('\tskipping export due to overlapping note durations')
+            print('\tskipping export due to overlapping note durations (unknown reason)')
             continue
 
         if 'beethoven' in str(krnPath) and krnPath.name in (
                 'sonata11-1.krn',
         ):
-            print('\tskipping export due to overlapping note durations')
+            print('\tskipping export due to unexported *tremolo causing overlapping note durations')
             continue
 
         if 'rds-scores' in str(krnPath) and krnPath.name in (
-                'R409_Web-w3p7m46-49.krn',
                 'R319_Fal-w6p178-179h44m1-5.krn'
         ):
-            print('\tskipping export due to overlapping note durations')
+            print('\tskipping export due to unexported *tremolo causing overlapping note durations')
             continue
 
-        # *rscale:2 is causing import to produce a score with notes that overlap.
-        # That causes export to raise an exception when adding '.'s to finish out
-        # the note's duration (it runs into the next note before it should)
         if 'beethoven' in str(krnPath) and krnPath.name in (
-                'sonata13-4.krn', # beethoven measure =265
                 'sonata08-1.krn',
                 'sonata14-3.krn',
                                                             ):
-            print('\tskipping export due to *rscale issues')
+            print('\tskipping export due to unexported *tremolo causing overlapping note durations')
             continue
 
         hdw: HumdrumWriter = HumdrumWriter(score)
@@ -142,13 +145,13 @@ def ReadAllTestFilesInFolder(folder: str):
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R262x_Ive-w33b4p26.krn',
                 ): # rds-scores
-            print('\tskipping parse of export due to weird spine stuff (staff count changed?)')
+            print('\tskipping parse of export due to two missing instrument abbreviation spines')
             continue
 
         if 'beethoven' in str(krnPath) and krnPath.name in (
                 'sonata20-2.krn',
                                                             ):
-            print('\tskipping parse of export due to unimplemented export of tremolo')
+            print('\tskipping parse of export due to unexported tremolo')
             continue
 
         if 'tasso-scores' in str(krnPath) and krnPath.name in (
@@ -158,17 +161,21 @@ def ReadAllTestFilesInFolder(folder: str):
             continue
 
         if 'rds-scores' in str(krnPath) and krnPath.name in (
-                'R714_Cop-w32p117-118m110-112.krn',
-                'R408_Web-w13p1-2m1-12.krn',
                 'R258_Ive-w30p9m55-57.krn',
                                                             ):
-            print('\tskipping parse of export due to crazy manipulators in the original')
+            print('\tskipping parse of export due to unparseable manipulators (original is even weirder, but parseable)')
             continue
 
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R408_Web-w13p1-2m1-12.krn',
                                                             ):
-            print('\tskipping parse of export due to tremolo with triplets in the original')
+            print('\tskipping parse of export due to unexported tremolo with triplets')
+            continue
+
+        if 'jrp-scores' in str(krnPath) and krnPath.name in (
+                'Ock1013e-Requiem-Offertory_Domine_Jesu_Christe.krn',
+                                                            ):
+            print('skipping parse of export due to unparseable duration in tuplet')
             continue
 
         hfb = HumdrumFile(str(fp))
@@ -188,11 +195,6 @@ def ReadAllTestFilesInFolder(folder: str):
 #         print("crashed {} times {} out of {} files".format(numCrashes, crashIdxes, len(krnPaths)))
 #         assert False
 
-def test_HumdrumFile_read_all_test_files_from_humlib_FromFile():
-    '''Test HumdrumFile('blah.krn') for every krn file
-        in ~/Documents/test/humdrum_test_files_from_humlib'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_test_files_from_humlib')
-
 @pytest.mark.slow
 def test_HumdrumFile_read_all_test_files_from_humdrum_beethoven_piano_sonatas_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file
@@ -204,12 +206,6 @@ def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_mazurkas_FromFile()
     '''Test HumdrumFile('blah.krn') for every krn file
         in ~/Documents/test/humdrum_chopin_mazurkas'''
     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_chopin_mazurkas')
-
-# @pytest.mark.slow
-# def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_first_editions_FromFile():
-#     '''Test HumdrumFile('blah.krn') for every krn file
-#         in ~/Documents/test/humdrum-chopin-first-editions'''
-#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum-chopin-first-editions')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_test_files_from_humdrum_joplin_FromFile():
@@ -223,22 +219,39 @@ def test_HumdrumFile_read_all_test_files_from_humdrum_mozart_piano_sonatas_FromF
         in ~/Documents/test/humdrum_mozart_piano_sonatas'''
     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_mozart_piano_sonatas')
 
+def test_HumdrumFile_read_all_test_files_from_humlib_FromFile():
+    '''Test HumdrumFile('blah.krn') for every krn file
+        in ~/Documents/test/humdrum_test_files_from_humlib'''
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_test_files_from_humlib')
+
 @pytest.mark.slow
 def test_HumdrumFile_read_all_humdrum_files_in_music21_corpus_FromFile():
     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
     in ~/Documents/test/humdrum_test_files_from_music21_corpus'''
     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_test_files_from_music21_corpus')
 
-@pytest.mark.slow
-def test_HumdrumFile_read_all_humdrum_files_in_tasso_scores_FromFile():
-    '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
-    in ~/Documents/test/tasso-scores'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/tasso-scores')
+# @pytest.mark.slow
+# def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_first_editions_FromFile():
+#     '''Test HumdrumFile('blah.krn') for every krn file
+#         in ~/Documents/test/humdrum-chopin-first-editions'''
+#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum-chopin-first-editions')
+
+#@pytest.mark.slow
+# def test_HumdrumFile_read_all_humdrum_files_in_jrp_scores_FromFile():
+#     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
+#     in ~/Documents/test/jrp-scores'''
+#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/jrp-scores')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_humdrum_files_in_rds_scores_FromFile():
     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
     in ~/Documents/test/rds-scores'''
     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/rds-scores')
+
+@pytest.mark.slow
+def test_HumdrumFile_read_all_humdrum_files_in_tasso_scores_FromFile():
+    '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
+    in ~/Documents/test/tasso-scores'''
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/tasso-scores')
 
 # add more tests for coverage...

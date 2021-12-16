@@ -2721,11 +2721,11 @@ class HumdrumFile(HumdrumFileContent):
 
         sumSoFar: HumNum = HumNum(0)
         for i, durItem in enumerate(durItems):
-            durNoDots: HumNum = durItem.scaledDurationNoDots(durItem.rscale)
+            durNoDots: HumNum = durItem.durationNoDots
             dotlessDur[i] = durNoDots / 4
             powerOfTwoWithoutDots[i] = Convert.isPowerOfTwo(durNoDots)
             hasTuplet = hasTuplet or not powerOfTwoWithoutDots[i]
-            durationWithDots[i] = durItem.scaledDuration(durItem.rscale)
+            durationWithDots[i] = durItem.duration
             durSum[i] = sumSoFar
             sumSoFar += durationWithDots[i]
 
