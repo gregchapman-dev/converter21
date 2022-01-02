@@ -32,6 +32,8 @@ from .HumdrumFileStructure import HumdrumFileStructure
 from .HumdrumFileContent import HumdrumFileContent
 from .HumdrumFile import HumdrumFile
 
+from .HumdrumTools import ToolTremolo
+
 from .EventData import EventData
 from .MeasureData import MeasureData, SimultaneousEvents
 from .StaffData import StaffData

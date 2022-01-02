@@ -15,6 +15,7 @@
 
 import sys
 import re
+import math
 from typing import Union, List, Tuple, OrderedDict, Optional, Type
 from fractions import Fraction
 import music21 as m21
@@ -597,18 +598,20 @@ class M21Convert:
 
     @staticmethod
     def kernTokenStringAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
-        if 'Unpitched' in m21GeneralNote.classes:
-            return M21Convert.kernTokenStringAndLayoutsFromM21Unpitched(m21GeneralNote, spannerBundle, owner)
+        if 'Note' in m21GeneralNote.classes:
+            return M21Convert.kernTokenStringAndLayoutsFromM21Note(
+                                        m21GeneralNote, spannerBundle, owner)
 
         if 'Rest' in m21GeneralNote.classes:
-            return M21Convert.kernTokenStringAndLayoutsFromM21Rest(m21GeneralNote, spannerBundle)
+            return M21Convert.kernTokenStringAndLayoutsFromM21Rest(
+                                        m21GeneralNote, spannerBundle, owner)
 
         if 'Chord' in m21GeneralNote.classes:
-            return M21Convert.kernTokenStringAndLayoutsFromM21Chord(m21GeneralNote, spannerBundle, owner)
+            return M21Convert.kernTokenStringAndLayoutsFromM21Chord(
+                                        m21GeneralNote, spannerBundle, owner)
 
-        if 'Note' in m21GeneralNote.classes:
-            # Work from the note's pitch
-            return M21Convert.kernTokenStringAndLayoutsFromM21Note(m21GeneralNote, spannerBundle, owner)
+        if 'Unpitched' in m21GeneralNote.classes:
+            return M21Convert.kernTokenStringAndLayoutsFromM21Unpitched(m21GeneralNote, spannerBundle, owner)
 
         # Not a GeneralNote (Chord, Note, Rest, Unpitched).
         return ('', [])
@@ -658,9 +661,22 @@ class M21Convert:
         layouts: [str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
                                                 m21Unpitched,
+                                                recip,
+                                                spannerBundle,
                                                 isFirstNoteInChord = False,
                                                 isStandaloneNote = True,
-                                                spannerBundle=spannerBundle)
+                                                owner=owner)
+
+        if vdurRecip and postfix.count('@@') == 2:
+            # we have a fingered tremolo, so a portion of visual duration doubles the actual
+            # duration to make music21 do the right thing visually with a fingered tremolo.
+            # We must undo this factor of 2.
+            vdur: HumNum = Convert.recipToDuration(vdurRecip)
+            vdur /= 2
+            m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+            vdurRecip = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
+            if vdurRecip == recip:
+                vdurRecip = ''
 
         token: str = prefix + recip + graceType + pitch + postfix
 
@@ -670,13 +686,16 @@ class M21Convert:
         return (token, layouts)
 
     @staticmethod
-    def kernTokenStringAndLayoutsFromM21Rest(m21Rest: m21.note.Rest, spannerBundle: m21.spanner.SpannerBundle) -> Tuple[str, List[str]]:
+    def kernTokenStringAndLayoutsFromM21Rest(m21Rest: m21.note.Rest, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
         pitch: str = 'r' # "pitch" of a rest is 'r'
         recip: str = ''
         vdurRecip: str = ''
         recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Rest.duration)
-        postfixAndLayouts: Tuple[str, List[str]] = M21Convert.kernPostfixAndLayoutsFromM21Rest(m21Rest,
-                                                                                               spannerBundle)
+        postfixAndLayouts: Tuple[str, List[str]] = M21Convert.kernPostfixAndLayoutsFromM21Rest(
+                                                                m21Rest,
+                                                                recip,
+                                                                spannerBundle,
+                                                                owner)
         postfix: str = postfixAndLayouts[0]
         layouts: [str] = postfixAndLayouts[1]
 
@@ -688,12 +707,20 @@ class M21Convert:
         return (token, layouts)
 
     @staticmethod
-    def kernPostfixAndLayoutsFromM21Rest(m21Rest: m21.note.Rest, _spannerBundle: m21.spanner.SpannerBundle) -> Tuple[str, List[str]]:
+    def kernPostfixAndLayoutsFromM21Rest(m21Rest: m21.note.Rest,
+                                         recip: str,
+                                         _spannerBundle: m21.spanner.SpannerBundle,
+                                         owner=None,
+                                         ) -> Tuple[str, List[str]]:
         postfix: str = ''
         layouts: [str] = []
 
         # rest postfix possibility 0: fermata
-        postfix += M21Convert._getHumdrumStringFromM21Expressions(m21Rest.expressions)
+        postfix += M21Convert._getHumdrumStringFromM21Expressions(
+                                    m21Rest.expressions,
+                                    m21Rest.duration,
+                                    recip,
+                                    owner=owner)
 
         # rest postfix possibility 1: pitch (for vertical positioning)
         if m21Rest.stepShift != 0:
@@ -715,7 +742,9 @@ class M21Convert:
         return (postfix, layouts)
 
     @staticmethod
-    def kernTokenStringAndLayoutsFromM21Note(m21Note: m21.note.Note, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
+    def kernTokenStringAndLayoutsFromM21Note(m21Note: m21.note.Note,
+                                             spannerBundle: m21.spanner.SpannerBundle,
+                                             owner=None) -> Tuple[str, List[str]]:
         prefix: str = ''
         recip: str = ''
         vdurRecip: str = ''
@@ -726,9 +755,22 @@ class M21Convert:
         layouts: [str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
                                                 m21Note,
+                                                recip,
+                                                spannerBundle,
                                                 isFirstNoteInChord = False,
                                                 isStandaloneNote = True,
-                                                spannerBundle=spannerBundle)
+                                                owner=owner)
+
+        if vdurRecip and postfix.count('@@') == 2:
+            # we have a fingered tremolo, so a portion of visual duration doubles the actual
+            # duration to make music21 do the right thing visually with a fingered tremolo.
+            # We must undo this factor of 2.
+            vdur: HumNum = Convert.recipToDuration(vdurRecip)
+            vdur /= 2
+            m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+            vdurRecip = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
+            if vdurRecip == recip:
+                vdurRecip = ''
 
         token: str = prefix + recip + graceType + pitch + postfix
 
@@ -753,9 +795,10 @@ class M21Convert:
 
     @staticmethod
     def kernPrefixPostfixAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.Note,
-                                               isFirstNoteInChord: bool,
-                                               isStandaloneNote: bool,
+                                               recip: str,
                                                spannerBundle: m21.spanner.SpannerBundle,
+                                               isFirstNoteInChord: bool = False,
+                                               isStandaloneNote: bool = True,
                                                owner=None) -> Tuple[str, str, List[str]]:
         prefix: str = ''
         postfix: str = ''
@@ -772,14 +815,19 @@ class M21Convert:
         beamStr: str = ''
         if isStandaloneNote:
             # if this note is in a chord, we will get this info from the chord itself, not from here
+            beamStr = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21GeneralNote)
+
             expressions: m21.expressions.Expression = \
                 M21Utilities.getAllExpressionsFromGeneralNote(m21GeneralNote, spannerBundle)
-            expressionStr = M21Convert._getHumdrumStringFromM21Expressions(expressions,
-                                                                            owner)
+            expressionStr = M21Convert._getHumdrumStringFromM21Expressions(
+                                            expressions,
+                                            m21GeneralNote.duration,
+                                            recip,
+                                            beamStr.count('L'), # beamStarts
+                                            owner)
             articStr = M21Convert._getHumdrumStringFromM21Articulations(m21GeneralNote.articulations,
                                                                             owner)
             stemStr = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21GeneralNote)
-            beamStr = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21GeneralNote)
 
         # isFirstNoteInChord is currently unused, but I suspect we'll need it at some point.
         # Make pylint happy (I can't just rename it with a '_' because callers use the param name.)
@@ -859,13 +907,27 @@ class M21Convert:
         layoutsForChord: [str] = []
 
         prefixPerNote, postfixPerNote, layoutsForChord = \
-            M21Convert.kernPrefixesPostfixesAndLayoutsFromM21Chord(m21Chord, spannerBundle, owner)
+            M21Convert.kernPrefixesPostfixesAndLayoutsFromM21Chord(
+                                m21Chord,
+                                recip,
+                                spannerBundle,
+                                owner)
 
         token: str = ''
         for i, (prefix, pitch, postfix) in enumerate(zip(prefixPerNote, pitchPerNote, postfixPerNote)):
             if i > 0:
                 token += ' '
             token += prefix + recip + graceType + pitch + postfix
+            if vdurRecip and postfix.count('@@') == 2:
+                # we have a fingered tremolo, so a portion of visual duration doubles the actual
+                # duration to make music21 do the right thing visually with a fingered tremolo.
+                # We must undo this factor of 2.
+                vdur: HumNum = Convert.recipToDuration(vdurRecip)
+                vdur /= 2
+                m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+                vdurRecip = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
+                if vdurRecip == recip:
+                    vdurRecip = ''
 
         if vdurRecip:
             layoutsForChord.append('!LO:N:vis=' + vdurRecip)
@@ -881,7 +943,7 @@ class M21Convert:
         return pitches
 
     @staticmethod
-    def kernPrefixesPostfixesAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[List[str], List[str], List[str]]:
+    def kernPrefixesPostfixesAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, recip: str, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[List[str], List[str], List[str]]:
         prefixPerNote:   [str] = [] # one per note
         postfixPerNote:  [str] = [] # one per note
         layoutsForNotes: [str] = [] # 0 or more per note
@@ -893,17 +955,26 @@ class M21Convert:
 
             prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
                                             m21Note,
+                                            recip,
+                                            spannerBundle,
                                             isFirstNoteInChord = noteIdx == 0,
                                             isStandaloneNote = False,
-                                            spannerBundle=spannerBundle)
+                                            owner=owner)
 
             # Since this is a chord, we have to do the following by hand instead of (or as well as)
             # getting the info from each note.
             if noteIdx == 0:
-                articStr:str = M21Convert._getHumdrumStringFromM21Articulations(m21Chord.articulations, owner)
-                exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(m21Chord.expressions, owner)
-                stemStr: str = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21Chord)
                 beamStr: str = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21Chord)
+                articStr:str = M21Convert._getHumdrumStringFromM21Articulations(
+                                                m21Chord.articulations,
+                                                owner)
+                exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(
+                                                m21Chord.expressions,
+                                                m21Chord.duration,
+                                                recip,
+                                                beamStr.count('L'), # beamStarts
+                                                owner)
+                stemStr: str = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21Chord)
                 slurStarts, slurStops = M21Convert._getKernSlurStartsAndStopsFromGeneralNote(m21Chord, spannerBundle)
 
                 prefix = slurStarts + prefix
@@ -1533,7 +1604,11 @@ class M21Convert:
         return output
 
     @staticmethod
-    def _getHumdrumStringFromM21Expressions(m21Expressions: List[m21.expressions.Expression], _owner=None) -> str:
+    def _getHumdrumStringFromM21Expressions(m21Expressions: List[m21.expressions.Expression],
+                                            duration: m21.duration.Duration,
+                                            recip: str,
+                                            beamStarts: int=None,
+                                            owner=None) -> str:
         # expressions are Fermata, Trill, Mordent, Turn, Tremolo (one note)
         # also the following two Spanners: TrillExtension and TremoloSpanner (multiple notes)
         output: str = ''
@@ -1547,11 +1622,9 @@ class M21Convert:
             if isinstance(expr, m21.expressions.Turn):
                 # TODO: print('export of Turn not implemented')
                 continue
-            if isinstance(expr, m21.expressions.Tremolo):
-                # TODO: print('export of Tremolo not implemented')
-                continue
-            if isinstance(expr, m21.expressions.TremoloSpanner):
-                # TODO: print('export of TremoloSpanner not implemented')
+            if isinstance(expr, (m21.expressions.Tremolo, m21.expressions.TremoloSpanner)):
+                output += M21Convert._getHumdrumStringFromTremolo(
+                                        expr, duration, recip, beamStarts, owner)
                 continue
             if isinstance(expr, m21.expressions.TrillExtension):
                 # TODO: print('export of TrillExtension not implemented')
@@ -1559,6 +1632,63 @@ class M21Convert:
             if isinstance(expr, m21.expressions.Fermata):
                 output += ';'
                 continue
+
+        return output
+
+    numberOfFlagsToDurationReciprocal: dict = {
+        0 : 4,
+        1 : 8,
+        2 : 16,
+        3 : 32,
+        4 : 64,
+        5 : 128,
+        6 : 256,
+        7 : 512,
+        8 : 1024,
+        9 : 2048,
+    }
+
+    @staticmethod
+    def _getHumdrumStringFromTremolo(tremolo: Union[m21.expressions.Tremolo,
+                                                    m21.expressions.TremoloSpanner],
+                                     duration: m21.duration.Duration,
+                                     recip: str,
+                                     beamStarts: int,
+                                     _owner=None) -> str:
+        output: str = ''
+        fingered: bool = None
+        if isinstance(tremolo, m21.expressions.Tremolo):
+            fingered = False
+        elif isinstance(tremolo, m21.expressions.TremoloSpanner):
+            fingered = True
+        else:
+            raise HumdrumInternalError('tremolo is not of an appropriate type') # shouldn't happen
+
+        tremolo: int = M21Convert.numberOfFlagsToDurationReciprocal.get(tremolo.numberOfMarks, None)
+        if tremolo is not None:
+            tvalue: HumNum = HumNum(tremolo)
+            if fingered:
+                if beamStarts and duration.quarterLength < 1:
+                    # ignore beamStarts for quarter-notes and above
+                    tvalue *= beamStarts
+                if duration.tuplets and len(duration.tuplets) == 1:
+                    tvalue /= HumNum(duration.tuplets[0].tupletMultiplier())
+                if tvalue.denominator == 1:
+                    output = f'@@{tvalue}@@'
+                else:
+                    output = f'@@{tvalue.numerator}%{tvalue.denominator}@@'
+            else: # not fingered (bowed)
+                durNoDots: HumNum = Convert.recipToDurationNoDots(recip)
+                if 0 < durNoDots < 1:
+                    dval: float = - math.log2(float(durNoDots))
+                    twopow: int = int(dval)
+                    tvalue *= (1<<twopow)
+                if duration.tuplets and len(duration.tuplets) == 1:
+                    tvalue /= HumNum(duration.tuplets[0].tupletMultiplier())
+                if tvalue.denominator == 1:
+                    output = f'@{tvalue}@'
+                else:
+                    output = f'@{tvalue.numerator}%{tvalue.denominator}@'
 
         return output
 

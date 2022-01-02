@@ -169,7 +169,8 @@ class HumdrumLine(HumHash):
     '''
     def __getitem__(self, index: int) -> HumdrumToken:
         if not isinstance(index, int):
-            raise Exception("only simple indexing (no slicing) allowed in HumdrumLine")
+            # if its a slice, out-of-range start/stop won't crash
+            return self._tokens[index]
 
         if index < 0:
             index += len(self._tokens)
@@ -966,6 +967,9 @@ class HumdrumLine(HumHash):
         for i, token in enumerate(self._tokens):
             self.text += token.text
             self.text += '\t' * self._numTabsAfterToken[i]
+            # during export, we have tokens, and then call createLineFromTokens, and someone
+            # has to set up token.ownerLine; we never call createTokensFromLine in that case.
+            token.ownerLine = self
 
     '''
     //////////////////////////////
@@ -1238,6 +1242,31 @@ class HumdrumLine(HumHash):
                     return barnum
 
         return -1
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumLine::copyStructure -- For data lines only at the moment.
+    '''
+    def copyStructure(self, fromLine, nullStr: str):
+        for fromToken in fromLine.tokens():
+            newToken: HumdrumToken = HumdrumToken(nullStr)
+            newToken.ownerLine = self
+            newToken.copyStructure(fromToken)
+            self._tokens.append(newToken)
+
+        self.createLineFromTokens()
+        # pylint: disable=protected-access
+        self._numTabsAfterToken = fromLine._numTabsAfterToken
+        self._rhythmAnalyzed = fromLine._rhythmAnalyzed
+        # pylint: enable=protected-access
+        self.ownerFile = fromLine.ownerFile
+
+        # Other information that should be set later (perhaps with a delta on the durations)
+        #   lineIndex
+        #   durationFromStart
+        #   durationFromBarline
+        #   durationToBarline
 
     '''
     //////////////////////////////

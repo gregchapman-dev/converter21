@@ -271,9 +271,11 @@ with open(goodPath, 'w', encoding='utf-8') as goodf:
                     continue
 
                 if runTheDiff(Path(file), resultsf):
+                    resultsf.flush()
                     print(file, file=goodf)
                     goodf.flush()
                 else:
+                    resultsf.flush()
                     print(file, file=badf)
                     badf.flush()
 

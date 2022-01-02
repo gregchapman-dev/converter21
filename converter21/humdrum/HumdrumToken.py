@@ -12,6 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 import re
+import copy
 
 from converter21.humdrum import HumAddress
 from converter21.humdrum import HumNum
@@ -2708,6 +2709,20 @@ class HumdrumToken(HumHash):
     @nullResolution.setter
     def nullResolution(self, newNullResolution): # newNullResolution: HumdrumToken
         self._nullResolution = newNullResolution
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumToken::copyStucture --
+    '''
+    def copyStructure(self, fromToken):
+        # pylint: disable=protected-access
+        self._strandIndex = fromToken._strandIndex
+        originalOwnerLine = self._address.ownerLine # pick this up before you overwrite _address
+        self._address = copy.copy(fromToken._address)
+        # pylint: enable=protected-access
+        # ownerLine will in general be different, so do not copy, but preserve the original
+        self._address.ownerLine = originalOwnerLine
 
     '''
     //////////////////////////////

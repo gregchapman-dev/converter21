@@ -12,8 +12,11 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+from typing import Union
 
+from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumHash
+from converter21.humdrum import HumNum
 from converter21.humdrum import HumSignifiers
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumLine
@@ -326,7 +329,8 @@ class HumdrumFileBase(HumHash):
     '''
     def __getitem__(self, index: int) -> HumdrumLine:
         if not isinstance(index, int):
-            raise Exception("only simple indexing (no slicing) allowed in HumdrumFileBase")
+            # if its a slice, out-of-range start/stop won't crash
+            return self._lines[index]
 
         if index < 0:
             index += len(self._lines)
@@ -550,6 +554,26 @@ class HumdrumFileBase(HumHash):
             return self.isValid
         return self.isValid
 
+    # for use by HumdrumWriter, for example, who has already created tokens and lines.
+    def analyzeBase(self) -> bool:
+        # this only happens in readString, so we need to do it here for exported HumdrumFiles.
+        for line in self.lines():
+            line.ownerFile = self
+        # don't call analyzeTokens, we already have lines from the tokens
+
+        if not self.analyzeLines():
+            return self.isValid
+        if not self.analyzeSpines():
+            return self.isValid
+        if not self.analyzeLinks():
+            return self.isValid
+        if not self.analyzeTracks():
+            return self.isValid
+        if not self.fixupKernRecipOnlyTokens():
+            return self.isValid
+        return self.isValid
+
+
     '''
         fixupKernRecipOnlyTokens: certain krn files (looking at you,
         rds-scores/R415_Web-w28p2-3m11-19.krn) have recip-only tokens
@@ -628,6 +652,25 @@ class HumdrumFileBase(HumHash):
         nextLine: HumdrumLine = None
         prevLine: HumdrumLine = None
         for line in self._lines:
+            if not line.hasSpines:
+                continue
+            prevLine = nextLine
+            nextLine = line
+            if prevLine is not None:
+                if not self.stitchLinesTogether(prevLine, nextLine):
+                    return self.isValid
+
+        return self.isValid
+
+    '''
+        analyzeLinksForLineSlice is for use after line insertion.  Make sure
+            the slice starts and ends on pre-existing (non-inserted) lines,
+            and contains all inserted lines.
+    '''
+    def analyzeLinksForLineSlice(self, lineSlice: slice) -> bool:
+        prevLine: HumdrumLine = None
+        nextLine: HumdrumLine = None
+        for line in self[lineSlice]:
             if not line.hasSpines:
                 continue
             prevLine = nextLine
@@ -989,12 +1032,20 @@ Line: {line.text}''')
     // HumdrumFileBase::appendLine -- Add a line to the file's contents.  The file's
     //    spine and rhythmic structure should be recalculated after an append.
     '''
-    def appendLine(self, line, asGlobalToken=False): # line can be HumdrumLine or str
+    def appendLine(self, line,
+                    asGlobalToken=False,
+                    analyzeTokenLinks=False): # line can be HumdrumLine or str
         if isinstance(line, str):
             line = HumdrumLine(line, asGlobalToken=asGlobalToken)
         if not isinstance(line, HumdrumLine):
             raise TypeError("appendLine must receive either line: str or line: HumdrumLine")
         self._lines.append(line)
+
+        # if requested, re-analyze token links around the insertion
+        if analyzeTokenLinks:
+            startIdx: int = self.lineCount-2 # previous last line
+            endIdx: int = self.lineCount-1 # new last line
+            self.analyzeLinksForLineSlice(slice(startIdx, endIdx+1))
 
     '''
     ////////////////////////////
@@ -1002,7 +1053,9 @@ Line: {line.text}''')
     // HumdrumFileBase::insertLine -- Add a line to the file's contents.  The file's
     //    spine and rhythmic structure should be recalculated after an append.
     '''
-    def insertLine(self, index: int, aLine, asGlobalToken=False): # aLine can be HumdrumLine or str
+    def insertLine(self, index: int, aLine: Union[HumdrumLine, str],
+                    asGlobalToken: bool=False,
+                    analyzeTokenLinks: bool=False):
         if isinstance(aLine, str):
             aLine = HumdrumLine(aLine, asGlobalToken=asGlobalToken)
         if not isinstance(aLine, HumdrumLine):
@@ -1013,6 +1066,252 @@ Line: {line.text}''')
         for i, line in enumerate(self._lines):
             if i >= index:
                 line.lineIndex = i
+
+        # if requested, re-analyze token links around the insertion
+        if analyzeTokenLinks:
+            startIdx: int = max(0, index)
+            endIdx: int = min(index+1, self.lineCount-1)
+            self.analyzeLinksForLineSlice(slice(startIdx, endIdx+1))
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::insertNullDataLine -- Add a null data line at
+    //     the given absolute quarter-note timestamp in the file.  If there
+    //     is already a data line at the given timestamp, then do not create
+    //     a line and instead return a pointer to the existing line.  Returns
+    //     NULL if there was a problem.
+    '''
+    def insertNullDataLine(self, timestamp: HumNum):
+        # for now do a linear search for the insertion point, but later
+        # do something more efficient.
+        beforet: HumNum = None
+        beforei: int = None
+
+        for i, line in enumerate(self.lines()):
+            if not line.isData:
+                continue
+
+            current: HumNum = line.durationFromStart
+            if current == timestamp:
+                return line
+
+            if current > timestamp:
+                break
+
+            beforet = current
+            beforei = i
+
+        if beforei is None:
+            return None
+
+        beforeLine: HumdrumLine = self[beforei]
+        newLine: HumdrumLine = HumdrumLine()
+        # copyStructure will add null tokens automatically
+        newLine.copyStructure(beforeLine, '.')
+
+        self.insertLine(beforei+1, newLine)
+
+        # Set the timestamp information for inserted line:
+        delta: HumNum = timestamp - beforet
+
+        newLine.durationFromStart = beforeLine.durationFromStart + delta
+        newLine.durationFromBarline = beforeLine.durationFromBarline + delta
+        newLine.durationToBarline = beforeLine.durationToBarline - delta
+        newLine.duration = beforeLine.duration - delta
+        beforeLine.duration = delta
+
+        for beforeToken, newToken in zip(beforeLine.tokens(), newLine.tokens()):
+            beforeToken.insertTokenAfter(newToken)
+
+        return newLine
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::insertNullInterpretationLine -- Add a null interpretation
+    //     line at the given absolute quarter-note timestamp in the file.  The line will
+    //     be added after any other interpretation lines at that timestamp, but before any
+    //     local comments that appear immediately before the data line(s) at that timestamp.
+    //     Returns NULL if there was a problem.
+    '''
+    def insertNullInterpretationLine(self, timestamp: HumNum) -> HumdrumLine:
+	    # for now do a linear search for the insertion point, but later
+	    # do something more efficient.
+        beforei: int = None
+
+        for i, line in enumerate(self.lines()):
+            if not line.isData:
+                continue
+
+            current: HumNum = line.durationFromStart
+            if current == timestamp:
+                beforei = i
+                break
+
+            if current > timestamp:
+                break
+
+            beforei = i
+
+        if beforei is None:
+            return None
+
+        targetLine: HumdrumLine = self.getLineForInterpretationInsertion(beforei)
+        newLine: HumdrumLine = HumdrumLine()
+        # copyStructure will add null tokens automatically
+        newLine.copyStructure(targetLine, '*')
+
+        targeti: int = targetLine.lineIndex
+        self.insertLine(targeti, newLine)
+
+        # inserted line will increment beforei by one:
+        beforei += 1
+        beforeLine: HumdrumLine = self[beforei]
+
+        newLine.durationFromStart = beforeLine.durationFromStart
+        newLine.durationFromBarline = beforeLine.durationFromBarline
+        newLine.durationToBarline = beforeLine.durationToBarline
+        newLine.duration = HumNum(0)
+
+        # Problems here if targetLine is a manipulator
+        for targetToken, newToken in zip(targetLine.tokens(), newLine.tokens()):
+            targetToken.insertTokenAfter(newToken)
+
+        return newLine
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::insertNullInterpretationLineAbove -- Add a null interpretation
+    //     line at the given absolute quarter-note timestamp in the file.  The line will
+    //     be added before any other lines at that timestamp.
+    //     Returns NULL if there was a problem.
+    '''
+    def insertNullInterpretationLineAbove(self, timestamp: HumNum) -> HumdrumLine:
+        beforei: int = None
+
+        for i, line in enumerate(self.lines()):
+            current: HumNum = line.durationFromStart
+            if current == timestamp:
+                beforei = i
+                break
+            if current > timestamp:
+                break
+
+            beforei = i
+
+        if beforei is None:
+            return None
+
+        targetLine: HumdrumLine = self.getLineForInterpretationInsertionAbove(beforei)
+        newLine: HumdrumLine = HumdrumLine()
+        newLine.copyStructure(targetLine, '*')
+
+        targeti: int = targetLine.lineIndex
+
+        self.insertLine(targeti, newLine)
+
+        beforei += 1
+        beforeLine: HumdrumLine = self[beforei]
+        newLine.durationFromStart = beforeLine.durationFromStart
+        newLine.durationFromBarline = beforeLine.durationFromBarline
+        newLine.durationToBarline = beforeLine.durationToBarline
+        newLine.duration = HumNum(0)
+
+        for targetToken, newToken in zip(targetLine.tokens(), newLine.tokens()):
+            targetToken.insertTokenAfter(newToken)
+
+        return newLine
+
+    '''
+        insertNullInterpretationLineAt(lineIndex) does exactly that, including
+        hooking up the inter-line token links. The structure of the null interp
+        line is determined by copying the line that is currently at lineIndex
+        before the insertion.
+        The newly created null interp line is returned.
+    '''
+    def insertNullInterpretationLineAt(self, lineIndex: int) -> HumdrumLine:
+        newLine: HumdrumLine = HumdrumLine()
+
+        targetLine: HumdrumLine = None
+        if self.lineCount <= 0:
+            raise HumdrumInternalError('Cannot insert a null interpretation line in an empty file')
+        if lineIndex > self.lineCount:
+            raise HumdrumInternalError('Cannot insert a null interpretion line beyond the EOF')
+
+        if lineIndex < self.lineCount:
+            targetLine = self[lineIndex]
+            newLine.copyStructure(targetLine, '*')
+            newLine.durationFromStart = targetLine.durationFromStart
+            newLine.durationFromBarline = targetLine.durationFromBarline
+            newLine.durationToBarline = targetLine.durationToBarline
+            newLine.duration = HumNum(0)
+            self.insertLine(lineIndex, newLine, analyzeTokenLinks=True)
+        else: # append the new line
+            prevLine: HumdrumLine = self[lineIndex-1]
+            newLine.copyStructure(prevLine, '*') # problem if prevLine is manipulator
+            newLine.durationFromStart = prevLine.durationFromStart + prevLine.duration
+            newLine.durationFromBarline = prevLine.durationFromBarline + prevLine.duration
+            newLine.durationToBarline = prevLine.durationToBarline + prevLine.duration
+            newLine.duration = HumNum(0)
+            self.appendLine(newLine, analyzeTokenLinks=True)
+
+        return newLine
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::getLineForInterpretationInsertion --  Search backwards
+    //    in the file for the first local comment immediately before a data line
+    //    index given as input.  If there are no local comments, then return the
+    //    data line.  If there are local comment lines immediately before the data
+    //    line, then keep searching for the first local comment.  Non-spined lines
+    //    (global or empty lines) are ignored.  This function is used to insert
+    //    an empty interpretation before a data line at a specific data line.
+    '''
+    def getLineForInterpretationInsertion(self, index: int) -> HumdrumLine:
+        current: int = index - 1
+        previous: int = index
+        while current > 0:
+            currentLine: HumdrumLine = self[current]
+            if not currentLine.hasSpines:
+                current -= 1
+                continue
+            if currentLine.isLocalComment:
+                previous = current
+                current -= 1
+                continue
+
+            return self[previous]
+
+        return self[index]
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::getLineForInterpretationInsertionAbove --  Search backwards
+    //    in the file for the first line at the same timestamp as the starting line.
+    '''
+    def getLineForInterpretationInsertionAbove(self, index: int) -> HumdrumLine:
+        timestamp: HumNum = self[index].durationFromStart
+        current: int = index - 1
+        previous: int = index
+        while current > 0:
+            currentLine: HumdrumLine = self[current]
+            if not currentLine.hasSpines:
+                current -= 1
+                continue
+            teststamp: HumNum = currentLine.durationFromStart
+            if teststamp == timestamp:
+                previous = current
+                current -= 1
+                continue
+
+            assert self[previous].hasSpines
+            return self[previous]
+
+        return self[index]
 
     '''
     ////////////////////////////

@@ -47,9 +47,12 @@ def runTheFullTest(krnPath: Path):
         print('\tskipping export of empty score')
         return
 
+#    score1.show('musicxml.pdf')
+
     hdw: HumdrumWriter = HumdrumWriter(score1)
     hdw.makeNotation = False
     hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
+    # hdw.expandTremolos = False
 
     success: bool = True
     fp = Path(tempfile.gettempdir()) / krnPath.name

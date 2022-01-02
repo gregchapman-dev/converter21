@@ -3835,7 +3835,14 @@ class HumdrumFile(HumdrumFileContent):
             # numberOfMarks out of range (1..8)
             return
 
-    def _processTremolo2(self, noteOrChord: m21.note.NotRest, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int, staffIndex: int, layerIndex: int) -> bool:
+    def _processTremolo2(self,
+                         noteOrChord: m21.note.NotRest,
+                         voice: m21.stream.Voice,
+                         noteOrChordOffsetInVoice: Union[Fraction, float],
+                         layerData: [HumdrumToken],
+                         tokenIdx: int,
+                         staffIndex: int,
+                         layerIndex: int) -> bool:
         layerTok: HumdrumToken = layerData[tokenIdx]
         tremolo2: m21.expressions.TremoloSpanner = m21.expressions.TremoloSpanner()
         beams: int = layerTok.getValueInt('auto', 'beams')
@@ -3859,15 +3866,15 @@ class HumdrumFile(HumdrumFileContent):
             # ignoring slurs, ties, ornaments, articulations
             if second.isChord:
                 chord2: m21.chord.Chord = self._createAndConvertChord(second, staffIndex, layerIndex)
-                chord2OffsetInMeasure: Fraction = M21Convert.m21Offset(second.durationFromBarline)
-                chord2OffsetInVoice: Union[Fraction, float] = chord2OffsetInMeasure - voiceOffsetInMeasure
+                chord2OffsetInVoice: Union[Fraction, float] = (
+                        noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
                 voice.coreInsert(chord2OffsetInVoice, chord2)
                 insertedIntoVoice = True
                 tremolo2.addSpannedElements(noteOrChord, chord2)
             else:
                 note2: m21.note.Note = self._createAndConvertNote(second, 0, staffIndex, layerIndex)
-                note2OffsetInMeasure: Fraction = M21Convert.m21Offset(second.durationFromBarline)
-                note2OffsetInVoice: Union[Fraction, float] = note2OffsetInMeasure - voiceOffsetInMeasure
+                note2OffsetInVoice: Union[Fraction, float] = (
+                        noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
                 voice.coreInsert(note2OffsetInVoice, note2)
                 insertedIntoVoice = True
                 tremolo2.addSpannedElements(noteOrChord, note2)
@@ -3931,7 +3938,7 @@ class HumdrumFile(HumdrumFileContent):
         for obj in tremoloSpanner.getSpannedElementsByClass(['NotRest']): # Note, Chord, Unpitched
             if direction > 0:
                 obj.stemDirection = 'up'
-            else:
+            elif direction < 0:
                 obj.stemDirection = 'down'
 
     '''
@@ -3950,7 +3957,7 @@ class HumdrumFile(HumdrumFileContent):
         if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
             self._processTremolo(chord, layerTok)
         elif self._hasTremolo and layerTok.getValueBool('auto', 'tremolo2'):
-            self._processTremolo2(chord, voice, voiceOffsetInMeasure, layerData, tokenIdx, staffIndex, layerIndex)
+            self._processTremolo2(chord, voice, chordOffsetInVoice, layerData, tokenIdx, staffIndex, layerIndex)
 
         # TODO: chord signifiers
         #self._processChordSignifiers(chord, layerTok, staffIndex)
@@ -4147,7 +4154,7 @@ class HumdrumFile(HumdrumFileContent):
         if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
             self._processTremolo(note, layerTok)
         elif self._hasTremolo and layerTok.getValueBool('auto', 'tremolo2'):
-            self._processTremolo2(note, voice, voiceOffsetInMeasure, layerData, tokenIdx, staffIndex, layerIndex)
+            self._processTremolo2(note, voice, noteOffsetInVoice, layerData, tokenIdx, staffIndex, layerIndex)
 
         self._processSlurs(note, layerTok)
         self._processPhrases(note, layerTok)

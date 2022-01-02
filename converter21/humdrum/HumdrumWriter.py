@@ -38,6 +38,7 @@ from converter21.humdrum import HumGrid
 
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumFile
+from converter21.humdrum import ToolTremolo
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
 ### with a colon appended.
@@ -96,6 +97,9 @@ class HumdrumWriter:
         # as long as they do it before they call write())
         self.makeNotation : bool = True  # client can set to False if obj is a Score
         self.addRecipSpine: bool = False # client can set to True to add a recip spine to the output
+        self.expandTremolos: bool = True # can be set to False if you want to keep the '@32@'-style
+                                         # bowed tremolos, and the '@@16@@'-style fingered tremolos
+
         self.VoiceDebug: bool = False # can be set to True for debugging output
         self._reservedRDFKernSignifiers: str = '' # set by property, so we can vet it
         self._assignedRDFKernSignifiers: str = '' # set internally, as we use them for various things
@@ -106,7 +110,8 @@ class HumdrumWriter:
 
         # private data, computed along the way...
         self._forceRecipSpine: bool = False # set to true sometimes in figured bass, harmony code
-        self._hasTremolo: bool = False
+        self._hasTremolo: bool = False      # has fingered or bowed tremolo(s) that need expanding
+        self._hasOrnaments: bool = False    # has trills, mordents, or turns that need refinement
 
         # temporary data (to be emitted with next durational object)
         # First elements of text tuple are part index, staff index, voice index
@@ -279,15 +284,22 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         self._addFooterRecords(outfile)
         #888 self._addMeasureOneNumber(outfile)
 
+        for hline in outfile.lines():
+            hline.createLineFromTokens()
+
 #         chord.run(outfile) # makes sure each note in the chord has the right stuff on it?
 
 #         if self._hasOrnaments: # maybe outgrid.hasOrnaments? or m21Score.hasOrnaments?
 #             trillspell.run(outfile) # figures out actual trill, mordent, turn type
                                       # based on current key and accidentals
 
-#         if self._hasTremolo:
-#             tremolo.run(outfile) # spells out the tremolo, which was inserted (apparently)
-                                   # as a single token? Adds *tremolo/*Xtremolo, so we know.
+        if self._hasTremolo and self.expandTremolos: # client can disable tremolo expansion
+            # tremolos have been inserted as single tokens (or token pairs) that describe
+            # the tremolo (e.g. with '@@16@@' or '@32@').  This needs to be expanded into
+            # all the actual notes in the tremolo, surrounded by *tremolo/*Xtremolo to tell
+            # parsers to look for spelled-out tremolos here.
+            tremolo = ToolTremolo(outfile)
+            tremolo.processFile()
 
         # TODO: Here's where we would do the Humdrum-land transpositions (if necessary)
         # TODO: ... the trick is that we need to know exactly which parts/staves to
@@ -295,9 +307,6 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # TODO: ... a HumdrumFile or HumdrumFileUtilities function, it has to be here.
         # if self._hasTranspositions:
         #     self.transposeToConcertPitch(outfile)
-
-        for hline in outfile.lines():
-            hline.createLineFromTokens()
 
         self._printResult(fp, outfile)
 
