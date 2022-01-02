@@ -1234,18 +1234,22 @@ Line: {line.text}''')
     def insertNullInterpretationLineAt(self, lineIndex: int) -> HumdrumLine:
         newLine: HumdrumLine = HumdrumLine()
 
-        targetLine: HumdrumLine = None
         if self.lineCount <= 0:
             raise HumdrumInternalError('Cannot insert a null interpretation line in an empty file')
         if lineIndex > self.lineCount:
             raise HumdrumInternalError('Cannot insert a null interpretion line beyond the EOF')
 
         if lineIndex < self.lineCount:
-            targetLine = self[lineIndex]
-            newLine.copyStructure(targetLine, '*')
-            newLine.durationFromStart = targetLine.durationFromStart
-            newLine.durationFromBarline = targetLine.durationFromBarline
-            newLine.durationToBarline = targetLine.durationToBarline
+            nextLine: HumdrumLine = self[lineIndex]
+            copyLine: HumdrumLine = nextLine
+            if not copyLine.hasSpines:
+                copyLine = self[lineIndex-1] # problem if previous line is manipulator
+            if not copyLine.hasSpines:
+                raise HumdrumInternalError('Cannot insert a null interpretation line between two unspined lines')
+            newLine.copyStructure(copyLine, '*')
+            newLine.durationFromStart = nextLine.durationFromStart
+            newLine.durationFromBarline = nextLine.durationFromBarline
+            newLine.durationToBarline = nextLine.durationToBarline
             newLine.duration = HumNum(0)
             self.insertLine(lineIndex, newLine, analyzeTokenLinks=True)
         else: # append the new line
