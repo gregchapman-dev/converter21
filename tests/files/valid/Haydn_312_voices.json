@@ -1,0 +1,61 @@
+{
+    "fileContentsUnmodified": true,
+    "tpq": 6,
+    "exclusiveInterpretationLineNumbers": [
+        3
+    ],
+    "manipulatorLineNumbers": [
+        3,
+        11,
+        24,
+        26
+    ],
+    "tokenDataTypeChanges": {
+        "1": [
+            ""
+        ],
+        "3": [
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**dynam"
+        ],
+        "12": [
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**kern",
+            "**dynam"
+        ],
+        "25": [
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**dynam"
+        ]
+    },
+    "spineInfoChanges": {
+        "1": [
+            ""
+        ],
+        "3": [
+            "1",
+            "2",
+            "3",
+            "4"
+        ],
+        "12": [
+            "1",
+            "2",
+            "(3)a",
+            "(3)b",
+            "4"
+        ],
+        "25": [
+            "1",
+            "2",
+            "3",
+            "4"
+        ]
+    }
+}

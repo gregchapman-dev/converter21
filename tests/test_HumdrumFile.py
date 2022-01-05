@@ -60,6 +60,12 @@ def ReadAllTestFilesInFolder(folder: str):
             print('skipping test because krnFile contains more than one score (not yet supported)')
             continue
 
+        if 'rds-scores' in str(krnPath) and krnPath.name in (
+                'R408_Web-w13p1-2m1-12.krn',
+                                                            ):
+            print('\tskipping import due to no note/chord/rest at end of tuplet')
+            continue
+
         if 'jrp-scores' in str(krnPath) and krnPath.name in (
                 'Agr1001c-Missa_In_myne_zin-Sanctus.krn',
                 'Agr1001d-Missa_In_myne_zin-Agnus.krn',
@@ -98,22 +104,9 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping export due to overlapping note durations (unknown reason)')
             continue
 
-        if 'beethoven' in str(krnPath) and krnPath.name in (
-                'sonata11-1.krn',
-        ):
-            print('\tskipping export due to unexported *tremolo causing overlapping note durations')
-            continue
-
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R319_Fal-w6p178-179h44m1-5.krn'
         ):
-            print('\tskipping export due to unexported *tremolo causing overlapping note durations')
-            continue
-
-        if 'beethoven' in str(krnPath) and krnPath.name in (
-                'sonata08-1.krn',
-                'sonata14-3.krn',
-                                                            ):
             print('\tskipping export due to unexported *tremolo causing overlapping note durations')
             continue
 
@@ -148,12 +141,6 @@ def ReadAllTestFilesInFolder(folder: str):
             print('\tskipping parse of export due to two missing instrument abbreviation spines')
             continue
 
-        if 'beethoven' in str(krnPath) and krnPath.name in (
-                'sonata20-2.krn',
-                                                            ):
-            print('\tskipping parse of export due to unexported tremolo')
-            continue
-
         if 'tasso-scores' in str(krnPath) and krnPath.name in (
                 'Trm0247a-Io_vidi_gia_sotto_lardente_sole--Marenzio_1584.krn',
                                                         ):
@@ -164,12 +151,6 @@ def ReadAllTestFilesInFolder(folder: str):
                 'R258_Ive-w30p9m55-57.krn',
                                                             ):
             print('\tskipping parse of export due to unparseable manipulators (original is even weirder, but parseable)')
-            continue
-
-        if 'rds-scores' in str(krnPath) and krnPath.name in (
-                'R408_Web-w13p1-2m1-12.krn',
-                                                            ):
-            print('\tskipping parse of export due to unexported tremolo with triplets')
             continue
 
         if 'jrp-scores' in str(krnPath) and krnPath.name in (

@@ -129,9 +129,7 @@ class ToolTremolo:
             currLastLineIndex: int = None
             prevLastLineIndex: int = None
             currFirstLineIndex: int = None
-            prevFirstLineIndex: int = None
             for idx, (firstLine, lastLine) in enumerate(zip(firstLines, lastLines)):
-                prevFirstLineIndex = currFirstLineIndex
                 prevLastLineIndex = currLastLineIndex
                 currFirstLineIndex = firstLine.lineIndex
                 currLastLineIndex = lastLine.lineIndex
@@ -264,7 +262,7 @@ class ToolTremolo:
         markup: str = f'@{value.numerator}@'
         base: str = re.sub(markup, '', token.text)
 
-        # complicated beamings are note allowed yet (no internal L/J markers in tremolo beam)
+        # complicated beamings are not allowed yet (no internal L/J markers in tremolo beam)
         hasBeamStart: bool = 'L' in base
         hasBeamStop: bool = 'J' in base
 

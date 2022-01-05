@@ -91,6 +91,7 @@ def runTheFullTest(krnPath: Path):
         print('annotated the scores to show differences')
         sv.show_differences(score1, score2)
         print('displayed both annotated scores')
+#        print('written to: ', score1.write('musicxml'))
 
 # ------------------------------------------------------------------------------
 

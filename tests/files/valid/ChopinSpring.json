@@ -1,0 +1,102 @@
+{
+    "fileContentsUnmodified": true,
+    "tpq": 4,
+    "exclusiveInterpretationLineNumbers": [
+        12
+    ],
+    "manipulatorLineNumbers": [
+        12,
+        23,
+        24,
+        444,
+        451
+    ],
+    "tokenDataTypeChanges": {
+        "1": [
+            ""
+        ],
+        "12": [
+            "**kern",
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**text",
+            "**dynam"
+        ],
+        "24": [
+            "**kern",
+            "**kern",
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**text",
+            "**dynam"
+        ],
+        "25": [
+            "**kern",
+            "**kern",
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**text",
+            "**text",
+            "**dynam"
+        ],
+        "445": [
+            "**kern",
+            "**kern",
+            "**dynam",
+            "**kern",
+            "**text",
+            "**text",
+            "**dynam"
+        ],
+        "452": [
+            ""
+        ]
+    },
+    "spineInfoChanges": {
+        "1": [
+            ""
+        ],
+        "12": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+        ],
+        "24": [
+            "(1)a",
+            "(1)b",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+        ],
+        "25": [
+            "(1)a",
+            "(1)b",
+            "2",
+            "3",
+            "4",
+            "(5)a",
+            "(5)b",
+            "6"
+        ],
+        "445": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "(5)a",
+            "(5)b",
+            "6"
+        ],
+        "452": [
+            ""
+        ]
+    }
+}

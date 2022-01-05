@@ -1,0 +1,21 @@
+{
+    "fileContentsUnmodified": true,
+    "tpq": 2,
+    "exclusiveInterpretationLineNumbers": [
+        1
+    ],
+    "manipulatorLineNumbers": [
+        1,
+        10
+    ],
+    "tokenDataTypeChanges": {
+        "1": [
+            "**kern"
+        ]
+    },
+    "spineInfoChanges": {
+        "1": [
+            "1"
+        ]
+    }
+}

@@ -1488,16 +1488,19 @@ class HumdrumFile(HumdrumFileContent):
             # This means we had to pull out the _checkForTremolo call, since
             # that definitely has to happen before processing the note (it
             # may completely replace a beamed group of notes with a tremolo).
+            # It also means that we have to call _handleGroupState before
+            # any continue below, since they won't reach the call at bottom
+            # of the loop.
             if ss.tremolo:
                 if 'L' in layerTok.text:
                     self._checkForTremolo(layerData, tgs, tokenIdx)
 
             if layerTok.getValueBool('auto', 'tremoloBeam'): # 'tremoloBeam' is set by _checkForTremolo
-                if 'L' not in layerTok.text:
-                    # ignore the ending note of a beamed group
-                    # of tremolos (a previous note in the tremolo
-                    # replaces display of this note).
-                    groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
+                if 'J' in layerTok.text:
+                    # handle the ending note of a beamed group
+                    # of tremolos (reach back to the first note in this
+                    # last tremolo in the beamed group, to add the 'stop' beam).
+                    groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex, tremoloBeam=True)
                     continue
 
             if layerTok.getValueBool('auto', 'suppress'): # 'suppress' is set by _checkForTremolo
@@ -1506,6 +1509,7 @@ class HumdrumFile(HumdrumFileContent):
                 # But there are some things we have to do anyway...
                 if self._processSuppressedLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex):
                     insertedIntoVoice = True
+                groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
                 continue
 
             # conversion of **kern data to music21
@@ -2008,7 +2012,8 @@ class HumdrumFile(HumdrumFileContent):
                           tgs: [HumdrumBeamAndTuplet],
                           layerData: [HumdrumToken],
                           tokenIdx: int,
-                          staffIndex: int) -> BeamAndTupletGroupState:
+                          staffIndex: int,
+                          tremoloBeam: bool = False) -> BeamAndTupletGroupState:
         token: HumdrumToken = layerData[tokenIdx]
         tg: HumdrumBeamAndTuplet = tgs[tokenIdx]
         newState: BeamAndTupletGroupState = copy.copy(currState)
@@ -2061,7 +2066,7 @@ class HumdrumFile(HumdrumFileContent):
             newState.previousBeamTokenIdx = tokenIdx
         elif newState.inBeam and tg.beamEnd:
             # end the beam
-            self._endBeam(layerData, tokenIdx, newState.previousBeamTokenIdx)
+            self._endBeam(layerData, tokenIdx, newState.previousBeamTokenIdx, tremoloBeam=tremoloBeam)
             newState.inBeam = False
             newState.previousBeamTokenIdx = -1
         elif newState.inBeam and not layerData[tokenIdx].isRest:
@@ -2156,7 +2161,16 @@ class HumdrumFile(HumdrumFileContent):
         dur = HumNum(noteDurationNoDots.numerator, noteDurationNoDots.denominator)
         if dur not in durationNoDotsToNumBeams:
             return 0
-        return durationNoDotsToNumBeams[dur]
+
+        numBeams: int = durationNoDotsToNumBeams[dur]
+
+        # adjust if this note is a bowed tremolo (numberOfMarks replaces some beams)
+        for expression in noteOrChord.expressions:
+            if isinstance(expression, m21.expressions.Tremolo):
+                numBeams -= expression.numberOfMarks
+                break
+
+        return numBeams
 
     def _startBeam(self, layerData: [HumdrumToken], startTokenIdx: int):
         token: HumdrumToken = layerData[startTokenIdx]
@@ -2169,20 +2183,39 @@ class HumdrumFile(HumdrumFileContent):
         for _ in range(0, numBeams):
             obj.beams.append('start')
 
-    def _continueBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevBeamTokenIdx: int, beamType: str = 'continue'):
+    @staticmethod
+    def _findStartOfTremolo(layerData: [HumdrumToken], tokenIdx: int) -> int:
+        for i in range(tokenIdx, -1, -1):
+            if layerData[i].getValue('auto', 'tremolo'): # all tremolo starts are marked thus
+                return i
+        raise HumdrumInternalError('cannot find start of tremolo')
+
+    def _continueBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevBeamTokenIdx: int,
+                            beamType: str = 'continue', tremoloBeam: bool = False):
+        if tremoloBeam and beamType == 'stop': # last note in a beamed group of tremolos
+            # search back for first note in this last tremolo of a beamed group of tremolos
+            tokenIdx = self._findStartOfTremolo(layerData, tokenIdx)
+
         token: HumdrumToken = layerData[tokenIdx]
         obj: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
 
         if obj is None or 'Rest' in obj.classes:
             return
 
+        if tremoloBeam and beamType == 'stop':
+            # replace the last beam in obj (probably a 'continue') with a 'stop'.
+            # Note that setByNumber is 1-based, so len(beamsList) is the last beam.
+            beamNum: int = len(obj.beams.beamsList)
+            if beamNum > 0:
+                obj.beams.setByNumber(beamNum, beamType)
+            # no 'breakBeamCount' check for you...
+            return
+
         prevToken: HumdrumToken = layerData[prevBeamTokenIdx]
         prevObj: m21.note.GeneralNote = prevToken.getValueM21Object('music21',
                                                                  'generalNote')
-
         numBeams: int = self._getNumBeamsForNoteOrChord(token, obj)
         prevNumBeams: int = self._getNumBeamsForNoteOrChord(prevToken, prevObj)
-
         if 0 < numBeams < prevNumBeams:
             # we're not dealing with secondary breaks here (that happens below), just
             # beam counts that are derived from the note durations.  So this means the
@@ -2227,9 +2260,10 @@ class HumdrumFile(HumdrumFileContent):
                     prevObj.beams.setByNumber(i, 'stop')
                     obj.beams.setByNumber(i, 'start')
 
-    def _endBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevBeamTokenIdx: int):
+    def _endBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevBeamTokenIdx: int,
+                        tremoloBeam: bool = False):
         # the implementation here is exactly the same as _continueBeam, so just call him.
-        self._continueBeam(layerData, tokenIdx, prevBeamTokenIdx, beamType='stop')
+        self._continueBeam(layerData, tokenIdx, prevBeamTokenIdx, beamType='stop', tremoloBeam=tremoloBeam)
 
     def _startGBeam(self, layerData: [HumdrumToken], startTokenIdx: int):
         self._startBeam(layerData, startTokenIdx)
@@ -3436,7 +3470,7 @@ class HumdrumFile(HumdrumFileContent):
                 if len(pitches[i]) != len(pitches[i-1]):
                     allPitchesEqual = False
                     nextSame[i-1] = False
-                    break
+                    continue
 
                 # Check if each note in the successive chords is the same.
                 # The ordering of notes in each chord is assumed to be the same
@@ -3446,10 +3480,6 @@ class HumdrumFile(HumdrumFileContent):
                     if pitches[i][j] != pitches[i-1][j]:
                         allPitchesEqual = False
                         nextSame[i-1] = False
-                        break
-
-                if not allPitchesEqual:
-                    break
 
         if allPitchesEqual:
             # beam group should be converted into a single note (bowed) tremolo

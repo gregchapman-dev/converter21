@@ -1,0 +1,51 @@
+{
+    "fileContentsUnmodified": true,
+    "tpq": 1,
+    "exclusiveInterpretationLineNumbers": [
+        2
+    ],
+    "manipulatorLineNumbers": [
+        2,
+        16
+    ],
+    "tokenDataTypeChanges": {
+        "1": [
+            ""
+        ],
+        "2": [
+            "**kern"
+        ],
+        "4": [
+            ""
+        ],
+        "5": [
+            "**kern"
+        ],
+        "11": [
+            ""
+        ],
+        "12": [
+            "**kern"
+        ]
+    },
+    "spineInfoChanges": {
+        "1": [
+            ""
+        ],
+        "2": [
+            "1"
+        ],
+        "4": [
+            ""
+        ],
+        "5": [
+            "1"
+        ],
+        "11": [
+            ""
+        ],
+        "12": [
+            "1"
+        ]
+    }
+}
