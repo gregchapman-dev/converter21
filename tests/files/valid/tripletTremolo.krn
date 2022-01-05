@@ -1,0 +1,27 @@
+**kern
+*part1
+*staff1
+*k[f#]
+*G:
+*M2/4
+=1
+!! First half of measure is a quarter-note-duration rest
+4r
+!! Second half of measure is a quarter-note-duration triplet
+!! First note of the quarter-note-duration triplet is a rest
+12r
+!! The following should be a single-note tremolo that has the next two
+!! notes of the quarter-note-duration triplet (each split into four notes).
+!! So this should be notated as a single quarter note with a one-mark tremolo
+*tremolo
+48dLLL
+48d
+48d
+48d
+48d
+48d
+48d
+48dJJJ
+*Xtremolo
+==
+*-
