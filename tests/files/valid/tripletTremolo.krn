@@ -23,5 +23,20 @@
 48d
 48dJJJ
 *Xtremolo
+=2
+!! Same as above, but with the 12r rest at the end of the triplet, and the 4r rest after that.
+!! And the 2/3 of the triplet that is a tremolo is now split into two internal tremolos (one beam group).
+*tremolo
+48enLLL
+48en
+48en
+48en
+48dd#X
+48dd#
+48dd#
+48dd#JJJ
+*Xtremolo
+12r
+4r
 ==
 *-

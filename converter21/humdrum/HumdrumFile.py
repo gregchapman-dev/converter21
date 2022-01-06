@@ -1440,6 +1440,7 @@ class HumdrumFile(HumdrumFileContent):
         groupState: BeamAndTupletGroupState = BeamAndTupletGroupState()
 
 #        lastDataTok: HumdrumToken = None # ignore for now, it's for sameas clef analysis
+        inTremolo: bool = False
         insertedIntoVoice: bool = False
         for tokenIdx, layerTok in enumerate(layerData):
             # Check for fake inserted token representing an invisible rest (due to
@@ -1494,13 +1495,14 @@ class HumdrumFile(HumdrumFileContent):
             if ss.tremolo:
                 if 'L' in layerTok.text:
                     self._checkForTremolo(layerData, tgs, tokenIdx)
+                inTremolo = layerTok.getValueBool('auto', 'inTremolo')
 
             if layerTok.getValueBool('auto', 'tremoloBeam'): # 'tremoloBeam' is set by _checkForTremolo
                 if 'J' in layerTok.text:
                     # handle the ending note of a beamed group
                     # of tremolos (reach back to the first note in this
                     # last tremolo in the beamed group, to add the 'stop' beam).
-                    groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex, tremoloBeam=True)
+                    groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex, tremoloBeam=True, tremolo=inTremolo)
                     continue
 
             if layerTok.getValueBool('auto', 'suppress'): # 'suppress' is set by _checkForTremolo
@@ -1509,7 +1511,7 @@ class HumdrumFile(HumdrumFileContent):
                 # But there are some things we have to do anyway...
                 if self._processSuppressedLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex):
                     insertedIntoVoice = True
-                groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
+                groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex, tremolo=inTremolo)
                 continue
 
             # conversion of **kern data to music21
@@ -1533,7 +1535,7 @@ class HumdrumFile(HumdrumFileContent):
                 if self._processOtherLayerToken(voice, voiceOffsetInMeasure, layerTok, staffIndex):
                     insertedIntoVoice = True
 
-            groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex)
+            groupState = self._handleGroupState(groupState, tgs, layerData, tokenIdx, staffIndex, tremolo=inTremolo)
 
         # end loop over layer tokens
 
@@ -2013,7 +2015,8 @@ class HumdrumFile(HumdrumFileContent):
                           layerData: [HumdrumToken],
                           tokenIdx: int,
                           staffIndex: int,
-                          tremoloBeam: bool = False) -> BeamAndTupletGroupState:
+                          tremoloBeam: bool = False,
+                          tremolo: bool = False) -> BeamAndTupletGroupState:
         token: HumdrumToken = layerData[tokenIdx]
         tg: HumdrumBeamAndTuplet = tgs[tokenIdx]
         newState: BeamAndTupletGroupState = copy.copy(currState)
@@ -2047,11 +2050,11 @@ class HumdrumFile(HumdrumFileContent):
                                             tg.durationTupleNormal,
                                             tg.numScale)
             # start the tuplet
-            self._startTuplet(layerData, tokenIdx, newState.m21Tuplet, staffIndex)
+            self._startTuplet(layerData, tokenIdx, newState.m21Tuplet, staffIndex, tremolo)
             newState.inTuplet = True
         elif newState.inTuplet and tg.tupletEnd:
             # end the tuplet
-            self._endTuplet(layerData, tokenIdx, newState.m21Tuplet)
+            self._endTuplet(layerData, tokenIdx, newState.m21Tuplet, tremolo)
             newState.inTuplet = False
             newState.m21Tuplet = None
         elif newState.inTuplet:
@@ -2102,7 +2105,7 @@ class HumdrumFile(HumdrumFileContent):
         numActual: int = numberNotesActual
         numNormal: int = numberNotesNormal
         durNormal: m21.duration.DurationTuple = durationNormal
-        if numScale is not None:
+        if numScale is not None and numScale != 1:
             # multiply numActual and numNormal by numScale
             # dived durNormal by numScale
             numActual *= numScale
@@ -2186,7 +2189,7 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _findStartOfTremolo(layerData: [HumdrumToken], tokenIdx: int) -> int:
         for i in range(tokenIdx, -1, -1):
-            if layerData[i].getValue('auto', 'tremolo'): # all tremolo starts are marked thus
+            if layerData[i].getValue('auto', 'startTremolo'): # all tremolo starts are marked thus
                 return i
         raise HumdrumInternalError('cannot find start of tremolo')
 
@@ -2274,7 +2277,9 @@ class HumdrumFile(HumdrumFileContent):
     def _endGBeam(self, layerData: [HumdrumToken], tokenIdx: int, prevGBeamTokenIdx: int):
         self._endBeam(layerData, tokenIdx, prevGBeamTokenIdx)
 
-    def _startTuplet(self, layerData: [HumdrumToken], startTokenIdx: int, tupletTemplate: m21.duration.Tuplet, staffIndex: int):
+    def _startTuplet(self, layerData: [HumdrumToken], startTokenIdx: int,
+                     tupletTemplate: m21.duration.Tuplet, staffIndex: int,
+                     tremolo: bool = False):
         ss: StaffStateVariables = self._staffStates[staffIndex]
         startTok: HumdrumToken = layerData[startTokenIdx]
         startNote: m21.note.GeneralNote = startTok.getValueM21Object('music21', 'generalNote')
@@ -2285,8 +2290,38 @@ class HumdrumFile(HumdrumFileContent):
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
 #         originalQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
+
+        if tremolo:
+            newNoteDuration: HumNum = None
+            tremoloNoteVisualDuration: HumNum = None
+            tremoloNoteGesturalDuration: HumNum = None
+
+            # this code is very like the tremolo code in _convertRhythm/_endTuplet. TODO: have one copy of this
+            if startTok.getValueBool('auto', 'startTremolo'):
+                tremoloNoteVisualDuration = Convert.recipToDuration(startTok.getValue('auto', 'recip'))
+            elif startTok.getValueBool('auto', 'startTremolo2') or \
+                    startTok.getValueBool('auto', 'tremoloAux'):
+                # In two note tremolos, the two notes each look like they have the full duration
+                # of the tremolo sequence, but they actually each need to have half that duration
+                # internally, for the measure duration to make sense.
+                tremoloNoteVisualDuration = Convert.recipToDuration(startTok.getValue('auto', 'recip'))
+                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+            if tremoloNoteVisualDuration is not None:
+                newNoteDuration = m21.duration.Duration()
+                newNoteDuration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                if tremoloNoteGesturalDuration is not None:
+                    newNoteDuration.linked = False # leave the note looking like visual duration
+                    newNoteDuration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                startNote.duration = newNoteDuration
+
         duration: m21.duration.Duration = copy.deepcopy(startNote.duration)
-        tuplet: m21.duration.Tuplet = copy.deepcopy(tupletTemplate)
+        tuplet: m21.duration.Tuplet = None
+
+        if tremolo:
+            if duration.tuplets:
+                tuplet = copy.deepcopy(duration.tuplets[0]) # it's already computed from recip
+        else:
+            tuplet = copy.deepcopy(tupletTemplate)
 
         # We may need to compute a new duration from scratch, now that we have the tuplet
         # details.  This is because sometimes music21 doesn't give us a duration we like.
@@ -2298,55 +2333,58 @@ class HumdrumFile(HumdrumFileContent):
         # tuplet at all.  Same deal, we know better, so we compute a new duration from scratch,
         # with our tuplet template as a guide.
 
+        # Note that "if tremolo", we've already recomputed the duration, so don't bother here.
         recomputeDuration: bool = False
-        if duration.tuplets in (None, ()):
-            recomputeDuration = True
-        elif len(duration.tuplets) > 1:
-            recomputeDuration = True
-        elif duration.tuplets[0].durationNormal != tuplet.durationNormal:
-            recomputeDuration = True
-        elif duration.tuplets[0].tupletMultiplier() != tuplet.tupletMultiplier():
-            recomputeDuration = True
+        if tuplet and not tremolo:
+            if duration.tuplets in (None, ()):
+                recomputeDuration = True
+            elif len(duration.tuplets) > 1:
+                recomputeDuration = True
+            elif duration.tuplets[0].durationNormal != tuplet.durationNormal:
+                recomputeDuration = True
+            elif duration.tuplets[0].tupletMultiplier() != tuplet.tupletMultiplier():
+                recomputeDuration = True
 
-        if recomputeDuration:
-            duration = M21Convert.m21DurationWithTuplet(startTok, tuplet)
+            if recomputeDuration:
+                duration = M21Convert.m21DurationWithTuplet(startTok, tuplet)
 
         # Now figure out the rest of the tuplet fields (type, placement, bracket, etc)
 
-        tuplet.type = 'start' # has to be set, or no-one cares about the placement, bracket, etc
+        if tuplet:
+            tuplet.type = 'start' # has to be set, or no-one cares about the placement, bracket, etc
 
-        if self._hasAboveParameter(startTok, 'TUP'):
-            tuplet.placement = 'above'
-        elif self._hasBelowParameter(startTok, 'TUP'):
-            tuplet.placement = 'below'
+            if self._hasAboveParameter(startTok, 'TUP'):
+                tuplet.placement = 'above'
+            elif self._hasBelowParameter(startTok, 'TUP'):
+                tuplet.placement = 'below'
 
-        # The staff might have suppressed tuplet brackets
-        if ss.suppressTupletBracket or ss.suppressTupletNumber:
-            # if we're suppressing tuplet numbers, suppress the bracket
-            tuplet.bracket = False
+            # The staff might have suppressed tuplet brackets
+            if ss.suppressTupletBracket or ss.suppressTupletNumber:
+                # if we're suppressing tuplet numbers, suppress the bracket
+                tuplet.bracket = False
 
-        # Here iohumdrum.cpp decides that if there is a beam that covers exactly this tuplet,
-        # then we should suppress the tuplet's bracket.  This seems like an engraving decision,
-        # so I'm not going to do it here in the parser.
-#         if self._shouldHideBeamBracket(tgs, layerData, startTokenIdx):
-#             tuplet.bracket = False
+            # Here iohumdrum.cpp decides that if there is a beam that covers exactly this tuplet,
+            # then we should suppress the tuplet's bracket.  This seems like an engraving decision,
+            # so I'm not going to do it here in the parser.
+    #         if self._shouldHideBeamBracket(tgs, layerData, startTokenIdx):
+    #             tuplet.bracket = False
 
-        # local control of brackets (overrides staff-level tuplet bracket suppression)
-        xbr: bool = self._hasTrueLayoutParameter(startTok, 'TUP', 'xbr')
-        br: bool = self._hasTrueLayoutParameter(startTok, 'TUP', 'br')
-        if xbr:
-            tuplet.bracket = False
-        if br:
-            tuplet.bracket = True
+            # local control of brackets (overrides staff-level tuplet bracket suppression)
+            xbr: bool = self._hasTrueLayoutParameter(startTok, 'TUP', 'xbr')
+            br: bool = self._hasTrueLayoutParameter(startTok, 'TUP', 'br')
+            if xbr:
+                tuplet.bracket = False
+            if br:
+                tuplet.bracket = True
 
-        # The staff might have suppressed tuplet numbers (e.g. after a measure or two)
-        if ss.suppressTupletNumber:
-            tuplet.tupletActualShow = None
+            # The staff might have suppressed tuplet numbers (e.g. after a measure or two)
+            if ss.suppressTupletNumber:
+                tuplet.tupletActualShow = None
 
-        # Now set the tuplets in the duration to just this one
-        # If we recomputed the duration above, this has already been done.
-        if not recomputeDuration:
-            duration.tuplets = (tuplet,)
+            # Now set the tuplets in the duration to just this one
+            # If we recomputed the duration above, this has already been done.
+            if not recomputeDuration:
+                duration.tuplets = (tuplet,)
 
         # And set this new duration on the startNote.
         startNote.duration = duration
@@ -2363,7 +2401,7 @@ class HumdrumFile(HumdrumFileContent):
         token: HumdrumToken = layerData[tokenIdx]
         note: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
         if not note:
-            # This could be a *something interp token; just skip it.
+            # This could be a *something interp token (or a suppressed note); just skip it.
             return
         if token.isGrace: # grace note in the middle of a tuplet, but it's not _in_ the tuplet
             return
@@ -2412,7 +2450,10 @@ class HumdrumFile(HumdrumFileContent):
 #             raise HumdrumInternalError('_continueTuplet modified duration.quarterLength')
 
     @staticmethod
-    def _endTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet):
+    def _endTuplet(layerData: [HumdrumToken], tokenIdx: int, tupletTemplate: m21.duration.Tuplet,
+                   tremolo: bool = False):
+        if tremolo:
+            tokenIdx = HumdrumFile._findStartOfTremolo(layerData, tokenIdx)
         endToken: HumdrumToken = layerData[tokenIdx]
         endNote: m21.note.GeneralNote = endToken.getValueM21Object('music21', 'generalNote')
         if not endNote:
@@ -2423,8 +2464,37 @@ class HumdrumFile(HumdrumFileContent):
         # are tricky, so we need to check our work).
 #         originalQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
 
+        if tremolo:
+            newNoteDuration: HumNum = None
+            tremoloNoteVisualDuration: HumNum = None
+            tremoloNoteGesturalDuration: HumNum = None
+
+            # this code is very like the tremolo code in _convertRhythm/_startTuplet. TODO: have one copy of this
+            if endToken.getValueBool('auto', 'startTremolo'):
+                tremoloNoteVisualDuration = Convert.recipToDuration(endToken.getValue('auto', 'recip'))
+            elif endToken.getValueBool('auto', 'startTremolo2') or \
+                    endToken.getValueBool('auto', 'tremoloAux'):
+                # In two note tremolos, the two notes each look like they have the full duration
+                # of the tremolo sequence, but they actually each need to have half that duration
+                # internally, for the measure duration to make sense.
+                tremoloNoteVisualDuration = Convert.recipToDuration(endToken.getValue('auto', 'recip'))
+                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+            if tremoloNoteVisualDuration is not None:
+                newNoteDuration = m21.duration.Duration()
+                newNoteDuration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                if tremoloNoteGesturalDuration is not None:
+                    newNoteDuration.linked = False # leave the note looking like visual duration
+                    newNoteDuration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                endNote.duration = newNoteDuration
+
         duration: m21.duration.Duration = copy.deepcopy(endNote.duration)
-        tuplet: m21.duration.Tuplet = copy.deepcopy(tupletTemplate)
+        tuplet: m21.duration.Tuplet = None
+
+        if tremolo:
+            if duration.tuplets:
+                tuplet = copy.deepcopy(duration.tuplets[0]) # it's already computed from recip
+        else:
+            tuplet = copy.deepcopy(tupletTemplate)
 
         # We may need to compute a new duration from scratch, now that we have the tuplet
         # details.  This is because sometimes music21 doesn't give us a duration we like.
@@ -2436,23 +2506,25 @@ class HumdrumFile(HumdrumFileContent):
         # tuplet at all.  Same deal, we know better, so we compute a new duration from scratch,
         # with our tuplet template as a guide.
 
-        recomputeDuration: bool = False
-        if duration.tuplets in (None, ()):
-            recomputeDuration = True
-        elif len(duration.tuplets) > 1:
-            recomputeDuration = True
-        elif duration.tuplets[0].durationNormal != tuplet.durationNormal:
-            recomputeDuration = True
-        elif duration.tuplets[0].tupletMultiplier() != tuplet.tupletMultiplier():
-            recomputeDuration = True
+        # Note that "if tremolo", we've already recomputed the duration, so don't bother here.
+        if tuplet and not tremolo:
+            recomputeDuration: bool = False
+            if duration.tuplets in (None, ()):
+                recomputeDuration = True
+            elif len(duration.tuplets) > 1:
+                recomputeDuration = True
+            elif duration.tuplets[0].durationNormal != tuplet.durationNormal:
+                recomputeDuration = True
+            elif duration.tuplets[0].tupletMultiplier() != tuplet.tupletMultiplier():
+                recomputeDuration = True
 
-        if recomputeDuration:
-            duration = M21Convert.m21DurationWithTuplet(endToken, tuplet)
+            if recomputeDuration:
+                duration = M21Convert.m21DurationWithTuplet(endToken, tuplet)
 
-        tuplet.type = 'stop'
-
-        # Now set the tuplet in the duration to this one
-        duration.tuplets = (tuplet,)
+        if tuplet:
+            # Now set the tuplet in the duration to this one
+            tuplet.type = 'stop'
+            duration.tuplets = (tuplet,)
 
         # And set this new duration on the endNote.
         endNote.duration = duration
@@ -3274,13 +3346,22 @@ class HumdrumFile(HumdrumFileContent):
         for tg in tggroup:
             totalDur += tg.duration
 
-        units: HumNum = totalDur / maxDur
-        if units.denominator == 1 and units > 1:
-            scale: HumNum = units / tggroup[0].numNotesActual
-            if scale.denominator == 1 and scale > 1:
-                for tg in tggroup:
-                    tg.numScale = scale.numerator
-                return
+        # TODO: transformation below should probably happen above as well, but needs testing
+        # units: HumNum = totalDur / maxDur
+        # if units.denominator == 1 and units > 1:
+            # scale: HumNum = units / tggroup[0].numNotesActual
+            # if scale.denominator == 1 and scale > 1:
+            #     for tg in tggroup:
+            #         tg.numScale = scale.numerator
+            #     return
+        numNotesActual: HumNum = HumNum(totalDur / maxDur)
+        numNotesNormal: HumNum = HumNum(numNotesActual * tggroup[0].tupletMultiplier)
+        if (numNotesActual.denominator == 1 and numNotesActual > 1
+                and numNotesNormal.denominator == 1 and numNotesNormal > 1):
+            for tg in tggroup:
+                tg.numScale = 1
+                tg.numNotesActual = numNotesActual.numerator
+                tg.numNotesNormal = numNotesNormal.numerator
 
     '''
     //////////////////////////////
@@ -3495,10 +3576,12 @@ class HumdrumFile(HumdrumFileContent):
                 # something went wrong calculating durations
                 return False
 
-            notes[0].setValue('auto', 'tremolo', '1')
+            notes[0].setValue('auto', 'startTremolo', '1')
+            notes[0].setValue('auto', 'inTremolo', '1')
             notes[0].setValue('auto', 'recip', recip)
             notes[0].setValue('auto', 'slashes', slashes)
             for i in range(1, len(notes)):
+                notes[i].setValue('auto', 'inTremolo', '1')
                 notes[i].setValue('auto', 'suppress', '1')
 
             return True
@@ -3549,6 +3632,7 @@ class HumdrumFile(HumdrumFileContent):
             # First suppress printing of all non-primary tremolo notes:
             for grouping in groupings:
                 for j in range(1, len(grouping)):
+                    grouping[j].setValue('auto', 'inTremolo', '1')
                     grouping[j].setValue('auto', 'suppress', '1')
 
             # Now add tremolo slash(es) on the first notes.
@@ -3557,7 +3641,8 @@ class HumdrumFile(HumdrumFileContent):
                 tdur: HumNum = duration * len(grouping)
                 recip: str = Convert.durationToRecip(tdur)
                 slashCount: int = -int(math.log2(float(duration) / float(tdur)))
-                grouping[0].setValue('auto', 'tremolo', '1')
+                grouping[0].setValue('auto', 'startTremolo', '1')
+                grouping[0].setValue('auto', 'inTremolo', '1')
                 grouping[0].setValue('auto', 'slashes', slashCount)
                 grouping[0].setValue('auto', 'recip', recip)
 
@@ -3602,7 +3687,8 @@ class HumdrumFile(HumdrumFileContent):
             # something went wrong calculating durations.
             raise HumdrumInternalError(f'Problem with tremolo2 beams calculation: {beams}')
 
-        notes[0].setValue('auto', 'tremolo2', '1')
+        notes[0].setValue('auto', 'startTremolo2', '1')
+        notes[0].setValue('auto', 'inTremolo', '1')
         notes[0].setValue('auto', 'recip', recip)
         notes[0].setValue('auto', 'unit', unitRecip) # problem if dotted...
         notes[0].setValue('auto', 'beams', beams)
@@ -3611,6 +3697,7 @@ class HumdrumFile(HumdrumFileContent):
         notes[-1].setValue('auto', 'recip', recip)
 
         for i in range(1, len(notes)):
+            notes[i].setValue('auto', 'inTremolo')
             notes[i].setValue('auto', 'suppress', '1')
 
         return True
@@ -3984,9 +4071,9 @@ class HumdrumFile(HumdrumFileContent):
         chordOffsetInVoice: Union[Fraction, float] = chordOffsetInMeasure - voiceOffsetInMeasure
         chord: m21.chord.Chord = self._createAndConvertChord(layerTok, staffIndex, layerIndex)
 
-        if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
+        if self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo'):
             self._processTremolo(chord, layerTok)
-        elif self._hasTremolo and layerTok.getValueBool('auto', 'tremolo2'):
+        elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo2'):
             self._processTremolo2(chord, voice, chordOffsetInVoice, layerData, tokenIdx, staffIndex, layerIndex)
 
         # TODO: chord signifiers
@@ -4181,9 +4268,9 @@ class HumdrumFile(HumdrumFileContent):
         note: m21.note.Note = self._createAndConvertNote(layerTok, 0, staffIndex, layerIndex)
 
         # TODO: tremolos
-        if self._hasTremolo and layerTok.getValueBool('auto', 'tremolo'):
+        if self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo'):
             self._processTremolo(note, layerTok)
-        elif self._hasTremolo and layerTok.getValueBool('auto', 'tremolo2'):
+        elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo2'):
             self._processTremolo2(note, voice, noteOffsetInVoice, layerData, tokenIdx, staffIndex, layerIndex)
 
         self._processSlurs(note, layerTok)
@@ -5317,9 +5404,9 @@ class HumdrumFile(HumdrumFileContent):
         tremoloNoteVisualDuration: HumNum = None
         tremoloNoteGesturalDuration: HumNum = None
         if self._hasTremolo and (token.isNote or token.isChord):
-            if token.getValueBool('auto', 'tremolo'):
+            if token.getValueBool('auto', 'startTremolo'):
                 tremoloNoteVisualDuration = Convert.recipToDuration(token.getValue('auto', 'recip'))
-            elif token.getValueBool('auto', 'tremolo2') or \
+            elif token.getValueBool('auto', 'startTremolo2') or \
                     token.getValueBool('auto', 'tremoloAux'):
                 # In two note tremolos, the two notes each look like they have the full duration
                 # of the tremolo sequence, but they actually each need to have half that duration

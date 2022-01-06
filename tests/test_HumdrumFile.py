@@ -60,11 +60,11 @@ def ReadAllTestFilesInFolder(folder: str):
             print('skipping test because krnFile contains more than one score (not yet supported)')
             continue
 
-        if 'rds-scores' in str(krnPath) and krnPath.name in (
-                'R408_Web-w13p1-2m1-12.krn',
-                                                            ):
-            print('\tskipping import due to no note/chord/rest at end of tuplet')
-            continue
+#         if 'rds-scores' in str(krnPath) and krnPath.name in (
+#                 'R408_Web-w13p1-2m1-12.krn',
+#                                                             ):
+#             print('\tskipping import due to no note/chord/rest at end of tuplet')
+#             continue
 
         if 'jrp-scores' in str(krnPath) and krnPath.name in (
                 'Agr1001c-Missa_In_myne_zin-Sanctus.krn',

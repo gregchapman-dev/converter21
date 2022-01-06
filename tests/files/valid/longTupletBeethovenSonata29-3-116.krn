@@ -1,0 +1,46 @@
+!!!COM: Beethoven, Ludwig van
+!!!CDT: 1770///-1827///
+!!!OTL: Piano Sonata no. 29 in B-flat major
+!!!OTP: hammerklavier
+!!!OPS: 106
+!!!OMV: 3
+!!!OMD: Adagio sostenuto
+**kern	**kern
+*staff2	*staff1
+*Ipiano	*Ipiano
+*clefF4	*clefG2
+*k[f#c#g#]	*k[f#c#g#]
+*f#:	*f#:
+*M6/8	*M6/8
+*MM46	*MM46
+=116	=116
+16A\ 16c#\ 16e\ 16a\LL	(16fff#\LL
+16r	16eee\JJ)
+16CC#\ 16C#\	(24eee\LL
+.	24ggn\
+16r	.
+.	24ff#\
+16A\ 16c#\ 16e\ 16a\JJ	24gg\
+.	24aa\
+16r	.
+.	24aa#\
+16A\ 16c#\ 16e\ 16a\LL	24ccc#\)
+.	(24bb\
+16r	.
+.	24aan\
+16CC#\ 16C#\	24gg\
+.	24ff#\
+16r	.
+.	24gg\
+16A\ 16c#\ 16e\ 16a\JJ	24gg#\
+.	24aa\
+16r	.
+.	24ee\JJ
+==	==
+*-	*-
+!!!LOR: Durand 1915, plates 9327/9328, Paul Dukas, ed.
+!!!URL-vhv: https://verovio.humdrum.org/?file=beethoven/sonatas/sonata29-3.krn
+!!!URL-pdf: https://github.com/craigsapp/beethoven-piano-sonatas/blob/master/reference-edition/sonata29-3.pdf
+!!!ENC: Craig Stuart Sapp
+!!!END: 2008/11/11/
+!!!EEV: 2014/07/13/ (added ottavas)
