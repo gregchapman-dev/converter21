@@ -366,11 +366,8 @@ class HumdrumBeamAndTuplet:
 
         self.tupletStart: int = 0 # set to tuplet group number (on starting note/rest)
         self.tupletEnd: int = 0   # set to tuplet group number (on ending note/rest)
-        self.forceStartStop: bool = False # True if Humdrum data made us start or end
-                                 # this tuplet at a specific location (i.e. we should
-                                 # encode that in music21).  If False, we leave tuplet.type
-                                 # unspecified in music21 (neither 'start' nor 'stop'), and
-                                 # let the starts/stops fall where they may.
+        self.forceStartStop: bool = False   # True if Humdrum data made us start or end
+                                            # this tuplet at a specific location.
 
         # for beamed normal notes
         self.beamStart: int = 0  # set to beam number on starting note
@@ -1496,6 +1493,8 @@ class HumdrumFile(HumdrumFileContent):
                 if 'L' in layerTok.text:
                     self._checkForTremolo(layerData, tgs, tokenIdx)
                 inTremolo = layerTok.getValueBool('auto', 'inTremolo')
+            else:
+                inTremolo = False
 
             if layerTok.getValueBool('auto', 'tremoloBeam'): # 'tremoloBeam' is set by _checkForTremolo
                 if 'J' in layerTok.text:
@@ -2347,6 +2346,7 @@ class HumdrumFile(HumdrumFileContent):
 
             if recomputeDuration:
                 duration = M21Convert.m21DurationWithTuplet(startTok, tuplet)
+                tuplet = duration.tuplets[0]
 
         # Now figure out the rest of the tuplet fields (type, placement, bracket, etc)
 
@@ -2436,6 +2436,7 @@ class HumdrumFile(HumdrumFileContent):
 
         if recomputeDuration:
             duration = M21Convert.m21DurationWithTuplet(token, tuplet)
+            tuplet = duration.tuplets[0]
 
         # set the tuplet on the note duration.
         # If we recomputed the duration above, this has already been done
@@ -2507,8 +2508,8 @@ class HumdrumFile(HumdrumFileContent):
         # with our tuplet template as a guide.
 
         # Note that "if tremolo", we've already recomputed the duration, so don't bother here.
+        recomputeDuration: bool = False
         if tuplet and not tremolo:
-            recomputeDuration: bool = False
             if duration.tuplets in (None, ()):
                 recomputeDuration = True
             elif len(duration.tuplets) > 1:
@@ -2520,11 +2521,13 @@ class HumdrumFile(HumdrumFileContent):
 
             if recomputeDuration:
                 duration = M21Convert.m21DurationWithTuplet(endToken, tuplet)
+                tuplet = duration.tuplets[0]
 
         if tuplet:
             # Now set the tuplet in the duration to this one
             tuplet.type = 'stop'
-            duration.tuplets = (tuplet,)
+            if not recomputeDuration:
+                duration.tuplets = (tuplet,)
 
         # And set this new duration on the endNote.
         endNote.duration = duration
