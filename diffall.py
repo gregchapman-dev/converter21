@@ -145,6 +145,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
     hdw: HumdrumWriter = HumdrumWriter(score1)
     hdw.makeNotation = False
     hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
+    # hdw.expandTremolos = False
 
     try:
         success: bool = True

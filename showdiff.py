@@ -32,8 +32,8 @@ def runTheFullTest(krnPath: Path):
     assert(hfb.isValid)
 
     # test against known good results
-    results = HumdrumFileTestResults.fromFiles(str(krnPath), str(resultsPath))
-    CheckHumdrumFile(hfb, results)
+    # results = HumdrumFileTestResults.fromFiles(str(krnPath), str(resultsPath))
+    # CheckHumdrumFile(hfb, results)
 
     # import HumdrumFile into music21 stream
     score1 = hfb.createMusic21Stream()

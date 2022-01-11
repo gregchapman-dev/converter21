@@ -2143,6 +2143,11 @@ class HumdrumFile(HumdrumFileContent):
         if noteOrChord is None:
             return 0
 
+        # adjust if this note is in a fingered tremolo (currently all beams are marks
+        # in that case, so return zero beams).
+        if noteOrChord.getSpannerSites('TremoloSpanner'):
+            return 0
+
         noteDurationNoDots: HumNum
         if token.isGrace:
             noteDurationNoDots = token.graceVisualDuration
@@ -3556,7 +3561,8 @@ class HumdrumFile(HumdrumFileContent):
         for i, note in enumerate(notes):
             if '_' in note.text or '[' in note.text or ']' in note.text:
                 # Note/chord involved a tie is present,
-                # so disallow any tremolo on this beamed group.
+                # so disallow any bowed tremolo on this beamed group.
+                # Disallow any tremolo if a tie is on an internal note.
                 if i == 0:
                     firstHasTie = True
                 elif i == len(notes) - 1:
@@ -3578,7 +3584,7 @@ class HumdrumFile(HumdrumFileContent):
         nextSame: [bool] = [True] * len(notes)
         allPitchesEqual: bool = True
         if firstHasTie or lastHasTie:
-            allPitchesEqual = False
+            allPitchesEqual = False # disable bowed tremolo
         else:
             for i in range(1, len(pitches)):
                 if len(pitches[i]) != len(pitches[i-1]):
@@ -3600,10 +3606,10 @@ class HumdrumFile(HumdrumFileContent):
             tdur: HumNum = duration * len(notes)
             recip: str = Convert.durationToRecip(tdur)
 
-            slashes: int = math.log(float(duration)) / math.log(2.0)
-            noteSlash: int = math.log(float(tdur)) / math.log(2.0)
-            if noteSlash < 0:
-                slashes = slashes - noteSlash
+            slashes: int = int(math.log(float(duration)) / math.log(2.0))
+            noteBeams: int = int(math.log(float(tdur)) / math.log(2.0))
+            if noteBeams < 0:
+                slashes = slashes - noteBeams
             slashes = -slashes
             if slashes <= 0:
                 # something went wrong calculating durations
@@ -3624,18 +3630,21 @@ class HumdrumFile(HumdrumFileContent):
         # same duration (this requirement can be loosened in the future
         # if necessary).
         hasInternalTrem: bool = True
-        for i in range(1, len(nextSame) - 1):
-            if nextSame[i]:
-                continue
-            if not nextSame[i-1]:
-                hasInternalTrem = False
-                break
-            if not nextSame[i+1]:
-                hasInternalTrem = False
-                break
-        if len(nextSame) == 2:
-            if not nextSame[0] and nextSame[1]:
-                hasInternalTrem = False
+        if firstHasTie or lastHasTie:
+            hasInternalTrem = False # disable multiple bowed tremolos in a single beam group
+        else:
+            for i in range(1, len(nextSame) - 1):
+                if nextSame[i]:
+                    continue
+                if not nextSame[i-1]:
+                    hasInternalTrem = False
+                    break
+                if not nextSame[i+1]:
+                    hasInternalTrem = False
+                    break
+            if len(nextSame) == 2:
+                if not nextSame[0] and nextSame[1]:
+                    hasInternalTrem = False
 
         # Group separate tremolo groups within a single beam
         groupings: [[HumdrumToken]] = []
@@ -3715,7 +3724,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # Eventually also allow calculating of beam.float
         # (mostly for styling half note tremolos).
-        beams: int = -math.log(float(duration)) / math.log(2.0)
+        beams: int = -int(math.log(float(duration)) / math.log(2.0))
         if beams <= 0:
             # something went wrong calculating durations.
             raise HumdrumInternalError(f'Problem with tremolo2 beams calculation: {beams}')
@@ -3975,6 +3984,31 @@ class HumdrumFile(HumdrumFileContent):
         return rest
 
     @staticmethod
+    def _processUnexpandedTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken):
+        m = re.search(r'@(\d+)@', layerTok.text)
+        if not m:
+            return # it wasn't an unexpanded tremolo after all
+
+        tremoloTotalDuration: HumNum = Convert.recipToDuration(layerTok.text)
+        tremoloSingleNoteDuration: HumNum = Convert.recipToDuration(m.group(1))
+        slashes: int = int(math.log(float(tremoloSingleNoteDuration)) / math.log(2.0))
+        noteBeams: int = int(math.log(float(tremoloTotalDuration)) / math.log(2.0))
+        if noteBeams < 0:
+            slashes = slashes - noteBeams
+        slashes = -slashes
+        if slashes <= 0:
+            # something went wrong calculating durations
+            return
+
+        tremolo: m21.expressions.Tremolo = m21.expressions.Tremolo()
+        try:
+            tremolo.numberOfMarks = slashes
+            noteOrChord.expressions.append(tremolo)
+        except m21.expressions.TremoloException:
+            # numberOfMarks out of range (1..8)
+            return
+
+    @staticmethod
     def _processTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken):
         tremolo: m21.expressions.Tremolo = m21.expressions.Tremolo()
         slashes: int = layerTok.getValueInt('auto', 'slashes')
@@ -3985,6 +4019,81 @@ class HumdrumFile(HumdrumFileContent):
             # numberOfMarks out of range (1..8)
             return
 
+    def _processUnexpandedTremolo2(self,
+                                   noteOrChord: m21.note.NotRest,
+                                   voice: m21.stream.Voice,
+                                   noteOrChordOffsetInVoice: Union[Fraction, float],
+                                   layerData: [HumdrumToken],
+                                   tokenIdx: int,
+                                   staffIndex: int,
+                                   layerIndex: int) -> bool:
+        skippedEndOfTremolo2: bool = False
+        layerTok: HumdrumToken = layerData[tokenIdx]
+        m = re.search(r'@@(\d+)@@', layerTok.text)
+        if not m:
+            return skippedEndOfTremolo2 # it wasn't an unexpanded tremolo2 after all
+
+        if layerTok.getValueBool('auto', 'unexpandedTremolo2AlreadyProcessed'):
+            skippedEndOfTremolo2 = True
+            return skippedEndOfTremolo2 # it's an endTremolo2 token, and we've already processed it
+
+        singleTremoloNoteDuration: HumNum = Convert.recipToDuration(m.group(1))
+        beams: int = -int(math.log(float(singleTremoloNoteDuration)) / math.log(2.0))
+        second: HumdrumToken = None
+
+        tremolo2: m21.expressions.TremoloSpanner = m21.expressions.TremoloSpanner()
+        try:
+            tremolo2.numberOfMarks = beams
+            for z in range(tokenIdx+1, len(layerData)):
+                if re.search(r'@@(\d+)@@', layerData[z].text):
+                    second = layerData[z]
+                    second.setValue('auto', 'unexpandedTremolo2AlreadyProcessed', '1')
+                    break
+        except m21.expressions.TremoloException:
+            # numberOfMarks out of range (1..8)
+            return skippedEndOfTremolo2
+
+        if not second:
+            return skippedEndOfTremolo2
+
+        # First we need to double the visual duration of noteOrChord (leaving the
+        # gestural duration as it was)
+        self._fixupUnexpandedTremolo2Duration(noteOrChord)
+
+        self.m21Score.coreInsert(0, tremolo2)
+        self.m21Score.coreElementsChanged()
+
+        # ignoring slurs, ties, ornaments, articulations
+        if second.isChord:
+            chord2: m21.chord.Chord = self._createAndConvertChord(second, staffIndex, layerIndex)
+            self._fixupUnexpandedTremolo2Duration(chord2)
+            chord2OffsetInVoice: Union[Fraction, float] = (
+                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            voice.coreInsert(chord2OffsetInVoice, chord2)
+            tremolo2.addSpannedElements(noteOrChord, chord2)
+        else:
+            note2: m21.note.Note = self._createAndConvertNote(second, 0, staffIndex, layerIndex)
+            note2OffsetInVoice: Union[Fraction, float] = (
+                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            self._fixupUnexpandedTremolo2Duration(note2)
+            voice.coreInsert(note2OffsetInVoice, note2)
+            tremolo2.addSpannedElements(noteOrChord, note2)
+
+        self._addSlurToTremoloSpanner(tremolo2, layerTok, second)
+        self._addExplicitStemDirectionToTremoloSpanner(tremolo2, layerTok)
+
+        return skippedEndOfTremolo2
+
+    @staticmethod
+    def _fixupUnexpandedTremolo2Duration(noteOrChord: m21.note.NotRest):
+        # double the duration
+        originalDuration: HumNum = HumNum(noteOrChord.duration.quarterLength)
+        noteOrChord.duration.quarterLength = Fraction(originalDuration * 2)
+
+        # halve the gestural duration (back to what it was)
+        noteOrChord.duration.linked = False # so visual duration will stay doubled
+        noteOrChord.duration.quarterLength = Fraction(originalDuration)
+
     def _processTremolo2(self,
                          noteOrChord: m21.note.NotRest,
                          voice: m21.stream.Voice,
@@ -3992,7 +4101,7 @@ class HumdrumFile(HumdrumFileContent):
                          layerData: [HumdrumToken],
                          tokenIdx: int,
                          staffIndex: int,
-                         layerIndex: int) -> bool:
+                         layerIndex: int):
         layerTok: HumdrumToken = layerData[tokenIdx]
         tremolo2: m21.expressions.TremoloSpanner = m21.expressions.TremoloSpanner()
         beams: int = layerTok.getValueInt('auto', 'beams')
@@ -4006,33 +4115,30 @@ class HumdrumFile(HumdrumFileContent):
                     break
         except m21.expressions.TremoloException:
             # numberOfMarks out of range (1..8)
-            return False
+            return
 
-        insertedIntoVoice: bool = False
-        if second:
-            self.m21Score.coreInsert(0, tremolo2)
-            self.m21Score.coreElementsChanged()
+        if not second:
+            return
 
-            # ignoring slurs, ties, ornaments, articulations
-            if second.isChord:
-                chord2: m21.chord.Chord = self._createAndConvertChord(second, staffIndex, layerIndex)
-                chord2OffsetInVoice: Union[Fraction, float] = (
-                        noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
-                voice.coreInsert(chord2OffsetInVoice, chord2)
-                insertedIntoVoice = True
-                tremolo2.addSpannedElements(noteOrChord, chord2)
-            else:
-                note2: m21.note.Note = self._createAndConvertNote(second, 0, staffIndex, layerIndex)
-                note2OffsetInVoice: Union[Fraction, float] = (
-                        noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
-                voice.coreInsert(note2OffsetInVoice, note2)
-                insertedIntoVoice = True
-                tremolo2.addSpannedElements(noteOrChord, note2)
+        self.m21Score.coreInsert(0, tremolo2)
+        self.m21Score.coreElementsChanged()
 
-            self._addSlurToTremoloSpanner(tremolo2, layerTok, second)
-            self._addExplicitStemDirectionToTremoloSpanner(tremolo2, layerTok)
+        # ignoring slurs, ties, ornaments, articulations
+        if second.isChord:
+            chord2: m21.chord.Chord = self._createAndConvertChord(second, staffIndex, layerIndex)
+            chord2OffsetInVoice: Union[Fraction, float] = (
+                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            voice.coreInsert(chord2OffsetInVoice, chord2)
+            tremolo2.addSpannedElements(noteOrChord, chord2)
+        else:
+            note2: m21.note.Note = self._createAndConvertNote(second, 0, staffIndex, layerIndex)
+            note2OffsetInVoice: Union[Fraction, float] = (
+                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            voice.coreInsert(note2OffsetInVoice, note2)
+            tremolo2.addSpannedElements(noteOrChord, note2)
 
-        return insertedIntoVoice
+        self._addSlurToTremoloSpanner(tremolo2, layerTok, second)
+        self._addExplicitStemDirectionToTremoloSpanner(tremolo2, layerTok)
 
     '''
     //////////////////////////////
@@ -4092,6 +4198,32 @@ class HumdrumFile(HumdrumFileContent):
                 obj.stemDirection = 'down'
 
     '''
+        _processTremolos: does any processing necessary to generate Tremolo or TremoloSpanner
+    '''
+    def _processTremolos(self, noteOrChord: m21.note.NotRest,
+                               voice: m21.stream.Voice,
+                               offsetInVoice: Union[Fraction, float],
+                               layerData: [HumdrumToken],
+                               tokenIdx: int,
+                               staffIndex: int,
+                               layerIndex: int) -> bool:
+        skippedEndOfTremolo2: bool = False
+        layerTok: HumdrumToken = layerData[tokenIdx]
+        if '@@' in layerTok.text:
+            skippedEndOfTremolo2 = self._processUnexpandedTremolo2(noteOrChord, voice, offsetInVoice,
+                                                                layerData, tokenIdx,
+                                                                staffIndex, layerIndex)
+        elif '@' in layerTok.text:
+            self._processUnexpandedTremolo(noteOrChord, layerTok)
+        elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo'):
+            self._processTremolo(noteOrChord, layerTok)
+        elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo2'):
+            self._processTremolo2(noteOrChord, voice, offsetInVoice,
+                                  layerData, tokenIdx,
+                                  staffIndex, layerIndex)
+        return skippedEndOfTremolo2
+
+    '''
         _processChordLayerToken
     '''
     def _processChordLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: [HumdrumToken], tokenIdx: int, staffIndex: int, layerIndex: int) -> bool:
@@ -4104,10 +4236,10 @@ class HumdrumFile(HumdrumFileContent):
         chordOffsetInVoice: Union[Fraction, float] = chordOffsetInMeasure - voiceOffsetInMeasure
         chord: m21.chord.Chord = self._createAndConvertChord(layerTok, staffIndex, layerIndex)
 
-        if self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo'):
-            self._processTremolo(chord, layerTok)
-        elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo2'):
-            self._processTremolo2(chord, voice, chordOffsetInVoice, layerData, tokenIdx, staffIndex, layerIndex)
+        skipThisChord: bool = self._processTremolos(chord, voice, chordOffsetInVoice,
+                                                    layerData, tokenIdx, staffIndex, layerIndex)
+        if skipThisChord: # it was the end of a Tremolo2, and had already been inserted earlier
+            return False
 
         # TODO: chord signifiers
         #self._processChordSignifiers(chord, layerTok, staffIndex)
@@ -4293,18 +4425,17 @@ class HumdrumFile(HumdrumFileContent):
         _processNoteLayerToken
     '''
     def _processNoteLayerToken(self, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], layerData: HumdrumToken, tokenIdx: int, staffIndex: int, layerIndex: int) -> bool:
-        # insertedIntoVoice: bool = False # don't bother computing this since we _always_ insert into
-        #                                   the voice ourselves, unconditionally
         layerTok: HumdrumToken = layerData[tokenIdx]
         noteOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
         noteOffsetInVoice: Union[Fraction, float] = noteOffsetInMeasure - voiceOffsetInMeasure
         note: m21.note.Note = self._createAndConvertNote(layerTok, 0, staffIndex, layerIndex)
 
         # TODO: tremolos
-        if self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo'):
-            self._processTremolo(note, layerTok)
-        elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo2'):
-            self._processTremolo2(note, voice, noteOffsetInVoice, layerData, tokenIdx, staffIndex, layerIndex)
+        skipThisNote: bool = self._processTremolos(note, voice, noteOffsetInVoice,
+                                                   layerData, tokenIdx,
+                                                   staffIndex, layerIndex)
+        if skipThisNote:
+            return False # it was an endTremolo2, and had been inserted earlier
 
         self._processSlurs(note, layerTok)
         self._processPhrases(note, layerTok)

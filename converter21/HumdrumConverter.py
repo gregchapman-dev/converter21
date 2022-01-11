@@ -77,6 +77,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
     # pylint: disable=arguments-differ
     def write(self, obj, fmt, fp=None, subformats=None,
                     makeNotation=True, addRecipSpine=False,
+                    expandTremolos=True,
                     **keywords):
         if fp is None:
             fp = self.getTemporaryFile()
@@ -89,6 +90,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         hdw = HumdrumWriter(obj)
         hdw.makeNotation = makeNotation
         hdw.addRecipSpine = addRecipSpine
+        hdw.expandTremolos = expandTremolos
 
         with open(fp, 'w', encoding='utf8') as f:
             hdw.write(f)
