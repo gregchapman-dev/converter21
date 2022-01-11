@@ -134,23 +134,23 @@ class HumdrumFileContent(HumdrumFileStructure):
         # check for informal breaking markers such as:
         # !!pagebreak:original
         # !!linebreak:original
-        for line in self._lines:
-            if not line.isGlobalComment:
-                continue
-
-            if line[0].text.startswith('!!pagebreak:'):
-                self._hasInformalBreaks = True
-                break
-
-            if line[0].text.startswith('!!linebreak:'):
-                self._hasInformalBreaks = True
-                break
+# we don't pay attention to informal breaks (these are the breaks that happened to be in the
+# original score, not breaks that were specified as part of that score)
+#         for line in self._lines:
+#             if not line.isGlobalComment:
+#                 continue
+#
+#             if line[0].text.startswith('!!pagebreak:'):
+#                 self._hasInformalBreaks = True
+#                 break
+#
+#             if line[0].text.startswith('!!linebreak:'):
+#                 self._hasInformalBreaks = True
+#                 break
 
         # check for formal breaking markers such as:
-        # !!LO:PB:g=original
-        # !!LO:LB:g=original
-        # !LO:PB:g=original
-        # !LO:LB:g=original
+        # !!LO:PB:g=z
+        # !!LO:LB:g=z
         for line in self._lines:
             if not line.isComment:
                 continue

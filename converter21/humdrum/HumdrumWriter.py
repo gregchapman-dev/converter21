@@ -788,7 +788,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 if token is None:
                     continue
 
-                if token.text in ('!!linebreak:original', '!!pagebreak:original'):
+                if token.text in ('!!LO:LB:g=z', '!!LO:PB:g=z'):
                     gmlast.slices.append(gridSlice)
                     gm.slices.pop(sliceIdx)
                     # there can be only one break, so quit the slice loop now.
@@ -1461,10 +1461,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         if isPageBreak:
 #             if token is None or token.text != '!!pagebreak:original':
-            outgm.addGlobalComment('!!pagebreak:original', nowTime)
+            outgm.addGlobalComment('!!LO:PB:g=z', nowTime)
         elif isSystemBreak:
 #             if token is None or token.text != '!!linebreak:original':
-            outgm.addGlobalComment('!!linebreak:original', nowTime)
+            outgm.addGlobalComment('!!LO:LB:g=z', nowTime)
 
 
     '''

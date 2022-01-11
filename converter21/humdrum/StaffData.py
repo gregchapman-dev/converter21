@@ -52,9 +52,7 @@ class StaffData:
         # Transpose any transposing instrument parts to "sounding pitch" (a.k.a. concert pitch).
         # For performance, check the instruments here, since stream.toSoundingPitch
         # can be expensive, even if there is no transposing instrument.
-        # pylint: disable=singleton-comparison
-        if partStaff and partStaff.atSoundingPitch == False: # might be 'unknown' or True
-            # pylint: enable=singleton-comparison
+        if partStaff and partStaff.atSoundingPitch is False: # might be 'unknown' or True
             for inst in partStaff.getElementsByClass(m21.instrument.Instrument):
                 if M21Utilities.isTransposingInstrument(inst):
                     partStaff.toSoundingPitch(inPlace=True)

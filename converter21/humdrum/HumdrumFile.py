@@ -589,7 +589,7 @@ class HumdrumFile(HumdrumFileContent):
         lineIdx: int = self._staffStarts[0].lineIndex # assumes no staff starts earlier than the first
         while lineIdx < self.lineCount - 1:
             lineIdx = self._convertSystemMeasure(lineIdx) # returns the line number of the next measure
-            self._checkForInformalBreak(lineIdx)
+#            self._checkForInformalBreak(lineIdx)
 
         self._processHangingTieStarts()
 
@@ -597,9 +597,7 @@ class HumdrumFile(HumdrumFileContent):
         # For performance, check the instruments here, since stream.toWrittenPitch
         # can be expensive, even if there is no transposing instrument.
         for ss in self._staffStates:
-            # pylint: disable=singleton-comparison
-            if ss.m21Part and ss.m21Part.atSoundingPitch == True: # might be 'unknown' or False
-                # pylint: enable=singleton-comparison
+            if ss.m21Part and ss.m21Part.atSoundingPitch is True: # might be 'unknown' or False
                 for inst in ss.m21Part.getElementsByClass(m21.instrument.Instrument):
                     if M21Utilities.isTransposingInstrument(inst):
                         ss.m21Part.toWrittenPitch(inPlace=True)
@@ -6836,56 +6834,56 @@ class HumdrumFile(HumdrumFileContent):
     // to the layout system as need.  Search for a break message anywhere
     // around the barline but before any data is found.
     '''
-    def _checkForInformalBreak(self, lineIdx: int):
-        if lineIdx >= self.lineCount - 1:
-            return
-
-        firstTS: HumNum = self._lines[lineIdx].durationFromStart
-        lineBreakIdx: int = -1
-        pageBreakIdx: int = -1
-
-        # look forward for informal breaks, up to first data, or first line where ts changes
-        for i in range(lineIdx, self.lineCount):
-            line = self._lines[i]
-            if line.isData or line.durationFromStart != firstTS:
-                break
-
-            if not line.isGlobalComment:
-                continue
-
-            if line[0].text.startswith('!!linebreak:'):
-                lineBreakIdx = i
-                break
-
-            if line[0].text.startswith('!!pagebreak:'):
-                pageBreakIdx = i
-                break
-
-        if lineBreakIdx == -1 and pageBreakIdx == -1:
-            # look backward for informal breaks, back to first data, or first line where ts changes
-            for i in reversed(range(1, lineIdx)): # don't bother with line 0
-                line = self._lines[i]
-                if line.isData or line.durationFromStart != firstTS:
-                    break
-
-                if not line.isGlobalComment:
-                    continue
-
-                if line[0].text.startswith('!!linebreak:'):
-                    lineBreakIdx = i
-                    break
-
-                if line[0].text.startswith('!!pagebreak:'):
-                    pageBreakIdx = i
-                    break
-
-        if lineBreakIdx == -1 and pageBreakIdx == -1:
-            return
-
-        if lineBreakIdx > 0:
-            self._m21BreakAtStartOfNextMeasure = m21.layout.SystemLayout(isNew = True)
-        elif pageBreakIdx > 0:
-            self._m21BreakAtStartOfNextMeasure = m21.layout.PageLayout(isNew = True)
+#     def _checkForInformalBreak(self, lineIdx: int):
+#         if lineIdx >= self.lineCount - 1:
+#             return
+#
+#         firstTS: HumNum = self._lines[lineIdx].durationFromStart
+#         lineBreakIdx: int = -1
+#         pageBreakIdx: int = -1
+#
+#         # look forward for informal breaks, up to first data, or first line where ts changes
+#         for i in range(lineIdx, self.lineCount):
+#             line = self._lines[i]
+#             if line.isData or line.durationFromStart != firstTS:
+#                 break
+#
+#             if not line.isGlobalComment:
+#                 continue
+#
+#             if line[0].text.startswith('!!linebreak:'):
+#                 lineBreakIdx = i
+#                 break
+#
+#             if line[0].text.startswith('!!pagebreak:'):
+#                 pageBreakIdx = i
+#                 break
+#
+#         if lineBreakIdx == -1 and pageBreakIdx == -1:
+#             # look backward for informal breaks, back to first data, or first line where ts changes
+#             for i in reversed(range(1, lineIdx)): # don't bother with line 0
+#                 line = self._lines[i]
+#                 if line.isData or line.durationFromStart != firstTS:
+#                     break
+#
+#                 if not line.isGlobalComment:
+#                     continue
+#
+#                 if line[0].text.startswith('!!linebreak:'):
+#                     lineBreakIdx = i
+#                     break
+#
+#                 if line[0].text.startswith('!!pagebreak:'):
+#                     pageBreakIdx = i
+#                     break
+#
+#         if lineBreakIdx == -1 and pageBreakIdx == -1:
+#             return
+#
+#         if lineBreakIdx > 0:
+#             self._m21BreakAtStartOfNextMeasure = m21.layout.SystemLayout(isNew = True)
+#         elif pageBreakIdx > 0:
+#             self._m21BreakAtStartOfNextMeasure = m21.layout.PageLayout(isNew = True)
 
     '''
     //////////////////////////////
@@ -6903,12 +6901,12 @@ class HumdrumFile(HumdrumFileContent):
 
         token: HumdrumToken = line[0]
         group: str = token.layoutParameter('LB', 'g')
-        if group:
+        if group == 'z':
             self._m21BreakAtStartOfNextMeasure = m21.layout.SystemLayout(isNew = True)
             return
 
         group: str = token.layoutParameter('PB', 'g')
-        if group:
+        if group == 'z':
             self._m21BreakAtStartOfNextMeasure = m21.layout.PageLayout(isNew = True)
             return
 
