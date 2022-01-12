@@ -1866,10 +1866,14 @@ class M21Convert:
                 outputMType = MeasureType.RepeatBoth
                 outputVStyle = M21Convert._combineVisualRepeatBothStyles(
                                                 prevMeasureEndStyle.vStyle,
-                                                currMeasureBeginStyle.vStyle)
+                                                outputVStyle)
             else:
                 outputMType = MeasureType.RepeatBackward
                 outputVStyle = prevMeasureEndStyle.vStyle
+        else:
+            # just take the "more complex" of the two
+            outputMType = max(outputMType, prevMeasureEndStyle.mType)
+            outputVStyle = max(outputVStyle, prevMeasureEndStyle.vStyle)
 
         return M21Convert.getMeasureStyle(outputVStyle, outputMType)
 

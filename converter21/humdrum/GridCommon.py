@@ -88,18 +88,21 @@ class SliceType(IntEnum):
 
 @unique
 class MeasureVisualStyle(IntEnum):
+    # this enum is sorted so that we can use max() to pick between
+    # previous right barline and current left barline visual style
+    Regular = auto()
     Double = auto()
     HeavyHeavy = auto()
     HeavyLight = auto()
     Final = auto()      # In MusicXML, this is called 'light-heavy'
     Short = auto()
     Tick = auto()
-    Invisible = auto()
-    Regular = auto()
     Heavy = auto()
     # some special ones only used with RepeatBoth
     HeavyLightHeavy = auto()
     LightHeavyLight = auto()
+    # Invisible comes last
+    Invisible = auto()
 
 
 @unique
