@@ -1,18 +1,13 @@
 # converter21
-A music21-based music notation file format converter CLI app, and a new music21 subconverter plug-in
-
-My initial goal here is to make a really accurate (and thorough) Humdrum importer and exporter for music21.
-
-convertscore.py is a general-purpose music21-based converter which also happens to use my Humdrum importer instead of music21's.
-
-Examples of convertscore.py usage can be seen below.
-
-Convert humdrum file to musicxml format:
-
-python3 convertscore.py --output-to musicxml infile.krn outfile.musicxml
-
-Same but specifying stdin and stdout (with '-'):
-
-cat infile.krn | python3 convertscore.py --input-from humdrum --output-to musicxml - - > outfile.musicxml
+A music21-extending converter package.  Currently contains an alternate music21 humdrum converter that completely replaces music21's humdrum parser, and adds the (until now) missing humdrum writer.
 
 The Humdrum portion of this software is derived/translated from the C++ code in https://github.com/craigsapp/humlib, by Craig Stuart Sapp.
+
+## Setup
+Depends on music21, which should also be configured to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://github.com/gregchapman-dev/musicdiff.git), but converter21 itself does not.
+
+## Usage
+An example music file format conversion tool based on music21's conversion utilities can be found in [convertscore.py](convertscore.py).  This example shows you how to register converter21's humdrum converter so that music21 will use it in place of its own.  Thus, convertscore.py can convert to humdrum, even though music21 by itself cannot.
+
+## License
+Licensed under the [MIT license](LICENSE)
