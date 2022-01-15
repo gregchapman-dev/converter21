@@ -5,7 +5,7 @@ import sys
 from typing import List, Tuple
 from music21.base import VERSION_STR
 
-from musicdiff import notation
+from musicdiff.annotation import AnnScore
 from musicdiff import Comparison
 
 # The things we're testing
@@ -209,9 +209,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        annotatedScore1 = notation.Score(score1)
-        annotatedScore2 = notation.Score(score2)
-        op_list, cost = Comparison.compare_annotated_scores(
+        annotatedScore1 = AnnScore(score1)
+        annotatedScore2 = AnnScore(score2)
+        op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
         print(f'numDiffs = {numDiffs}')
@@ -278,5 +278,8 @@ with open(goodPath, 'w', encoding='utf-8') as goodf:
                     resultsf.flush()
                     print(file, file=badf)
                     badf.flush()
+            resultsf.flush()
+        badf.flush()
+    goodf.flush()
 
 print('done.')

@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 import tempfile
 import argparse
@@ -7,29 +6,22 @@ import subprocess
 
 from music21.base import VERSION_STR
 from musicdiff import Visualization
-from musicdiff import notation
+from musicdiff.annotation import AnnScore
 from musicdiff import Comparison
 
 # The things we're testing
-from converter21.humdrum import HumdrumFileBase
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
-from converter21.humdrum.HumdrumFileBase import getMergedSpineInfo
-
-
-
-# The check routine that every test calls at least once
-from tests.Utilities import CheckHumdrumFile, HumdrumFileTestResults
 
 def runTheFullTest(krnPath: Path):
     print(f'krn file: {krnPath}')
 
-    resultsFileName = krnPath.stem + '.json'
-    resultsPath = krnPath.parent / resultsFileName
+    # resultsFileName = krnPath.stem + '.json'
+    # resultsPath = krnPath.parent / resultsFileName
 
     # import into HumdrumFile
     hfb = HumdrumFile(str(krnPath))
-    assert(hfb.isValid)
+    assert hfb.isValid
 
     # test against known good results
     # results = HumdrumFileTestResults.fromFiles(str(krnPath), str(resultsPath))
@@ -37,8 +29,8 @@ def runTheFullTest(krnPath: Path):
 
     # import HumdrumFile into music21 stream
     score1 = hfb.createMusic21Stream()
-    assert(score1 is not None)
-    assert(score1.isWellFormedNotation() or not score1.elements)
+    assert score1 is not None
+    assert score1.isWellFormedNotation() or not score1.elements
 
     # export score back to humdrum (without any makeNotation fixups)
 
@@ -56,46 +48,46 @@ def runTheFullTest(krnPath: Path):
 
     success: bool = True
     fp = Path(tempfile.gettempdir()) / krnPath.name
-    with open(fp, 'w') as f:
+    with open(fp, 'w', encoding='utf-8') as f:
         success = hdw.write(f)
 
 #     if not success:
 #         score1.show('musicxml.pdf')
-    assert(success)
+    assert success
 
     # and then try to parse the exported humdrum file
 
     hfb = HumdrumFile(str(fp))
 #     if not hfb.isValid:
 #         score1.show('musicxml.pdf')
-    assert(hfb.isValid)
+    assert hfb.isValid
 
     score2 = hfb.createMusic21Stream()
 #     if score2 is None or not score2.isWellFormedNotation():
 #         score1.show('musicxml.pdf')
-    assert(score2 is not None)
-    assert(score2.isWellFormedNotation())
+    assert score2 is not None
+    assert score2.isWellFormedNotation()
 
     # compare the two music21 scores
 
     # first with bbdiff:
-    subprocess.run(['bbdiff', str(krnPath), str(fp)])
+    subprocess.run(['bbdiff', str(krnPath), str(fp)], check=False)
 
     # next with music-score-diff:
     print('comparing the two m21 scores')
-    score_lin1 = notation.Score(score1)
+    score_lin1 = AnnScore(score1)
     print('loaded first score')
-    score_lin2 = notation.Score(score2)
+    score_lin2 = AnnScore(score2)
     print('loaded second score')
-    diffList, cost = Comparison.diff_annotated_scores(score_lin1, score_lin2)
+    diffList, _cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
     print('diffed the two scores:')
     numDiffs = len(diffList)
     print(f'\tnumber of differences = {numDiffs}')
     if numDiffs > 0:
         print('now we will mark and display the two scores')
-        Visualization.mark_differences(score1, score2, diffList)
+        Visualization.mark_diffs(score1, score2, diffList)
         print('marked the scores to show differences')
-        Visualization.show_differences(score1, score2)
+        Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
 #        print('written to: ', score1.write('musicxml'))
 
