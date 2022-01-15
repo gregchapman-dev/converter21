@@ -4,7 +4,11 @@ import tempfile
 import argparse
 import sys
 import subprocess
+
 from music21.base import VERSION_STR
+from musicdiff import Visualization
+from musicdiff import notation
+from musicdiff import Comparison
 
 # The things we're testing
 from converter21.humdrum import HumdrumFileBase
@@ -12,10 +16,6 @@ from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
 from converter21.humdrum.HumdrumFileBase import getMergedSpineInfo
 
-# music-score-diff lib
-import lib.score_visualization as sv
-import lib.NotationLinear as nlin
-import lib.score_comparison_lib as scl
 
 
 # The check routine that every test calls at least once
@@ -83,19 +83,19 @@ def runTheFullTest(krnPath: Path):
 
     # next with music-score-diff:
     print('comparing the two m21 scores')
-    score_lin1 = nlin.Score(score1)
+    score_lin1 = notation.Score(score1)
     print('loaded first score')
-    score_lin2 = nlin.Score(score2)
+    score_lin2 = notation.Score(score2)
     print('loaded second score')
-    op_list, cost = scl.complete_scorelin_diff(score_lin1, score_lin2)
+    diffList, cost = Comparison.diff_annotated_scores(score_lin1, score_lin2)
     print('diffed the two scores:')
-    numDiffs = len(op_list)
+    numDiffs = len(diffList)
     print(f'\tnumber of differences = {numDiffs}')
     if numDiffs > 0:
-        print('now we will annotate and display the two scores')
-        sv.annotate_differences(score1, score2, op_list)
-        print('annotated the scores to show differences')
-        sv.show_differences(score1, score2)
+        print('now we will mark and display the two scores')
+        Visualization.mark_differences(score1, score2, diffList)
+        print('marked the scores to show differences')
+        Visualization.show_differences(score1, score2)
         print('displayed both annotated scores')
 #        print('written to: ', score1.write('musicxml'))
 

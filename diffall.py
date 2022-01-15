@@ -5,14 +5,12 @@ import sys
 from typing import List, Tuple
 from music21.base import VERSION_STR
 
+from musicdiff import notation
+from musicdiff import Comparison
+
 # The things we're testing
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
-
-# music-score-diff lib
-#import lib.score_visualization as sv
-import lib.NotationLinear as nlin
-import lib.score_comparison_lib as scl
 
 def oplistSummary(op_list: List[Tuple[str]]) -> str:
     output: str = ''
@@ -211,9 +209,10 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        score_lin1 = nlin.Score(score1)
-        score_lin2 = nlin.Score(score2)
-        op_list, _cost = scl.complete_scorelin_diff(score_lin1, score_lin2)
+        annotatedScore1 = notation.Score(score1)
+        annotatedScore2 = notation.Score(score2)
+        op_list, cost = Comparison.compare_annotated_scores(
+                                        annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
         print(f'numDiffs = {numDiffs}')
         print(f'numDiffs = {numDiffs}', file=results)
@@ -228,8 +227,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
     except KeyboardInterrupt:
         sys.exit(0)
     except:
-        print('music-score-diff crashed')
-        print('music-score-diff crashed', file=results)
+        print('musicdiff crashed')
+        print('musicdiff crashed', file=results)
         results.flush()
         return False
 
