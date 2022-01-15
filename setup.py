@@ -19,9 +19,9 @@ if __name__ == '__main__':
         author='Greg Chapman',
         author_email='gregc@mac.com',
         url='https://github.com/gregchapman-dev/converter21',
-        license='BSD',
+        license='MIT',
         python_requires='>=3.7',
-        description='music21-based score converter tool with a new Humdrum converter',
+        description='music21-extending converter package (adds Humdrum writer, replaces Humdrum parser)',
         long_description=open('README.md').read(),
         packages=setuptools.find_packages(),
         install_requires=[
