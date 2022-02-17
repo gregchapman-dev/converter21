@@ -175,9 +175,24 @@ class M21Utilities:
         return expressions
 
     @staticmethod
+    def getDynamicWedgesStartedOrStoppedWithGeneralNote(gnote: m21.note.GeneralNote,
+                                                        spannerBundle: m21.spanner.SpannerBundle
+                                                       ) -> [m21.dynamics.DynamicWedge]:
+        output: List[m21.dynamics.DynamicWedge] = []
+        spanners: List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+        for spanner in spanners:
+            if spanner not in spannerBundle:
+                continue
+            if not spanner.isFirst(gnote) and not spanner.isLast(gnote): # not started/stopped with general note, forget it
+                continue
+            if isinstance(spanner, m21.dynamics.DynamicWedge):
+                output.append(spanner)
+        return output
+
+    @staticmethod
     def getDynamicWedgesStartedWithGeneralNote(gnote: m21.note.GeneralNote,
                                                spannerBundle: m21.spanner.SpannerBundle
-                                              ) -> [m21.dynamics.DynamicWedge]:
+                                               ) -> [m21.dynamics.DynamicWedge]:
         output: List[m21.dynamics.DynamicWedge] = []
         spanners: List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
@@ -211,6 +226,38 @@ class M21Utilities:
             return False # instrument transposition is a no-op
 
         return True
+
+    @staticmethod
+    def splitComplexRestDurations(s: m21.stream.Stream):
+        # only handles rests that are in s directly (does not recurse)
+        # always in-place, never adds ties (because they're rests)
+        # loses all beams, so we can only do this on rests!
+        rest: m21.note.GeneralNote = None
+        for rest in s.getElementsByClass('Rest'):
+            if rest.duration.type != 'complex':
+                continue
+            insertPoint = rest.offset
+            restList: [m21.note.Rest] = M21Utilities.splitComplexRestDuration(rest)
+            s.replace(rest, restList[0])
+            insertPoint += restList[0].quarterLength
+            for subsequent in restList[1:]:
+                s.insert(insertPoint, subsequent)
+                insertPoint += subsequent.quarterLength
+
+            # Replace elements in spanners
+            for sp in rest.getSpannerSites():
+                if sp.getFirst() is rest:
+                    sp.replaceSpannedElement(rest, restList[0])
+                if sp.getLast() is rest:
+                    sp.replaceSpannedElement(rest, restList[-1])
+
+    @staticmethod
+    def splitComplexRestDuration(rest: m21.note.Rest):
+        atm = rest.duration.aggregateTupletMultiplier()
+        quarterLengthList = [c.quarterLength * atm for c in rest.duration.components]
+        splitList = rest.splitByQuarterLengths(quarterLengthList, addTies=False)
+        return splitList
+
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: Tuple[int, int, int, str]) -> bool:

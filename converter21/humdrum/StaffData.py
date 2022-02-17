@@ -36,6 +36,7 @@ class StaffData:
         ownerPart: PartData
         self.ownerPart: PartData = ownerPart
         self.m21PartStaff: m21.stream.Part = partStaff
+        self.spannerBundle = ownerPart.spannerBundle # inherited from ownerScore, ultimately
         self._transposeWrittenToSounding(partStaff)
         self._staffIndex: int = staffIndex
         self._hasDynamics: bool = False

@@ -39,7 +39,9 @@ def runTheFullTest(krnPath: Path):
         print('\tskipping export of empty score')
         return
 
-#    score1.show('musicxml.pdf')
+#     score1.show('musicxml.pdf')
+#     xmlFile = score1.write('musicxml')
+#     print(f'MusicXML written to {xmlFile}')
 
     hdw: HumdrumWriter = HumdrumWriter(score1)
     hdw.makeNotation = False
@@ -68,6 +70,8 @@ def runTheFullTest(krnPath: Path):
     assert score2 is not None
     assert score2.isWellFormedNotation()
 
+#     score2.show('musicxml.pdf')
+
     # compare the two music21 scores
 
     # first with bbdiff:
@@ -89,7 +93,8 @@ def runTheFullTest(krnPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
-#        print('written to: ', score1.write('musicxml'))
+#     print('score1 written to: ', score1.write('musicxml', makeNotation=False))
+#     print('score2 written to: ', score2.write('musicxml', makeNotation=False))
 
 # ------------------------------------------------------------------------------
 

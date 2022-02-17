@@ -15,10 +15,12 @@ from typing import Union, List
 #from fractions import Fraction
 
 import music21 as m21
+from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import EventData
 from converter21.humdrum import Convert
+from converter21.humdrum import M21Utilities
 from converter21.humdrum import M21Convert
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
@@ -46,6 +48,7 @@ class MeasureData:
         ownerStaff: StaffData
         self.m21Measure: m21.stream.Measure = measure
         self.ownerStaff: StaffData = ownerStaff
+        self.spannerBundle = ownerStaff.spannerBundle # inherited from ownerScore, ultimately
         self._prevMeasData = prevMeasData
         self._measureIndex: int = measureIndex
         self._startTime: HumNum = HumNum(-1)
@@ -201,6 +204,18 @@ class MeasureData:
             event: EventData = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
                 self.events.append(event)
+                # Make a separate event for any DynamicWedge (in score's
+                #   spannerBundle) that starts with this element.
+                #   Why?
+                #       1. So we don't put the end of the wedge in the same slice as the
+                #           endNote (wedges end at the end time of the endNote, not at
+                #           the start time of the endNote).
+                #       2. So wedge starts/ends will go in their own slice if necessary (e.g.
+                #           if we choose not to export the voice-with-only-invisible-rests we
+                #           may have made to position them correctly.
+                extraEvents: List[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
+                if extraEvents:
+                    self.events += extraEvents
 
         if emptyEndDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
@@ -215,6 +230,62 @@ class MeasureData:
                     self.events.append(event)
                 startTime += duration
 
+    def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> List[EventData]:
+        output: List[EventData] = []
+        wedges: List[m21.dynamics.DynamicWedge] = (
+                    M21Utilities.getDynamicWedgesStartedOrStoppedWithGeneralNote(
+                        event.m21Object,
+                        self.spannerBundle)
+                )
+        wedge: m21.dynamics.DynamicWedge
+        for wedge in wedges:
+            ownerScore = self.ownerStaff.ownerPart.ownerScore
+            score: m21.stream.Score = ownerScore.m21Score
+            startNote: m21.note.GeneralNote = wedge.getFirst()
+            endNote: m21.note.GeneralNote = wedge.getLast()
+            thisEventIsStart: bool = startNote is event.m21Object
+            thisEventIsEnd: bool = endNote is event.m21Object
+            wedgeStartTime: HumNum = None
+            wedgeDuration: HumNum = None
+            wedgeEndTime: HumNum = HumNum(endNote.getOffsetInHierarchy(score)
+                                        + endNote.duration.quarterLength)
+            if thisEventIsStart:
+                wedgeStartTime = HumNum(startNote.getOffsetInHierarchy(score))
+                wedgeDuration = HumNum(wedgeEndTime - wedgeStartTime)
+
+            if thisEventIsStart and thisEventIsEnd:
+                # print(f'wedgeStartStopEvent: {event}', file=sys.stderr)
+                # one note for the wedge? let's make one event, so it can become '>]' or whatever
+                wedgeStartStopEvent: EventData = EventData(wedge, -1, event.voiceIndex, self,
+                                                           offsetInScore=wedgeStartTime,
+                                                           duration=wedgeDuration)
+                output.append(wedgeStartStopEvent)
+            elif thisEventIsStart:
+                # add the start event, with duration
+                # print(f'wedgeStartEvent: {event}', file=sys.stderr)
+                wedgeStartEvent: EventData = EventData(wedge, -1, event.voiceIndex, self,
+                                                       offsetInScore=wedgeStartTime,
+                                                       duration=wedgeDuration)
+                output.append(wedgeStartEvent)
+            elif thisEventIsEnd:
+                # add the end event (duration == 0)
+                # but add it to the same measure/voice as the wedge start event
+                # print(f'wedgeStopEvent: {event}', file=sys.stderr)
+                wedgeStartEvent: EventData = ownerScore.eventFromM21Object.get(wedge.id, None)
+                if wedgeStartEvent is None:
+                    print('wedgeStop with no wedgeStart, putting it in its own measure/voice', file=sys.stderr)
+                    endVoiceIndex: int = event.voiceIndex
+                    endSelf = self
+                else:
+                    endVoiceIndex: int = wedgeStartEvent.voiceIndex
+                    endSelf = wedgeStartEvent.ownerMeasure
+                wedgeEndEvent: EventData = EventData(wedge, -1, endVoiceIndex, endSelf,
+                                                     offsetInScore=wedgeEndTime,
+                                                     duration=0)
+                output.append(wedgeEndEvent)
+
+        return output
+
     def _parseEventsAtTopLevelOf(self, m21Stream: m21.stream.Measure):
         for elementIndex, element in enumerate(m21Stream):
             if 'Stream' in element.classes:
@@ -224,6 +295,10 @@ class MeasureData:
             event: EventData = EventData(element, elementIndex, -1, self)
             if event is not None:
                 self.events.append(event)
+
+                extraEvents: List[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
+                if extraEvents:
+                    self.events += extraEvents
 
     '''
     //////////////////////////////
@@ -256,10 +331,14 @@ class MeasureData:
         for event in self.events:
             startTime: HumNum = event.startTime
             duration: HumNum = event.duration
-            if duration == 0:
-                mapping[startTime].zeroDur.append(event)
-            else:
+            if duration != 0 or event.isDynamicWedgeStartOrStop:
+                # We treat dynamicWedge start/stop events as having duration even though
+                # the stop events do not.  This is so that they can go in the same
+                # slice with notes/rests, or on their own slice if they have a unique
+                # timestamp.
                 mapping[startTime].nonZeroDur.append(event)
+            else:
+                mapping[startTime].zeroDur.append(event)
 
         # debugging
         '''

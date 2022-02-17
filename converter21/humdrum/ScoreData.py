@@ -13,9 +13,11 @@
 # License:       BSD, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+from typing import Dict, Union
 import music21 as m21
 
 from converter21.humdrum import HumdrumInternalError
+from converter21.humdrum import EventData
 from converter21.humdrum import PartData
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
@@ -38,10 +40,13 @@ class ScoreData:
             raise HumdrumInternalError('ScoreData must be initialized with a music21 Score object')
 
         self.m21Score: m21.stream.Score = score
+        self.spannerBundle = ownerWriter.spannerBundle
         self.m21Metadata: m21.metadata.Metadata = score.metadata
         self._semiFlat: m21.stream.Score = None
 
         self.parts: [PartData] = []
+
+        self.eventFromM21Object: Dict[Union[int, str], EventData] = {}
 
         # Following staff group code stolen from musicxml exporter in music21.
         # Keep it up-to-date!

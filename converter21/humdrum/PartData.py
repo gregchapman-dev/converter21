@@ -33,6 +33,7 @@ class PartData:
         from converter21.humdrum import ScoreData
         ownerScore: ScoreData
         self.ownerScore = ownerScore
+        self.spannerBundle = ownerScore.spannerBundle
         self._partIndex = partIndex
 
         # partStaves will be a list of one Part, or a list of multiple PartStaffs,

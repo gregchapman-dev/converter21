@@ -682,6 +682,12 @@ class HumdrumToken(HumHash):
     def previousToken0(self):
         return self._previousToken0
 
+    @property
+    def previousTokenN(self):
+        if self._previousTokens:
+            return self._previousTokens[-1]
+        return None
+
     def updatePreviousToken0(self):
         self._previousToken0 = self.previousToken(0)
 

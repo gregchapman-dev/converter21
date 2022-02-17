@@ -1,0 +1,72 @@
+**kern	**kern	**dynam
+*part1	*part1	*part1
+*staff2	*staff1	*staff1/2
+*clefF4	*clefG2	*clefG2
+*k[b-e-a-d-]	*k[b-e-a-d-]	*k[b-e-a-d-]
+*f:	*f:	*f:
+*M2/2	*M2/2	*M2/2
+=1	=1	=1
+!! weird case where the wedge ends on the first beat of a measure so you should
+!! choose the last note in the previous measure (and we don't, we make a 0-length
+!! rest), combined with two other problems: (1) the last note in the previous
+!! measure is a suppressed tremolo note, and (2) we put it in the measure containing
+!! the start wedge anyway (sigh).
+*tremolo	*	*
+8AAA-L	4c 4e-])	.
+8AA-	.	.
+8AAA-	4dd-'	.
+8AA-J	.	.
+8AAA-L	4cc'	<
+8AA-	.	.
+8AAA-	4dd-' 4gg'	.
+8AA-J	.	.
+=2	=2	=2
+8AAA-L	4cc' 4aa-'	.
+8AA-	.	.
+8AAA-	4gg' 4ddd-'	.
+8AA-J	.	.
+8AAA-L	4aa-' 4ccc'	.
+8AA-	.	.
+8AAA-	4gg' 4ddd-'	.
+8AA-J	.	.
+=3	=3	=3
+8AAA-L	4aa-' 4ccc'	[
+8AA-	.	.
+8AAA-	4r	.
+8AA-J	.	.
+8AAA-L	2r	.
+8AA-	.	.
+8AAA-	.	.
+8AA-J	.	.
+*Xtremolo	*	*
+=4	=4	=4
+!! start in one measure, end in another
+2d-	2cc	<
+2d-	2dd-	.
+=5	=5	=5
+2d-	2ee-	.
+2d-	2ff-	[
+=6	=6	=6
+!! start/stop on same note (special case: end is at end of note instead of at start of note)
+1A-	1dd-	ff >]
+=7	=7	=7
+!! stop then start again on null line to
+2d- 2f	(4cc]	<
+.	2b-	.
+.	.	[ >
+2d 2f	.	)
+.	4a-\	]
+=8	=8	=8
+!! stop then start again on non-null line
+8A-L	8r	.
+8e-	(8bL	.
+8A-	8dd-	.
+8e-J	8ccJ)	.
+8FL	8r	.
+8d	(8ddL	<
+8A-	8aa-	[ >
+8dJ	8ddJ)	]
+==	==	==
+*-	*-	*-
+!!!RDF**kern: > = above
+!!!RDF**kern: < = below

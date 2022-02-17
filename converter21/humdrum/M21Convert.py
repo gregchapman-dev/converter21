@@ -1445,23 +1445,28 @@ class M21Convert:
         return output
 
     @staticmethod
-    def getDynamicWedgeString(wedge: m21.dynamics.DynamicWedge, gnote: m21.note.GeneralNote) -> str:
+    def getDynamicWedgeString(wedge: m21.dynamics.DynamicWedge, isStart: bool, isEnd: bool) -> str:
         if not isinstance(wedge, m21.dynamics.DynamicWedge):
             return ''
 
         isCrescendo: bool = isinstance(wedge, m21.dynamics.Crescendo)
         isDiminuendo: bool = isinstance(wedge, m21.dynamics.Diminuendo)
-        isStart: bool = wedge.isFirst(gnote)
-        isEnd: bool = wedge.isLast(gnote)
 
-        if isStart and isCrescendo:
-            return '<'
-        if isStart and isDiminuendo:
-            return '>'
-        if isEnd and isCrescendo:
-            return '['
-        if isEnd and isDiminuendo:
-            return ']'
+        if isStart and isEnd:
+            # start and end in same string
+            if isCrescendo:
+                return '<['
+            if isDiminuendo:
+                return '>]'
+        else:
+            if isStart and isCrescendo:
+                return '<'
+            if isStart and isDiminuendo:
+                return '>'
+            if isEnd and isCrescendo:
+                return '['
+            if isEnd and isDiminuendo:
+                return ']'
 
         return ''
 
@@ -1471,44 +1476,46 @@ class M21Convert:
     // Tool_musicxml2hum::getDynamicsParameters --
     '''
     @staticmethod
-    def getDynamicsParameters(dynamic: Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge],
-                               gnote: m21.note.GeneralNote) -> str:
-        isSpanner: bool = None
-
-        if isinstance(dynamic, m21.dynamics.Dynamic):
-            isSpanner = False
-
-        if isinstance(dynamic, m21.dynamics.DynamicWedge):
-            isSpanner = True
-
-        if isSpanner is None:
-            # dynamic has invalid type
-            return ''
-
-        if isSpanner and not dynamic.isFirst(gnote):
-            # don't apply parameters to ends of hairpins.
+    def getDynamicParameters(dynamic: m21.dynamics.Dynamic) -> str:
+        if not isinstance(dynamic, m21.dynamics.Dynamic):
             return ''
 
         if hasattr(dynamic, 'placement'):
             # Dynamic.placement showed up in music21 v7
-            if dynamic.placement is None:
-                return ''
-
             if dynamic.placement == 'above':
                 return ':a'
 
             if dynamic.placement == 'below':
-                return ':b'
+                return '' # music21 never sets to None, always 'below', and humdrum default is below
         else:
             # in music21 v6 it's called Dynamic.positionPlacement
-            if dynamic.positionPlacement is None:
-                return ''
-
             if dynamic.positionPlacement == 'above':
                 return ':a'
 
             if dynamic.positionPlacement == 'below':
-                return ':b'
+                return '' # music21 never sets to None, always 'below', and humdrum default is below
+
+        return ''
+
+    @staticmethod
+    def getDynamicWedgeStartParameters(dynamic: m21.dynamics.DynamicWedge) -> str:
+        if not isinstance(dynamic, m21.dynamics.DynamicWedge):
+            return ''
+
+        if hasattr(dynamic, 'placement'):
+            # Dynamic.placement showed up in music21 v7
+            if dynamic.placement == 'above':
+                return ':a'
+
+            if dynamic.placement == 'below':
+                return '' # music21 never sets to None, always 'below', and humdrum default is below
+        else:
+            # in music21 v6 it's called Dynamic.positionPlacement
+            if dynamic.positionPlacement == 'above':
+                return ':a'
+
+            if dynamic.positionPlacement == 'below':
+                return '' # music21 never sets to None, always 'below', and humdrum default is below
 
         return ''
 

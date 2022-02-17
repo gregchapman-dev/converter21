@@ -3,6 +3,7 @@ import tempfile
 import argparse
 import sys
 from typing import List, Tuple
+import music21 as m21
 from music21.base import VERSION_STR
 
 from musicdiff.annotation import AnnScore
@@ -12,9 +13,15 @@ from musicdiff import Comparison
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
 
-def oplistSummary(op_list: List[Tuple[str]]) -> str:
+def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
+    obj = score.recurse().getElementById(theID)
+    return obj
+
+def oplistSummary(op_list: List[Tuple[str]], score1: m21.stream.Score, score2: m21.stream.Score) -> str:
     output: str = ''
     counts: dict = {}
+
+    # print(f'op_list = {op_list}', file=sys.stderr)
 
     counts['measure'] = 0
     counts['voice'] = 0
@@ -72,6 +79,24 @@ def oplistSummary(op_list: List[Tuple[str]]) -> str:
                         'delarticulation',
                         'editarticulation'):
             counts['articulation'] += 1
+        elif op[0] in ('extrains',
+                       'extradel',
+                       'extrasub',
+                       'extracontentedit',
+                       'extraoffsetedit',
+                       'extradurationedit'):
+            key: str = 'extra'
+            if op[1] is not None:
+                obj = getM21ObjectById(op[1].extra, score1)
+                if obj:
+                    key = obj.classes[0]
+            else:
+                obj = getM21ObjectById(op[2].extra, score2)
+                if obj:
+                    key = obj.classes[0]
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
 
     firstDone: bool = False
     for k, v in counts.items():
@@ -218,7 +243,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
         print(f'numDiffs = {numDiffs}', file=results)
         results.flush()
         if numDiffs > 0:
-            summ: str = '\t' + oplistSummary(op_list)
+            summ: str = '\t' + oplistSummary(op_list, score1, score2)
             print(summ)
             print(summ, file=results)
             results.flush()
@@ -269,6 +294,9 @@ with open(goodPath, 'w', encoding='utf-8') as goodf:
                     print(file, file=resultsf)
                     resultsf.flush()
                     continue
+
+#                 if file != '/Users/gregc/Documents/test/humdrum_beethoven_piano_sonatas/kern/sonata02-3.krn':
+#                     continue
 
                 if runTheDiff(Path(file), resultsf):
                     resultsf.flush()

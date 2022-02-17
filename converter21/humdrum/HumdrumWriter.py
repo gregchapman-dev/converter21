@@ -89,7 +89,7 @@ class HumdrumWriter:
     def __init__(self, obj: m21.prebase.ProtoM21Object):
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21Score: m21.stream.Score = None
-        self._spannerBundle = None
+        self.spannerBundle = None
         self._scoreData: ScoreData = None
         self._maxStaff: int = 0
 
@@ -226,7 +226,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             self._m21Score = self._m21Object
         del self._m21Object # everything after this uses self._m21Score
 
-        self._spannerBundle = self._m21Score.spannerBundle
+        self.spannerBundle = self._m21Score.spannerBundle
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -428,7 +428,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # pylint: enable=protected-access
 
     def _addHeaderRecords(self, outfile: HumdrumFile):
-        systemDecoration: str = self._getSystemDecoration(self._scoreData)
+        systemDecoration: str = self._getSystemDecoration()
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
 
@@ -578,21 +578,20 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     outfile.appendLine('!!!' + hdKey + colonBeforeValue + hdValue, asGlobalToken=True)
         # pylint: enable=protected-access
 
-    @staticmethod
-    def _getSystemDecoration(scoreData: ScoreData) -> str:
+    def _getSystemDecoration(self) -> str:
         output: str = ''
 
         # Find all the StaffGroups in the score, and use sg.spannerStorage.elements (the parts)
         # as well as sg.symbol and sg.barTogether from each one to generate a 'sN'-based
         # system-decoration string.
-        m21Score: m21.stream.Score = scoreData.m21Score
-        staffNumbersByM21Part: Dict[m21.stream.Part, int] = HumdrumWriter._getGlobalStaffNumbersForM21Parts(scoreData)
-        staffGroups: List[m21.layout.StaffGroup] = list(m21Score.spannerBundle.getByClass('StaffGroup'))
-        staffGroupTrees: List[M21StaffGroupTree] = HumdrumWriter._getStaffGroupTrees(
+        staffNumbersByM21Part: Dict[m21.stream.Part, int] = self._getGlobalStaffNumbersForM21Parts(
+                                                                    self._scoreData)
+        staffGroups: List[m21.layout.StaffGroup] = list(self.spannerBundle.getByClass('StaffGroup'))
+        staffGroupTrees: List[M21StaffGroupTree] = self._getStaffGroupTrees(
                                                                 staffGroups, staffNumbersByM21Part)
 
         for sgtree in staffGroupTrees:
-            output, _ = HumdrumWriter._appendRecursiveDecoString(output, sgtree)
+            output, _ = self._appendRecursiveDecoString(output, sgtree)
 
         return output
 
@@ -906,7 +905,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     print(f'\tSTi:   {event.staffIndex}', end='', file=sys.stderr)
                     print(f'\tVi:    {event.voiceIndex}', end='', file=sys.stderr)
                     print(f'\tDUR:   {event.duration}', end='', file=sys.stderr)
-                    print(f'\tTOKEN: {event.kernTokenString(self._spannerBundle)}',
+                    print(f'\tTOKEN: {event.kernTokenString(self.spannerBundle)}',
                                 end='', file=sys.stderr)
                     print(f'\tNAME:  {event.name}', end='', file=sys.stderr)
                     print('', file=sys.stderr) # line feed (one line per event)
@@ -1510,69 +1509,69 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         tokenString: str = ''
         layouts: [str] = []
-        tokenString, layouts = event.getNoteKernTokenStringAndLayouts(self._spannerBundle)
-        if '@' in tokenString:
-            self._hasTremolo = True
+        if not event.isDynamicWedgeStartOrStop:
+            tokenString, layouts = event.getNoteKernTokenStringAndLayouts()
+            if '@' in tokenString:
+                self._hasTremolo = True
 
-        if self.Debug:
-            print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
-            print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
-            print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
-            print(f'STn: {event.staffNumber}', end='\t', file=sys.stderr)
-            print(f'Vn: {event.voiceNumber}', end='\t', file=sys.stderr)
-            print(f'STi: {event.staffIndex}', end='\t', file=sys.stderr)
-            print(f'Vi: {event.voiceIndex}', end='\t', file=sys.stderr)
-            print(f'eName: {event.name}', file=sys.stderr)
+            if self.Debug:
+                print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
+                print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
+                print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
+                print(f'STn: {event.staffNumber}', end='\t', file=sys.stderr)
+                print(f'Vn: {event.voiceNumber}', end='\t', file=sys.stderr)
+                print(f'STi: {event.staffIndex}', end='\t', file=sys.stderr)
+                print(f'Vi: {event.voiceIndex}', end='\t', file=sys.stderr)
+                print(f'eName: {event.name}', file=sys.stderr)
 
-        token = HumdrumToken(tokenString)
-        outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(voiceIndex, token, event.duration)
-        for layoutString in layouts:
-            outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, layoutString)
+            token = HumdrumToken(tokenString)
+            outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(voiceIndex, token, event.duration)
+            for layoutString in layouts:
+                outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, layoutString)
 
-        vcount: int = self._addLyrics(outSlice.parts[partIndex].staves[staffIndex], event)
-        if vcount > 0:
-            event.reportVerseCountToOwner(staffIndex, vcount)
+            vcount: int = self._addLyrics(outSlice.parts[partIndex].staves[staffIndex], event)
+            if vcount > 0:
+                event.reportVerseCountToOwner(staffIndex, vcount)
 
-        hcount: int = self._addHarmony(outSlice.parts[partIndex], event, nowTime, partIndex)
-        if hcount > 0:
-            event.reportHarmonyCountToOwner(hcount)
+            hcount: int = self._addHarmony(outSlice.parts[partIndex], event, nowTime, partIndex)
+            if hcount > 0:
+                event.reportHarmonyCountToOwner(hcount)
 
-# LATER: implement figured bass
-#         fcount: int = self._addFiguredBass(outSlice.parts[partIndex], event, nowTime, partIndex)
-#         if fcount > 0:
-#             event.reportFiguredBassToOwner()
+    # LATER: implement figured bass
+    #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex], event, nowTime, partIndex)
+    #         if fcount > 0:
+    #             event.reportFiguredBassToOwner()
 
-# LATER: implement brackets for *lig/*Xlig and *col/*Xcol
-#         if self._currentBrackets[partIndex]:
-#             for bracket in self._currentBrackets[partIndex]:
-#                 event.bracket = bracket
-#             self._currentBrackets[partIndex] = []
-#             self._addBrackets(outSlice, outgm, event, nowTime, partIndex)
+    # LATER: implement brackets for *lig/*Xlig and *col/*Xcol
+    #         if self._currentBrackets[partIndex]:
+    #             for bracket in self._currentBrackets[partIndex]:
+    #                 event.bracket = bracket
+    #             self._currentBrackets[partIndex] = []
+    #             self._addBrackets(outSlice, outgm, event, nowTime, partIndex)
 
-        if event.texts or self._currentTexts:
-            # self._currentTexts contains any zero-duration (unassociated) TextExpressions,
-            # that could be in any part/staff/voice.  We'll take the opportunity to add them
-            # now.
-            # event.texts contains any TextExpressions associated with this note (in this
-            # part/staff/voice).
-            self._addTexts(outSlice, outgm, event, self._currentTexts)
-            self._currentTexts = [] # they've all been added
+            if event.texts or self._currentTexts:
+                # self._currentTexts contains any zero-duration (unassociated) TextExpressions,
+                # that could be in any part/staff/voice.  We'll take the opportunity to add them
+                # now.
+                # event.texts contains any TextExpressions associated with this note (in this
+                # part/staff/voice).
+                self._addTexts(outSlice, outgm, event, self._currentTexts)
+                self._currentTexts = [] # they've all been added
 
-        if self._currentTempos:
-            # self._currentTempos contains all the TempoIndications that could be in any part.
-            # There is no event.tempos (music21 tempos are always unassociated).  But we take
-            # the opportunity to add them now.
-            self._addTempos(outSlice, outgm, self._currentTempos)
-            self._currentTempos = [] # they've all been added
+            if self._currentTempos:
+                # self._currentTempos contains all the TempoIndications that could be in any part.
+                # There is no event.tempos (music21 tempos are always unassociated).  But we take
+                # the opportunity to add them now.
+                self._addTempos(outSlice, outgm, self._currentTempos)
+                self._currentTempos = [] # they've all been added
 
-        if event.dynamics(self._spannerBundle) or self._currentDynamics:
+        if event.isDynamicWedgeStartOrStop or self._currentDynamics:
             # self._currentDynamics contains any zero-duration (unassociated) dynamics ('pp' et al)
             # that could be in any part/staff.
-            # event.dynamics() contains any "durational" dynamics (multi-note wedges starts or stops)
-            # associated with this note, in this part/staff.
+            # event has a single dynamic wedge start or stop, that is in this part/staff.
             self._addDynamics(outSlice, outgm, event, self._currentDynamics)
             self._currentDynamics = []
-            if event.dynamics(self._spannerBundle):
+            if event.isDynamicWedgeStartOrStop:
                 event.reportDynamicToOwner() # reports that dynamics exist in this part/staff
 
         # 888 might need special hairpin ending processing here (or might be musicXML-specific).
@@ -1585,51 +1584,68 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addDynamic -- extract any dynamics for the event
     '''
-    def _addDynamics(self, outSlice: GridSlice, outgm: GridMeasure,
+    @staticmethod
+    def _addDynamics(outSlice: GridSlice, outgm: GridMeasure,
                      event: EventData, extraDynamics: List[Tuple[int, int, m21.dynamics.Dynamic]]):
 
-        dynamics: List[Tuple[int, int, Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]]] = []
+        dynamics: List[Tuple[int, int, str]] = []
 
-        for dynamicWedge in event.dynamics(self._spannerBundle):
-            dynamics.append((event.partIndex, event.staffIndex, dynamicWedge))
+        if event.isDynamicWedgeStartOrStop:
+            dynamics.append((event.partIndex, event.staffIndex, event.getDynamicWedgeString()))
 
-        if extraDynamics:
-            dynamics += extraDynamics
+        for partIndex, staffIndex, dynamic in extraDynamics:
+            dstring = M21Convert.getDynamicString(dynamic)
+            dynamics.append((partIndex, staffIndex, dstring))
+
+        if not dynamics:
+            return # we shouldn't have been called
 
         dynTokens: Dict[Tuple[int, int], HumdrumToken] = {}
         moreThanOneDynamic: Dict[Tuple[int, int], bool] = {}
-        for partIndex, staffIndex, dynamic in dynamics:
-            dstring: str = ''
-            if isinstance(dynamic, m21.dynamics.Dynamic):
-                dstring = M21Convert.getDynamicString(dynamic)
-            elif isinstance(dynamic, m21.dynamics.DynamicWedge):
-                dstring = M21Convert.getDynamicWedgeString(dynamic, event.m21Object)
+        currentDynamicIndex: Dict[Tuple[int, int], int] = {}
 
-            if dstring:
-                if dynTokens.get((partIndex, staffIndex), None) is None:
-                    dynTokens[(partIndex, staffIndex)] = HumdrumToken(dstring)
-                    moreThanOneDynamic[(partIndex, staffIndex)] = False
-                else:
-                    dynTokens[(partIndex, staffIndex)].text += ' ' + dstring
-                    moreThanOneDynamic[(partIndex, staffIndex)] = False
+        for partIndex, staffIndex, dstring in dynamics:
+            if not dstring:
+                continue
+
+            if dynTokens.get((partIndex, staffIndex), None) is None:
+                dynTokens[(partIndex, staffIndex)] = HumdrumToken(dstring)
+                moreThanOneDynamic[(partIndex, staffIndex)] = False
+            else:
+                dynTokens[(partIndex, staffIndex)].text += ' ' + dstring
+                moreThanOneDynamic[(partIndex, staffIndex)] = True
+                currentDynamicIndex[(partIndex, staffIndex)] = 1 # ':n=' is 1-based
 
         for (partIndex, staffIndex), token in dynTokens.items(): # key is Tuple[int, int], value is token
-            outSlice.parts[partIndex].staves[staffIndex].dynamics = token
+            if outSlice.parts[partIndex].staves[staffIndex].dynamics is None:
+                outSlice.parts[partIndex].staves[staffIndex].dynamics = token
+            else:
+                outSlice.parts[partIndex].staves[staffIndex].dynamics.text += ' ' + token.text
+                moreThanOneDynamic[(partIndex, staffIndex)] = True
+                currentDynamicIndex[(partIndex, staffIndex)] = 1 # ':n=' is 1-based
 
         # add any necessary layout params
-        for i, (partIndex, staffIndex, dynamic) in enumerate(dynamics):
-            dparam: str = M21Convert.getDynamicsParameters(dynamic, event.m21Object)
+
+        # first the one DynamicWedge start or stop that is this event (but only if it's a start)
+        if event.isDynamicWedgeStart:
+            dparam: str = M21Convert.getDynamicWedgeStartParameters(event.m21Object)
             if dparam:
-                fullParam: str = ''
-                if isinstance(dynamic, m21.dynamics.Dynamic):
-                    fullParam += '!LO:DY'
-                elif isinstance(dynamic, m21.dynamics.DynamicWedge):
-                    fullParam += '!LO:HP'
-                else:
-                    continue
+                fullParam: str = '!LO:HP'
+                if moreThanOneDynamic[(partIndex, staffIndex)]:
+                    fullParam += ':n=' + currentDynamicIndex[(partIndex, staffIndex)]
+                    currentDynamicIndex[(partIndex, staffIndex)] += 1
+                fullParam += dparam
+                outgm.addDynamicsLayoutParameters(outSlice, partIndex, staffIndex, fullParam)
+
+        # next the Dynamic objects ('pp', etc) in extraDynamics
+        for partIndex, staffIndex, dynamic in extraDynamics:
+            dparam: str = M21Convert.getDynamicParameters(dynamic)
+            if dparam:
+                fullParam: str = '!LO:DY'
 
                 if moreThanOneDynamic[(partIndex, staffIndex)]:
-                    fullParam += ':n=' + str(i+1) # :n= is 1-based
+                    fullParam += ':n=' + currentDynamicIndex[(partIndex, staffIndex)]
+                    currentDynamicIndex[(partIndex, staffIndex)] += 1
 
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, staffIndex, fullParam)
