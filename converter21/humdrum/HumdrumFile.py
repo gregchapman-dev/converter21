@@ -2217,8 +2217,8 @@ class HumdrumFile(HumdrumFileContent):
             self._endBeam(layerData, tokenIdx, newState.previousBeamTokenIdx, tremoloBeam=tremoloBeam)
             newState.inBeam = False
             newState.previousBeamTokenIdx = -1
-        elif newState.inBeam and not layerData[tokenIdx].isRest:
-            # continue the beam (but not if it's a rest, they can be within
+        elif newState.inBeam and not layerData[tokenIdx].isRest and not layerData[tokenIdx].isGrace:
+            # continue the beam (but not if it's a rest or grace note, they can be within
             # the beam duration, but they won't have beams, obviously)
             self._continueBeam(layerData, tokenIdx, newState.previousBeamTokenIdx)
             newState.previousBeamTokenIdx = tokenIdx
