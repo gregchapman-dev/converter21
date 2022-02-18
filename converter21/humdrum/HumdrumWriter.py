@@ -244,7 +244,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if not status:
             return status
 
-        outgrid.removeRedundantClefChanges()
+#         outgrid.removeRedundantClefChanges() # don't do this; we're not in the business of prettying things
 #         outgrid.removeSibeliusIncipit()
 
         # transfer verse counts from parts/staves to HumGrid:
@@ -961,6 +961,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             status = status and self._convertNowEvents(gm, nowEvents, processTime)
         #end loop over slices (i.e. events in the measure across all partstaves)
 
+        if self._currentTexts or self._currentDynamics or self._currentTempos:
+            # one more _addEvent (no slice, no event) to flush out these
+            # things that have to be exported as a side-effect of the next
+            # durational event (but we've hit end of measure, so there is
+            # no such event to process, unless we're willing to let them
+            # move to the next measure... which we are NOT).
+            self._addEvent(None, gm, None, processTime)
+
         #888 if self._offsetHarmony:
             #888 self._insertOffsetHarmonyIntoMeasure(gm)
         #888 if self._offsetFiguredBass:
@@ -1503,53 +1511,59 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addEvent -- Add a note or rest to a grid slice
     '''
     def _addEvent(self, outSlice: GridSlice, outgm: MeasureData, event: EventData, nowTime: HumNum):
-        partIndex: int = event.partIndex
-        staffIndex: int = event.staffIndex
-        voiceIndex: int = event.voiceIndex
+        partIndex: int = None # event.partIndex
+        staffIndex: int = None # event.staffIndex
+        voiceIndex: int = None # event.voiceIndex
+
+        if event is not None:
+            partIndex = event.partIndex
+            staffIndex = event.staffIndex
+            voiceIndex = event.voiceIndex
 
         tokenString: str = ''
         layouts: [str] = []
-        if not event.isDynamicWedgeStartOrStop:
-            tokenString, layouts = event.getNoteKernTokenStringAndLayouts()
-            if '@' in tokenString:
-                self._hasTremolo = True
+        if event is None or not event.isDynamicWedgeStartOrStop:
+            if event is not None:
+                tokenString, layouts = event.getNoteKernTokenStringAndLayouts()
+                if '@' in tokenString:
+                    self._hasTremolo = True
 
-            if self.Debug:
-                print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
-                print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
-                print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
-                print(f'STn: {event.staffNumber}', end='\t', file=sys.stderr)
-                print(f'Vn: {event.voiceNumber}', end='\t', file=sys.stderr)
-                print(f'STi: {event.staffIndex}', end='\t', file=sys.stderr)
-                print(f'Vi: {event.voiceIndex}', end='\t', file=sys.stderr)
-                print(f'eName: {event.name}', file=sys.stderr)
+                if self.Debug:
+                    print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
+                    print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
+                    print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
+                    print(f'STn: {event.staffNumber}', end='\t', file=sys.stderr)
+                    print(f'Vn: {event.voiceNumber}', end='\t', file=sys.stderr)
+                    print(f'STi: {event.staffIndex}', end='\t', file=sys.stderr)
+                    print(f'Vi: {event.voiceIndex}', end='\t', file=sys.stderr)
+                    print(f'eName: {event.name}', file=sys.stderr)
 
-            token = HumdrumToken(tokenString)
-            outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(voiceIndex, token, event.duration)
-            for layoutString in layouts:
-                outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, layoutString)
+                token = HumdrumToken(tokenString)
+                outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(voiceIndex, token, event.duration)
+                for layoutString in layouts:
+                    outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, layoutString)
 
-            vcount: int = self._addLyrics(outSlice.parts[partIndex].staves[staffIndex], event)
-            if vcount > 0:
-                event.reportVerseCountToOwner(staffIndex, vcount)
+                vcount: int = self._addLyrics(outSlice.parts[partIndex].staves[staffIndex], event)
+                if vcount > 0:
+                    event.reportVerseCountToOwner(staffIndex, vcount)
 
-            hcount: int = self._addHarmony(outSlice.parts[partIndex], event, nowTime, partIndex)
-            if hcount > 0:
-                event.reportHarmonyCountToOwner(hcount)
+                hcount: int = self._addHarmony(outSlice.parts[partIndex], event, nowTime, partIndex)
+                if hcount > 0:
+                    event.reportHarmonyCountToOwner(hcount)
 
-    # LATER: implement figured bass
-    #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex], event, nowTime, partIndex)
-    #         if fcount > 0:
-    #             event.reportFiguredBassToOwner()
+        # LATER: implement figured bass
+        #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex], event, nowTime, partIndex)
+        #         if fcount > 0:
+        #             event.reportFiguredBassToOwner()
 
-    # LATER: implement brackets for *lig/*Xlig and *col/*Xcol
-    #         if self._currentBrackets[partIndex]:
-    #             for bracket in self._currentBrackets[partIndex]:
-    #                 event.bracket = bracket
-    #             self._currentBrackets[partIndex] = []
-    #             self._addBrackets(outSlice, outgm, event, nowTime, partIndex)
+        # LATER: implement brackets for *lig/*Xlig and *col/*Xcol
+        #         if self._currentBrackets[partIndex]:
+        #             for bracket in self._currentBrackets[partIndex]:
+        #                 event.bracket = bracket
+        #             self._currentBrackets[partIndex] = []
+        #             self._addBrackets(outSlice, outgm, event, nowTime, partIndex)
 
-            if event.texts or self._currentTexts:
+            if (event is not None and event.texts) or self._currentTexts:
                 # self._currentTexts contains any zero-duration (unassociated) TextExpressions,
                 # that could be in any part/staff/voice.  We'll take the opportunity to add them
                 # now.
@@ -1565,7 +1579,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 self._addTempos(outSlice, outgm, self._currentTempos)
                 self._currentTempos = [] # they've all been added
 
-        if event.isDynamicWedgeStartOrStop or self._currentDynamics:
+        if (event is not None and event.isDynamicWedgeStartOrStop) or self._currentDynamics:
             # self._currentDynamics contains any zero-duration (unassociated) dynamics ('pp' et al)
             # that could be in any part/staff.
             # event has a single dynamic wedge start or stop, that is in this part/staff.
@@ -1590,7 +1604,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         dynamics: List[Tuple[int, int, str]] = []
 
-        if event.isDynamicWedgeStartOrStop:
+        eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
+        eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
+
+        if eventIsDynamicWedge:
             dynamics.append((event.partIndex, event.staffIndex, event.getDynamicWedgeString()))
 
         for partIndex, staffIndex, dynamic in extraDynamics:
@@ -1627,7 +1644,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # add any necessary layout params
 
         # first the one DynamicWedge start or stop that is this event (but only if it's a start)
-        if event.isDynamicWedgeStart:
+        if eventIsDynamicWedgeStart:
             dparam: str = M21Convert.getDynamicWedgeStartParameters(event.m21Object)
             if dparam:
                 fullParam: str = '!LO:HP'
@@ -1644,7 +1661,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 fullParam: str = '!LO:DY'
 
                 if moreThanOneDynamic[(partIndex, staffIndex)]:
-                    fullParam += ':n=' + currentDynamicIndex[(partIndex, staffIndex)]
+                    fullParam += ':n=' + str(currentDynamicIndex[(partIndex, staffIndex)])
                     currentDynamicIndex[(partIndex, staffIndex)] += 1
 
                 fullParam += dparam
@@ -1659,14 +1676,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                         outgm: GridMeasure,
                         event: EventData,
                         extraTexts: List[Tuple[int, int, int, m21.expressions.TextExpression]]):
-        partIndex: int = event.partIndex
-        staffIndex: int = event.staffIndex
-        voiceIndex: int = event.voiceIndex
-
-        for textExpression in event.texts:
-            self._addText(outSlice, outgm,
-                          partIndex, staffIndex, voiceIndex,
-                          textExpression)
+        if event is not None:
+            partIndex: int = event.partIndex
+            staffIndex: int = event.staffIndex
+            voiceIndex: int = event.voiceIndex
+            for textExpression in event.texts:
+                self._addText(outSlice, outgm,
+                              partIndex, staffIndex, voiceIndex,
+                              textExpression)
 
         # extraTexts come each with their own partIndex, staffIndex, voiceIndex
         for partIndex, staffIndex, voiceIndex, textExpression in extraTexts:

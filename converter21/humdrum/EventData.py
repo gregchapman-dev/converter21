@@ -69,7 +69,7 @@ class EventData:
             self._startTime = offsetInScore
         else:
             ownerScore = self.ownerMeasure.ownerStaff.ownerPart.ownerScore
-            self._startTime = HumNum(ownerScore.getSemiFlatScore().elementOffset(element))
+            self._startTime = HumNum(element.getOffsetInHierarchy(ownerScore.m21Score))
 
         if duration is not None:
             self._duration = duration

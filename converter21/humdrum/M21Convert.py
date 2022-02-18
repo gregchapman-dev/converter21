@@ -32,8 +32,8 @@ class M21Convert:
     humdrumMensurationSymbolToM21TimeSignatureSymbol = {
         'c':    'common',   # modern common time (4/4)
         'c|':   'cut',      # modern cut time (2/2)
-        'C':    'common',   # actually mensural-style common, but music21 doesn't know that one
-        'C|':   'cut',      # actually mensural-style cut, but music21 doesn't know that one
+#       'C':    '',        # mensural common (not supported in music21)
+#       'C|':    '',       # mensural cut (2/1) (not supported in music21)
 #       'O':    '',        # mensural 'O' (not supported in music21)
 #       'O|':   '',        # mensural 'cut O' (not supported in music21)
     }
@@ -1433,16 +1433,26 @@ class M21Convert:
 
         return None
 
+    dynamicPatterns = [
+        # These have to be in a search order where you won't find a substring of the real pattern first.
+        # For example, if you reverse the middle two, then 'fp' will match as 'f' before it matches as 'fp'.
+        'm(f|p)',      # 'mf', 'mp'
+        's?f+z?p+',     # 'fp', 'sfzp', 'ffp' etc
+        '[sr]?f+z?',    # 'sf, 'sfz', 'f', 'fff', etc
+        'p+',           # 'p', 'ppp', etc
+    ]
     @staticmethod
     def getDynamicString(dynamic: m21.dynamics.Dynamic) -> str:
         if not isinstance(dynamic, m21.dynamics.Dynamic):
             return ''
 
-        output: str = dynamic.value
-        if output == 'rf':  # C++ code does this mapping, not sure why
-            output = 'rfz'
+        for patt in M21Convert.dynamicPatterns:
+            m = re.search(patt, dynamic.value)
+            if m:
+                output = m.group(0)
+                return output
 
-        return output
+        return dynamic.value
 
     @staticmethod
     def getDynamicWedgeString(wedge: m21.dynamics.DynamicWedge, isStart: bool, isEnd: bool) -> str:
@@ -1480,22 +1490,37 @@ class M21Convert:
         if not isinstance(dynamic, m21.dynamics.Dynamic):
             return ''
 
+        output: str = ''
         if hasattr(dynamic, 'placement'):
             # Dynamic.placement showed up in music21 v7
             if dynamic.placement == 'above':
-                return ':a'
+                output += ':a'
 
             if dynamic.placement == 'below':
-                return '' # music21 never sets to None, always 'below', and humdrum default is below
+                pass # music21 never sets to None, defaults to 'below', and humdrum default is below
         else:
             # in music21 v6 it's called Dynamic.positionPlacement
             if dynamic.positionPlacement == 'above':
-                return ':a'
+                output += ':a'
 
             if dynamic.positionPlacement == 'below':
-                return '' # music21 never sets to None, always 'below', and humdrum default is below
+                pass # music21 never sets to None, defaults to 'below', and humdrum default is below
 
-        return ''
+        # right justification
+        if dynamic.style.justify == 'right':
+            output += ':rj'
+
+        # t='sempre %s' (if dynamic.value is 'ff sempre legato', for example)
+        if M21Convert.getDynamicString(dynamic) != dynamic.value:
+            for patt in M21Convert.dynamicPatterns:
+                m = re.search(patt, dynamic.value)
+                if m:
+                    dynstr: str = m.group(0)
+                    fmt: str = re.sub(dynstr, '%s', dynamic.value)
+                    output += ':t=' + fmt
+                    break
+
+        return output
 
     @staticmethod
     def getDynamicWedgeStartParameters(dynamic: m21.dynamics.DynamicWedge) -> str:

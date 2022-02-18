@@ -15,7 +15,7 @@ from typing import Union, List
 #from fractions import Fraction
 
 import music21 as m21
-from converter21.humdrum import HumdrumExportError
+# from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import EventData
@@ -172,13 +172,16 @@ class MeasureData:
             # treat the measure itself as voice 0
             self._parseEventsIn(self.m21Measure, 0)
         else:
-            # parse the 0-offset non-streams first...
-            self._parseEventsAtTopLevelOf(self.m21Measure)
-            # ... then parse the voices
+            # first parse the voices...
             for voiceIndex, voice in enumerate(self.m21Measure.voices):
                 emptyStartDuration: HumNum = HumNum(voice.offset)
                 emptyEndDuration: HumNum = HumNum(self.duration - (HumNum(voice.offset) + HumNum(voice.duration.quarterLength)))
                 self._parseEventsIn(voice, voiceIndex, emptyStartDuration, emptyEndDuration)
+
+            # ... then parse the non-streams last, so that the ending barline lands after
+            # any objects in the voices that are also at the last offset in the measure
+            # (e.g. TextExpressions after the last note in the measure).
+            self._parseEventsAtTopLevelOf(self.m21Measure)
 
         self._sortEvents()
 
@@ -199,8 +202,8 @@ class MeasureData:
                     self.events.append(event)
                 startTime += duration
 
-        m21FlatStream: Union[m21.stream.Voice, m21.stream.Measure] = m21Stream.flat
-        for elementIndex, element in enumerate(m21FlatStream):
+        for elementIndex, element in enumerate(m21Stream.recurse()
+                                                    .getElementsNotOfClass(m21.stream.Stream)):
             event: EventData = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
                 self.events.append(event)
@@ -273,7 +276,7 @@ class MeasureData:
                 # print(f'wedgeStopEvent: {event}', file=sys.stderr)
                 wedgeStartEvent: EventData = ownerScore.eventFromM21Object.get(wedge.id, None)
                 if wedgeStartEvent is None:
-                    print('wedgeStop with no wedgeStart, putting it in its own measure/voice', file=sys.stderr)
+                    # print('wedgeStop with no wedgeStart, putting it in its own measure/voice', file=sys.stderr)
                     endVoiceIndex: int = event.voiceIndex
                     endSelf = self
                 else:

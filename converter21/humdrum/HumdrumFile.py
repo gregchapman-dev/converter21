@@ -5935,7 +5935,7 @@ class HumdrumFile(HumdrumFileContent):
                 else:
                     hairpins += ch
 
-            if re.search('^[sr]?f+z?$', letters): # 'sf', 'sfz', 'f', 'fff', etc ('rfz'? really?)
+            if re.search('^[sr]?f+z?$', letters): # 'sf', 'sfz', 'f', 'fff', etc
                 dynamic = letters
             elif re.search('^p+$', letters): # 'p', 'ppp', etc
                 dynamic = letters
@@ -6587,7 +6587,8 @@ class HumdrumFile(HumdrumFileContent):
             isFirst = self._isFirstTokenOnStaff(token)
 
         if not isFirst:
-            # Don't insert multiple global directions.
+            # Don't insert multiple global directions per staff (see below where we
+            # additionally only put a global direction in one particular staff).
             return insertedIntoVoice
 
         hps: HumParamSet = token.getLinkedParameterSet(index)
@@ -6620,7 +6621,9 @@ class HumdrumFile(HumdrumFileContent):
         # justification == 1 means right justified
         justification: int = 0
 
-# TODO: merge new iohumdrum.cpp changes --gregc 01July2021
+# NOPE: merge new iohumdrum.cpp changes --gregc 01July2021
+# Actually, I don't want to change to right justification just because of where the text is.
+# Accuracy over prettiness during export. -- gregc
 #     if (token->isBarline()) {
 #         hum::HumNum startdur = token->getDurationFromStart();
 #         hum::HumdrumFile *hfile = token->getOwner()->getOwner();

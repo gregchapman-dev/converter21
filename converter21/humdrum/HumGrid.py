@@ -337,7 +337,7 @@ class HumGrid:
         self.expandLocalCommentLayers()
         self.calculateGridDurations()
         # move clefs from start of measure to end of prev measure (skip the first measure)
-        self.adjustClefChanges()
+#        self.adjustClefChanges() # Don't do that. Humdrum don't care.
         self.addNullTokens()
 #         self.addInvisibleRestsInFirstTrack() what the heck is this for? It's doing bad stuff.
         self.addMeasureLines()
@@ -682,7 +682,6 @@ class HumGrid:
     // HumGrid::adjustClefChanges -- If a clef change starts at the
     //     beginning of a measure, move it to before the measure (unless
     //     the measure has zero duration).
-    '''
     def adjustClefChanges(self):
         for i in range(1, len(self.measures)):
             thisMeasure: GridMeasure = self.measures[i]
@@ -704,6 +703,7 @@ class HumGrid:
             # move clef to end of previous measure
             thisMeasure.slices.pop(0)
             prevMeasure.slices.append(firstSliceOfThisMeasure)
+    '''
 
     def checkForMissingNullTokens(self, sliceType=None):
         for i, gridSlice in enumerate(self._allSlices):
@@ -2027,7 +2027,6 @@ class HumGrid:
     //
     // HumGrid::removeRedundantClefChanges -- Will also have to consider
     //		the meter signature.
-    '''
     def removeRedundantClefChanges(self):
         # curClef is a list of the current staff on the part:staff.
         curClef: [[str]] = []
@@ -2078,6 +2077,7 @@ class HumGrid:
                 # the clefSlice.
                 if allEmpty:
                     clefSlice.invalidate()
+    '''
 
     '''
     //////////////////////////////
