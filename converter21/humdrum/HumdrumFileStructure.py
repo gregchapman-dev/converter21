@@ -256,7 +256,7 @@ class HumdrumFileStructure(HumdrumFileBase):
         success = self.analyzeNullLineRhythms()
         if not success:
             return False
-        self.fillInNegativeStartTimes()
+        self.fillInMissingStartTimes()
         self.assignLineDurations()
         success = self.analyzeMeter()
         if not success:
@@ -549,6 +549,15 @@ Line: {line.text}''')
             if not line.hasSpines:
                 continue
 
+            if line.isBarline:
+                # We start from scratch in each measure.  This is because, if there is a null data line
+                # as the first line in a measure, we don't want it to start halfway from last real note
+                # in previous measure to first real note in this measure.  Any such unprocessed null
+                # lines will end up inheriting their start time from the first non-null note in this
+                # measure, during fillInMissingStartTimes' first loop (backwards) over the lines.
+                previousLine = None
+                nullLines = []
+
             if line.isAllRhythmicNull:
                 if line.isData:
                     nullLines.append(line)
@@ -557,7 +566,7 @@ Line: {line.text}''')
             if line.durationFromStart is None:
                 if line.isData:
                     return self.setParseError(
-f'''Error: found an unexpected negative duration on line {line.durationFromStart}
+f'''Error: found an unexpectedly missing durationFromStart on data line {line.durationFromStart}
 Line: {line.text}''')
                 continue
 
@@ -586,9 +595,10 @@ Line: {line.text}''')
     //    after the initial rhythmAnalysis mean that the lines are not data line.
     //    Duplicate the duration of the next non-negative duration for all negative
     //    durations.
+        "negative" is now "None" -- gregc
     '''
-    def fillInNegativeStartTimes(self):
-        lastDur: HumNum = HumNum(-1)
+    def fillInMissingStartTimes(self):
+        lastDur: HumNum = None
 
         for line in reversed(self._lines):
             if line.durationFromStart is None and lastDur is not None:

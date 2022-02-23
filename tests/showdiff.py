@@ -59,12 +59,12 @@ def runTheFullTest(krnPath: Path):
 
     # and then try to parse the exported humdrum file
 
-    hfb = HumdrumFile(str(fp))
-#     if not hfb.isValid:
+    hfb2 = HumdrumFile(str(fp))
+#     if not hfb2.isValid:
 #         score1.show('musicxml.pdf')
-    assert hfb.isValid
+    assert hfb2.isValid
 
-    score2 = hfb.createMusic21Stream()
+    score2 = hfb2.createMusic21Stream()
 #     if score2 is None or not score2.isWellFormedNotation():
 #         score1.show('musicxml.pdf')
     assert score2 is not None

@@ -1585,7 +1585,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             # event has a single dynamic wedge start or stop, that is in this part/staff.
             self._addDynamics(outSlice, outgm, event, self._currentDynamics)
             self._currentDynamics = []
-            if event.isDynamicWedgeStartOrStop:
+            if event is not None and event.isDynamicWedgeStartOrStop:
                 event.reportDynamicToOwner() # reports that dynamics exist in this part/staff
 
         # 888 might need special hairpin ending processing here (or might be musicXML-specific).
@@ -1634,6 +1634,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 currentDynamicIndex[(partIndex, staffIndex)] = 1 # ':n=' is 1-based
 
         for (partIndex, staffIndex), token in dynTokens.items(): # key is Tuple[int, int], value is token
+            if outSlice is None:
+                # we better make one, timestamped at end of measure, type Notes (even though it
+                # will only have '.' in the **kern spines, and a 'p' (or whatever) in the **dynam spine)
+                outSlice = GridSlice(outgm, outgm.timestamp+outgm.duration, SliceType.Notes)
+                outSlice.initializeBySlice(outgm.slices[-1])
+
             if outSlice.parts[partIndex].staves[staffIndex].dynamics is None:
                 outSlice.parts[partIndex].staves[staffIndex].dynamics = token
             else:
@@ -1649,7 +1655,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             if dparam:
                 fullParam: str = '!LO:HP'
                 if moreThanOneDynamic[(partIndex, staffIndex)]:
-                    fullParam += ':n=' + currentDynamicIndex[(partIndex, staffIndex)]
+                    fullParam += ':n=' + str(currentDynamicIndex[(partIndex, staffIndex)])
                     currentDynamicIndex[(partIndex, staffIndex)] += 1
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, staffIndex, fullParam)

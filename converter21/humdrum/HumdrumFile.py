@@ -689,10 +689,10 @@ class HumdrumFile(HumdrumFileContent):
                 lineIdx = endIdx
                 continue
 
-            offsetInScore = self._lines[startIdx].durationFromStart
+            offsetInScore: HumNum = self._lines[startIdx].durationFromStart
             if offsetInScore < 0:
                 print(f'offsetInScore(startIdx={startIdx}) is negative: {offsetInScore}', file=sys.stderr)
-                offsetInScore = 0
+                offsetInScore = HumNum(0)
 
             self._setupSystemMeasures(measureKey, offsetInScore)
 
@@ -701,8 +701,6 @@ class HumdrumFile(HumdrumFileContent):
             for li in range(startIdx, endIdx): # leave endIdx for the next measure
                 self._measureIndexFromLineIndex[li] = measureIndex
 
-            # add the current measure's duration to offsetInScore to help position the next measure
-            offsetInScore += self._lines[startIdx].durationToBarline
             lineIdx = endIdx
 
     '''
@@ -1334,12 +1332,12 @@ class HumdrumFile(HumdrumFileContent):
 
                 output[staffIndex][layerIndex].append(token)
 
-                # if layerIndex == 0 and token.isClef:
-                #     layerCount = self._getCurrentLayerCount(token)
-                #     # Duplicate clef in all layers (needed for cases when
-                #     # a secondary layer ends before the end of a measure.
-                #     for k in range(layerCount, len(output[staffIndex])):
-                #         output[staffIndex][k].append(token)
+                if layerIndex == 0 and token.isClef:
+                    layerCount = self._getCurrentLayerCount(token)
+                    # Duplicate clef in all layers (needed for cases when
+                    # a secondary layer ends before the end of a measure.
+                    for k in range(layerCount, len(output[staffIndex])):
+                        output[staffIndex][k].append(token)
 
         return output
 
@@ -4060,13 +4058,17 @@ class HumdrumFile(HumdrumFileContent):
     def _createNote(infoHash: HumHash = None) -> m21.note.Note:
         # infoHash is generally the token for which the note is being created,
         # but we declare it as a HumHash, since the only thing we read is
-        # 'spannerHolder'.
+        # 'placeHolder'.
         # The actual construction of the note contents from the token is done elsewhere.
-        spannerHolder: m21.note.GeneralNote = None
+        placeHolder: m21.note.GeneralNote = None
         if infoHash:
-            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+            placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
 
-        note: m21.note.Note = M21Utilities.createNote(spannerHolder)
+        note: m21.note.Note = M21Utilities.createNote(placeHolder)
+
+        if placeHolder is not None:
+            infoHash.setValue('music21', 'placeHolder', None)
+
         return note
 
     def _createAndConvertNote(self, token: HumdrumToken, staffAdjust: int, measureIndex: int, staffIndex: int, layerIndex: int, subTokenIdx: int = -1) -> m21.note.Note:
@@ -4077,29 +4079,25 @@ class HumdrumFile(HumdrumFileContent):
         return note
 
     @staticmethod
-    def _createUnpitched(infoHash: HumHash = None) -> m21.note.Note:
-        # infoHash is generally the token for which the note is being created,
-        # but we declare it as a HumHash, since the only thing we read is
-        # 'spannerHolder'.
-        # The actual construction of the note contents from the token is done elsewhere.
-        spannerHolder: m21.note.GeneralNote = None
-        if infoHash:
-            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
-
-        unpitched: m21.note.Unpitched = M21Utilities.createUnpitched(spannerHolder)
+    def _replaceGeneralNoteWithUnpitched(placeHolder: m21.note.GeneralNote) -> m21.note.Note:
+        unpitched: m21.note.Unpitched = M21Utilities.createUnpitched(placeHolder)
         return unpitched
 
     @staticmethod
     def _createChord(infoHash: HumHash = None) -> m21.chord.Chord:
         # infoHash is generally the token for which the chord is being created,
         # but we declare it as a HumHash, since the only thing we read is
-        # 'spannerHolder'.
+        # 'placeHolder'.
         # The actual construction of the chord contents from the token is done elsewhere.
-        spannerHolder: m21.note.GeneralNote = None
+        placeHolder: m21.note.GeneralNote = None
         if infoHash:
-            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+            placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
 
-        chord: m21.chord.Chord = M21Utilities.createChord(spannerHolder)
+        chord: m21.chord.Chord = M21Utilities.createChord(placeHolder)
+
+        if placeHolder is not None:
+            infoHash.setValue('music21', 'placeHolder', None)
+
         return chord
 
     def _createAndConvertChord(self, token: HumdrumToken, measureIndex: int, staffIndex: int, layerIndex: int) -> m21.chord.Chord:
@@ -4113,13 +4111,17 @@ class HumdrumFile(HumdrumFileContent):
     def _createRest(infoHash: HumHash = None) -> m21.note.Rest:
         # infoHash is generally the token for which the rest is being created,
         # but we declare it as a HumHash, since the only thing we read is
-        # 'spannerHolder'.
+        # 'placeHolder'.
         # The actual construction of the rest contents from the token is done elsewhere.
-        spannerHolder: m21.note.GeneralNote = None
+        placeHolder: m21.note.GeneralNote = None
         if infoHash:
-            spannerHolder = infoHash.getValueM21Object('music21', 'spannerHolder')
+            placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
 
-        rest: m21.note.Rest = M21Utilities.createRest(spannerHolder)
+        rest: m21.note.Rest = M21Utilities.createRest(placeHolder)
+
+        if placeHolder is not None:
+            infoHash.setValue('music21', 'placeHolder', None)
+
         return rest
 
     def _createAndConvertRest(self, token: HumdrumToken, measureIndex: int, staffIndex: int) -> m21.note.Rest:
@@ -4226,6 +4228,8 @@ class HumdrumFile(HumdrumFileContent):
             tremolo2.addSpannedElements(noteOrChord, chord2)
         else:
             note2: m21.note.Note = self._createAndConvertNote(second, 0, measureIndex, staffIndex, layerIndex)
+            if note2 is None:
+                return skippedEndOfTremolo2
             note2OffsetInVoice: Union[Fraction, float] = (
                     noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
             self._fixupUnexpandedTremolo2Duration(note2)
@@ -4286,6 +4290,8 @@ class HumdrumFile(HumdrumFileContent):
             tremolo2.addSpannedElements(noteOrChord, chord2)
         else:
             note2: m21.note.Note = self._createAndConvertNote(second, 0, measureIndex, staffIndex, layerIndex)
+            if note2 is None:
+                return
             note2OffsetInVoice: Union[Fraction, float] = (
                     noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
             voice.coreInsert(note2OffsetInVoice, note2)
@@ -4476,14 +4482,15 @@ class HumdrumFile(HumdrumFileContent):
 #             }
 
             note = self._createAndConvertNote(layerTok, 0, measureIndex, staffIndex, layerIndex, subTokenIdx)
-            chord.add(note)
+            if note is not None:
+                chord.add(note)
 
         if allInvisible:
             chord.style.hideObjectOnPrint = True
 
         # grace notes need to be done before rhythm since default
         # duration is set to an eighth note here.
-        chord = self._processGrace(chord, layerTok.text)
+        chord = self._replaceNoteOrChordWithGrace(chord, layerTok.text)
 
         # chord tremolos are handled inside _convertRhythm
         self._convertRhythm(chord, layerTok)
@@ -4610,7 +4617,9 @@ class HumdrumFile(HumdrumFileContent):
         noteOffsetInVoice: Union[Fraction, float] = noteOffsetInMeasure - voiceOffsetInMeasure
         note: m21.note.Note = self._createAndConvertNote(layerTok, 0, measureIndex, staffIndex, layerIndex)
 
-        # TODO: tremolos
+        if note is None:
+            return False
+
         skipThisNote: bool = self._processTremolos(note, measureIndex,
                                                    voice, noteOffsetInVoice,
                                                    layerData, tokenIdx,
@@ -4807,11 +4816,14 @@ class HumdrumFile(HumdrumFileContent):
         else:
             endNote = endTok.getValueM21Object('music21', 'generalNote')
             if not endNote:
-                # endNote will likely not have been created yet.
-                # Here we make a placeholder GeneralNote, from which createNote will
-                # transfer the spanners, when creating the actual note.
-                endNote = m21.note.GeneralNote()
-                endTok.setValue('music21', 'spannerHolder', endNote)
+                # endNote may not have been created yet. If so, we will use a
+                # placeHolder GeneralNote instead, from which createNote will
+                # transfer the spanners, when creating the actual note.  If there
+                # isn't already a placeHolder GeneralNote, we will make one here.
+                endNote = endTok.getValueM21Object('music21', 'placeHolder')
+                if endNote is None:
+                    endNote = m21.note.GeneralNote()
+                    endTok.setValue('music21', 'placeHolder', endNote)
             trillExtension = m21.expressions.TrillExtension(startNote, endNote)
 
         self.m21Score.coreInsert(0, trillExtension)
@@ -5092,11 +5104,14 @@ class HumdrumFile(HumdrumFileContent):
             startNote: m21.note.GeneralNote = slurStartTok.getValueM21Object(
                                                 'music21', 'generalNote')
             if not startNote:
-                # startNote can sometimes not be there yet, due to cross layer slurs.
-                # Here we make a placeholder GeneralNote, from which createNote will
-                # transfer the spanners, when creating the actual note.
-                startNote = m21.note.GeneralNote()
-                slurStartTok.setValue('music21', 'spannerHolder', startNote)
+                # startNote may not have been created yet. If so, we will use a
+                # placeHolder GeneralNote instead, from which createNote will
+                # transfer the spanners, when creating the actual note.  If there
+                # isn't already a placeHolder GeneralNote, we will make one here.
+                startNote = slurStartTok.getValueM21Object('music21', 'placeHolder')
+                if startNote is None:
+                    startNote = m21.note.GeneralNote()
+                    slurStartTok.setValue('music21', 'placeHolder', startNote)
 
             slur: m21.spanner.Slur = m21.spanner.Slur(startNote, endNote)
             self._addSlurLineStyle(slur, slurStartTok, slurStartNumber)
@@ -5180,7 +5195,7 @@ class HumdrumFile(HumdrumFileContent):
         pass # TODO: phrases (_processPhrases)
 
     @staticmethod
-    def _processGrace(noteOrChord: m21.note.NotRest, tstring: str) -> Union[m21.note.Note, m21.chord.Chord]:
+    def _replaceNoteOrChordWithGrace(noteOrChord: m21.note.NotRest, tstring: str) -> Union[m21.note.Note, m21.chord.Chord]:
         myNC: Union[m21.note.Note, m21.chord.Chord] = noteOrChord
         if 'qq' in tstring:
             myNC = myNC.getGrace(appoggiatura=True)
@@ -5189,6 +5204,12 @@ class HumdrumFile(HumdrumFileContent):
         elif 'q' in tstring:
             myNC = myNC.getGrace(appoggiatura=False)
             myNC.duration.type = 'eighth' # for now, recomputed later
+
+        if myNC is not noteOrChord:
+            # transfer any spanners from noteOrChord to myNC
+            for spanner in noteOrChord.getSpannerSites():
+                spanner.replaceSpannedElement(noteOrChord, myNC)
+
         return myNC
 
     def _convertNote(self,
@@ -5236,8 +5257,8 @@ class HumdrumFile(HumdrumFileContent):
         # self._processOttava(note, token, staffIndex) # new factored routine
 
         # check for accacciatura ('q') and appoggiatura ('qq')
-        if not isChord:
-            note = self._processGrace(note, tstring)
+        if not isChord and 'q' in tstring:
+            note = self._replaceNoteOrChordWithGrace(note, tstring)
 
         # Add the pitch information
         # This here is the point where C++ code transposes "transposing instruments"
@@ -5247,7 +5268,7 @@ class HumdrumFile(HumdrumFileContent):
         octave: int = Convert.kernToOctaveNumber(tstring)
 
         if isUnpitched:
-            note = self._createUnpitched(token)
+            note = self._replaceGeneralNoteWithUnpitched(note)
             if octave >= 0 and m21PitchName is not None:
                 note.displayOctave = octave
                 note.displayStep = m21PitchName
@@ -5255,6 +5276,8 @@ class HumdrumFile(HumdrumFileContent):
             # Q: might need to jump octaves backward to the ottava?  Maybe that's just MEI.
             # Q: music21 has transposing and non-transposing ottavas, so we probably just
             # Q: need to use the right one, so we can leave the note alone.
+            if octave < 0 or m21PitchName is None:
+                return None # tstring is bogus, it didn't parse as a note.
             note.octave = octave
             note.name = m21PitchName
 
@@ -5265,7 +5288,7 @@ class HumdrumFile(HumdrumFileContent):
         # needs some work (and a revisiting of the iohumdrum.cpp code)
 
         if token.getBooleanLayoutParameter('N', 'xstem'):
-            note.stemDirection = 'nostem'
+            note.stemDirection = 'noStem'
 
         if token.getBooleanLayoutParameter('N', 'cue'):
             note.style.noteSize = 'cue'
@@ -5798,7 +5821,10 @@ class HumdrumFile(HumdrumFileContent):
             # if dur == 0 (e.g. token.text == 'aaq' with no recip data),
             # we'll just leave the default type of 'eighth' as we set it earlier.
             if dur != 0:
-                obj.duration.type = m21.duration.convertQuarterLengthToType(Fraction(dur))
+                # There are humdrum scores with grace notes that have tuplet-y durations,
+                # but all we care about is how many flags.  So "closest type" is better
+                # than crashing because there is no matching type.
+                obj.duration.type = m21.duration.quarterLengthToClosestType(Fraction(dur))[0]
         else:
             obj.duration.quarterLength = Fraction(dur)
 
@@ -6145,11 +6171,14 @@ class HumdrumFile(HumdrumFileContent):
             if startNoteToken:
                 startNote = startNoteToken.getValueM21Object('music21', 'generalNote')
                 if not startNote:
-                    # startNote can sometimes not be there yet, due to cross layer slurs.
-                    # Here we make a placeholder GeneralNote, from which createNote will
-                    # transfer the spanners, when creating the actual note.
-                    startNote = m21.note.GeneralNote()
-                    startNoteToken.setValue('music21', 'spannerHolder', startNote)
+                    # startNote may not have been created yet. If so, we will use a
+                    # placeHolder GeneralNote instead, from which createNote will
+                    # transfer the spanners, when creating the actual note.  If there
+                    # isn't already a placeHolder GeneralNote, we will make one here.
+                    startNote = startNoteToken.getValueM21Object('music21', 'placeHolder')
+                    if startNote is None:
+                        startNote = m21.note.GeneralNote()
+                        startNoteToken.setValue('music21', 'placeHolder', startNote)
                 m21Hairpin.addSpannedElements(startNote)
             else:
                 # insert a Voice (at measure offset 0) with a single invisible Rest
@@ -6181,11 +6210,14 @@ class HumdrumFile(HumdrumFileContent):
             if endNoteToken:
                 endNote = endNoteToken.getValueM21Object('music21', 'generalNote')
                 if not endNote:
-                    # endNote can sometimes not be there yet, due to cross layer slurs.
-                    # Here we make a placeholder GeneralNote, from which createNote will
-                    # transfer the spanners, when creating the actual note.
-                    endNote = m21.note.GeneralNote()
-                    endNoteToken.setValue('music21', 'spannerHolder', endNote)
+                    # endNote may not have been created yet. If so, we will use a
+                    # placeHolder GeneralNote instead, from which createNote will
+                    # transfer the spanners, when creating the actual note.  If there
+                    # isn't already a placeHolder GeneralNote, we will make one here.
+                    endNote = endNoteToken.getValueM21Object('music21', 'placeHolder')
+                    if endNote is None:
+                        endNote = m21.note.GeneralNote()
+                        endNoteToken.setValue('music21', 'placeHolder', endNote)
                 m21Hairpin.addSpannedElements(endNote)
             else:
                 # insert a Voice (at measure offset 0) with a single invisible Rest
@@ -8530,6 +8562,10 @@ class HumdrumFile(HumdrumFileContent):
         startIdx, endIdx = measureKey
         if startIdx is None:
             # skip it (but return the positive version so the client can keep walking measures)
+            return endIdx
+
+        if self.ignoreLine[startIdx]:
+            # don't perform first pass on this measure (!!ignore/!!Xignore toggles)
             return endIdx
 
         self._firstPassMeasureStaves(measureKey)

@@ -461,7 +461,7 @@ class Convert:
 
         return output
 
-    METRONOME_MARK_PATTERN : str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)'
+    METRONOME_MARK_PATTERN : str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.d*)'
 
     @staticmethod
     def getMetronomeMarkInfo(text: str) -> (str, str, str):

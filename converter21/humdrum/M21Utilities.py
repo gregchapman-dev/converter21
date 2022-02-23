@@ -77,66 +77,66 @@ def setDebugReprInternal(self, method):
 class M21Utilities:
 
     @staticmethod
-    def createNote(spannerHolder: m21.note.GeneralNote = None) -> m21.note.Note:
+    def createNote(placeHolder: m21.note.GeneralNote = None) -> m21.note.Note:
         note = m21.note.Note()
 
         # for debugging, override this note's _reprInternal so we can see any Beams.
         setDebugReprInternal(note, noteDebugReprInternal)
 
-        # Now replace spannerHolder with note in every spanner that references it.
+        # Now replace placeHolder with note in every spanner that references it.
         # (This is for, e.g., slurs that were created before this note was there.)
-        if spannerHolder:
-            spanners = spannerHolder.getSpannerSites()
+        if placeHolder:
+            spanners = placeHolder.getSpannerSites()
             for spanner in spanners:
-                spanner.replaceSpannedElement(spannerHolder, note)
+                spanner.replaceSpannedElement(placeHolder, note)
 
         return note
 
     @staticmethod
-    def createUnpitched(spannerHolder: m21.note.GeneralNote = None) -> m21.note.Unpitched:
+    def createUnpitched(placeHolder: m21.note.GeneralNote = None) -> m21.note.Unpitched:
         unpitched = m21.note.Unpitched()
 
         # for debugging, override this unpitched's _reprInternal so we can see any Beams.
         setDebugReprInternal(unpitched, unpitchedDebugReprInternal)
 
-        # Now replace spannerHolder with unpitched in every spanner that references it.
+        # Now replace placeHolder with unpitched in every spanner that references it.
         # (This is for, e.g., slurs that were created before this unpitched was there.)
-        if spannerHolder:
-            spanners = spannerHolder.getSpannerSites()
+        if placeHolder:
+            spanners = placeHolder.getSpannerSites()
             for spanner in spanners:
-                spanner.replaceSpannedElement(spannerHolder, unpitched)
+                spanner.replaceSpannedElement(placeHolder, unpitched)
 
         return unpitched
 
     @staticmethod
-    def createChord(spannerHolder: m21.note.GeneralNote = None) -> m21.chord.Chord:
+    def createChord(placeHolder: m21.note.GeneralNote = None) -> m21.chord.Chord:
         chord = m21.chord.Chord()
 
         # for debugging, override this chord's _reprInternal so we can see any Beams.
         setDebugReprInternal(chord, chordDebugReprInternal)
 
-        # Now replace spannerHolder with chord in every spanner that references it.
+        # Now replace placeHolder with chord in every spanner that references it.
         # (This is for, e.g., slurs that were created before this chord was there.)
-        if spannerHolder:
-            spanners = spannerHolder.getSpannerSites()
+        if placeHolder:
+            spanners = placeHolder.getSpannerSites()
             for spanner in spanners:
-                spanner.replaceSpannedElement(spannerHolder, chord)
+                spanner.replaceSpannedElement(placeHolder, chord)
 
         return chord
 
     @staticmethod
-    def createRest(spannerHolder: m21.note.GeneralNote = None) -> m21.note.Rest:
+    def createRest(placeHolder: m21.note.GeneralNote = None) -> m21.note.Rest:
         rest = m21.note.Rest()
 
         # for debugging, override this rest's _reprInternal so we can see any Beams.
         setDebugReprInternal(rest, noteDebugReprInternal)
 
-        # Now replace spannerHolder with rest in every spanner that references it.
+        # Now replace placeHolder with rest in every spanner that references it.
         # (This is for, e.g., slurs that were created before this rest was there.)
-        if spannerHolder:
-            spanners = spannerHolder.getSpannerSites()
+        if placeHolder:
+            spanners = placeHolder.getSpannerSites()
             for spanner in spanners:
-                spanner.replaceSpannedElement(spannerHolder, rest)
+                spanner.replaceSpannedElement(placeHolder, rest)
 
         return rest
 

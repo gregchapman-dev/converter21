@@ -5,6 +5,9 @@
 *k[b-e-a-d-]	*k[b-e-a-d-]	*k[b-e-a-d-]
 *f:	*f:	*f:
 *M2/2	*M2/2	*M2/2
+=0-	=0-	=0-
+!! You can't ignore the first measure, so here's one we don't care about.
+4AA-	4d-	.
 =1	=1	=1
 !! weird case where the wedge ends on the first beat of a measure so you should
 !! choose the last note in the previous measure (and we don't, we make a 0-length
@@ -66,6 +69,15 @@
 8d	(8ddL	<
 8A-	8aa-	[ >
 8dJ	8ddJ)	]
+=49	=49	=49
+!! Stop on a grace note!
+4EE-	8gL	<
+.	8a-XJ	(
+.	8a-/q	[
+4BB- 4A-	4.gg	>
+4EE-	.	)
+.	8ff	]
+4BB-	4gg	.
 ==	==	==
 *-	*-	*-
 !!!RDF**kern: > = above

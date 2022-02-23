@@ -120,34 +120,18 @@ def runTheDiff(krnPath: Path, results) -> bool:
     results.flush()
 
     # import into HumdrumFile
-    try:
-        hfb = HumdrumFile(str(krnPath))
-        if not hfb.isValid:
-            print('HumdrumFile1 parse failure')
-            print('HumdrumFile1 parse failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('HumdrumFile1 parse crash')
-        print('HumdrumFile1 parse crash', file=results)
+    hfb = HumdrumFile(str(krnPath))
+    if not hfb.isValid:
+        print('HumdrumFile1 parse failure')
+        print('HumdrumFile1 parse failure', file=results)
         results.flush()
         return False
 
     # import HumdrumFile into music21 stream
-    try:
-        score1 = hfb.createMusic21Stream()
-        if score1 is None:
-            print('score1 creation failure')
-            print('score1 creation failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('score1 creation crash')
-        print('score1 creation crash', file=results)
+    score1 = hfb.createMusic21Stream()
+    if score1 is None:
+        print('score1 creation failure')
+        print('score1 creation failure', file=results)
         results.flush()
         return False
 
@@ -172,52 +156,28 @@ def runTheDiff(krnPath: Path, results) -> bool:
     hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
     # hdw.expandTremolos = False
 
-    try:
-        success: bool = True
-        fp = Path(tempfile.gettempdir()) / krnPath.name
-        with open(fp, 'w', encoding='utf-8') as f:
-            success = hdw.write(f)
-        if not success:
-            print('export failed')
-            print('export failed', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('export crash')
-        print('export crash', file=results)
+    success: bool = True
+    fp = Path(tempfile.gettempdir()) / krnPath.name
+    with open(fp, 'w', encoding='utf-8') as f:
+        success = hdw.write(f)
+    if not success:
+        print('export failed')
+        print('export failed', file=results)
         results.flush()
         return False
 
     # and then try to parse the exported humdrum file
-    try:
-        hfb2 = HumdrumFile(str(fp))
-        if not hfb2.isValid:
-            print('HumdrumFile2 parse failure')
-            print('HumdrumFile2 parse failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('HumdrumFile2 parse crash')
-        print('HumdrumFile2 parse crash', file=results)
+    hfb2 = HumdrumFile(str(fp))
+    if not hfb2.isValid:
+        print('HumdrumFile2 parse failure')
+        print('HumdrumFile2 parse failure', file=results)
         results.flush()
         return False
 
-    try:
-        score2 = hfb2.createMusic21Stream()
-        if score2 is None:
-            print('score2 creation failure')
-            print('score2 creation failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('score2 creation crash')
-        print('score2 creation crash', file=results)
+    score2 = hfb2.createMusic21Stream()
+    if score2 is None:
+        print('score2 creation failure')
+        print('score2 creation failure', file=results)
         results.flush()
         return False
 
@@ -235,29 +195,21 @@ def runTheDiff(krnPath: Path, results) -> bool:
 
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
-    try:
-        annotatedScore1 = AnnScore(score1)
-        annotatedScore2 = AnnScore(score2)
-        op_list, _cost = Comparison.annotated_scores_diff(
-                                        annotatedScore1, annotatedScore2)
-        numDiffs = len(op_list)
-        print(f'numDiffs = {numDiffs}')
-        print(f'numDiffs = {numDiffs}', file=results)
-        results.flush()
-        if numDiffs > 0:
-            summ: str = '\t' + oplistSummary(op_list, score1, score2)
-            print(summ)
-            print(summ, file=results)
-            results.flush()
-            return False
-        return True
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('musicdiff crashed')
-        print('musicdiff crashed', file=results)
+    annotatedScore1 = AnnScore(score1)
+    annotatedScore2 = AnnScore(score2)
+    op_list, _cost = Comparison.annotated_scores_diff(
+                                    annotatedScore1, annotatedScore2)
+    numDiffs = len(op_list)
+    print(f'numDiffs = {numDiffs}')
+    print(f'numDiffs = {numDiffs}', file=results)
+    results.flush()
+    if numDiffs > 0:
+        summ: str = '\t' + oplistSummary(op_list, score1, score2)
+        print(summ)
+        print(summ, file=results)
         results.flush()
         return False
+    return True
 
 # ------------------------------------------------------------------------------
 

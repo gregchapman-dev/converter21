@@ -585,6 +585,8 @@ class M21Convert:
     def m21FontStyleFromFontStyle(fontStyle: str) -> str:
         if fontStyle == 'bold-italic':
             return 'bolditalic'
+        if fontStyle == 'normal-italic':
+            return 'italic'
         return fontStyle
 
     '''
