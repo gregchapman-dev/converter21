@@ -473,7 +473,7 @@ class M21Convert:
         numDots: int = None
         durNoDots, numDots = Convert.computeDurationNoDotsAndNumDots(dur)
         if numDots is None:
-            print(f'Cannot figure out durNoDots + numDots from {token.text}, tuplet={tuplet}, about to crash in convertQuarterLengthToType()...', file=sys.stderr)
+            print(f'Cannot figure out durNoDots + numDots from {token.text} (on line number {token.lineNumber}), tuplet={tuplet}, about to crash in convertQuarterLengthToType()...', file=sys.stderr)
         durType: str = m21.duration.convertQuarterLengthToType(Fraction(durNoDots))
         #print('m21DurationWithTuplet: type = "{}", dots={}'.format(durType, numDots), file=sys.stderr)
         component: m21.duration.DurationTuple = m21.duration.durationTupleFromTypeDots(durType, numDots)
@@ -693,6 +693,7 @@ class M21Convert:
         recip: str = ''
         vdurRecip: str = ''
         recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Rest.duration)
+        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Rest.duration)
         postfixAndLayouts: Tuple[str, List[str]] = M21Convert.kernPostfixAndLayoutsFromM21Rest(
                                                                 m21Rest,
                                                                 recip,
@@ -701,7 +702,7 @@ class M21Convert:
         postfix: str = postfixAndLayouts[0]
         layouts: [str] = postfixAndLayouts[1]
 
-        token: str = recip + pitch + postfix
+        token: str = recip + graceType + pitch + postfix
 
         if vdurRecip:
             layouts.append('!LO:N:vis=' + vdurRecip)

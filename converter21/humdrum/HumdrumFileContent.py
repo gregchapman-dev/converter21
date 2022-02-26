@@ -741,6 +741,9 @@ class HumdrumFileContent(HumdrumFileStructure):
 
         pitch: str = m.group(1)
         b7: int = Convert.kernToBase7(pitch)
+        if b7 < 0:
+            # that wasn't really a pitch, no vertical positioning for you
+            return False
 
         diff: int = (b7 - baseline) + 100
         if diff % 2 != 0:

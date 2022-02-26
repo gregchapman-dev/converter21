@@ -4490,7 +4490,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # grace notes need to be done before rhythm since default
         # duration is set to an eighth note here.
-        chord = self._replaceNoteOrChordWithGrace(chord, layerTok.text)
+        chord = self._replaceGeneralNoteWithGrace(chord, layerTok.text)
 
         # chord tremolos are handled inside _convertRhythm
         self._convertRhythm(chord, layerTok)
@@ -4571,6 +4571,10 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::convertRest --
     '''
     def _convertRest(self, rest: m21.note.Rest, token: HumdrumToken, measureIndex: int, staffIndex: int) -> m21.note.Rest:
+        # check for accacciatura ('q') and appoggiatura ('qq')
+        if 'q' in token.text:
+            rest = self._replaceGeneralNoteWithGrace(rest, token.text)
+
         self._convertRhythm(rest, token)
         self._positionRestVertically(rest, token)
 
@@ -5195,22 +5199,22 @@ class HumdrumFile(HumdrumFileContent):
         pass # TODO: phrases (_processPhrases)
 
     @staticmethod
-    def _replaceNoteOrChordWithGrace(noteOrChord: m21.note.NotRest, tstring: str) -> Union[m21.note.Note, m21.chord.Chord]:
-        myNC: Union[m21.note.Note, m21.chord.Chord] = noteOrChord
+    def _replaceGeneralNoteWithGrace(generalNote: m21.note.GeneralNote, tstring: str) -> Union[m21.note.Note, m21.chord.Chord]:
+        myGN: Union[m21.note.Note, m21.chord.Chord] = generalNote
         if 'qq' in tstring:
-            myNC = myNC.getGrace(appoggiatura=True)
-            myNC.duration.slash = False
-            myNC.duration.type = 'eighth' # for now, recomputed later
+            myGN = myGN.getGrace(appoggiatura=True)
+            myGN.duration.slash = False
+            myGN.duration.type = 'eighth' # for now, recomputed later
         elif 'q' in tstring:
-            myNC = myNC.getGrace(appoggiatura=False)
-            myNC.duration.type = 'eighth' # for now, recomputed later
+            myGN = myGN.getGrace(appoggiatura=False)
+            myGN.duration.type = 'eighth' # for now, recomputed later
 
-        if myNC is not noteOrChord:
-            # transfer any spanners from noteOrChord to myNC
-            for spanner in noteOrChord.getSpannerSites():
-                spanner.replaceSpannedElement(noteOrChord, myNC)
+        if myGN is not generalNote:
+            # transfer any spanners from generalNote to myGN
+            for spanner in generalNote.getSpannerSites():
+                spanner.replaceSpannedElement(generalNote, myGN)
 
-        return myNC
+        return myGN
 
     def _convertNote(self,
                      note: m21.note.Note,
@@ -5258,7 +5262,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # check for accacciatura ('q') and appoggiatura ('qq')
         if not isChord and 'q' in tstring:
-            note = self._replaceNoteOrChordWithGrace(note, tstring)
+            note = self._replaceGeneralNoteWithGrace(note, tstring)
 
         # Add the pitch information
         # This here is the point where C++ code transposes "transposing instruments"
