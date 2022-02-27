@@ -797,7 +797,7 @@ class M21Convert:
         return 'q'
 
     @staticmethod
-    def kernPrefixPostfixAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.Note,
+    def kernPrefixPostfixAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote,
                                                recip: str,
                                                spannerBundle: m21.spanner.SpannerBundle,
                                                isFirstNoteInChord: bool = False,
@@ -837,7 +837,7 @@ class M21Convert:
         if isFirstNoteInChord:
             pass
 
-        postfix = invisibleStr + articStr + expressionStr + stemStr + beamStr
+        postfix = expressionStr + articStr + stemStr + beamStr + invisibleStr
 
         # prefix/postfix possibility: ties
         tieStart, tieStop, tieLayouts = M21Convert._getTieStartStopAndLayoutsFromM21GeneralNote(m21GeneralNote)
@@ -951,6 +951,23 @@ class M21Convert:
         postfixPerNote:  [str] = [] # one per note
         layoutsForNotes: [str] = [] # 0 or more per note
 
+        # Here we get the chord signifiers, which might be applied to each note in the token,
+        # or just the first, or just the last.
+        beamStr: str = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21Chord)
+        articStr:str = M21Convert._getHumdrumStringFromM21Articulations(
+                                        m21Chord.articulations,
+                                        owner)
+        exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(
+                                        m21Chord.expressions,
+                                        m21Chord.duration,
+                                        recip,
+                                        beamStr.count('L'), # beamStarts
+                                        owner)
+        stemStr: str = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21Chord)
+        slurStarts, slurStops = M21Convert._getKernSlurStartsAndStopsFromGeneralNote(
+                                                            m21Chord, spannerBundle)
+
+        # Here we get each note's signifiers
         for noteIdx, m21Note in enumerate(m21Chord):
             prefix:  str   = '' # one for this note
             postfix: str   = '' # one for this note
@@ -964,24 +981,20 @@ class M21Convert:
                                             isStandaloneNote = False,
                                             owner=owner)
 
-            # Since this is a chord, we have to do the following by hand instead of (or as well as)
-            # getting the info from each note.
+            # Add the chord signifiers as appropriate
             if noteIdx == 0:
-                beamStr: str = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21Chord)
-                articStr:str = M21Convert._getHumdrumStringFromM21Articulations(
-                                                m21Chord.articulations,
-                                                owner)
-                exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(
-                                                m21Chord.expressions,
-                                                m21Chord.duration,
-                                                recip,
-                                                beamStr.count('L'), # beamStarts
-                                                owner)
-                stemStr: str = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21Chord)
-                slurStarts, slurStops = M21Convert._getKernSlurStartsAndStopsFromGeneralNote(m21Chord, spannerBundle)
-
+                # first note gets the slur starts
+                #   (plus expressions, articulations, stem directions)
                 prefix = slurStarts + prefix
-                postfix = articStr + exprStr + postfix + stemStr + beamStr + slurStops
+                postfix = postfix + exprStr + articStr + stemStr
+            elif noteIdx == len(m21Chord) - 1:
+                # last note gets the beams, and the slur stops
+                #   (plus expressions, articulations, stem directions)
+                postfix = postfix + exprStr + articStr + stemStr + beamStr + slurStops
+            else:
+                # the other notes in the chord just get expressions, articulations, stem directions
+                postfix = postfix + exprStr + articStr + stemStr
+
 
             # put them in prefixPerNote, postFixPerNote, and layoutsForNotes
             prefixPerNote.append(prefix)

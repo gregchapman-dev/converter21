@@ -79,23 +79,29 @@ def oplistSummary(op_list: List[Tuple[str]], score1: m21.stream.Score, score2: m
                         'delarticulation',
                         'editarticulation'):
             counts['articulation'] += 1
-        elif op[0] in ('extrains',
-                       'extradel',
-                       'extrasub',
+
+        elif op[0] == 'extradel':
+            # op[1] only
+            assert isinstance(op[1], AnnExtra)
+            key = op[1].content
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'extrains':
+            # op[2] only
+            assert isinstance(op[2], AnnExtra)
+            key = op[2].content
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] in ('extrasub',
                        'extracontentedit',
                        'extraoffsetedit',
                        'extradurationedit'):
-            key: str = 'extra'
-            assert ( (op[1] is None or isinstance(op[1], AnnExtra))
-                        and (op[2] is None or isinstance(op[2], AnnExtra)) )
-            if op[1] is not None:
-                obj = getM21ObjectById(op[1].extra, score1)
-                if obj:
-                    key = obj.classes[0]
-            else:
-                obj = getM21ObjectById(op[2].extra, score2)
-                if obj:
-                    key = obj.classes[0]
+            # op[1] and op[2]
+            assert isinstance(op[1], AnnExtra)
+            assert isinstance(op[2], AnnExtra)
+            key = op[1].content # a little weird for "extracontentedit", but that's pretty rare
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
