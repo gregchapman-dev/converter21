@@ -2,6 +2,23 @@ from fractions import Fraction
 import music21 as m21
 print(m21.__version__)
 
+# test PR #1240
+restVoice = m21.stream.Voice()
+positionedRest = m21.note.Rest()
+positionedRest.duration = m21.duration.Duration(Fraction(1, 3))
+restVoice.insert(Fraction(11, 3), positionedRest)
+restVoice.makeRests(inPlace=True,
+                    hideRests=True)
+
+for i, rest in enumerate(restVoice.notesAndRests):
+    print(f'rest[{i}] = {rest}')
+    print(f'rest[{i}].duration = {rest.duration}')
+    print(f'rest[{i}] tuplets = {rest.duration.tuplets}')
+    print(f'rest[{i}] components = {rest.duration.components}')
+
+print('')
+
+
 '''
 # test makeAccidentals
 s = m21.stream.Score()
@@ -97,9 +114,9 @@ outputFile = s.write(fmt='musicxml', fp=None, makeNotation=False)
 print('output musicxml is in', outputFile)
 '''
 
+'''
 # test DynamicWedge horizontal offsets
 
-#'''
 # method: invisible rest in a special "timing" voice
 s = m21.stream.Score()
 p = m21.stream.Part()
@@ -154,6 +171,7 @@ outputFile = s.write(fmt='musicxml', fp=None, makeNotation=False)
 print('output musicxml is in', outputFile)
 '''
 
+'''
 # method: invisible TextExpression ('') or Dynamic in the same Voice whose offset is where you want the Dynamic to start/end
 # THIS DOESN'T WORK: the end/start lands at the end of the note just _after_ the TextExpression/Dynamic.
 s = m21.stream.Score()

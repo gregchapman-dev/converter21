@@ -250,8 +250,8 @@ class MeasureData:
             thisEventIsEnd: bool = endNote is event.m21Object
             wedgeStartTime: HumNum = None
             wedgeDuration: HumNum = None
-            wedgeEndTime: HumNum = HumNum(endNote.getOffsetInHierarchy(score)
-                                        + endNote.duration.quarterLength)
+            wedgeEndTime: HumNum = (HumNum(endNote.getOffsetInHierarchy(score))
+                                        + HumNum(endNote.duration.quarterLength))
             if thisEventIsStart:
                 wedgeStartTime = HumNum(startNote.getOffsetInHierarchy(score))
                 wedgeDuration = HumNum(wedgeEndTime - wedgeStartTime)

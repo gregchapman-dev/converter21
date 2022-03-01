@@ -6183,33 +6183,18 @@ class HumdrumFile(HumdrumFileContent):
                     if startNote is None:
                         startNote = m21.note.GeneralNote()
                         startNoteToken.setValue('music21', 'placeHolder', startNote)
-                m21Hairpin.addSpannedElements(startNote)
             else:
-                # insert a Voice (at measure offset 0) with a single invisible Rest
-                # (at voice offset token.durationFromBarline) and use that Rest as startNote.
-                # The rest duration doesn't matter; it should be short enough to fit in the measure.
-                restVoice = m21.stream.Voice()
-                startNote = m21.note.Rest()
-                startNote.style.hideObjectOnPrint = True
-                startNote.duration = m21.duration.Duration(Fraction(token.durationToBarline))
-                m21Hairpin.addSpannedElements(startNote)
-
-                restVoice.coreInsert(token.durationFromBarline, startNote)
-                restVoice.coreElementsChanged()
-                # well-formed streams really should have notes/rests starting at
-                # offset 0, and we have a single rest at (likely) a non-zero offset,
-                # so we call makeRests here to insert an invisible rest that starts
-                # at offset 0, and ends when ours begins.
-                restVoice.makeRests(inPlace=True, hideRests=True)
-                # Now make any weird-length rests into multiple regular-length rests, if necessary
-                M21Utilities.splitComplexRestDurations(restVoice)
-
-                # Figure out which m21 measure this restVoice belongs in: which measureIndex is token in?
+                # insert a Voice (at measure offset 0) with two invisible Rests, the first starting
+                # at offset 0 and ending at voice offset token.durationFromBarline, and the second
+                # starting at voice offset token.durationFromBarline, and ending at end of measure.
+                # Use the second rest as the start note.
                 restMeasureIndex: int = self.measureIndexFromLineIndex(token.lineIndex)
-                restMeasurePerStaff: [m21.stream.Measure] = self._allMeasuresPerStaff[restMeasureIndex]
-                restMeasurePerStaff[staffIndex].coreInsert(0, restVoice)
-                restMeasurePerStaff[staffIndex].coreElementsChanged()
-
+                restMeasure = self._allMeasuresPerStaff[restMeasureIndex][staffIndex]
+                voiceDuration: HumNum = token.durationFromBarline + token.durationToBarline
+                transitionOffset: HumNum = token.durationFromBarline
+                _, startNote = self._createAndInsertInvisibleRestVoice(restMeasure,
+                                                                       voiceDuration,
+                                                                       transitionOffset)
             endNote: m21.note.GeneralNote = None
             if endNoteToken:
                 endNote = endNoteToken.getValueM21Object('music21', 'generalNote')
@@ -6222,34 +6207,19 @@ class HumdrumFile(HumdrumFileContent):
                     if endNote is None:
                         endNote = m21.note.GeneralNote()
                         endNoteToken.setValue('music21', 'placeHolder', endNote)
-                m21Hairpin.addSpannedElements(endNote)
             else:
-                # insert a Voice (at measure offset 0) with a single invisible Rest
-                # (at voice offset 0) and use that Rest as endNote.
-                # The rest duration must be endTok.durationFromBarline, to land the
-                # end of the rest at the appropriate offset. (add endTok.duration
-                # if endAtEndOfEndToken is True)
-                restVoice = m21.stream.Voice()
-                endNote = m21.note.Rest()
-                endNote.style.hideObjectOnPrint = True
-                endNoteDuration: Fraction = Fraction(endTok.durationFromBarline)
-                if endAtEndOfEndToken:
-                    endNoteDuration += Fraction(endTok.duration)
-                endNote.duration = m21.duration.Duration(endNoteDuration)
-                m21Hairpin.addSpannedElements(endNote)
-
-                restVoice.coreInsert(0, endNote)
-                restVoice.coreElementsChanged()
-                # no need to call makeRests, since our rest is at offset 0...
-                # restVoice.makeRests(inPlace=True, hideRests=True)
-                # Now make a weird-length rest into multiple regular-length rests, if necessary
-                M21Utilities.splitComplexRestDurations(restVoice)
-
-                # Figure out which m21 measure this restVoice belongs in: which measureIndex is endToken in?
+                # Create a measure-length Voice filled with multiple invisible Rests, with one
+                # ending at offset endTok.durationFromBarline, and another starting at
+                # that offset.
+                # Use the rest that ends at endTok.durationFromBarline as the endNote.
                 restMeasureIndex: int = self.measureIndexFromLineIndex(endTok.lineIndex)
-                restMeasurePerStaff: [m21.stream.Measure] = self._allMeasuresPerStaff[restMeasureIndex]
-                restMeasurePerStaff[staffIndex].coreInsert(0, restVoice)
-                restMeasurePerStaff[staffIndex].coreElementsChanged()
+                restMeasure = self._allMeasuresPerStaff[restMeasureIndex][staffIndex]
+                voiceDuration: HumNum = endTok.durationFromBarline + endTok.durationToBarline
+                transitionOffset: HumNum = endTok.durationFromBarline
+                endNote, _ = self._createAndInsertInvisibleRestVoice(restMeasure,
+                                                                     voiceDuration,
+                                                                     transitionOffset)
+            m21Hairpin.addSpannedElements(startNote, endNote)
 
             self.m21Score.coreInsert(0, m21Hairpin)
             self.m21Score.coreElementsChanged()
@@ -6308,6 +6278,158 @@ class HumdrumFile(HumdrumFileContent):
         return insertedIntoVoice
 
     '''
+    _createAndInsertInvisibleRestVoice:
+            Create a Voice and fill it with two (or more) invisible Rests, with a goal
+            of having a transition between two rests exactly at token.durationFromBarline.
+            Insert this voice at offset 0 in the measure.
+
+            The idea is that the rest that ends at token.durationFromBarline can then be
+            used as the endNote of a spanner that ends at token.durationFromBarline, and
+            the rest that starts at token.durationFromBarline can then be used as the
+            startNote of a spanner that starts at token.durationFromBarline. Both of
+            those two transition-adjacent rests are returned, so the client can use either
+            one as needed.
+    '''
+    def _createAndInsertInvisibleRestVoice(self,
+                                           measure: m21.stream.Measure,
+                                           voiceDuration: HumNum,
+                                           transitionOffset: HumNum) -> Tuple[m21.note.Rest,
+                                                                              m21.note.Rest]:
+        restVoice = m21.stream.Voice()
+
+        # We will fill with normal-duration rests before we get to any tuplet rests.
+        offsetOfTransitionalTuplet: HumNum = None
+        transitionalTupletElementDuration: HumNum = None
+        offsetOfTransitionalTuplet, transitionalTupletElementDuration = (
+            self._computeTransitionalTupletOffsetAndElementDuration(transitionOffset)
+        )
+        amountToFill: HumNum = transitionOffset
+        fillerRestDuration: HumNum = HumNum(64) # start with duplex-maxima (16 whole notes)
+        fillerRest: m21.note.Rest = None
+        currOffset: HumNum = HumNum(0)
+
+        # offsetOfTransitionalTuplet is the same as transitionOffset
+        # if the transition is not tuplet-y
+        while currOffset < offsetOfTransitionalTuplet:
+            while fillerRestDuration <= amountToFill:
+                fillerRest: m21.note.Rest = self._createInvisibleRest(fillerRestDuration)
+                restVoice.append(fillerRest)
+                currOffset += fillerRestDuration
+                amountToFill -= fillerRestDuration
+            fillerRestDuration /= 2
+
+        numElementsAdded: int = 0
+        numElementsNeeded: int = 0
+        if transitionalTupletElementDuration.numerator == 1:
+            numElementsNeeded = transitionalTupletElementDuration.denominator
+
+        if transitionalTupletElementDuration > HumNum(0):
+            while amountToFill > 0:
+                # finish off up to transitionOffset with as many minimumRestDuration rests as is needed.
+                fillerRest = self._createInvisibleRest(transitionalTupletElementDuration)
+                restVoice.append(fillerRest)
+                currOffset += transitionalTupletElementDuration
+                amountToFill -= transitionalTupletElementDuration
+                numElementsAdded += 1
+
+        restEndingAtTransition: m21.note.Rest = fillerRest
+        restStartingAtTransition: m21.note.Rest = None
+
+        # Now we fill the voice _after_ the transitionOffset
+        amountToFill = voiceDuration - transitionOffset
+
+        # Now keep adding minimum duration rests until we hit an offset that is divisible by
+        # a power of two (i.e. finish any tuplet).  The first one you add is the
+        # restStartingAtTransition.
+        while numElementsAdded < numElementsNeeded and amountToFill > HumNum(0):
+            fillerRest = self._createInvisibleRest(transitionalTupletElementDuration)
+            restVoice.append(fillerRest)
+            if restStartingAtTransition is None:
+                restStartingAtTransition = fillerRest
+            currOffset += transitionalTupletElementDuration
+            amountToFill -= transitionalTupletElementDuration
+            numElementsAdded += 1
+
+        # now fill out the voiceDuration with power-of-two-based rests.
+        # if we don't yet have a restStartingAtTransition, the first one is it.
+        while amountToFill > HumNum(0):
+            fillerRestDuration = HumNum(1, self._lcd(currOffset).denominator)
+            if fillerRestDuration > amountToFill:
+                fillerRestDuration = amountToFill
+            fillerRest: m21.note.Rest = self._createInvisibleRest(fillerRestDuration)
+            restVoice.append(fillerRest)
+            if restStartingAtTransition is None:
+                restStartingAtTransition = fillerRest
+            currOffset += fillerRestDuration
+            amountToFill -= fillerRestDuration
+
+        measure.coreInsert(0, restVoice)
+        measure.coreElementsChanged()
+
+        return restEndingAtTransition, restStartingAtTransition
+
+    '''
+        _createInvisibleRest(duration)
+        Creates an invisible rest of the requested duration.
+    '''
+    @staticmethod
+    def _createInvisibleRest(duration: HumNum) -> m21.note.Rest:
+        rest = m21.note.Rest()
+        rest.duration = m21.duration.Duration(Fraction(duration))
+
+        # Make it invisible
+        rest.style.hideObjectOnPrint = True
+
+        # Make sure any tuplet notation is also invisible (MuseScore has been known
+        # to put visible tuplet numbers above invisible tuplet rests(!).
+        if rest.duration.tuplets:
+            for tuplet in rest.duration.tuplets:
+                tuplet.tupletActualShow = None
+                tuplet.tupletNormalShow = None
+
+        return rest
+
+    @staticmethod
+    def _lcd(hn: HumNum) -> HumNum:
+        # HumNum creation from two ints will always normalize to lcd form.
+        return HumNum(hn.numerator, hn.denominator)
+
+    @staticmethod
+    def _isPowerOfTwo(x: int) -> bool:
+        # note that 0 is considered a power of two here
+        return (x and (not(x & (x - 1))) )
+
+    '''
+        _computeTransitionalTupletOffsetAndElementDuration(transitionOffset)
+            Returns the offset and element duration of any implied tuplet that crosses
+            transitionOffset. If a tuplet is not implied, we return offset=transitionOffset
+            and elementDuration=0.
+            The idea is that the client can then fill with big power-of-two rests up to
+            the transitional tuplet offset, and then fill in a series of element duration
+            rests through the transitionOffset to the next power-of-two offset, then fill
+            with big power-of-two rests again to the end of the measure.
+    '''
+
+    def _computeTransitionalTupletOffsetAndElementDuration(self,
+                                                           transitionOffset: HumNum) -> Tuple[HumNum,
+                                                                                              HumNum]:
+        lcdTransitionOffset: HumNum = self._lcd(transitionOffset)
+
+        if self._isPowerOfTwo(lcdTransitionOffset.denominator):
+            return transitionOffset, HumNum(0)
+
+        elementDuration: HumNum = HumNum(1, lcdTransitionOffset.denominator) # LCD already
+
+        # back up the offset until we hit a power-of-two denominator
+        transitionalTupletOffset: HumNum = self._lcd(lcdTransitionOffset - elementDuration)
+
+        while not self._isPowerOfTwo(transitionalTupletOffset.denominator):
+            transitionalTupletOffset = self._lcd(transitionalTupletOffset - elementDuration)
+
+        return transitionalTupletOffset, elementDuration
+
+
+    '''
     //////////////////////////////
     //
     // HumdrumInput::getLeftNoteDuration --
@@ -6320,9 +6442,8 @@ class HumdrumFile(HumdrumFileContent):
 #         return output
 
     @staticmethod
-    def _getLeftNoteToken(token: HumdrumToken, isStart: bool) -> Optional[HumdrumToken]:
-        # Look left for a non-null data token (within the track's kern fields, if isStart,
-        # else in any track)
+    def _getLeftNoteToken(token: HumdrumToken, _isStart: bool) -> Optional[HumdrumToken]:
+        # Look left for a non-null data token within the track's kern fields
         output: HumdrumToken = None
         if token.isDataType('**dynam'):
             # we must first find the first kern token to the left before scanning
@@ -6330,9 +6451,15 @@ class HumdrumFile(HumdrumFileContent):
                 token = token.previousFieldToken
 
         ttrack: int = token.track
+#         tStartTok: HumdrumToken = self._staffStarts[self._staffStartsIndexByTrack[ttrack]]
+#         tpart: int = self._getPartNumberLabel(tStartTok)
+
         current: HumdrumToken = token
         while current:
-            if isStart and current.track != ttrack:
+#             startTok: HumdrumToken = self._staffStarts[self._staffStartsIndexByTrack[current.track]]
+#             part: int = self._getPartNumberLabel(startTok)
+#             if part != tpart:
+            if current.track != ttrack:
                 break
             if not current.isKern:
                 break
@@ -6346,18 +6473,23 @@ class HumdrumFile(HumdrumFileContent):
         return output
 
     @staticmethod
-    def _getRightNoteToken(token: HumdrumToken, isStart: bool) -> Optional[HumdrumToken]:
-        # Look right for a non-null data token (within the track's kern fields, if isStart,
-        # else in any track)
+    def _getRightNoteToken(token: HumdrumToken, _isStart: bool) -> Optional[HumdrumToken]:
+        # Look right for a non-null data token within the track's kern fields
         output: HumdrumToken = None
         if not token.isKern:
             # there are no interesting kern tokens to the right (only to the left)
             return None
 
         ttrack: int = token.track
+#         tStartTok: HumdrumToken = self._staffStarts[self._staffStartsIndexByTrack[ttrack]]
+#         tpart: int = self._getPartNumberLabel(tStartTok)
+
         current: HumdrumToken = token
         while current:
-            if isStart and current.track != ttrack:
+#             startTok: HumdrumToken = self._staffStarts[self._staffStartsIndexByTrack[current.track]]
+#             part: int = self._getPartNumberLabel(startTok)
+#             if part != tpart:
+            if current.track != ttrack:
                 break
             if not current.isKern:
                 break
