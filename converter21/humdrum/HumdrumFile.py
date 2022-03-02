@@ -2152,6 +2152,36 @@ class HumdrumFile(HumdrumFileContent):
 
         return False
 
+    commonTempoWords: List[str] = [
+    'larghissimo',
+    'largamente',
+    'grave',
+    'largo',
+    'lento',
+    'adagio'
+    'slow',
+    'langsam',
+    'larghetto',
+    'adagietto',
+    'andante',
+    'andantino',
+    'maestoso',
+    'moderato',
+    'moderate',
+    'allegretto',
+    'animato',
+    'allegro',
+    'fast',
+    'schnell',
+    'allegrissimo',
+    'vite',
+    'vivace',
+    'vivacissimo',
+    'presto',
+    'prestissimo',
+    'con moto',
+    ]
+
     @staticmethod
     def _isTempoish(text: str) -> bool:
         if not text:
@@ -2160,9 +2190,23 @@ class HumdrumFile(HumdrumFileContent):
         if re.search(r'\[.*?\]\s*=.*\d\d', text):
             return True
 
-        tt: m21.tempo.TempoText = m21.tempo.TempoText(text)
-        return tt.isCommonTempoText()
+        # A modified version of m21.TempoText.isCommonTempoText (which thinks
+        # that 'g' is common tempo text because it is found in 'allegro').
 
+        def stripText(txt: str) -> str:
+            txt = txt.strip()
+            txt = txt.replace(' ', '')
+            txt = txt.replace('.', '')
+            txt = txt.lower()
+            return txt
+
+        cmptxt: str = stripText(text)
+        for candidate in HumdrumFile.commonTempoWords:
+            candidate = stripText(candidate)
+            if candidate in cmptxt: # if cmptxt == common tempo word, or cmptxt contains common tempo word
+                return True
+
+        return False
     '''
     //////////////////////////////
     //
