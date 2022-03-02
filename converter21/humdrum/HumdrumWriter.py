@@ -441,8 +441,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # Top of Humdrum file is (in order):
         # 1. Composer(s): COM = m21Metadata.getContributorsByRole('composer')[0].name
         # 2. Title: OTL = metadata._workIds['title']
-        # 2a. If no title, then Movement name: OMD = metadata._workIDs['movementName']
-        # 3. Copyright: YEC = metadata.copyright
+        # 3. Movement name: OMD = metadata._workIDs['movementName']
+        # 4. Copyright: YEC = metadata.copyright
         firstComposerEmitted: m21.metadata.Contributor = None
         titleEmitted: bool = False
         movementNameEmitted: bool = False
@@ -451,9 +451,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         atLine: int = 0
         composers: List[m21.metadata.Text] = m21Metadata.getContributorsByRole('composer')
         mdTitle: m21.metadata.Text = m21Metadata._workIds['title']
-        mdMovementName: m21.metadata.Text = None
-        if not mdTitle:
-            mdMovementName = m21Metadata._workIds['movementName']
+        mdMovementName: m21.metadata.Text = m21Metadata._workIds['movementName']
         mdCopyright: m21.metadata.Copyright = m21Metadata.copyright
 
 

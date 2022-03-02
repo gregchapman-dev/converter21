@@ -1678,6 +1678,12 @@ class HumdrumFile(HumdrumFileContent):
         if ss.hasLyrics:
             if self._checkForVerseLabels(measureIndex, voice, voiceOffsetInMeasure, layerTok):
                 insertedIntoVoice = True
+
+        if not layerTok.isNull and not layerTok.isManipulator:
+            # non-null, non-manip interp tokens can have linked params that are directions
+            if self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex):
+                insertedIntoVoice = True
+
         # TODO: ottava marks
         # self._handleOttavaMark(voice, layerTok, staffIndex)
         # self._handleLigature(layerTok) # just for **mens
@@ -1694,8 +1700,8 @@ class HumdrumFile(HumdrumFileContent):
         self._handleColorInterp(measureIndex, layerTok) # new
         if self._handleClefChange(measureIndex, voice, voiceOffsetInMeasure, layerData, tokenIdx):
             insertedIntoVoice = True
-        if self._handleTimeSigChange(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex): # new
-            insertedIntoVoice = True
+#         if self._handleTimeSigChange(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex): # new
+#             insertedIntoVoice = True
 
         return insertedIntoVoice
 
@@ -1786,18 +1792,21 @@ class HumdrumFile(HumdrumFileContent):
 #                         tok = tok.previousFieldToken
         return False
 
-    def _handleTimeSigChange(self,
-                             measureIndex: int,
-                             voice: m21.stream.Voice,
-                             voiceOffsetInMeasure: Union[Fraction, float],
-                             token: HumdrumToken,
-                             staffIndex: int) -> bool:
-        if token.isTimeSignature:
-            # Now done at the measure level.  This location might
-            # be good for time signatures which change in the
-            # middle of measures.
-            return self._processDirections(measureIndex, voice, voiceOffsetInMeasure, token, staffIndex)
-        return False
+#     def _handleTimeSigChange(self,
+#                              _measureIndex: int,
+#                              _voice: m21.stream.Voice,
+#                              _voiceOffsetInMeasure: Union[Fraction, float],
+#                              _token: HumdrumToken,
+#                              _staffIndex: int) -> bool:
+#         if token.isTimeSignature:
+#             # Now done at the measure level.  This location might
+#             # be good for time signatures which change in the
+#             # middle of measures.
+#             # _processDirections is now done, more generally, in _processInterpretationLayerToken.
+#             # return self._processDirections(measureIndex, voice, voiceOffsetInMeasure, token, staffIndex)
+#             pass
+#
+#         return False
 
     '''
     //////////////////////////////
@@ -1984,10 +1993,12 @@ class HumdrumFile(HumdrumFileContent):
         if not tempoName and tempoBPM <= 0:
             return
 
-        if self._hasTempoTextAfter(token):
+        if self._hasTempoTextAfterMM(token):
             # we'll handle this *MM during text direction processing
             return
 
+        # Only insert the tempo if there is no higher kern/mens spine
+        # that has a tempo marking at the same time.
         if not self._isLastStaffTempo(token):
             return
 
@@ -2016,17 +2027,15 @@ class HumdrumFile(HumdrumFileContent):
     //////////////////////////////
     //
     // HumdrumInput::isLastStaffTempo --
+        I have changed the definition of this to not care about track numbers,
+        just look to see if there's a higher kern/mens spine with a tempo. --gregc
     '''
     @staticmethod
     def _isLastStaffTempo(token: HumdrumToken) -> bool:
         field: int = token.fieldIndex + 1
-        track: int = token.track
         line: HumdrumLine = token.ownerLine
         for i in range (field, line.tokenCount):
             newTok: HumdrumToken = line[i]
-            newTrack: int = newTok.track
-            if track == newTrack:
-                continue
             if not newTok.isStaffDataType: # kern or mens
                 continue
             if newTok.isTempo:
@@ -2042,7 +2051,7 @@ class HumdrumFile(HumdrumFileContent):
     //    Algorithm: Find the first note after the input token and then check for a local
     //    or global LO:TX parameter that applies to that note (for local LO:TX).
     '''
-    def _hasTempoTextAfter(self, token: HumdrumToken) -> bool:
+    def _hasTempoTextAfterMM(self, token: HumdrumToken) -> bool:
         inFile = token.ownerLine.ownerFile # it's a HumdrumFile, but pylint doesn't like it
         startLineIdx: int = token.lineIndex
         current: HumdrumToken = token.nextToken0
@@ -2076,18 +2085,49 @@ class HumdrumFile(HumdrumFileContent):
             line = current.lineIndex
 
         for text in texts:
-            if self._isTempoishText(text):
+            if self._isTempoishLayout(text):
                 return True
 
         # now check for global tempo text
         texts = []
-        for i in reversed(range(startLineIdx+1, dataLineIdx-1)):
+        for i in reversed(range(startLineIdx+1, dataLineIdx)):
             gtok: HumdrumToken = inFile[i][0] # token 0 of line i
             if gtok.text.startswith('!!LO:TX:'):
                 texts.append(gtok.text)
 
         for text in texts:
-            if self._isTempoishText(text):
+            if self._isTempoishLayout(text):
+                return True
+
+        return False
+
+    def _hasTempoTextAfterOMD(self, token: HumdrumToken) -> bool:
+        inFile = token.ownerLine.ownerFile # it's a HumdrumFile, but pylint doesn't like it
+        startLineIdx: int = token.lineIndex
+
+        # search for first spined line and start at that line's first token
+        current: HumdrumToken = token
+        i: int = startLineIdx
+        while current and not inFile[i].isData:
+            i += 1
+            current = inFile[i][0]
+
+        if not current:
+            return False
+
+        # current points at first data line after OMD.
+        data: HumdrumToken = current
+        dataLineIdx: int = data.lineIndex
+        # now work backwards (to the OMD) searching for potential tempo text
+        texts: [HumdrumToken] = []
+
+        for i in reversed(range(startLineIdx+1, dataLineIdx)):
+            for tok in inFile[i].tokens():
+                if tok.text.startswith('!LO:TX:') or tok.text.startswith('!!LO:TX:'):
+                    texts.append(tok.text)
+
+        for text in texts:
+            if self._isTempoishLayout(text):
                 return True
 
         return False
@@ -2097,8 +2137,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::isTempoishText -- Return true if the text is probably tempo indication.
     '''
-    @staticmethod
-    def _isTempoishText(text: str) -> bool:
+    def _isTempoishLayout(self, text: str) -> bool:
         if re.search(':tempo:', text):
             return True
         if re.search(':temp$', text):
@@ -2108,10 +2147,21 @@ class HumdrumFile(HumdrumFileContent):
             return False
 
         textStr: str = m.group(1)
-        if re.search(r'\[.*?\]\s*=.*\d\d', textStr):
+        if self._isTempoish(textStr):
             return True
 
         return False
+
+    @staticmethod
+    def _isTempoish(text: str) -> bool:
+        if not text:
+            return False
+
+        if re.search(r'\[.*?\]\s*=.*\d\d', text):
+            return True
+
+        tt: m21.tempo.TempoText = m21.tempo.TempoText(text)
+        return tt.isCommonTempoText()
 
     '''
     //////////////////////////////
@@ -6354,8 +6404,7 @@ class HumdrumFile(HumdrumFileContent):
         # if we don't yet have a restStartingAtTransition, the first one is it.
         while amountToFill > HumNum(0):
             fillerRestDuration = HumNum(1, self._lcd(currOffset).denominator)
-            if fillerRestDuration > amountToFill:
-                fillerRestDuration = amountToFill
+            fillerRestDuration = min(fillerRestDuration, amountToFill)
             fillerRest: m21.note.Rest = self._createInvisibleRest(fillerRestDuration)
             restVoice.append(fillerRest)
             if restStartingAtTransition is None:
@@ -6397,7 +6446,7 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _isPowerOfTwo(x: int) -> bool:
         # note that 0 is considered a power of two here
-        return (x and (not(x & (x - 1))) )
+        return (x and (not x & (x - 1)))
 
     '''
         _computeTransitionalTupletOffsetAndElementDuration(transitionOffset)
@@ -6925,13 +6974,13 @@ class HumdrumFile(HumdrumFileContent):
         if re.search(Convert.METRONOME_MARK_PATTERN, text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
-        elif token.isTimeSignature:
+        elif self._isTempoish(text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
         elif isTempo:
             midiBPM: int = self._getMmTempo(token)
             if midiBPM == 0:
-                # this is a redundant tempo message, so ignore (event as text dir)
+                # this is a redundant tempo message, so ignore (even as text dir)
                 return insertedIntoVoice
 
             tempo = m21.tempo.MetronomeMark(number=midiBPM)
@@ -7085,6 +7134,38 @@ class HumdrumFile(HumdrumFileContent):
         voice.coreInsert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
         return True
 
+    def prevTokenIncludingGlobalToken(self, token: HumdrumToken) -> HumdrumToken:
+        current: HumdrumToken = token
+        currLine: HumdrumLine = current.ownerLine
+        currLineIdx: int = currLine.lineIndex
+
+        currLineIdx -= 1
+        if currLineIdx >= 0:
+            currLine = self[currLineIdx]
+            # try for previous token, else first token on previous (global) line
+            current = current.previousToken0
+            if current is None:
+                current = currLine[0]
+            return current
+
+        return None
+
+    def nextTokenIncludingGlobalToken(self, token: HumdrumToken) -> HumdrumToken:
+        current: HumdrumToken = token
+        currLine: HumdrumLine = current.ownerLine
+        currLineIdx: int = currLine.lineIndex
+
+        currLineIdx += 1
+        if currLineIdx < self.lineCount:
+            currLine = self[currLineIdx]
+            # try for next token, else first token on previous (global) line
+            current = current.nextToken0
+            if current is None:
+                current = currLine[0]
+            return current
+
+        return None
+
     '''
     //////////////////////////////
     //
@@ -7111,6 +7192,19 @@ class HumdrumFile(HumdrumFileContent):
 
         return 0
 
+    def _getMmTempoBeforeOMD(self, token: HumdrumToken) -> int:
+        current: HumdrumToken = token
+
+        if current and current.isData:
+            current = self.prevTokenIncludingGlobalToken(current)
+
+        while current and not current.isData:
+            if current.isTempo:
+                return current.tempoBPM
+            current = self.prevTokenIncludingGlobalToken(current)
+
+        return 0
+
     '''
     //////////////////////////////
     //
@@ -7119,21 +7213,15 @@ class HumdrumFile(HumdrumFileContent):
     //     Returns 0.0 if no tempo is found.
         Actually returns any *MM# tempo value at or after the input token, and returns 0 if nothing found.
     '''
-    @staticmethod
-    def _getMmTempoForward(token: HumdrumToken) -> int:
+    def _getMmTempoForward(self, token: HumdrumToken) -> int:
         current: HumdrumToken = token
         if current and current.isData:
-            current = current.nextToken0
-
-        line: int = 0
-        while current.spineInfo == '':
-            line = current.lineIndex + 1
-            current = current.ownerLine.ownerFile[line][0] # first token on next line
+            current = self.nextTokenIncludingGlobalToken(current)
 
         while current and not current.isData:
             if current.isTempo:
                 return current.tempoBPM
-            current = current.nextToken0
+            current = self.nextTokenIncludingGlobalToken(current)
 
         return 0
 
@@ -7180,7 +7268,7 @@ class HumdrumFile(HumdrumFileContent):
 
         mmNumber: int = midiBPM
         if mmNumber <= 0:
-            self._getMmTempo(token) # nearby (previous) *MM
+            mmNumber = self._getMmTempo(token) # nearby (previous) *MM
 
         if bpmText and (bpmText[-1] == ')' or bpmText[-1] == ']'):
             bpmText = bpmText[0:-1]
@@ -7282,13 +7370,16 @@ class HumdrumFile(HumdrumFileContent):
         token: HumdrumToken = self._lines[index][0] # first token of line 'index'
         self._currentOMDDurationFromStart = token.durationFromStart
 
+        if self._hasTempoTextAfterOMD(token):
+            return # any tempo text after an OMD will have everything we need
+
         # check for nearby *MM marker before OMD
-        midibpm: int = self._getMmTempo(token)
+        midibpm: int = self._getMmTempoBeforeOMD(token)
         if midibpm <= 0:
             # check for nearby *MM marker after OMD
             midibpm = self._getMmTempoForward(token)
 
-        if midibpm > 0 or value:
+        if midibpm > 0 or self._isTempoish(value):
             # put the metronome mark in this measure of staff 0 (highest staff on the page)
             staffIndex: int = 0
             tempo: m21.tempo.MetronomeMark = self._createMetronomeMark(value, midibpm)

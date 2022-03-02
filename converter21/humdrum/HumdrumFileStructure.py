@@ -684,8 +684,8 @@ Line: {line.text}''')
             elif tok.isBarline:
                 # layout parameters allowed for barlines
                 dtok = tok
-            elif tok.isInterpretation and tok.text != '*':
-                # layout parameters allowed for non-null interpretations
+            elif tok.isInterpretation and tok.text != '*' and not tok.isManipulator:
+                # layout parameters allowed for non-null, non-manip interpretations
                 dtok = tok
             elif tok.isLocalComment and tok.text.startswith('!LO:'):
                 tok.storeParameterSet()

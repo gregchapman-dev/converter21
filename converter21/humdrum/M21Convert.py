@@ -1283,10 +1283,13 @@ class M21Convert:
     '''
     @staticmethod
     def _cleanSpacesAndColons(inStr: str) -> str:
-        inStr: str = inStr.strip() # strips all leading and trailing whitespace
         newLinesAndTabs: str = '\t\n\r\v\f'
         output: str = ''
         for ch in inStr:
+            if ch == '\u00A0': # convert all non-breaking spaces to '&nbsp;'
+                output += '&nbsp;'
+                continue
+
             if ch == ':': # convert all colons to '&colon;'
                 output += '&colon;'
                 continue
@@ -1297,6 +1300,9 @@ class M21Convert:
 
             output += ch
 
+        # Strip all leading and trailing whitespace
+        # We do this last after we've already saved the non-breaking spaces from stripping.
+        output = output.strip()
         return output
 
     @staticmethod
