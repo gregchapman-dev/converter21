@@ -815,8 +815,19 @@ class HumdrumFile(HumdrumFileContent):
         # piano sonata21-3.krn as an example.  First OMD is 'Rondo: Allegretto
         # moderato', and last OMD (in a measure in the middle of the movement) is
         # 'Prestissimo'.  The movement name is 'Rondo: Allegretto'. --gregc
-        alreadyHaveMovementName: bool = False
+        # Clarification: the first OMD only becomes the movement name if it is
+        # seen before any data lines (i.e. notes/rests).  If the first OMD is
+        # seen after some notes, it's just a tempo change.
+        firstDataLineIdx: HumdrumLine = self.lineCount # one off the end
+        for line in self._lines:
+            if line.isData:
+                firstDataLineIdx = line.lineIndex
+                break
+
+        alreadySawOMD: bool = False
         for bibLine in self.referenceRecords():
+            if bibLine.text.startswith('!!!!'):
+                continue # skip the universal records for now, we don't handle multi-score Humdrum files
             key = bibLine.referenceKey
             value = bibLine.referenceValue
 
@@ -831,13 +842,14 @@ class HumdrumFile(HumdrumFileContent):
                 value = html.unescape(value)
             if key == 'OMD':
                 # only take the first OMD for the movement name
-                if not alreadyHaveMovementName:
-                    # strip off any [quarter = 128] suffix
-                    tempoName, _noteName, _bpmText = Convert.getMetronomeMarkInfo(value)
-                    if tempoName:
-                        value = tempoName
-                    self._biblio.append((key, value))
-                    alreadyHaveMovementName = True
+                if not alreadySawOMD:
+                    alreadySawOMD = True
+                    if bibLine.lineIndex < firstDataLineIdx:
+                        # strip off any [quarter = 128] suffix
+                        tempoName, _noteName, _bpmText = Convert.getMetronomeMarkInfo(value)
+                        if tempoName:
+                            value = tempoName
+                        self._biblio.append((key, value))
             else:
                 self._biblio.append((key, value))
 
@@ -1980,11 +1992,14 @@ class HumdrumFile(HumdrumFileContent):
         if not token.isTempo:
             return
 
-        # bail if you see a nearby OMD, since the processing
-        # of that non-initial OMD (see _checkForOmd) will handle this
-        # *MM for us.
-        if self._isNearOmd(token):
-            # we'll handle this *MM in _checkForOmd()
+        # bail if you see a nearby OMD just before this token, since the processing
+        # of that non-initial OMD (see _checkForOmd) has handled this *MM for us.
+        # If the nearby OMD is partway through a measure, though, it will not have
+        # been handled by _checkForOmd (which prepends a measure with a starting
+        # tempo change), and we will need to handle it here (and get the tempo name
+        # from the OMD if necessary, see below).
+        if self._isNearHandledOmd(token):
+            # we've handled this *MM in _checkForOmd()
             return
 
         tempoName: str = token.tempoName # *MM[Adagio] => tempoName == 'Adagio', tempoBPM == 0
@@ -2001,6 +2016,17 @@ class HumdrumFile(HumdrumFileContent):
         # that has a tempo marking at the same time.
         if not self._isLastStaffTempo(token):
             return
+
+        if not tempoName:
+            # if there's a nearby unhandled OMD, get the tempoName from there.
+            nearbyUnhandledOMD: HumdrumLine = self._getNearbyUnhandledOmdLine(token)
+            if nearbyUnhandledOMD is not None:
+                nearbyUnhandledOMD[0].setValue('auto', 'OMD handled', True)
+                tempoName = nearbyUnhandledOMD.referenceValue
+
+        if tempoName:
+            tempoName = html.unescape(tempoName)
+            tempoName = tempoName.strip()
 
         mmText: str = tempoName
         if mmText == '':
@@ -2179,7 +2205,6 @@ class HumdrumFile(HumdrumFileContent):
     'vivacissimo',
     'presto',
     'prestissimo',
-    'con moto',
     ]
 
     @staticmethod
@@ -2187,7 +2212,7 @@ class HumdrumFile(HumdrumFileContent):
         if not text:
             return False
 
-        if re.search(r'\[.*?\]\s*=.*\d\d', text):
+        if Convert.hasMetronomeMarkInfo(text):
             return True
 
         # A modified version of m21.TempoText.isCommonTempoText (which thinks
@@ -2214,29 +2239,55 @@ class HumdrumFile(HumdrumFileContent):
     //    An OMD line, with the boundary being a data line (measures are included).
     '''
     @staticmethod
-    def _isNearOmd(token: HumdrumToken) -> bool:
+    def _isNearHandledOmd(token: HumdrumToken) -> bool:
         tline: int = token.lineIndex
         inFile = token.ownerLine.ownerFile # it's a HumdrumFile, but pylint doesn't like it
 
-        for i in reversed(range(0, tline-1)): # BUG: for (i = tline - 1; tline >= 0; --i)
+        for i in reversed(range(0, tline)):
             ltok: HumdrumToken = inFile[i][0] # token 0 of line i
             if ltok.isData:
                 break
             if not inFile[i].isReference:
                 continue
-            if ltok.text.startswith('!!!OMD'):
+            if ltok.text.startswith('!!!OMD') and ltok.getValueBool('auto', 'OMD handled'):
                 return True
 
-        for i in range(tline+1, inFile.lineCount): # BUG: for (i = tline + 1; tline < infile.getLineCount(); ++tline)
+        for i in range(tline+1, inFile.lineCount):
             ltok: HumdrumToken = inFile[i][0] # token 0 of line i
             if ltok.isData:
                 break
             if not inFile[i].isReference:
                 continue
-            if ltok.text.startswith('!!!OMD'):
+            if ltok.text.startswith('!!!OMD') and ltok.getValueBool('auto', 'OMD handled'):
                 return True
 
         return False
+
+    @staticmethod
+    def _getNearbyUnhandledOmdLine(token: HumdrumToken) -> HumdrumLine:
+        tline: int = token.lineIndex
+        inFile = token.ownerLine.ownerFile # it's a HumdrumFile, but pylint doesn't like it
+
+        for i in reversed(range(0, tline)):
+            ltok: HumdrumToken = inFile[i][0] # token 0 of line i
+            if ltok.isData:
+                break
+            if not inFile[i].isReference:
+                continue
+            if ltok.text.startswith('!!!OMD') and not ltok.getValueBool('auto', 'OMD handled'):
+                return inFile[i]
+
+        for i in range(tline+1, inFile.lineCount):
+            ltok: HumdrumToken = inFile[i][0] # token 0 of line i
+            if ltok.isData:
+                break
+            if not inFile[i].isReference:
+                continue
+            if ltok.text.startswith('!!!OMD') and not ltok.getValueBool('auto', 'OMD handled'):
+                return inFile[i]
+
+        return None
+
 
     '''
         _handleGroupState adds beams and tuplets to a note/rest in the layer, as appropriate.
@@ -6999,6 +7050,7 @@ class HumdrumFile(HumdrumFileContent):
                 text = 'S'
 
         text = html.unescape(text)
+        text = text.strip()
 
         maxStaff: int = len(self._staffStarts) - 1
 
@@ -7015,10 +7067,7 @@ class HumdrumFile(HumdrumFileContent):
                 return insertedIntoVoice
 
         tempoOrDirection: m21.Music21Object = None
-        if re.search(Convert.METRONOME_MARK_PATTERN, text):
-            tempo = self._createMetronomeMark(text, token)
-            tempoOrDirection = tempo
-        elif self._isTempoish(text):
+        if self._isTempoish(text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
         elif isTempo:
@@ -7113,10 +7162,7 @@ class HumdrumFile(HumdrumFileContent):
 
         text = html.unescape(text)
 
-        if re.search(Convert.METRONOME_MARK_PATTERN, text):
-            tempo = self._createMetronomeMark(text, token)
-            tempoOrDirection = tempo
-        elif token.isTimeSignature:
+        if self._isTempoish(text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
         else:
@@ -7283,6 +7329,8 @@ class HumdrumFile(HumdrumFileContent):
         noteName: str = None  # e.g. 'quarter'
         bpmText: str = None   # e.g. '88'
 
+        text = html.unescape(text)
+
         tempoName, noteName, bpmText = Convert.getMetronomeMarkInfo(text)
 
         if not tempoName and not noteName and not bpmText:
@@ -7294,6 +7342,7 @@ class HumdrumFile(HumdrumFileContent):
                     mmNumber = None
 
             mmText: str = text
+            mmText = mmText.strip()  # strip leading and trailing whitespace
             if mmText == '':
                 mmText = None
 
@@ -7408,6 +7457,7 @@ class HumdrumFile(HumdrumFileContent):
                 value = line.referenceValue
                 # break # Don't break: search for the last OMD in a non-data region
 
+        value = html.unescape(value)
         if not value:
             return
 
@@ -7424,6 +7474,7 @@ class HumdrumFile(HumdrumFileContent):
             midibpm = self._getMmTempoForward(token)
 
         if midibpm > 0 or self._isTempoish(value):
+            token.setValue('auto', 'OMD handled', True)
             # put the metronome mark in this measure of staff 0 (highest staff on the page)
             staffIndex: int = 0
             tempo: m21.tempo.MetronomeMark = self._createMetronomeMark(value, midibpm)

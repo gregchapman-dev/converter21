@@ -1719,15 +1719,39 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # extra metronome marks when exporting from PartStaffs.
         # We only want one metronome mark in this slice, preferably in the top-most part
         # We'll be content with the highest partIndex seen.
-        highestPartIndexSeen: int = -1
-        highestTempoIndicationSeen: m21.tempo.TempoIndication = None
-        for partIndex, tempoIndication in tempos:
-            if partIndex > highestPartIndexSeen:
-                highestPartIndexSeen = partIndex
-                highestTempoIndicationSeen = tempoIndication
+        # Note: The original routine over-deleted if there were multiple _different_ metronome marks.
+        # This is now rewritten to only delete actual duplicates. --gregc
+        emittedTempos: List[m21.tempo.TempoIndication] = []
 
-        if highestPartIndexSeen >= 0:
-            self._addTempo(outSlice, outgm, highestPartIndexSeen, highestTempoIndicationSeen)
+        # First, sort by partIndex (highest first)
+        # Then loop over all the tempos, adding only the first one you see of each unique mark
+        def partIndexOf(tempo: Tuple[int, m21.tempo.TempoIndication]) -> int:
+            return tempo[0]
+
+        def isAlreadyEmitted(tempo: m21.tempo.TempoIndication) -> bool:
+            tempoMM: m21.tempo.MetronomeMark = tempo.getSoundingMetronomeMark()
+            for e in emittedTempos:
+                if type(tempo) is not type(e): # original type, not MM
+                    continue
+                eMM: m21.tempo.MetronomeMark = e.getSoundingMetronomeMark()
+                if eMM.numberImplicit != tempoMM.numberImplicit:
+                    continue
+                if not eMM.numberImplicit and eMM.number != tempoMM.number:
+                    continue
+                if eMM.textImplicit != tempoMM.textImplicit:
+                    continue
+                if not eMM.textImplicit and eMM.text != tempoMM.text:
+                    continue
+                if eMM.referent != tempoMM.referent:
+                    continue
+                return True
+            return False
+
+        sortedTempos = sorted(tempos, key=partIndexOf, reverse=True)
+        for partIndex, tempoIndication in sortedTempos:
+            if not isAlreadyEmitted(tempoIndication):
+                self._addTempo(outSlice, outgm, partIndex, tempoIndication)
+                emittedTempos.append(tempoIndication)
 
     '''
     //////////////////////////////

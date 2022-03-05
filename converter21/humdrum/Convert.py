@@ -461,16 +461,36 @@ class Convert:
 
         return output
 
-    METRONOME_MARK_PATTERN : str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.d*)'
+    _METRONOME_MARK_PATTERNS : List[str] = [
+        # the one with parens needs to come first or a string with parens will match the wrong
+        # pattern, and instead of 'Allegro', you'll get 'Allegro ('.
+        r'(.*)\(\[([^=\]]*)\]\s*=\s*(\d+\.?\d*)',   # e.g. 'Allegro ([quarter] = 128.0'
+        r'(.*)\[([^=\]]*)\]\s*=\s*(\d+\.?\d*)',     # e.g. 'Allegro [quarter] = 128.0'
+    ]
 
     @staticmethod
     def getMetronomeMarkInfo(text: str) -> (str, str, str):
-        # takes strings like "Andante [quarter = 88]" and returns
-        # returns (tempoName, refNoteName, bpmText) -> ('Andante', 'quarter', '88)
-        m = re.search(Convert.METRONOME_MARK_PATTERN, text)
-        if m:
-            return (m.group(1), m.group(2), m.group(3))
+        # takes strings like
+        # "Andante [quarter] = 88.1"  # PATTERNS[0]
+        # or
+        # "Andante ([quarter] = 88.1" # PATTERNS[1]
+        # and returns
+        # (tempoName, refNoteName, bpmText) -> ('Andante', 'quarter', '88.1')
+        for markPatt in Convert._METRONOME_MARK_PATTERNS:
+            m = re.search(markPatt, text)
+            if m:
+                return (m.group(1), m.group(2), m.group(3))
+
         return (None, None, None)
+
+    @staticmethod
+    def hasMetronomeMarkInfo(text: str) -> bool:
+        for markPatt in Convert._METRONOME_MARK_PATTERNS:
+            m = re.search(markPatt, text)
+            if m:
+                return True
+
+        return False
 
     '''
         *** Math ***
