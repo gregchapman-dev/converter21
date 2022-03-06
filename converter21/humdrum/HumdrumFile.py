@@ -1305,11 +1305,6 @@ class HumdrumFile(HumdrumFileContent):
                     layerIndex += 1
 
                 lastTrack = tokenTrack
-                if token.isNullData:
-                    # keeping null interpretations to search for clef
-                    # in primary layer for secondary layer duplication.
-                    if token.linkedParameterSetCount == 0:
-                        continue
 
                 if token.isLocalComment and token.isNull:
                     # don't store empty comments as well. (maybe ignore all
@@ -1577,8 +1572,10 @@ class HumdrumFile(HumdrumFileContent):
 #                 lastDataTok = layerTok
 
             if layerTok.isNullData:
-                # print any global text directions attached to the null token
+                # print any global text directions (or dynamics) attached to the null token
                 # and then skip to next token.
+                if self._processDynamics(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex):
+                    insertedIntoVoice = True
                 if self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex):
                     insertedIntoVoice = True
                 continue
@@ -6207,25 +6204,14 @@ class HumdrumFile(HumdrumFileContent):
                                         hairpins, token, dynTok, staffIndex):
                     insertedIntoVoice = True
 
-        token = token.nextToken0
-        if not token:
-            return insertedIntoVoice
+        # No more need for the following recursive call to _processDynamics:
+        # // re-run this function on null tokens after the main note since
+        # // there may be dynamics unattached to a note (for various often
+        # // legitimate reasons).  Maybe make this more efficient later, such as
+        # // do a separate parse of dynamics data in a different loop.
 
-        while token and not token.isData:
-            token = token.nextToken0
-
-        if not token:
-            return insertedIntoVoice
-        if not token.isNull:
-            return insertedIntoVoice
-
-        # re-run this function on null tokens after the main note since
-        # there may be dynamics unattached to a note (for various often
-        # legitimate reasons).  Maybe make this more efficient later, such as
-        # do a separate parse of dynamics data in a different loop.
-        if self._processDynamics(measureIndex, voice, voiceOffsetInMeasure, token, staffIndex):
-            insertedIntoVoice = True
-
+        # Instead I now leave null data tokens in the layerData, and process
+        # them just like suppressed tokens: directions/dynamics only. --gregc
         return insertedIntoVoice
 
     def _processHairpin(self,
