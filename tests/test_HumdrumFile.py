@@ -13,8 +13,11 @@ from converter21.humdrum.HumdrumFileBase import getMergedSpineInfo
 from tests.Utilities import CheckHumdrumFile, HumdrumFileTestResults
 
 # def test_ParticularFile():
-#     f = HumdrumFile('/Users/gregc/Documents/test/humdrum_test_files_from_humlib/test-manipulators.krn') # put particular file to test's full pathstr there
-#     results = HumdrumFileTestResults('') # put particular file to test's results file there
+#     f = HumdrumFile('/Users/gregc/Documents/test/rds-scores/kern/R408_Web-w13p1-2m1-12.krn') # put particular file to test's full pathstr there
+#     assert (f.isValid)
+#
+#     results = HumdrumFileTestResults.fromFiles('/Users/gregc/Documents/test/rds-scores/kern/R408_Web-w13p1-2m1-12.krn',
+#                                                '/Users/gregc/Documents/test/rds-scores/kern/R408_Web-w13p1-2m1-12.json')
 #     CheckHumdrumFile(f, results)
 
 def test_getMergedSpineInfo():
@@ -60,20 +63,6 @@ def ReadAllTestFilesInFolder(folder: str):
             print('skipping test because krnFile contains more than one score (not yet supported)')
             continue
 
-#         if 'rds-scores' in str(krnPath) and krnPath.name in (
-#                 'R408_Web-w13p1-2m1-12.krn',
-#                                                             ):
-#             print('\tskipping import due to no note/chord/rest at end of tuplet')
-#             continue
-
-        if 'jrp-scores' in str(krnPath) and krnPath.name in (
-                'Agr1001c-Missa_In_myne_zin-Sanctus.krn',
-                'Agr1001d-Missa_In_myne_zin-Agnus.krn',
-                'Mar2085-Salve_regina.krn',
-                                                            ):
-            print('skipping test because krnFile does not parse (inexpressible duration in tuplet)')
-            continue
-
         hfb = HumdrumFile(str(krnPath))
         assert(hfb.isValid)
 
@@ -99,15 +88,9 @@ def ReadAllTestFilesInFolder(folder: str):
         # these are cases that cause extendTokenDuration to fail because it ran out
         # of room before the next note (music21 has overlapping notes, most likely)
         if krnPath.name in (
-                'Tam2010724a-Picciola_e_lape_e_fa_col_picciol_morso--Balsamino_1594.krn', # tasso-scores
+                'test-manipulators.krn',
                             ):
-            print('\tskipping export due to overlapping note durations (unknown reason)')
-            continue
-
-        if 'rds-scores' in str(krnPath) and krnPath.name in (
-                'R319_Fal-w6p178-179h44m1-5.krn'
-        ):
-            print('\tskipping export due to unexported *tremolo causing overlapping note durations')
+            print('\tskipping export due to overlapping note durations (caused perhaps by *+)')
             continue
 
         hdw: HumdrumWriter = HumdrumWriter(score)
@@ -137,26 +120,15 @@ def ReadAllTestFilesInFolder(folder: str):
         # this is a weird one...
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R262x_Ive-w33b4p26.krn',
+                'R443_Ber-w10p321m593-595.krn',
                 ): # rds-scores
-            print('\tskipping parse of export due to two missing instrument abbreviation spines')
-            continue
-
-        if 'tasso-scores' in str(krnPath) and krnPath.name in (
-                'Trm0247a-Io_vidi_gia_sotto_lardente_sole--Marenzio_1584.krn',
-                                                        ):
-            print('\tskipping parse of export due to missing note weirdness (perhaps because of [whole]->[whole-dot)')
+            print('\tskipping parse of export due to missing fields')
             continue
 
         if 'rds-scores' in str(krnPath) and krnPath.name in (
                 'R258_Ive-w30p9m55-57.krn',
                                                             ):
             print('\tskipping parse of export due to unparseable manipulators (original is even weirder, but parseable)')
-            continue
-
-        if 'jrp-scores' in str(krnPath) and krnPath.name in (
-                'Ock1013e-Requiem-Offertory_Domine_Jesu_Christe.krn',
-                                                            ):
-            print('skipping parse of export due to unparseable duration in tuplet')
             continue
 
         hfb = HumdrumFile(str(fp))
