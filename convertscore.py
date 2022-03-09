@@ -8,8 +8,8 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021 Greg Chapman
-# License:       BSD, see LICENSE
+# Copyright:     (c) 2021-2022 Greg Chapman
+# License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import argparse
 import os

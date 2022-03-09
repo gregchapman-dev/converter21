@@ -9,8 +9,8 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021 Greg Chapman
-# License:       BSD, see LICENSE
+# Copyright:     (c) 2021-2022 Greg Chapman
+# License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
 from typing import List
@@ -483,6 +483,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 gridSlice.duration = sliceDur
 
         # in the first bar, we delay the initial barline until after all the clef, keysig, etc
+        haveFirstBarline: bool = False
         doFirstBarlineNow: bool = False
         didFirstBarline: bool = False
         firstBarlineSlice: GridSlice = None
@@ -511,10 +512,11 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                     gridSlice.transferTokens(outFile, recip)
                     continue
 
-                # assumption: there's only one measure slice in the first measure, and
-                # we'll see it well before we run into something that will make us do it.
-                if gridSlice.isMeasureSlice:
+                # assumption: we'll see the first barline well before we run into
+                # something that will make us do it.
+                if gridSlice.isMeasureSlice and not haveFirstBarline:
                     firstBarlineSlice = gridSlice
+                    haveFirstBarline = True
                 else:
                     gridSlice.transferTokens(outFile, recip)
             else:

@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# Name:          HumSignifiers.py
+# Purpose:       Parsing/interpreting of RDF signifiers during Humdrum import
+#
+# Authors:       Greg Chapman <gregc@mac.com>
+#                Humdrum code derived/translated from humlib (authored by
+#                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
+#
+# Copyright:     (c) 2021-2022 Greg Chapman
+# License:       MIT, see LICENSE
+# ------------------------------------------------------------------------------
 import re
 
 SIGNIFIER_UNKNOWN = 'unknown'
