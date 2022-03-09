@@ -1,7 +1,7 @@
 # converter21
 A music21-extending converter package, and score conversion command line tool.  Contains an alternate music21 humdrum converter that adds a humdrum writer and replaces music21's humdrum parser.
 
-The Humdrum portion of this software is derived/translated from the C++ code in https://github.com/craigsapp/humlib, by Craig Stuart Sapp.
+The Humdrum portion of this software is derived/translated from the C++ code in [humlib](https://github.com/craigsapp/humlib), by Craig Stuart Sapp.
 
 ## Setup
 Depends on [music21](https://pypi.org/project/music21), which should also be configured (instructions [here](https://web.mit.edu/music21/doc/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://pypi.org/project/musicdiff), but converter21 itself does not.
