@@ -7841,6 +7841,32 @@ class HumdrumFile(HumdrumFileContent):
             return tok.groupNum
         return 0
 
+    def _shouldFakeOnePartAndOrAllStaves(self) -> (bool, bool):
+        # returns (fakeOnePart, fakeAllStaves)
+        # Returns fakeOnePart=True if (1) there are any missing *partN interps and
+        #                             (2) there are <= 3 staffStarts.
+        # (if there are more than 3 staffStarts, we will fake as many parts as there are staves)
+        # Returns fakeAllStaves=True if there are any missing *staffN interps.
+        numStaves: int = len(self._staffStarts)
+
+        partInterpsUsable: bool = True
+        staffInterpsUsable: bool = True
+        for startTok in self._staffStarts:
+            partNum: int = self._getPartNumberLabel(startTok)
+            staffNum: int = self._getStaffNumberLabel(startTok)
+            if partNum <= 0:
+                partInterpsUsable = False
+            if staffNum <= 0:
+                staffInterpsUsable = False
+
+            if not partInterpsUsable and not staffInterpsUsable:
+                # we're not going to get any new information, get out
+                break
+
+        fakeOnePart: bool = not partInterpsUsable and numStaves <= 3
+        fakeAllStaves: bool = not staffInterpsUsable
+        return fakeOnePart, fakeAllStaves
+
     '''
     //////////////////////////////
     //
@@ -7890,6 +7916,10 @@ class HumdrumFile(HumdrumFileContent):
         staffToPart = {}    # key is staff num, value is part num
         staffToStaffStartIndex = {} # key is staff num, value is index into self._staffStarts
 
+        fakeOnePart: bool = False
+        fakeAllStaves: bool = False
+        fakeOnePart, fakeAllStaves = self._shouldFakeOnePartAndOrAllStaves()
+
         for staffStartIndex, (ss, startTok) in enumerate(zip(self._staffStates, self._staffStarts)):
             staffNum: int = self._getStaffNumberLabel(startTok)
             groupNum: int = self._getGroupNumberLabel(startTok)
@@ -7897,11 +7927,11 @@ class HumdrumFile(HumdrumFileContent):
             trackNum: int = startTok.track
             instrumentClass: str = ss.instrumentClass
 
-            # we require *staffN numbers to be present, or system-decoration can't work --gregc
-            # (not strictly true, you could do tN (trackNum) style decoration, and we should
-            # allow that)
-            if staffNum <= 0:
-                return False
+            if fakeAllStaves:
+                staffNum = staffStartIndex + 1
+
+            if fakeOnePart:
+                partNum = 1
 
             staffList.append(staffNum)
             staffToStaffStartIndex[staffNum] = staffStartIndex
@@ -7932,298 +7962,346 @@ class HumdrumFile(HumdrumFileContent):
                     ss.isPartStaff = True
                     # if this was the 2nd staff in the part, reach back and mark the first one as well
                     if len(partToStaves[partNum]) == 2:
-                        firstStaffIdxInPart: int = partToStaves[partNum][0] - 1 # idx is 0-based
+                        firstStaffNumInPart: int = partToStaves[partNum][0]
+                        firstStaffIdxInPart: int = staffToStaffStartIndex[firstStaffNumInPart]
                         self._staffStates[firstStaffIdxInPart].isPartStaff = True
                 staffToPart[staffNum] = partNum
 
-        if not decoration:
-            # note that we do this check after all that work above, since that work
-            # includes ss.isPartStaff computation, which we need to do whether or not
-            # there is a system-decoration.
-            return False
+        # Compute the StaffGroupDescriptionTree, either from the decoration string,
+        # or if there is no such string, create a default tree from partToStaves et al.
+        topLevelParent: M21StaffGroupDescriptionTree = None
 
-        # Expand groupings into staves.  The d variable contains the expansions
-        # and the decoration variable contains the original decoration string.
-        d: str = decoration
+        if decoration:
+            # Expand groupings into staves.  The d variable contains the expansions
+            # and the decoration variable contains the original decoration string.
+            d: str = decoration
 
-        # Instrument class expansion to staves:
-        # e.g. '{(bras)}' might expand to '{(s3,s4,s5)}'
-        if classToStaves:
-            for iClassPattern, staves in classToStaves.items():
+            # Instrument class expansion to staves:
+            # e.g. '{(bras)}' might expand to '{(s3,s4,s5)}'
+            if classToStaves:
+                for iClassPattern, staves in classToStaves.items():
+                    replacement: str = ''
+                    for i, sNum in enumerate(staves):
+                        replacement += 's' + str(sNum)
+                        if i < len(staves) - 1:
+                            replacement += ','
+                    d = re.sub(iClassPattern, replacement, d)
+
+            # Group number expansion to staves:
+            if groupToStaves:
+                # example:   {(g1}} will be expanded to {(s1,s2,s3)} if
+                # group1 is given to staff1, staff2, and staff3.
+                for gNum, staves in groupToStaves.items():
+                    gNumStr: str = 'g' + str(gNum)
+                    replacement: str = ''
+                    for i, sNum in enumerate(staves):
+                        replacement += 's' + str(sNum)
+                        if i < len(staves) - 1:
+                            replacement += ','
+                    d = re.sub(gNumStr, replacement, d)
+
+            # Part number expansion to staves:
+            if partToStaves:
+                # example:   {(p1}} will be expanded to {(s1,s2)} if
+                # part1 is given to staff1 and staff2.
+                for pNum, staves in partToStaves.items():
+                    pNumStr: str = 'p' + str(pNum)
+                    replacement: str = ''
+                    for i, sNum in enumerate(staves):
+                        replacement += 's' + str(sNum)
+                        if i < len(staves) - 1:
+                            replacement += ','
+                    d = re.sub(pNumStr, replacement, d)
+
+            # remove unexpanded groups and parts
+            d = re.sub(r'p\d+', '', d)
+            d = re.sub(r'g\d+', '', d)
+
+            # remove any invalid characters
+            d = re.sub(r'[^0-9s()<>{}*\[\]]', '', d)
+
+            # Expand * to mean all tracks present in the score
+            hasStar: bool = False
+            if re.search(r'\*', d):
                 replacement: str = ''
-                for i, sNum in enumerate(staves):
-                    replacement += 's' + str(sNum)
-                    if i < len(staves) - 1:
+                for i, trackNum in enumerate(trackList):
+                    replacement += 't' + str(trackNum)
+                    if i < len(trackList) - 1:
                         replacement += ','
-                d = re.sub(iClassPattern, replacement, d)
+                d = re.sub(r'\*', replacement, d)
+                hasStar = True
 
-        # Group number expansion to staves:
-        if groupToStaves:
-            # example:   {(g1}} will be expanded to {(s1,s2,s3)} if
-            # group1 is given to staff1, staff2, and staff3.
-            for gNum, staves in groupToStaves.items():
-                gNumStr: str = 'g' + str(gNum)
-                replacement: str = ''
-                for i, sNum in enumerate(staves):
-                    replacement += 's' + str(sNum)
-                    if i < len(staves) - 1:
-                        replacement += ','
-                d = re.sub(gNumStr, replacement, d)
+            d = re.sub(r'\*', '', d) # gets rid of any remaining '*' characters
+            if not d:
+                return False
+            '''
+            print('INPUT DECORATION: {}'.format(decoration), file=sys.stderr)
+            print('       PROCESSED: {}'.format(d), file=sys.stderr)
+            '''
 
-        # Part number expansion to staves:
-        if partToStaves:
-            # example:   {(p1}} will be expanded to {(s1,s2)} if
-            # part1 is given to staff1 and staff2.
-            for pNum, staves in partToStaves.items():
-                pNumStr: str = 'p' + str(pNum)
-                replacement: str = ''
-                for i, sNum in enumerate(staves):
-                    replacement += 's' + str(sNum)
-                    if i < len(staves) - 1:
-                        replacement += ','
-                d = re.sub(pNumStr, replacement, d)
+            decoStaffNums: [int] = []
+            for m in re.finditer(r's(\d+)', d):
+                if m:
+                    decoStaffNums.append(int(m.group(1)))
 
-        # remove unexpanded groups and parts
-        d = re.sub(r'p\d+', '', d)
-        d = re.sub(r'g\d+', '', d)
+            for decoStaffNum in decoStaffNums:
+                if decoStaffNum not in staffList:
+                    # The staff number in the decoration string
+                    # is not present in the list so remove it.
+                    staffNumPattern = 's' + str(decoStaffNum)
+                    # assert that if there is a next char, it is not a digit (don't match 's1' to 's10')
+                    staffNumPattern += r'(?!\d)'
+                    d = re.sub(staffNumPattern, '', d)
 
-        # remove any invalid characters
-        d = re.sub(r'[^0-9s()<>{}*\[\]]', '', d)
+            # remove any empty groups
+            d = re.sub(r'\(\)', '', d)
+            d = re.sub(r'\[\]', '', d)
+            d = re.sub(r'\{\}', '', d)
+            d = re.sub(r'<>', '', d)
+            # do it again to be safe (for one recursion)
+            d = re.sub(r'\(\)', '', d)
+            d = re.sub(r'\[\]', '', d)
+            d = re.sub(r'\{\}', '', d)
+            d = re.sub(r'<>', '', d)
 
-        # Expand * to mean all tracks present in the score
-        hasStar: bool = False
-        if re.search(r'\*', d):
-            replacement: str = ''
-            for i, trackNum in enumerate(trackList):
-                replacement += 't' + str(trackNum)
-                if i < len(trackList) - 1:
-                    replacement += ','
-            d = re.sub(r'\*', replacement, d)
-            hasStar = True
+            # How many staves ('sN' or 'tN') in d?
+            decoStaffCount = d.count('s') + d.count('t')
+            if decoStaffCount == 0:
+                return False
 
-        d = re.sub(r'\*', '', d) # gets rid of any remaining '*' characters
-        if not d:
-            return False
-        '''
-        print('INPUT DECORATION: {}'.format(decoration), file=sys.stderr)
-        print('       PROCESSED: {}'.format(d), file=sys.stderr)
-        '''
+            if decoStaffCount == 1:
+                # remove decoration when a single staff on system.
+                # This leaves only 'sN' or 'tN', with no braces of any sort.
+                d = re.sub(r'[^ts\d]', '', d)
 
-        decoStaffNums: [int] = []
-        for m in re.finditer(r's(\d+)', d):
-            if m:
-                decoStaffNums.append(int(m.group(1)))
+            # Now pair (), <> {}, and [] parentheses in the d string.
+            # This is mostly for validation purposes (are things properly nested?)
+            # but we also use pairing when walking the string to keep track of
+            # where the current '}' was opened, for example.
+            OPENS  = ['(', '{', '[', '<']
+            CLOSES = [')', '}', ']', '>']
+            stack: [tuple] = []             # list of (d string index, paren char)
+            pairing: [int] = [-1] * len(d)
 
-        for decoStaffNum in decoStaffNums:
-            if decoStaffNum not in staffList:
-                # The staff number in the decoration string
-                # is not present in the list so remove it.
-                staffNumPattern = 's' + str(decoStaffNum)
-                # assert that if there is a next char, it is not a digit (don't match 's1' to 's10')
-                staffNumPattern += r'(?!\d)'
-                d = re.sub(staffNumPattern, '', d)
+            for i, ch in enumerate(d):
+                if ch in OPENS:
+                    stack.append((i, ch))
+                elif ch in CLOSES:
+                    if not stack: # if stack is empty
+                        # close with no open
+                        isValid = False
+                        break
+                    positionInList: int = CLOSES.index(ch)
+                    if stack[-1][1] != OPENS[positionInList]:
+                        # mismatched open and close
+                        isValid = False
+                        break
+                    pairing[stack[-1][0]] = i
+                    pairing[i] = stack[-1][0]
+                    stack.pop() # removes last element of stack, which we just consumed
 
-        # remove any empty groups
-        d = re.sub(r'\(\)', '', d)
-        d = re.sub(r'\[\]', '', d)
-        d = re.sub(r'\{\}', '', d)
-        d = re.sub(r'<>', '', d)
-        # do it again to be safe (for one recursion)
-        d = re.sub(r'\(\)', '', d)
-        d = re.sub(r'\[\]', '', d)
-        d = re.sub(r'\{\}', '', d)
-        d = re.sub(r'<>', '', d)
+            if stack: # is not empty
+                isValid = False
 
-        # How many staves ('sN' or 'tN') in d?
-        decoStaffCount = d.count('s') + d.count('t')
-        if decoStaffCount == 0:
-            return False
+            '''
+            # print analysis:
+            for i, ch in enumerate(d):
+                print("d[{}] =\t{} pairing: {}".format(i, ch, pairing[i]), file=sys.stderr)
+            '''
 
-        if decoStaffCount == 1:
-            # remove decoration when a single staff on system.
-            # This leaves only 'sN' or 'tN', with no braces of any sort.
-            d = re.sub(r'[^ts\d]', '', d)
+            if not isValid:
+                return False
 
-        # Now pair (), <> {}, and [] parentheses in the d string.
-        # This is mostly for validation purposes (are things properly nested?)
-        # but we also use pairing when walking the string to keep track of
-        # where the current '}' was opened, for example.
-        OPENS  = ['(', '{', '[', '<']
-        CLOSES = [')', '}', ']', '>']
-        stack: [tuple] = []             # list of (d string index, paren char)
-        pairing: [int] = [-1] * len(d)
+            if not pairing: # if pairing is empty
+                return False
 
-        for i, ch in enumerate(d):
-            if ch in OPENS:
-                stack.append((i, ch))
-            elif ch in CLOSES:
-                if not stack: # if stack is empty
-                    # close with no open
-                    isValid = False
-                    break
-                positionInList: int = CLOSES.index(ch)
-                if stack[-1][1] != OPENS[positionInList]:
-                    # mismatched open and close
-                    isValid = False
-                    break
-                pairing[stack[-1][0]] = i
-                pairing[i] = stack[-1][0]
-                stack.pop() # removes last element of stack, which we just consumed
+            # figure out which staffIndices etc are grouped.  If groups are nested, higher level groups
+            # contain all the staves of their contained (lower level) groups.
 
-        if stack: # is not empty
-            isValid = False
+            # groupDescs has an element for every character in d.  We will replace some of these
+            # Nones (the ones where a '{[(<' starts a group) with an actual group description below.
+            groupDescs: List[Optional[M21StaffGroupDescriptionTree]] = [None] * len(d)
 
-        '''
-        # print analysis:
-        for i, ch in enumerate(d):
-            print("d[{}] =\t{} pairing: {}".format(i, ch, pairing[i]), file=sys.stderr)
-        '''
+            # loop over d, creating/pushing, popping through nested M21StaffGroupDescriptionTrees
+            # as you hit various delimiters, adding each staffIndex seen to all currently pushed
+            # M21StaffGroupDescriptionTrees (you, and those above you) as you walk over the 'sN's.
+            staffStartIndicesSeen: List[int] = []
+            isStaffIndicator: bool = False
+            isTrackIndicator: bool = False
+            value: int = 0
 
-        if not isValid:
-            return False
+            # rootGroupDesc is only there if there is no outer group in d (i.e. pretend there is a '()'
+            # around the whole thing if there is no '[]', '{}', '()', or '<>' around the whole thing).
+            rootGroupDesc: M21StaffGroupDescriptionTree = None
+            currentGroup: M21StaffGroupDescriptionTree = None
+            if pairing[-1] != 0:
+                # There is no outer group, so make a fake one.
+                rootGroupDesc = M21StaffGroupDescriptionTree()
+                rootGroupDesc.symbol = None # no visible bracing
+                rootGroupDesc.barTogether = False # no barline across the staves
+                currentGroup = rootGroupDesc
 
-        if not pairing: # if pairing is empty
-            return False
+            skipNext: bool = False
+            for i, dCharI in enumerate(d):
+                if skipNext:
+                    skipNext = False
+                    continue
 
-        # figure out which staffIndices etc are grouped.  If groups are nested, higher level groups
-        # contain all the staves of their contained (lower level) groups.
+                if dCharI in '{[<':
+                    groupDescs[i] = M21StaffGroupDescriptionTree()
+                    groupDescs[i].symbol = M21Convert.humdrumDecoGroupStyleToM21GroupSymbol[dCharI]
+                    if i < len(d) - 1:
+                        if d[i + 1] == '(' and pairing[i+1] == pairing[i] - 1:
+                            # the '(' and ')' are both one character inside the enclosing braces
+                            groupDescs[i].barTogether = True
+                            skipNext = True # we've already handled the '('
+                    groupDescs[i].parent = currentGroup
+                    if currentGroup is not None:
+                        currentGroup.children.append(groupDescs[i])
+                    currentGroup = groupDescs[i]
+                elif dCharI == '(':
+                    # standalone '(' gets its own StaffGroup with no symbol, just barTogether = True
+                    groupDescs[i] = M21StaffGroupDescriptionTree()
+                    groupDescs[i].barTogether = True
+                    groupDescs[i].parent = currentGroup
+                    if currentGroup is not None:
+                        currentGroup.children.append(groupDescs[i])
+                    currentGroup = groupDescs[i]
+                elif dCharI in '}]>':
+                    # pairing[i] is the index in d of the matching '{[<'
+                    currentGroup = groupDescs[pairing[i]].parent
+                elif dCharI == ')':
+                    # pairing[i] is the index in d of the matching '{[<('
+                    if i < len(d) - 1:
+                        if d[i+1] in '}]>' and pairing[i+1] == pairing[i] - 1:
+                            # this is NOT a standalone ')', so skip it.
+                            # We already set barTogether when we saw the matching '('.
+                            continue
+                    currentGroup = groupDescs[pairing[i]].parent
 
-        # groupDescs has an element for every character in d.  We will replace some of these
-        # Nones (the ones where a '{[(<' starts a group) with an actual group description below.
-        groupDescs: List[Optional[M21StaffGroupDescriptionTree]] = [None] * len(d)
+                elif dCharI == 's':
+                    isStaffIndicator = True
+                    isTrackIndicator = False
 
-        # loop over d, creating/pushing, popping through nested M21StaffGroupDescriptionTrees
-        # as you hit various delimiters, adding each staffIndex seen to all currently pushed
-        # M21StaffGroupDescriptionTrees (you, and those above you) as you walk over the 'sN's.
-        staffStartIndicesSeen: List[int] = []
-        isStaffIndicator: bool = False
-        isTrackIndicator: bool = False
-        value: int = 0
+                elif dCharI == 't':
+                    isStaffIndicator = False
+                    isTrackIndicator = True
 
-        # rootGroupDesc is only there if there is no outer group in d (i.e. pretend there is a '()'
-        # around the whole thing if there is no '[]', '{}', '()', or '<>' around the whole thing).
-        rootGroupDesc: M21StaffGroupDescriptionTree = None
-        currentGroup: M21StaffGroupDescriptionTree = None
-        if pairing[-1] != 0:
-            # There is no outer group, so make a fake one.
+                elif dCharI.isdigit():
+                    value = max(value, 0) # never leave it < 0
+                    value = (value * 10) + int(dCharI)
+                    if i == len(d) - 1 or not d[i + 1].isdigit(): # if end of digit chars
+                        staffStartIndex: int = -1
+                        if isStaffIndicator:
+                            staffStartIndex = staffToStaffStartIndex.get(value, -1)
+                        elif isTrackIndicator:
+                            staffStartIndex = trackToStaffStartIndex.get(value, -1)
+
+                        value = 0
+
+                        isStaffIndicator = False
+                        isTrackIndicator = False
+                        if staffStartIndex not in range(0, self.staffCount):
+                            # Spine does not exist in the score: skip it.
+                            continue
+
+                        # we put this staffStartIndex in the current group (noted as 'owned')
+                        # and as 'referenced' in current group and all its ancestors.
+                        currentGroup.ownedStaffIndices.append(staffStartIndex)
+
+                        ancestor: M21StaffGroupDescriptionTree = currentGroup
+                        while ancestor is not None:
+                            ancestor.staffIndices.append(staffStartIndex)
+                            ancestor = ancestor.parent
+
+                        staffStartIndicesSeen.append(staffStartIndex)
+
+            # Check to see that all staffstarts are represented in system decoration exactly once.
+            # Otherwise, declare that it is invalid.
+            found: [int] = [0] * self.staffCount
+            if not hasStar: # if hasStar, we're good by definition
+                for val in staffStartIndicesSeen:
+                    found[val] += 1
+
+                for i, foundCount in enumerate(found):
+                    if foundCount != 1:
+                        isValid = False
+                        break
+
+            if not isValid:
+                print("DECORATION IS INVALID:", decoration, file=sys.stderr)
+                if d != decoration:
+                    print("\tSTAFF VERSION:", d, file=sys.stderr)
+
+                # iohumdrum.cpp unconditionally adds a full-score brace here, but I'm going
+                # to fail instead, and let the failure handling put some default bracing
+                # in place.
+                return False
+
+            for groupDesc in groupDescs:
+                if groupDesc is not None and groupDesc.staffIndices:
+                    # we skip None groupDescs and empty groupDescs (no staves)
+                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
+
+            topLevelParent = rootGroupDesc
+            if topLevelParent is None:
+                topLevelParent = groupDescs[0]
+
+        else:
+            # There is no decoration, but we know partToStaves, so if we have multi-staff
+            # parts, let's make staff groups for them, so we don't end up (on export)
+            # with multiple parts instead of multiple staves within one part. We walk
+            # the parts/staves and create a StaffGroupDescriptionTree here, similar to
+            # how we do it above while walking the decoration string.
+
+            # groupDescs has an element for every part in partToStaves.  We will replace some of these
+            # Nones (the ones where a part has multiple staves) with an actual group description below.
+            groupDescs: List[Optional[M21StaffGroupDescriptionTree]] = [None] * len(partToStaves)
+            rootGroupDesc: M21StaffGroupDescriptionTree = None
+
             rootGroupDesc = M21StaffGroupDescriptionTree()
             rootGroupDesc.symbol = None # no visible bracing
             rootGroupDesc.barTogether = False # no barline across the staves
-            currentGroup = rootGroupDesc
 
-        skipNext: bool = False
-        for i, dCharI in enumerate(d):
-            if skipNext:
-                skipNext = False
-                continue
+            numStaffGroups: bool = 0
+            for i, staves in enumerate(partToStaves.values()):
+                if len(staves) > 1:
+                    # make a StaffGroupDescriptionTree for these staves,
+                    # and put it under rootGroupDesc
+                    groupDescs[i] = M21StaffGroupDescriptionTree()
+                    groupDescs[i].symbol = 'brace' # default for undecorated staff groups (e.g. piano)
+                    groupDescs[i].barTogether = False
+                    groupDescs[i].ownedStaffIndices = [staffToStaffStartIndex[staffNum] for staffNum in staves]
+                    groupDescs[i].staffIndices = groupDescs[i].ownedStaffIndices
+                    groupDescs[i].parent = rootGroupDesc
+                    rootGroupDesc.children.append(groupDescs[i])
+                    rootGroupDesc.staffIndices += groupDescs[i].staffIndices
+                    numStaffGroups += 1
+                elif len(staves) == 1:
+                    # no StaffGroupDescriptionTree for this staff, it's owned by the top-level staff group
+                    snum: int = staffToStaffStartIndex[staves[0]]
+                    rootGroupDesc.ownedStaffIndices.append(snum)
+                    rootGroupDesc.staffIndices.append(snum)
 
-            if dCharI in '{[<':
-                groupDescs[i] = M21StaffGroupDescriptionTree()
-                groupDescs[i].symbol = M21Convert.humdrumDecoGroupStyleToM21GroupSymbol[dCharI]
-                if i < len(d) - 1:
-                    if d[i + 1] == '(' and pairing[i+1] == pairing[i] - 1:
-                        # the '(' and ')' are both one character inside the enclosing braces
-                        groupDescs[i].barTogether = True
-                        skipNext = True # we've already handled the '('
-                groupDescs[i].parent = currentGroup
-                if currentGroup is not None:
-                    currentGroup.children.append(groupDescs[i])
-                currentGroup = groupDescs[i]
-            elif dCharI == '(':
-                # standalone '(' gets its own StaffGroup with no symbol, just barTogether = True
-                groupDescs[i] = M21StaffGroupDescriptionTree()
-                groupDescs[i].barTogether = True
-                groupDescs[i].parent = currentGroup
-                if currentGroup is not None:
-                    currentGroup.children.append(groupDescs[i])
-                currentGroup = groupDescs[i]
-            elif dCharI in '}]>':
-                # pairing[i] is the index in d of the matching '{[<'
-                currentGroup = groupDescs[pairing[i]].parent
-            elif dCharI == ')':
-                # pairing[i] is the index in d of the matching '{[<('
-                if i < len(d) - 1:
-                    if d[i+1] in '}]>' and pairing[i+1] == pairing[i] - 1:
-                        # this is NOT a standalone ')', so skip it.
-                        # We already set barTogether when we saw the matching '('.
-                        continue
-                currentGroup = groupDescs[pairing[i]].parent
+            for groupDesc in groupDescs:
+                if groupDesc is not None and groupDesc.staffIndices:
+                    # we skip None groupDescs and empty groupDescs (no staves)
+                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
 
-            elif dCharI == 's':
-                isStaffIndicator = True
-                isTrackIndicator = False
-
-            elif dCharI == 't':
-                isStaffIndicator = False
-                isTrackIndicator = True
-
-            elif dCharI.isdigit():
-                value = max(value, 0) # never leave it < 0
-                value = (value * 10) + int(dCharI)
-                if i == len(d) - 1 or not d[i + 1].isdigit(): # if end of digit chars
-                    staffStartIndex: int = -1
-                    if isStaffIndicator:
-                        staffStartIndex = staffToStaffStartIndex.get(value, -1)
-                    elif isTrackIndicator:
-                        staffStartIndex = trackToStaffStartIndex.get(value, -1)
-
-                    value = 0
-
-                    isStaffIndicator = False
-                    isTrackIndicator = False
-                    if staffStartIndex not in range(0, self.staffCount):
-                        # Spine does not exist in the score: skip it.
-                        continue
-
-                    # we put this staffStartIndex in the current group (noted as 'owned')
-                    # and as 'referenced' in current group and all its ancestors.
-                    currentGroup.ownedStaffIndices.append(staffStartIndex)
-
-                    ancestor: M21StaffGroupDescriptionTree = currentGroup
-                    while ancestor is not None:
-                        ancestor.staffIndices.append(staffStartIndex)
-                        ancestor = ancestor.parent
-
-                    staffStartIndicesSeen.append(staffStartIndex)
-
-        # Check to see that all staffstarts are represented in system decoration exactly once.
-        # Otherwise, declare that it is invalid.
-        found: [int] = [0] * self.staffCount
-        if not hasStar: # if hasStar, we're good by definition
-            for val in staffStartIndicesSeen:
-                found[val] += 1
-
-            for i, foundCount in enumerate(found):
-                if foundCount != 1:
-                    isValid = False
-                    break
-
-        if not isValid:
-            print("DECORATION IS INVALID:", decoration, file=sys.stderr)
-            if d != decoration:
-                print("\tSTAFF VERSION:", d, file=sys.stderr)
-
-            # iohumdrum.cpp unconditionally adds a full-score brace here, but I'm going
-            # to fail instead, and let the failure handling put some default bracing
-            # in place.
-            return False
-
-        for groupDesc in groupDescs:
-            if groupDesc is not None and groupDesc.staffIndices:
-                # we skip None groupDescs and empty groupDescs (no staves)
-                groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
-
-        topLevelParent: M21StaffGroupDescriptionTree = rootGroupDesc
-        if topLevelParent is None:
-            topLevelParent = groupDescs[0]
-
-        # Recursively sort every list of siblings in the tree by
-        # lowest staff number, so the staff numbers are in order.
-        self._sortGroupDescriptionTrees([topLevelParent])
+            if (numStaffGroups == 1 and
+                    rootGroupDesc.staffIndices == rootGroupDesc.children[0].staffIndices):
+                topLevelParent = rootGroupDesc.children[0] # just that one, please
+            elif numStaffGroups > 0:
+                topLevelParent = rootGroupDesc
 
         staffGroups: List[m21.layout.StaffGroup] = []
-        newStaffGroups, _, _ = self._processStaffGroupDescriptionTree(topLevelParent)
-        staffGroups += newStaffGroups
+        if topLevelParent is not None:
+            # Recursively sort every list of siblings in the tree by
+            # lowest staff number, so the staff numbers are in order.
+            self._sortGroupDescriptionTrees([topLevelParent])
+
+            newStaffGroups, _, _ = self._processStaffGroupDescriptionTree(topLevelParent)
+            staffGroups += newStaffGroups
 
         # Insert the StaffGroups into the score in reverse order.
         # TODO: Figure out if inserting StaffGroups into the score in reverse order is correct.
