@@ -21,6 +21,7 @@ from fractions import Fraction
 import music21 as m21
 
 from converter21.humdrum import MeasureStyle, MeasureVisualStyle, MeasureType
+from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum
@@ -1685,6 +1686,8 @@ class M21Convert:
                 continue
             if isinstance(expr, m21.expressions.Fermata):
                 output += ';'
+                if expr.type == 'upright':
+                    output += '<'
                 continue
 
         return output
@@ -1977,6 +1980,13 @@ class M21Convert:
         vStyle = M21Convert.measureVisualStyleFromM21BarlineType[m21Barline.type]
         return M21Convert.getMeasureStyle(vStyle, mType)
 
+    @staticmethod
+    def fermataStyleFromM21Barline(barline: m21.bar.Barline) -> FermataStyle:
+        if not isinstance(barline, m21.bar.Barline):
+            return FermataStyle.NoFermata
+        return M21Convert.fermataStyleFromM21Fermata(barline.pause)
+
+
     # m21Barline is ordered, because we want to iterate over the keys, and find '||' before '|', for example
     m21BarlineTypeFromHumdrumType: OrderedDict = OrderedDict(
     [
@@ -2066,6 +2076,30 @@ class M21Convert:
             outputBarline = m21.bar.Barline(barlineType)
 
         return outputBarline
+
+    @staticmethod
+    def fermataStyleFromM21Fermata(m21Fermata: m21.expressions.Fermata) -> FermataStyle:
+        if not isinstance(m21Fermata, m21.expressions.Fermata):
+            return FermataStyle.NoFermata
+
+        output: FermataStyle = FermataStyle.Fermata
+        if m21Fermata.style == 'upright':
+            output = FermataStyle.FermataBelow
+#         elif m21Fermata.style == 'inverted': # leave it as a normal Fermata, this is m21's default
+#             output = FermataStyle.FermataAbove
+
+        return output
+
+    @staticmethod
+    def combineTwoFermataStyles(currMeasureBeginFermata: FermataStyle, prevMeasureEndFermata: FermataStyle) -> FermataStyle:
+        # simple combination for now: if either is a fermata, use it as the combination
+        # if both are a fermata, use the current measure's begin fermata
+        # if neither is a fermata, return FermataStyle.NoFermata
+        if currMeasureBeginFermata != FermataStyle.NoFermata:
+            return currMeasureBeginFermata
+        if prevMeasureEndFermata != FermataStyle.NoFermata:
+            return prevMeasureEndFermata
+        return FermataStyle.NoFermata
 
     # Conversions from str to m21.metadata.DateBlah types, and back.
     # e.g. '1942///-1943///' -> DateBetween([Date(1942), Date(1943)])

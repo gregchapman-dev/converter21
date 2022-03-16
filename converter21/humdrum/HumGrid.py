@@ -939,6 +939,7 @@ class HumGrid:
             measure.slices.insert(0, mslice) # barline is first slice in measure
 
             partCount: int = len(firstSpined.parts)
+            staffIndex: int = 0
             for p in range(0, partCount):
                 part = GridPart()
                 mslice.parts.append(part)
@@ -964,9 +965,12 @@ class HumGrid:
                         voiceCount = 1
 
                     for _ in range(0, voiceCount):
-                        token = self.createBarToken(measure)
+                        token = self.createBarToken(measure, staffIndex)
                         gv: GridVoice = GridVoice(token, 0)
                         staff.voices.append(gv)
+
+                    staffIndex += 1
+
 
     '''
     //////////////////////////////
@@ -988,45 +992,48 @@ class HumGrid:
         timestamp: HumNum = modelSlice.timestamp
 
         measure: GridMeasure = self.measures[-1]
-        measureStyle: str = self.getLastBarlineStyle(measure)
 
         mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
         measure.slices.append(mslice)
 
+        staffIndex: int = 0
         for modelPart in modelSlice.parts:
             part = GridPart()
             mslice.parts.append(part)
             for _ in range(0, len(modelPart.staves)):
+                measureStyle: str = self.getLastBarlineStyle(measure, staffIndex)
                 staff = GridStaff()
                 part.staves.append(staff)
                 token: HumdrumToken = HumdrumToken('=' + measureStyle)
                 voice: GridVoice = GridVoice(token, 0)
                 staff.voices.append(voice)
+                staffIndex += 1
 
     '''
     //////////////////////////////
     //
     // HumGrid::createBarToken --
     '''
-    def createBarToken(self, measure: GridMeasure) -> str:
+    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> str:
         token: str = ''
-        measureStyle: str = self.getMeasureStyle(measure)
+        measureStyle: str = self.getMeasureStyle(measure, staffIndex)
         measureNumStr: str = measure.measureNumberString
 
         if measureNumStr:
             if measureStyle == '=':
                 token = '=='
                 token += measureNumStr
+            elif measureStyle.startswith('=;'):
+                token = '=='
+                token += measureNumStr
+                token += measureStyle[1:]
             else:
                 token = '='
                 token += measureNumStr
                 token += measureStyle
         else:
-            if measureStyle == '=':
-                token = '=='
-            else:
-                token = '='
-                token += measureStyle
+            token = '='
+            token += measureStyle
 
         return token
 
@@ -1089,13 +1096,17 @@ class HumGrid:
     // HumGrid::getBarStyle --
     '''
     @staticmethod
-    def getMeasureStyle(measure: GridMeasure) -> str:
+    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str:
         output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.measureStyle)
+        output += Convert.fermataStyleToHumdrumFermataStyleStr(
+                            measure.fermataStyle(staffIndex))
         return output
 
     @staticmethod
-    def getLastBarlineStyle(measure: GridMeasure) -> str:
+    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str:
         output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.rightBarlineStyle)
+        output += Convert.fermataStyleToHumdrumFermataStyleStr(
+                            measure.rightBarlineFermataStyle(staffIndex))
         return output
 
     '''

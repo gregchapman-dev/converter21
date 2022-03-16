@@ -12,7 +12,9 @@
 # ------------------------------------------------------------------------------
 
 from .HumExceptions import HumdrumInternalError, HumdrumSyntaxError, HumdrumExportError
-from .GridCommon import SliceType, MeasureStyle, MeasureType, MeasureVisualStyle
+from .GridCommon import SliceType
+from .GridCommon import MeasureStyle, MeasureType, MeasureVisualStyle
+from .GridCommon import FermataStyle
 
 from .HumNum import HumNum
 from .Convert import Convert

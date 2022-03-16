@@ -4158,7 +4158,7 @@ class HumdrumFile(HumdrumFileContent):
                 if currentMeasurePerStaff[staffIndex]:
                     currentMeasurePerStaff[staffIndex].rightBarline = m21.bar.Repeat(direction='end')
 
-            if ';' in endBarline.text or ',' in endBarline.text:
+            if ';' in endBarline.text: # or ',' in endBarline.text:
                 if currentMeasurePerStaff[staffIndex]:
                     if not currentMeasurePerStaff[staffIndex].rightBarline:
                         currentMeasurePerStaff[staffIndex].rightBarline = m21.bar.Barline('normal')
@@ -4986,12 +4986,12 @@ class HumdrumFile(HumdrumFileContent):
 
 #         staffAdj: int = self._getStaffAdjustment(token)
         fermata: m21.expressions.Fermata = m21.expressions.Fermata()
-        fermata.type = 'upright'
+        fermata.type = 'inverted' # yeah, this seems backward to me, too, but Finale says this is right
 
         fermata2: m21.expressions.Fermata = None
         if ';;' in token.text:
             fermata2 = m21.expressions.Fermata()
-            fermata2.type = 'inverted'
+            fermata2.type = 'upright'
             fermata2.style.absoluteY = 'below'
 
         if fermata2:
@@ -5004,10 +5004,10 @@ class HumdrumFile(HumdrumFileContent):
 
         direction: int = self._getDirection(token, ';')
         if direction < 0:
-            fermata.type = 'inverted'
+            fermata.type = 'upright'
             fermata.style.absoluteY = 'below'
         elif direction > 0:
-            fermata.type = 'upright'
+            fermata.type = 'inverted'
             fermata.style.absoluteY = 'above'
         # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
         # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.

@@ -153,3 +153,9 @@ class MeasureStyle(Enum):
     def __init__(self, vStyle: MeasureVisualStyle, mType: MeasureType):
         self.vStyle = vStyle
         self.mType = mType
+
+class FermataStyle(IntEnum):
+    NoFermata = auto()
+    Fermata = auto()
+    FermataAbove = auto()
+    FermataBelow = auto()

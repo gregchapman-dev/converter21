@@ -22,6 +22,7 @@ from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumFile
 
 from converter21.humdrum import MeasureStyle
+from converter21.humdrum import FermataStyle
 from converter21.humdrum import SliceType
 from converter21.humdrum import GridVoice
 #from converter21.humdrum import GridSide
@@ -53,8 +54,12 @@ class GridMeasure:
         self.timeSigDur: HumNum = HumNum(-1)
         self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
         self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.fermataStylePerStaff: List[FermataStyle] = []
         self.measureStyle: MeasureStyle = MeasureStyle.Regular
         self.measureNumberString: str = ''
+
+        # only used on last measure in score
+        self.rightBarlineFermataStylePerStaff: List[FermataStyle] = []
 
     def __str__(self) -> str:
         output: str = f'MEASURE({self.measureNumberString}):'
@@ -719,3 +724,29 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
             if tslice is not None and tslice.hasSpines:
                 return tslice
         return None
+
+    def fermataStyle(self, staffIndex: int) -> FermataStyle:
+        output: FermataStyle = FermataStyle.NoFermata
+
+        if 0 <= staffIndex < len(self.fermataStylePerStaff):
+            output = self.fermataStylePerStaff[staffIndex]
+
+#         if output != FermataStyle.NoFermata:
+#             print(f'fermataStyle({staffIndex}): {output}')
+
+#         print(f'fermataStyle({staffIndex}): {output}')
+
+        return output
+
+    def rightBarlineFermataStyle(self, staffIndex: int) -> FermataStyle:
+        output: FermataStyle = FermataStyle.NoFermata
+
+        if 0 <= staffIndex < len(self.rightBarlineFermataStylePerStaff):
+            output = self.rightBarlineFermataStylePerStaff[staffIndex]
+
+#         if output != FermataStyle.NoFermata:
+#             print(f'rightBarlineFermataStyle({staffIndex}): {output}')
+
+#         print(f'rightBarlineFermataStyle({staffIndex}): {output}')
+
+        return output

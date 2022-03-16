@@ -882,6 +882,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     gm.measureStyle = xmeasure.measureStyle
                     gm.measureNumberString = xmeasure.measureNumberString # might be '124a'
 
+                # barline fermatas, on the other hand, need to be checked in every staff
+                gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
+                gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
+
         curTime: [HumNum] = [None] * len(measureDatas)
         measureDurs: [HumNum] = [None] * len(measureDatas)
         curIndex: [int] = [0] * len(measureDatas)

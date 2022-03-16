@@ -18,6 +18,7 @@ import music21 as m21
 # from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum
 from converter21.humdrum import MeasureStyle
+from converter21.humdrum import FermataStyle
 from converter21.humdrum import EventData
 from converter21.humdrum import Convert
 from converter21.humdrum import M21Utilities
@@ -56,12 +57,20 @@ class MeasureData:
         self._timeSigDur: HumNum = HumNum(-1)
         # leftBarlineStyle describes the left barline of this measure
         self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
-        # _rightBarlineStyle describes the right barline of this measure
+        # rightBarlineStyle describes the right barline of this measure
         self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
-        # _measureStyle is a combination of this measure's leftBarlineStyle and
+        # measureStyle is a combination of this measure's leftBarlineStyle and
         # the previous measure's rightBarlineStyle.  It's the style we use when
         # writing a barline ('=') token.
         self.measureStyle: MeasureStyle = MeasureStyle.Regular
+
+        self.leftBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
+        self.rightBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
+        # fermataStyle is a combination of this measure's leftBarlineFermataStyle and
+        # the previous measure's rightBarlineFermataStyle.  It's the fermata style we
+        # use when writing a barline ('=') token.
+        self.fermataStyle: FermataStyle = FermataStyle.NoFermata
+
         self._measureNumberString: str = ''
         self.events: [EventData] = []
         self.sortedEvents: [SimultaneousEvents] = [] # public list of startTime-binned events
@@ -159,6 +168,20 @@ class MeasureData:
             prevRightMeasureStyle = self._prevMeasData.rightBarlineStyle
         self.measureStyle = M21Convert.combineTwoMeasureStyles(self.leftBarlineStyle,
                                                                prevRightMeasureStyle)
+        # Extract left and right barline Fermata
+        self.leftBarlineFermataStyle = M21Convert.fermataStyleFromM21Barline(
+                                                        self.m21Measure.leftBarline)
+        self.rightBarlineFermataStyle = M21Convert.fermataStyleFromM21Barline(
+                                                        self.m21Measure.rightBarline)
+
+        # Grab the previous measure's right barline fermata style (if there is one) and
+        # combine it with our left barline fermata style, giving our fermataStyle.
+        prevRightBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
+        if self._prevMeasData is not None:
+            prevRightBarlineFermataStyle = self._prevMeasData.rightBarlineFermataStyle
+        self.fermataStyle = M21Convert.combineTwoFermataStyles(
+                                self.leftBarlineFermataStyle,
+                                prevRightBarlineFermataStyle)
 
         # measure index 0 only: add events for any Instruments found in ownerStaff.m21PartStaff
         if self.measureIndex == 0:

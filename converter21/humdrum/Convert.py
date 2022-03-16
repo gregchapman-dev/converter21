@@ -16,6 +16,7 @@ import math
 from typing import Dict, List
 
 from converter21.humdrum import MeasureStyle
+from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumNum
 from converter21.humdrum import HumdrumInternalError
 
@@ -1339,7 +1340,7 @@ class Convert:
     def diatonicChromaticToTrans(d: int, c: int) -> str:
         return 'd' + str(d) + 'c' + str(c)
 
-    humdrumBarlineStyleFromMeasureStyle: dict = {
+    _humdrumBarlineStyleFromMeasureStyle: dict = {
         MeasureStyle.Double                      : '||',
         MeasureStyle.HeavyHeavy                  : '!!',
         MeasureStyle.HeavyLight                  : '!|',
@@ -1373,5 +1374,17 @@ class Convert:
 
     @staticmethod
     def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> str:
-        output: str = Convert.humdrumBarlineStyleFromMeasureStyle[measureStyle]
+        output: str = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
+        return output
+
+    _humdrumFermataStyleFromFermataStyle: dict = {
+        FermataStyle.NoFermata      : '',
+        FermataStyle.Fermata        : ';',
+        FermataStyle.FermataAbove   : ';>',
+        FermataStyle.FermataBelow   : ';<',
+    }
+
+    @staticmethod
+    def fermataStyleToHumdrumFermataStyleStr(fermataStyle: FermataStyle) -> str:
+        output: str = Convert._humdrumFermataStyleFromFermataStyle[fermataStyle]
         return output
