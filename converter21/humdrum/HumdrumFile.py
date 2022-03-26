@@ -1069,7 +1069,6 @@ class HumdrumFile(HumdrumFileContent):
         if not endToken.isBarline: # no barline at all, put a hidden one in
             for measure in currentMeasurePerStaff:
                 measure.rightBarline = m21.bar.Barline('none')
-                measure.rightBarline.style.hideObjectOnPrint = True
             return
 
         if endBar.startswith('=='): # final barline (light-heavy)
@@ -2034,7 +2033,7 @@ class HumdrumFile(HumdrumFileContent):
 
         if mmText is not None or mmNumber is not None:
             # We insert this tempo at the beginning of the measure
-            tempo: m21.tempo.MetronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text = mmText)
+            tempo: m21.tempo.MetronomeMark = self._myMetronomeMarkInit(number=mmNumber, text = mmText)
             if hasattr(tempo, 'placement'):
                 tempo.placement = 'above'
             else:
@@ -4785,14 +4784,6 @@ class HumdrumFile(HumdrumFileContent):
 #             if (m_signifiers.hairpinAccent && layerdata[i]->find(m_signifiers.hairpinAccent) != std::string::npos) {
 #                 addHairpinAccent(layerdata[i]);
 #             }
-# this cuesize stuff is done in convertNote.  Put it in a new processCueSize function
-# and call it from convertNote only (covers more cases than here).
-#             if (m_signifiers.cuesize && layerdata[i]->find(m_signifiers.cuesize) != std::string::npos) {
-#                 note->SetCue(BOOLEAN_true);
-#             }
-#             else if (m_staffstates.at(staffindex).cue_size.at(m_currentlayer)) {
-#                 note->SetCue(BOOLEAN_true);
-#             }
         self._addArticulations(note, layerTok)
         self._addOrnaments(note, layerTok)
         self._addArpeggio(note, layerTok)
@@ -5436,9 +5427,6 @@ class HumdrumFile(HumdrumFileContent):
         if token.getBooleanLayoutParameter('N', 'xstem'):
             note.stemDirection = 'noStem'
 
-        if token.getBooleanLayoutParameter('N', 'cue'):
-            note.style.noteSize = 'cue'
-
         self._setNoteHead(note, token, subTokenIdx, staffIndex) # new
 
         mensit: bool = False
@@ -5598,12 +5586,13 @@ class HumdrumFile(HumdrumFileContent):
             token.setValue('music21', 'measureIndex', measureIndex)
 
         # cue sized notes
-        if self._signifiers.cueSize \
-                and self._signifiers.cueSize in tstring:
+        if self._signifiers.cueSize and self._signifiers.cueSize in tstring:
             # note is marked as cue-sized
             note.style.noteSize = 'cue'
         elif ss.cueSize[layerIndex]:
             # layer is marked as containing all cue-sized notes
+            note.style.noteSize = 'cue'
+        elif token.getBooleanLayoutParameter('N', 'cue'):
             note.style.noteSize = 'cue'
 
         return note
@@ -6030,40 +6019,94 @@ class HumdrumFile(HumdrumFileContent):
         ttrack: int = -1
         startField: int = token.fieldIndex + 1
 
-#         forceAbove: bool = False
-#         forceBelow: bool = False
-#         forceCenter: bool = False
+        forceAbove: bool = False
+        forceBelow: bool = False
+        forceCenter: bool = False
         trackDiff: int = 0
-#         staffAdjust: int = ss.dynamStaffAdj
-#         force: bool = False
+        staffAdj: int = ss.dynamStaffAdj
 
-#         if ss.dynamPos > 0:
-#             #force = True
-#             forceAbove = True
-#         elif ss.dynamPos < 0:
-#             #force = True
-#             forceBelow = True
-#         elif ss.dynamPos == 0 and ss.dynamPosDefined:
-#             forceCenter = True
+        if ss.dynamPos > 0:
+            forceAbove = True
+        elif ss.dynamPos < 0:
+            forceBelow = True
+        elif ss.dynamPos == 0 and ss.dynamPosDefined:
+            forceCenter = True
 #         elif ss.hasLyrics:
-#             forceAbove = True # Q: is this something we shouldn't do (rendering decisions)?
+#             above = True # Q: is this something we shouldn't do (rendering decisions)?
 
-#         justification: bool = False
-#         if token.layoutParameter('DY', 'rj') == 'true':
-#             justification = True
+        # Handle "z" in (**kern) token for subito forte (sf), or "zz" for sforzando (sfz)
+        if 'z' in token.text and 'zy' not in token.text: # z (sf) or zz (sfz) and not zy (not hidden)
+            above: bool = False
+            below: bool = False
+            center: bool = False
 
-        dcolor: str = token.layoutParameter('DY', 'color')
-#         needsRend: bool = justification or dcolor
+            # default placement is above for subtrack 1, below for subtrack 2, and nothing for others
+            # subtrack: int = token.subTrack
+            # if subtrack == 1:
+            #     above = True
+            #     below = False
+            #     center = False
+            # elif subtrack == 2:
+            #     above = False
+            #     below = True
+            #     center = False
 
-        # Handle "z" for sforzando (sf), or "zz" for sfz
-        # Ah... 'z' at the end of a note means sf, sfz. Better fill in this code. --gregc
-        if 'z' in token.text:
-            pass
-            # TODO: print('_processDynamics: "z" found in token.text at top level', file=sys.stderr)
+            # Now figure out if placement was specified
+            if self._hasAboveParameter(token, 'DY'):
+                above = True
+                below = False
+                center = False
+            if not above:
+                below = self._hasBelowParameter(token, 'DY') #, staffAdj)
+            if not above and not below:
+                hasCenter, staffAdj = self._hasCenterParameter(token, 'DY', staffAdj)
+                if hasCenter:
+                    above = False
+                    below = False
+                    center = True
 
+
+            # Here is where we create the music21 object for the sf/sfz
+            dynstr: str = 'sf'
+            if 'zz' in token.text:
+                dynstr = 'sfz'
+            m21sf: m21.dynamics.Dynamic = m21.dynamics.Dynamic(dynstr)
+            # Undo music21's default Dynamic absolute positioning
+            m21sf.style.absoluteX = None
+            m21sf.style.absoluteY = None
+
+
+            dcolor: str = token.layoutParameter('DY', 'color')
+            if dcolor:
+                m21sf.style.color = dcolor
+
+            if token.layoutParameter('DY', 'rj') == 'true':
+                m21sf.style.justify = 'right'
+
+            if above or forceAbove:
+                if hasattr(m21sf, 'placement'):
+                    m21sf.placement = 'above'
+                else:
+                    m21sf.style.absoluteY = 'above'
+            elif below or forceBelow:
+                if hasattr(m21sf, 'placement'):
+                    m21sf.placement = 'below'
+                else:
+                    m21sf.style.absoluteY = 'below'
+            elif center or forceCenter:
+                # center means below, and vertically centered between this staff and the one below
+                m21sf.style.alignVertical = 'middle'
+                if hasattr(m21sf, 'placement'):
+                    m21sf.placement = 'below'
+                else:
+                    m21sf.style.absoluteY = 'below'
+
+            voice.coreInsert(dynamicOffsetInVoice, m21sf)
+            insertedIntoVoice = True
+
+        # now look for any **dynam tokens to the right
         active: bool = True
         for i in range(startField, line.tokenCount):
-            staffAdj = ss.dynamStaffAdj
             dynTok: HumdrumToken = line[i]
             exInterp: str = dynTok.dataType.text
             if exInterp != '**kern' and 'kern' in exInterp:
@@ -6083,7 +6126,7 @@ class HumdrumFile(HumdrumFileContent):
                     break
             if not active:
                 continue
-            if not (dynTok.isDataType('**dynam') or dynTok.isDataType('**dyn')):
+            if not dynTok.isDataType('**dynam') and not dynTok.isDataType('**dyn'):
                 continue
 
             # Don't skip NULL tokens, because this algorithm only prints dynamics
@@ -6117,8 +6160,6 @@ class HumdrumFile(HumdrumFileContent):
                 dynamic = letters
 
             if dynamic:
-                staffAdj = ss.dynamStaffAdj
-
                 dynText: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 't', '', '')
                 if not dynText:
                     dynText = self._getLayoutParameterWithDefaults(dynTok, 'DY', 'tx', '', '')
@@ -6129,17 +6170,14 @@ class HumdrumFile(HumdrumFileContent):
                 above: bool = self._hasAboveParameter(dynTok, 'DY') #, staffAdj)
                 below: bool = False
                 center: bool = False
-#                 showPlace: bool = above
                 if not above:
                     below = self._hasBelowParameter(dynTok, 'DY') #, staffAdj)
-#                     showPlace = below
                 if not above and not below:
                     hasCenter, staffAdj = self._hasCenterParameter(token, 'DY', staffAdj)
                     if hasCenter:
                         above = False
                         below = False
                         center = True
-#                         showPlace = center
 
                 # if pcount > 0, then search for prefix and postfix text
                 # to add to the dynamic.
@@ -6169,7 +6207,10 @@ class HumdrumFile(HumdrumFileContent):
 
                 # Here is where we create the music21 object for the dynamic
                 m21Dynamic: m21.dynamics.Dynamic = m21.dynamics.Dynamic(dynamic)
-                m21Dynamic.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold') # this is what C++ code does
+                # Undo music21's default Dynamic absolute positioning
+                m21Dynamic.style.absoluteX = None
+                m21Dynamic.style.absoluteY = None
+
                 if dcolor:
                     m21Dynamic.style.color = dcolor
                 if rightJustified:
@@ -6177,24 +6218,23 @@ class HumdrumFile(HumdrumFileContent):
 
                 # verticalgroup: str = dyntok.layoutParameter('DY', 'vg')
                 # Q: is there a music21 equivalent to MEI's verticalgroup?
-                if above:
+                if above or forceAbove:
                     if hasattr(m21Dynamic, 'placement'):
                         m21Dynamic.placement = 'above'
                     else:
                         m21Dynamic.style.absoluteY = 'above'
-                elif below:
+                elif below or forceBelow:
                     if hasattr(m21Dynamic, 'placement'):
                         m21Dynamic.placement = 'below'
                     else:
                         m21Dynamic.style.absoluteY = 'below'
-                elif center:
-                    m21Dynamic.style.absoluteY = -20
-#                 elif forceAbove:
-#                     m21Dynamic.style.absoluteY = 'above'
-#                 elif forceBelow:
-#                     m21Dynamic.style.absoluteY = 'below'
-#                 elif forceCenter:
-#                     m21Dynamic.style.absoluteY = -20
+                elif center or forceCenter:
+                    # center means below, and vertically centered between this staff and the one below
+                    m21Dynamic.style.alignVertical = 'middle'
+                    if hasattr(m21Dynamic, 'placement'):
+                        m21Dynamic.placement = 'below'
+                    else:
+                        m21Dynamic.style.absoluteY = 'below'
 
                 voice.coreInsert(dynamicOffsetInVoice, m21Dynamic)
                 insertedIntoVoice = True
@@ -6271,23 +6311,23 @@ class HumdrumFile(HumdrumFileContent):
                 m21Hairpin = m21.dynamics.Diminuendo()
 
             # LATER: staff adjustments for dynamics and forcing position
-            if center and not above and not below:
-                m21Hairpin.style.absoluteY = -20
-            else:
-                if above:
-                    if hasattr(m21Hairpin, 'placement'):
-                        m21Hairpin.placement = 'above'
-                    else:
-                        m21Hairpin.style.absoluteY = 'above'
-                elif below:
-                    if hasattr(m21Hairpin, 'placement'):
-                        m21Hairpin.placement = 'below'
-                    else:
-                        m21Hairpin.style.absoluteY = 'below'
-#                 elif forceAbove:
-#                     m21Hairpin.style.absoluteY = 'above'
-#                 elif forceBelow:
-#                     m21Hairpin.style.absoluteY = 'below'
+            if above:
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'above'
+                else:
+                    m21Hairpin.style.absoluteY = 'above'
+            elif below:
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'below'
+                else:
+                    m21Hairpin.style.absoluteY = 'below'
+            elif center:
+                # center means below, and vertically centered between this staff and the one below
+                m21Hairpin.style.alignVertical = 'middle'
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'below'
+                else:
+                    m21Hairpin.style.absoluteY = 'below'
 
             # Now I need to put the start and end "notes" into the Crescendo spanner.
             # This is instead of all the timestamp stuff C++ code does.
@@ -6386,23 +6426,25 @@ class HumdrumFile(HumdrumFileContent):
             if fontStyle:
                 m21TextExp.style.fontStyle = M21Convert.m21FontStyleFromFontStyle(fontStyle)
 
-            if center and not above and not below:
-                m21TextExp.style.absoluteY = -20
-            else:
-                if above:
-                    if hasattr(m21TextExp, 'placement'):
-                        m21TextExp.placement = 'above'
-                    else:
-                        m21TextExp.style.absoluteY = 'above'
-                elif below:
-                    if hasattr(m21TextExp, 'placement'):
-                        m21TextExp.placement = 'below'
-                    else:
-                        m21TextExp.style.absoluteY = 'below'
-#                 elif forceAbove:
-#                     m21TextExp.style.absoluteY = 'above'
-#                 elif forceBelow:
-#                     m21TextExp.style.absoluteY = 'below'
+            if above:
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'above'
+                else:
+                    m21TextExp.style.absoluteY = 'above'
+            elif below:
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'below'
+                else:
+                    m21TextExp.style.absoluteY = 'below'
+            elif center:
+                # center means below, and vertically centered between this staff and the one below
+                m21TextExp.style.alignVertical = 'middle'
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'below'
+                else:
+                    m21TextExp.style.absoluteY = 'below'
+
+
             voice.coreInsert(dynamicOffsetInVoice, m21TextExp)
             insertedIntoVoice = True
 
@@ -6859,8 +6901,6 @@ class HumdrumFile(HumdrumFileContent):
                 placement = 'below'
             else:
                 placement = 'above'
-        else:
-            placement = 'above'
 
         if self._addDirection(text, placement, bold, italic, measureIndex, voice, voiceOffsetInMeasure,
                               token, justification, color, vgroup):
@@ -7021,8 +7061,6 @@ class HumdrumFile(HumdrumFileContent):
                 placement = 'below'
             else:
                 placement = 'above'
-        else:
-            placement = 'above'
 
         if isSic:
             if verboseType == 'text':
@@ -7062,30 +7100,32 @@ class HumdrumFile(HumdrumFileContent):
                 # this is a redundant tempo message, so ignore (even as text dir)
                 return insertedIntoVoice
 
-            tempo = m21.tempo.MetronomeMark(number=midiBPM)
+            tempo = self._myMetronomeMarkInit(number=midiBPM)
             tempoOrDirection = tempo
         else:
             direction = m21.expressions.TextExpression(text)
             tempoOrDirection = direction
 
-        if direction:
-            if hasattr(direction, 'placement'):
-                # TextExpression got .placement in music21 v7
-                direction.placement = placement
-            else:
-                # In v6 it was TextExpression.positionPlacement
-                direction.positionPlacement = placement
-        else:
+        if placement:
             if placement == 'between':
                 placement = 'below'
+                tempoOrDirection.style.alignVertical = 'middle'
 
-            if placement in ('above', 'below'):
-                if hasattr(tempo, 'placement'):
-                    # MetronomeMark got .placement in music21 v7
-                    tempo.placement = placement
+            if direction:
+                if hasattr(direction, 'placement'):
+                    # TextExpression got .placement in music21 v7
+                    direction.placement = placement
                 else:
-                    # In v6 the only thing you could do was set style.absoluteY
-                    tempo.style.absoluteY = placement
+                    # In v6 it was TextExpression.positionPlacement
+                    direction.positionPlacement = placement
+            else:
+                if placement in ('above', 'below'):
+                    if hasattr(tempo, 'placement'):
+                        # MetronomeMark got .placement in music21 v7
+                        tempo.placement = placement
+                    else:
+                        # In v6 the only thing you could do was set style.absoluteY
+                        tempo.style.absoluteY = placement
 
         if color:
             tempoOrDirection.style.color = color
@@ -7094,11 +7134,12 @@ class HumdrumFile(HumdrumFileContent):
         elif isSic:
             tempoOrDirection.style.color = 'limegreen'
 
-        if italic:
+        if bold and italic:
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
+        elif italic:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
-
-        if bold:
-            tempoOrDirection.style.fontWeight = 'bold'
+        elif bold:
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
         if justification:
             tempoOrDirection.style.justify = 'right'
@@ -7170,24 +7211,26 @@ class HumdrumFile(HumdrumFileContent):
         if _typeValue:
             pass # appendType(direction, typeValue)
 
-        if direction:
-            if hasattr(direction, 'placement'):
-                # TextExpression got .placement in music21 v7
-                direction.placement = placement
-            else:
-                # In music21 v6, it was TextExpression.positionPlacement
-                direction.positionPlacement = placement
-        else:
+        if placement: # we do nothing with placement None or ''
             if placement == 'between':
                 placement = 'below'
+                tempoOrDirection.style.alignVertical = 'middle'
 
-            if placement in ('above', 'below'):
-                if hasattr(tempo, 'placement'):
-                    # MetronomeMark got .placement in music21 v7
-                    tempo.placement = placement
+            if direction:
+                if hasattr(direction, 'placement'):
+                    # TextExpression got .placement in music21 v7
+                    direction.placement = placement
                 else:
-                    # In music21 v6, all you could do was set style.absoluteY
-                    tempo.style.absoluteY = placement
+                    # In music21 v6, it was TextExpression.positionPlacement
+                    direction.positionPlacement = placement
+            else:
+                if placement in ('above', 'below'):
+                    if hasattr(tempo, 'placement'):
+                        # MetronomeMark got .placement in music21 v7
+                        tempo.placement = placement
+                    else:
+                        # In music21 v6, all you could do was set style.absoluteY
+                        tempo.style.absoluteY = placement
 
         if color:
             tempoOrDirection.style.color = color
@@ -7196,11 +7239,12 @@ class HumdrumFile(HumdrumFileContent):
         elif isSic:
             tempoOrDirection.style.color = 'limegreen'
 
-        if italic:
+        if bold and italic:
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
+        elif italic:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
-
-        if bold:
-            tempoOrDirection.style.fontWeight = 'bold'
+        elif bold:
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
         if justification:
             tempoOrDirection.style.justify = 'right'
@@ -7301,7 +7345,58 @@ class HumdrumFile(HumdrumFileContent):
 
         return 0
 
-    def _createMetronomeMark(self, text: str, tokenOrBPM: Union[HumdrumToken, int]):
+    '''
+        _myMetronomeMarkInit: calls m21.tempo.MetronomeMark() and then puts the style back to
+        regular TextStyle defaults.
+    '''
+    @staticmethod
+    def _myMetronomeMarkInit(text=None, number=None, referent=None, parentheses=False) -> m21.tempo.MetronomeMark:
+        mm = m21.tempo.MetronomeMark(text=text,
+                                     number=number,
+                                     referent=referent,
+                                     parentheses=parentheses)
+        if mm.hasStyleInformation:
+            # undo music21's weird TempoText style defaults
+            # and just go with music21's normal TextStyle defaults
+            defaultStyle = m21.style.TextStyle()
+
+            # fields from class Style
+
+            # pylint: disable=protected-access
+            mm.style.size               = defaultStyle.size
+            mm.style.relativeX          = defaultStyle.relativeX
+            mm.style.relativeY          = defaultStyle.relativeY
+            mm.style.absoluteX          = defaultStyle.absoluteX
+            mm.style._absoluteY         = defaultStyle._absoluteY
+            mm.style._enclosure         = defaultStyle._enclosure
+            mm.style.fontRepresentation = defaultStyle.fontRepresentation
+            mm.style.color              = defaultStyle.color
+            mm.style.units              = defaultStyle.units
+            mm.style.hideObjectOnPrint  = defaultStyle.hideObjectOnPrint
+
+            # fields from class TextStyle
+
+            mm.style._fontFamily        = defaultStyle._fontFamily
+            mm.style._fontSize          = defaultStyle._fontSize
+            mm.style._fontStyle         = defaultStyle._fontStyle
+            mm.style._fontWeight        = defaultStyle._fontWeight
+            mm.style._letterSpacing     = defaultStyle._letterSpacing
+            mm.style.lineHeight         = defaultStyle.lineHeight
+            mm.style.textDirection      = defaultStyle.textDirection
+            mm.style.textRotation       = defaultStyle.textRotation
+            mm.style.language           = defaultStyle.language
+            mm.style.textDecoration     = defaultStyle.textDecoration
+            mm.style._justify           = defaultStyle._justify
+            mm.style._alignHorizontal   = defaultStyle._alignHorizontal
+            mm.style._alignVertical     = defaultStyle._alignVertical
+            # pylint: enable=protected-access
+
+        return mm
+
+    def _createMetronomeMark(self,
+                             text: str,
+                             tokenOrBPM: Union[HumdrumToken, int]
+                            ) -> m21.tempo.MetronomeMark:
         token: HumdrumToken = None
         midiBPM: int = 0
         if isinstance(tokenOrBPM, HumdrumToken):
@@ -7333,7 +7428,7 @@ class HumdrumFile(HumdrumFileContent):
                 mmText = None
 
             if mmNumber or mmText:
-                metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText)
+                metronomeMark = self._myMetronomeMarkInit(number=mmNumber, text=mmText)
             return metronomeMark
 
         # at least one of tempoName, noteName, and bpmText are present
@@ -7358,7 +7453,7 @@ class HumdrumFile(HumdrumFileContent):
             mmNumber = None
 
         if mmNumber is not None or mmText is not None or mmReferent is not None:
-            metronomeMark = m21.tempo.MetronomeMark(number=mmNumber, text=mmText, referent=mmReferent)
+            metronomeMark = self._myMetronomeMarkInit(number=mmNumber, text=mmText, referent=mmReferent)
         return metronomeMark
 
     '''
@@ -8679,27 +8774,27 @@ class HumdrumFile(HumdrumFileContent):
                 ss.dynamStaffAdj = 0
                 ss.dynamPosDefined = True
 
-        if partTok:
-            pPartNum: int = 0   # from *part token
-            dPartNum: int = 0   # from *part token in associated dynam spine
-            lPartNum: int = 0   # from *part token in next left staff spine
-            dynamSpine: HumdrumToken = self.associatedDynamSpine(partTok)
-            if dynamSpine:
-                dPartNum = dynamSpine.partNum
-
-            if dPartNum > 0:
-                pPartNum = partTok.partNum
-
-            if pPartNum > 0:
-                nextLeftStaffTok = self.previousStaffToken(partTok)
-                if nextLeftStaffTok:
-                    lPartNum = nextLeftStaffTok.partNum
-
-            if lPartNum > 0:
-                if lPartNum == pPartNum and dPartNum == pPartNum:
-                    ss.dynamPos = 0
-                    ss.dynamStaffAdj = 0
-                    ss.dynamPosDefined = True
+        # if partTok:
+        #     pPartNum: int = 0   # from *part token
+        #     dPartNum: int = 0   # from *part token in associated dynam spine
+        #     lPartNum: int = 0   # from *part token in next left staff spine
+        #     dynamSpine: HumdrumToken = self.associatedDynamSpine(partTok)
+        #     if dynamSpine:
+        #         dPartNum = dynamSpine.partNum
+        #
+        #     if dPartNum > 0:
+        #         pPartNum = partTok.partNum
+        #
+        #     if pPartNum > 0:
+        #         nextLeftStaffTok = self.previousStaffToken(partTok)
+        #         if nextLeftStaffTok:
+        #             lPartNum = nextLeftStaffTok.partNum
+        #
+        #     if lPartNum > 0:
+        #         if lPartNum == pPartNum and dPartNum == pPartNum:
+        #             ss.dynamPos = 0
+        #             ss.dynamStaffAdj = 0
+        #             ss.dynamPosDefined = True
 
         if staffScaleTok:
             ss.staffScaleFactor = staffScaleTok.scale

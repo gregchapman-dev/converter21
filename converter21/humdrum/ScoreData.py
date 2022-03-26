@@ -115,5 +115,11 @@ class ScoreData:
     def reportCaesuraToOwner(self) -> str:
         return self.ownerWriter.reportCaesuraToOwner()
 
+    def reportCueSizeToOwner(self) -> str:
+        return self.ownerWriter.reportCueSizeToOwner()
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        return self.ownerWriter.reportNoteColorToOwner(color)
+
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerWriter.reportLinkedSlurToOwner()

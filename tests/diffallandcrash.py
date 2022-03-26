@@ -32,6 +32,8 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
     counts['tie'] = 0
     counts['expression'] = 0
     counts['articulation'] = 0
+    counts['notestyle'] = 0
+    counts['stemdirection'] = 0
 
     for op in op_list:
         # measure
@@ -48,8 +50,15 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'delpitch',
                         'headedit',
                         'dotins',
-                        'dotdel'):
+                        'dotdel',
+                        'editnoteshape',
+                        'editnoteheadfill',
+                        'editnoteheadparenthesis'):
             counts['note'] += 1
+        elif op[0] in ('editstyle'):
+            counts['notestyle'] += 1
+        elif op[0] in ('editstemdirection'):
+            counts['stemdirection'] += 1
         # beam
         elif op[0] in ('insbeam',
                         'delbeam',

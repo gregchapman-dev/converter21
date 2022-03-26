@@ -98,5 +98,11 @@ class PartData:
     def reportCaesuraToOwner(self) -> str:
         return self.ownerScore.reportCaesuraToOwner()
 
+    def reportCueSizeToOwner(self) -> str:
+        return self.ownerScore.reportCueSizeToOwner()
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        return self.ownerScore.reportNoteColorToOwner(color)
+
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerScore.reportLinkedSlurToOwner()

@@ -13,7 +13,7 @@
 import sys
 import copy
 from collections import OrderedDict
-from typing import List, Tuple, Dict, Set, Union
+from typing import List, Tuple, Dict, Set, Union, Optional
 import music21 as m21
 
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
@@ -68,9 +68,10 @@ class HumdrumWriter:
         ('Music21Object', '_fromMusic21Object'),
     ])
 
-     # '<>' are not considered reservable, they are hard-coded to below/above, and
-     # used as such without coordination here.
-    _reservableRDFKernSignifiers: str = 'ijZVNl!@+|'
+    # '<>' are not considered reservable, they are hard-coded to below/above, and
+    # used as such without coordination here.
+    # '@' is not considered reservable (damn) because we use it in tremolos (e.g. '@16@' and '@@32@@')
+    _reservableRDFKernSignifiers: str = 'ijZVNl!+|'
 
     _m21EditorialStyleToHumdrumEditorialStyle: dict = {
         # m21 editorial style: RDF definition string we will write
@@ -106,7 +107,7 @@ class HumdrumWriter:
 
         # _rdfKernSignifierLookup will be computed from what is needed in the score,
         # taking into account any reservedRDFKernSignifiers set by the user
-        self._rdfKernSignifierLookup: dict = {} # key: definition, value: signifier
+        self._rdfKernSignifierLookup: dict = {} # key: definition (str or tuple), value: signifier
 
         # private data, computed along the way...
         self._forceRecipSpine: bool = False # set to true sometimes in figured bass, harmony code
@@ -121,14 +122,18 @@ class HumdrumWriter:
         # First element of tempo tuple is part index (tempo is at the part level)
         self._currentTempos: List[Tuple[int, m21.tempo.TempoIndication]] = []
 
-    def _chosenSignifierForRDFDefinition(self, rdfDefinition: str, favoriteSignifier: str) -> str:
+    def _chosenSignifierForRDFDefinition(self,
+                                         rdfDefinition: Union[str, Tuple[str, Optional[str]]],
+                                         favoriteSignifier: str) -> str:
+        chosenSignifier: Optional[str] = None
         # if we've already chosen a signifier, just return that
-        chosenSignifier: str = self._rdfKernSignifierLookup.get(rdfDefinition, None)
+        chosenSignifier = self._rdfKernSignifierLookup.get(rdfDefinition, None)
         if chosenSignifier is not None:
             return chosenSignifier
 
         # if we can get the favorite, choose it
-        if favoriteSignifier not in self.reservedRDFKernSignifiers:
+        if (favoriteSignifier not in self.reservedRDFKernSignifiers
+                and favoriteSignifier not in self._assignedRDFKernSignifiers):
             chosenSignifier = favoriteSignifier
             self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
             self._assignedRDFKernSignifiers += chosenSignifier
@@ -173,6 +178,20 @@ class HumdrumWriter:
     def reportCaesuraToOwner(self) -> str:
         rdfDefinition: str = 'caesura'
         favoriteSignifier: str = 'Z'
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+    def reportCueSizeToOwner(self) -> str:
+        rdfDefinition: str = 'cue size'
+        favoriteSignifier: str = '!'
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        # 'marked note, color=hotpink'
+        rdfDefinition: Tuple[str, Optional[str]] = (
+            ('marked note', None),
+            ('color', color),
+                                                   )
+        favoriteSignifier: str = 'i'
         return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
 
     def reportLinkedSlurToOwner(self) -> str:
@@ -333,7 +352,20 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _addFooterRecords(self, outfile: HumdrumFile):
         for definition, signifier in self._rdfKernSignifierLookup.items():
-            rdfLine: str = f'!!!RDF**kern: {signifier} = {definition}'
+            rdfLine = f'!!!RDF**kern: {signifier} = '
+            if isinstance(definition, tuple): # it's a tuple of k/v pairs
+                # multiple definitions: key1, key2 = value2, key3, etc...
+                for i, (k, v) in enumerate(definition):
+                    if i > 0:
+                        rdfLine += ', '
+                    if v is None:
+                        rdfLine += f'{k}'
+                    elif v == '':
+                        rdfLine += f'{k}='
+                    else:
+                        rdfLine += f'{k}="{v}"' # double quotes, or parse will include any following ','
+            else:
+                rdfLine += f'{definition}'
             outfile.appendLine(rdfLine, asGlobalToken=True)
 
         # we always export these, even if we didn't use them, since we almost always use them

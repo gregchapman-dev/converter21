@@ -218,6 +218,12 @@ class EventData:
     def reportCaesuraToOwner(self) -> str:
         return self.ownerMeasure.reportCaesuraToOwner()
 
+    def reportCueSizeToOwner(self) -> str:
+        return self.ownerMeasure.reportCueSizeToOwner()
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        return self.ownerMeasure.reportNoteColorToOwner(color)
+
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerMeasure.reportLinkedSlurToOwner()
 

@@ -131,7 +131,7 @@ class HumSignifiers:
 
         # boolean switches:
         self.noStem: str = ''           # !!!RDF**kern: N = no stem
-        self.cueSize: str = ''          # !!!RDF**kern: @ = cue size
+        self.cueSize: str = ''          # !!!RDF**kern: ! = cue size
         self.hairpinAccent: str = ''    # !!!RDF**kern: j = hairpin accent
         self.verticalStroke: str = ''   # !!!RDF**kern: | = vertical stroke
         self.terminalLong: str = ''     # !!!RDF**kern: l = terminal long|long note

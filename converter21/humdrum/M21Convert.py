@@ -798,6 +798,18 @@ class M21Convert:
         return 'q'
 
     @staticmethod
+    def _getSizeFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str:
+        if m21GeneralNote.hasStyleInformation:
+            return m21GeneralNote.style.noteSize # e.g. None, 'cue'
+        return None
+
+    @staticmethod
+    def _getColorFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str:
+        if m21GeneralNote.hasStyleInformation:
+            return m21GeneralNote.style.color # e.g. None, 'hotpink', '#00FF00', etc
+        return None
+
+    @staticmethod
     def kernPrefixPostfixAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote,
                                                recip: str,
                                                spannerBundle: m21.spanner.SpannerBundle,
@@ -817,6 +829,8 @@ class M21Convert:
         expressionStr: str = ''
         stemStr: str = ''
         beamStr: str = ''
+        cueSizeChar: str = ''
+        noteColorChar: str = ''
         if isStandaloneNote:
             # if this note is in a chord, we will get this info from the chord itself, not from here
             beamStr = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21GeneralNote)
@@ -838,7 +852,17 @@ class M21Convert:
         if isFirstNoteInChord:
             pass
 
-        postfix = expressionStr + articStr + stemStr + beamStr + invisibleStr
+        # cue size is assumed to always be set on individual notes in a chord,
+        # never just on the chord itself.
+        noteSize: str = M21Convert._getSizeFromGeneralNote(m21GeneralNote)
+        if noteSize is not None and noteSize == 'cue':
+            cueSizeChar = owner.reportCueSizeToOwner()
+
+        noteColor: str = M21Convert._getColorFromGeneralNote(m21GeneralNote)
+        if noteColor:
+            noteColorChar = owner.reportNoteColorToOwner(noteColor)
+
+        postfix = expressionStr + articStr + cueSizeChar + noteColorChar + stemStr + beamStr + invisibleStr
 
         # prefix/postfix possibility: ties
         tieStart, tieStop, tieLayouts = M21Convert._getTieStartStopAndLayoutsFromM21GeneralNote(m21GeneralNote)
@@ -893,7 +917,7 @@ class M21Convert:
 
     @staticmethod
     def _getKernInvisibilityFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str:
-        if m21GeneralNote.style.hideObjectOnPrint:
+        if m21GeneralNote.hasStyleInformation and m21GeneralNote.style.hideObjectOnPrint:
             return 'yy'
         if 'SpacerRest' in m21GeneralNote.classes: # deprecated, but if we see it...
             return 'yy'
@@ -1205,13 +1229,12 @@ class M21Convert:
         return ''
 
     @staticmethod
-    def textLayoutParameterFromM21Pieces(content: str,
-                                         placement: Optional[str],
-                                         absoluteY: Optional[float],
-                                         fontStyle: Optional[str],
-                                         fontWeight: Optional[str]) -> str:
+    def textLayoutParameterFromM21Pieces(content    : str,
+                                         placement  : str,
+                                         style      : Optional[m21.style.Style]) -> str:
         placementString: str = ''
         styleString: str = ''
+        colorString: str = ''
         contentString: str = M21Convert._cleanSpacesAndColons(content)
 
         # We are perfectly happy to deal with empty contentString.  The result will be:
@@ -1223,34 +1246,45 @@ class M21Convert:
             if placement == 'above':
                 placementString = ':a'
             elif placement == 'below':
-                placementString = ':b'
+                if style and style.alignVertical == 'middle':
+                    placementString = ':c'
+                else:
+                    placementString = ':b'
 
-        # absoluteY overrides placement
-        if absoluteY is not None:
-            if absoluteY >= 0.0:
-                placementString = ':a'
-            else:
-                placementString = ':b'
+        if style:
+            # absoluteY overrides placement
+            if style.absoluteY is not None:
+                if style.absoluteY >= 0.0:
+                    placementString = ':a'
+                else:
+                    placementString = ':b'
 
-        italic: bool = False
-        bold: bool = False
+            italic: bool = False
+            bold: bool = False
 
-        if fontStyle is not None:
-            if fontStyle == 'italic':
-                italic = True
+            if style.fontStyle is not None:
+                if style.fontStyle == 'italic':
+                    italic = True
+                elif style.fontStyle == 'bold':
+                    bold = True
+                elif style.fontStyle == 'bolditalic':
+                    bold = True
+                    italic = True
 
-        if fontWeight is not None:
-            if fontWeight == 'bold':
-                bold = True
+            if style.fontWeight is not None and style.fontWeight == 'bold':
+                    bold = True
 
-        if italic and bold:
-            styleString = ':Bi'
-        elif italic:
-            styleString = ':i'
-        elif bold:
-            styleString = ':B'
+            if italic and bold:
+                styleString = ':Bi'
+            elif italic:
+                styleString = ':i'
+            elif bold:
+                styleString = ':B'
 
-        output: str = '!LO:TX' + placementString + styleString + ':t=' + contentString
+            if style.color: # not None and != ''
+                colorString = f':color={style.color}'
+
+        output: str = '!LO:TX' + placementString + styleString + colorString + ':t=' + contentString
         return output
 
     @staticmethod
@@ -1268,11 +1302,10 @@ class M21Convert:
             # old music21 v6 name is TextExpression.positionPlacement
             placement = textExpression.positionPlacement
 
-        return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement,
-                                                           textExpression.style.absoluteY,
-                                                           textExpression.style.fontStyle,
-                                                           textExpression.style.fontWeight)
-
+        if textExpression.hasStyleInformation:
+            return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement,
+                                                               textExpression.style)
+        return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
     '''
     //////////////////////////////
     //
@@ -1376,10 +1409,9 @@ class M21Convert:
             # (nothing at all, not even 'positionPlacement' in v6)
             placement = 'above' # assume tempos are above for v6
 
-        return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement,
-                                                           tempo.style.absoluteY,
-                                                           tempo.style.fontStyle,
-                                                           tempo.style.fontWeight)
+        if tempo.hasStyleInformation:
+            return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, tempo.style)
+        return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
 
 
 
@@ -1520,17 +1552,19 @@ class M21Convert:
                 output += ':a'
 
             if dynamic.placement == 'below':
-                pass # music21 never sets to None, defaults to 'below', and humdrum default is below
+                # don't check alignVertical, it isn't there (only in TextStyle)
+                output += ':b'
         else:
             # in music21 v6 it's called Dynamic.positionPlacement
             if dynamic.positionPlacement == 'above':
                 output += ':a'
 
             if dynamic.positionPlacement == 'below':
-                pass # music21 never sets to None, defaults to 'below', and humdrum default is below
+                # don't check alignVertical, it isn't there (only in TextStyle)
+                output += ':b'
 
         # right justification
-        if dynamic.style.justify == 'right':
+        if dynamic.hasStyleInformation and dynamic.style.justify == 'right':
             output += ':rj'
 
         # t='sempre %s' (if dynamic.value is 'ff sempre legato', for example)
@@ -1556,6 +1590,7 @@ class M21Convert:
                 return ':a'
 
             if dynamic.placement == 'below':
+                # don't check alignVertical, it isn't there (only in TextStyle)
                 return '' # music21 never sets to None, always 'below', and humdrum default is below
         else:
             # in music21 v6 it's called Dynamic.positionPlacement
@@ -1563,6 +1598,7 @@ class M21Convert:
                 return ':a'
 
             if dynamic.positionPlacement == 'below':
+                # don't check alignVertical, it isn't there (only in TextStyle)
                 return '' # music21 never sets to None, always 'below', and humdrum default is below
 
         return ''
@@ -2083,9 +2119,9 @@ class M21Convert:
             return FermataStyle.NoFermata
 
         output: FermataStyle = FermataStyle.Fermata
-        if m21Fermata.style == 'upright':
+        if m21Fermata.hasStyleInformation and m21Fermata.style == 'upright':
             output = FermataStyle.FermataBelow
-#         elif m21Fermata.style == 'inverted': # leave it as a normal Fermata, this is m21's default
+#         elif m21Fermata.hasStyleInformation and m21Fermata.style == 'inverted': # leave it as a normal Fermata, this is m21's default
 #             output = FermataStyle.FermataAbove
 
         return output

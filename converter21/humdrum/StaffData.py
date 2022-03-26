@@ -81,6 +81,12 @@ class StaffData:
     def reportCaesuraToOwner(self) -> str:
         return self.ownerPart.reportCaesuraToOwner()
 
+    def reportCueSizeToOwner(self) -> str:
+        return self.ownerPart.reportCueSizeToOwner()
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        return self.ownerPart.reportNoteColorToOwner(color)
+
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerPart.reportLinkedSlurToOwner()
 

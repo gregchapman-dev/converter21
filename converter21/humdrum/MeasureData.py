@@ -424,6 +424,12 @@ class MeasureData:
     def reportCaesuraToOwner(self) -> str:
         return self.ownerStaff.reportCaesuraToOwner()
 
+    def reportCueSizeToOwner(self) -> str:
+        return self.ownerStaff.reportCueSizeToOwner()
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        return self.ownerStaff.reportNoteColorToOwner(color)
+
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerStaff.reportLinkedSlurToOwner()
 
