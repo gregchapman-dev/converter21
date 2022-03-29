@@ -55,7 +55,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
                 {1.6667} <music21.note.Note E->
                 {1.8333} <music21.note.Note D>
         '''
-        print("parsing krn string", file=sys.stderr)
+        # print("parsing krn string", file=sys.stderr)
         hf = HumdrumFile()
         hf.readString(dataString)
         self.stream = hf.createMusic21Stream()
@@ -68,7 +68,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         Note that normally, implementing parseData is sufficient, but Humdrum files
         may be utf-8 or latin-1, so we need to handle various text encodings ourselves.
         '''
-        print("parsing krn file", file=sys.stderr)
+        # print("parsing krn file", file=sys.stderr)
         hf = HumdrumFile(filePath)
         self.stream = hf.createMusic21Stream()
         self.humdrumFile = hf

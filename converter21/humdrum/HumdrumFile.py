@@ -8759,20 +8759,20 @@ class HumdrumFile(HumdrumFileContent):
             if self._omets and staffNum == self._omets[-1][0]:
                 meterSigTok = self._omets[-1][1]
 
-        if staffTok:
-            # search for a **dynam before the next **kern spine, and set the
-            # dynamics position to centered if there is a slash in the *staff1/2 string.
-            # In the future also check *part# to see if there are two staves for a part
-            # with no **dynam for the lower staff (infer to be a grand staff).
-            dynamSpine: HumdrumToken = self.associatedDynamSpine(staffTok)
-            if dynamSpine \
-                    and dynamSpine.isStaffInterpretation \
-                    and '/' in dynamSpine.text:
-                # the dynamics should be placed between
-                # staves: the current one and the one below it.
-                ss.dynamPos = 0
-                ss.dynamStaffAdj = 0
-                ss.dynamPosDefined = True
+        # if staffTok:
+        #     # search for a **dynam before the next **kern spine, and set the
+        #     # dynamics position to centered if there is a slash in the *staff1/2 string.
+        #     # In the future also check *part# to see if there are two staves for a part
+        #     # with no **dynam for the lower staff (infer to be a grand staff).
+        #     dynamSpine: HumdrumToken = self.associatedDynamSpine(staffTok)
+        #     if dynamSpine \
+        #             and dynamSpine.isStaffInterpretation \
+        #             and '/' in dynamSpine.text:
+        #         # the dynamics should be placed between
+        #         # staves: the current one and the one below it.
+        #         ss.dynamPos = 0
+        #         ss.dynamStaffAdj = 0
+        #         ss.dynamPosDefined = True
 
         # if partTok:
         #     pPartNum: int = 0   # from *part token

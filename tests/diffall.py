@@ -8,6 +8,7 @@ from music21.base import VERSION_STR
 
 from musicdiff.annotation import AnnScore, AnnExtra
 from musicdiff import Comparison
+from musicdiff import DetailLevel
 
 # The things we're testing
 from converter21.humdrum import HumdrumFile
@@ -251,8 +252,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        annotatedScore1 = AnnScore(score1)
-        annotatedScore2 = AnnScore(score2)
+        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
+        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)

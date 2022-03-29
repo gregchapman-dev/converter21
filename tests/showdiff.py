@@ -8,6 +8,7 @@ from music21.base import VERSION_STR
 from musicdiff import Visualization
 from musicdiff.annotation import AnnScore
 from musicdiff import Comparison
+from musicdiff import DetailLevel
 
 # The things we're testing
 from converter21.humdrum import HumdrumFile
@@ -79,9 +80,9 @@ def runTheFullTest(krnPath: Path):
 
     # next with music-score-diff:
     print('comparing the two m21 scores')
-    score_lin1 = AnnScore(score1)
+    score_lin1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
     print('loaded first score')
-    score_lin2 = AnnScore(score2)
+    score_lin2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
     print('loaded second score')
     diffList, _cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
     print('diffed the two scores:')

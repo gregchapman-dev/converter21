@@ -1234,6 +1234,7 @@ class M21Convert:
                                          style      : Optional[m21.style.Style]) -> str:
         placementString: str = ''
         styleString: str = ''
+        justString: str = ''
         colorString: str = ''
         contentString: str = M21Convert._cleanSpacesAndColons(content)
 
@@ -1281,10 +1282,13 @@ class M21Convert:
             elif bold:
                 styleString = ':B'
 
+            if style.justify == 'right':
+                justString = ':rj'
+
             if style.color: # not None and != ''
                 colorString = f':color={style.color}'
 
-        output: str = '!LO:TX' + placementString + styleString + colorString + ':t=' + contentString
+        output: str = '!LO:TX' + placementString + styleString + justString + colorString + ':t=' + contentString
         return output
 
     @staticmethod
@@ -1552,16 +1556,20 @@ class M21Convert:
                 output += ':a'
 
             if dynamic.placement == 'below':
-                # don't check alignVertical, it isn't there (only in TextStyle)
-                output += ':b'
+                if dynamic.style.alignVertical == 'middle':
+                    output += ':c'
+                else:
+                    output += ':b'
         else:
             # in music21 v6 it's called Dynamic.positionPlacement
             if dynamic.positionPlacement == 'above':
                 output += ':a'
 
             if dynamic.positionPlacement == 'below':
-                # don't check alignVertical, it isn't there (only in TextStyle)
-                output += ':b'
+                if dynamic.style.alignVertical == 'middle':
+                    output += ':c'
+                else:
+                    output += ':b'
 
         # right justification
         if dynamic.hasStyleInformation and dynamic.style.justify == 'right':
