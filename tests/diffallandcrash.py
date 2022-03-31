@@ -115,6 +115,15 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
+        elif op[0] == 'extrastyleedit':
+            # op[1] and op[2]
+            assert isinstance(op[1], AnnExtra)
+            assert isinstance(op[2], AnnExtra)
+            key = op[1].content + ':style'
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+
 
     firstDone: bool = False
     for k, v in counts.items():

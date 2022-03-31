@@ -8,6 +8,7 @@ from music21.base import VERSION_STR
 
 from musicdiff.annotation import AnnScore, AnnExtra
 from musicdiff import Comparison
+from musicdiff import DetailLevel
 
 # The things we're testing
 from converter21.humdrum import HumdrumFile
@@ -32,6 +33,8 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
     counts['tie'] = 0
     counts['expression'] = 0
     counts['articulation'] = 0
+    counts['notestyle'] = 0
+    counts['stemdirection'] = 0
 
     for op in op_list:
         # measure
@@ -48,8 +51,15 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'delpitch',
                         'headedit',
                         'dotins',
-                        'dotdel'):
+                        'dotdel',
+                        'editnoteshape',
+                        'editnoteheadfill',
+                        'editnoteheadparenthesis'):
             counts['note'] += 1
+        elif op[0] in ('editstyle'):
+            counts['notestyle'] += 1
+        elif op[0] in ('editstemdirection'):
+            counts['stemdirection'] += 1
         # beam
         elif op[0] in ('insbeam',
                         'delbeam',
@@ -105,6 +115,15 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
+        elif op[0] == 'extrastyleedit':
+            # op[1] and op[2]
+            assert isinstance(op[1], AnnExtra)
+            assert isinstance(op[2], AnnExtra)
+            key = op[1].content + ':style'
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+
 
     firstDone: bool = False
     for k, v in counts.items():
@@ -202,8 +221,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        annotatedScore1 = AnnScore(score1)
-        annotatedScore2 = AnnScore(score2)
+        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
+        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
@@ -224,6 +243,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
         print('musicdiff crashed', file=results)
         results.flush()
         return False
+    return True
 
 # ------------------------------------------------------------------------------
 

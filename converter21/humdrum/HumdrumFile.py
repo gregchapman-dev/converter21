@@ -8601,8 +8601,8 @@ class HumdrumFile(HumdrumFileContent):
         group: int = self._getGroupNumberLabel(partStartTok)
 
         clefTok: HumdrumToken = None
-        partTok: HumdrumToken = None
-        staffTok: HumdrumToken = None
+#         partTok: HumdrumToken = None
+#         staffTok: HumdrumToken = None
         staffScaleTok: HumdrumToken = None
         striaTok: HumdrumToken = None
         keySigTok: HumdrumToken = None
@@ -8638,10 +8638,10 @@ class HumdrumFile(HumdrumFileContent):
             elif token.isOriginalClef:
                 if token.originalClef[0].isdigit():
                     self._oclefs.append((staffNum, token))
-            elif token.isPart:
-                partTok = token
-            elif token.isStaffInterpretation:
-                staffTok = token
+#             elif token.isPart:
+#                 partTok = token
+#             elif token.isStaffInterpretation:
+#                 staffTok = token
             elif token.isStria: # num lines per staff (usually 5)
                 striaTok = token
             elif token.isOriginalMensurationSymbol:

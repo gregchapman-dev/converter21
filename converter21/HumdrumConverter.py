@@ -9,7 +9,7 @@
 # Copyright:     (c) 2021-2022 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-import sys
+#import sys
 from music21 import converter
 from music21 import common
 

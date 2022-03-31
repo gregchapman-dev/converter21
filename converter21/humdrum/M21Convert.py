@@ -1273,7 +1273,7 @@ class M21Convert:
                     italic = True
 
             if style.fontWeight is not None and style.fontWeight == 'bold':
-                    bold = True
+                bold = True
 
             if italic and bold:
                 styleString = ':Bi'
