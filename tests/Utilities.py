@@ -744,3 +744,6 @@ def CheckM21DateSelection(dateSelection,
 def CheckString(string, expectedString):
     assert isinstance(string, str)
     assert string == expectedString
+
+def CheckIsNone(obj):
+    assert obj is None

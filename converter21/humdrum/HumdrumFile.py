@@ -845,10 +845,12 @@ class HumdrumFile(HumdrumFileContent):
                 if not alreadySawOMD:
                     alreadySawOMD = True
                     if bibLine.lineIndex < firstDataLineIdx:
-                        # strip off any [quarter = 128] suffix
-                        tempoName, _noteName, _bpmText = Convert.getMetronomeMarkInfo(value)
+                        # strip off any [quarter = 128] suffix, and any 'M.M.' or 'M. M.' or etc.
+                        tempoName, _mmStr, _noteName, _bpmText = Convert.getMetronomeMarkInfo(value)
                         if tempoName:
-                            value = tempoName
+                            tempoName.strip()
+                            if tempoName:
+                                value = tempoName
                         self._biblio.append((key, value))
             else:
                 self._biblio.append((key, value))
@@ -2033,11 +2035,15 @@ class HumdrumFile(HumdrumFileContent):
 
         if mmText is not None or mmNumber is not None:
             # We insert this tempo at the beginning of the measure
+            # OMD and *MM have no way of specifying placement or fontStyle,
+            # so we default to the usual: 'above' and 'bold'
             tempo: m21.tempo.MetronomeMark = self._myMetronomeMarkInit(number=mmNumber, text = mmText)
+            tempo.style.fontStyle = 'bold'
             if hasattr(tempo, 'placement'):
                 tempo.placement = 'above'
             else:
                 tempo.style.absoluteY = 'above'
+
             tempoOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
 
             currentMeasurePerStaff: [m21.stream.Measure] = self._allMeasuresPerStaff[measureIndex]
@@ -7407,12 +7413,15 @@ class HumdrumFile(HumdrumFileContent):
         metronomeMark: m21.tempo.MetronomeMark = None
 
         tempoName: str = None # e.g. 'andante'
+        mmStr: str = None     # e.g. 'M. M.' or 'M.M.' or 'M M' or M:M:
         noteName: str = None  # e.g. 'quarter'
         bpmText: str = None   # e.g. '88'
 
         text = html.unescape(text)
 
-        tempoName, noteName, bpmText = Convert.getMetronomeMarkInfo(text)
+        tempoName, mmStr, noteName, bpmText = Convert.getMetronomeMarkInfo(text)
+        if mmStr is None:
+            mmStr = ''
 
         if not tempoName and not noteName and not bpmText:
             # raw text
@@ -7437,6 +7446,12 @@ class HumdrumFile(HumdrumFileContent):
         if mmText and (mmText[-1] == '(' or mmText[-1] == '['):
             mmText = mmText[0:-1]
         mmText = mmText.strip() # strip leading and trailing whitespace
+
+        if mmText and mmStr:
+            mmText += ' ' + mmStr
+        elif not mmText and mmStr:
+            mmText = mmStr
+
         if mmText == '':
             mmText = None
 
@@ -7557,8 +7572,11 @@ class HumdrumFile(HumdrumFileContent):
         if midibpm > 0 or self._isTempoish(value):
             token.setValue('auto', 'OMD handled', True)
             # put the metronome mark in this measure of staff 0 (highest staff on the page)
+            # Since OMD has no way of specifying placement or fontStyle, we set these
+            # to the usual: 'above' and 'bold'
             staffIndex: int = 0
             tempo: m21.tempo.MetronomeMark = self._createMetronomeMark(value, midibpm)
+            tempo.style.fontStyle = 'bold'
             if hasattr(tempo, 'placement'):
                 tempo.placement = 'above'
             else:

@@ -51,12 +51,12 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'delpitch',
                         'headedit',
                         'dotins',
-                        'dotdel',
-                        'editnoteshape',
-                        'editnoteheadfill',
-                        'editnoteheadparenthesis'):
+                        'dotdel'):
             counts['note'] += 1
-        elif op[0] in ('editstyle'):
+        elif op[0] in ('editstyle',
+                       'editnoteshape',
+                       'editnoteheadfill',
+                       'editnoteheadparenthesis'):
             counts['notestyle'] += 1
         elif op[0] in ('editstemdirection'):
             counts['stemdirection'] += 1

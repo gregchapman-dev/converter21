@@ -1757,6 +1757,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # We'll be content with the highest partIndex seen.
         # Note: The original routine over-deleted if there were multiple _different_ metronome marks.
         # This is now rewritten to only delete actual duplicates. --gregc
+        # And now de-duplication is disabled; it was causing more problems than it was worth.
         emittedTempos: List[m21.tempo.TempoIndication] = []
 
         # First, sort by partIndex (highest first)
@@ -1764,24 +1765,25 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         def partIndexOf(tempo: Tuple[int, m21.tempo.TempoIndication]) -> int:
             return tempo[0]
 
-        def isAlreadyEmitted(tempo: m21.tempo.TempoIndication) -> bool:
-            tempoMM: m21.tempo.MetronomeMark = tempo.getSoundingMetronomeMark()
-            for e in emittedTempos:
-                if type(tempo) is not type(e): # original type, not MM
-                    continue
-                eMM: m21.tempo.MetronomeMark = e.getSoundingMetronomeMark()
-                if eMM.numberImplicit != tempoMM.numberImplicit:
-                    continue
-                if not eMM.numberImplicit and eMM.number != tempoMM.number:
-                    continue
-                if eMM.textImplicit != tempoMM.textImplicit:
-                    continue
-                if not eMM.textImplicit and eMM.text != tempoMM.text:
-                    continue
-                if eMM.referent != tempoMM.referent:
-                    continue
-                return True
-            return False
+        def isAlreadyEmitted(_tempo: m21.tempo.TempoIndication) -> bool:
+            return False # disable de-duplication to see if it causes any problems (helps with a few scores)
+#             tempoMM: m21.tempo.MetronomeMark = tempo.getSoundingMetronomeMark()
+#             for e in emittedTempos:
+#                 if type(tempo) is not type(e): # original type, not MM
+#                     continue
+#                 eMM: m21.tempo.MetronomeMark = e.getSoundingMetronomeMark()
+#                 if eMM.numberImplicit != tempoMM.numberImplicit:
+#                     continue
+#                 if not eMM.numberImplicit and eMM.number != tempoMM.number:
+#                     continue
+#                 if eMM.textImplicit != tempoMM.textImplicit:
+#                     continue
+#                 if not eMM.textImplicit and eMM.text != tempoMM.text:
+#                     continue
+#                 if eMM.referent != tempoMM.referent:
+#                     continue
+#                 return True
+#             return False
 
         sortedTempos = sorted(tempos, key=partIndexOf, reverse=True)
         for partIndex, tempoIndication in sortedTempos:

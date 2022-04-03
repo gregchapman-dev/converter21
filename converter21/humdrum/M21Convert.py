@@ -864,6 +864,9 @@ class M21Convert:
 
         postfix = expressionStr + articStr + cueSizeChar + noteColorChar + stemStr + beamStr + invisibleStr
 
+        noteLayouts: [str] = M21Convert._getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote)
+        layouts += noteLayouts
+
         # prefix/postfix possibility: ties
         tieStart, tieStop, tieLayouts = M21Convert._getTieStartStopAndLayoutsFromM21GeneralNote(m21GeneralNote)
         prefix = tieStart + prefix # prepend to prefix for readability
@@ -878,6 +881,34 @@ class M21Convert:
         postfix += slurStops
 
         return (prefix, postfix, layouts)
+
+    @staticmethod
+    def _getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> List[str]:
+        if not isinstance(m21GeneralNote, m21.note.NotRest):
+            # no notehead stuff, get out
+            return []
+
+        # noteheadFill is None, True, False
+        # notehead is None, 'normal', 'cross', 'diamond', etc
+        if m21GeneralNote.noteheadFill is None and (
+                m21GeneralNote.notehead is None or m21GeneralNote.notehead == 'normal'
+                                                   ):
+            return []
+
+        head: Optional[str] = None
+        if m21GeneralNote.noteheadFill is True:
+            head = 'solid'
+        elif m21GeneralNote.noteheadFill is False:
+            head = 'open'
+        elif m21GeneralNote.notehead == 'diamond':
+            head = 'diamond'
+        elif m21GeneralNote.notehead == 'cross':
+            head = 'plus'
+
+        if head:
+            return [f'!LO:N:head={head}']
+
+        return []
 
     @staticmethod
     def _getKernSlurStartsAndStopsFromGeneralNote(m21GeneralNote: m21.note.GeneralNote, spannerBundle: m21.spanner.SpannerBundle) -> Tuple[str, str]:
@@ -1364,6 +1395,7 @@ class M21Convert:
             textExp = tempo.getTextExpression() # only returns explicit text
             if textExp is None:
                 return ('', '')
+            textExp.placement = tempo.placement
             tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
             return ('', tempoTextLayout)
 
@@ -1383,6 +1415,7 @@ class M21Convert:
         textExp = tempo.getTextExpression() # only returns explicit text
         if textExp is not None:
             # We have some text (like 'Andante') to display (and some textStyle)
+            textExp.placement = tempo.placement
             tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
 
         if tempo.number is not None and not tempo.numberImplicit:
@@ -1442,9 +1475,12 @@ class M21Convert:
         if not noteName:
             return None
 
-        # in case someone forgot to strip the brackets off '[quarter-dot]', for example.
-        if noteName[0] == '[' and noteName[-1] == ']':
-            noteName = noteName[1:-1]
+        # In case someone forgot to strip the brackets off '[quarter-dot]', for example.
+        if noteName[0] == '[':
+            noteName = noteName[1:]
+
+        if noteName[-1] == ']':
+            noteName = noteName[:-1]
 
         # remove styling qualifiers
         noteName = noteName.split('|', 1)[0] # splits at first '|' only, or not at all
@@ -1500,17 +1536,50 @@ class M21Convert:
         '[sr]?f+z?',    # 'sf, 'sfz', 'f', 'fff', etc
         'p+',           # 'p', 'ppp', etc
     ]
+    dynamicBrackets = [
+        ('brack', r'\[ ', r' \]'),
+        ('paren', r'\( ', r' \)'),
+        ('curly', r'\{ ', r' \}'),
+        ('angle', '< ', ' >'),
+    ]
     @staticmethod
     def getDynamicString(dynamic: m21.dynamics.Dynamic) -> str:
         if not isinstance(dynamic, m21.dynamics.Dynamic):
             return ''
 
         for patt in M21Convert.dynamicPatterns:
-            m = re.search(patt, dynamic.value)
+            # look for perfect match of entire value
+            m = re.match('^' + patt + '$', dynamic.value)
             if m:
                 output = m.group(0)
                 return output
 
+        # didn't find a perfect match, check for surrounding brackets, parens, curlies or angles.
+        for patt in M21Convert.dynamicPatterns:
+            for _name, start, end in M21Convert.dynamicBrackets:
+                matchPatt: str = '^' + start + patt + end + '$'
+                m = re.match(matchPatt, dynamic.value)
+                if m:
+                    output = m.group(0)
+                    # strip off the start and end
+                    output = output[2:-2]
+                    return output
+
+        # didn't find anything yet, perhaps it's something like 'p sempre legato', where
+        # we need to find 'p', and not 'mp'.
+        for patt in M21Convert.dynamicPatterns:
+            for startDelim in ('^', r'\s'):
+                for endDelim in (r'\s', '$'):
+                    m = re.search(startDelim + patt + endDelim, dynamic.value)
+                    if m:
+                        output: str = m.group(0)
+                        if startDelim == r'\s':
+                            output = output[1:]
+                        if endDelim == r'\s':
+                            output = output[:-1]
+                        return output
+
+        # give up and return whatever that string is (that isn't, and doesn't contain, a dynamic)
         return dynamic.value
 
     @staticmethod
@@ -1575,15 +1644,32 @@ class M21Convert:
         if dynamic.hasStyleInformation and dynamic.style.justify == 'right':
             output += ':rj'
 
-        # t='sempre %s' (if dynamic.value is 'ff sempre legato', for example)
         if M21Convert.getDynamicString(dynamic) != dynamic.value:
+            # check first for surrounding brackets, parens, curlies or angles.
             for patt in M21Convert.dynamicPatterns:
-                m = re.search(patt, dynamic.value)
-                if m:
-                    dynstr: str = m.group(0)
-                    fmt: str = re.sub(dynstr, '%s', dynamic.value)
-                    output += ':t=' + fmt
-                    break
+                for name, start, end in M21Convert.dynamicBrackets:
+                    matchPatt: str = '^' + start + patt + end + '$'
+                    m = re.match(matchPatt, dynamic.value)
+                    if m:
+                        output += ':ed=' + name
+                        return output
+
+            # t='%s sempre legato' (if dynamic.value is 'ff sempre legato', for example)
+            # be careful not to match 'mp' in 'ff sempre legato'!
+            for patt in M21Convert.dynamicPatterns:
+                for startDelim in ('^', r'\s'):
+                    for endDelim in (r'\s', '$'):
+                        m = re.search(startDelim + patt + endDelim, dynamic.value)
+                        if m:
+                            dynstr: str = m.group(0)
+                            substitution: str = '%s'
+                            if startDelim == r'\s':
+                                substitution = dynstr[0] + substitution
+                            if endDelim == r'\s':
+                                substitution = substitution + dynstr[-1]
+                            fmt: str = re.sub(dynstr, substitution, dynamic.value, count=1)
+                            output += ':t=' + fmt
+                            return output
 
         return output
 
