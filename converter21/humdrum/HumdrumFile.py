@@ -8017,9 +8017,9 @@ class HumdrumFile(HumdrumFileContent):
     # 'COM72@RU'
     # 'COM5@@RU'
     @staticmethod
-    def _parseReferenceItem(k: str, v: str) -> Tuple[str, m21.metadata.Text, bool]:
+    def _parseReferenceItem(k: str, v: str) -> Tuple[str, m21.metadata.TextLiteral, bool]:
         parsedKey: str = None
-        parsedValue: m21.metadata.Text = None
+        parsedValue: m21.metadata.TextLiteral = None
         isParseable: bool = False
 
         # parse the key with regex:
@@ -8030,26 +8030,20 @@ class HumdrumFile(HumdrumFileContent):
         if not m:
             isParseable = False
             parsedKey = k
-            parsedValue = m21.metadata.Text(v)
+            parsedValue = m21.metadata.TextLiteral(v)
         else:
             isParseable = True
             parsedKey = m.group(1)
-            parsedValue = m21.metadata.Text(v)
             langCode: str = m.group(5)
-            isOriginalLanguage: bool = m.group(4) == '@@'
-            # There's no way in m21 metadata Text to say that this one is
-            # the original language, except to leave off the language code.
-            # Which sucks, because now we've dropped what that original
-            # language is on the floor.
-            if langCode and not isOriginalLanguage:
-                parsedValue.language = langCode.lower() # ISO 639-1 and 639-2 codes are lower-case
+            isTranslated: bool = langCode and m.group(4) != '@@'
+            parsedValue = m21.metadata.TextLiteral(v, language=langCode.lower() if langCode else None, isTranslated=isTranslated)
 
         # we consider any key a humdrum standard key if it is parseable, and starts with 3 chars
         # that are in the list of humdrumReferenceKeys ('COM', 'OTL', etc)
         # This includes parsed keys such as: 'COM-viaf-url' because it starts with COM.
         isHumdrumStandardKey: bool = (isParseable and
                                         len(parsedKey) >= 3 and
-                                        parsedKey[0:3] in M21Convert.humdrumReferenceKeys)
+                                        parsedKey[0:3] in M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey)
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
     @staticmethod
@@ -8095,49 +8089,21 @@ class HumdrumFile(HumdrumFileContent):
         m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
 
-        # Keep track of workIds (including copyright and date) we've added to the
-        # metadata itself (not metadata.editorial, or metadata.contributors). This
-        # is so we can put any others that would overwrite them into metadata.editorial.
-        parsedKeysAdded = []
         for k, v in self._biblio:
             parsedKey: str = None
-            parsedValue: m21.metadata.Text = None
+            parsedValue: m21.metadata.TextLiteral = None
             isStandardHumdrumKey: bool = False
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
-            alreadyAddedSomethingLikeThis: bool = parsedKey in parsedKeysAdded
 
-            # contributors can handle more than one of a particular role, so don't check
-            # or append to parsedKeysAdded.
-            if parsedKey in M21Convert.humdrumReferenceKeyToM21ContributorRole:
-                contrib = m21.metadata.Contributor()
-                contrib.name = parsedValue
-                contrib.role = M21Convert.humdrumReferenceKeyToM21ContributorRole[parsedKey]
-                #print('contributor = key: {} -> {} -> {}, value: {}/{}'.format(k, parsedKey, contrib.role, parsedValue, parsedValue.language), file=sys.stderr)
-                m21Metadata.addContributor(contrib)
+            m21PropertyNSKey: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey.get(parsedKey, None)
+            m21Property: m21.metadata.Property = m21Metadata.getPropertyDefinitionByNSKey(m21PropertyNSKey)
+
+            if m21Property is not None:
+                m21Key: str = m21.metadata.Metadata.propertyToNSKey(m21Property)
+                m21Value: Union[m21.metadata.TextLiteral, m21.metadata.Date]
+                m21Value = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedKey, parsedValue, m21Property) # will sometimes call M21Convert.m21DateObjectFromString
+                m21Metadata.addItem(m21Key, m21Value)
                 continue
-
-            if (not alreadyAddedSomethingLikeThis
-                    and parsedKey.lower() in m21Metadata.workIdAbbreviationDict):
-                #print('workId = key: {} -> {} -> {}, value: {}/{}'.format(k, parsedKey, m21Metadata.workIdAbbreviationDict[parsedKey.lower()], parsedValue, parsedValue.language), file=sys.stderr)
-                m21Metadata.setWorkId(parsedKey, parsedValue)
-                parsedKeysAdded.append(parsedKey)
-                continue
-
-            if (not alreadyAddedSomethingLikeThis
-                    and parsedKey == 'YEC'): # electronic edition copyright
-                #print('copyright = key: {} -> {}, value: {}/{}'.format(k, parsedKey, parsedValue, parsedValue.language), file=sys.stderr)
-                m21Metadata.copyright = m21.metadata.Copyright(parsedValue)
-                parsedKeysAdded.append(parsedKey)
-                continue
-
-            if (not alreadyAddedSomethingLikeThis
-                    and parsedKey == 'ODT'): # date of composition
-                date = M21Convert.m21DateObjectFromString(str(parsedValue))
-                if date is not None:
-                    #print('date = key: {} -> {}, value: {} -> {}'.format(k, parsedKey, parsedValue, date), file=sys.stderr)
-                    m21Metadata.date = date
-                    parsedKeysAdded.append(parsedKey)
-                    continue
 
             # Doesn't match any known m21.metadata-supported metadata (or it does, and we
             # already put one in metadata, so we can't put this one there, or it does, and
@@ -8145,32 +8111,12 @@ class HumdrumFile(HumdrumFileContent):
             # Add verbatim to m21Score.metadata.editorial, which is (among other
             # things) a dictionary.
             if isStandardHumdrumKey:
-                newk: str = k
-
-                # insert/increment a number just after the standard key if necessary, to make it unique
-                if alreadyAddedSomethingLikeThis:
-                    # We added it without a number (but it might have had one)
-                    # so we just start at '1' now.  We basically have to renumber
-                    # things entirely.  So if you had no numbers, you'll have them
-                    # now, and if you did have numbers, you have new numbers now.
-                    newk = self._replaceOrInsertNumberInReferenceKey(newk, 1)
-
-                while 'humdrum:' + newk in m21Metadata.editorial:
-                    newk = self._incrementOrInsertNumberInReferenceKey(newk, 1)
-
-                # prepend the unparsed key with 'humdrum:', and put it in editorial unparsed
-                newk = 'humdrum:' + newk
-
-                #print('editorial = key: {}, value: {}'.format(newk, v), file=sys.stderr)
-                m21Metadata.editorial[newk] = v
+                # prepend the unparsed key with 'humdrum:', and put it in as "personal" unparsed
+                # TODO: register the humdrum namespace properly and put it there instead.
+                m21Metadata.addPersonalItem('humdrum:' + k, v)
             else:
                 # freeform key/value, put it in editorial unparsed
-                #print('editorial = key: {}, value: {}'.format(k, v), file=sys.stderr)
-                if k not in m21Metadata.editorial:
-                    # you only get the first of multiple identical free-form keys
-                    m21Metadata.editorial[k] = v
-                else:
-                    print(f'dropping non-unique metadata key \'{k}\': \'{v}\' on the floor', file=sys.stderr)
+                m21Metadata.addPersonalItem(k, v)
 
     def _createStaffGroupsAndParts(self):
         decoration: str = self.getReferenceValueForKey('system-decoration')

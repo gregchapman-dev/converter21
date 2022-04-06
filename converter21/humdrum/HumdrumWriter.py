@@ -382,6 +382,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         'date': 'ODT'
     }
 
+    '''
     @staticmethod
     def _allMetadataAsTextObjects(m21Metadata: m21.metadata.Metadata) -> List[Tuple[str, m21.prebase.ProtoM21Object]]: # value can be m21.metadata.Text or m21.metadata.Date et al
         # this is straightup equivalent to Metadata.all(), but it (1) returns the full value
@@ -455,6 +456,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 hdKey += '@' + langCode.upper()
             outfile.appendLine('!!!' + hdKey + ': ' + vStr, asGlobalToken=True)
         # pylint: enable=protected-access
+    '''
 
     def _addHeaderRecords(self, outfile: HumdrumFile):
         systemDecoration: str = self._getSystemDecoration()
@@ -467,6 +469,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if m21Metadata is None:
             return
 
+    '''
         # Top of Humdrum file is (in order):
         # 1. Composer(s): COM = m21Metadata.getContributorsByRole('composer')[0].name
         # 2. Title: OTL = metadata._workIds['title']
@@ -604,6 +607,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                         colonBeforeValue = ':'
                     outfile.appendLine('!!!' + hdKey + colonBeforeValue + hdValue, asGlobalToken=True)
         # pylint: enable=protected-access
+    '''
 
     def _getSystemDecoration(self) -> str:
         output: str = ''
