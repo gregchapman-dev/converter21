@@ -8017,9 +8017,9 @@ class HumdrumFile(HumdrumFileContent):
     # 'COM72@RU'
     # 'COM5@@RU'
     @staticmethod
-    def _parseReferenceItem(k: str, v: str) -> Tuple[str, m21.metadata.Text, bool]:
+    def _parseReferenceItem(k: str, v: str) -> Tuple[str, m21.metadata.TextLiteral, bool]:
         parsedKey: str = None
-        parsedValue: m21.metadata.Text = None
+        parsedValue: m21.metadata.TextLiteral = None
         isParseable: bool = False
 
         # parse the key with regex:
@@ -8030,7 +8030,7 @@ class HumdrumFile(HumdrumFileContent):
         if not m:
             isParseable = False
             parsedKey = k
-            parsedValue = m21.metadata.Text(v)
+            parsedValue = m21.metadata.TextLiteral(v)
         else:
             isParseable = True
             parsedKey = m.group(1)
@@ -8095,7 +8095,7 @@ class HumdrumFile(HumdrumFileContent):
 
         for k, v in self._biblio:
             parsedKey: str = None
-            parsedValue: m21.metadata.Text = None
+            parsedValue: m21.metadata.TextLiteral = None
             isStandardHumdrumKey: bool = False
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
