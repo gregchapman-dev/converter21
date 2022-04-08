@@ -16,7 +16,7 @@
 import sys
 import re
 import math
-from typing import Union, List, Tuple, Dict, OrderedDict, Optional, Type
+from typing import Union, List, Tuple, OrderedDict, Optional, Type
 from fractions import Fraction
 
 import music21 as m21
@@ -32,21 +32,21 @@ from converter21.humdrum import Convert
 from converter21.humdrum import M21Utilities
 
 class M21Convert:
-    humdrumMensurationSymbolToM21TimeSignatureSymbol = {
+    humdrumMensurationSymbolToM21TimeSignatureSymbol: dict = {
         'c':    'common',   # modern common time (4/4)
         'c|':   'cut',      # modern cut time (2/2)
-#       'C':    '',        # mensural common (not supported in music21)
-#       'C|':    '',       # mensural cut (2/1) (not supported in music21)
-#       'O':    '',        # mensural 'O' (not supported in music21)
-#       'O|':   '',        # mensural 'cut O' (not supported in music21)
+#       'C':    '',         # mensural common (not supported in music21)
+#       'C|':    '',        # mensural cut (2/1) (not supported in music21)
+#       'O':    '',         # mensural 'O' (not supported in music21)
+#       'O|':   '',         # mensural 'cut O' (not supported in music21)
     }
 
-    m21TimeSignatureSymbolToHumdrumMensurationSymbol = {
-        'common': 'c',   # modern common time (4/4)
-        'cut': 'c|',    # modern cut time (2/2)
+    m21TimeSignatureSymbolToHumdrumMensurationSymbol: dict = {
+        'common':   'c',    # modern common time (4/4)
+        'cut':      'c|',   # modern cut time (2/2)
     }
 
-    diatonicToM21PitchName = {
+    diatonicToM21PitchName: dict = {
         0: 'C',
         1: 'D',
         2: 'E',
@@ -56,7 +56,7 @@ class M21Convert:
         6: 'B',
     }
 
-    humdrumReferenceKeyToM21ContributorRole = {
+    humdrumReferenceKeyToM21ContributorRole: dict = {
         'COM': 'composer',
         'COA': 'attributed composer',
         'COS': 'suspected composer',
@@ -73,7 +73,7 @@ class M21Convert:
         'ENC': 'electronic encoder'
     }
 
-    m21ContributorRoleToHumdrumReferenceKey = {
+    m21ContributorRoleToHumdrumReferenceKey: dict = {
         'composer'                  : 'COM',
         'attributed composer'       : 'COA',
         'suspected composer'        : 'COS',
@@ -90,7 +90,23 @@ class M21Convert:
         'electronic encoder'        : 'ENC'
     }
 
-    humdrumReferenceKeyToM21MetadataPropertyNSKey = {
+    humdrumReferenceKeyToEncodingScheme: dict = {
+        # Note that we only enter things in this dict that aren't free-form text (that's the default).
+        # Note also that 'humdrum:date' covers all the ways humdrum encodes dates in a string. The
+        # string might represent a single date, a pair of dates, or even a list of dates.
+        'CDT': 'humdrum:date', # composer's birth and death dates (**zeit format)
+        'RRD': 'humdrum:date', # release date (**date format)
+        'RDT': 'humdrum:date', # date of recording (**date format)
+        'MRD': 'humdrum:date', # date of performance (**date format)
+        'MPD': 'humdrum:date', # date of first performance (**date format)
+        'MDT': 'humdrum:date', # unknown, but I've seen 'em (another way to say date of performance?)
+        'ODT': 'humdrum:date', # date or period of composition (**date or **zeit format)
+        'PDT': 'humdrum:date', # date first published (**date format)
+        'YER': 'humdrum:date', # date electronic edition released
+        'END': 'humdrum:date', # encoding date
+    }
+
+    humdrumReferenceKeyToM21MetadataPropertyNSKey: dict = {
         # dict value is either 'namespace:name' or '' (if there is no m21Metadata equivalent)
         # Authorship information:
         'COM': 'marcrel:CMP', # composer's name
@@ -203,27 +219,33 @@ class M21Convert:
         'RWB': '' # a warning about the representation
     }
 
-    humdrumDecoGroupStyleToM21GroupSymbol = {
+    # This dict is private because we wrap a function around it.
+    _m21MetadataPropertyNSKeyToHumdrumReferenceKey: dict = {nsKey: hdKey
+                                                        for (hdKey, nsKey) in
+                                                            humdrumReferenceKeyToM21MetadataPropertyNSKey.items()
+                                                                if nsKey != ''}
+
+    humdrumDecoGroupStyleToM21GroupSymbol: dict = {
         '{':    'brace',
         '[':    'bracket',
         '<':    'square',   # what is this one supposed to be, it's often ignored in iohumdrum.cpp
     }
 
-    m21GroupSymbolToHumdrumDecoGroupStyleStart = {
+    m21GroupSymbolToHumdrumDecoGroupStyleStart: dict = {
         'brace':    '{',
         'bracket':  '[',
         'square':   '<',    # what is this one supposed to be, it's often ignored in iohumdrum.cpp
         'line':     '',     # humdrum doesn't have line, but "no style" is close
     }
 
-    m21GroupSymbolToHumdrumDecoGroupStyleStop = {
+    m21GroupSymbolToHumdrumDecoGroupStyleStop: dict = {
         'brace':    '}',
         'bracket':  ']',
         'square':   '>',    # what is this one supposed to be, it's often ignored in iohumdrum.cpp
         'line':     '',     # humdrum doesn't have line, but "no style" is close
     }
 
-    humdrumStandardKeyStringsToNumSharps = {
+    humdrumStandardKeyStringsToNumSharps: dict = {
         '':                 0,
         'f#':               1,
         'f#c#':             2,
@@ -241,7 +263,7 @@ class M21Convert:
         'b-e-a-d-g-c-f-':   -7,
     }
 
-    numSharpsToHumdrumStandardKeyStrings = {
+    numSharpsToHumdrumStandardKeyStrings: dict = {
         0:  '',
         1:  'f#',
         2:  'f#c#',
@@ -259,7 +281,7 @@ class M21Convert:
         -7: 'b-e-a-d-g-c-f-',
     }
 
-    humdrumModeToM21Mode = {
+    humdrumModeToM21Mode: dict = {
         'dor':  'dorian',
         'phr':  'phrygian',
         'lyd':  'lydian',
@@ -269,7 +291,7 @@ class M21Convert:
         'loc':  'locrian',
     }
 
-    m21ModeToHumdrumMode = {
+    m21ModeToHumdrumMode: dict = {
         'dorian': 'dor',
         'phrygian': 'phr',
         'lydian': 'lyd',
@@ -2471,9 +2493,89 @@ class M21Convert:
         return ''
 
     @staticmethod
-    def humdrumMetadataValueToM21MetadataValue(_humdrumKey: str,
-                                               humdrumValue: m21.metadata.TextLiteral,
-                                               _m21Property: m21.metadata.Property
+    def humdrumMetadataValueToM21MetadataValue(humdrumValue: m21.metadata.TextLiteral,
                                               ) -> Union[m21.metadata.TextLiteral,
                                                          m21.metadata.DateSingle]:
-        return humdrumValue # TODO: often right, but I need to implement this
+        m21Value: Optional[Union[m21.metadata.TextLiteral, m21.metadata.DateSingle]] = None
+
+        if humdrumValue.encodingScheme == 'humdrum.date':
+            # convert to m21.metadata.DateXxxx
+            m21Value = M21Convert.m21DateObjectFromString(str(humdrumValue))
+            if m21Value is None:
+                # wouldn't convert to DateXxxx, leave it as TextLiteral
+                m21Value = humdrumValue
+        else:
+            # default is m21.metadata.TextLiteral
+            m21Value = humdrumValue
+
+        return m21Value
+
+    @staticmethod
+    def m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey: str) -> Optional[str]:
+        hdKey: str = M21Convert._m21MetadataPropertyNSKeyToHumdrumReferenceKey.get(nsKey, None)
+
+        if hdKey is None:
+            # see if it was a 'humdrum:XXX' passthru
+            if nsKey.startswith('humdrum:'):
+                hdKey = nsKey[8:]
+
+        return hdKey
+
+    @staticmethod
+    def m21MetadataItemToHumdrumKeyWithoutIndex(nsKey: str,
+                                                value: Union[str,
+                                                             m21.metadata.TextLiteral,
+                                                             m21.metadata.DateSingle]
+                                                ) -> Optional[str]:
+        hdKey: str = M21Convert._m21MetadataPropertyNSKeyToHumdrumReferenceKey.get(nsKey, None)
+
+        if hdKey is None:
+            # see if it was a 'humdrum:XXX' passthru
+            if nsKey.startswith('humdrum:'):
+                hdKey = nsKey[8:]
+
+        if isinstance(value, m21.metadata.TextLiteral):
+            if value.language:
+                if value.isTranslated:
+                    hdKey += '@' + value.language.upper()
+                else:
+                    hdKey += '@@' + value.language.upper()
+        return hdKey
+
+    @staticmethod
+    def m21MetadataItemToHumdrumReferenceLineStr(idx: int, # this is the index to insert into the hdKey
+                                                 nsKey: str,
+                                                 value: Union[str,
+                                                              m21.metadata.TextLiteral,
+                                                              m21.metadata.DateSingle]) -> Optional[str]:
+        valueStr: str = ''
+
+        hdKey = M21Convert.m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey)
+        if hdKey is not None:
+            if idx > 0: # we generate 'XXX', 'XXX1', 'XXX2', etc
+                hdKey += str(idx)
+        else:
+            # must be free-form personal key... pass it thru as is (no indexing)
+            hdKey = nsKey
+
+        if isinstance(value, m21.metadata.TextLiteral):
+            if value.language:
+                if value.isTranslated:
+                    hdKey += '@' + value.language.upper()
+                else:
+                    hdKey += '@@' + value.language.upper()
+            valueStr = str(value)
+        elif isinstance(value, m21.metadata.DateSingle):
+            # all metadata DateXxxx types derive from DateSingle
+            # We don't like str(DateXxxx)'s results so we do our own.
+            valueStr = M21Convert.stringFromM21DateObject(value)
+        else:
+            # it's already a str, we hope, but if not, we convert here
+            valueStr = str(value)
+
+        if valueStr == '':
+            refLineStr: str = '!!!' + hdKey + ':'
+        else:
+            refLineStr: str = '!!!' + hdKey + ': ' + valueStr
+
+        return refLineStr

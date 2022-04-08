@@ -8036,7 +8036,11 @@ class HumdrumFile(HumdrumFileContent):
             parsedKey = m.group(1)
             langCode: str = m.group(5)
             isTranslated: bool = langCode and m.group(4) != '@@'
-            parsedValue = m21.metadata.TextLiteral(v, language=langCode.lower() if langCode else None, isTranslated=isTranslated)
+            encodingScheme: Optional[str] = M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
+            parsedValue = m21.metadata.TextLiteral(v,
+                                                   language=langCode.lower() if langCode else None,
+                                                   isTranslated=isTranslated,
+                                                   encodingScheme=encodingScheme)
 
         # we consider any key a humdrum standard key if it is parseable, and starts with 3 chars
         # that are in the list of humdrumReferenceKeys ('COM', 'OTL', etc)
@@ -8095,14 +8099,11 @@ class HumdrumFile(HumdrumFileContent):
             isStandardHumdrumKey: bool = False
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
-            m21PropertyNSKey: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey.get(parsedKey, None)
-            m21Property: m21.metadata.Property = m21Metadata.getPropertyDefinitionByNSKey(m21PropertyNSKey)
-
-            if m21Property is not None:
-                m21Key: str = m21.metadata.Metadata.propertyToNSKey(m21Property)
+            m21NSKey: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey.get(parsedKey, None)
+            if m21NSKey:
                 m21Value: Union[m21.metadata.TextLiteral, m21.metadata.Date]
-                m21Value = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedKey, parsedValue, m21Property) # will sometimes call M21Convert.m21DateObjectFromString
-                m21Metadata.addItem(m21Key, m21Value)
+                m21Value = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
+                m21Metadata.addItem(m21NSKey, m21Value)
                 continue
 
             # Doesn't match any known m21.metadata-supported metadata (or it does, and we
