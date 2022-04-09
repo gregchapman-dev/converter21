@@ -109,11 +109,11 @@ class M21Convert:
     humdrumReferenceKeyToM21MetadataPropertyNSKey: dict = {
         # dict value is either 'namespace:name' or '' (if there is no m21Metadata equivalent)
         # Authorship information:
-        'COM': 'marcrel:CMP', # composer's name
-        'COA': '', # attributed composer
-        'COS': '', # suspected composer
-        'COL': '', # composer's abbreviated, alias, or stage name
-        'COC': '', # composer's corporate name
+        'COM': 'marcrel:CMP',                   # composer's name
+        'COA': 'music21:attributedComposer',    # attributed composer
+        'COS': 'music21:suspectedComposer',     # suspected composer
+        'COL': 'music21:composerAlias',         # composer's abbreviated, alias, or stage name
+        'COC': 'music21:composerCorporate', # composer's corporate name
         'CDT': '', # composer's birth and death dates (**zeit format)
         'CBL': '', # composer's birth location
         'CDL': '', # composer's death location
@@ -121,7 +121,7 @@ class M21Convert:
         'LYR': 'marcrel:LYR', # lyricist's name
         'LIB': 'marcrel:LBT', # librettist's name
         'LAR': 'marcrel:ARR', # music arranger's name
-        'LOR': '', # orchestrator's name
+        'LOR': 'music21:orchestrator', # orchestrator's name
         'TXO': 'music21:textOriginalLanguage', # original language of vocal/choral text
         'TXL': 'music21:textLanguage', # language of the encoded vocal/choral text
         # Recording information (if the Humdrum encodes information pertaining to an audio recording)
