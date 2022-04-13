@@ -387,12 +387,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
 
-        m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
+        m21Metadata: m21.metadata.ExtendedMetadata = m21.metadata.ExtendedMetadata(
+                                                            self._m21Score.metadata)
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
         if m21Metadata is None:
             return
 
-        allItems = m21Metadata.all() # list of tuples (nsKey, singleValue), sorted by nsKey
+        allItems = m21Metadata.getAllItems() # list of tuples (nsKey, singleValue)
 
         # Top of Humdrum file is (in order):
         # 1. Composer name(s)
@@ -413,34 +414,34 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             return output
 
         mdComposerItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'marcrel:CMP')
 
         mdTitleItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:title')
         mdAlternateTitleItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:alternative')
         mdPopularTitleItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:popularTitle')
         mdParentTitleItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:parentTitle')
         mdGroupTitleItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:groupTitle')
         mdMovementNameItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'music21:movementName')
         mdMovementNumberItems: List[
-                            Tuple[str, m21.metadata.TextLiteral]
+                            Tuple[str, m21.metadata.Text]
                         ] = returnAndRemoveAllItemsWithNSKey(allItems, 'music21:movementNumber')
 
-        # Copyright needs some work, because it's probably a combination of multiple NSKeys into
-        # one object.
-#         mdCopyrights: List[m21.metadata.Copyright] = m21Metadata.copyrights
+        mdCopyrightItems: List[
+                            Tuple[str, m21.metadata.Copyright]
+                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:rights')
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
 
@@ -518,13 +519,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-#         if mdCopyright:
-#             langCode: str = mdCopyright.language
-#             hdKey: str = 'YEC'
-#             if langCode:
-#                 hdKey += '@' + langCode.upper()
-#             outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdCopyright), asGlobalToken=True)
-#             atLine += 1
+        for nsKey, value in mdCopyrightItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            if refLineStr is not None:
+                outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
+            atLine += 1
 
         # what's left in allItems goes at the bottom of the file
         for nsKey, value in allItems:

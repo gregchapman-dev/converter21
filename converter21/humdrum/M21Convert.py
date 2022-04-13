@@ -16,7 +16,7 @@
 import sys
 import re
 import math
-from typing import Union, List, Tuple, OrderedDict, Optional, Type
+from typing import Union, List, Tuple, OrderedDict, Optional, Type, Any
 from fractions import Fraction
 
 import music21 as m21
@@ -2291,7 +2291,7 @@ class M21Convert:
                     dateStrings = string.split(divider, 1) # split only at first instance of divider
                 break # we assume there is only one type of divider present
 
-        del string # to make sure we never look at it again
+        del string # to make sure we never look at it again, it's all dateStrings from here out
 
         singleRelevance: str = ''
         if typeNeeded == m21.metadata.DateSingle:
@@ -2493,22 +2493,25 @@ class M21Convert:
         return ''
 
     @staticmethod
-    def humdrumMetadataValueToM21MetadataValue(humdrumValue: m21.metadata.TextLiteral,
-                                              ) -> Union[m21.metadata.TextLiteral,
-                                                         m21.metadata.DateSingle]:
-        m21Value: Optional[Union[m21.metadata.TextLiteral, m21.metadata.DateSingle]] = None
+    def humdrumMetadataValueToM21MetadataValue(humdrumValue: m21.metadata.Text) -> Any:
+        m21Value: Optional[Union[m21.metadata.Text, m21.metadata.DateSingle]] = None
 
-        if humdrumValue.encodingScheme == 'humdrum.date':
+        if humdrumValue.encodingScheme == 'humdrum:date':
             # convert to m21.metadata.DateXxxx
             m21Value = M21Convert.m21DateObjectFromString(str(humdrumValue))
             if m21Value is None:
-                # wouldn't convert to DateXxxx, leave it as TextLiteral
+                # wouldn't convert to DateXxxx, leave it as Text
                 m21Value = humdrumValue
         else:
-            # default is m21.metadata.TextLiteral
+            # default is m21.metadata.Text (even for Contributors)
             m21Value = humdrumValue
 
         return m21Value
+
+    @staticmethod
+    def stringFromM21Contributor(c: m21.metadata.Contributor) -> str:
+        # TODO: someday support export of multi-named Contributors
+        return c.names[0]
 
     @staticmethod
     def m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey: str) -> Optional[str]:
@@ -2523,9 +2526,7 @@ class M21Convert:
 
     @staticmethod
     def m21MetadataItemToHumdrumKeyWithoutIndex(nsKey: str,
-                                                value: Union[str,
-                                                             m21.metadata.TextLiteral,
-                                                             m21.metadata.DateSingle]
+                                                value: Any
                                                 ) -> Optional[str]:
         hdKey: str = M21Convert._m21MetadataPropertyNSKeyToHumdrumReferenceKey.get(nsKey, None)
 
@@ -2534,7 +2535,7 @@ class M21Convert:
             if nsKey.startswith('humdrum:'):
                 hdKey = nsKey[8:]
 
-        if isinstance(value, m21.metadata.TextLiteral):
+        if isinstance(value, m21.metadata.Text):
             if value.language:
                 if value.isTranslated:
                     hdKey += '@' + value.language.upper()
@@ -2545,9 +2546,7 @@ class M21Convert:
     @staticmethod
     def m21MetadataItemToHumdrumReferenceLineStr(idx: int, # this is the index to insert into the hdKey
                                                  nsKey: str,
-                                                 value: Union[str,
-                                                              m21.metadata.TextLiteral,
-                                                              m21.metadata.DateSingle]) -> Optional[str]:
+                                                 value: Any) -> Optional[str]:
         valueStr: str = ''
 
         hdKey = M21Convert.m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey)
@@ -2558,7 +2557,7 @@ class M21Convert:
             # must be free-form personal key... pass it thru as is (no indexing)
             hdKey = nsKey
 
-        if isinstance(value, m21.metadata.TextLiteral):
+        if isinstance(value, m21.metadata.Text):
             if value.language:
                 if value.isTranslated:
                     hdKey += '@' + value.language.upper()
@@ -2569,6 +2568,8 @@ class M21Convert:
             # all metadata DateXxxx types derive from DateSingle
             # We don't like str(DateXxxx)'s results so we do our own.
             valueStr = M21Convert.stringFromM21DateObject(value)
+        elif isinstance(value, m21.metadata.Contributor):
+            valueStr = M21Convert.stringFromM21Contributor(value)
         else:
             # it's already a str, we hope, but if not, we convert here
             valueStr = str(value)

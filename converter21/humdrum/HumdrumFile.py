@@ -8017,9 +8017,9 @@ class HumdrumFile(HumdrumFileContent):
     # 'COM72@RU'
     # 'COM5@@RU'
     @staticmethod
-    def _parseReferenceItem(k: str, v: str) -> Tuple[str, m21.metadata.TextLiteral, bool]:
+    def _parseReferenceItem(k: str, v: str) -> Tuple[str, m21.metadata.Text, bool]:
         parsedKey: str = None
-        parsedValue: m21.metadata.TextLiteral = None
+        parsedValue: m21.metadata.Text = None
         isParseable: bool = False
 
         # parse the key with regex:
@@ -8030,17 +8030,17 @@ class HumdrumFile(HumdrumFileContent):
         if not m:
             isParseable = False
             parsedKey = k
-            parsedValue = m21.metadata.TextLiteral(v)
+            parsedValue = m21.metadata.Text(v)
         else:
             isParseable = True
             parsedKey = m.group(1)
             langCode: str = m.group(5)
             isTranslated: bool = langCode and m.group(4) != '@@'
             encodingScheme: Optional[str] = M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
-            parsedValue = m21.metadata.TextLiteral(v,
-                                                   language=langCode.lower() if langCode else None,
-                                                   isTranslated=isTranslated,
-                                                   encodingScheme=encodingScheme)
+            parsedValue = m21.metadata.Text(v,
+                                            language=langCode.lower() if langCode else None,
+                                            isTranslated=isTranslated,
+                                            encodingScheme=encodingScheme)
 
         # we consider any key a humdrum standard key if it is parseable, and starts with 3 chars
         # that are in the list of humdrumReferenceKeys ('COM', 'OTL', etc)
@@ -8090,18 +8090,18 @@ class HumdrumFile(HumdrumFileContent):
         if not self._biblio:
             return # there is no metadata to be had
 
-        m21Metadata = m21.metadata.Metadata()
+        m21Metadata = m21.metadata.ExtendedMetadata()
         self.m21Score.metadata = m21Metadata
 
         for k, v in self._biblio:
             parsedKey: str = None
-            parsedValue: m21.metadata.TextLiteral = None
+            parsedValue: m21.metadata.Text = None
             isStandardHumdrumKey: bool = False
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
             m21NSKey: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey.get(parsedKey, None)
             if m21NSKey:
-                m21Value: Union[m21.metadata.TextLiteral, m21.metadata.Date]
+                m21Value: Union[m21.metadata.Text, m21.metadata.Date]
                 m21Value = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
                 m21Metadata.addItem(m21NSKey, m21Value)
                 continue
