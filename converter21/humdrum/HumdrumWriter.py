@@ -387,7 +387,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
 
-        m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
+        m21Metadata: m21.metadata.ExtendedMetadata = m21.metadata.ExtendedMetadata(
+                                                            self._m21Score.metadata)
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
         if m21Metadata is None:
             return
