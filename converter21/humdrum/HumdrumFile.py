@@ -8090,7 +8090,7 @@ class HumdrumFile(HumdrumFileContent):
         if not self._biblio:
             return # there is no metadata to be had
 
-        m21Metadata = m21.metadata.ExtendedMetadata()
+        m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
 
         for k, v in self._biblio:

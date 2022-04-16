@@ -2511,6 +2511,8 @@ class M21Convert:
     @staticmethod
     def stringFromM21Contributor(c: m21.metadata.Contributor) -> str:
         # TODO: someday support export of multi-named Contributors
+        if not c.names:
+            return ''
         return c.names[0]
 
     @staticmethod
