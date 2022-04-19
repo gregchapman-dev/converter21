@@ -8047,7 +8047,7 @@ class HumdrumFile(HumdrumFileContent):
         # This includes parsed keys such as: 'COM-viaf-url' because it starts with COM.
         isHumdrumStandardKey: bool = (isParseable and
                                         len(parsedKey) >= 3 and
-                                        parsedKey[0:3] in M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey)
+                                        parsedKey[0:3] in M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName)
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
     @staticmethod
@@ -8099,11 +8099,11 @@ class HumdrumFile(HumdrumFileContent):
             isStandardHumdrumKey: bool = False
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
-            m21NSKey: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyNSKey.get(parsedKey, None)
-            if m21NSKey:
+            m21UniqueName: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(parsedKey, None)
+            if m21UniqueName:
                 m21Value: Union[m21.metadata.Text, m21.metadata.Date]
                 m21Value = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
-                m21Metadata.addItem(m21NSKey, m21Value)
+                m21Metadata.addItem(m21UniqueName, m21Value)
                 continue
 
             # Doesn't match any known m21.metadata-supported metadata (or it does, and we

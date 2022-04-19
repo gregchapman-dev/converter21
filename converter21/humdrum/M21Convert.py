@@ -106,66 +106,66 @@ class M21Convert:
         'END': 'humdrum:date', # encoding date
     }
 
-    humdrumReferenceKeyToM21MetadataPropertyNSKey: dict = {
+    humdrumReferenceKeyToM21MetadataPropertyUniqueName: dict = {
         # dict value is either 'namespace:name' or '' (if there is no m21Metadata equivalent)
         # Authorship information:
-        'COM': 'marcrel:CMP',                   # composer's name
-        'COA': 'music21:attributedComposer',    # attributed composer
-        'COS': 'music21:suspectedComposer',     # suspected composer
-        'COL': 'music21:composerAlias',         # composer's abbreviated, alias, or stage name
-        'COC': 'music21:composerCorporate', # composer's corporate name
+        'COM': 'composer',                   # composer's name
+        'COA': 'attributedComposer',    # attributed composer
+        'COS': 'suspectedComposer',     # suspected composer
+        'COL': 'composerAlias',         # composer's abbreviated, alias, or stage name
+        'COC': 'composerCorporate', # composer's corporate name
         'CDT': '', # composer's birth and death dates (**zeit format)
         'CBL': '', # composer's birth location
         'CDL': '', # composer's death location
         'CNT': '', # composer's nationality
-        'LYR': 'marcrel:LYR', # lyricist's name
-        'LIB': 'marcrel:LBT', # librettist's name
-        'LAR': 'marcrel:ARR', # music arranger's name
-        'LOR': 'music21:orchestrator', # orchestrator's name
-        'TXO': 'music21:textOriginalLanguage', # original language of vocal/choral text
-        'TXL': 'music21:textLanguage', # language of the encoded vocal/choral text
+        'LYR': 'lyricist', # lyricist's name
+        'LIB': 'librettist', # librettist's name
+        'LAR': 'arranger', # music arranger's name
+        'LOR': 'orchestrator', # orchestrator's name
+        'TXO': 'textOriginalLanguage', # original language of vocal/choral text
+        'TXL': 'textLanguage', # language of the encoded vocal/choral text
         # Recording information (if the Humdrum encodes information pertaining to an audio recording)
-        'TRN': 'marcrel:TRL', # translator of the text
+        'TRN': 'translator', # translator of the text
         'RTL': '', # album title
-        'RMM': 'marcrel:MFR', # manufacturer or sponsoring company
+        'RMM': 'manufacturer', # manufacturer or sponsoring company
         'RC#': '', # recording company's catalog number of album
-        'RRD': 'dcterm:issued', # release date (**date format)
+        'RRD': 'dateIssued', # release date (**date format)
         'RLC': '', # place of recording
-        'RNP': 'marcrel:PRO', # producer's name
+        'RNP': 'producer', # producer's name
         'RDT': '', # date of recording (**date format)
         'RT#': '', # track number
         # Performance information (if the Humdrum encodes, say, a MIDI performance)
         'MGN': '', # ensemble's name
-        'MPN': 'marcrel:PRF', # performer's name
+        'MPN': 'performer', # performer's name
         'MPS': '', # suspected performer
         'MRD': '', # date of performance (**date format)
         'MLC': '', # place of performance
-        'MCN': 'marcrel:CND', # conductor's name
+        'MCN': 'conductor', # conductor's name
         'MPD': '', # date of first performance (**date format)
         'MDT': '', # unknown, but I've seen 'em (another way to say date of performance?)
         # Work identification information
-        'OTL': 'dcterm:title', # title
-        'OTP': 'music21:popularTitle', # popular title
-        'OTA': 'dcterm:alternative', # alternative title
-        'OPR': 'music21:parentTitle', # title of parent work
-        'OAC': 'music21:actNumber', # act number (e.g. '2' or 'Act 2')
-        'OSC': 'music21:sceneNumber', # scene number (e.g. '3' or 'Scene 3')
-        'OMV': 'music21:movementNumber', # movement number (e.g. '4', or 'mov. 4', or...)
-        'OMD': 'music21:movementName', # movement name
-        'OPS': 'music21:opusNumber', # opus number (e.g. '23', or 'Opus 23')
-        'ONM': 'music21:number', # number (e.g. '5', or 'No. 5')
-        'OVM': 'music21:volume', # volume number (e.g. '6' or 'Vol. 6')
-        'ODE': 'music21:dedication', # dedicated to
-        'OCO': 'music21:commission', # commissioned by
-        'OCL': 'marcrel:TRC', # collected/transcribed by
+        'OTL': 'title', # title
+        'OTP': 'popularTitle', # popular title
+        'OTA': 'alternativeTitle', # alternative title
+        'OPR': 'parentTitle', # title of parent work
+        'OAC': 'actNumber', # act number (e.g. '2' or 'Act 2')
+        'OSC': 'sceneNumber', # scene number (e.g. '3' or 'Scene 3')
+        'OMV': 'movementNumber', # movement number (e.g. '4', or 'mov. 4', or...)
+        'OMD': 'movementName', # movement name
+        'OPS': 'opusNumber', # opus number (e.g. '23', or 'Opus 23')
+        'ONM': 'number', # number (e.g. '5', or 'No. 5')
+        'OVM': 'volume', # volume number (e.g. '6' or 'Vol. 6')
+        'ODE': 'dedication', # dedicated to
+        'OCO': 'commission', # commissioned by
+        'OCL': 'transcriber', # collected/transcribed by
         'ONB': '', # free form note (nota bene) related to title or identity of work
-        'ODT': 'dcterm:created', # date or period of composition (**date or **zeit format)
-        'OCY': 'music21:countryOfComposition', # country of composition
-        'OPC': 'music21:localeOfComposition', # city, town, or village of composition
+        'ODT': 'dateCreated', # date or period of composition (**date or **zeit format)
+        'OCY': 'countryOfComposition', # country of composition
+        'OPC': 'localeOfComposition', # city, town, or village of composition
         # Group information
-        'GTL': 'music21:groupTitle', # group title (e.g. 'The Seasons')
-        'GAW': 'music21:associatedWork', # associated work, such as a play or film
-        'GCO': 'dcterm:isPartOf', # collection designation (e.g. 'Norton Scores')
+        'GTL': 'groupTitle', # group title (e.g. 'The Seasons')
+        'GAW': 'associatedWork', # associated work, such as a play or film
+        'GCO': 'isPartOf', # collection designation (e.g. 'Norton Scores')
         # Imprint information
         'PUB': '', # publication status 'published'/'unpublished'
         'PED': '', # publication editor
@@ -179,10 +179,6 @@ class M21Convert:
         'SMS': '', # unpublished manuscript source name
         'SML': '', # unpublished manuscript location
         'SMA': '', # acknowledgment of manuscript access
-        # Copyright information
-        # Nothing maps directly to anything standard, but if you have enough info you can
-        # create:
-        # dcterm:rightsHolder, dcterm:dateCopyrighted, dcterm:accessRights, dcterm:license
         'YEP': '', # publisher of electronic edition
         'YEC': '', # date and owner of electronic copyright
         'YER': '', # date electronic edition released
@@ -220,9 +216,9 @@ class M21Convert:
     }
 
     # This dict is private because we wrap a function around it.
-    _m21MetadataPropertyNSKeyToHumdrumReferenceKey: dict = {nsKey: hdKey
+    _m21MetadataPropertyUniqueNameToHumdrumReferenceKey: dict = {nsKey: hdKey
                                                         for (hdKey, nsKey) in
-                                                            humdrumReferenceKeyToM21MetadataPropertyNSKey.items()
+                                                            humdrumReferenceKeyToM21MetadataPropertyUniqueName.items()
                                                                 if nsKey != ''}
 
     humdrumDecoGroupStyleToM21GroupSymbol: dict = {
@@ -2517,7 +2513,8 @@ class M21Convert:
 
     @staticmethod
     def m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey: str) -> Optional[str]:
-        hdKey: str = M21Convert._m21MetadataPropertyNSKeyToHumdrumReferenceKey.get(nsKey, None)
+        uniqueName: str = m21.metadata.Metadata.nsKeyToUniqueName(nsKey)
+        hdKey: str = M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
 
         if hdKey is None:
             # see if it was a 'humdrum:XXX' passthru
@@ -2530,7 +2527,8 @@ class M21Convert:
     def m21MetadataItemToHumdrumKeyWithoutIndex(nsKey: str,
                                                 value: Any
                                                 ) -> Optional[str]:
-        hdKey: str = M21Convert._m21MetadataPropertyNSKeyToHumdrumReferenceKey.get(nsKey, None)
+        uniqueName: str = m21.metadata.Metadata.nsKeyToUniqueName(nsKey)
+        hdKey: str = M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
 
         if hdKey is None:
             # see if it was a 'humdrum:XXX' passthru

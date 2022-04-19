@@ -400,11 +400,11 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # 3. Movement name (should only be one, but we'll take 'em all)
         # 4. Copyright(s) including original and electronic
 
-        def returnAndRemoveAllItemsWithNSKey(allItems: List[Tuple], nsKey: str) -> List[Tuple]:
+        def returnAndRemoveAllItemsWithUniqueName(allItems: List[Tuple], uniqueName: str) -> List[Tuple]:
             # NSKey is 0th element of tuple
             output: List[Tuple] = []
             for item in allItems:
-                if item[0] == nsKey:
+                if m21.metadata.Metadata.nsKeyToUniqueName(item[0]) == uniqueName:
                     output.append(item)
 
             for itemToRemove in output:
@@ -414,33 +414,33 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         mdComposerItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'marcrel:CMP')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'composer')
 
         mdTitleItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:title')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'title')
         mdAlternateTitleItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:alternative')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'alternativeTitle')
         mdPopularTitleItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:popularTitle')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'popularTitle')
         mdParentTitleItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:parentTitle')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'parentTitle')
         mdGroupTitleItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:groupTitle')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'groupTitle')
         mdMovementNameItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'music21:movementName')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementName')
         mdMovementNumberItems: List[
                             Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'music21:movementNumber')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementNumber')
 
         mdCopyrightItems: List[
                             Tuple[str, m21.metadata.Copyright]
-                        ] = returnAndRemoveAllItemsWithNSKey(allItems, 'dcterm:rights')
+                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
 
