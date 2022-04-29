@@ -418,7 +418,7 @@ class StaffStateVariables:
 
         # verse_labels == List of verse labels that need to be added to the
         # current staff.
-        self.lyricLabels: [HumdrumToken] = []
+        self.verseLabels: [HumdrumToken] = []
 
         # figured bass
         self.figuredBassState: int = None
@@ -473,7 +473,7 @@ class StaffStateVariables:
 
     def printState(self, prefix: str):
         print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
-        print(f'{prefix}lyricLabels: {self.lyricLabels}', file=sys.stderr)
+        print(f'{prefix}verseLabels: {self.verseLabels}', file=sys.stderr)
 
 
 class HumdrumFile(HumdrumFileContent):
@@ -605,7 +605,7 @@ class HumdrumFile(HumdrumFileContent):
         self._calculateStaffStartsIndexByTrack()
 
         # prepare more stuff
-        self._prepareLyrics() # which staffs have associated lyrics?
+        self._prepareVerses() # which staffs have associated lyrics?
         self._prepareSections() # associate numbered and unnumbered section names with lines
         self._prepareMetadata() # pull standard biblio keys/values out of reference records
         self._prepareTimeSignatures() # gather time signature info
@@ -1686,8 +1686,7 @@ class HumdrumFile(HumdrumFileContent):
         insertedIntoVoice: bool = False
 
         if ss.hasLyrics:
-            if self._checkForVerseLabels(measureIndex, voice, voiceOffsetInMeasure, layerTok):
-                insertedIntoVoice = True
+            self._checkForVerseLabels(layerTok)
 
         if not layerTok.isNull and not layerTok.isManipulator:
             # non-null, non-manip interp tokens can have linked params that are directions
@@ -1714,19 +1713,6 @@ class HumdrumFile(HumdrumFileContent):
 #             insertedIntoVoice = True
 
         return insertedIntoVoice
-
-    '''
-    //////////////////////////////
-    //
-    // HumdrumInput::checkForVerseLabels --
-    '''
-    def _checkForVerseLabels(self,
-                             measureIndex: int,
-                             voice: m21.stream.Voice,
-                             voiceOffsetInMeasure: Union[Fraction, float],
-                             token: HumdrumToken) -> bool:
-        # TODO: verse labels
-        pass # returns None from _checkForVerseLabels, which will evaluate to False appropriately
 
     def _handlePedalMark(self,
                          measureIndex: int,
@@ -4669,7 +4655,7 @@ class HumdrumFile(HumdrumFileContent):
 
         layerTok.setValue('music21', 'measureIndex', measureIndex)
 
-        self._convertLyrics(chord, layerTok)
+        self._convertVerses(chord, layerTok)
         return chord
 
     '''
@@ -5585,7 +5571,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # lyrics
         if not isChord:
-            self._convertLyrics(note, token)
+            self._convertVerses(note, token)
 
         # measure index (for later m21.spanner stuff: slurs, ties, phrases, etc)
         if not isChord:
@@ -5720,8 +5706,268 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::convertVerses --
     '''
-    def _convertLyrics(self, obj: m21.Music21Object, token: HumdrumToken):
-        pass # TODO: lyrics (_convertLyrics)
+    def _convertVerses(self, obj: m21.Music21Object, token: HumdrumToken):
+        staffIndex: int = self._staffStartsIndexByTrack[token.track]
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+        if not ss.hasLyrics:
+            return
+
+#         int subtrack = token->getSubtrack();
+#         if (subtrack > 1) {
+#             if (token->noteInLowerSubtrack()) {
+#                 // don't print a lyric for secondary layers unless
+#                 // all of the lower layers do not have a note attacking
+#                 // or tied at the same time.  This is because verovio
+#                 // will incorrectly overstrike syllables shared between
+#                 // layers if there is an offset of a second between the layers.
+#                 return;
+#                 // probably also have to deal with chords containing seconds...
+#             }
+#         }
+
+        line: HumdrumLine = token.ownerLine
+        track: int = token.track
+        startField: int = token.fieldIndex + 1
+        verseNum: int = 0
+
+        for i, fieldTok in enumerate(line.tokens()):
+            if i < startField:
+                continue
+            exinterp: str = fieldTok.dataType.text
+            if fieldTok.isKern or 'kern' in exinterp:
+                if fieldTok.track != track:
+                    break
+
+            if fieldTok.isMens or 'mens' in exinterp:
+                if fieldTok.track != track:
+                    break
+
+            isLyric: bool = False
+            isSilbe: bool = False
+            isVdata: bool = False
+            isVVdata: bool = False
+            if fieldTok.isDataType('**text'):
+                isLyric = True
+            elif fieldTok.isDataType('**silbe'):
+                isSilbe = True
+                isLyric = True
+            elif exinterp.startswith('**vdata'):
+                isVdata = True
+                isLyric = True
+            elif exinterp.startswith('**vvdata'):
+                isVVdata = True
+                isLyric = True
+
+            if not isLyric:
+                continue
+
+            if fieldTok.isNull:
+                verseNum += 1
+                continue
+
+            if isSilbe:
+                if fieldTok.text == '|':
+                    verseNum += 1
+                    continue
+
+            labels: List[HumdrumToken] = None
+            verseLabel: str = None
+            if ss.verseLabels:
+                labels = self._getVerseLabels(fieldTok, staffIndex)
+                if labels:
+                    verseLabel = self._getVerseLabelText(labels[0])
+
+            vtexts: List[str] = []
+#             vtoks: List[HumdrumToken] = []
+            vcolor: str = ''
+            ftrack: int = fieldTok.track
+            fstrack: int = fieldTok.subTrack
+
+            if isSilbe:
+#                 vtoks.append(fieldTok)
+                value: str = fieldTok.text
+                value = re.sub('\\|', '', value)
+                value = re.sub('u2', '&uuml;', value)
+                value = re.sub('a2', '&auml;', value)
+                value = re.sub('o2', '&ouml;', value)
+                vtexts.append(value)
+                vcolor = self._spineColor[ftrack][fstrack]
+            else:
+                # not silbe
+#                 vtoks.append(fieldTok)
+                vtexts.append(fieldTok.text)
+                vcolor = self._spineColor[ftrack][fstrack]
+
+            if isVVdata:
+                self._splitSyllableBySpaces(vtexts)
+
+            for content in vtexts:
+                # emit music21 lyrics and attach to obj
+                verseNum += 1
+                if not content:
+                    continue
+
+                # parent Lyric (will contain multiple component Lyrics if elisions present)
+                verse: m21.note.Lyric = m21.note.Lyric()
+                if vcolor:
+                    verse.style.color = vcolor
+
+                verse.number = verseNum
+                if verseLabel:
+                    verse.identifier = verseLabel
+
+
+                if isVdata or isVVdata:
+                    # do not parse text content as lyrics
+                    verse.text = content
+                    # note/chord.lyric appends to internal list of lyrics (i.e. stanzas)
+                    obj.lyric = verse
+                    continue
+
+                content = self._colorVerse(verse, content)
+
+                # verse can have multiple syllables if elisions present
+
+                contents: List[str] = []
+
+                # split syllable by elisions:
+                contents.append(content[0])
+                for z in range(1, len(content) - 1):
+                    if content[z] == ' ' and content[z + 1] != "'":
+                        # the latter condition is to not elide "ma 'l"
+                        # create an elision by separating into next piece of syllable
+                        contents.append('')
+                    else:
+                        contents[-1] += content[z]
+
+                if len(content) > 1:
+                    contents[-1] += content[-1]
+
+                # add elements for sub-syllables due to elisions:
+                if len(contents) > 1:
+                    verse.components = []
+                    for syllableContent in contents:
+                        # Note that Lyric('-ing') handles all the parsing to figure out wordPos etc
+                        syl: m21.note.Lyric = m21.note.Lyric(syllableContent)
+                        verse.components.append(syl)
+                else:
+                    verse.text = contents[0]
+
+                # note/chord.lyric = verse appends to internal list of lyrics (i.e. stanzas)
+                obj.lyric = verse
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getVerseLabelText --
+    '''
+    @staticmethod
+    def _getVerseLabelText(token: HumdrumToken) -> str:
+        if token is None:
+            return ''
+        if not token.isInterpretation:
+            return ''
+        if not token.text.startswith('*v:'):
+            return ''
+
+        contents: str = token.text[3:]
+        output: str = ''
+        if re.search(contents, r'^\d+$'):
+            output = contents + '.'
+        else:
+            output = contents
+
+        return output
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::splitSyllableBySpaces -- Split a string into pieces
+    //    according to spaces.  Default value spacer = ' ');
+    '''
+    @staticmethod
+    def _splitSyllableBySpaces(vtext: List[str], spacer: str = ' '):
+        if len(vtext) != 1:
+            return
+
+        if spacer not in vtext[0]:
+            return
+
+        original: str = vtext[0]
+        vtext[0] = ''
+
+        for origCh in original:
+            if origCh != spacer:
+                vtext[-1] += origCh
+                continue
+            # new string needs to be made
+            vtext.append('')
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::checkForVerseLabels --
+    '''
+    def _checkForVerseLabels(self, token: HumdrumToken):
+        if token is None:
+            return
+        if not token.isInterpretation:
+            return
+
+        track: int = token.track
+        staffIndex: int = self._staffStartsIndexByTrack[token.track]
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
+        current: HumdrumToken = token.nextFieldToken
+        while current is not None and track == current.track:
+            current = current.nextFieldToken
+
+        while current and not current.isStaffDataType:
+            if current.isDataType('**text') and current.text.startswith('*v:'):
+                ss.verseLabels.append(current)
+            current = current.nextFieldToken
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getVerseLabels --
+    '''
+    def _getVerseLabels(self, token: HumdrumToken, staffIndex: int) -> List[HumdrumToken]:
+        output: List[HumdrumToken] = []
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+        if not ss.verseLabels:
+            return output
+
+        remainder: List[HumdrumToken] = []
+        spineInfo = token.spineInfo
+        for label in ss.verse_labels:
+            if label.spineInfo == spineInfo:
+                output.append(label)
+            else:
+                remainder.append(label)
+
+        if not output:
+            return output
+
+        ss.verse_labels = remainder
+        return output
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::colorVerse --
+    '''
+    def _colorVerse(self, verse: m21.note.Lyric, tokenStr: str) -> str:
+        output: str = tokenStr
+        for textMark, textColor in zip(self._signifiers.textMarks, self._signifiers.textColors):
+            if textMark in tokenStr:
+                verse.style.color = textColor
+
+                # remove mark character from text (so that it does not display)
+                output = re.sub(textMark, '', output)
+                return output
+
+        return output
 
     '''
     //////////////////////////////
@@ -9138,13 +9384,13 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::prepareVerses -- Assumes that m_staffstarts has been
     //      filled already.
     '''
-    def _prepareLyrics(self):
+    def _prepareVerses(self):
         if self.staffCount == 0:
             return
 
+        line: HumdrumLine = self._staffStarts[0].ownerLine
         for i, startTok in enumerate(self._staffStarts):
-            line: HumdrumLine = startTok.ownerLine
-            fieldIdx = startTok.fieldIndex
+            fieldIdx: int = startTok.fieldIndex
             for j in range(fieldIdx+1, line.tokenCount):
                 if line[j].isStaffDataType:
                     break # we're done looking for associated lyrics spines
