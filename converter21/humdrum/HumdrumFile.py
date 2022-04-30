@@ -5786,10 +5786,13 @@ class HumdrumFile(HumdrumFileContent):
             if isSilbe:
 #                 vtoks.append(fieldTok)
                 value: str = fieldTok.text
-                value = re.sub('\\|', '', value)
-                value = re.sub('u2', '&uuml;', value)
-                value = re.sub('a2', '&auml;', value)
-                value = re.sub('o2', '&ouml;', value)
+                value = value.replace('|', '')
+                value = value.replace('u2', 'ü')
+                value = value.replace('a2', 'ä')
+                value = value.replace('o2', 'ö')
+                value = value.replace(r'\u3', 'ü')
+                value = value.replace(r'\a3', 'ä')
+                value = value.replace(r'\o3', 'ö')
                 vtexts.append(value)
                 vcolor = self._spineColor[ftrack][fstrack]
             else:
@@ -5819,9 +5822,9 @@ class HumdrumFile(HumdrumFileContent):
 
                 if isVdata or isVVdata:
                     # do not parse text content as lyrics
+                    # applyRaw=True means do not do any hyphen parsing
                     verse.setTextAndSyllabic(content, applyRaw=True)
-                    # note/chord.lyric appends to internal list of lyrics (i.e. stanzas)
-                    obj.lyric = verse
+                    obj.lyrics.append(verse)
                     continue
 
                 content = self._colorVerse(verse, content)
@@ -5847,15 +5850,15 @@ class HumdrumFile(HumdrumFileContent):
                 if len(contents) > 1:
                     verse.components = []
                     for syllableContent in contents:
-                        # Note that Lyric('-ing') handles all the parsing to figure out wordPos etc
                         syl: m21.note.Lyric = m21.note.Lyric()
+                        # applyRaw=False means do all the parsing of hyphens to figure out syllabic
                         syl.setTextAndSyllabic(syllableContent, applyRaw=False)
                         verse.components.append(syl)
                 else:
+                    # applyRaw=False means do all the parsing of hyphens to figure out syllabic
                     verse.setTextAndSyllabic(contents[0], applyRaw=False)
 
-                # note/chord.lyric = verse appends to internal list of lyrics (i.e. stanzas)
-                obj.lyric = verse
+                obj.lyrics.append(verse)
 
     '''
     //////////////////////////////

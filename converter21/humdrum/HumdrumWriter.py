@@ -271,7 +271,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             for s, staffData in enumerate(partData.staves):
                 if staffData.hasDynamics:
                     outgrid.setDynamicsPresent(p, s)
-                outgrid.setVerseCount(p, s, staffData.verseCount)
+                verseCount: int = staffData.verseCount
+                outgrid.setVerseCount(p, s, verseCount)
 
 	    # transfer harmony counts from parts to HumGrid:
         # for p, partData in enumerate(self._scoreData.parts):
