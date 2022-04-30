@@ -5836,15 +5836,21 @@ class HumdrumFile(HumdrumFileContent):
                 # split syllable by elisions:
                 contents.append(content[0])
                 for z in range(1, len(content) - 1):
-                    if content[z] == ' ' and content[z + 1] != "'":
-                        # the latter condition is to not elide "ma 'l"
+                    if content[z] in (' ', '\xa0') and content[z + 1] != "'":
                         # create an elision by separating into next piece of syllable
+                        # \xa0 is a non-breaking space, and several humdrum files in
+                        # jrp-scores use it as an elision character.
+                        # The latter condition is to not elide "ma 'l"
                         contents.append('')
                     else:
                         contents[-1] += content[z]
 
                 if len(content) > 1:
                     contents[-1] += content[-1]
+
+                # we're all split apart, so we can translate any &nbsp; et al
+                for i, c in enumerate(contents):
+                    contents[i] = html.unescape(c)
 
                 # add elements for sub-syllables due to elisions:
                 if len(contents) > 1:
@@ -5944,7 +5950,7 @@ class HumdrumFile(HumdrumFileContent):
 
         remainder: List[HumdrumToken] = []
         spineInfo = token.spineInfo
-        for label in ss.verse_labels:
+        for label in ss.verseLabels:
             if label.spineInfo == spineInfo:
                 output.append(label)
             else:
@@ -5953,7 +5959,7 @@ class HumdrumFile(HumdrumFileContent):
         if not output:
             return output
 
-        ss.verse_labels = remainder
+        ss.verseLabels = remainder
         return output
 
     '''
