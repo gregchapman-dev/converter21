@@ -5819,7 +5819,7 @@ class HumdrumFile(HumdrumFileContent):
 
                 if isVdata or isVVdata:
                     # do not parse text content as lyrics
-                    verse.text = content
+                    verse.setTextAndSyllabic(content, applyRaw=True)
                     # note/chord.lyric appends to internal list of lyrics (i.e. stanzas)
                     obj.lyric = verse
                     continue
@@ -5848,10 +5848,11 @@ class HumdrumFile(HumdrumFileContent):
                     verse.components = []
                     for syllableContent in contents:
                         # Note that Lyric('-ing') handles all the parsing to figure out wordPos etc
-                        syl: m21.note.Lyric = m21.note.Lyric(syllableContent)
+                        syl: m21.note.Lyric = m21.note.Lyric()
+                        syl.setTextAndSyllabic(syllableContent, applyRaw=False)
                         verse.components.append(syl)
                 else:
-                    verse.text = contents[0]
+                    verse.setTextAndSyllabic(contents[0], applyRaw=False)
 
                 # note/chord.lyric = verse appends to internal list of lyrics (i.e. stanzas)
                 obj.lyric = verse
