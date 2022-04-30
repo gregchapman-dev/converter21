@@ -229,3 +229,6 @@ class EventData:
 
     def reportDynamicToOwner(self):
         self.ownerMeasure.reportDynamicToOwner()
+
+    def reportVerseCountToOwner(self, verseCount: int):
+        self.ownerMeasure.reportVerseCountToOwner(verseCount)

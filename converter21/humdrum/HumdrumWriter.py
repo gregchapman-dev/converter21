@@ -266,23 +266,17 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 #         outgrid.removeRedundantClefChanges() # don't do this; we're not in the business of prettying things
 #         outgrid.removeSibeliusIncipit()
 
-        # transfer verse counts from parts/staves to HumGrid:
-        # LATER: should also do part verse counts here (-1 staffindex).
-        # for p, partData in enumerate(self._scoreData.parts):
-        #     for s in range(0, len(partData.staves)):
-        #         verseCount: int = partData.verseCount(s)
-        #         outgrid.setVerseCount(p, s, verseCount)
+        # transfer verse counts and dynamics boolean from staves to HumGrid:
+        for p, partData in enumerate(self._scoreData.parts):
+            for s, staffData in enumerate(partData.staves):
+                if staffData.hasDynamics:
+                    outgrid.setDynamicsPresent(p, s)
+                outgrid.setVerseCount(p, s, staffData.verseCount)
 
 	    # transfer harmony counts from parts to HumGrid:
         # for p, partData in enumerate(self._scoreData.parts):
         #     harmonyCount: int = partData.harmonyCount
         #     outgrid.setHarmonyCount(p, harmonyCount)
-
-    	# transfer dynamics boolean for part/staff to HumGrid
-        for p, partData in enumerate(self._scoreData.parts):
-            for s, staffData in enumerate(partData.staves):
-                if staffData.hasDynamics:
-                    outgrid.setDynamicsPresent(p, s)
 
         # transfer figured bass boolean for part to HumGrid
 #       for (int p=0; p<(int)partdata.size(); p++) {
@@ -1579,7 +1573,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
                 vcount: int = self._addLyrics(outSlice.parts[partIndex].staves[staffIndex], event)
                 if vcount > 0:
-                    event.reportVerseCountToOwner(staffIndex, vcount)
+                    event.reportVerseCountToOwner(vcount)
 
                 hcount: int = self._addHarmony(outSlice.parts[partIndex], event, nowTime, partIndex)
                 if hcount > 0:
@@ -1817,10 +1811,72 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addLyrics --
     '''
-    def _addLyrics(self, staff: GridStaff, event: EventData) -> int: #LATER: needs implementation
-        if self or staff or event:
+    def _addLyrics(self, staff: GridStaff, event: EventData) -> int:
+        gnote: m21.note.GeneralNote = event.m21Object
+        verses: List[m21.note.Lyric] = []
+        if not hasattr(gnote, 'lyrics'):
             return 0
-        return 0
+        if not gnote.lyrics:
+            return 0
+
+        # order the verses by number
+        for lyric in gnote.lyrics:
+            number: int = lyric.number
+            if number > 100:
+                print(f'Error: verse number is too large: {number}', file=sys.stderr)
+                return 0
+
+            if number == len(verses) + 1:
+                verses.append(lyric)
+            elif 0 < number < len(verses):
+                # replace a verse for some reason
+                verses[number-1] = lyric
+            elif number > 0:
+                # more than one off the end, fill in with empty slots
+                oldLen: int = len(verses)
+                newLen: int = number
+                for _ in range(oldLen, newLen):
+                    verses.append(None)
+                verses[number-1] = lyric
+
+        # now, in number order (with maybe some empty slots)
+        for i, verse in enumerate(verses):
+            verseText: str = ''
+            if verse is not None:
+                # rawText handles elisions as well as syllabic-based hyphens
+                verseText = self._cleanSpaces(verse.rawText)
+
+				# escape text which would otherwise be reinterpreated
+				# as Humdrum syntax.
+                if verseText and verseText[0] in ('!', '*'):
+                    verseText = '\\' + verseText
+
+            token: HumdrumToken = None
+            if verseText:
+                token = HumdrumToken(verseText)
+            else:
+                token = HumdrumToken('.')
+            staff.sides.setVerse(i, token)
+
+        return staff.sides.verseCount
+
+    '''
+    //////////////////////////////
+    //
+    // cleanSpaces -- remove trailing and leading spaces from text.
+    //    Also removed doubled spaces, and converts tabs and newlines
+    //    into spaces.
+    '''
+    @staticmethod
+    def _cleanSpaces(text: str) -> str:
+        # Non-obvious, but it does the job exactly...
+        # split() returns a list of words that were delimited by chunks of
+        # whitespace (space, tab, newline, etc).  The words will have NO
+        # whitespace in them (i.e. trailing and leading whitespace is also
+        # removed).  join() will rejoin those words with a single space
+        # (specified here as ' ') between them.
+        return ' '.join(text.split())
+
 
     '''
     //////////////////////////////

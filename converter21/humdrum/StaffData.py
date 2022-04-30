@@ -40,6 +40,7 @@ class StaffData:
         self._transposeWrittenToSounding(partStaff)
         self._staffIndex: int = staffIndex
         self._hasDynamics: bool = False
+        self._verseCount: int = 0
         self.measures: [MeasureData] = []
 
         prevMeasData: MeasureData = None
@@ -75,6 +76,10 @@ class StaffData:
     def hasDynamics(self) -> bool:
         return self._hasDynamics
 
+    @property
+    def verseCount(self) -> int:
+        return self._verseCount
+
     def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
         return self.ownerPart.reportEditorialAccidentalToOwner(editorialStyle)
 
@@ -90,5 +95,10 @@ class StaffData:
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerPart.reportLinkedSlurToOwner()
 
+    def receiveVerseCount(self, verseCount: int):
+        # don't propagate up to PartData, verses are per staff
+        self._verseCount = verseCount
+
     def receiveDynamic(self):
-        self._hasDynamics = True # don't propagate up to PartData, we do per-staff dynamics
+        # don't propagate up to PartData, we do per-staff dynamics
+        self._hasDynamics = True
