@@ -39,15 +39,15 @@ class GridSide:
         if self.xmlIdCount > 0:
             outstr += 'xmlid:' + self.xmlId
         if self.verseCount > 0:
-            outstr += ' verse:'
+            outstr += 'verse:'
             for i, verse in enumerate(self._verses):
-                outstr += verse
+                outstr += verse.text
                 if i < self.verseCount:
                     outstr += '; '
         if self.dynamicsCount > 0:
             outstr += 'dyn:' + self.dynamics.text
         if self.harmonyCount > 0:
-            outstr += 'harm:' + self.harmony
+            outstr += 'harm:' + self.harmony.text
         outstr += '] '
         return outstr
 

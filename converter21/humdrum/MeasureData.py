@@ -433,6 +433,9 @@ class MeasureData:
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerStaff.reportLinkedSlurToOwner()
 
+    def reportVerseCountToOwner(self, verseCount: int):
+        self.ownerStaff.receiveVerseCount(verseCount)
+
     '''
     //////////////////////////////
     //

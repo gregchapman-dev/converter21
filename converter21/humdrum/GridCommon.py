@@ -70,14 +70,15 @@ class SliceType(IntEnum):
     Labels = auto()           # Interpretation, RegularInterpretation, Spined
     LabelAbbrs = auto()       # Interpretation, RegularInterpretation, Spined
     Ottavas = auto()          # Interpretation, RegularInterpretation, Spined
+    VerseLabels = auto()      # Interpretation, RegularInterpretation, Spined
     RegularInterpretation_ = auto()
     Exclusives = auto()       # Interpretation, Manipulator, Spined
     Terminators = auto()      # Interpretation, Manipulator, Spined
     Manipulators = auto()     # Interpretation, Manipulator, Spined
     Manipulator_ = auto()
     Interpretation_ = auto()
-    Layouts = auto()          # Interpretation, Spined
-    LocalComments = auto()    # Interpretation, Spined
+    Layouts = auto()          # Spined
+    LocalComments = auto()    # Spined
     Spined_ = auto()
     GlobalComments = auto()   # Other (not Spined)
     GlobalLayouts = auto()    # Other (not Spined)
