@@ -5849,8 +5849,8 @@ class HumdrumFile(HumdrumFileContent):
                     contents[-1] += content[-1]
 
                 # we're all split apart, so we can translate any &nbsp; et al
-                for i, c in enumerate(contents):
-                    contents[i] = html.unescape(c)
+                for idx, c in enumerate(contents):
+                    contents[idx] = html.unescape(c)
 
                 # add elements for sub-syllables due to elisions:
                 if len(contents) > 1:

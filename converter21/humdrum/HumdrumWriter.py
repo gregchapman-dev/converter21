@@ -1572,7 +1572,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 for layoutString in layouts:
                     outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, layoutString)
 
-                vcount: int = self._addLyrics(outSlice.parts[partIndex].staves[staffIndex], event)
+                vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
                 if vcount > 0:
                     event.reportVerseCountToOwner(vcount)
 
@@ -1812,7 +1812,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addLyrics --
     '''
-    def _addLyrics(self, staff: GridStaff, event: EventData) -> int:
+    def _addLyrics(self,
+                   outgm: GridMeasure,
+                   outSlice: GridSlice,
+                   partIndex: int,
+                   staffIndex: int,
+                   event: EventData) -> int:
+        staff: GridStaff = outSlice.parts[partIndex].staves[staffIndex]
         gnote: m21.note.GeneralNote = event.m21Object
         verses: List[m21.note.Lyric] = []
         if not hasattr(gnote, 'lyrics'):
@@ -1841,8 +1847,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 verses[number-1] = lyric
 
         # now, in number order (with maybe some empty slots)
+        vLabelTokens: List[HumdrumToken] = [None] * len(verses)
+        thereAreVerseLabels: bool = False
+
         for i, verse in enumerate(verses):
-            verseText: str = ''
+            verseText: str = None
+            verseLabel: str = None
             if verse is not None:
                 # rawText handles elisions as well as syllabic-based hyphens
                 verseText = self._cleanSpaces(verse.rawText)
@@ -1852,12 +1862,27 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 if verseText and verseText[0] in ('!', '*'):
                     verseText = '\\' + verseText
 
-            token: HumdrumToken = None
+                # if verse.identifier has not been set, verse.identifier will return verse.number
+                # (which is always set to an integer for ordering), and we're uninterested
+                # in that for verse labeling purposes.  We're already ordering by number.
+                if verse.identifier != verse.number:
+                    verseLabel = verse.identifier
+
+            if verseLabel:
+                vLabelTokens[i] = HumdrumToken('*v:' + verseLabel)
+                thereAreVerseLabels = True
+
+            verseToken: HumdrumToken = None
             if verseText:
-                token = HumdrumToken(verseText)
+                verseToken = HumdrumToken(verseText)
             else:
-                token = HumdrumToken('.')
-            staff.sides.setVerse(i, token)
+                verseToken = HumdrumToken('.')
+
+            staff.sides.setVerse(i, verseToken)
+
+        # if there are any verse labels, add them in a new slice just before this one
+        if thereAreVerseLabels:
+            outgm.addVerseLabels(outSlice, partIndex, staffIndex, vLabelTokens)
 
         return staff.sides.verseCount
 

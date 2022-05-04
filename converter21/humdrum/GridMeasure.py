@@ -13,7 +13,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import List
+from typing import List, Optional
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum
@@ -509,6 +509,8 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                     doFirstBarlineNow = True
                 elif gridSlice.isManipulatorSlice:
                     doFirstBarlineNow = True
+                elif gridSlice.isVerseLabelSlice:
+                    doFirstBarlineNow = True
 
                 if doFirstBarlineNow and not didFirstBarline:
                     firstBarlineSlice.transferTokens(outFile, recip)
@@ -592,6 +594,59 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
             voices.append(GridVoice())
         return voices[voiceIndex]
 
+    def addVerseLabels(self, associatedSlice: GridSlice,
+                            partIndex: int, staffIndex: int,
+                            verseLabels: List[HumdrumToken]):
+        # add these verse labels just before this associatedSlice
+        if len(self.slices) == 0:
+		    # something strange happened: expecting at least one item in measure.
+            return # associatedSlice is supposed to already be in the measure
+
+        associatedSliceIdx: Optional[int] = None
+        if associatedSlice is None:
+            # place at end of measure (associate with imaginary slice just off the end)
+            associatedSliceIdx = len(self.slices)
+        else:
+            # find owning line (associatedSlice)
+            foundIt: bool = False
+            for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
+                gridSlice: GridSlice = self.slices[associatedSliceIdx]
+                if gridSlice is associatedSlice:
+                    foundIt = True
+                    break
+            if not foundIt:
+                # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
+                return
+
+        # see if the previous slice is a VerseLabels slice we can use
+        prevIdx: int = associatedSliceIdx-1
+        prevSlice: GridSlice = self.slices[prevIdx]
+        if prevSlice.isVerseLabelSlice:
+            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
+            if prevStaff.sides.verseCount == 0:
+                for i, verseLabel in enumerate(verseLabels):
+                    if verseLabel is not None:
+                        prevStaff.sides.setVerse(i, verseLabel)
+                return
+
+        # if we get here, we couldn't use the previous slice, so we need to insert
+        # a new Layout slice to use, just before the associated slice.
+        insertPoint: int = associatedSliceIdx
+        newSlice: GridSlice = None
+        if associatedSlice is not None:
+            newSlice: GridSlice = GridSlice(self, associatedSlice.timestamp, SliceType.VerseLabels)
+            newSlice.initializeBySlice(associatedSlice)
+            self.slices.insert(insertPoint, newSlice)
+        else:
+            newSlice = GridSlice(self, self.timestamp + self.duration, SliceType.VerseLabels)
+            newSlice.initializeBySlice(self.slices[-1])
+            self.slices.append(newSlice)
+
+        newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
+        for i, verseLabel in enumerate(verseLabels):
+            if verseLabel is not None:
+                newStaff.sides.setVerse(i, verseLabel)
+
     '''
     //////////////////////////////
     //
@@ -605,13 +660,13 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
 		    # something strange happened: expecting at least one item in measure.
             return # associatedSlice is supposed to already be in the measure
 
+        associatedSliceIdx: Optional[int] = None
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            associatedSliceIdx: int = None
             for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
@@ -662,13 +717,13 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
 		    # something strange happened: expecting at least one item in measure.
             return # associatedSlice is supposed to already be in the measure
 
+        associatedSliceIdx: Optional[int] = None
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            associatedSliceIdx: int = None
             for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
