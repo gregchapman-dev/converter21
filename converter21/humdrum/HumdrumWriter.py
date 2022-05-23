@@ -392,7 +392,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if m21Metadata is None:
             return
 
-        allItems = m21Metadata.getAllItems() # list of tuples (nsKey, singleValue)
+        allItems = m21Metadata.getAllNamedValues() # list of tuples (nsKey, singleValue)
 
         # Top of Humdrum file is (in order):
         # 1. Composer name(s)
