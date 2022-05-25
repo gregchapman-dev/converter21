@@ -8101,22 +8101,16 @@ class HumdrumFile(HumdrumFileContent):
 
             m21UniqueName: str = M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(parsedKey, None)
             if m21UniqueName:
-                m21Value: Union[m21.metadata.Text, m21.metadata.Date]
-                m21Value = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
+                m21Value: Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
                 m21Metadata.add(m21UniqueName, m21Value)
                 continue
 
-            # Doesn't match any known m21.metadata-supported metadata (or it does, and we
-            # already put one in metadata, so we can't put this one there, or it does, and
-            # we couldn't parse it, so we'll have to treat it verbatim).
-            # Add verbatim to m21Score.metadata.editorial, which is (among other
-            # things) a dictionary.
+            # Doesn't match any known m21.metadata-supported metadata.
             if isStandardHumdrumKey:
                 # prepend the unparsed key with 'humdrum:', and put it in as custom unparsed
-                # TODO: register the humdrum namespace properly and put it there instead.
                 m21Metadata.addCustom('humdrum:' + k, v)
             else:
-                # freeform key/value, put it in editorial unparsed
+                # freeform key/value, put it in as custom
                 m21Metadata.addCustom(k, v)
 
     def _createStaffGroupsAndParts(self):

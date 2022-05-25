@@ -56,40 +56,6 @@ class M21Convert:
         6: 'B',
     }
 
-    humdrumReferenceKeyToM21ContributorRole: dict = {
-        'COM': 'composer',
-        'COA': 'attributed composer',
-        'COS': 'suspected composer',
-        'COL': 'composer alias',
-        'COC': 'corporate composer',
-        'LYR': 'lyricist',
-        'LIB': 'librettist',
-        'LAR': 'arranger',
-        'LOR': 'orchestrator',
-        'TRN': 'translator',
-        'YOO': 'original document owner',
-        'YOE': 'original editor',
-        'EED': 'electronic editor',
-        'ENC': 'electronic encoder'
-    }
-
-    m21ContributorRoleToHumdrumReferenceKey: dict = {
-        'composer'                  : 'COM',
-        'attributed composer'       : 'COA',
-        'suspected composer'        : 'COS',
-        'composer alias'            : 'COL',
-        'corporate composer'        : 'COC',
-        'lyricist'                  : 'LYR',
-        'librettist'                : 'LIB',
-        'arranger'                  : 'LAR',
-        'orchestrator'              : 'LOR',
-        'translator'                : 'TRN',
-        'original document owner'   : 'YOO',
-        'original editor'           : 'YOE',
-        'electronic editor'         : 'EED',
-        'electronic encoder'        : 'ENC'
-    }
-
     humdrumReferenceKeyToEncodingScheme: dict = {
         # Note that we only enter things in this dict that aren't free-form text (that's the default).
         # Note also that 'humdrum:date' covers all the ways humdrum encodes dates in a string. The
@@ -107,9 +73,9 @@ class M21Convert:
     }
 
     humdrumReferenceKeyToM21MetadataPropertyUniqueName: dict = {
-        # dict value is either 'namespace:name' or '' (if there is no m21Metadata equivalent)
+        # dict value is music21's unique name or '' (if there is no m21Metadata equivalent)
         # Authorship information:
-        'COM': 'composer',                   # composer's name
+        'COM': 'composer',              # composer's name
         'COA': 'attributedComposer',    # attributed composer
         'COS': 'suspectedComposer',     # suspected composer
         'COL': 'composerAlias',         # composer's abbreviated, alias, or stage name
@@ -153,9 +119,9 @@ class M21Convert:
         'OMV': 'movementNumber', # movement number (e.g. '4', or 'mov. 4', or...)
         'OMD': 'movementName', # movement name
         'OPS': 'opusNumber', # opus number (e.g. '23', or 'Opus 23')
-        'ONM': 'number', # number (e.g. '5', or 'No. 5')
-        'OVM': 'volume', # volume number (e.g. '6' or 'Vol. 6')
-        'ODE': 'dedication', # dedicated to
+        'ONM': 'number', # number (e.g. number of song within ABC multi-song file)
+        'OVM': 'volumeNumber', # volume number (e.g. '6' or 'Vol. 6')
+        'ODE': 'dedicatedTo', # dedicated to
         'OCO': 'commission', # commissioned by
         'OCL': 'transcriber', # collected/transcribed by
         'ONB': '', # free form note (nota bene) related to title or identity of work
@@ -165,7 +131,7 @@ class M21Convert:
         # Group information
         'GTL': 'groupTitle', # group title (e.g. 'The Seasons')
         'GAW': 'associatedWork', # associated work, such as a play or film
-        'GCO': 'isPartOf', # collection designation (e.g. 'Norton Scores')
+        'GCO': 'collectionDesignation', # collection designation (e.g. 'Norton Scores')
         # Imprint information
         'PUB': '', # publication status 'published'/'unpublished'
         'PED': '', # publication editor
@@ -180,7 +146,7 @@ class M21Convert:
         'SML': '', # unpublished manuscript location
         'SMA': '', # acknowledgment of manuscript access
         'YEP': '', # publisher of electronic edition
-        'YEC': '', # date and owner of electronic copyright
+        'YEC': 'copyright', # date and owner of electronic copyright
         'YER': '', # date electronic edition released
         'YEM': '', # copyright message (e.g. 'All rights reserved')
         'YEN': '', # country of copyright
