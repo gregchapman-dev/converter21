@@ -17,8 +17,10 @@
 import sys
 from typing import Union
 
+from music21.common import opFrac
+
 from converter21.humdrum import HumdrumInternalError
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumToken
 
 ### For debug or unit test print, a simple way to get a string which is the current function name
@@ -31,7 +33,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class GridVoice:
-    def __init__(self, token: Union[HumdrumToken,str] = None, duration: HumNum = HumNum(0)):
+    def __init__(self, token: Union[HumdrumToken,str] = None, duration: HumNumIn = opFrac(0)):
         self._token: HumdrumToken = None
         if isinstance(token, HumdrumToken) or token is None:
             self._token = token
@@ -40,8 +42,8 @@ class GridVoice:
         else:
             raise HumdrumInternalError(f'invalid type of token: {token}')
 
-        self._nextDur = duration
-#         self._prevDur = HumNum(0) # appears to be unused (never set to anything but zero)
+        self._nextDur = opFrac(duration)
+#         self._prevDur = opFrac(0) # appears to be unused (never set to anything but zero)
         self._isTransfered: bool = False
 
     def __str__(self) -> str:
@@ -118,9 +120,9 @@ class GridVoice:
         return self._nextDur # + self._prevDur # prevDur is always zero, it seems
 
     @duration.setter
-    def duration(self, newDuration: HumNum):
-        self._nextDur = newDuration
-#         self._prevDur = HumNum(0)
+    def duration(self, newDuration: HumNumIn):
+        self._nextDur = opFrac(newDuration)
+#         self._prevDur = opFrac(0)
 
     '''
     //////////////////////////////

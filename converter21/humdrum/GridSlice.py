@@ -13,9 +13,12 @@
 # ------------------------------------------------------------------------------
 import sys
 from typing import Union
+from fractions import Fraction
+
+from music21.common import opFrac
 
 from converter21.humdrum import HumdrumInternalError
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumFile
@@ -42,12 +45,12 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class GridSlice:
-    def __init__(self, ownerMeasure, timestamp: HumNum, sliceType: SliceType,
+    def __init__(self, ownerMeasure, timestamp: HumNumIn, sliceType: SliceType,
                        partCount: int = 0, fromSlice = None):
         from converter21.humdrum import GridMeasure
         from converter21.humdrum import HumGrid
         ownerMeasure: GridMeasure
-        self._timestamp: HumNum = timestamp
+        self._timestamp: HumNum = opFrac(timestamp)
         self._type: SliceType = sliceType
         self._ownerGrid: HumGrid = None
         self._measure: GridMeasure = None # enclosing measure
@@ -80,7 +83,7 @@ class GridSlice:
                     # don't create voices here
 
     def __str__(self) -> str:
-        output: str = f'TS={self.timestamp} '
+        output: str = f'TS={Fraction(self.timestamp)} '
 
         for p, part in enumerate(self.parts):
             output += '(p' + str(p) + ':)'
@@ -159,28 +162,32 @@ class GridSlice:
     //   list for the presence of triplets.
     '''
     @staticmethod
-    def _createRecipTokenFromDuration(duration: HumNum) -> HumdrumToken:
-        duration /= 4 # convert to quarter note units
+    def _createRecipTokenFromDuration(duration: HumNumIn) -> HumdrumToken:
+        dur: HumNum = opFrac(duration)
+        dur = opFrac(dur / opFrac(4)) # convert to quarter note units
 
-        if duration.numerator == 0:
+        durFraction: Fraction = Fraction(dur)
+        if durFraction.numerator == 0:
             # if the GridSlice is at the end of a measure, the
             # time between the starttime/endtime of the GridSlice should
             # be subtracted from the endtime of the current GridMeasure.
             return HumdrumToken('g')
 
-        if duration.numerator == 1:
-            return HumdrumToken(str(duration.denominator))
+        if durFraction.numerator == 1:
+            return HumdrumToken(str(durFraction.denominator))
 
-        if duration.numerator % 3 == 0:
-            dotdur: HumNum = (duration * 2) / 3
-            if dotdur.numerator == 1:
-                return HumdrumToken(str(dotdur.denominator) + '.')
+        if durFraction.numerator % 3 == 0:
+            dotdur: HumNum = dur * opFrac(Fraction(2, 3))
+            dotdurFraction: Fraction = Fraction(dotdur)
+            if dotdurFraction.numerator == 1:
+                return HumdrumToken(str(dotdurFraction.denominator) + '.')
 
         # try to fit to two dots here
 
         # try to fit to three dots here
 
-        return HumdrumToken(str(duration.denominator) + '%' + str(duration.numerator))
+        return HumdrumToken(str(durFraction.denominator) +
+                            '%' + str(durFraction.numerator))
 
     @property
     def sliceType(self) -> SliceType:
@@ -394,13 +401,13 @@ class GridSlice:
     @property
     def measureDuration(self) -> HumNum:
         if not self.measure:
-            return HumNum(-1)
+            return opFrac(-1)
         return self.measure.duration
 
     @property
     def measureTimestamp(self) -> HumNum:
         if not self.measure:
-            return HumNum(-1)
+            return opFrac(-1)
         return self.measure.timestamp
 
     '''
@@ -614,8 +621,8 @@ class GridSlice:
     // GridSlice::setDuration --
     '''
     @duration.setter
-    def duration(self, newDuration: HumNum):
-        self._duration = newDuration
+    def duration(self, newDuration: HumNumIn):
+        self._duration = opFrac(newDuration)
 
     '''
     //////////////////////////////
@@ -632,8 +639,8 @@ class GridSlice:
     // GridSlice::setTimestamp --
     '''
     @timestamp.setter
-    def timestamp(self, newTimestamp: HumNum):
-        self._timestamp = newTimestamp
+    def timestamp(self, newTimestamp: HumNumIn):
+        self._timestamp = opFrac(newTimestamp)
 
     '''
     //////////////////////////////
@@ -673,7 +680,7 @@ class GridSlice:
     def invalidate(self):
         self.sliceType = SliceType.Invalid
         # should only do with 0 duration slices, but force to 0 if not already.
-        self.duration = HumNum(0)
+        self.duration = opFrac(0)
 
     '''
     //////////////////////////////

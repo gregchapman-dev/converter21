@@ -13,7 +13,10 @@
 import sys
 import re
 import math
+from fractions import Fraction
 from typing import List, Optional
+
+from music21.common import opFrac
 
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumLine
@@ -66,23 +69,22 @@ class ToolTremolo:
 
                 value: int = int(m.group(1))
                 duration: HumNum = Convert.recipToDuration(token.text)
-                count: HumNum = duration
-                count *= value
-                count /= 4
-                increment: HumNum = HumNum(4)
-                increment /= value
+                four: HumNum = opFrac(4)
+                count: HumNum = opFrac((duration * value) / four)
+                increment: HumNum = opFrac(four / value)
 
                 if '@@' in token.text:
-                    count *= 2
+                    count = opFrac(count * 2)
 
-                if count.denominator != 1:
+                countFraction: Fraction = Fraction(count)
+                if countFraction.denominator != 1:
                     print(f'Error: tremolo time value cannot be used: {value}', file=sys.stderr)
                     continue
 
-                kcount: int = count.numerator
+                kcount: int = countFraction.numerator
                 startTime: HumNum = token.durationFromStart
                 for k in range(1, kcount):
-                    timestamp: HumNum = startTime + (increment * k)
+                    timestamp: HumNum = opFrac(startTime + (increment * opFrac(k)))
                     self.infile.insertNullDataLine(timestamp)
 
         self.expandTremolos()
@@ -224,17 +226,23 @@ class ToolTremolo:
         if not m:
             return
 
-        value = int(m.group(1))
+        value: int = int(m.group(1))
+        valueHumNum: HumNum = opFrac(value)
+        valueFraction: Fraction = Fraction(value)
+
         duration: HumNum = Convert.recipToDuration(token.text)
-        count: HumNum = HumNum(duration * value / 4)
-        if count.denominator != 1:
+
+        four: HumNum = opFrac(4)
+        count: HumNum = opFrac(duration * valueHumNum / four)
+        countFraction: Fraction = Fraction(count)
+        if countFraction.denominator != 1:
             print(f'Error: non-integer number of tremolo notes: {token}', file=sys.stderr)
             return
         if value < 8:
             print(f'Error: tremolo notes can only be eighth-notes or shorter: {token}',
                     file=sys.stderr)
             return
-        if float(duration) > 0.5:
+        if duration > 0.5:
             # needs to be less than one for tuplet quarter note tremolos
             addBeam = True
 
@@ -245,21 +253,19 @@ class ToolTremolo:
         # *tremolo can reduce it back into a tremolo, since
         # it will only reduce beam groups.
 
-        repeat: HumNum = duration
-        repeat *= value
-        repeat /= 4
-        increment: HumNum = HumNum(4)
-        increment /= value
-        if repeat.denominator != 1:
+        repeat: HumNum = opFrac((duration * valueHumNum) / four)
+        increment: HumNum = opFrac(four / valueHumNum)
+        repeatFraction: Fraction = Fraction(repeat)
+        if repeatFraction.denominator != 1:
             print(f'Error: tremolo repetition count must be an integer: {token}',
                     file=sys.stderr)
             return
-        tnotes = repeat.numerator
+        tnotes = repeatFraction.numerator
 
         self.storeFirstTremoloNoteInfo(token)
 
         beams: int = int(math.log(float(value), 2)) - 2
-        markup: str = f'@{value.numerator}@'
+        markup: str = f'@{valueFraction.numerator}@'
         base: str = re.sub(markup, '', token.text)
 
         # complicated beamings are not allowed yet (no internal L/J markers in tremolo beam)
@@ -278,7 +284,7 @@ class ToolTremolo:
         # Set the rhythm of the tremolo notes.
         # Augmentation dot is expected adjacent to regular rhythm value.
         # Maybe allow anywhere?
-        base = re.sub(r'\d+%?\d*\.*', str(value.numerator), base)
+        base = re.sub(r'\d+%?\d*\.*', str(valueFraction.numerator), base)
         initial: str = base
         if hasBeamStart:
             initial += startBeam
@@ -294,7 +300,7 @@ class ToolTremolo:
 
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token.durationFromStart
-        timestamp: HumNum = startTime + increment
+        timestamp: HumNum = opFrac(startTime + increment)
         currTok: HumdrumToken = token.nextToken(0)
         counter: int = 1
 
@@ -325,12 +331,13 @@ class ToolTremolo:
                 self.storeLastTremoloNoteInfo(currTok)
             else:
                 currTok.text = base
+
             currTok.ownerLine.createLineFromTokens()
             if counter >= tnotes:
                 # done with inserting of tremolo notes.
                 break
 
-            timestamp += increment
+            timestamp = opFrac(timestamp + increment)
             currTok = currTok.nextToken(0)
 
     '''
@@ -347,25 +354,26 @@ class ToolTremolo:
             return
 
         value: int = int(m.group(1))
-        if not Convert.isPowerOfTwo(HumNum(value)):
+        valueHumNum: HumNum = opFrac(value)
+        if not Convert.isPowerOfTwo(valueHumNum):
             print(f'Error: not a power of two: {token1}', file=sys.stderr)
             return
         if value < 8:
             print(f'Error: tremolo can only be eighth-notes or shorter: {token1}', file=sys.stderr)
             return
 
-        duration: HumNum = Convert.recipToDuration(token1.text)
-        count: HumNum = duration
 
-        count *= value
-        count /= 4
-        if count.denominator != 1:
+        duration: HumNum = Convert.recipToDuration(token1.text)
+        four: HumNum = opFrac(4)
+        count: HumNum = opFrac((duration * valueHumNum) / four)
+        countFraction: Fraction = Fraction(count)
+
+        if countFraction.denominator != 1:
             print(f'Error: tremolo repetition count must be an integer: {token1}', file=sys.stderr)
             return
-        increment: HumNum = HumNum(4)
-        increment /= value
+        increment: HumNum = opFrac(four / valueHumNum)
 
-        tnotes: int = count.numerator * 2
+        tnotes: int = countFraction.numerator * 2
 
         self.storeFirstTremoloNoteInfo(token1)
 
@@ -405,7 +413,7 @@ class ToolTremolo:
 
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token1.durationFromStart
-        timestamp: HumNum = startTime + increment
+        timestamp: HumNum = opFrac(startTime + increment)
         currTok: HumdrumToken = token1.nextToken(0)
         counter: int = 1
         while currTok is not None:
@@ -435,11 +443,12 @@ class ToolTremolo:
                 state = not state
 
             currTok.ownerLine.createLineFromTokens()
+
             if counter >= tnotes:
                 # done with inserting of tremolo notes
                 break
 
-            timestamp += increment
+            timestamp = opFrac(timestamp + increment)
             currTok = currTok.nextToken(0)
 
     '''

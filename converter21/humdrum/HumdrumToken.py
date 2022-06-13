@@ -13,9 +13,12 @@
 import sys
 import re
 import copy
+from fractions import Fraction
+
+from music21.common import opFrac
 
 from converter21.humdrum import HumAddress
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumHash
 from converter21.humdrum import HumParamSet
 from converter21.humdrum import Convert
@@ -58,9 +61,9 @@ def makeTag(string: str, num: int) -> str:
 # used to generate invisible rests to fill gaps.  Not a real HumdrumToken, but can be put
 # in arrays of layerTokens, and will be specially treated.
 class FakeRestToken:
-    def __init__(self, duration: HumNum, durationFromBarline: HumNum = HumNum(0)):
-        self.duration = duration
-        self.durationFromBarline = durationFromBarline
+    def __init__(self, duration: HumNumIn, durationFromBarline: HumNumIn = 0):
+        self.duration = opFrac(duration)
+        self.durationFromBarline = opFrac(durationFromBarline)
 
 # We use conditionally defined attributes to implement property caching, so make pylint shut up about it
 # pylint: disable=attribute-defined-outside-init
@@ -98,12 +101,12 @@ class HumdrumToken(HumHash):
         // Grace note will have a zero duration, even if they have a duration
         // list in the token for a graphical display duration.
         '''
-        self._duration: HumNum = HumNum(-1)
+        self._duration: HumNum = opFrac(-1)
 
         # graceVisualDuration: only set for grace notes that have recip in their token
         # e.g. '16qqcc'.  self._duration is 0 (because it's a grace note), but the grace
         # note will have two flags because of the '16'.
-        self._graceVisualDuration: HumNum = HumNum(-1)
+        self._graceVisualDuration: HumNum = opFrac(-1)
 
         '''
         // nextTokens: This is a list of all previous tokens in the spine which
@@ -182,7 +185,7 @@ class HumdrumToken(HumHash):
         '''
             rscale: the rscale that applies to this token
         '''
-        self.rscale: HumNum = HumNum(1)
+        self._rscale: HumNum = opFrac(1)
 
         '''
             We are also a HumHash, and that was initialized via super() above.
@@ -384,23 +387,24 @@ class HumdrumToken(HumHash):
     //    returns the duration until the endpoint; otherwise, returns 0;
     //    Expand later to handle slur ends and elided slurs.  The function
     //    HumdrumFileContent::analyzeSlurs() should be called before accessing
-    //    this function.  If the slur duruation was already calculated, return
+    //    this function.  If the slur duration was already calculated, return
     //    that value; otherwise, calculate from the location of a matching
     //    slur end.
     '''
-    def getSlurDuration(self, scale: HumNum) -> HumNum:
+    def getSlurDuration(self, scale: HumNumIn) -> HumNum:
         if not self.isKern:
-            return HumNum(0)
+            return opFrac(0)
 
         if self.isDefined('auto', 'slurDuration'):
-            return self.getValueFraction('auto', 'slurDuration')
+            return self.getValueHumNum('auto', 'slurDuration')
 
         if self.isDefined('auto', 'slurEnd'):
             slurEndToken = self.getValueToken('auto', 'slurEnd')
             if slurEndToken is not None:
-                return slurEndToken.durationFromStart(scale) - self.durationFromStart(scale)
+                return opFrac(slurEndToken.durationFromStart(scale) -
+                                self.durationFromStart(scale))
 
-        return HumNum(0)
+        return opFrac(0)
 
     '''
     //////////////////////////////
@@ -603,6 +607,14 @@ class HumdrumToken(HumHash):
     def subTrackCount(self, newSubTrackCount: int):
         self._address.subTrackCount = newSubTrackCount
 
+    @property
+    def rscale(self) -> HumNum:
+        return self._rscale
+
+    @rscale.setter
+    def rscale(self, newRscale: HumNumIn):
+        self._rscale = opFrac(newRscale)
+
     '''
     //////////////////////////////
     //
@@ -756,19 +768,19 @@ class HumdrumToken(HumHash):
         self._rhythmAnalyzed = True
 
         if self.text == NULL_DATA:
-            self._duration = HumNum(-1)
+            self._duration = opFrac(-1)
             return
 
         if self.isComment:
-            self._duration = HumNum(-1)
+            self._duration = opFrac(-1)
             return
 
         if self.isInterpretation:
-            self._duration = HumNum(-1)
+            self._duration = opFrac(-1)
             return
 
         if self.isBarline:
-            self._duration = HumNum(-1)
+            self._duration = opFrac(-1)
             return
 
         if self.hasRhythm:
@@ -784,11 +796,11 @@ class HumdrumToken(HumHash):
                     self._duration = Convert.mensToDuration(self.text)
                 else:
                     # LATER: **koto not supported...
-                    self._duration = HumNum(-1)
+                    self._duration = opFrac(-1)
             else:
-                self._duration = HumNum(-1)
+                self._duration = opFrac(-1)
         else:
-            self._duration = HumNum(-1)
+            self._duration = opFrac(-1)
 
     '''
     ///////////////////////////////
@@ -842,8 +854,8 @@ class HumdrumToken(HumHash):
     //    value will also include implicit duration calculated in analyzeRhythm
     //    in the HumdrumFileStructure class.
     '''
-    def scaledDuration(self, scale: HumNum) -> HumNum:
-        return self.duration * scale # self.duration will trigger rhythm analysis if necessary
+    def scaledDuration(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.duration * opFrac(scale)) # self.duration will trigger rhythm analysis if necessary
 
     ''' duration property for unscaled getDuration --gregc '''
     @property
@@ -860,9 +872,9 @@ class HumdrumToken(HumHash):
     //    HumdrumFileStructure::analyzeTokenDurations().
     '''
     @duration.setter
-    def duration(self, newDuration: HumNum):
+    def duration(self, newDuration: HumNumIn):
         self._rhythmAnalyzed = True # bugfix, although current clients probably won't care --gregc
-        self._duration = newDuration
+        self._duration = opFrac(newDuration)
 
     @property
     def graceVisualDuration(self) -> HumNum:
@@ -904,10 +916,11 @@ class HumdrumToken(HumHash):
 
         bot: int = int(pow(2.0, dotCount + 1)) - 1
         top: int = int(pow(2.0, dotCount))
-        return self.duration * HumNum(top, bot)
+        dotMultiplier: HumNum = opFrac(Fraction(top, bot))
+        return opFrac(self.duration * dotMultiplier)
 
-    def scaledDurationNoDots(self, scale: HumNum) -> HumNum:
-        return self.durationNoDots * scale
+    def scaledDurationNoDots(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationNoDots * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -918,12 +931,12 @@ class HumdrumToken(HumHash):
     //   in reference to the start of the token, not the end of the token,
     //   which may be on another HumdrumLine.
     '''
-    def getScaledDurationFromStart(self, scale: HumNum) -> HumNum:
+    def getScaledDurationFromStart(self, scale: HumNumIn) -> HumNum:
         lineDur = self.ownerLine.durationFromStart
         if lineDur is None:
             return None
 
-        return lineDur * scale
+        return opFrac(lineDur * opFrac(scale))
 
     ''' durationFromStart property for unscaled getDurationFromStart --gregc '''
     @property
@@ -939,16 +952,16 @@ class HumdrumToken(HumHash):
     //   to end is always the duration to the end of the last non-zero
     //   duration line.
     '''
-    def getScaledDurationToEnd(self, scale: HumNum) -> HumNum:
+    def getScaledDurationToEnd(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None: # bugfix, but current clients probably don't care --gregc
-            return HumNum(0)
-        return self.ownerLine.durationToEnd * scale
+            return opFrac(0)
+        return opFrac(self.ownerLine.durationToEnd * opFrac(scale))
 
     ''' durationToEnd property for unscaled getDurationToEnd --gregc '''
     @property
     def durationToEnd(self) -> HumNum:
         if self.ownerLine is None: # bugfix, but current clients probably don't care --gregc
-            return HumNum(0)
+            return opFrac(0)
         return self.ownerLine.durationToEnd
 
     '''
@@ -962,16 +975,16 @@ class HumdrumToken(HumHash):
     //   will always be non-positive if the file is read with HumdrumFileBase and
     //   analyzeMeter() is not run to analyze the data.
     '''
-    def getScaledBarlineDuration(self, scale: HumNum) -> HumNum:
+    def getScaledBarlineDuration(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:
-            return HumNum(0)
-        return self.ownerLine.barlineDuration * scale
+            return opFrac(0)
+        return opFrac(self.ownerLine.barlineDuration * opFrac(scale))
 
     ''' barlineDuration property for unscaled getBarlineDuration '''
     @property
     def barlineDuration(self) -> HumNum:
         if self.ownerLine is None:
-            return HumNum(0)
+            return opFrac(0)
         return self.ownerLine.barlineDuration
 
     '''
@@ -981,16 +994,16 @@ class HumdrumToken(HumHash):
     //      the start of the next barline. Units are quarter notes, unless scale
     //      is set to a value other than 1.
     '''
-    def getScaledDurationToBarline(self, scale: HumNum) -> HumNum:
+    def getScaledDurationToBarline(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:
-            return HumNum(0)
-        return self.ownerLine.durationToBarline * scale
+            return opFrac(0)
+        return opFrac(self.ownerLine.durationToBarline * opFrac(scale))
 
     ''' durationToBarline property for unscaled getDurationToBarline --gregc '''
     @property
     def durationToBarline(self) -> HumNum:
         if self.ownerLine is None:
-            return HumNum(0)
+            return opFrac(0)
         return self.ownerLine.durationToBarline
 
     '''
@@ -1000,16 +1013,16 @@ class HumdrumToken(HumHash):
     //      the previous barline. Units are quarter notes, unless scale
     //      is set to a value other than 1.
     '''
-    def getScaledDurationFromBarline(self, scale: HumNum) -> HumNum:
+    def getScaledDurationFromBarline(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:
-            return HumNum(0)
-        return self.ownerLine.durationFromBarline * scale
+            return opFrac(0)
+        return opFrac(self.ownerLine.durationFromBarline * opFrac(scale))
 
     ''' durationFromBarline property for unscaled getDurationFromBarline --gregc '''
     @property
     def durationFromBarline(self) -> HumNum:
         if self.ownerLine is None:
-            return HumNum(0)
+            return opFrac(0)
         return self.ownerLine.durationFromBarline
 
     '''

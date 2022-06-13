@@ -20,6 +20,7 @@ import html
 import copy
 
 import music21 as m21
+from music21.common import opFrac
 
 # from converter21.humdrum import HumdrumSyntaxError
 from converter21.humdrum import HumdrumInternalError
@@ -27,7 +28,7 @@ from converter21.humdrum import HumdrumFileContent
 from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import FakeRestToken
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumHash
 from converter21.humdrum import HumParamSet
 from converter21.humdrum import Convert
@@ -49,18 +50,18 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 '''
 
 # Note that these durations are expressed in quarter notes,
-# so HumNum(1,2), a.k.a "a half" actually means an eighth note,
+# so Fraction(1,2), a.k.a "a half" actually means an eighth note,
 # which has one beam.
 durationNoDotsToNumBeams = {
-    HumNum(1,   2):    1, # eighth note has 1 beam
-    HumNum(1,   4):    2, # 16th note has 2 beams
-    HumNum(1,   8):    3, # 32nd note has 3 beams
-    HumNum(1,  16):    4, # 64th note has 4 beams
-    HumNum(1,  32):    5, # 128th note has 5 beams
-    HumNum(1,  64):    6, # 256th note has 6 beams
-    HumNum(1, 128):    7, # 512th note has 7 beams
-    HumNum(1, 256):    8, # 1024th note has 8 beams
-    HumNum(1, 512):    9, # 2048th note has 9 beams
+    opFrac(Fraction(1,   2)):    1, # eighth note has 1 beam
+    opFrac(Fraction(1,   4)):    2, # 16th note has 2 beams
+    opFrac(Fraction(1,   8)):    3, # 32nd note has 3 beams
+    opFrac(Fraction(1,  16)):    4, # 64th note has 4 beams
+    opFrac(Fraction(1,  32)):    5, # 128th note has 5 beams
+    opFrac(Fraction(1,  64)):    6, # 256th note has 6 beams
+    opFrac(Fraction(1, 128)):    7, # 512th note has 7 beams
+    opFrac(Fraction(1, 256)):    8, # 1024th note has 8 beams
+    opFrac(Fraction(1, 512)):    9, # 2048th note has 9 beams
 }
 
 humdrumInstrumentClassCodeToInstrumentName = {
@@ -361,7 +362,7 @@ class HumdrumBeamAndTuplet:
         # tupletMultiplier is still 2/3 (i.e. all note durations are 2/3 of normal duration)
         self.numNotesActual: int = 1
         self.numNotesNormal: int = 1
-        self.tupletMultiplier: HumNum = HumNum(1, 1)
+        self.tupletMultiplier: HumNum = opFrac(1)
         self.numScale: int = 1
 
         self.tupletStart: int = 0 # set to tuplet group number (on starting note/rest)
@@ -567,7 +568,7 @@ class HumdrumFile(HumdrumFileContent):
         # at start of the next measure
         self._m21BreakAtStartOfNextMeasure: [m21.Music21Object] = None # SystemLayout or PageLayout
 
-        self._currentOMDDurationFromStart: HumNum = HumNum(0)
+        self._currentOMDDurationFromStart: HumNum = opFrac(0)
 
     def createMusic21Stream(self) -> m21.stream.Stream:
         # First, analyze notation: this is extra analysis, not done by default,
@@ -692,7 +693,7 @@ class HumdrumFile(HumdrumFileContent):
             offsetInScore: HumNum = self._lines[startIdx].durationFromStart
             if offsetInScore < 0:
                 print(f'offsetInScore(startIdx={startIdx}) is negative: {offsetInScore}', file=sys.stderr)
-                offsetInScore = HumNum(0)
+                offsetInScore = opFrac(0)
 
             self._setupSystemMeasures(measureKey, offsetInScore)
 
@@ -866,7 +867,7 @@ class HumdrumFile(HumdrumFileContent):
         top: int = -1
         bot: int = -1
 
-        self._timeSigDurationsByLine = [HumNum(-1)] * self.lineCount
+        self._timeSigDurationsByLine = [opFrac(-1)] * self.lineCount
         self._timeSignaturesWithLineIdx = []
 
         starts = self.spineStartListOfType('**kern')
@@ -880,7 +881,7 @@ class HumdrumFile(HumdrumFileContent):
         if startTok is None:
             return
 
-        curDur: HumNum = HumNum(-1)
+        curDur: HumNum = opFrac(-1)
 
         token = startTok.nextToken0 # stay left if there's a split
         while token is not None:
@@ -891,8 +892,8 @@ class HumdrumFile(HumdrumFileContent):
                 continue
             top, bot = token.timeSignature
             self._timeSignaturesWithLineIdx.append((top, bot, lineIdx))
-            curDur = HumNum(top, bot)
-            curDur *= 4 # convert to duration in quarter notes
+            curDur = opFrac(Fraction(top, bot))
+            curDur = opFrac(curDur * 4) # convert to duration in quarter notes
 
             self._timeSigDurationsByLine[lineIdx] = curDur
             token = token.nextToken0 # stay left if there's a split
@@ -986,8 +987,9 @@ class HumdrumFile(HumdrumFileContent):
         a single measures-worth of all Parts), we actually set up "SystemMeasures",
         a list of Measures, one per staff/Part.
     '''
-    def _setupSystemMeasures(self, measureKey: Tuple[int, int], measureOffset: HumNum) -> int:
+    def _setupSystemMeasures(self, measureKey: Tuple[int, int], measureOffset: HumNumIn) -> int:
         startLineIdx, endLineIdx = measureKey
+        mOffset: HumNum = opFrac(measureOffset)
 
         measureNumber: Union[int, str] = self._getMeasureNumber(startLineIdx)
         if measureNumber == -1:
@@ -998,7 +1000,7 @@ class HumdrumFile(HumdrumFileContent):
             ss: StaffStateVariables = self._staffStates[i]
             measure: m21.stream.Measure = m21.stream.Measure(measureNumber)
             currentMeasurePerStaff.append(measure)
-            ss.m21Part.coreInsert(Fraction(measureOffset), measure)
+            ss.m21Part.coreInsert(mOffset, measure)
             ss.m21Part.coreElementsChanged()
 
             # start coreInserting into measure
@@ -1211,14 +1213,14 @@ class HumdrumFile(HumdrumFileContent):
                 if timeSigTok is not None:
                     m21TimeSig = M21Convert.m21TimeSignature(timeSigTok, meterSigTok)
                     if m21TimeSig is not None:
-                        m21OffsetInMeasure = M21Convert.m21Offset(timeSigTok.durationFromBarline)
+                        m21OffsetInMeasure = timeSigTok.durationFromBarline
                         measure.coreInsert(m21OffsetInMeasure, m21TimeSig)
                         insertedIntoMeasure = True
 
                 if keySigTok is not None:
                     m21KeySig = M21Convert.m21KeySignature(keySigTok, keyTok)
                     if m21KeySig is not None:
-                        m21OffsetInMeasure = M21Convert.m21Offset(keySigTok.durationFromBarline)
+                        m21OffsetInMeasure = keySigTok.durationFromBarline
                         measure.coreInsert(m21OffsetInMeasure, m21KeySig)
                         insertedIntoMeasure = True
 
@@ -1330,11 +1332,11 @@ class HumdrumFile(HumdrumFileContent):
                     if prevDataToken is not None:
                         prevDuration: HumNum = prevDataToken.duration
                         # e.g. barlines have duration == -1, use 0 instead
-                        prevDuration = max(prevDuration, 0)
-                        prevEndTime: HumNum = prevDataToken.durationFromStart + prevDuration
-                        gapDuration: HumNum = token.durationFromStart - prevEndTime
+                        prevDuration = max(prevDuration, opFrac(0))
+                        prevEndTime: HumNum = opFrac(prevDataToken.durationFromStart + prevDuration)
+                        gapDuration: HumNum = opFrac(token.durationFromStart - prevEndTime)
                         if gapDuration > 0:
-                            fakeRestDurationFromBarline: HumNum = token.durationFromBarline - gapDuration
+                            fakeRestDurationFromBarline: HumNum = opFrac(token.durationFromBarline - gapDuration)
                             fakeRests: [FakeRestToken] = self.makeFakeRestTokens(gapDuration, fakeRestDurationFromBarline)
                             output[staffIndex][layerIndex] += fakeRests
 
@@ -1350,12 +1352,13 @@ class HumdrumFile(HumdrumFileContent):
         return output
 
     @staticmethod
-    def makeFakeRestTokens(gapDuration: HumNum, durationFromBarline: HumNum) -> List[FakeRestToken]:
+    def makeFakeRestTokens(gapDuration: HumNumIn, durationFromBarline: HumNumIn) -> List[FakeRestToken]:
         output: List[FakeRestToken] = []
+        durFromBarline: HumNum = opFrac(durationFromBarline)
         restDurations: List[HumNum] = Convert.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
         for restDuration in restDurations:
-            output.append(FakeRestToken(restDuration, durationFromBarline))
-            durationFromBarline += restDuration
+            output.append(FakeRestToken(restDuration, durFromBarline))
+            durFromBarline = opFrac(durFromBarline + restDuration)
 
         return output
 
@@ -1452,7 +1455,7 @@ class HumdrumFile(HumdrumFileContent):
         # There are a lot of humdrum scores where this is not correct ordering, so I'm
         # reverting this change (back to doing the layers forward).  We might want an
         # option (for import here, and export elsewhere) to allow the user to specify
-        #their preference.
+        # their preference.
 
         # for layerIndex in range(layerCount-1, -1, -1):
         for layerIndex in range(0, layerCount):
@@ -1529,9 +1532,9 @@ class HumdrumFile(HumdrumFileContent):
         # MEI (and maybe others) might need it, but that's for the various exporters to
         # deal with if necessary.  We have positioned this Voice correctly in the Measure.
         voice: m21.stream.Voice = m21.stream.Voice()
-        voiceOffsetInMeasure: Fraction = M21Convert.m21Offset(layerData[0].durationFromBarline)
+        voiceOffsetInMeasure: HumNum = layerData[0].durationFromBarline
         if layerData[0].isBarline:
-            voiceOffsetInMeasure = 0 # durationFromBarline returns duration of previous bar in this case
+            voiceOffsetInMeasure = opFrac(0) # durationFromBarline returns duration of previous bar in this case
 
         measureIndex: int = self.measureIndexFromKey(measureKey)
         currentMeasurePerStaff: [m21.stream.Measure] = self._allMeasuresPerStaff[measureIndex]
@@ -1676,11 +1679,12 @@ class HumdrumFile(HumdrumFileContent):
     def _processInterpretationLayerToken(self,
                                          measureIndex: int,
                                          voice: m21.stream.Voice,
-                                         voiceOffsetInMeasure: Union[Fraction, float],
+                                         voiceOffsetInMeasure: HumNumIn,
                                          layerData: [HumdrumToken],
                                          tokenIdx: int,
                                          layerIndex: int,
                                          staffIndex: int) -> bool:
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         ss: StaffStateVariables = self._staffStates[staffIndex]
         layerTok: HumdrumToken = layerData[tokenIdx]
         insertedIntoVoice: bool = False
@@ -1690,7 +1694,7 @@ class HumdrumFile(HumdrumFileContent):
 
         if not layerTok.isNull and not layerTok.isManipulator:
             # non-null, non-manip interp tokens can have linked params that are directions
-            if self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex):
+            if self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex):
                 insertedIntoVoice = True
 
         # TODO: ottava marks
@@ -1698,18 +1702,18 @@ class HumdrumFile(HumdrumFileContent):
         # self._handleLigature(layerTok) # just for **mens
         # self._handleColoration(layerTok) # just for **mens
         self._handleTempoChange(measureIndex, layerTok, staffIndex)
-        if self._handlePedalMark(measureIndex, voice, voiceOffsetInMeasure, layerTok):
+        if self._handlePedalMark(measureIndex, voice, vOffsetInMeasure, layerTok):
             insertedIntoVoice = True
         self._handleStaffStateVariables(measureIndex, layerTok, layerIndex, staffIndex)
         self._handleStaffDynamicsStateVariables(measureIndex, layerTok, staffIndex)
-        if self._handleCustos(measureIndex, voice, voiceOffsetInMeasure, layerTok):
+        if self._handleCustos(measureIndex, voice, vOffsetInMeasure, layerTok):
             insertedIntoVoice = True
-        if self._handleRepInterp(measureIndex, voice, voiceOffsetInMeasure, layerTok): # new
+        if self._handleRepInterp(measureIndex, voice, vOffsetInMeasure, layerTok): # new
             insertedIntoVoice = True
         self._handleColorInterp(measureIndex, layerTok) # new
-        if self._handleClefChange(measureIndex, voice, voiceOffsetInMeasure, layerData, tokenIdx):
+        if self._handleClefChange(measureIndex, voice, vOffsetInMeasure, layerData, tokenIdx):
             insertedIntoVoice = True
-#         if self._handleTimeSigChange(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex): # new
+#         if self._handleTimeSigChange(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex): # new
 #             insertedIntoVoice = True
 
         return insertedIntoVoice
@@ -1717,7 +1721,7 @@ class HumdrumFile(HumdrumFileContent):
     def _handlePedalMark(self,
                          measureIndex: int,
                          voice: m21.stream.Voice,
-                         voiceOffsetInMeasure: Union[Fraction, float],
+                         voiceOffsetInMeasure: HumNumIn,
                          token: HumdrumToken) -> bool:
         # TODO: pedal marks
         pass # returns None from _handlePedalMark, which will evaluate to False appropriately
@@ -1725,7 +1729,7 @@ class HumdrumFile(HumdrumFileContent):
     def _handleCustos(self,
                       measureIndex: int,
                       voice: m21.stream.Voice,
-                      voiceOffsetInMeasure: Union[Fraction, float],
+                      voiceOffsetInMeasure: HumNumIn,
                       token: HumdrumToken) -> bool:
         # TODO: *custos
         pass # returns None from _handleCustos, which will evaluate to False appropriately
@@ -1733,7 +1737,7 @@ class HumdrumFile(HumdrumFileContent):
     def _handleRepInterp(self,
                          measureIndex: int,
                          voice: m21.stream.Voice,
-                         voiceOffsetInMeasure: Union[Fraction, float],
+                         voiceOffsetInMeasure: HumNumIn,
                          token: HumdrumToken) -> bool:
         # TODO: *rep (repetition element)
         pass # returns None from _handleRepInterp, which will evaluate to False appropriately
@@ -1748,9 +1752,10 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _handleClefChange(_measureIndex: int,
                           voice: m21.stream.Voice,
-                          voiceOffsetInMeasure: Union[Fraction, float],
+                          voiceOffsetInMeasure: HumNumIn,
                           layerData: [HumdrumToken],
                           tokenIdx: int) -> bool:
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         token: HumdrumToken = layerData[tokenIdx]
         forceClefChange: bool = False
         if token.isClef:
@@ -1762,8 +1767,8 @@ class HumdrumFile(HumdrumFileContent):
 
         if forceClefChange or token.durationFromStart != 0:
             if token.isClef:
-                clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-                clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
+                clefOffsetInMeasure: HumNum = token.durationFromBarline
+                clefOffsetInVoice: HumNum = opFrac(clefOffsetInMeasure - vOffsetInMeasure)
                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(token)
                 voice.coreInsert(clefOffsetInVoice, m21Clef)
                 return True
@@ -1779,8 +1784,8 @@ class HumdrumFile(HumdrumFileContent):
 #                         ttrack: int = tok.track
 #                         if ttrack == xtrack:
 #                             if tok.isClef:
-#                                 clefOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-#                                 clefOffsetInVoice: Union[Fraction, float] = clefOffsetInMeasure - voiceOffsetInMeasure
+#                                 clefOffsetInMeasure: Fraction = token.durationFromBarline
+#                                 clefOffsetInVoice: HumNum = clefOffsetInMeasure - vOffsetInMeasure
 #                                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(tok)
 #                                 voice.coreInsert(clefOffsetInVoice, m21Clef)
 #                                 insertedIntoVoice = True
@@ -1791,7 +1796,7 @@ class HumdrumFile(HumdrumFileContent):
 #     def _handleTimeSigChange(self,
 #                              _measureIndex: int,
 #                              _voice: m21.stream.Voice,
-#                              _voiceOffsetInMeasure: Union[Fraction, float],
+#                              _voiceOffsetInMeasure: HumNumIn,
 #                              _token: HumdrumToken,
 #                              _staffIndex: int) -> bool:
 #         if token.isTimeSignature:
@@ -2030,7 +2035,7 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 tempo.style.absoluteY = 'above'
 
-            tempoOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
+            tempoOffsetInMeasure: HumNum = token.durationFromBarline
 
             currentMeasurePerStaff: [m21.stream.Measure] = self._allMeasuresPerStaff[measureIndex]
             currentMeasurePerStaff[staffIndex].coreInsert(
@@ -2387,7 +2392,7 @@ class HumdrumFile(HumdrumFileContent):
             numActual *= numScale
             numNormal *= numScale
             if durNormal is not None:
-                durNormal = m21.duration.durationTupleFromQuarterLength(durNormal.quarterLength / Fraction(numScale))
+                durNormal = m21.duration.durationTupleFromQuarterLength(opFrac(durNormal.quarterLength / numScale))
 
         tuplet: m21.duration.Tuplet = m21.duration.Tuplet(
                                         numberNotesActual=numActual,
@@ -2439,14 +2444,18 @@ class HumdrumFile(HumdrumFileContent):
                 # normal notes is 2.  i.e. 3 actual notes are played in the duration of 2 normal notes
                 numberActualNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesActual
                 numberNormalNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesNormal
-                noteDurationNoDots *= HumNum(numberActualNotesInTuplet, numberNormalNotesInTuplet)
+                multiplier: Fraction = Fraction(numberActualNotesInTuplet, numberNormalNotesInTuplet)
+                noteDurationNoDots = opFrac(noteDurationNoDots * opFrac(multiplier))
 
-        # normalize the fraction
-        dur = HumNum(noteDurationNoDots.numerator, noteDurationNoDots.denominator)
-        if dur not in durationNoDotsToNumBeams:
+        if isinstance(noteDurationNoDots, Fraction):
+            # normalize the Fraction (not sure this is actually necessary now that we are using opFrac,
+            # but let's try not to make any assumptions about the implementation of opFrac)
+            noteDurationNoDots = opFrac(Fraction(noteDurationNoDots.numerator, noteDurationNoDots.denominator))
+
+        if noteDurationNoDots not in durationNoDotsToNumBeams:
             return 0
 
-        numBeams: int = durationNoDotsToNumBeams[dur]
+        numBeams: int = durationNoDotsToNumBeams[noteDurationNoDots]
 
         # adjust if this note is a bowed tremolo (numberOfMarks replaces some beams)
         for expression in noteOrChord.expressions:
@@ -2570,10 +2579,10 @@ class HumdrumFile(HumdrumFileContent):
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
-#         originalQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
+#         originalQuarterLength: HumNum = opFrac(startNote.duration.quarterLength)
 
         if tremolo:
-            newNoteDuration: HumNum = None
+            newNoteDuration: m21.duration.Duration = None
             tremoloNoteVisualDuration: HumNum = None
             tremoloNoteGesturalDuration: HumNum = None
 
@@ -2586,13 +2595,14 @@ class HumdrumFile(HumdrumFileContent):
                 # of the tremolo sequence, but they actually each need to have half that duration
                 # internally, for the measure duration to make sense.
                 tremoloNoteVisualDuration = Convert.recipToDuration(startTok.getValue('auto', 'recip'))
-                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+                tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
+
             if tremoloNoteVisualDuration is not None:
                 newNoteDuration = m21.duration.Duration()
-                newNoteDuration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                newNoteDuration.quarterLength = tremoloNoteVisualDuration
                 if tremoloNoteGesturalDuration is not None:
                     newNoteDuration.linked = False # leave the note looking like visual duration
-                    newNoteDuration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                    newNoteDuration.quarterLength = tremoloNoteGesturalDuration
                 startNote.duration = newNoteDuration
 
         duration: m21.duration.Duration = copy.deepcopy(startNote.duration)
@@ -2674,7 +2684,7 @@ class HumdrumFile(HumdrumFileContent):
         # Check to make sure we didn't change the actual duration of the note
         # (and generate the new quarterLength _now_ so the cache doesn't clear
         # at an inopportune time).
-#         newQuarterLength: HumNum = HumNum(startNote.duration.quarterLength)
+#         newQuarterLength: HumNum = opFrac(startNote.duration.quarterLength)
 #         if newQuarterLength != originalQuarterLength:
 #             raise HumdrumInternalError('_startTuplet modified duration.quarterLength')
 
@@ -2691,10 +2701,10 @@ class HumdrumFile(HumdrumFileContent):
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
-#         originalQuarterLength: HumNum = HumNum(note.duration.quarterLength)
+#         originalQuarterLength: HumNum = opFrac(note.duration.quarterLength)
 
         if tremolo:
-            newNoteDuration: HumNum = None
+            newNoteDuration: m21.duration.Duration = None
             tremoloNoteVisualDuration: HumNum = None
             tremoloNoteGesturalDuration: HumNum = None
 
@@ -2707,13 +2717,13 @@ class HumdrumFile(HumdrumFileContent):
                 # of the tremolo sequence, but they actually each need to have half that duration
                 # internally, for the measure duration to make sense.
                 tremoloNoteVisualDuration = Convert.recipToDuration(token.getValue('auto', 'recip'))
-                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+                tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
             if tremoloNoteVisualDuration is not None:
                 newNoteDuration = m21.duration.Duration()
-                newNoteDuration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                newNoteDuration.quarterLength = tremoloNoteVisualDuration
                 if tremoloNoteGesturalDuration is not None:
                     newNoteDuration.linked = False # leave the note looking like visual duration
-                    newNoteDuration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                    newNoteDuration.quarterLength = tremoloNoteGesturalDuration
                 note.duration = newNoteDuration
 
         duration: m21.duration.Duration = copy.deepcopy(note.duration)
@@ -2758,7 +2768,7 @@ class HumdrumFile(HumdrumFileContent):
         # And set this new duration on the note.
         note.duration = duration
 
-#         newQuarterLength: HumNum = HumNum(note.duration.quarterLength)
+#         newQuarterLength: HumNum = opFrac(note.duration.quarterLength)
 #         if newQuarterLength != originalQuarterLength:
 #             raise HumdrumInternalError('_continueTuplet modified duration.quarterLength')
 
@@ -2775,10 +2785,10 @@ class HumdrumFile(HumdrumFileContent):
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
         # are tricky, so we need to check our work).
-#         originalQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
+#         originalQuarterLength: HumNum = opFrac(endNote.duration.quarterLength)
 
         if tremolo:
-            newNoteDuration: HumNum = None
+            newNoteDuration: m21.duration.Duration = None
             tremoloNoteVisualDuration: HumNum = None
             tremoloNoteGesturalDuration: HumNum = None
 
@@ -2791,13 +2801,13 @@ class HumdrumFile(HumdrumFileContent):
                 # of the tremolo sequence, but they actually each need to have half that duration
                 # internally, for the measure duration to make sense.
                 tremoloNoteVisualDuration = Convert.recipToDuration(endToken.getValue('auto', 'recip'))
-                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+                tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
             if tremoloNoteVisualDuration is not None:
                 newNoteDuration = m21.duration.Duration()
-                newNoteDuration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                newNoteDuration.quarterLength = tremoloNoteVisualDuration
                 if tremoloNoteGesturalDuration is not None:
                     newNoteDuration.linked = False # leave the note looking like visual duration
-                    newNoteDuration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                    newNoteDuration.quarterLength = tremoloNoteGesturalDuration
                 endNote.duration = newNoteDuration
 
         duration: m21.duration.Duration = copy.deepcopy(endNote.duration)
@@ -2844,7 +2854,7 @@ class HumdrumFile(HumdrumFileContent):
         # And set this new duration on the endNote.
         endNote.duration = duration
 
-#         newQuarterLength: HumNum = HumNum(endNote.duration.quarterLength)
+#         newQuarterLength: HumNum = opFrac(endNote.duration.quarterLength)
 #         if newQuarterLength != originalQuarterLength:
 #             raise HumdrumInternalError('_endTuplet modified duration.quarterLength')
 
@@ -3140,15 +3150,15 @@ class HumdrumFile(HumdrumFileContent):
         # the first index.
         durSum: [HumNum] = [None] * len(durItems)
 
-        sumSoFar: HumNum = HumNum(0)
+        sumSoFar: HumNum = opFrac(0)
         for i, durItem in enumerate(durItems):
             durNoDots: HumNum = durItem.durationNoDots
-            dotlessDur[i] = durNoDots / 4
+            dotlessDur[i] = opFrac(durNoDots / opFrac(4))
             powerOfTwoWithoutDots[i] = Convert.isPowerOfTwo(durNoDots)
             hasTuplet = hasTuplet or not powerOfTwoWithoutDots[i]
             durationWithDots[i] = durItem.duration
             durSum[i] = sumSoFar
-            sumSoFar += durationWithDots[i]
+            sumSoFar = opFrac(sumSoFar + durationWithDots[i])
 
         # Count the number of beams.  The durbeamnum std::vector contains a list
         # of beam numbers starting from 1 (or 0 if a note/rest has no beam).
@@ -3220,8 +3230,8 @@ class HumdrumFile(HumdrumFileContent):
         # beamdur = a list of the durations for each beam
         beamDurs: [HumNum] = [None] * len(beamStarts)
         for i in range(0, len(beamDurs)):
-            beamDurs[i] = (durSum[beamEnds[i]] - durSum[beamStarts[i]]) \
-                            + durationWithDots[beamEnds[i]]
+            beamDurs[i] = opFrac((durSum[beamEnds[i]] - durSum[beamStarts[i]])
+                            + durationWithDots[beamEnds[i]])
 
         # beampowdot == the number of augmentation dots on a power of two for
         # the duration of the beam.  -1 means could not be made power of two with
@@ -3266,7 +3276,7 @@ class HumdrumFile(HumdrumFileContent):
 
             # Search for the end.
             ending: int = len(durItems) - 1
-            groupDur: HumNum = HumNum(0)
+            groupDur: HumNum = opFrac(0)
 
             forcedTupletDuration: HumNum = None
             rparam: str = durItems[starting].layoutParameter('TUP', 'r')
@@ -3282,10 +3292,10 @@ class HumdrumFile(HumdrumFileContent):
                     ending = endIndex
 
                     # create a new tuplet group
-                    groupDur = HumNum(0)
+                    groupDur = opFrac(0)
                     for j in range(starting, ending+1): # starting through ending
                         tupletGroups[j] = tupletNum
-                        groupDur += durationWithDots[j]
+                        groupDur = opFrac(groupDur + durationWithDots[j])
                     tupletDurs[starting] = groupDur
                     tupletNum += 1
                     skipToI = ending + 1
@@ -3305,7 +3315,7 @@ class HumdrumFile(HumdrumFileContent):
                     break
 
                 # The rest of these are based on group duration so far.
-                groupDur += durationWithDots[j]
+                groupDur = opFrac(groupDur + durationWithDots[j])
 
                 if forcedTupletDuration is not None and groupDur >= forcedTupletDuration:
                     ending = j
@@ -3355,7 +3365,7 @@ class HumdrumFile(HumdrumFileContent):
         # different ratios in different portions of the group.
         numNotesActual: [int] = [-1] * len(tupletGroups)
         numNotesNormal: [int] = [-1] * len(tupletGroups)
-        tupletMultiplier: [HumNum] = [HumNum(1)] * len(tupletGroups)
+        tupletMultiplier: [HumNum] = [opFrac(1)] * len(tupletGroups)
         for i, tupletGroup in enumerate(tupletGroups):
             if tupletGroup == 0:
                 continue
@@ -3366,20 +3376,24 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 quotient: float = float(numNotesActual[i]) / float(numNotesNormal[i])
                 iQuotient: int = int(quotient)
-                nextPowOfTwo = HumNum(self._nextLowerPowerOfTwo(iQuotient))
+                nextPowOfTwo = opFrac(self._nextLowerPowerOfTwo(iQuotient))
 
-            if dotlessDur[i].numerator == 3:
+            if Fraction(dotlessDur[i]).numerator == 3:
                 # correction for duplets
-                nextPowOfTwo /= HumNum(2)
+                nextPowOfTwo = opFrac(nextPowOfTwo / opFrac(2))
 
-            tupletMultiplier[i] = dotlessDur[i] / nextPowOfTwo
-            numNotesActual[i] = tupletMultiplier[i].denominator
-            numNotesNormal[i] = tupletMultiplier[i].numerator
+            tupletMultiplier[i] = opFrac(dotlessDur[i] / nextPowOfTwo)
+
+            tupletMultiplierFraction: Fraction = Fraction(tupletMultiplier[i])
+            dotlessDurFraction: Fraction = Fraction(dotlessDur[i])
+
+            numNotesActual[i] = tupletMultiplierFraction.denominator
+            numNotesNormal[i] = tupletMultiplierFraction.numerator
 
             # Reference tuplet breve to breve rather than whole.
-            if dotlessDur[i].numerator == 4 and dotlessDur[i].denominator == 3:
+            if dotlessDurFraction.numerator == 4 and dotlessDurFraction.denominator == 3:
                 numNotesNormal[i] = 2
-                tupletMultiplier[i] = HumNum(2, tupletMultiplier[i].denominator)
+                tupletMultiplier[i] = opFrac(Fraction(2, tupletMultiplierFraction.denominator))
 
         # adjust tupletgroups based on tuplet ratio changes
         correction: int = 0
@@ -3410,7 +3424,7 @@ class HumdrumFile(HumdrumFileContent):
                 durationTupleNormal[i] = None
                 continue
             durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
-                                        tupletDurs[i] / HumNum(numNotesNormal[i]))
+                                        tupletDurs[i] / opFrac(numNotesNormal[i]))
             if durationTupleNormal[i].type == 'inexpressible':
                 # It must be a partial tuplet: tupletDurs[i] is only part of the full tuplet duration.
                 # This seems like a mal-notation to me: see Palestrina/Benedictus_66_b_002.krn measure
@@ -3439,7 +3453,8 @@ class HumdrumFile(HumdrumFileContent):
 
                 # try (first) for power of two full tuplet duration
                 for numNotes in reversed(range(1, numNotesActual[i])):
-                    proposedTupletDur: HumNum = tupletDurs[i] / HumNum(numNotes, numNotesActual[i])
+                    proposedTupletDur: HumNum = opFrac(tupletDurs[i] /
+                                                        opFrac(Fraction(numNotes, numNotesActual[i])))
                     if Convert.isPowerOfTwo(proposedTupletDur):
                         durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
                                                     proposedTupletDur)
@@ -3451,8 +3466,10 @@ class HumdrumFile(HumdrumFileContent):
 
                 # try (next) for single-dotted power of two full tuplet duration
                 for numNotes in reversed(range(1, numNotesActual[i])):
-                    proposedTupletDur: HumNum = tupletDurs[i] / HumNum(numNotes, numNotesActual[i])
-                    tupletDurWithoutSingleDot: HumNum = proposedTupletDur * HumNum(2, 3)
+                    proposedTupletDur: HumNum = opFrac(tupletDurs[i] /
+                                                        opFrac(Fraction(numNotes, numNotesActual[i])))
+                    tupletDurWithoutSingleDot: HumNum = opFrac(proposedTupletDur /
+                                                                opFrac(Fraction(3, 2)))
                     if Convert.isPowerOfTwo(tupletDurWithoutSingleDot):
                         durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
                                                     proposedTupletDur)
@@ -3468,8 +3485,8 @@ class HumdrumFile(HumdrumFileContent):
             tgs[-1].token = layerTok
             if indexMapping2[i] < 0:
                 # this is a non-durational layer item or a non-tuplet note
-                tgs[-1].duration = HumNum(0)
-                tgs[-1].durationNoDots = HumNum(0)
+                tgs[-1].duration = opFrac(0)
+                tgs[-1].durationNoDots = opFrac(0)
                 tgs[-1].beamStart = 0
                 tgs[-1].beamEnd = 0
                 tgs[-1].gbeamStart = gbeamStarts[i]
@@ -3479,7 +3496,7 @@ class HumdrumFile(HumdrumFileContent):
                 tgs[-1].group = -1
                 tgs[-1].numNotesActual = -1
                 tgs[-1].numNotesNormal = -1
-                tgs[-1].tupletMultiplier = HumNum(1)
+                tgs[-1].tupletMultiplier = opFrac(1)
                 tgs[-1].durationTupleNormal = None
                 tgs[-1].forceStartStop = False
             else:
@@ -3594,7 +3611,9 @@ class HumdrumFile(HumdrumFileContent):
         if num:
             numValue: int = int(num)
             if numValue > 0:
-                scale: HumNum = HumNum(num) / tggroup[0].numNotesActual
+                scale: Fraction = Fraction(num)
+                scale /= tggroup[0].numNotesActual
+                # if scale is an integer >= 1...
                 if scale.denominator == 1 and scale >= 1:
                     for tg in tggroup:
                         tg.numScale = scale.numerator
@@ -3618,7 +3637,8 @@ class HumdrumFile(HumdrumFileContent):
             # All durations are the same, so set the scale to the multiple of how
             # many of that duration are present. (or to 1, if that doesn't work)
             count: int = list(durCounts.values())[0] # how many of that duration are present
-            scale: HumNum = HumNum(count) / tggroup[0].numNotesActual
+            scale: Fraction = Fraction(count) / tggroup[0].numNotesActual
+            # if scale is an integer > 1
             if scale.denominator == 1 and scale > 1:
                 for tg in tggroup:
                     tg.numScale = scale.numerator
@@ -3630,7 +3650,7 @@ class HumdrumFile(HumdrumFileContent):
         if len(durCounts) == 2:
             counts: [int] = list(durCounts.values())
             if counts[0] == counts[1]:
-                scale: HumNum = HumNum(counts[0]) / tggroup[0].numNotesActual
+                scale: Fraction = Fraction(counts[0]) / tggroup[0].numNotesActual
                 if scale.denominator == 1 and scale > 1:
                     for tg in tggroup:
                         tg.numScale = scale.numerator
@@ -3652,14 +3672,14 @@ class HumdrumFile(HumdrumFileContent):
         '''
 
         # Try units = totalDur / maxDur
-        maxDur: HumNum = HumNum(0)
+        maxDur: HumNum = opFrac(0)
         for dur in durCounts:
             if dur > maxDur:
                 maxDur = dur
 
-        totalDur: HumNum = HumNum(0)
+        totalDur: HumNum = opFrac(0)
         for tg in tggroup:
-            totalDur += tg.duration
+            totalDur = opFrac(totalDur + tg.duration)
 
         # TODO: transformation below should probably happen above as well, but needs testing
         # units: HumNum = totalDur / maxDur
@@ -3669,8 +3689,8 @@ class HumdrumFile(HumdrumFileContent):
             #     for tg in tggroup:
             #         tg.numScale = scale.numerator
             #     return
-        numNotesActual: HumNum = HumNum(totalDur / maxDur)
-        numNotesNormal: HumNum = HumNum(numNotesActual * tggroup[0].tupletMultiplier)
+        numNotesActual: Fraction = Fraction(totalDur / maxDur)
+        numNotesNormal: Fraction = Fraction(numNotesActual * tggroup[0].tupletMultiplier)
         if (numNotesActual.denominator == 1 and numNotesActual > 1
                 and numNotesNormal.denominator == 1 and numNotesNormal > 1):
             for tg in tggroup:
@@ -3880,7 +3900,7 @@ class HumdrumFile(HumdrumFileContent):
 
         if allPitchesEqual:
             # beam group should be converted into a single note (bowed) tremolo
-            tdur: HumNum = duration * len(notes)
+            tdur: HumNum = opFrac(duration * len(notes))
             recip: str = Convert.durationToRecip(tdur)
 
             slashes: int = int(math.log(float(duration)) / math.log(2.0))
@@ -3940,8 +3960,7 @@ class HumdrumFile(HumdrumFileContent):
         allPow2: bool = True
         if hasInternalTrem:
             for grouping in groupings:
-                count: HumNum = HumNum(len(grouping))
-                if not Convert.isPowerOfTwo(count):
+                if not Convert.isPowerOfTwo(len(grouping)):
                     allPow2 = False
                     break
 
@@ -3957,7 +3976,7 @@ class HumdrumFile(HumdrumFileContent):
             # Now add tremolo slash(es) on the first notes.
 
             for grouping in groupings:
-                tdur: HumNum = duration * len(grouping)
+                tdur: HumNum = opFrac(duration * len(grouping))
                 recip: str = Convert.durationToRecip(tdur)
                 slashCount: int = -int(math.log2(float(duration) / float(tdur)))
                 grouping[0].setValue('auto', 'startTremolo', '1')
@@ -3995,7 +4014,7 @@ class HumdrumFile(HumdrumFileContent):
                     return False
 
         # If got to this point, create a two-note/chord tremolo
-        tdur: HumNum = duration * len(notes)
+        tdur: HumNum = opFrac(duration * len(notes))
         recip: str = Convert.durationToRecip(tdur)
         unitRecip: str = Convert.durationToRecip(duration)
 
@@ -4056,10 +4075,10 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::nextHigherPowerOfTwo -- Use with values between 0 and 1.
     '''
     @staticmethod
-    def _nextHigherPowerOfTwo(num: HumNum) -> HumNum:
+    def _nextHigherPowerOfTwo(num: HumNumIn) -> HumNum:
         value: float = math.log(float(num)) / math.log(2.0)
         denom: int = int(-value)
-        return HumNum(1, int(pow(2.0, denom)))
+        return opFrac(Fraction(1, int(pow(2.0, denom))))
 
     '''
     //////////////////////////////
@@ -4092,27 +4111,28 @@ class HumdrumFile(HumdrumFileContent):
         What the heck, check for 4 augmentation dots, too.
     '''
     @staticmethod
-    def _getNumDotsForPowerOfTwo(value: HumNum) -> int:
-        if Convert.isPowerOfTwo(value):
+    def _getNumDotsForPowerOfTwo(value: HumNumIn) -> int:
+        val: HumNum = opFrac(value)
+        if Convert.isPowerOfTwo(val):
             return 0
 
         # check for one dot
-        tval: HumNum = value * HumNum(2, 3)
+        tval: HumNum = opFrac(val / opFrac(Fraction(3, 2)))
         if Convert.isPowerOfTwo(tval):
             return 1
 
         # check for two dots
-        tval = value * HumNum(4, 7)
+        tval = opFrac(val / opFrac(Fraction(7, 4)))
         if Convert.isPowerOfTwo(tval):
             return 2
 
         # check for three dots
-        tval = value * HumNum(8, 15)
+        tval = opFrac(val / opFrac(Fraction(15, 8)))
         if Convert.isPowerOfTwo(tval):
             return 3
 
         # check for four dots
-        tval = value * HumNum(16, 31)
+        tval = opFrac(val / opFrac(Fraction(31, 16)))
         if Convert.isPowerOfTwo(tval):
             return 4
 
@@ -4124,7 +4144,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processBarlinesInLayerData(self,
                                     measureIndex: int,
                                     voice: m21.stream.Voice,
-                                    voiceOffsetInMeasure: Union[Fraction, float],
+                                    voiceOffsetInMeasure: HumNumIn,
                                     track: int,
                                     layerIndex: int) -> bool:
         insertedIntoVoice: bool = False
@@ -4266,7 +4286,7 @@ class HumdrumFile(HumdrumFileContent):
 
     def _createAndConvertFakeRest(self, fakeRest: FakeRestToken) -> m21.note.Rest:
         rest: m21.note.Rest = self._createRest(None)
-        rest.duration.quarterLength = Fraction(fakeRest.duration)
+        rest.duration.quarterLength = fakeRest.duration
         rest.style.hideObjectOnPrint = True
         return rest
 
@@ -4310,7 +4330,7 @@ class HumdrumFile(HumdrumFileContent):
                                    noteOrChord: m21.note.NotRest,
                                    measureIndex: int,
                                    voice: m21.stream.Voice,
-                                   noteOrChordOffsetInVoice: Union[Fraction, float],
+                                   noteOrChordOffsetInVoice: HumNumIn,
                                    layerData: [HumdrumToken],
                                    tokenIdx: int,
                                    staffIndex: int,
@@ -4351,20 +4371,21 @@ class HumdrumFile(HumdrumFileContent):
         self.m21Score.coreInsert(0, tremolo2)
         self.m21Score.coreElementsChanged()
 
+        ncOffsetInVoice: HumNum = opFrac(noteOrChordOffsetInVoice)
         # ignoring slurs, ties, ornaments, articulations
         if second.isChord:
             chord2: m21.chord.Chord = self._createAndConvertChord(second, measureIndex, staffIndex, layerIndex)
             self._fixupUnexpandedTremolo2Duration(chord2)
-            chord2OffsetInVoice: Union[Fraction, float] = (
-                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            chord2OffsetInVoice: HumNum = opFrac(
+                ncOffsetInVoice + noteOrChord.duration.quarterLength)
             voice.coreInsert(chord2OffsetInVoice, chord2)
             tremolo2.addSpannedElements(noteOrChord, chord2)
         else:
             note2: m21.note.Note = self._createAndConvertNote(second, 0, measureIndex, staffIndex, layerIndex)
             if note2 is None:
                 return skippedEndOfTremolo2
-            note2OffsetInVoice: Union[Fraction, float] = (
-                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            note2OffsetInVoice: HumNum = opFrac(
+                    ncOffsetInVoice + noteOrChord.duration.quarterLength)
             self._fixupUnexpandedTremolo2Duration(note2)
             voice.coreInsert(note2OffsetInVoice, note2)
             tremolo2.addSpannedElements(noteOrChord, note2)
@@ -4377,18 +4398,18 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _fixupUnexpandedTremolo2Duration(noteOrChord: m21.note.NotRest):
         # double the duration
-        originalDuration: HumNum = HumNum(noteOrChord.duration.quarterLength)
-        noteOrChord.duration.quarterLength = Fraction(originalDuration * 2)
+        originalDuration: HumNum = opFrac(noteOrChord.duration.quarterLength)
+        noteOrChord.duration.quarterLength = opFrac(originalDuration * opFrac(2))
 
         # halve the gestural duration (back to what it was)
         noteOrChord.duration.linked = False # so visual duration will stay doubled
-        noteOrChord.duration.quarterLength = Fraction(originalDuration)
+        noteOrChord.duration.quarterLength = originalDuration
 
     def _processTremolo2(self,
                          noteOrChord: m21.note.NotRest,
                          measureIndex: int,
                          voice: m21.stream.Voice,
-                         noteOrChordOffsetInVoice: Union[Fraction, float],
+                         noteOrChordOffsetInVoice: HumNumIn,
                          layerData: [HumdrumToken],
                          tokenIdx: int,
                          staffIndex: int,
@@ -4414,19 +4435,21 @@ class HumdrumFile(HumdrumFileContent):
         self.m21Score.coreInsert(0, tremolo2)
         self.m21Score.coreElementsChanged()
 
+        ncOffsetInVoice: HumNum = opFrac(noteOrChordOffsetInVoice)
+
         # ignoring slurs, ties, ornaments, articulations
         if second.isChord:
             chord2: m21.chord.Chord = self._createAndConvertChord(second, measureIndex, staffIndex, layerIndex)
-            chord2OffsetInVoice: Union[Fraction, float] = (
-                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            chord2OffsetInVoice: HumNum = opFrac(
+                    ncOffsetInVoice + noteOrChord.duration.quarterLength)
             voice.coreInsert(chord2OffsetInVoice, chord2)
             tremolo2.addSpannedElements(noteOrChord, chord2)
         else:
             note2: m21.note.Note = self._createAndConvertNote(second, 0, measureIndex, staffIndex, layerIndex)
             if note2 is None:
                 return
-            note2OffsetInVoice: Union[Fraction, float] = (
-                    noteOrChordOffsetInVoice + noteOrChord.duration.quarterLength)
+            note2OffsetInVoice: HumNum = opFrac(
+                    ncOffsetInVoice + noteOrChord.duration.quarterLength)
             voice.coreInsert(note2OffsetInVoice, note2)
             tremolo2.addSpannedElements(noteOrChord, note2)
 
@@ -4496,15 +4519,16 @@ class HumdrumFile(HumdrumFileContent):
     def _processTremolos(self, noteOrChord: m21.note.NotRest,
                                measureIndex: int,
                                voice: m21.stream.Voice,
-                               offsetInVoice: Union[Fraction, float],
+                               offsetInVoice: HumNumIn,
                                layerData: [HumdrumToken],
                                tokenIdx: int,
                                staffIndex: int,
                                layerIndex: int) -> bool:
         skippedEndOfTremolo2: bool = False
         layerTok: HumdrumToken = layerData[tokenIdx]
+        ncOffsetInVoice: HumNum = opFrac(offsetInVoice)
         if '@@' in layerTok.text:
-            skippedEndOfTremolo2 = self._processUnexpandedTremolo2(noteOrChord, measureIndex, voice, offsetInVoice,
+            skippedEndOfTremolo2 = self._processUnexpandedTremolo2(noteOrChord, measureIndex, voice, ncOffsetInVoice,
                                                                 layerData, tokenIdx,
                                                                 staffIndex, layerIndex)
         elif '@' in layerTok.text:
@@ -4512,7 +4536,7 @@ class HumdrumFile(HumdrumFileContent):
         elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo'):
             self._processTremolo(noteOrChord, layerTok)
         elif self._hasTremolo and layerTok.getValueBool('auto', 'startTremolo2'):
-            self._processTremolo2(noteOrChord, measureIndex, voice, offsetInVoice,
+            self._processTremolo2(noteOrChord, measureIndex, voice, ncOffsetInVoice,
                                   layerData, tokenIdx,
                                   staffIndex, layerIndex)
         return skippedEndOfTremolo2
@@ -4523,7 +4547,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processChordLayerToken(self,
                                 measureIndex: int,
                                 voice: m21.stream.Voice,
-                                voiceOffsetInMeasure: Union[Fraction, float],
+                                voiceOffsetInMeasure: HumNumIn,
                                 layerData: [HumdrumToken],
                                 tokenIdx: int,
                                 staffIndex: int,
@@ -4532,9 +4556,9 @@ class HumdrumFile(HumdrumFileContent):
 
         # insertedIntoVoice: bool = False # don't bother computing this since we _always_ insert into
         #                                   the voice ourselves, unconditionally
-
-        chordOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
-        chordOffsetInVoice: Union[Fraction, float] = chordOffsetInMeasure - voiceOffsetInMeasure
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
+        chordOffsetInMeasure: HumNum = layerTok.durationFromBarline
+        chordOffsetInVoice: HumNum = opFrac(chordOffsetInMeasure - vOffsetInMeasure)
         chord: m21.chord.Chord = self._createAndConvertChord(layerTok, measureIndex, staffIndex, layerIndex)
 
         skipThisChord: bool = self._processTremolos(chord, measureIndex, voice, chordOffsetInVoice,
@@ -4547,14 +4571,14 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processSlurs(chord, layerTok)
         self._processPhrases(chord, layerTok)
-        self._processDynamics(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex)
+        self._processDynamics(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
 
         # TODO: chord stem directions
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
         self._addArticulations(chord, layerTok)
         self._addOrnaments(chord, layerTok)
         self._addArpeggio(chord, layerTok)
-        self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex)
+        self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
 
         voice.coreInsert(chordOffsetInVoice, chord)
         return True # we inserted into the voice
@@ -4664,21 +4688,22 @@ class HumdrumFile(HumdrumFileContent):
     def _processRestLayerToken(self,
                                measureIndex: int,
                                voice: m21.stream.Voice,
-                               voiceOffsetInMeasure: Union[Fraction, float],
+                               voiceOffsetInMeasure: HumNumIn,
                                layerTok: HumdrumToken,
                                staffIndex: int) -> bool:
         # insertedIntoVoice: bool = False # don't bother computing this since we _always_ insert into
         #                                   the voice ourselves, unconditionally
-        restOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
-        restOffsetInVoice: Union[Fraction, float] = restOffsetInMeasure - voiceOffsetInMeasure
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
+        restOffsetInMeasure: HumNum = layerTok.durationFromBarline
+        restOffsetInVoice: HumNum = opFrac(restOffsetInMeasure - vOffsetInMeasure)
         rest: m21.note.Rest = self._createAndConvertRest(layerTok, measureIndex, staffIndex)
 
         # TODO: rest colors
         #self._colorRest(rest, layerTok)
         self._processSlurs(rest, layerTok)
         self._processPhrases(rest, layerTok)
-        self._processDynamics(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex)
-        self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex)
+        self._processDynamics(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
+        self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
 
         if 'yy' in layerTok.text and not self._signifiers.irestColor and not self._signifiers.spaceColor:
             # Invisible rest
@@ -4690,10 +4715,11 @@ class HumdrumFile(HumdrumFileContent):
     def _processFakeRestLayerToken(self,
                                    _measureIndex: int,
                                    voice: m21.stream.Voice,
-                                   voiceOffsetInMeasure: Union[Fraction, float],
+                                   voiceOffsetInMeasure: HumNumIn,
                                    fakeRest: FakeRestToken) -> bool:
-        restOffsetInMeasure: Fraction = M21Convert.m21Offset(fakeRest.durationFromBarline)
-        restOffsetInVoice: Union[Fraction, float] = restOffsetInMeasure - voiceOffsetInMeasure
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
+        restOffsetInMeasure: HumNum = fakeRest.durationFromBarline
+        restOffsetInVoice: HumNum = opFrac(restOffsetInMeasure - vOffsetInMeasure)
         rest: m21.note.Rest = self._createAndConvertFakeRest(fakeRest)
         voice.coreInsert(restOffsetInVoice, rest)
         return True # we did insert into the voice
@@ -4745,13 +4771,14 @@ class HumdrumFile(HumdrumFileContent):
     def _processNoteLayerToken(self,
                                measureIndex: int,
                                voice: m21.stream.Voice,
-                               voiceOffsetInMeasure: Union[Fraction, float],
+                               voiceOffsetInMeasure: HumNumIn,
                                layerData: HumdrumToken, tokenIdx: int,
                                staffIndex: int,
                                layerIndex: int) -> bool:
         layerTok: HumdrumToken = layerData[tokenIdx]
-        noteOffsetInMeasure: Fraction = M21Convert.m21Offset(layerTok.durationFromBarline)
-        noteOffsetInVoice: Union[Fraction, float] = noteOffsetInMeasure - voiceOffsetInMeasure
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
+        noteOffsetInMeasure: HumNum = layerTok.durationFromBarline
+        noteOffsetInVoice: HumNum = opFrac(noteOffsetInMeasure - vOffsetInMeasure)
         note: m21.note.Note = self._createAndConvertNote(layerTok, 0, measureIndex, staffIndex, layerIndex)
 
         if note is None:
@@ -4766,7 +4793,7 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processSlurs(note, layerTok)
         self._processPhrases(note, layerTok)
-        self._processDynamics(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex)
+        self._processDynamics(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
         # TODO: note stem directions, no stem, hairpin accent, cue size
 #             assignAutomaticStem(note, layerdata[i], staffindex);
 #             if (m_signifiers.nostem && layerdata[i]->find(m_signifiers.nostem) != std::string::npos) {
@@ -4779,7 +4806,7 @@ class HumdrumFile(HumdrumFileContent):
         self._addArticulations(note, layerTok)
         self._addOrnaments(note, layerTok)
         self._addArpeggio(note, layerTok)
-        self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex)
+        self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
         voice.coreInsert(noteOffsetInVoice, note)
         return True # we did insert into the voice
 
@@ -6183,12 +6210,12 @@ class HumdrumFile(HumdrumFileContent):
                 # of the tremolo sequence, but they actually each need to have half that duration
                 # internally, for the measure duration to make sense.
                 tremoloNoteVisualDuration = Convert.recipToDuration(token.getValue('auto', 'recip'))
-                tremoloNoteGesturalDuration = tremoloNoteVisualDuration / 2
+                tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
             if tremoloNoteVisualDuration is not None:
-                obj.duration.quarterLength = Fraction(tremoloNoteVisualDuration)
+                obj.duration.quarterLength = tremoloNoteVisualDuration
                 if tremoloNoteGesturalDuration is not None:
                     obj.duration.linked = False # leave the note looking like visual duration
-                    obj.duration.quarterLength = Fraction(tremoloNoteGesturalDuration)
+                    obj.duration.quarterLength = tremoloNoteGesturalDuration
                 return
 
         tstring: str = token.text.lstrip(' ')
@@ -6210,7 +6237,7 @@ class HumdrumFile(HumdrumFileContent):
         if vdur is not None and vdur != dur:
             # set obj duration to vdur, and then unlink the duration, so the subsequent
             # setting of gestural/actual duration doesn't change how the note looks.
-            obj.duration.quarterLength = Fraction(vdur)
+            obj.duration.quarterLength = vdur
             obj.duration.linked = False
 
         if isGrace:
@@ -6221,9 +6248,9 @@ class HumdrumFile(HumdrumFileContent):
                 # There are humdrum scores with grace notes that have tuplet-y durations,
                 # but all we care about is how many flags.  So "closest type" is better
                 # than crashing because there is no matching type.
-                obj.duration.type = m21.duration.quarterLengthToClosestType(Fraction(dur))[0]
+                obj.duration.type = m21.duration.quarterLengthToClosestType(dur)[0]
         else:
-            obj.duration.quarterLength = Fraction(dur)
+            obj.duration.quarterLength = dur
 
     '''
         _processOtherLayerToken
@@ -6231,7 +6258,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processOtherLayerToken(self,
                                 measureIndex: int,
                                 voice: m21.stream.Voice,
-                                voiceOffsetInMeasure: Union[Fraction, float],
+                                voiceOffsetInMeasure: HumNumIn,
                                 layerTok: HumdrumToken,
                                 staffIndex: int) -> bool:
         pass # returns None from _processOtherLayerToken, which will evaluate to False appropriately
@@ -6242,17 +6269,18 @@ class HumdrumFile(HumdrumFileContent):
     def _processSuppressedLayerToken(self,
                                      measureIndex: int,
                                      voice: m21.stream.Voice,
-                                     voiceOffsetInMeasure: Union[Fraction, float],
+                                     voiceOffsetInMeasure: HumNumIn,
                                      layerTok: HumdrumToken,
                                      staffIndex: int) -> bool:
         # This element is not supposed to be printed,
         # probably due to being in a tremolo.
         # But first check for dynamics and text, which
         # should not be suppressed:
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         insertedIntoVoice: bool = False
-        if self._processDynamics(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex):
+        if self._processDynamics(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex):
             insertedIntoVoice = True
-        if self._processDirections(measureIndex, voice, voiceOffsetInMeasure, layerTok, staffIndex):
+        if self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex):
             insertedIntoVoice = True
 
         return insertedIntoVoice
@@ -6260,7 +6288,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processDynamics(self,
                          measureIndex: int,
                          voice: m21.stream.Voice,
-                         voiceOffsetInMeasure: Union[Fraction, float],
+                         voiceOffsetInMeasure: HumNumIn,
                          token: HumdrumToken,
                          staffIndex: int) -> bool:
         insertedIntoVoice: bool = False
@@ -6272,8 +6300,9 @@ class HumdrumFile(HumdrumFileContent):
         if not line:
             return insertedIntoVoice
 
-        dynamicOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-        dynamicOffsetInVoice: Union[Fraction, float] = dynamicOffsetInMeasure - voiceOffsetInMeasure
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
+        dynamicOffsetInMeasure: HumNum = token.durationFromBarline
+        dynamicOffsetInVoice: HumNum = opFrac(dynamicOffsetInMeasure - vOffsetInMeasure)
 
 
         track: int = token.track
@@ -6519,7 +6548,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processHairpin(self,
                         _measureIndex: int,
                         voice: m21.stream.Voice,
-                        dynamicOffsetInVoice: Union[Fraction, float],
+                        dynamicOffsetInVoice: HumNumIn,
                         hairpins: str,
                         token: HumdrumToken,
                         dynTok: HumdrumToken,
@@ -6707,7 +6736,7 @@ class HumdrumFile(HumdrumFileContent):
                     m21TextExp.style.absoluteY = 'below'
 
 
-            voice.coreInsert(dynamicOffsetInVoice, m21TextExp)
+            voice.coreInsert(opFrac(dynamicOffsetInVoice), m21TextExp)
             insertedIntoVoice = True
 
         return insertedIntoVoice
@@ -6727,75 +6756,79 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _createAndInsertInvisibleRestVoice(self,
                                            measure: m21.stream.Measure,
-                                           voiceDuration: HumNum,
-                                           transitionOffset: HumNum) -> Tuple[m21.note.Rest,
+                                           voiceDuration: HumNumIn,
+                                           transitionOffset: HumNumIn) -> Tuple[m21.note.Rest,
                                                                               m21.note.Rest]:
         restVoice = m21.stream.Voice()
+
+        tOffset: HumNum = opFrac(transitionOffset)
+        vDuration: HumNum = opFrac(voiceDuration)
 
         # We will fill with normal-duration rests before we get to any tuplet rests.
         offsetOfTransitionalTuplet: HumNum = None
         transitionalTupletElementDuration: HumNum = None
         offsetOfTransitionalTuplet, transitionalTupletElementDuration = (
-            self._computeTransitionalTupletOffsetAndElementDuration(transitionOffset)
+            self._computeTransitionalTupletOffsetAndElementDuration(tOffset)
         )
-        amountToFill: HumNum = transitionOffset
-        fillerRestDuration: HumNum = HumNum(64) # start with duplex-maxima (16 whole notes)
+        ttElementDurFraction: Fraction = Fraction(transitionalTupletElementDuration)
+        amountToFill: HumNum = tOffset
+        fillerRestDuration: HumNum = opFrac(64) # start with duplex-maxima (16 whole notes)
         fillerRest: m21.note.Rest = None
-        currOffset: HumNum = HumNum(0)
+        currOffset: HumNum = opFrac(0)
 
-        # offsetOfTransitionalTuplet is the same as transitionOffset
+        # offsetOfTransitionalTuplet is the same as tOffset
         # if the transition is not tuplet-y
         while currOffset < offsetOfTransitionalTuplet:
             while fillerRestDuration <= amountToFill:
                 fillerRest: m21.note.Rest = self._createInvisibleRest(fillerRestDuration)
                 restVoice.append(fillerRest)
-                currOffset += fillerRestDuration
-                amountToFill -= fillerRestDuration
-            fillerRestDuration /= 2
+                currOffset = opFrac(currOffset + fillerRestDuration)
+                amountToFill = opFrac(amountToFill - fillerRestDuration)
+            fillerRestDuration = opFrac(fillerRestDuration / opFrac(2))
 
         numElementsAdded: int = 0
         numElementsNeeded: int = 0
-        if transitionalTupletElementDuration.numerator == 1:
-            numElementsNeeded = transitionalTupletElementDuration.denominator
+        if ttElementDurFraction.numerator == 1:
+            numElementsNeeded = ttElementDurFraction.denominator
 
-        if transitionalTupletElementDuration > HumNum(0):
+        if transitionalTupletElementDuration > 0:
             while amountToFill > 0:
-                # finish off up to transitionOffset with as many minimumRestDuration rests as is needed.
+                # finish off up to tOffset with as many minimumRestDuration rests as is needed.
                 fillerRest = self._createInvisibleRest(transitionalTupletElementDuration)
                 restVoice.append(fillerRest)
-                currOffset += transitionalTupletElementDuration
-                amountToFill -= transitionalTupletElementDuration
+                currOffset = opFrac(currOffset + transitionalTupletElementDuration)
+                amountToFill = opFrac(amountToFill - transitionalTupletElementDuration)
                 numElementsAdded += 1
 
         restEndingAtTransition: m21.note.Rest = fillerRest
         restStartingAtTransition: m21.note.Rest = None
 
-        # Now we fill the voice _after_ the transitionOffset
-        amountToFill = voiceDuration - transitionOffset
+        # Now we fill the voice _after_ the tOffset
+        amountToFill = opFrac(vDuration - tOffset)
 
         # Now keep adding minimum duration rests until we hit an offset that is divisible by
         # a power of two (i.e. finish any tuplet).  The first one you add is the
         # restStartingAtTransition.
-        while numElementsAdded < numElementsNeeded and amountToFill > HumNum(0):
+        while numElementsAdded < numElementsNeeded and amountToFill > 0:
             fillerRest = self._createInvisibleRest(transitionalTupletElementDuration)
             restVoice.append(fillerRest)
             if restStartingAtTransition is None:
                 restStartingAtTransition = fillerRest
-            currOffset += transitionalTupletElementDuration
-            amountToFill -= transitionalTupletElementDuration
+            currOffset = opFrac(currOffset + transitionalTupletElementDuration)
+            amountToFill = opFrac(amountToFill - transitionalTupletElementDuration)
             numElementsAdded += 1
 
-        # now fill out the voiceDuration with power-of-two-based rests.
+        # now fill out the vDuration with power-of-two-based rests.
         # if we don't yet have a restStartingAtTransition, the first one is it.
-        while amountToFill > HumNum(0):
-            fillerRestDuration = HumNum(1, self._lcd(currOffset).denominator)
+        while amountToFill > 0:
+            fillerRestDuration = opFrac(Fraction(1, self._lcd(currOffset).denominator))
             fillerRestDuration = min(fillerRestDuration, amountToFill)
             fillerRest: m21.note.Rest = self._createInvisibleRest(fillerRestDuration)
             restVoice.append(fillerRest)
             if restStartingAtTransition is None:
                 restStartingAtTransition = fillerRest
-            currOffset += fillerRestDuration
-            amountToFill -= fillerRestDuration
+            currOffset = opFrac(currOffset + fillerRestDuration)
+            amountToFill = opFrac(amountToFill - fillerRestDuration)
 
         measure.coreInsert(0, restVoice)
         measure.coreElementsChanged()
@@ -6807,9 +6840,9 @@ class HumdrumFile(HumdrumFileContent):
         Creates an invisible rest of the requested duration.
     '''
     @staticmethod
-    def _createInvisibleRest(duration: HumNum) -> m21.note.Rest:
+    def _createInvisibleRest(duration: HumNumIn) -> m21.note.Rest:
         rest = m21.note.Rest()
-        rest.duration = m21.duration.Duration(Fraction(duration))
+        rest.duration = m21.duration.Duration(opFrac(duration))
 
         # Make it invisible
         rest.style.hideObjectOnPrint = True
@@ -6824,9 +6857,10 @@ class HumdrumFile(HumdrumFileContent):
         return rest
 
     @staticmethod
-    def _lcd(hn: HumNum) -> HumNum:
-        # HumNum creation from two ints will always normalize to lcd form.
-        return HumNum(hn.numerator, hn.denominator)
+    def _lcd(hn: HumNum) -> Fraction:
+        # Fraction creation from two ints will always normalize to lcd form.
+        hnFraction: Fraction = Fraction(hn)
+        return Fraction(hnFraction.numerator, hnFraction.denominator)
 
     @staticmethod
     def _isPowerOfTwo(x: int) -> bool:
@@ -6844,23 +6878,24 @@ class HumdrumFile(HumdrumFileContent):
             with big power-of-two rests again to the end of the measure.
     '''
 
-    def _computeTransitionalTupletOffsetAndElementDuration(self,
-                                                           transitionOffset: HumNum) -> Tuple[HumNum,
-                                                                                              HumNum]:
-        lcdTransitionOffset: HumNum = self._lcd(transitionOffset)
+    def _computeTransitionalTupletOffsetAndElementDuration(
+            self, transitionOffset: HumNumIn) -> Tuple[HumNum, HumNum]:
+        tOffset: HumNum = opFrac(transitionOffset)
+        lcdTransitionOffsetFraction: Fraction = self._lcd(tOffset)
 
-        if self._isPowerOfTwo(lcdTransitionOffset.denominator):
-            return transitionOffset, HumNum(0)
+        if self._isPowerOfTwo(lcdTransitionOffsetFraction.denominator):
+            return tOffset, opFrac(0)
 
-        elementDuration: HumNum = HumNum(1, lcdTransitionOffset.denominator) # LCD already
+        elementDuration: HumNum = opFrac(Fraction(1, lcdTransitionOffsetFraction.denominator)) # LCD already
 
         # back up the offset until we hit a power-of-two denominator
-        transitionalTupletOffset: HumNum = self._lcd(lcdTransitionOffset - elementDuration)
+        transitionalTupletOffsetFraction: Fraction = self._lcd(tOffset - elementDuration)
 
-        while not self._isPowerOfTwo(transitionalTupletOffset.denominator):
-            transitionalTupletOffset = self._lcd(transitionalTupletOffset - elementDuration)
+        while not self._isPowerOfTwo(transitionalTupletOffsetFraction.denominator):
+            transitionalTupletOffsetFraction = self._lcd(opFrac(transitionalTupletOffsetFraction) -
+                                                            elementDuration)
 
-        return transitionalTupletOffset, elementDuration
+        return opFrac(transitionalTupletOffsetFraction), elementDuration
 
 
     '''
@@ -6869,7 +6904,7 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::getLeftNoteDuration --
     '''
 #     def _getLeftNoteDuration(self, token: HumdrumToken) -> HumNum:
-#         output: HumNum = HumNum(0)
+#         output: HumNum = opFrac(0)
 #         leftNote: HumdrumToken = self._getLeftNoteToken(token)
 #         if leftNote:
 #             output = Convert.recipToDuration(leftNote.text)
@@ -6936,10 +6971,11 @@ class HumdrumFile(HumdrumFileContent):
 
         return output
 
-    def _hasAppropriateTimestamp(self, token: HumdrumToken, timestamp: HumNum, start: bool) -> bool:
+    def _hasAppropriateTimestamp(self, token: HumdrumToken, timestamp: HumNumIn, start: bool) -> bool:
         if token is None:
             return False
-        return self._getAppropriateTimestamp(token, start) == timestamp
+        ts: HumNum = opFrac(timestamp)
+        return self._getAppropriateTimestamp(token, start) == ts
 
     @staticmethod
     def _getAppropriateTimestamp(token: HumdrumToken, start: bool) -> HumNum:
@@ -6947,20 +6983,21 @@ class HumdrumFile(HumdrumFileContent):
             return None
         if start:
             return token.durationFromStart
-        return token.durationFromStart + token.duration
+        return opFrac(token.durationFromStart + token.duration)
 
-    def _getNearbyNoteTokenWithAppropriateTimestamp(self, token: HumdrumToken, timestamp: HumNum, start: bool) -> HumdrumToken:
+    def _getNearbyNoteTokenWithAppropriateTimestamp(self, token: HumdrumToken, timestamp: HumNumIn, start: bool) -> HumdrumToken:
         # look left, then right (within the track)
         # Then, look up (left and right within the track) until you've passed the
         # timestamp
         # Then, look down (left and right within the track) until you've passed the
         # timestamp
+        ts: HumNum = opFrac(timestamp)
         output: HumdrumToken = self._getLeftNoteToken(token, start)
-        if self._hasAppropriateTimestamp(output, timestamp, start):
+        if self._hasAppropriateTimestamp(output, ts, start):
             return output
 
         output = self._getRightNoteToken(token, start)
-        if self._hasAppropriateTimestamp(output, timestamp, start):
+        if self._hasAppropriateTimestamp(output, ts, start):
             return output
 
         # start walking up the file until we pass the timestamp, looking left and right
@@ -6977,9 +7014,9 @@ class HumdrumFile(HumdrumFileContent):
                 output = self._getLeftNoteToken(current, start)
                 if output:
                     leftTimestamp: HumNum = self._getAppropriateTimestamp(output, start)
-                    if leftTimestamp == timestamp:
+                    if leftTimestamp == ts:
                         return output
-                    if leftTimestamp < timestamp:
+                    if leftTimestamp < ts:
                         # we've passed the left timestamp we were looking for
                         leftIsDone = True
 
@@ -6987,9 +7024,9 @@ class HumdrumFile(HumdrumFileContent):
                 output = self._getRightNoteToken(current, start)
                 if output:
                     rightTimestamp: HumNum = self._getAppropriateTimestamp(output, start)
-                    if rightTimestamp == timestamp:
+                    if rightTimestamp == ts:
                         return output
-                    if rightTimestamp < timestamp:
+                    if rightTimestamp < ts:
                         # we've passed the right timestamp we were looking for
                         rightIsDone = True
 
@@ -7012,9 +7049,9 @@ class HumdrumFile(HumdrumFileContent):
                 output = self._getLeftNoteToken(current, start)
                 if output:
                     leftTimestamp: HumNum = self._getAppropriateTimestamp(output, start)
-                    if leftTimestamp == timestamp:
+                    if leftTimestamp == ts:
                         return output
-                    if leftTimestamp < timestamp:
+                    if leftTimestamp < ts:
                         # we've passed the left timestamp we were looking for
                         leftIsDone = True
 
@@ -7022,9 +7059,9 @@ class HumdrumFile(HumdrumFileContent):
                 output = self._getRightNoteToken(current, start)
                 if output:
                     rightTimestamp: HumNum = self._getAppropriateTimestamp(output, start)
-                    if rightTimestamp == timestamp:
+                    if rightTimestamp == ts:
                         return output
-                    if rightTimestamp > timestamp:
+                    if rightTimestamp > ts:
                         # we've passed the right timestamp we were looking for
                         rightIsDone = True
 
@@ -7079,14 +7116,15 @@ class HumdrumFile(HumdrumFileContent):
     def _processDirections(self,
                            measureIndex: int,
                            voice: m21.stream.Voice,
-                           voiceOffsetInMeasure: Union[Fraction, float],
+                           voiceOffsetInMeasure: HumNumIn,
                            token: HumdrumToken,
                            staffIndex: int) -> bool:
         insertedIntoVoice: bool = False
 
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         lcount = token.linkedParameterSetCount
         for i in range(0, lcount):
-            if self._processLinkedDirection(i, measureIndex, voice, voiceOffsetInMeasure, token, staffIndex):
+            if self._processLinkedDirection(i, measureIndex, voice, vOffsetInMeasure, token, staffIndex):
                 insertedIntoVoice = True
 
         text: str = token.getValue('LO', 'TX', 't')
@@ -7164,7 +7202,7 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 placement = 'above'
 
-        if self._addDirection(text, placement, bold, italic, measureIndex, voice, voiceOffsetInMeasure,
+        if self._addDirection(text, placement, bold, italic, measureIndex, voice, vOffsetInMeasure,
                               token, justification, color, vgroup):
             insertedIntoVoice = True
 
@@ -7175,9 +7213,10 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::processLinkedDirection --
     '''
-    def _processLinkedDirection(self, index: int, _measureIndex: int, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, staffIndex: int) -> bool:
+    def _processLinkedDirection(self, index: int, _measureIndex: int, voice: m21.stream.Voice, voiceOffsetInMeasure: HumNumIn, token: HumdrumToken, staffIndex: int) -> bool:
         insertedIntoVoice: bool = False
 
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         direction: m21.expressions.TextExpression = None
         tempo: m21.tempo.MetronomeMark = None
 
@@ -7406,8 +7445,8 @@ class HumdrumFile(HumdrumFileContent):
         if justification:
             tempoOrDirection.style.justify = 'right'
 
-        tempoOrDirectionOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-        tempoOrDirectionOffsetInVoice: Union[Fraction, float] = tempoOrDirectionOffsetInMeasure - voiceOffsetInMeasure
+        tempoOrDirectionOffsetInMeasure: HumNum = token.durationFromBarline
+        tempoOrDirectionOffsetInVoice: HumNum = opFrac(tempoOrDirectionOffsetInMeasure - vOffsetInMeasure)
         voice.coreInsert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
         insertedIntoVoice = True
 
@@ -7444,7 +7483,8 @@ class HumdrumFile(HumdrumFileContent):
     //     text directions attached to the note, and using getPayoutParameter() will merge
     //     all of their parameters incorrectly.
     '''
-    def _addDirection(self, text: str, placement: str, bold: bool, italic: bool, _measureIndex: int, voice: m21.stream.Voice, voiceOffsetInMeasure: Union[Fraction, float], token: HumdrumToken, justification: int, color: str, _vgroup: int) -> bool:
+    def _addDirection(self, text: str, placement: str, bold: bool, italic: bool, _measureIndex: int, voice: m21.stream.Voice, voiceOffsetInMeasure: HumNumIn, token: HumdrumToken, justification: int, color: str, _vgroup: int) -> bool:
+        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         tempo: m21.tempo.MetronomeMark = None
         direction: m21.expressions.TextExpression = None
         tempoOrDirection: m21.Music21Object = None
@@ -7511,8 +7551,8 @@ class HumdrumFile(HumdrumFileContent):
         if justification:
             tempoOrDirection.style.justify = 'right'
 
-        tempoOrDirectionOffsetInMeasure: Fraction = M21Convert.m21Offset(token.durationFromBarline)
-        tempoOrDirectionOffsetInVoice: Union[Fraction, float] = tempoOrDirectionOffsetInMeasure - voiceOffsetInMeasure
+        tempoOrDirectionOffsetInMeasure: HumNum = token.durationFromBarline
+        tempoOrDirectionOffsetInVoice: HumNum = opFrac(tempoOrDirectionOffsetInMeasure - vOffsetInMeasure)
         voice.coreInsert(tempoOrDirectionOffsetInVoice, tempoOrDirection)
         return True
 

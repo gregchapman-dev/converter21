@@ -230,20 +230,20 @@ class HumHash:
         except:
             return 0
 
-    def getValueFraction(self, *ns1ns2key): # returns HumNum
+    def getValueHumNum(self, *ns1ns2key): # returns HumNum
         from converter21.humdrum import HumdrumToken
         from converter21.humdrum import HumNum
         value = self.getValue(*ns1ns2key)
         if value is None:
-            return HumNum(0)
+            return opFrac(0)
 
         if isinstance(value, HumdrumToken):
-            return HumNum(0)
+            return opFrac(0)
 
         try:
-            return HumNum(value) # can convert from int, float, Fraction, str
+            return opFrac(value) # can convert from int, float, Fraction, str
         except:
-            return HumNum(0)
+            return opFrac(0)
 
     def getValueFloat(self, *ns1ns2key) -> float:
         from converter21.humdrum import HumdrumToken

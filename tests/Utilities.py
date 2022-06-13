@@ -9,6 +9,7 @@ from converter21.humdrum import HumSignifier
 from converter21.humdrum import HumSignifiers
 
 import music21 as m21
+from music21.common import opFrac
 
 from typing import Tuple
 from fractions import Fraction
@@ -365,7 +366,7 @@ def CheckHumdrumToken( token: HumdrumToken,
                         expectedDataType: str = '',
                         expectedTokenType: str = TOKENTYPE_DATA,
                         expectedSpecificType: str = SPECIFICTYPE_NOTHINGSPECIFIC,
-                        expectedDuration: str = HumNum(-1)
+                        expectedDuration: HumNum = opFrac(-1)
                         ):
 
     #print('CheckHumdrumToken: token = "{}"'.format(token))
@@ -414,7 +415,7 @@ def CheckHumdrumToken( token: HumdrumToken,
 
     # duration
     assert token.duration == expectedDuration
-    assert token.scaledDuration(HumNum(1,5)) == expectedDuration * HumNum(1,5)
+    assert token.scaledDuration(Fraction(1,5)) == opFrac(expectedDuration * Fraction(1,5))
 
     # Token Type
     assert token.isData == expectedIsData

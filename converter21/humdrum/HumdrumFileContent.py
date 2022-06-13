@@ -12,6 +12,9 @@
 # ------------------------------------------------------------------------------
 import re
 #import sys
+from fractions import Fraction
+
+from music21.common import opFrac
 
 from converter21.humdrum import HumNum
 from converter21.humdrum import Convert
@@ -379,7 +382,8 @@ class HumdrumFileContent(HumdrumFileStructure):
     							# This is a slur/phrase in an ending that start at the start of an ending.
                                 duration: HumNum = token.durationFromStart
                                 if labels[token.lineIndex].first is not None:
-                                    duration -= labels[token.lineIndex].first.durationFromStart
+                                    duration = opFrac(duration -
+                                                labels[token.lineIndex].first.durationFromStart)
                                 token.setValue('auto', endingBackTag, 'true')
                                 token.setValue('auto', sideTag, 'stop')
                                 token.setValue('auto', durationTag, token.durationToEnd)
@@ -531,7 +535,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             startTag += suffix
             startNumberTag += suffix
 
-        duration: HumNum = endTok.durationFromStart - startTok.durationFromStart
+        duration: HumNum = opFrac(endTok.durationFromStart - startTok.durationFromStart)
 
         startTok.setValue('auto', endTag, endTok)
         startTok.setValue('auto', 'id', startTok)
@@ -679,7 +683,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         if startSubtokenNumber > 0:
             tieEnd.setValue('auto', startNumTag, str(startSubtokenNumber))
 
-        duration: HumNum = tieEnd.durationFromStart - tieStart.durationFromStart
+        duration: HumNum = opFrac(tieEnd.durationFromStart - tieStart.durationFromStart)
         tieStart.setValue('auto', durTag, duration)
 
     '''
@@ -1006,7 +1010,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     def analyzeRScale(self) -> bool:
         numActiveTracks: int = 0 # number of tracks currently having an active rscale parameter
-        rscales: [HumNum] = [HumNum(1)] * (self.maxTrack+1)
+        rscales: [HumNum] = [opFrac(1)] * (self.maxTrack+1)
 
         for line in self._lines:
             if line.isInterpretation:
@@ -1017,22 +1021,22 @@ class HumdrumFileContent(HumdrumFileStructure):
                     if not token.text.startswith('*rscale:'):
                         continue
 
-                    value: HumNum = HumNum(1)
+                    value: HumNum = opFrac(1)
                     m = re.search(r'\*rscale:(\d+)/(\d+)', token.text)
                     if m is not None:
                         top: int = int(m.group(1))
                         bot: int = int(m.group(2))
-                        value = HumNum(top, bot)
+                        value = opFrac(Fraction(top, bot))
                     else:
                         m = re.search(r'\*rscale:(\d+)', token.text)
                         if m is not None:
                             top = int(m.group(1))
-                            value = HumNum(top, 1)
+                            value = opFrac(top)
 
                     ttrack: int = token.track
                     if value == 1:
                         if rscales[ttrack] != 1:
-                            rscales[ttrack] = HumNum(1)
+                            rscales[ttrack] = opFrac(1)
                             numActiveTracks -= 1
                     else:
                         if rscales[ttrack] == 1:
@@ -1054,10 +1058,10 @@ class HumdrumFileContent(HumdrumFileStructure):
                     continue
                 if token.isNull:
                     continue
-                if token.duration < HumNum(0):
+                if token.duration < 0:
                     continue
 
-                dur: HumNum = token.durationNoDots * rscales[ttrack]
+                dur: HumNum = opFrac(token.durationNoDots * rscales[ttrack])
                 vis: str = Convert.durationToRecip(dur)
                 vis += '.' * token.dotCount
                 token.setValue('LO', 'N', 'vis', vis)

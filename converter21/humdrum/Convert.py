@@ -13,11 +13,14 @@
 import sys
 import re
 import math
+from fractions import Fraction
 from typing import Dict, List
+
+from music21.common import opFrac
 
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumInternalError
 
 class Convert:
@@ -46,11 +49,11 @@ class Convert:
     _knownRecipDurationCache: Dict[str, HumNum] = {} # key is recip, value is duration: HumNum
 
     @staticmethod
-    def recipToDuration(recip: str, scale: HumNum = HumNum(4)) -> HumNum:
+    def recipToDuration(recip: str, scale: HumNumIn = opFrac(4)) -> HumNum:
         if recip in Convert._knownRecipDurationCache:
             return Convert._knownRecipDurationCache[recip]
 
-        output: HumNum = HumNum(0)
+        output: HumNum = opFrac(0)
         if 'q' in recip:
             # grace note, ignore printed rhythm
             Convert._knownRecipDurationCache[recip] = output
@@ -62,7 +65,7 @@ class Convert:
         m = re.search(r'([\d]+)%([\d]+)', subToken)
         if m is not None:
             # reciprocal rhythm 'denom%numer'
-            output = HumNum(int(m.group(2)), int(m.group(1)))
+            output = opFrac(Fraction(int(m.group(2)), int(m.group(1))))
         else:
             m = re.search(r'([\d]+)', subToken)
             if m is None:
@@ -73,12 +76,13 @@ class Convert:
             if m.group(1).startswith('0'):
                 # 0-symbol (e.g. '0' is 2/1, '00' is 4/1, '000' is 8/1, etc)
                 zeroCount = m.group(1).count('0')
-                output = HumNum(pow(2, zeroCount), 1)
+                output = opFrac(Fraction(pow(2, zeroCount), 1))
             else:
                 # plain rhythm (denominator is in subToken, numerator is 1)
-                output = HumNum(1, int(m.group(1)))
+                output = opFrac(Fraction(1, int(m.group(1))))
 
-        dotFactor: HumNum = HumNum(1)
+        scale = opFrac(scale)
+        dotFactor: HumNum = opFrac(1)
         if dotCount > 0:
             # if dotCount=1: dotFactor should be  3/2 (1.5, or one and a half)
             # if dotCount=2: dotFactor should be  7/4 (1.75, or one and three quarters)
@@ -88,9 +92,10 @@ class Convert:
             # dotFactor =   2^(dotCount+1) - 1
             #               ------------------
             #                   2^dotCount
-            dotFactor = HumNum(pow(2, dotCount+1)-1, pow(2, dotCount))
+            dotFactor = Fraction(pow(2, dotCount+1)-1, pow(2, dotCount))
+            dotFactor = opFrac(dotFactor)
 
-        output *= dotFactor * scale
+        output = opFrac(output * dotFactor * scale)
         Convert._knownRecipDurationCache[recip] = output
         return output
 
@@ -101,7 +106,7 @@ class Convert:
     //   any augmentation dots.
     '''
     @staticmethod
-    def recipToDurationNoDots(recip: str, scale: HumNum = HumNum(4)) -> HumNum:
+    def recipToDurationNoDots(recip: str, scale: HumNumIn = opFrac(4)) -> HumNum:
         recipNoDots: str = re.sub(r'\.', 'Z', recip)
         return Convert.recipToDuration(recipNoDots, scale)
 
@@ -116,18 +121,21 @@ class Convert:
     //   Example: 3/8 => 3/2 quarters
     '''
     @staticmethod
-    def timeSigToDuration(token, scale: HumNum = HumNum(4)) -> HumNum:
+    def timeSigToDuration(token, scale: HumNumIn = opFrac(4)) -> HumNum:
         if not token.isTimeSignature:
-            return HumNum(0)
+            return opFrac(0)
 
         # LATER: Handle extended **recip for time signature denominator
         m = re.search(r'^\*M(\d+)/(\d+)', token.text)
         if m is None:
-            return HumNum(0)
+            return opFrac(0)
+
+        scale = opFrac(scale)
 
         top: int = int(m.group(1))
         bot: int = int(m.group(2))
-        return HumNum(top, bot) * scale
+        output = opFrac(Fraction(top, bot)) * scale
+        return opFrac(output)
 
     '''
     //////////////////////////////
@@ -135,50 +143,54 @@ class Convert:
     // Convert::durationToRecip -- Duration input is in units of quarter notes
     '''
     @staticmethod
-    def durationToRecip(duration: HumNum) -> str:
-        duration *= HumNum(1, 4) # convert from quarter notes to whole notes
-        if duration.numerator == 1:
-            # simple rhythm (integer divisions of the whole note)
-            return str(duration.denominator)
+    def durationToRecip(duration: HumNumIn) -> str:
+        # convert from quarter notes to whole notes
+        dur: HumNum = opFrac(opFrac(duration) / opFrac(4))
+        # we need numerator and denominator sometimes
+        durFraction: Fraction = Fraction(dur)
 
-        if duration == 2:
+        if durFraction.numerator == 1:
+            # simple rhythm (integer divisions of the whole note)
+            return str(durFraction.denominator)
+
+        if dur == 2:
             return '0'    # breve
-        if duration == 3:
+        if dur == 3:
             return '0.'   # dotted breve
-        if duration == 4:
+        if dur == 4:
             return '00'   # long
-        if duration == 6:
+        if dur == 6:
             return '00.'  # dotted long
-        if duration == 8:
+        if dur == 8:
             return '000'  # maxima
-        if duration == 12:
+        if dur == 12:
             return '000.' # dotted maxima
 
-        if duration.numerator == 0:
+        if durFraction.numerator == 0:
             # grace note
             return 'q'
 
         # now decide if the rhythm can be represented simply with one dot.
-        test1dot: HumNum = duration * HumNum(2, 3)
+        test1dot: Fraction = Fraction(dur * opFrac(Fraction(2, 3)))
         if test1dot.numerator == 1:
             # single dot works
             return str(test1dot.denominator) + '.'
 
         # now decide if the rhythm can be represented simply with two dots.
-        test2dot: HumNum = duration * HumNum(4, 7)
+        test2dot: Fraction = Fraction(dur * opFrac(Fraction(4, 7)))
         if test2dot.numerator == 1:
             # double dot works
             return str(test2dot.denominator) + '..'
 
         # now decide if the rhythm can be represented simply with three dots.
-        test3dot: HumNum = duration * HumNum(8, 15)
+        test3dot: Fraction = Fraction(dur * opFrac(Fraction(8, 15)))
         if test3dot.numerator == 1:
             # triple dot works
             return str(test3dot.denominator) + '...'
 
         # duration required more than three dots or is not simple,
         # so assume that it is not simple:
-        return str(duration.denominator) + '%' + str(duration.numerator)
+        return str(durFraction.denominator) + '%' + str(durFraction.numerator)
 
     '''
         *** Mensural notation ***
@@ -207,7 +219,7 @@ class Convert:
     '''
     @staticmethod
     def mensToDuration(text: str) -> HumNum:
-        output: HumNum = HumNum(0)
+        output: HumNum = opFrac(0)
         perfect: bool = False
         for ch in text:
             if ch == 'p':
@@ -217,38 +229,40 @@ class Convert:
 
             # units are in whole notes, but we will convert to quarter notes before returning result
             if ch == 'X':
-                output = HumNum(8)
+                output = opFrac(8)
                 break
             if ch == 'L':
-                output = HumNum(4)
+                output = opFrac(4)
                 break
             if ch == 'S':
-                output = HumNum(2)
+                output = opFrac(2)
                 break
             if ch == 's':
-                output = HumNum(1)
+                output = opFrac(1)
                 break
             if ch == 'M':
-                output = HumNum(1,2)
+                output = opFrac(Fraction(1, 2))
                 break
             if ch == 'm':
-                output = HumNum(1, 4)
+                output = opFrac(Fraction(1, 4))
                 break
             if ch == 'U':
-                output = HumNum(1, 8)
+                output = opFrac(Fraction(1, 8))
                 break
             if ch == 'u':
-                output = HumNum(1, 16)
+                output = opFrac(Fraction(1, 16))
                 break
             if ch == ' ': # token separator, we're done
                 # only get duration of first note in chord
                 break
 
         if perfect:
-            output *= HumNum(3)
-            output /= HumNum(2)
+            output *= opFrac(3)
+            output /= opFrac(2)
 
-        return output * HumNum(4) # convert to quarter notes
+        # convert to quarter notes
+        output *= opFrac(4)
+        return opFrac(output)
 
     '''
     //////////////////////////////
@@ -257,38 +271,40 @@ class Convert:
     '''
     @staticmethod
     def mensToDurationNoDots(text: str) -> HumNum:
-        output: HumNum = HumNum(0)
+        output: HumNum = opFrac(0)
         for ch in text:
             # units are in whole notes, but we will convert to quarter notes before returning result
             if ch == 'X':
-                output = HumNum(8)
+                output = opFrac(8)
                 break
             if ch == 'L':
-                output = HumNum(4)
+                output = opFrac(4)
                 break
             if ch == 'S':
-                output = HumNum(2)
+                output = opFrac(2)
                 break
             if ch == 's':
-                output = HumNum(1)
+                output = opFrac(1)
                 break
             if ch == 'M':
-                output = HumNum(1,2)
+                output = opFrac(Fraction(1,2))
                 break
             if ch == 'm':
-                output = HumNum(1, 4)
+                output = opFrac(Fraction(1, 4))
                 break
             if ch == 'U':
-                output = HumNum(1, 8)
+                output = opFrac(Fraction(1, 8))
                 break
             if ch == 'u':
-                output = HumNum(1, 16)
+                output = opFrac(Fraction(1, 16))
                 break
             if ch == ' ': # token separator, we're done
                 # only get duration of first note in chord
                 break
 
-        return output * HumNum(4) # convert to quarter notes
+        # convert to quarter notes
+        output *= opFrac(4)
+        return opFrac(output)
 
     '''
     //////////////////////////////
@@ -1256,79 +1272,86 @@ class Convert:
     // HumNum::isPowerOfTwo -- Returns true if a power of two.
     '''
     @staticmethod
-    def isPowerOfTwo(num: HumNum) -> bool:
-        if num.numerator == 0:
+    def isPowerOfTwo(num: HumNumIn) -> bool:
+        numFraction: Fraction = Fraction(num)
+        if numFraction.numerator == 0:
             return False
-        absNumer: int = abs(num.numerator)
-        if num.denominator == 1:
+        absNumer: int = abs(numFraction.numerator)
+        if numFraction.denominator == 1:
             return (absNumer & (absNumer - 1)) == 0
         if absNumer == 1:
-            return (num.denominator & (num.denominator - 1)) == 0
+            return (numFraction.denominator & (numFraction.denominator - 1)) == 0
         return False
 
     @staticmethod
-    def isPowerOfTwoWithDots(quarterLength: HumNum) -> bool:
-        if Convert.isPowerOfTwo(quarterLength):
+    def isPowerOfTwoWithDots(quarterLength: HumNumIn) -> bool:
+        ql: HumNum = opFrac(quarterLength)
+        if Convert.isPowerOfTwo(ql):
             # power of two + no dots
             return True
-        if Convert.isPowerOfTwo(quarterLength * 2 / 3):
+        if Convert.isPowerOfTwo(ql * opFrac(Fraction(2, 3))):
             # power of two + 1 dot
             return True
-        if Convert.isPowerOfTwo(quarterLength * 4 / 7):
+        if Convert.isPowerOfTwo(ql * opFrac(Fraction(4, 7))):
             # power of two + 2 dots
             return True
-        if Convert.isPowerOfTwo(quarterLength * 8 / 15):
+        if Convert.isPowerOfTwo(ql * opFrac(Fraction(8, 15))):
             # power of two + 3 dots
             return True
         return False
 
     @staticmethod
-    def computeDurationNoDotsAndNumDots(durWithDots: HumNum) -> (HumNum, int):
-        attemptedPowerOfTwo: HumNum = durWithDots
+    def computeDurationNoDotsAndNumDots(durWithDots: HumNumIn) -> (HumNum, int):
+        dd: HumNum = opFrac(durWithDots)
+        attemptedPowerOfTwo: HumNum = dd
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + no dots
             return (attemptedPowerOfTwo, 0)
 
-        attemptedPowerOfTwo = durWithDots * 2 / 3
+        attemptedPowerOfTwo = dd * opFrac(Fraction(2, 3))
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + 1 dot
             return (attemptedPowerOfTwo, 1)
 
-        attemptedPowerOfTwo = durWithDots * 4 / 7
+        attemptedPowerOfTwo = dd * opFrac(Fraction(4, 7))
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + 2 dots
             return (attemptedPowerOfTwo, 2)
 
-        attemptedPowerOfTwo = durWithDots * 8 / 15
+        attemptedPowerOfTwo = dd * opFrac(Fraction(8, 15))
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
             # power of two + 3 dots
             return (attemptedPowerOfTwo, 3)
 
-        return (durWithDots, None) # None signals that we couldn't actually find a power-of-two duration
+        # None signals that we couldn't actually find a power-of-two duration
+        return (dd, None)
 
     @staticmethod
-    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNum) -> List[HumNum]:
+    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNumIn) -> List[HumNum]:
         output: List[HumNum] = []
-        ql: HumNum = quarterLength
+        ql: HumNum = opFrac(quarterLength)
+
         if Convert.isPowerOfTwoWithDots(ql):
             # power of two + maybe some dots
             output.append(ql)
             return output
 
-        powerOfTwoQLAttempt: HumNum = HumNum(4) # start with whole note
-        while powerOfTwoQLAttempt >= HumNum(1, 2048):
+        powerOfTwoQLAttempt: HumNum = opFrac(4) # start with whole note
+        smallest: HumNum = opFrac(Fraction(1, 2048))
+        while powerOfTwoQLAttempt >= smallest:
             if ql >= powerOfTwoQLAttempt:
                 output.append(powerOfTwoQLAttempt)
-                ql -= powerOfTwoQLAttempt
+                ql = opFrac(ql - powerOfTwoQLAttempt)
             else:
-                powerOfTwoQLAttempt /= 2
+                powerOfTwoQLAttempt = opFrac(powerOfTwoQLAttempt / 2)
 
             if Convert.isPowerOfTwoWithDots(ql):
                 # power of two + maybe some dots
                 output.append(ql)
                 return output
 
-        return [quarterLength] # we couldn't compute a full list so just return the original param
+        # we couldn't compute a full list so just return the original param
+        return [opFrac(quarterLength)]
 
     @staticmethod
     def transToDiatonicChromatic(trans: str) -> (int, int):

@@ -13,8 +13,10 @@
 import sys
 import re
 
+from music21.common import opFrac
+
 from converter21.humdrum import HumdrumInternalError
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 
 from converter21.humdrum import SliceType
@@ -381,7 +383,7 @@ class HumGrid:
         for sliceIdx in range(0, len(self._allSlices) - 1):
             ts1: HumNum = self._allSlices[sliceIdx].timestamp
             ts2: HumNum = self._allSlices[sliceIdx + 1].timestamp
-            dur: HumNum = ts2 - ts1
+            dur: HumNum = opFrac(ts2 - ts1)
             self._allSlices[sliceIdx].duration = dur
 
         return len(self._allSlices) > 0
@@ -401,7 +403,7 @@ class HumGrid:
         lastSlice = self._allSlices[-1]
 
         # set to zero in case not a duration type of line:
-        lastSlice.duration = HumNum(0)
+        lastSlice.duration = opFrac(0)
 
         if not lastSlice.isNoteSlice:
             return
@@ -461,8 +463,8 @@ class HumGrid:
         tokenDur: HumNum = Convert.recipToDuration(token.text)
         currTs: HumNum   = thisSlice.timestamp
         nextTs: HumNum   = nextSlice.timestamp
-        sliceDur: HumNum = nextTs - currTs
-        timeLeft: HumNum = tokenDur - sliceDur
+        sliceDur: HumNum = opFrac(nextTs - currTs)
+        timeLeft: HumNum = opFrac(tokenDur - sliceDur)
 
         if tokenDur == 0:
             # Do not try to extend tokens with zero duration
@@ -509,16 +511,16 @@ class HumGrid:
                 if nextsSlice:
                     nextTs = nextsSlice.timestamp
                 else:
-                    nextTs = currTs + sSlice.duration
+                    nextTs = opFrac(currTs + sSlice.duration)
 
-                sliceDur = nextTs - currTs
+                sliceDur = opFrac(nextTs - currTs)
                 sliceType = sSlice.sliceType
                 gs = sSlice.parts[parti].staves[staffi]
                 if gs is None:
                     raise HumdrumInternalError('Strange error6 in extendDurationToken()')
 
                 if sSlice.isGraceSlice:
-                    sSlice.duration = HumNum(0)
+                    sSlice.duration = opFrac(0)
                 elif sSlice.isDataSlice:
                     # if there is already a non-null token here, don't overwrite it,
                     # raise an exception instead.  This should not happen.
@@ -528,7 +530,7 @@ class HumGrid:
                             gs.voices[voicei].token.text != '.'):
                         raise HumdrumInternalError(f'Note ({token.text}) duration overlaps next note in voice ({gs.voices[voicei].token.text})')
                     gs.setNullTokenLayer(voicei, sliceType, sliceDur)
-                    timeLeft -= sliceDur
+                    timeLeft = opFrac(timeLeft - sliceDur)
                 elif sSlice.isInvalidSlice:
                     print(f'THIS IS AN INVALID SLICE({s}) {sSlice}', file=sys.stderr)
                 else:
@@ -757,7 +759,7 @@ class HumGrid:
                             if v >= len(sp.voices) - 1:
                                 # Found a data line with no data at given voice, so
                                 # add slice duration to cumulative duration.
-                                duration += slicep.duration
+                                duration = opFrac(duration + slicep.duration)
                                 continue
                             vp: GridVoice = sp.voices[v]
                             if vp is None:
@@ -865,14 +867,14 @@ class HumGrid:
             # Do not deal with zero duration items (maybe **mens data)
             return
 
-        difference: HumNum = endTime - startTime
-        gap: HumNum = difference - duration
+        difference: HumNum = opFrac(endTime - startTime)
+        gap: HumNum = opFrac(difference - duration)
         if gap == 0:
             # nothing to do
             nextEvent[p][s] = starting
             return
 
-        target: HumNum = startTime + duration
+        target: HumNum = opFrac(startTime + duration)
 
         kern: str = Convert.durationToRecip(gap)
         kern += 'ryy'
@@ -1071,21 +1073,21 @@ class HumGrid:
 #
 #         for m in range(start, len(self.measures)):
 #             if m == start and mdur[m] == 0:
-#                 output[m] = HumNum(counter-1)
+#                 output[m] = opFrac(counter-1)
 #                 continue
 #
 #             if mdur[m] == 0:
-#                 output[m] = HumNum(-1)
+#                 output[m] = opFrac(-1)
 #                 continue
 #
 #             if m < mcount - 1 and tsdur[m] == tsdur[m+1]:
 #                 if mdur[m] + mdur[m+1] == tsdur[m]:
-#                     output[m] = HumNum(-1)
+#                     output[m] = opFrac(-1)
 #                 else:
-#                     output[m] = HumNum(counter)
+#                     output[m] = opFrac(counter)
 #                     counter += 1
 #             else:
-#                 output[m] = HumNum(counter)
+#                 output[m] = opFrac(counter)
 #                 counter += 1
 #
 #         return output
@@ -1443,7 +1445,7 @@ class HumGrid:
     // HumGrid::createVoice -- create voice with given token contents.
     '''
     @staticmethod
-    def createVoice(tok: str, _post: str, _duration: HumNum, _partIndex: int, _staffIndex: int) -> GridVoice:
+    def createVoice(tok: str, _post: str, _duration: HumNumIn, _partIndex: int, _staffIndex: int) -> GridVoice:
         token: str = tok
         #token += ':' + _post + ':' + str(_partIndex) + ',' + str(_staffIndex)
         gv: GridVoice = GridVoice(token, 0)

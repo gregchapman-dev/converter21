@@ -12,9 +12,11 @@
 # ------------------------------------------------------------------------------
 import sys
 from typing import Union, List, Tuple
-import music21 as m21
 
-from converter21.humdrum import HumNum
+import music21 as m21
+from music21.common import opFrac
+
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
 from converter21.humdrum import M21Utilities
 
@@ -32,15 +34,15 @@ class EventData:
                        elementIndex: int,
                        voiceIndex: int,
                        ownerMeasure,
-                       offsetInScore: HumNum = None,
-                       duration: HumNum = None):
+                       offsetInScore: HumNumIn = None,
+                       duration: HumNumIn = None):
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
         ownerMeasure: MeasureData
         self.ownerMeasure: MeasureData = ownerMeasure
         self.spannerBundle = ownerMeasure.spannerBundle # inherited from ownerScore, ultimately
-        self._startTime: HumNum = HumNum(-1)
-        self._duration: HumNum = HumNum(-1)
+        self._startTime: HumNum = opFrac(-1)
+        self._duration: HumNum = opFrac(-1)
         self._voiceIndex: int = voiceIndex
         self._elementIndex: int = elementIndex
         self._element: m21.base.Music21Object = element
@@ -63,18 +65,18 @@ class EventData:
         return self.m21Object.classes[0] # at least say what type of m21Object it was
 
     def _parseEvent(self, element: m21.base.Music21Object,
-                          offsetInScore: HumNum,
-                          duration: HumNum):
+                          offsetInScore: HumNumIn,
+                          duration: HumNumIn):
         if offsetInScore is not None:
-            self._startTime = offsetInScore
+            self._startTime = opFrac(offsetInScore)
         else:
             ownerScore = self.ownerMeasure.ownerStaff.ownerPart.ownerScore
-            self._startTime = HumNum(element.getOffsetInHierarchy(ownerScore.m21Score))
+            self._startTime = opFrac(element.getOffsetInHierarchy(ownerScore.m21Score))
 
         if duration is not None:
-            self._duration = duration
+            self._duration = opFrac(duration)
         else:
-            self._duration = HumNum(element.duration.quarterLength)
+            self._duration = opFrac(element.duration.quarterLength)
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
         # the mro() for the object.

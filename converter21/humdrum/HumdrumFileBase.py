@@ -14,9 +14,11 @@
 import sys
 from typing import Union
 
+from music21.common import opFrac
+
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumHash
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumSignifiers
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumLine
@@ -1082,7 +1084,8 @@ Line: {line.text}''')
     //     a line and instead return a pointer to the existing line.  Returns
     //     NULL if there was a problem.
     '''
-    def insertNullDataLine(self, timestamp: HumNum):
+    def insertNullDataLine(self, timestamp: HumNumIn):
+        ts: HumNum = opFrac(timestamp)
         # for now do a linear search for the insertion point, but later
         # do something more efficient.
         beforet: HumNum = None
@@ -1093,10 +1096,10 @@ Line: {line.text}''')
                 continue
 
             current: HumNum = line.durationFromStart
-            if current == timestamp:
+            if current == ts:
                 return line
 
-            if current > timestamp:
+            if current > ts:
                 break
 
             beforet = current
@@ -1113,12 +1116,12 @@ Line: {line.text}''')
         self.insertLine(beforei+1, newLine)
 
         # Set the timestamp information for inserted line:
-        delta: HumNum = timestamp - beforet
+        delta: HumNum = opFrac(ts - beforet)
 
-        newLine.durationFromStart = beforeLine.durationFromStart + delta
-        newLine.durationFromBarline = beforeLine.durationFromBarline + delta
-        newLine.durationToBarline = beforeLine.durationToBarline - delta
-        newLine.duration = beforeLine.duration - delta
+        newLine.durationFromStart = opFrac(beforeLine.durationFromStart + delta)
+        newLine.durationFromBarline = opFrac(beforeLine.durationFromBarline + delta)
+        newLine.durationToBarline = opFrac(beforeLine.durationToBarline - delta)
+        newLine.duration = opFrac(beforeLine.duration - delta)
         beforeLine.duration = delta
 
         for beforeToken, newToken in zip(beforeLine.tokens(), newLine.tokens()):
@@ -1135,7 +1138,8 @@ Line: {line.text}''')
     //     local comments that appear immediately before the data line(s) at that timestamp.
     //     Returns NULL if there was a problem.
     '''
-    def insertNullInterpretationLine(self, timestamp: HumNum) -> HumdrumLine:
+    def insertNullInterpretationLine(self, timestamp: HumNumIn) -> HumdrumLine:
+        ts: HumNum = opFrac(timestamp)
 	    # for now do a linear search for the insertion point, but later
 	    # do something more efficient.
         beforei: int = None
@@ -1145,11 +1149,11 @@ Line: {line.text}''')
                 continue
 
             current: HumNum = line.durationFromStart
-            if current == timestamp:
+            if current == ts:
                 beforei = i
                 break
 
-            if current > timestamp:
+            if current > ts:
                 break
 
             beforei = i
@@ -1172,7 +1176,7 @@ Line: {line.text}''')
         newLine.durationFromStart = beforeLine.durationFromStart
         newLine.durationFromBarline = beforeLine.durationFromBarline
         newLine.durationToBarline = beforeLine.durationToBarline
-        newLine.duration = HumNum(0)
+        newLine.duration = opFrac(0)
 
         # Problems here if targetLine is a manipulator
         for targetToken, newToken in zip(targetLine.tokens(), newLine.tokens()):
@@ -1188,15 +1192,16 @@ Line: {line.text}''')
     //     be added before any other lines at that timestamp.
     //     Returns NULL if there was a problem.
     '''
-    def insertNullInterpretationLineAbove(self, timestamp: HumNum) -> HumdrumLine:
+    def insertNullInterpretationLineAbove(self, timestamp: HumNumIn) -> HumdrumLine:
+        ts: HumNum = opFrac(timestamp)
         beforei: int = None
 
         for i, line in enumerate(self.lines()):
             current: HumNum = line.durationFromStart
-            if current == timestamp:
+            if current == ts:
                 beforei = i
                 break
-            if current > timestamp:
+            if current > ts:
                 break
 
             beforei = i
@@ -1217,7 +1222,7 @@ Line: {line.text}''')
         newLine.durationFromStart = beforeLine.durationFromStart
         newLine.durationFromBarline = beforeLine.durationFromBarline
         newLine.durationToBarline = beforeLine.durationToBarline
-        newLine.duration = HumNum(0)
+        newLine.duration = opFrac(0)
 
         for targetToken, newToken in zip(targetLine.tokens(), newLine.tokens()):
             targetToken.insertTokenAfter(newToken)
@@ -1250,15 +1255,15 @@ Line: {line.text}''')
             newLine.durationFromStart = nextLine.durationFromStart
             newLine.durationFromBarline = nextLine.durationFromBarline
             newLine.durationToBarline = nextLine.durationToBarline
-            newLine.duration = HumNum(0)
+            newLine.duration = opFrac(0)
             self.insertLine(lineIndex, newLine, analyzeTokenLinks=True)
         else: # append the new line
             prevLine: HumdrumLine = self[lineIndex-1]
             newLine.copyStructure(prevLine, '*') # problem if prevLine is manipulator
-            newLine.durationFromStart = prevLine.durationFromStart + prevLine.duration
-            newLine.durationFromBarline = prevLine.durationFromBarline + prevLine.duration
-            newLine.durationToBarline = prevLine.durationToBarline + prevLine.duration
-            newLine.duration = HumNum(0)
+            newLine.durationFromStart = opFrac(prevLine.durationFromStart + prevLine.duration)
+            newLine.durationFromBarline = opFrac(prevLine.durationFromBarline + prevLine.duration)
+            newLine.durationToBarline = opFrac(prevLine.durationToBarline + prevLine.duration)
+            newLine.duration = opFrac(0)
             self.appendLine(newLine, analyzeTokenLinks=True)
 
         return newLine

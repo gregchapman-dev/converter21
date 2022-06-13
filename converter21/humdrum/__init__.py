@@ -16,7 +16,7 @@ from .GridCommon import SliceType
 from .GridCommon import MeasureStyle, MeasureType, MeasureVisualStyle
 from .GridCommon import FermataStyle
 
-from .HumNum import HumNum
+from .HumNum import HumNum, HumNumIn
 from .Convert import Convert
 from .HumAddress import HumAddress
 from .HumHash import HumHash

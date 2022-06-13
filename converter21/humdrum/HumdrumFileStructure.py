@@ -13,8 +13,11 @@
 # ------------------------------------------------------------------------------
 import sys
 from operator import attrgetter
+from fractions import Fraction
 
-from converter21.humdrum import HumNum
+from music21.common import opFrac
+
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumLine
@@ -127,7 +130,8 @@ class HumdrumFileStructure(HumdrumFileBase):
     def scoreDuration(self) -> HumNum:
         if self.lineCount == 0:
             return 0
-        return self._lines[-1].durationFromStart + self._lines[-1].duration # BUGFIX: Added last line duration
+        return opFrac(self._lines[-1].durationFromStart +
+                        self._lines[-1].duration) # BUGFIX: Added last line duration
 
     '''
     //////////////////////////////
@@ -144,7 +148,7 @@ class HumdrumFileStructure(HumdrumFileBase):
         if self._ticksPerQuarterNote > 0:
             return self._ticksPerQuarterNote
 
-        durationSet: {HumNum} = self.getPositiveLineDurations()
+        durationSet: {Fraction} = self.getPositiveLineDurationFractions()
         denoms: [int] = []
         for dur in durationSet:
             if dur.denominator > 1:
@@ -156,11 +160,11 @@ class HumdrumFileStructure(HumdrumFileBase):
         self._ticksPerQuarterNote = lcm
         return self._ticksPerQuarterNote
 
-    def getPositiveLineDurations(self) -> {HumNum}:
-        output: {HumNum} = set() # set of HumNums
+    def getPositiveLineDurationFractions(self) -> {Fraction}:
+        output: {Fraction} = set() # set of Fractions
         for line in self._lines:
             if line.duration is not None and line.duration > 0:
-                output.add(line.duration)
+                output.add(Fraction(line.duration))
         return output
 
     '''
@@ -185,12 +189,12 @@ class HumdrumFileStructure(HumdrumFileBase):
             currTok = currTok.nextToken0
 
         # now go back and set the absolute position from the start of the file.
-        totalDurSoFar: HumNum = HumNum(0)
+        totalDurSoFar: HumNum = opFrac(0)
         for line in self._lines:
             line.durationFromStart = totalDurSoFar
             if line.duration is None or line.duration < 0:
-                line.duration = HumNum(0)
-            totalDurSoFar += line.duration
+                line.duration = opFrac(0)
+            totalDurSoFar = opFrac(totalDurSoFar + line.duration)
 
         # Analyze durations to/from barlines:
         success = self.analyzeMeter()
@@ -224,14 +228,13 @@ class HumdrumFileStructure(HumdrumFileBase):
             return True
 
         startLine: int = self.trackStart(1).lineIndex
-        zero: HumNum = HumNum(0)
 
         for i in range(1, self.maxTrack+1):
             if not self.trackStart(i).hasRhythm:
                 # Can't analyze rhythm of spines that do not have rhythm
                 continue
             if self.trackStart(i).lineIndex == startLine:
-                success = self.assignDurationsToTrack(self.trackStart(i), zero)
+                success = self.assignDurationsToTrack(self.trackStart(i), 0)
                 if not success:
                     return False
             else:
@@ -280,27 +283,27 @@ class HumdrumFileStructure(HumdrumFileBase):
     def analyzeMeter(self) -> bool:
         self._barlines = []
 
-        durationSum: HumNum = HumNum(0)
+        durationSum: HumNum = opFrac(0)
         foundFirstBarline: bool = False
 
         for line in self._lines:
             line.durationFromBarline = durationSum
-            durationSum += line.duration
+            durationSum = opFrac(durationSum + line.duration)
             if line.isBarline:
                 foundFirstBarline = True
                 self._barlines.append(line)
-                durationSum = HumNum(0)
+                durationSum = opFrac(0)
             elif line.isData and not foundFirstBarline:
                 # pickup measure, so set the first barline to the start of the file
                 self._barlines.append(self._lines[0])
                 foundFirstBarline = True
 
-        durationSum = HumNum(0)
+        durationSum = opFrac(0)
         for line in reversed(self._lines):
-            durationSum += line.duration
+            durationSum = opFrac(durationSum + line.duration)
             line.durationToBarline = durationSum
             if line.isBarline:
-                durationSum = HumNum(0)
+                durationSum = opFrac(0)
 
         return True
 
@@ -399,11 +402,12 @@ class HumdrumFileStructure(HumdrumFileBase):
     //    for the rhythmic analysis of non-data tokens and non-rhythmic spines is
     //    done elsewhere.
     '''
-    def assignDurationsToTrack(self, startToken: HumdrumToken, startDur: HumNum) -> bool:
+    def assignDurationsToTrack(self, startToken: HumdrumToken, startDur: HumNumIn) -> bool:
+        sDur: HumNum = opFrac(startDur)
         if not startToken.hasRhythm:
             return self.isValid
 
-        success = self.prepareDurations(startToken, startToken.rhythmAnalysisState, startDur)
+        success = self.prepareDurations(startToken, startToken.rhythmAnalysisState, sDur)
         if not success:
             return self.isValid
         return self.isValid
@@ -415,20 +419,20 @@ class HumdrumFileStructure(HumdrumFileBase):
     //     HumdrumFileStructure::assignDurationsToTrack() which does all of the
     //     work for assigning durationFromStart values.
     '''
-    def prepareDurations(self, token: HumdrumToken, state: int, startDur: HumNum) -> bool:
+    def prepareDurations(self, token: HumdrumToken, state: int, startDur: HumNumIn) -> bool:
         if state != token.rhythmAnalysisState:
             return self.isValid
 
         token.incrementRhythmAnalysisState()
 
-        durSum : HumNum = startDur
+        durSum : HumNum = opFrac(startDur)
 
         success = self.setLineDurationFromStart(token, durSum)
         if not success:
             return self.isValid
 
         if token.duration > 0:
-            durSum += token.duration
+            durSum = opFrac(durSum + token.duration)
 
         reservoir: [HumdrumToken] = []
         startDurs: [HumNum] = []
@@ -452,7 +456,7 @@ class HumdrumFileStructure(HumdrumFileBase):
                 return self.isValid
 
             if token.duration > 0:
-                durSum += token.duration
+                durSum = opFrac(durSum + token.duration)
 
             tcount = token.nextTokenCount
 
@@ -474,21 +478,22 @@ class HumdrumFileStructure(HumdrumFileBase):
     // HumdrumFileStructure::setLineDurationFromStart -- Set the duration of
     //      a line based on the analysis of tokens in the spine.
     '''
-    def setLineDurationFromStart(self, token: HumdrumToken, durSum: HumNum) -> bool:
+    def setLineDurationFromStart(self, token: HumdrumToken, durSum: HumNumIn) -> bool:
+        dSum: HumNum = opFrac(durSum)
         if not token.isTerminateInterpretation and token.duration < 0:
 		    # undefined rhythm, so don't assign line duration information:
             return self.isValid
 
         line: HumdrumLine = token.ownerLine
         if line.durationFromStart is None:
-            line.durationFromStart = durSum
-        elif line.durationFromStart != durSum:
+            line.durationFromStart = dSum
+        elif line.durationFromStart != dSum:
             if not token.isTerminateInterpretation:
                 return self.setParseError(
 f'''Error: Inconsistent rhythm analysis occurring near line {token.lineNumber}
-Expected durationFromStart to be: {durSum} but found it to be {line.durationFromStart}
+Expected durationFromStart to be: {dSum} but found it to be {line.durationFromStart}
 Line: {line.text}''')
-            line.durationFromStart = max(line.durationFromStart, durSum)
+            line.durationFromStart = max(line.durationFromStart, dSum)
 
         return self.isValid
 
@@ -503,8 +508,8 @@ Line: {line.text}''')
     //    for the spine.
     '''
     def analyzeRhythmOfFloatingSpine(self, spineStart: HumdrumToken) -> bool:
-        durSum: HumNum = HumNum(0)
-        foundDur: HumNum = HumNum(0)
+        durSum: HumNum = opFrac(0)
+        foundDur: HumNum = opFrac(0)
         token: HumdrumToken = spineStart
 
         # Find a known durationFromStart for a line in the Humdrum file, then
@@ -518,10 +523,10 @@ Line: {line.text}''')
                     foundDur = token.durationFromStart
                     break
                 if token.duration > 0:
-                    durSum += token.duration
+                    durSum = opFrac(durSum + token.duration)
                 token = token.nextToken0
 
-        if foundDur == HumNum(0):
+        if foundDur == 0:
             return self.setParseError('Error: cannot link floating spine to score.')
 
         success = self.assignDurationsToTrack(spineStart, foundDur - durSum)
@@ -578,10 +583,10 @@ Line: {line.text}''')
 
             startDur: HumNum = previousLine.durationFromStart
             endDur: HumNum = nextLine.durationFromStart
-            gapDur: HumNum = endDur - startDur
-            nullDur: HumNum = gapDur / (len(nullLines) + 1)
+            gapDur: HumNum = opFrac(endDur - startDur)
+            nullDur: HumNum = opFrac(gapDur / (len(nullLines) + 1))
             for j, nullLine in enumerate(nullLines):
-                nullLine.durationFromStart = startDur + (nullDur * (j+1))
+                nullLine.durationFromStart = opFrac(startDur + opFrac(nullDur * (j+1)))
 
             previousLine = nextLine
             nullLines = []
@@ -622,11 +627,11 @@ Line: {line.text}''')
     def assignLineDurations(self):
         for i in range(0, len(self._lines)):
             if i == len(self._lines) - 1:
-                self._lines[i].duration = HumNum(0)
+                self._lines[i].duration = opFrac(0)
             else:
                 startDur = self._lines[i].durationFromStart
                 endDur = self._lines[i+1].durationFromStart
-                self._lines[i].duration = endDur - startDur
+                self._lines[i].duration = opFrac(endDur - startDur)
 
     '''
     //////////////////////////////
@@ -660,7 +665,7 @@ Line: {line.text}''')
                         return self.isValid
 
             if token.isNonNullData:
-                token.duration = current.durationFromStart - token.durationFromStart
+                token.duration = opFrac(current.durationFromStart - token.durationFromStart)
                 current = token
 
             token = token.previousToken0

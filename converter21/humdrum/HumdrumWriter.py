@@ -14,10 +14,12 @@ import sys
 import copy
 from collections import OrderedDict
 from typing import List, Tuple, Dict, Set, Union, Optional
+
 import music21 as m21
+from music21.common import opFrac
 
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
 from converter21.humdrum import M21Utilities
 from converter21.humdrum import M21StaffGroupTree
@@ -858,7 +860,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 maxStaff: int = outgrid.staffCount(p)
                 s: int = maxStaff - 1 # put it in last staff (which is first on the Humdrum line)
                 v: int = 0 # voice 0
-                gm.addLabelAbbrToken(abbr, HumNum(0), p, s, v, self._scoreData.partCount)
+                gm.addLabelAbbrToken(abbr, 0, p, s, v, self._scoreData.partCount)
 
         if hasName:
             for p, partData in enumerate(self._scoreData.parts):
@@ -878,7 +880,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 maxStaff: int = outgrid.staffCount(p)
                 s: int = maxStaff - 1 # put it in last staff (which is first on the Humdrum line)
                 v: int = 0 # voice 0
-                gm.addLabelToken(iname, HumNum(0), p, s, v, self._scoreData.partCount)
+                gm.addLabelToken(iname, 0, p, s, v, self._scoreData.partCount)
 
     '''
     //////////////////////////////
@@ -916,9 +918,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         curTime: [HumNum] = [None] * len(measureDatas)
         measureDurs: [HumNum] = [None] * len(measureDatas)
         curIndex: [int] = [0] * len(measureDatas)
-        nextTime: HumNum = HumNum(-1)
+        nextTime: HumNum = opFrac(-1)
 
-        tsDur: HumNum = HumNum(-1)
+        tsDur: HumNum = opFrac(-1)
         for ps, mdata in enumerate(measureDatas):
             events: [EventData] = mdata.events
             # Keep track of hairpin endings that should be attached
@@ -971,7 +973,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 #             nowPartStaves = []
             allEnd = True
             processTime = nextTime
-            nextTime = HumNum(-1)
+            nextTime = opFrac(-1)
             for ps in reversed(range(0, len(measureDatas))):
                 if curIndex[ps] >= len(sevents[ps]):
                     continue
@@ -1012,7 +1014,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _convertNowEvents(self, outgm: GridMeasure,
                           nowEvents: [SimultaneousEvents],
-                          nowTime: HumNum) -> bool:
+                          nowTime: HumNumIn) -> bool:
         if not nowEvents:
 #             print('NOW EVENTS ARE EMPTY', file=sys.stderr)
             return True
@@ -1044,7 +1046,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _appendZeroDurationEvents(self, outgm: GridMeasure,
                                   nowEvents: [SimultaneousEvents],
-                                  nowTime: HumNum):
+                                  nowTime: HumNumIn):
         hasClef:            bool = False
         hasKeySig:          bool = False
         hasKeyDesignation:  bool = False
@@ -1192,7 +1194,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _addGraceLines(self, outgm: GridMeasure,
                              notes: List[List[List[List[EventData]]]],
-                             nowTime: HumNum):
+                             nowTime: HumNumIn):
         maxGraceNoteCount: int = 0
         for staffList in notes: # notes is a list of staffLists, one staffList per part
             for voiceList in staffList:
@@ -1221,7 +1223,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addClefLine --
     '''
-    def _addClefLine(self, outgm: GridMeasure, clefs: List[List[Tuple[int, m21.clef.Clef]]], nowTime: HumNum):
+    def _addClefLine(self, outgm: GridMeasure, clefs: List[List[Tuple[int, m21.clef.Clef]]], nowTime: HumNumIn):
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Clefs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
@@ -1237,7 +1239,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addStriaLine --
     '''
-    def _addStriaLine(self, outgm: GridMeasure, staffLines: List[List[Tuple[int, int]]], nowTime: HumNum):
+    def _addStriaLine(self, outgm: GridMeasure, staffLines: List[List[Tuple[int, int]]], nowTime: HumNumIn):
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Stria)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
@@ -1255,7 +1257,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _addTimeSigLine(self, outgm: GridMeasure,
                               timeSigs: List[List[Tuple[int, m21.meter.TimeSignature]]],
-                              nowTime: HumNum,
+                              nowTime: HumNumIn,
                               hasMeterSig: bool):
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.TimeSigs)
         outgm.slices.append(gridSlice)
@@ -1284,7 +1286,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, timeSig in timeSigs:
             token: HumdrumToken = M21Convert.timeSigTokenFromM21TimeSignature(timeSig)
@@ -1300,7 +1302,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, timeSig in timeSigs:
             token: HumdrumToken = M21Convert.meterSigTokenFromM21TimeSignature(timeSig)
@@ -1319,7 +1321,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _addKeySigLine(self, outgm: GridMeasure,
                              keySigs: List[List[Tuple[int, Union[m21.key.KeySignature, m21.key.Key]]]],
-                             nowTime: HumNum,
+                             nowTime: HumNumIn,
                              hasKeyDesignation: bool):
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs)
         outgm.slices.append(gridSlice)
@@ -1346,7 +1348,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, keySig in keySigs:
             token: HumdrumToken = M21Convert.keySigTokenFromM21KeySignature(keySig)
@@ -1362,7 +1364,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, keySig in keySigs:
             if isinstance(keySig, m21.key.Key): # we can only generate KeyDesignation from Key
@@ -1380,7 +1382,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addTranspositionLine -- Transposition codes to
     //   produce written parts.
     '''
-    def _addTranspositionLine(self, outgm: GridMeasure, transposingInstruments: List[List[Tuple[int, m21.instrument.Instrument]]], nowTime: HumNum):
+    def _addTranspositionLine(self, outgm: GridMeasure, transposingInstruments: List[List[Tuple[int, m21.instrument.Instrument]]], nowTime: HumNumIn):
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
@@ -1395,7 +1397,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, inst in transposingInstruments:
             token: HumdrumToken = M21Convert.instrumentTransposeTokenFromM21Instrument(inst)
@@ -1415,7 +1417,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, clef in clefs:
             token: HumdrumToken = M21Convert.clefTokenFromM21Clef(clef)
@@ -1435,7 +1437,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if part is None:
             return
 
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, lineCount in staffLineCounts:
             tokenStr: str = '*stria' + str(lineCount)
@@ -1452,7 +1454,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     @staticmethod
     def _fillEmpties(part: GridPart, string: str):
-        durationZero: HumNum = HumNum(0)
+        durationZero: HumNum = opFrac(0)
 
         for staff in part.staves:
             if staff is None:
@@ -1474,7 +1476,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     @staticmethod
     def _processPrintElement(outgm: GridMeasure,
                              m21Obj: Union[m21.layout.PageLayout, m21.layout.SystemLayout],
-                             nowTime: HumNum):
+                             nowTime: HumNumIn):
         isPageBreak: bool = isinstance(m21Obj, m21.layout.PageLayout) and m21Obj.isNew
         isSystemBreak: bool = isinstance(m21Obj, m21.layout.SystemLayout) and m21Obj.isNew
 
@@ -1510,7 +1512,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _appendNonZeroDurationEvents(self, outgm: GridMeasure,
                                            nowEvents: [SimultaneousEvents],
-                                           nowTime: HumNum):
+                                           nowTime: HumNumIn):
         outSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Notes)
 
         if len(outgm.slices) == 0:
@@ -1539,7 +1541,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addEvent -- Add a note or rest to a grid slice
     '''
-    def _addEvent(self, outSlice: GridSlice, outgm: MeasureData, event: EventData, nowTime: HumNum):
+    def _addEvent(self, outSlice: GridSlice, outgm: MeasureData, event: EventData, nowTime: HumNumIn):
         partIndex: int = None # event.partIndex
         staffIndex: int = None # event.staffIndex
         voiceIndex: int = None # event.voiceIndex
@@ -1911,7 +1913,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _addHarmony(self, part: GridPart,  #LATER: needs implementation
                           event: EventData,
-                          nowTime: HumNum,
+                          nowTime: HumNumIn,
                           partIndex: int) -> int:
         if self or part or event or nowTime or partIndex:
             return 0

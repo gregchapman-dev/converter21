@@ -12,8 +12,11 @@
 # ------------------------------------------------------------------------------
 import sys
 import re
+from fractions import Fraction
 
-from converter21.humdrum import HumNum
+from music21.common import opFrac
+
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumHash
 from converter21.humdrum import Convert
 from converter21.humdrum import HumdrumToken
@@ -627,8 +630,9 @@ class HumdrumLine(HumHash):
                 self._ownerFile.analyzeRhythmStructure()
         return self._duration
 
-    def scaledDuration(self, scale: HumNum) -> HumNum:
-        return self.duration * scale # remember, accessing duration property can trigger rhythm analysis
+    def scaledDuration(self, scale: HumNumIn) -> HumNum:
+        # remember, accessing duration property can trigger rhythm analysis
+        return opFrac(self.duration * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -637,11 +641,11 @@ class HumdrumLine(HumHash):
     //   in the rhythmic analysis for the HumdurmFileStructure class.
     '''
     @duration.setter
-    def duration(self, newDuration: HumNum):
-        if newDuration >= HumNum(0):
-            self._duration = newDuration
+    def duration(self, newDuration: HumNumIn):
+        if newDuration >= 0:
+            self._duration = opFrac(newDuration)
         else:
-            self._duration = HumNum(0)
+            self._duration = opFrac(0)
 
     '''
     //////////////////////////////
@@ -660,10 +664,10 @@ class HumdrumLine(HumHash):
         if self.isBarline:
             return self.durationToBarline
 
-        return self.durationFromBarline + self.durationToBarline
+        return opFrac(self.durationFromBarline + self.durationToBarline)
 
-    def scaledBarlineDuration(self, scale: HumNum) -> HumNum:
-        return self.barlineDuration * scale
+    def scaledBarlineDuration(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.barlineDuration * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -680,8 +684,8 @@ class HumdrumLine(HumHash):
 
         return self._durationFromStart
 
-    def scaledDurationFromStart(self, scale: HumNum) -> HumNum:
-        return self.durationFromStart * scale
+    def scaledDurationFromStart(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationFromStart * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -691,8 +695,8 @@ class HumdrumLine(HumHash):
     //    analysis done in the HumdrumFileStructure class.
     '''
     @durationFromStart.setter
-    def durationFromStart(self, newDurationFromStart: HumNum):
-        self._durationFromStart = newDurationFromStart
+    def durationFromStart(self, newDurationFromStart: HumNumIn):
+        self._durationFromStart = opFrac(newDurationFromStart)
 
     '''
     //////////////////////////////
@@ -707,12 +711,12 @@ class HumdrumLine(HumHash):
             if self._ownerFile:
                 self._ownerFile.analyzeRhythmStructure()
             else:
-                return HumNum(0) # there's no owner, so we can't get the score duration
+                return opFrac(0) # there's no owner, so we can't get the score duration
 
-        return self._ownerFile.scoreDuration -  self.durationFromStart
+        return opFrac(self._ownerFile.scoreDuration -  self.durationFromStart)
 
-    def scaledDurationToEnd(self, scale: HumNum) -> HumNum:
-        return self.durationToEnd * scale
+    def scaledDurationToEnd(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationToEnd * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -729,8 +733,8 @@ class HumdrumLine(HumHash):
 
         return self._durationFromBarline
 
-    def scaledDurationFromBarline(self, scale: HumNum) -> HumNum:
-        return self.durationFromBarline * scale
+    def scaledDurationFromBarline(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationFromBarline * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -740,8 +744,8 @@ class HumdrumLine(HumHash):
     //    the HumdrumFileStructure class.
     '''
     @durationFromBarline.setter
-    def durationFromBarline(self, newDurationFromBarline: HumNum):
-        self._durationFromBarline = newDurationFromBarline
+    def durationFromBarline(self, newDurationFromBarline: HumNumIn):
+        self._durationFromBarline = opFrac(newDurationFromBarline)
 
     '''
     //////////////////////////////
@@ -757,8 +761,8 @@ class HumdrumLine(HumHash):
 
         return self._durationToBarline
 
-    def scaledDurationToBarline(self, scale: HumNum) -> HumNum:
-        return self.durationToBarline * scale
+    def scaledDurationToBarline(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationToBarline * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -768,8 +772,8 @@ class HumdrumLine(HumHash):
     //     analyzeMeter in the HumdrumFileStructure class.
     '''
     @durationToBarline.setter
-    def durationToBarline(self, newDurationToBarline: HumNum):
-        self._durationToBarline = newDurationToBarline
+    def durationToBarline(self, newDurationToBarline: HumNumIn):
+        self._durationToBarline = opFrac(newDurationToBarline)
 
     '''
     //////////////////////////////
@@ -805,23 +809,23 @@ class HumdrumLine(HumHash):
     //  Default value: beatrecip = "4".
     //  Default value: beatdur   = 1.
 
-        Instead of two routines for HumNum beatDur and str beatRecip, I'm writing one
+        Instead of two routines for HumNumIn beatDur and str beatRecip, I'm writing one
         that takes either.  I'll make the default beat a quarter note (beatRecip = "4",
-        beatDur = HumNum(1, 4)).  Note that if the type of beatDuration is not HumNum
-        or str, we'll try directly converting to HumNum, so we actually support float,
-        int, Decimal, etc here.  But we always return HumNum.
+        beatDur = Fraction(1, 4)).  Note that if the type of beatDuration is not str,
+        we'll call opFrac, so we actually support int, float, or Fraction here. But we
+        always return HumNum (a.k.a. float or Fraction).
     '''
-    def beat(self, beatDuration = HumNum(1,4)) -> HumNum:
-        if isinstance(beatDuration, HumNum):
-            pass
-        elif isinstance(beatDuration, str): # recip format string, e.g. '4' means 1/4
+    def beat(self, beatDuration = Fraction(1,4)) -> HumNum:
+        if isinstance(beatDuration, str): # recip format string, e.g. '4' means 1/4
             beatDuration = Convert.recipToDuration(beatDuration)
         else:
-            beatDuration = HumNum(beatDuration)
+            beatDuration = opFrac(beatDuration)
 
-        if beatDuration == HumNum(0):
-            return HumNum(0)
-        beatInMeasure = (self.durationFromBarline / beatDuration) + 1
+        if beatDuration == 0:
+            # avoid divide by 0, just return beatInMeasure = 0
+            return opFrac(0)
+
+        beatInMeasure = opFrac((self.durationFromBarline / beatDuration) + 1)
         return beatInMeasure
 
     '''

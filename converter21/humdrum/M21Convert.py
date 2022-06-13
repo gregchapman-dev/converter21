@@ -18,7 +18,9 @@ import re
 import math
 from typing import Union, List, Tuple, OrderedDict, Optional, Type
 from fractions import Fraction
+
 import music21 as m21
+from music21.common import opFrac
 
 from converter21.humdrum import MeasureStyle, MeasureVisualStyle, MeasureType
 from converter21.humdrum import FermataStyle
@@ -302,14 +304,6 @@ class M21Convert:
     ])
 
     @staticmethod
-    def m21Offset(humOffset: HumNum) -> Fraction:
-        # music21 offsets can be Fraction, float, or str, specified in
-        # quarter notes.  HumNum offsets are always a Fraction, and are
-        # also specified in quarter notes.
-        # We always produce a Fraction here, since that's what we have.
-        return Fraction(humOffset)
-
-    @staticmethod
     def m21PitchName(subTokenStr: str) -> str: # returns 'A#' for A sharp (ignores octave)
         diatonic: int = Convert.kernToDiatonicPC(subTokenStr) # PC == pitch class; ignores octave
         if diatonic < 0:
@@ -469,13 +463,13 @@ class M21Convert:
 
     @staticmethod
     def m21DurationWithTuplet(token: HumdrumToken, tuplet: m21.duration.Tuplet) -> m21.duration.Duration:
-        dur: HumNum = token.duration / HumNum(tuplet.tupletMultiplier())
+        dur: HumNum = opFrac(token.duration / tuplet.tupletMultiplier())
         durNoDots: HumNum = None
         numDots: int = None
         durNoDots, numDots = Convert.computeDurationNoDotsAndNumDots(dur)
         if numDots is None:
             print(f'Cannot figure out durNoDots + numDots from {token.text} (on line number {token.lineNumber}), tuplet={tuplet}, about to crash in convertQuarterLengthToType()...', file=sys.stderr)
-        durType: str = m21.duration.convertQuarterLengthToType(Fraction(durNoDots))
+        durType: str = m21.duration.convertQuarterLengthToType(durNoDots)
         #print('m21DurationWithTuplet: type = "{}", dots={}'.format(durType, numDots), file=sys.stderr)
         component: m21.duration.DurationTuple = m21.duration.durationTupleFromTypeDots(durType, numDots)
         output = m21.duration.Duration(components = (component,))
@@ -674,9 +668,8 @@ class M21Convert:
             # we have a fingered tremolo, so a portion of visual duration doubles the actual
             # duration to make music21 do the right thing visually with a fingered tremolo.
             # We must undo this factor of 2.
-            vdur: HumNum = Convert.recipToDuration(vdurRecip)
-            vdur /= 2
-            m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+            vdur: HumNum = opFrac(Convert.recipToDuration(vdurRecip) / 2)
+            m21VDur: m21.duration.Duration = m21.duration.Duration(vdur)
             vdurRecip = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
             if vdurRecip == recip:
                 vdurRecip = ''
@@ -769,9 +762,8 @@ class M21Convert:
             # we have a fingered tremolo, so a portion of visual duration doubles the actual
             # duration to make music21 do the right thing visually with a fingered tremolo.
             # We must undo this factor of 2.
-            vdur: HumNum = Convert.recipToDuration(vdurRecip)
-            vdur /= 2
-            m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+            vdur: HumNum = opFrac(Convert.recipToDuration(vdurRecip) / 2)
+            m21VDur: m21.duration.Duration = m21.duration.Duration(vdur)
             vdurRecip = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
             if vdurRecip == recip:
                 vdurRecip = ''
@@ -981,9 +973,8 @@ class M21Convert:
                 # we have a fingered tremolo, so a portion of visual duration doubles the actual
                 # duration to make music21 do the right thing visually with a fingered tremolo.
                 # We must undo this factor of 2.
-                vdur: HumNum = Convert.recipToDuration(vdurRecip)
-                vdur /= 2
-                m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+                vdur: HumNum = opFrac(Convert.recipToDuration(vdurRecip) / 2)
+                m21VDur: m21.duration.Duration = m21.duration.Duration(vdur)
                 vdurRecip = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
                 if vdurRecip == recip:
                     vdurRecip = ''
@@ -1091,51 +1082,53 @@ class M21Convert:
             # even though quarterLength is (correctly) zero. m21Duration.type is 'eighth'
             # or '16th' or whatever, so use that.  This way the grace notes will keep
             # the correct number of flags/beams.
-            dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
+            dur = m21.duration.convertTypeToQuarterLength(m21Duration.type)
             dots = ''
         elif m21Duration.linked is False:
             # There's a real duration and a visual duration
             # Real duration is quarterLength, visual duration is components[0].quarterLength (assuming only 1 component)
-            dur = HumNum(m21Duration.quarterLength)
+            dur = m21Duration.quarterLength
             if len(m21Duration.components) == 1:
-                vdur = HumNum(m21Duration.components[0].quarterLength)
+                vdur = m21Duration.components[0].quarterLength
             else:
                 print('visual duration unusable, ignoring it', file=sys.stderr)
         elif m21Duration.tuplets and len(m21Duration.tuplets) == 1:
-            dur = HumNum(m21.duration.convertTypeToQuarterLength(m21Duration.type))
-            dur *= HumNum(m21Duration.tuplets[0].tupletMultiplier())
+            dur = m21.duration.convertTypeToQuarterLength(m21Duration.type)
+            dur *= m21Duration.tuplets[0].tupletMultiplier()
+            dur = opFrac(dur)
             dots = '.' * m21Duration.dots
             inTuplet = True
         else:
             # no tuplet, or nested tuplets (which we will ignore, since music21 doesn't really
             # support nested tuplets, and neither do we)
-            dur = HumNum(m21Duration.quarterLength)
+            dur = m21Duration.quarterLength
 
-        dur /= 4 # convert to whole-note units
+        dur = opFrac(dur / 4) # convert to whole-note units
+        durFraction: Fraction = Fraction(dur)
 
         if dots is None:
             # compute number of dots from dur (and shrink dur to match)
-            if dur.numerator != 1: # if it's 1 we don't need any dots
+            if durFraction.numerator != 1: # if it's 1 we don't need any dots
                 # otherwise check up to three dots
-                oneDotDur: HumNum = dur * 2 / 3
+                oneDotDur: Fraction = Fraction(dur * 2 / 3)
                 if oneDotDur.numerator == 1:
-                    dur = oneDotDur
+                    durFraction = oneDotDur
                     dots = '.'
                 else:
-                    twoDotDur: HumNum = dur * 4 / 7
+                    twoDotDur: Fraction = Fraction(dur * 4 / 7)
                     if twoDotDur.numerator == 1:
-                        dur = twoDotDur
+                        durFraction = twoDotDur
                         dots = '..'
                     else:
-                        threeDotDur: HumNum = dur * 8 / 15
+                        threeDotDur: Fraction = Fraction(dur * 8 / 15)
                         if threeDotDur.numerator == 1:
-                            dur = threeDotDur
+                            durFraction = threeDotDur
                             dots = '...'
 
         percentExists: bool = False
-        out: str = str(dur.denominator)
-        if dur.numerator != 1:
-            out += '%' + str(dur.numerator)
+        out: str = str(durFraction.denominator)
+        if durFraction.numerator != 1:
+            out += '%' + str(durFraction.numerator)
             percentExists = True
         if dots:
             out += dots
@@ -1179,7 +1172,7 @@ class M21Convert:
                         out = out.replace('1%16' + someDots, '0000' + someDots)
 
         if vdur:
-            m21VDur: m21.duration.Duration = m21.duration.Duration(Fraction(vdur))
+            m21VDur: m21.duration.Duration = m21.duration.Duration(vdur)
             vdurRecip: str = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
             return out, vdurRecip
         return out, None
@@ -1853,17 +1846,18 @@ class M21Convert:
 
         tremolo: int = M21Convert.numberOfFlagsToDurationReciprocal.get(tremolo.numberOfMarks, None)
         if tremolo is not None:
-            tvalue: HumNum = HumNum(tremolo)
+            tvalue: HumNum = opFrac(tremolo)
             if fingered:
                 if beamStarts and duration.quarterLength < 1:
                     # ignore beamStarts for quarter-notes and above
                     tvalue *= beamStarts
                 if duration.tuplets and len(duration.tuplets) == 1:
-                    tvalue /= HumNum(duration.tuplets[0].tupletMultiplier())
-                if tvalue.denominator == 1:
-                    output = f'@@{tvalue}@@'
+                    tvalue /= duration.tuplets[0].tupletMultiplier()
+                tvFraction: Fraction = Fraction(tvalue)
+                if tvFraction.denominator == 1:
+                    output = f'@@{tvFraction.numerator}@@'
                 else:
-                    output = f'@@{tvalue.numerator}%{tvalue.denominator}@@'
+                    output = f'@@{tvFraction.numerator}%{tvFraction.denominator}@@'
             else: # not fingered (bowed)
                 durNoDots: HumNum = Convert.recipToDurationNoDots(recip)
                 if 0 < durNoDots < 1:
@@ -1871,11 +1865,12 @@ class M21Convert:
                     twopow: int = int(dval)
                     tvalue *= (1<<twopow)
                 if duration.tuplets and len(duration.tuplets) == 1:
-                    tvalue /= HumNum(duration.tuplets[0].tupletMultiplier())
-                if tvalue.denominator == 1:
-                    output = f'@{tvalue}@'
+                    tvalue /= duration.tuplets[0].tupletMultiplier()
+                tvFraction: Fraction = Fraction(tvalue)
+                if tvFraction.denominator == 1:
+                    output = f'@{tvFraction.numerator}@'
                 else:
-                    output = f'@{tvalue.numerator}%{tvalue.denominator}@'
+                    output = f'@{tvFraction.numerator}%{tvFraction.denominator}@'
 
         return output
 

@@ -14,9 +14,10 @@
 # ------------------------------------------------------------------------------
 import sys
 from typing import List, Optional
+from music21.common import opFrac
 
 from converter21.humdrum import HumdrumInternalError
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumToken
 #from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumFile
@@ -49,9 +50,9 @@ class GridMeasure:
         ownerGrid: HumGrid
         self._ownerGrid: HumGrid = ownerGrid
         self.slices: [GridSlice] = []
-        self.timestamp: HumNum = HumNum(-1)
-        self.duration: HumNum = HumNum(-1)
-        self.timeSigDur: HumNum = HumNum(-1)
+        self._timestamp: HumNum = opFrac(-1)
+        self._duration: HumNum = opFrac(-1)
+        self._timeSigDur: HumNum = opFrac(-1)
         self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
         self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
         self.fermataStylePerStaff: List[FermataStyle] = []
@@ -67,15 +68,39 @@ class GridMeasure:
             output += str(gridSlice) + '\n'
         return output
 
+    @property
+    def timestamp(self) -> HumNum:
+        return self._timestamp
+
+    @timestamp.setter
+    def timestamp(self, newTimestamp: HumNumIn):
+        self._timestamp = opFrac(newTimestamp)
+
+    @property
+    def duration(self) -> HumNum:
+        return self._duration
+
+    @duration.setter
+    def duration(self, newDuration: HumNumIn):
+        self._duration = opFrac(newDuration)
+
+    @property
+    def timeSigDur(self) -> HumNum:
+        return self._timeSigDur
+
+    @timeSigDur.setter
+    def timeSigDur(self, newTimeSigDur: HumNumIn):
+        self._timeSigDur = opFrac(newTimeSigDur)
+
     '''
     //////////////////////////////
     //
     // GridMeasure::appendGlobalLayout --
     '''
-    def appendGlobalLayout(self, tok: str, timestamp: HumNum) -> GridSlice:
+    def appendGlobalLayout(self, tok: str, timestamp: HumNumIn) -> GridSlice:
         gs: GridSlice = GridSlice(self, timestamp, SliceType.GlobalLayouts, 1)
         gs.addToken(tok, 0, 0, 0)
-        gs.duration = HumNum(0)
+        gs.duration = opFrac(0)
         self.slices.append(gs)
         return gs
 
@@ -86,9 +111,11 @@ class GridMeasure:
     //   gracenumber grace note line before the data line at the given
     //   timestamp.
     '''
-    def addGraceToken(self, tok: str, timestamp: HumNum,
+    def addGraceToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int,
                       maxStaff: int, graceNumber: int) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
+
         if graceNumber < 1:
             raise HumdrumInternalError(
                 'ERROR: graceNumber {} has to be larger than 0')
@@ -96,12 +123,12 @@ class GridMeasure:
         gs: GridSlice = None
         if not self.slices:
             # add a new GridSlice to an empty list.
-            gs = GridSlice(self, timestamp, SliceType.GraceNotes, maxStaff)
+            gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
-        if timestamp > self.slices[-1].timestamp:
+        if ts > self.slices[-1].timestamp:
             # Grace note needs to be added at the end of a measure.
             idx: int = len(self.slices) - 1 # pointing at last slice
             counter: int = 0
@@ -119,7 +146,7 @@ class GridMeasure:
 
                 if self.slices[idx].isDataSlice:
                     # insert grace note after this note
-                    gs = GridSlice(self, timestamp, SliceType.GraceNotes, maxStaff)
+                    gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
                     gs.addToken(tok, part, staff, voice)
                     self.slices.insert(idx+1, gs)
                     return gs
@@ -131,14 +158,14 @@ class GridMeasure:
         # search for existing line with same timestamp on a data slice:
         foundIndex: int = -1
         for idx, gridSlice in enumerate(self.slices):
-            if timestamp < gridSlice.timestamp:
+            if ts < gridSlice.timestamp:
                 raise HumdrumInternalError(
 f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
-\tGRACE TIMESTAMP: {timestamp}
+\tGRACE TIMESTAMP: {ts}
 \tTEST  TIMESTAMP: {gridSlice.timestamp}''')
 
             if gridSlice.isDataSlice:
-                if gridSlice.timestamp == timestamp:
+                if gridSlice.timestamp == ts:
                     foundIndex = idx
                     break
 
@@ -158,7 +185,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
 
             if self.slices[idx].isDataSlice:
                 # insert grace note after this note
-                gs = GridSlice(self, timestamp, SliceType.GraceNotes, maxStaff)
+                gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx+1, gs)
                 return gs
@@ -166,7 +193,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
             idx -= 1
 
         # grace note should be added at start of measure
-        gs = GridSlice(self, timestamp, SliceType.GraceNotes, maxStaff)
+        gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
         gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
@@ -178,40 +205,41 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    timestamp (or create a new data slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addDataToken(self, tok: str, timestamp: HumNum,
+    def addDataToken(self, tok: str, timestamp: HumNumIn,
                      part: int, staff: int, voice: int,
                      maxStaff: int) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
         gs: GridSlice = None
-        if not self.slices or self.slices[-1].timestamp < timestamp:
+        if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, timestamp, SliceType.Notes, maxStaff)
+            gs = GridSlice(self, ts, SliceType.Notes, maxStaff)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
         # search for existing line with same timestamp and the same slice type
         for idx, gridSlice in enumerate(self.slices):
-            if timestamp == gridSlice.timestamp and gridSlice.isGraceSlice:
+            if ts == gridSlice.timestamp and gridSlice.isGraceSlice:
                 # skip grace notes with the right timestamp
                 continue
 
             if not gridSlice.isDataSlice:
                 continue
 
-            if gridSlice.timestamp == timestamp:
+            if gridSlice.timestamp == ts:
                 gridSlice.addToken(tok, part, staff, voice)
                 gs = gridSlice
                 return gs
 
-            if gridSlice.timestamp > timestamp:
-                gs = GridSlice(self, timestamp, SliceType.Notes, maxStaff)
+            if gridSlice.timestamp > ts:
+                gs = GridSlice(self, ts, SliceType.Notes, maxStaff)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx, gs)
                 return gs
 
         # Couldn't find a place for it, so place at end of measure.
-        gs = GridSlice(self, timestamp, SliceType.Notes, maxStaff)
+        gs = GridSlice(self, ts, SliceType.Notes, maxStaff)
         gs.addToken(tok, part, staff, voice)
         self.slices.append(gs)
         return gs
@@ -220,44 +248,45 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         addTokenOfSliceType: common code used by several other add*Token
            functions (addTempoToken, addTimeSigToken, addMeterToken, etc).
     '''
-    def addTokenOfSliceType(self, tok: str, timestamp: HumNum,
+    def addTokenOfSliceType(self, tok: str, timestamp: HumNumIn,
                             sliceType: SliceType,
                             part: int, staff: int, voice: int,
                             maxStaff: int) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
         gs: GridSlice = None
-        if not self.slices or self.slices[-1].timestamp < timestamp:
+        if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, timestamp, sliceType, maxStaff)
+            gs = GridSlice(self, ts, sliceType, maxStaff)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
         # search for existing line with same timestamp and the same slice type
         for idx, gridSlice in enumerate(self.slices):
-            if gridSlice.timestamp == timestamp and gridSlice.sliceType == sliceType:
+            if gridSlice.timestamp == ts and gridSlice.sliceType == sliceType:
                 gridSlice.addToken(tok, part, staff, voice)
                 gs = gridSlice
                 return gs
 
-            if gridSlice.timestamp == timestamp and gridSlice.isDataSlice:
+            if gridSlice.timestamp == ts and gridSlice.isDataSlice:
                 # found the correct timestamp, but no slice of the right type at the
                 # timestamp, so add the new slice before the data slice (eventually
                 # keeping track of the order in which the other non-data slices should
                 # be placed).
-                gs = GridSlice(self, timestamp, sliceType, maxStaff)
+                gs = GridSlice(self, ts, sliceType, maxStaff)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx, gs)
                 return gs
 
-            if gridSlice.timestamp > timestamp:
-                gs = GridSlice(self, timestamp, sliceType, maxStaff)
+            if gridSlice.timestamp > ts:
+                gs = GridSlice(self, ts, sliceType, maxStaff)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx, gs)
                 return gs
 
         # Couldn't find a place for the token, so place at end of measure
-        gs = GridSlice(self, timestamp, sliceType, maxStaff)
+        gs = GridSlice(self, ts, sliceType, maxStaff)
         gs.addToken(tok, part, staff, voice)
         self.slices.append(gs)
         return gs
@@ -269,7 +298,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    the given timestamp (or create a new tempo slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addTempoToken(self, tok: str, timestamp: HumNum,
+    def addTempoToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Tempos,
                                         part, staff, voice, maxStaff)
@@ -281,7 +310,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    the given timestamp (or create a new timesig slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addTimeSigToken(self, tok: str, timestamp: HumNum,
+    def addTimeSigToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.TimeSigs,
                                         part, staff, voice, maxStaff)
@@ -296,7 +325,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    To do:
     //      The meter signtature should occur immediately after a time signature line.
     '''
-    def addMeterSigToken(self, tok: str, timestamp: HumNum,
+    def addMeterSigToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.MeterSigs,
                                         part, staff, voice, maxStaff)
@@ -308,7 +337,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    the given timestamp (or create a new keysig slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addKeySigToken(self, tok: str, timestamp: HumNum,
+    def addKeySigToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.KeySigs,
                                         part, staff, voice, maxStaff)
@@ -323,7 +352,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    Note: should placed after clef if present and no other transpose slice at
     //    same time.
     '''
-    def addTransposeToken(self, tok: str, timestamp: HumNum,
+    def addTransposeToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Transpositions,
                                         part, staff, voice, maxStaff)
@@ -335,7 +364,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    timestamp (or create a new clef slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addClefToken(self, tok: str, timestamp: HumNum,
+    def addClefToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Clefs,
                                         part, staff, voice, maxStaff)
@@ -347,7 +376,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    timestamp (or create a new barline slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addBarlineToken(self, tok: str, timestamp: HumNum,
+    def addBarlineToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Measures,
                                         part, staff, voice, maxStaff)
@@ -359,27 +388,28 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    the given timestamp (or create a new label slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addLabelToken(self, tok: str, timestamp: HumNum,
+    def addLabelToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int,
                       maxPart: int) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
         gs: GridSlice = None
-        if not self.slices or self.slices[-1].timestamp < timestamp:
+        if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, timestamp, SliceType.Labels, maxPart)
+            gs = GridSlice(self, ts, SliceType.Labels, maxPart)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
         # search for existing line with same timestamp and the same slice type
         for gridSlice in self.slices:
-            if gridSlice.timestamp == timestamp and gridSlice.isLabelSlice:
+            if gridSlice.timestamp == ts and gridSlice.isLabelSlice:
                 gridSlice.addToken(tok, part, staff, voice)
                 gs = gridSlice
                 return gs
 
         # Couldn't find a place for the label, so place at beginning of measure
-        gs = GridSlice(self, timestamp, SliceType.Labels, maxPart)
+        gs = GridSlice(self, ts, SliceType.Labels, maxPart)
         gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
@@ -391,27 +421,28 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    the given timestamp (or create a new label slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addLabelAbbrToken(self, tok: str, timestamp: HumNum,
+    def addLabelAbbrToken(self, tok: str, timestamp: HumNumIn,
                           part: int, staff: int, voice: int,
                           maxPart: int) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
         gs: GridSlice = None
-        if not self.slices or self.slices[-1].timestamp < timestamp:
+        if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, timestamp, SliceType.LabelAbbrs, maxPart)
+            gs = GridSlice(self, ts, SliceType.LabelAbbrs, maxPart)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
 
         # search for existing line with same timestamp and the same slice type
         for gridSlice in self.slices:
-            if gridSlice.timestamp == timestamp and gridSlice.isLabelAbbrSlice:
+            if gridSlice.timestamp == ts and gridSlice.isLabelAbbrSlice:
                 gridSlice.addToken(tok, part, staff, voice)
                 gs = gridSlice
                 return gs
 
         # Couldn't find a place for the label abbr, so place at beginning of measure
-        gs = GridSlice(self, timestamp, SliceType.LabelAbbrs, maxPart)
+        gs = GridSlice(self, ts, SliceType.LabelAbbrs, maxPart)
         gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
@@ -424,12 +455,13 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    adding the comment if it matches to another global comment at the
     //    same timestamp with the same text.
     '''
-    def addGlobalComment(self, tok: str, timestamp: HumNum) -> GridSlice:
+    def addGlobalComment(self, tok: str, timestamp: HumNumIn) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
         gs: GridSlice = None
-        if not self.slices or self.slices[-1].timestamp < timestamp:
+        if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, timestamp, SliceType.GlobalComments, 1)
+            gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
             gs.addToken(tok, 0, 0, 0)
             self.slices.append(gs)
             return gs
@@ -437,8 +469,8 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         # search for existing data line (of any type) with the same timestamp
         for idx, gridSlice in enumerate(self.slices):
             # does it need to be before data slice or any slice?
-            # if (((*iterator)->getTimestamp() == timestamp) && (*iterator)->isDataSlice())
-            if gridSlice.timestamp == timestamp:
+            # if (((*iterator)->getTimestamp() == ts) && (*iterator)->isDataSlice())
+            if gridSlice.timestamp == ts:
                 # found the correct timestamp on a slice, so add the global comment
                 # before the slice.  But don't add if the slice we found is a
                 # global comment with the same text.
@@ -448,14 +480,14 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                         gs = gridSlice
                         return gs
 
-                gs = GridSlice(self, timestamp, SliceType.GlobalComments, 1)
+                gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
                 gs.addToken(tok, 0, 0, 0)
                 self.slices.insert(idx, gs)
                 return gs
 
-            if gridSlice.timestamp > timestamp:
+            if gridSlice.timestamp > ts:
                 # insert before this slice
-                gs = GridSlice(self, timestamp, SliceType.GlobalComments, 1)
+                gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
                 gs.addToken(tok, 0, 0, 0)
                 self.slices.insert(idx, gs)
                 return gs
@@ -484,7 +516,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 mts: HumNum = self.timestamp
                 mdur: HumNum = self.duration
                 sts: HumNum = gridSlice.timestamp
-                sliceDur: HumNum = (mts + mdur) - sts
+                sliceDur: HumNum = opFrac((mts + mdur) - sts)
                 gridSlice.duration = sliceDur
 
         # in the first bar, we delay the initial barline until after all the clef, keysig, etc

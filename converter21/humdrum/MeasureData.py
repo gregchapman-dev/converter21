@@ -15,8 +15,10 @@ from typing import Union, List
 #from fractions import Fraction
 
 import music21 as m21
+from music21.common import opFrac
+
 # from converter21.humdrum import HumdrumExportError
-from converter21.humdrum import HumNum
+from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import EventData
@@ -35,8 +37,8 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 
 class SimultaneousEvents:
     def __init__(self):
-        self.startTime : HumNum = HumNum(-1) # start time of events
-        self.duration  : HumNum = HumNum(-1) # max duration of events?
+        self.startTime : HumNum = opFrac(-1) # start time of events
+        self.duration  : HumNum = opFrac(-1) # max duration of events?
         self.zeroDur   : [EventData] = []    # zero-duration events at this time
         self.nonZeroDur: [EventData] = []    # non-zero-duration events at this time
 
@@ -52,9 +54,9 @@ class MeasureData:
         self.spannerBundle = ownerStaff.spannerBundle # inherited from ownerScore, ultimately
         self._prevMeasData = prevMeasData
         self._measureIndex: int = measureIndex
-        self._startTime: HumNum = HumNum(-1)
-        self._duration: HumNum = HumNum(-1)
-        self._timeSigDur: HumNum = HumNum(-1)
+        self._startTime: HumNum = opFrac(-1)
+        self._duration: HumNum = opFrac(-1)
+        self._timeSigDur: HumNum = opFrac(-1)
         # leftBarlineStyle describes the left barline of this measure
         self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
         # rightBarlineStyle describes the right barline of this measure
@@ -135,7 +137,7 @@ class MeasureData:
     '''
     def _parseMeasure(self):
         self._setStartTimeOfMeasure()
-        self._duration = HumNum(self.m21Measure.duration.quarterLength)
+        self._duration = self.m21Measure.duration.quarterLength
 
         # m21 tracks timesigdur for us in barDuration, which is always the latest timeSig duration
         # But it can be ridiculously slow if it has to search back in the score for a timesignature,
@@ -144,7 +146,7 @@ class MeasureData:
         if self.m21Measure.timeSignature is None and self._prevMeasData is not None:
             self._timeSigDur = self._prevMeasData.timeSigDur
         else:
-            self._timeSigDur = HumNum(self.m21Measure.barDuration.quarterLength)
+            self._timeSigDur = self.m21Measure.barDuration.quarterLength
 
         self._measureNumberString = self.m21Measure.measureNumberWithSuffix()
         if self._measureNumberString == '0':
@@ -197,8 +199,10 @@ class MeasureData:
         else:
             # first parse the voices...
             for voiceIndex, voice in enumerate(self.m21Measure.voices):
-                emptyStartDuration: HumNum = HumNum(voice.offset)
-                emptyEndDuration: HumNum = HumNum(self.duration - (HumNum(voice.offset) + HumNum(voice.duration.quarterLength)))
+                emptyStartDuration: HumNum = voice.offset
+                emptyEndDuration: HumNum = opFrac(self.duration -
+                                                    (voice.offset +
+                                                        voice.duration.quarterLength))
                 self._parseEventsIn(voice, voiceIndex, emptyStartDuration, emptyEndDuration)
 
             # ... then parse the non-streams last, so that the ending barline lands after
@@ -210,8 +214,8 @@ class MeasureData:
 
     def _parseEventsIn(self, m21Stream: Union[m21.stream.Voice, m21.stream.Measure],
                              voiceIndex: int,
-                             emptyStartDuration: HumNum = HumNum(0),
-                             emptyEndDuration: HumNum = HumNum(0)):
+                             emptyStartDuration: HumNumIn = 0,
+                             emptyEndDuration: HumNumIn = 0):
         if emptyStartDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the beginning of m21Stream
@@ -223,7 +227,7 @@ class MeasureData:
                 event: EventData = EventData(m21StartRest, -1, voiceIndex, self, offsetInScore=startTime)
                 if event is not None:
                     self.events.append(event)
-                startTime += duration
+                startTime = opFrac(startTime + duration)
 
         for elementIndex, element in enumerate(m21Stream.recurse()
                                                     .getElementsNotOfClass(m21.stream.Stream)):
@@ -247,14 +251,14 @@ class MeasureData:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the end of m21Stream
             durations: List[HumNum] = Convert.getPowerOfTwoDurationsWithDotsAddingTo(emptyEndDuration)
-            startTime: HumNum = self.startTime + self.duration - emptyEndDuration
+            startTime: HumNum = opFrac(self.startTime + self.duration - opFrac(emptyEndDuration))
             for duration in durations:
                 m21EndRest: m21.note.Rest = m21.note.Rest(duration=m21.duration.Duration(duration))
                 m21EndRest.style.hideObjectOnPrint = True
                 event: EventData = EventData(m21EndRest, -1, voiceIndex, self, offsetInScore=startTime)
                 if event is not None:
                     self.events.append(event)
-                startTime += duration
+                startTime = opFrac(startTime + duration)
 
     def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> List[EventData]:
         output: List[EventData] = []
@@ -273,11 +277,11 @@ class MeasureData:
             thisEventIsEnd: bool = endNote is event.m21Object
             wedgeStartTime: HumNum = None
             wedgeDuration: HumNum = None
-            wedgeEndTime: HumNum = (HumNum(endNote.getOffsetInHierarchy(score))
-                                        + HumNum(endNote.duration.quarterLength))
+            wedgeEndTime: HumNum = opFrac(endNote.getOffsetInHierarchy(score) +
+                                            endNote.duration.quarterLength)
             if thisEventIsStart:
-                wedgeStartTime = HumNum(startNote.getOffsetInHierarchy(score))
-                wedgeDuration = HumNum(wedgeEndTime - wedgeStartTime)
+                wedgeStartTime = startNote.getOffsetInHierarchy(score)
+                wedgeDuration = opFrac(wedgeEndTime - wedgeStartTime)
 
             if thisEventIsStart and thisEventIsEnd:
                 # print(f'wedgeStartStopEvent: {event}', file=sys.stderr)
@@ -396,14 +400,14 @@ class MeasureData:
     '''
     def _setStartTimeOfMeasure(self):
         if self.ownerStaff is None:
-            self._startTime = HumNum(0)
+            self._startTime = opFrac(0)
             return
 
         if self._prevMeasData is None:
-            self._startTime = HumNum(0)
+            self._startTime = opFrac(0)
             return
 
-        self._startTime = self._prevMeasData.startTime + self._prevMeasData.duration
+        self._startTime = opFrac(self._prevMeasData.startTime + self._prevMeasData.duration)
 
     '''
     //////////////////////////////

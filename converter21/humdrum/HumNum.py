@@ -11,8 +11,18 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 from fractions import Fraction
+import typing as t
+import music21 as m21
 
-class HumNum(Fraction):
-    pass # all we are is a rename of Fraction; added utility functions can be found in Convert.py
-    # I couldn't figure out how to put the utility functions here, without also implementing
-    # pass through versions of all math routines that returned HumNum(mathresult).
+# HumNum is a type that can be float or Fraction.  The idea is that float
+# should be used for performance (if exactly accurate), and Fraction will
+# be used for accuracy (but only if necessary).
+# music21.common.opFrac(num) will convert from int, float, or Fraction to
+# the appropriate HumNum type (float or Fraction), and should be called on
+# the result of any HumNum math, to get things back to the most performant
+# type possible (given the newly computed value).
+HumNum = t.Union[float, Fraction]
+
+# HumNumIn is a type that can be converted to HumNum (int will turn into float,
+# since it obviously can be accurately represented).
+HumNumIn = t.Union[int, float, Fraction]
