@@ -49,7 +49,7 @@ class GridVoice:
     def __str__(self) -> str:
         if self.token is None:
             return '{n}'
-        return self.token.text
+        return self._token.text
 
     '''
     //////////////////////////////
@@ -106,7 +106,7 @@ class GridVoice:
     def isNull(self) -> bool:
         if self.token is None:
             return True
-        return self.token.isNull
+        return self._token.isNull
 
     '''
     //////////////////////////////

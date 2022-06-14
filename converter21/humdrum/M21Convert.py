@@ -2483,9 +2483,9 @@ class M21Convert:
         hdKey: str = M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
 
         if hdKey is None:
-            # see if it was a 'humdrum:XXX' passthru
-            if nsKey.startswith('humdrum:'):
-                hdKey = nsKey[8:]
+            # see if it was a 'humdrumraw:XXX' passthru
+            if nsKey.startswith('humdrumraw:'):
+                hdKey = nsKey[11:]
 
         return hdKey
 
@@ -2497,9 +2497,9 @@ class M21Convert:
         hdKey: str = M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
 
         if hdKey is None:
-            # see if it was a 'humdrum:XXX' passthru
-            if nsKey.startswith('humdrum:'):
-                hdKey = nsKey[8:]
+            # see if it was a 'humdrumraw:XXX' passthru
+            if nsKey.startswith('humdrumraw:'):
+                hdKey = nsKey[11:]
 
         if isinstance(value, m21.metadata.Text):
             if value.language:

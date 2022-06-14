@@ -123,63 +123,18 @@ if __name__ == "__main__":
     if args.input_file == '-':
         args.input_file = sys.stdin.read() # args.input_file now contains the entire input as a string
 
-    # import from input file with whatever metadata APIs it uses
+    # import from input file
     s0 = converter.parse(args.input_file, format=args.input_from, forceSource=True)
 
-    # export to musicxml with new metadata APIs
-    ScoreExporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = False
+    # export to musicxml
     outFile1 = s0.write(fmt='musicxml', makeNotation=False)
 
-    # import from new musicxml with new metadata APIs
-    MusicXMLImporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = False
+    # import from new musicxml
     s1 = converter.parse(outFile1, forceSource=True)
 
-    # export to input format with whatever metadata APIs it uses
+    export to input format
     outFile2 = s1.write(fmt=fileExt, makeNotation=False)
-
-    # bbdiff the first and last (both input format)
-    subprocess.run(['bbdiff', str(args.input_file), str(outFile2)], check=False)
-
-    # Now do it again, playing around with backward compatible mode
-
-    # export from new metadata to old musicxml
-    ScoreExporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = True
-    outFile1 = s0.write(fmt='musicxml', makeNotation=False)
-
-    # import from old musicxml with old metadata APIs
-    MusicXMLImporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = True
-    s1 = converter.parse(outFile1, forceSource=True)
-
-    # export to input format with whatever metadata APIs it uses
-    outFile2 = s1.write(fmt=fileExt, makeNotation=False)
-
-    # bbdiff the first and last (both input format)
-    subprocess.run(['bbdiff', str(args.input_file), str(outFile2)], check=False)
-
-    # Now do it again, playing around even more with backward compatible mode
-
-    # import from old musicxml with new metadata APIs
-    MusicXMLImporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = False
-    s1 = converter.parse(outFile1, forceSource=True)
-
-    # export to input format with whatever metadata APIs it uses
-    outFile2 = s1.write(fmt=fileExt, makeNotation=False)
-
-    # bbdiff the first and last (both input format)
-    subprocess.run(['bbdiff', str(args.input_file), str(outFile2)], check=False)
-
-    # Now do it again, playing around with backward compatible mode
-
-    # export from new metadata to new musicxml
-    ScoreExporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = False
-    outFile1 = s0.write(fmt='musicxml', makeNotation=False)
-
-    # import from new musicxml with old metadata APIs
-    MusicXMLImporter.USE_BACKWARD_COMPATIBLE_METADATA_APIS = True
-    s1 = converter.parse(outFile1, forceSource=True)
-
-    # export to input format with whatever metadata APIs it uses
-    outFile2 = s1.write(fmt=fileExt, makeNotation=False)
+    # outFile2 = s0.write(fmt=fileExt, makeNotation=False)
 
     # bbdiff the first and last (both input format)
     subprocess.run(['bbdiff', str(args.input_file), str(outFile2)], check=False)

@@ -12,6 +12,8 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
+from music21.common import opFrac
+
 def getKeyTuple(inKey: str) -> (str, str, str):
     keyList: [str] = inKey.split(':')
     if len(keyList) == 1:
@@ -232,7 +234,6 @@ class HumHash:
 
     def getValueHumNum(self, *ns1ns2key): # returns HumNum
         from converter21.humdrum import HumdrumToken
-        from converter21.humdrum import HumNum
         value = self.getValue(*ns1ns2key)
         if value is None:
             return opFrac(0)

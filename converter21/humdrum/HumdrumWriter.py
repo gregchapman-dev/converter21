@@ -529,10 +529,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # what's left in allItems goes at the bottom of the file
         for nsKey, value in allItems:
+            refLineStr: t.Optional[str] = None
             hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            if hdKeyWithoutIndex is not None:
+                idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            else:
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(0, nsKey, value)
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
