@@ -132,7 +132,7 @@ if __name__ == "__main__":
     # import from new musicxml
     s1 = converter.parse(outFile1, forceSource=True)
 
-    export to input format
+    # export to input format
     outFile2 = s1.write(fmt=fileExt, makeNotation=False)
     # outFile2 = s0.write(fmt=fileExt, makeNotation=False)
 
