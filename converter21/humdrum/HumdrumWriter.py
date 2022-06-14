@@ -529,7 +529,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # what's left in allItems goes at the bottom of the file
         for nsKey, value in allItems:
-            refLineStr: t.Optional[str] = None
+            refLineStr: Optional[str] = None
             hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
             if hdKeyWithoutIndex is not None:
                 idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
