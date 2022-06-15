@@ -8105,10 +8105,13 @@ class HumdrumFile(HumdrumFileContent):
                 m21Metadata.add(m21UniqueName, m21Value)
                 continue
 
-            # Doesn't match any known m21.metadata-supported metadata.
+            # Doesn't match any known m21.metadata-supported metadata (or it does, and
+            # we couldn't parse it, so we'll have to treat it verbatim).
             if isStandardHumdrumKey:
-                # prepend the unparsed key with 'humdrum:', and put it in as custom unparsed
-                m21Metadata.addCustom('humdrum:' + k, v)
+                # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
+                # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
+                # it in as "custom" unparsed
+                m21Metadata.addCustom('humdrumraw:' + k, v)
             else:
                 # freeform key/value, put it in as custom
                 m21Metadata.addCustom(k, v)
