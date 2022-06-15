@@ -16,7 +16,7 @@
 import sys
 import re
 import math
-from typing import Union, List, Tuple, Dict, OrderedDict, Optional, Type, Any
+from typing import Union, List, Tuple, OrderedDict, Optional, Type, Any
 from fractions import Fraction
 
 import music21 as m21
