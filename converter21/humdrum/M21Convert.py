@@ -102,7 +102,7 @@ class M21Convert:
         'RT#': '', # track number
         # Performance information (if the Humdrum encodes, say, a MIDI performance)
         'MGN': '', # ensemble's name
-        'MPN': 'performer', # performer's name
+        'MPN': '', # performer's name
         'MPS': '', # suspected performer
         'MRD': '', # date of performance (**date format)
         'MLC': '', # place of performance
@@ -2447,7 +2447,7 @@ class M21Convert:
             attr = M21Convert._dateAttrNames[i]
             value = getattr(date, attr)
             error = getattr(date, attr + 'Error')
-            if value is None:
+            if not value:
                 msg.append('')
             else:
                 fmt = M21Convert._dateAttrStrFormat[i]
