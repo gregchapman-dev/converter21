@@ -392,7 +392,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if m21Metadata is None:
             return
 
-        # get all metadata tuples (nsKey, singleValue)
+        # get all metadata tuples (namespaceName, singleValue)
         # getAllNamedItems returns a large tuple instead of a list, so we have to convert
         # to a list, since we want to remove things from it as we process them.
         allItems = list(m21Metadata.getAllNamedValues())
@@ -404,10 +404,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # 4. Copyright(s) including original and electronic
 
         def returnAndRemoveAllItemsWithUniqueName(allItems: List[Tuple], uniqueName: str) -> List[Tuple]:
-            # NSKey is 0th element of tuple
+            # namespaceName is 0th element of tuple
             output: List[Tuple] = []
             for item in allItems:
-                if m21.metadata.Metadata.nsKeyToUniqueName(item[0]) == uniqueName:
+                if m21.metadata.Metadata.namespaceNameToUniqueName(item[0]) == uniqueName:
                     output.append(item)
 
             for itemToRemove in output:
@@ -449,97 +449,97 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         atLine: int = 0
 
-        for nsKey, value in mdComposerItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdComposerItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdTitleItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdAlternateTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdAlternateTitleItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdPopularTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdPopularTitleItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdParentTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdParentTitleItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdGroupTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdGroupTitleItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdMovementNameItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdMovementNameItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdMovementNumberItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdMovementNumberItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
-        for nsKey, value in mdCopyrightItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+        for namespaceName, value in mdCopyrightItems:
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         # what's left in allItems goes at the bottom of the file
-        for nsKey, value in allItems:
+        for namespaceName, value in allItems:
             refLineStr: Optional[str] = None
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(nsKey, value)
+            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             if hdKeyWithoutIndex is not None:
                 idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                 hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, nsKey, value)
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, namespaceName, value)
             else:
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(0, nsKey, value)
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(0, namespaceName, value)
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 

@@ -2511,28 +2511,28 @@ class M21Convert:
         return c.names[0]
 
     @staticmethod
-    def m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey: str) -> Optional[str]:
-        uniqueName: str = m21.metadata.Metadata.nsKeyToUniqueName(nsKey)
+    def m21NamespaceNameToHumdrumKeyWithoutIndexOrLanguage(namespaceName: str) -> Optional[str]:
+        uniqueName: str = m21.metadata.Metadata.namespaceNameToUniqueName(namespaceName)
         hdKey: str = M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
 
         if hdKey is None:
             # see if it was a 'humdrumraw:XXX' passthru
-            if nsKey.startswith('humdrumraw:'):
-                hdKey = nsKey[11:]
+            if namespaceName.startswith('humdrumraw:'):
+                hdKey = namespaceName[11:]
 
         return hdKey
 
     @staticmethod
-    def m21MetadataItemToHumdrumKeyWithoutIndex(nsKey: str,
+    def m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName: str,
                                                 value: Any
                                                 ) -> Optional[str]:
-        uniqueName: str = m21.metadata.Metadata.nsKeyToUniqueName(nsKey)
+        uniqueName: str = m21.metadata.Metadata.namespaceNameToUniqueName(namespaceName)
         hdKey: str = M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
 
         if hdKey is None:
             # see if it was a 'humdrumraw:XXX' passthru
-            if nsKey.startswith('humdrumraw:'):
-                hdKey = nsKey[11:]
+            if namespaceName.startswith('humdrumraw:'):
+                hdKey = namespaceName[11:]
 
         if isinstance(value, m21.metadata.Text):
             if value.language:
@@ -2544,17 +2544,17 @@ class M21Convert:
 
     @staticmethod
     def m21MetadataItemToHumdrumReferenceLineStr(idx: int, # this is the index to insert into the hdKey
-                                                 nsKey: str,
+                                                 namespaceName: str,
                                                  value: Any) -> Optional[str]:
         valueStr: str = ''
 
-        hdKey = M21Convert.m21NSKeyToHumdrumKeyWithoutIndexOrLanguage(nsKey)
+        hdKey = M21Convert.m21NamespaceNameToHumdrumKeyWithoutIndexOrLanguage(namespaceName)
         if hdKey is not None:
             if idx > 0: # we generate 'XXX', 'XXX1', 'XXX2', etc
                 hdKey += str(idx)
         else:
             # must be free-form personal key... pass it thru as is (no indexing)
-            hdKey = nsKey
+            hdKey = namespaceName
 
         if isinstance(value, m21.metadata.Text):
             if value.language:
