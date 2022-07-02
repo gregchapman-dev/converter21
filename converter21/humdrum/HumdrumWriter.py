@@ -532,6 +532,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # what's left in allItems goes at the bottom of the file
         for namespaceName, value in allItems:
+            if namespaceName.startswith('m21FileInfo:'):
+                # We don't write fileInfo (which is about the original file, not the one we're writing)
+                # to the output Humdrum file.
+                continue
             refLineStr: Optional[str] = None
             hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(namespaceName, value)
             if hdKeyWithoutIndex is not None:

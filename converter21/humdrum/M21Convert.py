@@ -181,40 +181,6 @@ class M21Convert:
         'RWB': '' # a warning about the representation
     }
 
-    humdrumReferenceKeyToM21ContributorRole: dict = {
-        'COM': 'composer',
-        'COA': 'attributed composer',
-        'COS': 'suspected composer',
-        'COL': 'composer alias',
-        'COC': 'corporate composer',
-        'LYR': 'lyricist',
-        'LIB': 'librettist',
-        'LAR': 'arranger',
-        'LOR': 'orchestrator',
-        'TRN': 'translator',
-        'YOO': 'original document owner',
-        'YOE': 'original editor',
-        'EED': 'electronic editor',
-        'ENC': 'electronic encoder'
-    }
-
-    m21ContributorRoleToHumdrumReferenceKey: dict = {
-        'composer'                  : 'COM',
-        'attributed composer'       : 'COA',
-        'suspected composer'        : 'COS',
-        'composer alias'            : 'COL',
-        'corporate composer'        : 'COC',
-        'lyricist'                  : 'LYR',
-        'librettist'                : 'LIB',
-        'arranger'                  : 'LAR',
-        'orchestrator'              : 'LOR',
-        'translator'                : 'TRN',
-        'original document owner'   : 'YOO',
-        'original editor'           : 'YOE',
-        'electronic editor'         : 'EED',
-        'electronic encoder'        : 'ENC'
-    }
-
     # This dict is private because we wrap a function around it.
     _m21MetadataPropertyUniqueNameToHumdrumReferenceKey: dict = {
         uniqueName: hdKey for (hdKey, uniqueName) in
