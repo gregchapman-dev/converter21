@@ -4810,8 +4810,40 @@ class HumdrumFile(HumdrumFileContent):
         voice.coreInsert(noteOffsetInVoice, note)
         return True # we did insert into the voice
 
-    def _addArpeggio(self, gnote, layerTok):
-        pass # TODO: arpeggios (_addArpeggio)
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addArpeggio --
+    //   : = arpeggio which may cross between layers on a staff.
+    //   :: = arpeggio which crosses staves on a single system.
+    '''
+    def _addArpeggio(self, gnote: m21.note.GeneralNote, layerTok: HumdrumToken):
+        isSystemArpeggio: bool = False
+        isStaffArpeggio: bool = False
+        earp: HumdrumToken = None
+
+        if '::' in layerTok.text:
+            if not self._isLowestSystemArpeggio(layerTok):
+                return
+            isSystemArpeggio = True
+            earp = self._getHighestSystemArpeggio(layerTok)
+            if earp is None:
+                # no system arpeggio actually found
+                return
+        elif ':' in layerTok.text:
+            if not self._isLeftmostStaffArpeggio(layerTok):
+                return
+            isStaffArpeggio = True
+            earp = self.getRightmostStaffArpeggio(layerTok)
+            if earp is None:
+                # no staff arpeggio actually found
+                return
+        else:
+            return
+
+
+
+
 
     def _addArticulations(self, note: m21.note.GeneralNote, token: HumdrumToken):
         note.articulations += M21Convert.m21Articulations(
