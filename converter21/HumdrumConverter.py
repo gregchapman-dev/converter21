@@ -62,6 +62,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         self.humdrumFile = hf
         return self.stream
 
+    # pylint: disable=arguments-differ
     def parseFile(self, filePath, number=None):
         '''
         Create HumdrumFile object from a file path, and create a music21 Stream from it.

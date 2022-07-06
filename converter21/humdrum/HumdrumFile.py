@@ -4208,6 +4208,20 @@ class HumdrumFile(HumdrumFileContent):
         return insertedIntoVoice
 
     @staticmethod
+    def _getGeneralNoteOrPlaceHolder(token: HumdrumToken) -> m21.note.GeneralNote:
+        gnote: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
+        if not gnote:
+            # gnote may not have been created yet. If so, we will use a
+            # placeHolder GeneralNote instead, from which createNote will
+            # transfer the spanners, when creating the actual note.  If there
+            # isn't already a placeHolder GeneralNote, we will make one here.
+            gnote = token.getValueM21Object('music21', 'placeHolder')
+            if gnote is None:
+                gnote = m21.note.GeneralNote()
+                token.setValue('music21', 'placeHolder', gnote)
+        return gnote
+
+    @staticmethod
     def _createNote(infoHash: HumHash = None) -> m21.note.Note:
         # infoHash is generally the token for which the note is being created,
         # but we declare it as a HumHash, since the only thing we read is
@@ -4816,34 +4830,140 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::addArpeggio --
     //   : = arpeggio which may cross between layers on a staff.
     //   :: = arpeggio which crosses staves on a single system.
+
+        Music21 has two types of arpeggio marks: a single chord mark (ArpeggioMark, placed in
+        chord.expressions), and a multi-chord/note mark (ArpeggioMarkSpanner, which contains
+        all the notes/chords that are arpeggiated together).
+
+        Note that a Humdrum staff arpeggio may be translated to an ArpeggioMark on a single
+        chord, or may have multiple chords/notes (in multiple layers on a staff) so it must
+        be translated to an ArpeggioMarkSpanner. A system arpeggio always has multiple
+        chords/notes, so it is always translated to an ArpeggioMarkSpanner.
     '''
     def _addArpeggio(self, gnote: m21.note.GeneralNote, layerTok: HumdrumToken):
-        isSystemArpeggio: bool = False
-        isStaffArpeggio: bool = False
-        earp: HumdrumToken = None
+        arpeggiatedTokens: List[HumdrumToken] = []
 
         if '::' in layerTok.text:
-            if not self._isLowestSystemArpeggio(layerTok):
+            # it's a cross-staff arpeggio (a.k.a. system arpeggio)
+            if not self._isLeftmostSystemArpeggioToken(layerTok):
                 return
-            isSystemArpeggio = True
-            earp = self._getHighestSystemArpeggio(layerTok)
-            if earp is None:
+            arpeggiatedTokens = self._getSystemArpeggioTokens(layerTok)
+            if not arpeggiatedTokens:
                 # no system arpeggio actually found
                 return
         elif ':' in layerTok.text:
-            if not self._isLeftmostStaffArpeggio(layerTok):
+            # it's a single-layer or cross-layer arpeggio (a.k.a. staff arpeggio)
+            if not self._isLeftmostStaffArpeggioToken(layerTok):
                 return
-            isStaffArpeggio = True
-            earp = self.getRightmostStaffArpeggio(layerTok)
-            if earp is None:
+            arpeggiatedTokens = self._getStaffArpeggioTokens(layerTok)
+            if not arpeggiatedTokens:
                 # no staff arpeggio actually found
                 return
         else:
+            # no arpeggio on this note/chord
             return
 
+        if len(arpeggiatedTokens) == 1:
+            gnote.expressions.append(m21.expressions.ArpeggioMark())
+        elif len(arpeggiatedTokens) > 1:
+            arpeggioSpanner = m21.expressions.ArpeggioMarkSpanner()
+            for arpTok in arpeggiatedTokens:
+                gn: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(arpTok)
+                arpeggioSpanner.addSpannedElements(gn)
+            self.m21Score.coreInsert(0, arpeggioSpanner)
+            self.m21Score.coreElementsChanged()
 
+    @staticmethod
+    def _isLeftmostSystemArpeggioToken(token: HumdrumToken) -> bool:
+        tok: Optional[HumdrumToken] = token.previousFieldToken
 
+        # loop over tokens to our left, to see if there are any arpeggiated chords/notes
+        while tok is not None:
+            if not tok.isKern:
+                # skip spines that don't contain notes/chords/etc
+                tok = tok.previousFieldToken
+                continue
 
+            if ':' in tok.text:
+                # we found an arpeggiated chord/note to our left, so...
+                return False
+
+            tok = tok.previousFieldToken
+
+        return True
+
+    @staticmethod
+    def _getSystemArpeggioTokens(leftmostToken: HumdrumToken) -> List[HumdrumToken]:
+        output: List[HumdrumToken] = [leftmostToken]
+        tok: Optional[HumdrumToken] = leftmostToken.nextFieldToken
+
+        # loop over tokens to our right, adding them to the output list until we see
+        # a token without ':'.
+        while tok is not None:
+            if not tok.isKern:
+                # skip spines that don't contain notes/chords/etc
+                tok = tok.nextFieldToken
+                continue
+
+            if '::' not in tok.text:
+                # it's not an arpeggiated token, we're done
+                break
+
+            output.append(tok)
+            tok = tok.nextFieldToken
+
+        return output
+
+    @staticmethod
+    def _isLeftmostStaffArpeggioToken(token: HumdrumToken) -> bool:
+        staffTrack: int = token.track
+        tok: Optional[HumdrumToken] = token.previousFieldToken
+
+        # loop over tokens to our left, to see if there are any arpeggiated chords/notes
+        while tok is not None:
+            if tok.track != staffTrack:
+                # all done (we've moved into a different staff)
+                break
+
+            if not tok.isKern:
+                # skip spines that don't contain notes/chords/etc
+                tok = tok.previousFieldToken
+                continue
+
+            if ':' in tok.text:
+                # we found an arpeggiated chord/note to our left, so...
+                return False
+
+            tok = tok.previousFieldToken
+
+        return True
+
+    @staticmethod
+    def _getStaffArpeggioTokens(leftmostToken: HumdrumToken) -> List[HumdrumToken]:
+        output: List[HumdrumToken] = [leftmostToken]
+        staffTrack: int = leftmostToken.track
+        tok: Optional[HumdrumToken] = leftmostToken.nextFieldToken
+
+        # loop over tokens to our right, adding them to the output list until we see
+        # a token without ':'.
+        while tok is not None:
+            if tok.track != staffTrack:
+                # all done (we've moved into a different staff)
+                break
+
+            if not tok.isKern:
+                # skip spines that don't contain notes/chords/etc
+                tok = tok.nextFieldToken
+                continue
+
+            if ':' not in tok.text:
+                # it's not an arpeggiated token, we're done
+                break
+
+            output.append(tok)
+            tok = tok.nextFieldToken
+
+        return output
 
     def _addArticulations(self, note: m21.note.GeneralNote, token: HumdrumToken):
         note.articulations += M21Convert.m21Articulations(
@@ -5002,16 +5122,7 @@ class HumdrumFile(HumdrumFileContent):
         if justOneNote:
             trillExtension = m21.expressions.TrillExtension(startNote)
         else:
-            endNote = endTok.getValueM21Object('music21', 'generalNote')
-            if not endNote:
-                # endNote may not have been created yet. If so, we will use a
-                # placeHolder GeneralNote instead, from which createNote will
-                # transfer the spanners, when creating the actual note.  If there
-                # isn't already a placeHolder GeneralNote, we will make one here.
-                endNote = endTok.getValueM21Object('music21', 'placeHolder')
-                if endNote is None:
-                    endNote = m21.note.GeneralNote()
-                    endTok.setValue('music21', 'placeHolder', endNote)
+            endNote = self._getGeneralNoteOrPlaceHolder(endTok)
             trillExtension = m21.expressions.TrillExtension(startNote, endNote)
 
         self.m21Score.coreInsert(0, trillExtension)
@@ -5289,18 +5400,7 @@ class HumdrumFile(HumdrumFileContent):
             if isInvisible:
                 continue
 
-            startNote: m21.note.GeneralNote = slurStartTok.getValueM21Object(
-                                                'music21', 'generalNote')
-            if not startNote:
-                # startNote may not have been created yet. If so, we will use a
-                # placeHolder GeneralNote instead, from which createNote will
-                # transfer the spanners, when creating the actual note.  If there
-                # isn't already a placeHolder GeneralNote, we will make one here.
-                startNote = slurStartTok.getValueM21Object('music21', 'placeHolder')
-                if startNote is None:
-                    startNote = m21.note.GeneralNote()
-                    slurStartTok.setValue('music21', 'placeHolder', startNote)
-
+            startNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(slurStartTok)
             slur: m21.spanner.Slur = m21.spanner.Slur(startNote, endNote)
             self._addSlurLineStyle(slur, slurStartTok, slurStartNumber)
 
@@ -6667,16 +6767,7 @@ class HumdrumFile(HumdrumFileContent):
 
             startNote: m21.note.GeneralNote = None
             if startNoteToken:
-                startNote = startNoteToken.getValueM21Object('music21', 'generalNote')
-                if not startNote:
-                    # startNote may not have been created yet. If so, we will use a
-                    # placeHolder GeneralNote instead, from which createNote will
-                    # transfer the spanners, when creating the actual note.  If there
-                    # isn't already a placeHolder GeneralNote, we will make one here.
-                    startNote = startNoteToken.getValueM21Object('music21', 'placeHolder')
-                    if startNote is None:
-                        startNote = m21.note.GeneralNote()
-                        startNoteToken.setValue('music21', 'placeHolder', startNote)
+                startNote = self._getGeneralNoteOrPlaceHolder(startNoteToken)
             else:
                 # insert a Voice (at measure offset 0) with two invisible Rests, the first starting
                 # at offset 0 and ending at voice offset token.durationFromBarline, and the second
@@ -6691,16 +6782,7 @@ class HumdrumFile(HumdrumFileContent):
                                                                        transitionOffset)
             endNote: m21.note.GeneralNote = None
             if endNoteToken:
-                endNote = endNoteToken.getValueM21Object('music21', 'generalNote')
-                if not endNote:
-                    # endNote may not have been created yet. If so, we will use a
-                    # placeHolder GeneralNote instead, from which createNote will
-                    # transfer the spanners, when creating the actual note.  If there
-                    # isn't already a placeHolder GeneralNote, we will make one here.
-                    endNote = endNoteToken.getValueM21Object('music21', 'placeHolder')
-                    if endNote is None:
-                        endNote = m21.note.GeneralNote()
-                        endNoteToken.setValue('music21', 'placeHolder', endNote)
+                endNote = self._getGeneralNoteOrPlaceHolder(endNoteToken)
             else:
                 # Create a measure-length Voice filled with multiple invisible Rests, with one
                 # ending at offset endTok.durationFromBarline, and another starting at

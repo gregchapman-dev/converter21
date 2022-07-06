@@ -169,6 +169,8 @@ class M21Utilities:
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 expressions.append(spanner)
                 continue
+            if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                expressions.append(spanner)
 
         # finish up with gnote.expressions
         expressions += gnote.expressions
