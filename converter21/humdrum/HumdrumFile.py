@@ -4886,6 +4886,11 @@ class HumdrumFile(HumdrumFileContent):
                 tok = tok.previousFieldToken
                 continue
 
+            if tok.isRest and tok.isInvisible:
+                # skip invisible rests
+                tok = tok.nextFieldToken
+                continue
+
             if ':' in tok.text:
                 # we found an arpeggiated chord/note to our left, so...
                 return False
@@ -4904,6 +4909,11 @@ class HumdrumFile(HumdrumFileContent):
         while tok is not None:
             if not tok.isKern:
                 # skip spines that don't contain notes/chords/etc
+                tok = tok.nextFieldToken
+                continue
+
+            if tok.isRest and tok.isInvisible:
+                # skip invisible rests
                 tok = tok.nextFieldToken
                 continue
 
@@ -4932,6 +4942,11 @@ class HumdrumFile(HumdrumFileContent):
                 tok = tok.previousFieldToken
                 continue
 
+            if tok.isRest and tok.isInvisible:
+                # skip invisible rests
+                tok = tok.nextFieldToken
+                continue
+
             if ':' in tok.text:
                 # we found an arpeggiated chord/note to our left, so...
                 return False
@@ -4955,6 +4970,11 @@ class HumdrumFile(HumdrumFileContent):
 
             if not tok.isKern:
                 # skip spines that don't contain notes/chords/etc
+                tok = tok.nextFieldToken
+                continue
+
+            if tok.isRest and tok.isInvisible:
+                # skip invisible rests
                 tok = tok.nextFieldToken
                 continue
 
