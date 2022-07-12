@@ -4367,6 +4367,8 @@ class HumdrumFile(HumdrumFileContent):
         try:
             tremolo2.numberOfMarks = beams
             for z in range(tokenIdx+1, len(layerData)):
+                if isinstance(layerData[z], FakeRestToken):
+                    continue
                 if re.search(r'@@(\d+)@@', layerData[z].text):
                     second = layerData[z]
                     second.setValue('auto', 'unexpandedTremolo2AlreadyProcessed', '1')
