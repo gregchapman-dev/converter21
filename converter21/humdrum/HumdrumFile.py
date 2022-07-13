@@ -4843,6 +4843,12 @@ class HumdrumFile(HumdrumFileContent):
         chords/notes, so it is always translated to an ArpeggioMarkSpanner.
     '''
     def _addArpeggio(self, gnote: m21.note.GeneralNote, layerTok: HumdrumToken):
+        if not M21Utilities.m21SupportsArpeggioMarks():
+            # M21 ArpeggioMark support will (hopefully) be in v8.  It is in a PR
+            # at the moment, and if we're using that branch, we want to run our
+            # arpeggio code.
+            return
+
         arpeggiatedTokens: List[HumdrumToken] = []
 
         if '::' in layerTok.text:
