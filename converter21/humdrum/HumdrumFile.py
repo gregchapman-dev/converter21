@@ -4888,7 +4888,7 @@ class HumdrumFile(HumdrumFileContent):
 
             if tok.isRest and tok.isInvisible:
                 # skip invisible rests
-                tok = tok.nextFieldToken
+                tok = tok.previousFieldToken
                 continue
 
             if ':' in tok.text:
@@ -4944,7 +4944,7 @@ class HumdrumFile(HumdrumFileContent):
 
             if tok.isRest and tok.isInvisible:
                 # skip invisible rests
-                tok = tok.nextFieldToken
+                tok = tok.previousFieldToken
                 continue
 
             if ':' in tok.text:
