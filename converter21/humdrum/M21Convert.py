@@ -1830,15 +1830,16 @@ class M21Convert:
                 if expr.type == 'upright':
                     output += '<'
                 continue
-            if isinstance(expr, m21.expressions.ArpeggioMark):
-                output += ':'
-                continue
-            if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):
-                if M21Convert._allSpannedGeneralNotesInSameMeasure(expr):
+            if M21Utilities.m21SupportsArpeggioMarks():
+                if isinstance(expr, m21.expressions.ArpeggioMark):
                     output += ':'
-                else:
-                    output += '::'
-                continue
+                    continue
+                if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):
+                    if M21Convert._allSpannedGeneralNotesInSameMeasure(expr):
+                        output += ':'
+                    else:
+                        output += '::'
+                    continue
         return output
 
     numberOfFlagsToDurationReciprocal: dict = {
