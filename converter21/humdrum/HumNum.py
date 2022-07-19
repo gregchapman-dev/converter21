@@ -12,7 +12,6 @@
 # ------------------------------------------------------------------------------
 from fractions import Fraction
 import typing as t
-import music21 as m21
 
 # HumNum is a type that can be float or Fraction.  The idea is that float
 # should be used for performance (if exactly accurate), and Fraction will
