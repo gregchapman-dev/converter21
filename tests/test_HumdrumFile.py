@@ -6,7 +6,7 @@ import tempfile
 from converter21.humdrum import HumdrumFileBase
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
-from converter21.humdrum.HumdrumFileBase import getMergedSpineInfo
+from converter21.humdrum.humdrumfilebase import getMergedSpineInfo
 
 
 # The check routine that every test calls at least once

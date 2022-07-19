@@ -11,43 +11,43 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
-from .HumExceptions import HumdrumInternalError, HumdrumSyntaxError, HumdrumExportError
-from .GridCommon import SliceType
-from .GridCommon import MeasureStyle, MeasureType, MeasureVisualStyle
-from .GridCommon import FermataStyle
+from .humexceptions import HumdrumInternalError, HumdrumSyntaxError, HumdrumExportError
+from .gridcommon import SliceType
+from .gridcommon import MeasureStyle, MeasureType, MeasureVisualStyle
+from .gridcommon import FermataStyle
 
-from .HumNum import HumNum, HumNumIn
-from .Convert import Convert
-from .HumAddress import HumAddress
-from .HumHash import HumHash
-from .HumParamSet import HumParamSet
-from .HumdrumToken import HumdrumToken
-from .HumdrumToken import FakeRestToken
-from .M21Utilities import M21Utilities
-from .M21Convert import M21Convert
-from .M21Utilities import M21StaffGroupTree
-from .M21Utilities import M21StaffGroupDescriptionTree
-from .HumdrumLine import HumdrumLine
-from .HumSignifiers import HumSignifiers, HumSignifier
-from .HumdrumFileBase import HumdrumFileBase, TokenPair
-from .HumdrumFileStructure import HumdrumFileStructure
-from .HumdrumFileContent import HumdrumFileContent
-from .HumdrumFile import HumdrumFile
+from .humnum import HumNum, HumNumIn
+from .convert import Convert
+from .humaddress import HumAddress
+from .humhash import HumHash
+from .humparamset import HumParamSet
+from .humdrumtoken import HumdrumToken
+from .humdrumtoken import FakeRestToken
+from .m21utilities import M21Utilities
+from .m21convert import M21Convert
+from .m21utilities import M21StaffGroupTree
+from .m21utilities import M21StaffGroupDescriptionTree
+from .humdrumline import HumdrumLine
+from .humsignifiers import HumSignifiers, HumSignifier
+from .humdrumfilebase import HumdrumFileBase, TokenPair
+from .humdrumfilestructure import HumdrumFileStructure
+from .humdrumfilecontent import HumdrumFileContent
+from .humdrumfile import HumdrumFile
 
-from .HumdrumTools import ToolTremolo
+from .humdrumtools import ToolTremolo
 
-from .EventData import EventData
-from .MeasureData import MeasureData, SimultaneousEvents
-from .StaffData import StaffData
-from .PartData import PartData
-from .ScoreData import ScoreData
+from .eventdata import EventData
+from .measuredata import MeasureData, SimultaneousEvents
+from .staffdata import StaffData
+from .partdata import PartData
+from .scoredata import ScoreData
 
-from .GridVoice import GridVoice
-from .GridSide import GridSide
-from .GridStaff import GridStaff
-from .GridPart import GridPart
-from .GridSlice import GridSlice
-from .GridMeasure import GridMeasure
+from .gridvoice import GridVoice
+from .gridside import GridSide
+from .gridstaff import GridStaff
+from .gridpart import GridPart
+from .gridslice import GridSlice
+from .gridmeasure import GridMeasure
 
-from .HumGrid import HumGrid
-from .HumdrumWriter import HumdrumWriter
+from .humgrid import HumGrid
+from .humdrumwriter import HumdrumWriter
