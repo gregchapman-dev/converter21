@@ -14,6 +14,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumdrumExportError
@@ -66,11 +67,11 @@ class GridStaff():
         return 1
 
     @property
-    def dynamics(self) -> HumdrumToken:
+    def dynamics(self) -> t.Optional[HumdrumToken]:
         return self.sides.dynamics
 
     @dynamics.setter
-    def dynamics(self, newDynamics: HumdrumToken):
+    def dynamics(self, newDynamics: t.Optional[HumdrumToken]):
         self.sides.dynamics = newDynamics
 
 
@@ -123,7 +124,10 @@ class GridStaff():
 				    # there is already a null data token here, so don't
 				    # replace it.
                     return
-                raise HumdrumExportError('Warning, existing token: \'{self.voices[layerIndex].token.text}\' where a null token should be.')
+                raise HumdrumExportError(
+                    f'Warning, existing token: \'{self.voices[layerIndex].token.text}\' where '
+                    'a null token should be.'
+                )
 
         token: HumdrumToken = HumdrumToken(nullStr)
         self.setTokenLayer(layerIndex, token, nextDur)

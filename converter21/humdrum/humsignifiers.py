@@ -10,6 +10,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import re
+import typing as t
 
 SIGNIFIER_UNKNOWN = 'unknown'
 SIGNIFIER_LINK = 'link'
@@ -50,7 +51,7 @@ class HumSignifier:
         # Look in rdfValue for the form 'i = blah bleah blech'
         # This pattern actually matches multi-char signifiers as well...
         m2 = re.search(r'^\s*([^\s=]+)\s*=\s*(.*)\s*$', rdfValue)
-        if m2:
+        if m2 is not None:
             self._signifier = m2.group(1)  # 'i'
             self._definition = m2.group(2) # 'blah bleah blech'
             return True
@@ -60,9 +61,11 @@ class HumSignifier:
         # e.g. 'show spaces color=hotpink'
         m2 = re.search(r'\s*(.*)\s*$', rdfValue)
         self._signifier = ''
-        self._definition = m2.group(1)
+        if m2 is not None:
+            self._definition = m2.group(1)
+            return True
 
-        return True
+        return False
 
     '''
     //////////////////////////////
@@ -125,9 +128,11 @@ class HumSignifiers:
         # describing what text/style should be printed for every crescendo and
         # decrescendo in the score.
         self.crescText: str = ''        # !!!RDF**dynam: < = "cresc."
-        self.crescFontStyle: str = ''   # !!!RDF**dynam: < = "cresc." fontstyle = "normal | italic | bold | bold-italic"
+        self.crescFontStyle: str = ''   # !!!RDF**dynam: < = "cresc."
+                                        #       fontstyle = "normal | italic | bold | bold-italic"
         self.decrescText: str = ''      # !!!RDF**dynam: > = "decresc."
-        self.decrescFontStyle: str = '' # !!!RDF**dynam: > = "decresc." fontstyle = "normal | italic | bold | bold-italic"
+        self.decrescFontStyle: str = '' # !!!RDF**dynam: > = "decresc."
+                                        #       fontstyle = "normal | italic | bold | bold-italic"
 
         # boolean switches:
         self.noStem: str = ''           # !!!RDF**kern: N = no stem
@@ -346,7 +351,7 @@ class HumSignifiers:
             # colored notes
             # !!!RDF**kern: i = marked note, color="#ff0000"
             # !!!RDF**kern: i = matched note, color=blue
-            # !!!RDF**kern: i = <anything at all>color=red (so be careful to do all other colors above)
+            # !!!RDF**kern: i = <anything at all>color=red
             m = re.search('color' + EQUALSVALUE_PATTERN, rdf.definition)
             if m:
                 self.noteMarks.append(rdf.signifier)
@@ -383,7 +388,7 @@ class HumSignifiers:
     //
     // HumSignifiers::getSignifier --
     '''
-    def __getitem__(self, index: int) -> HumSignifier:
+    def __getitem__(self, index: int) -> t.Optional[HumSignifier]:
         if index < 0:
             index += self.signifierCount
 

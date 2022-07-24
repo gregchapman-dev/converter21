@@ -13,8 +13,8 @@
 import sys
 import re
 import math
+import typing as t
 from fractions import Fraction
-from typing import List, Optional
 
 from music21.common import opFrac
 
@@ -28,9 +28,9 @@ class ToolTremolo:
     # Tremolo expansion tool.
     def __init__(self, infile: HumdrumFile):
         self.infile: HumdrumFile = infile
-        self.markupTokens: List[HumdrumToken] = []
-        self.firstTremoloLinesInTrack: List[List[Optional[HumNum]]] = []
-        self.lastTremoloLinesInTrack: List[List[Optional[HumdrumLine]]] = []
+        self.markupTokens: t.List[HumdrumToken] = []
+        self.firstTremoloLinesInTrack: t.List[t.List[t.Optional[HumNum]]] = []
+        self.lastTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
 
     '''
     //////////////////////////////
@@ -106,7 +106,9 @@ class ToolTremolo:
     def notesFoundInTrackBetweenLineIndices(self, track: int, startIdx: int, endIdx: int) -> bool:
         # Check every line between startIdx and endIdx, NOT inclusive at either end
         for i in range(startIdx+1, endIdx):
-            line: HumdrumLine = self.infile[i]
+            line: t.Optional[HumdrumLine] = self.infile[i]
+            if line is None:
+                continue
             for token in line.tokens():
                 if token.track == track:
                     if token.isNote:
@@ -126,8 +128,8 @@ class ToolTremolo:
         for track, (firstLines, lastLines) in enumerate(zip(
                                                 self.firstTremoloLinesInTrack,
                                                 self.lastTremoloLinesInTrack)):
-            lastLineRemovalIndices: List[int] = []
-            firstLineRemovalIndices: List[int] = []
+            lastLineRemovalIndices: t.List[int] = []
+            firstLineRemovalIndices: t.List[int] = []
             currLastLineIndex: int = None
             prevLastLineIndex: int = None
             currFirstLineIndex: int = None
@@ -137,7 +139,8 @@ class ToolTremolo:
                 currLastLineIndex = lastLine.lineIndex
 
                 if prevLastLineIndex is not None:
-                    if not self.notesFoundInTrackBetweenLineIndices(track, prevLastLineIndex, currFirstLineIndex):
+                    if not self.notesFoundInTrackBetweenLineIndices(
+                            track, prevLastLineIndex, currFirstLineIndex):
                         lastLineRemovalIndices.append(idx-1)
                         firstLineRemovalIndices.append(idx)
 
@@ -203,10 +206,11 @@ class ToolTremolo:
         while i < len(self.markupTokens):
             token: HumdrumToken = self.markupTokens[i]
             if '@@' in token.text:
-                token2: Optional[HumdrumToken] = None
+                token2: t.Optional[HumdrumToken] = None
                 if i+1 < len(self.markupTokens):
                     token2 = self.markupTokens[i+1]
-                self.expandFingerTremolo(token, token2)
+                if token2 is not None:
+                    self.expandFingerTremolo(token, token2)
                 i += 2
             else:
                 self.expandTremolo(self.markupTokens[i])
@@ -218,7 +222,6 @@ class ToolTremolo:
     // Tool_tremolo::expandTremolo --
     '''
     def expandTremolo(self, token: HumdrumToken):
-        value: int = 0
         addBeam: bool = False
         tnotes: int = -1
 
@@ -301,7 +304,7 @@ class ToolTremolo:
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token.durationFromStart
         timestamp: HumNum = opFrac(startTime + increment)
-        currTok: HumdrumToken = token.nextToken(0)
+        currTok: t.Optional[HumdrumToken] = token.nextToken(0)
         counter: int = 1
 
         while currTok is not None:
@@ -309,7 +312,7 @@ class ToolTremolo:
                 currTok = currTok.nextToken(0)
                 continue
 
-            duration: HumNum = currTok.ownerLine.duration
+            duration = currTok.ownerLine.duration
             if duration == 0:
                 # grace note line, so skip
                 currTok = currTok.nextToken(0)
@@ -346,9 +349,6 @@ class ToolTremolo:
     // Tool_tremolo::expandFingerTremolos --
     '''
     def expandFingerTremolo(self, token1: HumdrumToken, token2: HumdrumToken):
-        if token2 is None:
-            return
-
         m = re.search(r'@@(\d+)@@', token1.text)
         if not m:
             return
@@ -414,7 +414,7 @@ class ToolTremolo:
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token1.durationFromStart
         timestamp: HumNum = opFrac(startTime + increment)
-        currTok: HumdrumToken = token1.nextToken(0)
+        currTok: t.Optional[HumdrumToken] = token1.nextToken(0)
         counter: int = 1
         while currTok is not None:
             if not currTok.isData:

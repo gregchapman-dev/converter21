@@ -9,6 +9,8 @@
 # Copyright:     (c) 2021-2022 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
+import typing as t
+
 NAME_IDX = 0
 VALUE_IDX = 1
 class HumParamSet:
@@ -22,8 +24,9 @@ class HumParamSet:
         self._token: HumdrumToken = None
         self._ns1: str = ''
         self._ns2: str = ''
-        self._parameters: [[str]] = [] # _parameters is a list of parameters.
-                                         # _parameters[i] is a 2-element list of str, ['key', 'value']
+        # _parameters is a list of parameters.
+        # _parameters[i] is a 2-element list of str, ['key', 'value']
+        self._parameters: t.List[t.List[str]] = []
 
         if isinstance(token, str):
             self.readString(token)
@@ -31,56 +34,26 @@ class HumParamSet:
             self._token = token
             self.readString(token.text)
 
-    '''
-    //////////////////////////////
-    //
-    // HumParamSet::getNamespace1 --
-    '''
     @property
     def namespace1(self) -> str:
         return self._ns1
 
-    '''
-    //////////////////////////////
-    //
-    // HumParamSet::setNamespace1 --
-    '''
     @namespace1.setter
     def namespace1(self, newNS1: str):
         self._ns1 = newNS1
 
-    '''
-    //////////////////////////////
-    //
-    // HumParamSet::getNamespace2 --
-    '''
     @property
     def namespace2(self) -> str:
         return self._ns2
 
-    '''
-    //////////////////////////////
-    //
-    // HumParamSet::setNamespace2 --
-    '''
     @namespace2.setter
     def namespace2(self, newNS2: str):
         self._ns2 = newNS2
 
-    '''
-    //////////////////////////////
-    //
-    // HumParamSet::getNamespace --
-    '''
     @property
     def namespace(self) -> str:
         return self._ns1 + ':' + self._ns2
 
-    '''
-    //////////////////////////////
-    //
-    // HumParamSet::setNamespace --
-    '''
     @namespace.setter
     def namespace(self, newNS: str):
         namespaces = newNS.split(':')
@@ -171,7 +144,7 @@ class HumParamSet:
             firstNonBang = i
             break
 
-        pieces: [str] = text[firstNonBang:].split(':')
+        pieces: t.List[str] = text[firstNonBang:].split(':')
 
         if len(pieces) < 3:
             return

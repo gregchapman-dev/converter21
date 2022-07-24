@@ -13,7 +13,8 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-#from typing import Union
+import typing as t
+
 import music21 as m21
 
 from converter21.humdrum import MeasureData
@@ -33,7 +34,6 @@ class StaffData:
                        ownerPart,
                        staffIndex: int):
         from converter21.humdrum import PartData
-        ownerPart: PartData
         self.ownerPart: PartData = ownerPart
         self.m21PartStaff: m21.stream.Part = partStaff
         self.spannerBundle = ownerPart.spannerBundle # inherited from ownerScore, ultimately
@@ -41,9 +41,9 @@ class StaffData:
         self._staffIndex: int = staffIndex
         self._hasDynamics: bool = False
         self._verseCount: int = 0
-        self.measures: [MeasureData] = []
+        self.measures: t.List[MeasureData] = []
 
-        prevMeasData: MeasureData = None
+        prevMeasData: t.Optional[MeasureData] = None
         for m, measure in enumerate(partStaff.getElementsByClass('Measure')):
             measData: MeasureData = MeasureData(measure, self, m, prevMeasData)
             self.measures.append(measData)

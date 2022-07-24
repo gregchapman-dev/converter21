@@ -11,7 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union, List, Tuple
+import typing as t
 
 import music21 as m21
 from music21.common import opFrac
@@ -34,22 +34,22 @@ class EventData:
                        elementIndex: int,
                        voiceIndex: int,
                        ownerMeasure,
-                       offsetInScore: HumNumIn = None,
-                       duration: HumNumIn = None):
+                       offsetInScore: t.Optional[HumNumIn] = None,
+                       duration: t.Optional[HumNumIn] = None):
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
-        ownerMeasure: MeasureData
         self.ownerMeasure: MeasureData = ownerMeasure
-        self.spannerBundle = ownerMeasure.spannerBundle # inherited from ownerScore, ultimately
+        self.spannerBundle = self.ownerMeasure.spannerBundle # from ownerScore, ultimately
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._voiceIndex: int = voiceIndex
         self._elementIndex: int = elementIndex
         self._element: m21.base.Music21Object = element
+        self._elementType: t.Type = type(element)
         self._name: str = ''
-        self._texts: [m21.expressions.TextExpression] = []
-        self._tempos: [m21.tempo.TempoIndication] = []
-        self._dynamics: List[Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
+        self._texts: t.List[m21.expressions.TextExpression] = []
+        self._tempos: t.List[m21.tempo.TempoIndication] = []
+        self._dynamics: t.List[t.Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
         self._myTextsComputed: bool = False
         self._myDynamicsComputed: bool = False
 
@@ -65,8 +65,8 @@ class EventData:
         return self.m21Object.classes[0] # at least say what type of m21Object it was
 
     def _parseEvent(self, element: m21.base.Music21Object,
-                          offsetInScore: HumNumIn,
-                          duration: HumNumIn):
+                          offsetInScore: t.Optional[HumNumIn],
+                          duration: t.Optional[HumNumIn]):
         if offsetInScore is not None:
             self._startTime = opFrac(offsetInScore)
         else:
@@ -163,14 +163,15 @@ class EventData:
         return self._element
 
     @property
-    def texts(self) -> List[m21.expressions.TextExpression]:
+    def texts(self) -> t.List[m21.expressions.TextExpression]:
         if not self._myTextsComputed:
-            self._texts = M21Utilities.getTextExpressionsFromGeneralNote(self.m21Object)
+            if isinstance(self.m21Object, m21.note.GeneralNote):
+                self._texts = M21Utilities.getTextExpressionsFromGeneralNote(self.m21Object)
             self._myTextsComputed = True
         return self._texts
 
     @property
-    def tempos(self) -> List[m21.tempo.TempoIndication]:
+    def tempos(self) -> t.List[m21.tempo.TempoIndication]:
         return self._tempos
 
     '''
@@ -180,11 +181,13 @@ class EventData:
         If event is a Chord, we return a space-delimited token string containing all the
         appropriate subtokens, and a list of all the layouts for the chord.
     '''
-    def getNoteKernTokenStringAndLayouts(self) -> Tuple[str, List[str]]:
+    def getNoteKernTokenStringAndLayouts(self) -> t.Tuple[str, t.List[str]]:
         # We pass in self to get reports of the existence of editorial accidentals, ornaments,
         # etc. These reports get passed up the EventData.py/MeasureData.py reporting chain up
         # to PartData.py, where they are stored and/or acted upon.
-        return M21Convert.kernTokenStringAndLayoutsFromM21GeneralNote(self.m21Object, self.spannerBundle, self)
+        return M21Convert.kernTokenStringAndLayoutsFromM21GeneralNote(
+            self.m21Object, self.spannerBundle, self
+        )
 
     def kernTokenString(self) -> str:
         # for debugging output; real code uses getNoteKernTokenStringAndLayouts() or
@@ -199,7 +202,9 @@ class EventData:
         if not self.isDynamicWedgeStartOrStop:
             return ''
 
-        return M21Convert.getDynamicWedgeString(self.m21Object, self.isDynamicWedgeStart, self.isDynamicWedgeStop)
+        return M21Convert.getDynamicWedgeString(
+            self.m21Object, self.isDynamicWedgeStart, self.isDynamicWedgeStop
+        )
 
     '''
     //////////////////////////////

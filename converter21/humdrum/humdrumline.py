@@ -12,6 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 import re
+import typing as t
 from fractions import Fraction
 
 from music21.common import opFrac
@@ -36,16 +37,19 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
     It splits at the delimiter, and strips all leading and trailing whitespace
     from the resulting strings.
 '''
-def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> (str, str):
+def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> t.Tuple[str, str]:
     keyAndValueStrList = keyValueStr.split(delimiter, 1) # ignore ':' in value
     if len(keyAndValueStrList) == 1:
-        return (keyAndValueStrList.strip(), None)
+        return (keyAndValueStrList[0].strip(), '')
 
     return (keyAndValueStrList[0].strip(), keyAndValueStrList[1].strip())
 
 
 class HumdrumLine(HumHash):
-    def __init__(self, line: str = '', asGlobalToken=False, ownerFile = None): # ownerFile: HumdrumFile
+    def __init__(self,
+            line: str = '',
+            asGlobalToken: bool = False,
+            ownerFile = None):  # ownerFile: HumdrumFile
         from converter21.humdrum import HumdrumFile
         super().__init__() # initialize the HumHash fields
 
@@ -57,9 +61,9 @@ class HumdrumLine(HumHash):
         elif len(line) > 0 and line[-1] == '\n':
             line = line[:-1] # strip off any trailing LF
 
-        self._text = ''
+        self._text: str = ''
         if not asGlobalToken:
-            self._text: str = line
+            self._text = line
 
         '''
         // owner: This is the HumdrumFile which manages the given line.
@@ -71,7 +75,7 @@ class HumdrumLine(HumHash):
         // the owning HumdrumFile object.
         // This variable is filled by HumdrumFileStructure::analyzeLines().
         '''
-        self._lineIndex: int = None
+        self._lineIndex: int = -1
 
         '''
         // m_tokens: Used to store the individual tab-separated token fields
@@ -87,7 +91,7 @@ class HumdrumLine(HumHash):
         // The contents of this vector should be deleted when deconstructing
         // a HumdrumLine object.
         '''
-        self._tokens: [HumdrumToken] = []
+        self._tokens: t.List[HumdrumToken] = []
         if asGlobalToken:
             self._tokens = [HumdrumToken(line)]
 
@@ -96,7 +100,7 @@ class HumdrumLine(HumHash):
         // each token on a line.  This is the number of tabs after the
         // token at the given index (so no tabs before the first token).
         '''
-        self._numTabsAfterToken: [int] = []
+        self._numTabsAfterToken: t.List[int] = []
         if asGlobalToken:
             self._numTabsAfterToken = [0]
 
@@ -108,7 +112,7 @@ class HumdrumLine(HumHash):
         // not just the minimum duration on the line.
         // This variable is filled by HumdrumFileStructure::analyzeRhythm().
         '''
-        self._duration: HumNum = None
+        self._duration: HumNum = -1.0
 
         '''
         // m_durationFromStart: This is the cumulative duration of all lines
@@ -118,27 +122,27 @@ class HumdrumLine(HumHash):
         // the second line will be 1 quarter note.
         // This variable is filled by HumdrumFileStructure::analyzeRhythm().
         '''
-        self._durationFromStart: HumNum = None
+        self._durationFromStart: HumNum = -1.0
 
         '''
         // m_durationFromBarline: This is the cumulative duration from the
         // last barline to the current data line.
         // This variable is filled by HumdrumFileStructure::analyzeMeter().
         '''
-        self._durationFromBarline: HumNum = None
+        self._durationFromBarline: HumNum = -1.0
 
         '''
         // m_durationToBarline: This is the duration from the start of the
         // current line to the next barline in the owning HumdrumFile object.
         // This variable is filled by HumdrumFileStructure::analyzeMeter().
         '''
-        self._durationToBarline: HumNum = None
+        self._durationToBarline: HumNum = -1.0
 
         '''
         // m_linkedParameters: List of Humdrum tokens which are parameters
         // (mostly only layout parameters at the moment)
         '''
-        self._linkedParameters: [HumdrumToken] = []
+        self._linkedParameters: t.List[HumdrumToken] = []
 
         '''
         // m_rhythm_analyzed: True if duration information from HumdrumFile
@@ -150,7 +154,7 @@ class HumdrumLine(HumHash):
             We are also a HumHash, and that was initialized via super() above.
             But we want our default HumHash prefix to be '!!', not ''
         '''
-        self.prefix = '!!'
+        self.prefix: str = '!!'
 
     # In C++ a HumdrumLine is also a string().  Deriving a mutable class from an immutable
     # base class in Python is trickier than I can manage. So we have a standard "conversion"
@@ -170,7 +174,7 @@ class HumdrumLine(HumHash):
 
             Returns None if index is out of bounds.
     '''
-    def __getitem__(self, index: int) -> HumdrumToken:
+    def __getitem__(self, index) -> t.Optional[HumdrumToken]:
         if not isinstance(index, int):
             # if its a slice, out-of-range start/stop won't crash
             return self._tokens[index]
@@ -195,18 +199,14 @@ class HumdrumLine(HumHash):
     //////////////////////////////
     //
     // HumdrumLine::getText --
+    // HumdrumLine::setText -- Get the textual content of the line.  Note that
+    //    you may need to run HumdrumLine::createLineFromTokens() if the tokens
+    //    of the line have changed.
     '''
     @property
     def text(self) -> str:
         return self._text
 
-    '''
-    //////////////////////////////
-    //
-    // HumdrumLine::setText -- Get the textual content of the line.  Note that
-    //    you may need to run HumdrumLine::createLineFromTokens() if the tokens
-    //    of the line have changed.
-    '''
     @text.setter
     def text(self, newText: str):
         self._text = newText
@@ -589,17 +589,13 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::getLineIndex -- Returns the index number of the line in the
     //    HumdrumFileBase storage for the lines.
+    // HumdrumLine::setLineIndex -- Used by the HumdrumFileBase class to set the
+    //   index number of the line in the data storage for the file.
     '''
     @property
     def lineIndex(self) -> int:
         return self._lineIndex
 
-    '''
-    //////////////////////////////
-    //
-    // HumdrumLine::setLineIndex -- Used by the HumdrumFileBase class to set the
-    //   index number of the line in the data storage for the file.
-    '''
     @lineIndex.setter
     def lineIndex(self, newLineIndex: int):
         self._lineIndex = newLineIndex
@@ -611,8 +607,6 @@ class HumdrumLine(HumHash):
         '''
     @property
     def lineNumber(self) -> int:
-        if self.lineIndex is None:
-            return None
         return self.lineIndex + 1
 
     '''
@@ -622,6 +616,8 @@ class HumdrumLine(HumHash):
     //    be None if rhythmic analysis in HumdrumFileStructure has not been
     //    done on the owning HumdrumFile object.  Otherwise this is the duration of
     //    the current line in the file.
+    // HumdrumLine::setDuration -- Sets the duration of the line.  This is done
+    //   in the rhythmic analysis for the HumdurmFileStructure class.
     '''
     @property
     def duration(self) -> HumNum:
@@ -630,22 +626,16 @@ class HumdrumLine(HumHash):
                 self._ownerFile.analyzeRhythmStructure()
         return self._duration
 
-    def scaledDuration(self, scale: HumNumIn) -> HumNum:
-        # remember, accessing duration property can trigger rhythm analysis
-        return opFrac(self.duration * opFrac(scale))
-
-    '''
-    //////////////////////////////
-    //
-    // HumdrumLine::setDuration -- Sets the duration of the line.  This is done
-    //   in the rhythmic analysis for the HumdurmFileStructure class.
-    '''
     @duration.setter
     def duration(self, newDuration: HumNumIn):
         if newDuration >= 0:
             self._duration = opFrac(newDuration)
         else:
             self._duration = opFrac(0)
+
+    def scaledDuration(self, scale: HumNumIn) -> HumNum:
+        # remember, accessing duration property can trigger rhythm analysis
+        return opFrac(self.duration * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -675,6 +665,9 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getDurationFromStart -- Get the duration from the start of the
     //    file to the start of the current line.  This will be -1 if rhythmic
     //    analysis has not been done in the HumdrumFileStructure class.
+    // HumdrumLine::setDurationFromStart -- Sets the duration from the start of the
+    //    file to the start of the current line.  This is used in rhythmic
+    //    analysis done in the HumdrumFileStructure class.
     '''
     @property
     def durationFromStart(self) -> HumNum:
@@ -684,19 +677,12 @@ class HumdrumLine(HumHash):
 
         return self._durationFromStart
 
-    def scaledDurationFromStart(self, scale: HumNumIn) -> HumNum:
-        return opFrac(self.durationFromStart * opFrac(scale))
-
-    '''
-    //////////////////////////////
-    //
-    // HumdrumLine::setDurationFromStart -- Sets the duration from the start of the
-    //    file to the start of the current line.  This is used in rhythmic
-    //    analysis done in the HumdrumFileStructure class.
-    '''
     @durationFromStart.setter
     def durationFromStart(self, newDurationFromStart: HumNumIn):
         self._durationFromStart = opFrac(newDurationFromStart)
+
+    def scaledDurationFromStart(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationFromStart * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -724,6 +710,9 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getDurationFromBarline -- Returns the duration from the start
     //    of the given line to the first barline occurring before the given line.
     //    Analysis of this data is found in HumdrumFileStructure::metricAnalysis.
+    // HumdrumLine::setDurationFromBarline -- Time from the previous
+    //    barline to the current line.  This function is used in analyzeMeter in
+    //    the HumdrumFileStructure class.
     '''
     @property
     def durationFromBarline(self) -> HumNum:
@@ -733,25 +722,21 @@ class HumdrumLine(HumHash):
 
         return self._durationFromBarline
 
+    @durationFromBarline.setter
+    def durationFromBarline(self, newDurationFromBarline: HumNumIn):
+        self._durationFromBarline = opFrac(newDurationFromBarline)
+
     def scaledDurationFromBarline(self, scale: HumNumIn) -> HumNum:
         return opFrac(self.durationFromBarline * opFrac(scale))
 
     '''
     //////////////////////////////
     //
-    // HumdrumLine::setDurationFromBarline -- Time from the previous
-    //    barline to the current line.  This function is used in analyzeMeter in
-    //    the HumdrumFileStructure class.
-    '''
-    @durationFromBarline.setter
-    def durationFromBarline(self, newDurationFromBarline: HumNumIn):
-        self._durationFromBarline = opFrac(newDurationFromBarline)
-
-    '''
-    //////////////////////////////
-    //
     // HumdrumLine::getDurationToBarline -- Time from the starting of the
     //   current note to the next barline.
+    // HumdrumLine::setDurationToBarline -- Sets the duration from the current
+    //     line to the next barline in the score.  This function is used by
+    //     analyzeMeter in the HumdrumFileStructure class.
     '''
     @property
     def durationToBarline(self) -> HumNum:
@@ -761,19 +746,12 @@ class HumdrumLine(HumHash):
 
         return self._durationToBarline
 
-    def scaledDurationToBarline(self, scale: HumNumIn) -> HumNum:
-        return opFrac(self.durationToBarline * opFrac(scale))
-
-    '''
-    //////////////////////////////
-    //
-    // HumdrumLine::setDurationToBarline -- Sets the duration from the current
-    //     line to the next barline in the score.  This function is used by
-    //     analyzeMeter in the HumdrumFileStructure class.
-    '''
     @durationToBarline.setter
     def durationToBarline(self, newDurationToBarline: HumNumIn):
         self._durationToBarline = opFrac(newDurationToBarline)
+
+    def scaledDurationToBarline(self, scale: HumNumIn) -> HumNum:
+        return opFrac(self.durationToBarline * opFrac(scale))
 
     '''
     //////////////////////////////
@@ -781,7 +759,7 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getTrackStart --  Returns the starting exclusive interpretation
     //    for the given spine/track.
     '''
-    def trackStart(self, track: int) -> HumdrumToken:
+    def trackStart(self, track: int) -> t.Optional[HumdrumToken]:
         if self._ownerFile is None:
             return None
 
@@ -793,7 +771,7 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getTrackEnd --  Returns the ending exclusive interpretation
     //    for the given spine/track.
     '''
-    def trackEnd(self, track: int, subSpine: int) -> HumdrumToken:
+    def trackEnd(self, track: int, subSpine: int) -> t.Optional[HumdrumToken]:
         if self._ownerFile is None:
             return None
 
@@ -984,7 +962,7 @@ class HumdrumLine(HumHash):
     //    HumdrumFileBase::getTrackWidths().  The first indexed value is unused,
     //    since there is no track 0.
     '''
-    def addExtraTabs(self, trackWidths: [int]):
+    def addExtraTabs(self, trackWidths: t.List[int]):
         if not self.hasSpines:
             return
 
@@ -1105,12 +1083,6 @@ class HumdrumLine(HumHash):
     def ownerFile(self): # -> HumdrumFile
         return self._ownerFile
 
-    '''
-    //////////////////////////////
-    //
-    // HumdrumLine::setOwner -- store a pointer to the HumdrumFile which
-    //    manages (owns) this object.
-    '''
     @ownerFile.setter
     def ownerFile(self, newOwnerFile): # newOwnerFile: HumdrumFile
         self._ownerFile = newOwnerFile
@@ -1149,8 +1121,9 @@ class HumdrumLine(HumHash):
     //    that the parameters are global rather than local.  (Global text directions
     //    will behave differently from local text directions, for example).
     '''
-    def setParameters(self, pdata: str): # pdata is 'LO:blah:bleah=value' (no leading '!' or '!!')
-        pieces: [str] = pdata.split(':')
+    def setParameters(self, pdata: str):
+        # pdata is 'LO:blah:bleah=value' (no leading '!' or '!!')
+        pieces: t.List[str] = pdata.split(':')
         if len(pieces) < 3:
             return
 
@@ -1161,7 +1134,7 @@ class HumdrumLine(HumHash):
 
         for i in range(2, len(pieces)):
             piece = re.sub('&colon', ':', pieces[i])
-            keyAndValue: [str] = piece.split('=')
+            keyAndValue: t.List[str] = piece.split('=')
 
             key = keyAndValue[0]
             if len(keyAndValue) == 1:
@@ -1252,7 +1225,7 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::copyStructure -- For data lines only at the moment.
     '''
-    def copyStructure(self, fromLine, nullStr: str):
+    def copyStructure(self, fromLine: 'HumdrumLine', nullStr: str):
         for fromToken in fromLine.tokens():
             newToken: HumdrumToken = HumdrumToken(nullStr)
             newToken.ownerLine = self

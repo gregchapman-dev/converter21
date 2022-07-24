@@ -15,7 +15,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+import typing as t
 
 from music21.common import opFrac
 
@@ -33,8 +33,11 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 # pylint: enable=protected-access
 
 class GridVoice:
-    def __init__(self, token: Union[HumdrumToken,str] = None, duration: HumNumIn = opFrac(0)):
-        self._token: HumdrumToken = None
+    def __init__(self,
+            token: t.Optional[t.Union[HumdrumToken, str]] = None,
+            duration: HumNumIn = opFrac(0)
+    ):
+        self._token: t.Optional[HumdrumToken] = None
         if isinstance(token, HumdrumToken) or token is None:
             self._token = token
         elif isinstance(token, str):
@@ -56,18 +59,14 @@ class GridVoice:
     //
     // GridVoice::isTransfered -- True if token was copied to a HumdrumFile
     //      object.
+    // GridVoice::setTransfered -- True if the object should not be
+    //    deleted with the object is destroyed.  False if the token
+    //    is not NULL and should be deleted when object is destroyed.
     '''
     @property
     def isTransfered(self) -> bool:
         return self._isTransfered
 
-    '''
-    //////////////////////////////
-    //
-    // GridVoice::setTransfered -- True if the object should not be
-    //    deleted with the object is destroyed.  False if the token
-    //    is not NULL and should be deleted when object is destroyed.
-    '''
     @isTransfered.setter
     def isTransfered(self, newIsTransfered: bool):
         self._isTransfered = newIsTransfered
@@ -78,16 +77,11 @@ class GridVoice:
     // GridVoice::getToken --
     '''
     @property
-    def token(self) -> HumdrumToken:
+    def token(self) -> t.Optional[HumdrumToken]:
         return self._token
 
-    '''
-    //////////////////////////////
-    //
-    // GridVoice::setToken --
-    '''
     @token.setter
-    def token(self, newToken: Union[HumdrumToken, str]):
+    def token(self, newToken: t.Optional[t.Union[HumdrumToken, str]]):
         if isinstance(newToken, HumdrumToken) or newToken is None:
             self._token = newToken
         elif isinstance(newToken, str):

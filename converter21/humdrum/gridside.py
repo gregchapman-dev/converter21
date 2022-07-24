@@ -13,7 +13,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+import typing as t
 
 from converter21.humdrum import HumdrumToken
 
@@ -29,10 +29,10 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 class GridSide:
     def __init__(self):
         self._verses: [HumdrumToken] = [] # there may be more than one verse of lyrics for a note
-        self._harmony: HumdrumToken = None
-        self._xmlId: HumdrumToken = None
-        self._dynamics: HumdrumToken = None
-        self._figuredBass: HumdrumToken = None
+        self._harmony: t.Optional[HumdrumToken] = None
+        self._xmlId: t.Optional[HumdrumToken] = None
+        self._dynamics: t.Optional[HumdrumToken] = None
+        self._figuredBass: t.Optional[HumdrumToken] = None
 
     def __str__(self):
         outstr: str = ' ['
@@ -55,12 +55,12 @@ class GridSide:
     def verseCount(self) -> int:
         return len(self._verses)
 
-    def getVerse(self, index: int) -> HumdrumToken:
+    def getVerse(self, index: int) -> t.Optional[HumdrumToken]:
         if 0 <= index < self.verseCount:
             return self._verses[index]
         return None
 
-    def setVerse(self, index: int, token: Union[HumdrumToken, str]):
+    def setVerse(self, index: int, token: t.Union[HumdrumToken, str]):
         if isinstance(token, str):
             # make it into a proper token
             token = HumdrumToken(token)
@@ -83,7 +83,7 @@ class GridSide:
         return 1
 
     @property
-    def harmony(self) -> HumdrumToken:
+    def harmony(self) -> t.Optional[HumdrumToken]:
         return self._harmony
 
     @harmony.setter
@@ -97,11 +97,11 @@ class GridSide:
         return 1
 
     @property
-    def xmlId(self) -> HumdrumToken:
+    def xmlId(self) -> t.Optional[HumdrumToken]:
         return self._xmlId
 
     @xmlId.setter
-    def xmlId(self, newXmlId: HumdrumToken):
+    def xmlId(self, newXmlId: t.Optional[HumdrumToken]):
         self._xmlId = newXmlId
 
     @property
@@ -111,11 +111,11 @@ class GridSide:
         return 1
 
     @property
-    def dynamics(self) -> HumdrumToken:
+    def dynamics(self) -> t.Optional[HumdrumToken]:
         return self._dynamics
 
     @dynamics.setter
-    def dynamics(self, newDynamics: HumdrumToken):
+    def dynamics(self, newDynamics: t.Optional[HumdrumToken]):
         self._dynamics = newDynamics
 
     @property
@@ -125,9 +125,9 @@ class GridSide:
         return 1
 
     @property
-    def figuredBass(self) -> HumdrumToken:
+    def figuredBass(self) -> t.Optional[HumdrumToken]:
         return self._figuredBass
 
     @figuredBass.setter
-    def figuredBass(self, newFiguredBass: HumdrumToken):
+    def figuredBass(self, newFiguredBass: t.Optional[HumdrumToken]):
         self._figuredBass = newFiguredBass

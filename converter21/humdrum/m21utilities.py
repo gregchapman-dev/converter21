@@ -13,10 +13,8 @@
 #    All methods are static.  M21Utilities is just a namespace for these conversion functions and
 #    look-up tables.
 
-# import sys
-# import re
-from typing import List, Tuple, Set, Dict
-# from fractions import Fraction
+import typing as t
+
 import music21 as m21
 
 from converter21.humdrum import HumdrumInternalError
@@ -27,44 +25,44 @@ DEBUG = 0
 TUPLETDEBUG = 1
 BEAMDEBUG = 1
 
-def durationWithTupletDebugReprInternal(self: m21.duration.Duration) -> str:
-    output: str = f'dur.qL={self.quarterLength}'
-    if len(self.tuplets) >= 1:
-        tuplet: m21.duration.Tuplet = self.tuplets[0]
+def durationWithTupletDebugReprInternal(dur: m21.duration.Duration) -> str:
+    output: str = f'dur.qL={dur.quarterLength}'
+    if len(dur.tuplets) >= 1:
+        tuplet: m21.duration.Tuplet = dur.tuplets[0]
         output += ' tuplets[0]: ' + tuplet._reprInternal()
         output += ' bracket=' + str(tuplet.bracket)
         output += ' type=' + str(tuplet.type)
     return output
 
-def noteDebugReprInternal(self: m21.note.Note) -> str:
-    output = self.name
-    if BEAMDEBUG and hasattr(self, 'beams') and self.beams:
-        output += ' beams: ' + self.beams._reprInternal()
+def noteDebugReprInternal(n: m21.note.Note) -> str:
+    output = n.name
+    if BEAMDEBUG and hasattr(n, 'beams') and n.beams:
+        output += ' beams: ' + n.beams._reprInternal()
     if TUPLETDEBUG:
-        output += ' ' + durationWithTupletDebugReprInternal(self.duration)
+        output += ' ' + durationWithTupletDebugReprInternal(n.duration)
     return output
 
-def unpitchedDebugReprInternal(self: m21.note.Unpitched) -> str:
-    output = super()._reprInternal
-    if BEAMDEBUG and hasattr(self, 'beams') and self.beams:
-        output += ' beams: ' + self.beams._reprInternal()
+def unpitchedDebugReprInternal(u: m21.note.Unpitched) -> str:
+    output = m21.note.GeneralNote._reprInternal(u)
+    if BEAMDEBUG and hasattr(u, 'beams') and u.beams:
+        output += ' beams: ' + u.beams._reprInternal()
     if TUPLETDEBUG:
-        output += ' ' + durationWithTupletDebugReprInternal(self.duration)
+        output += ' ' + durationWithTupletDebugReprInternal(u.duration)
     return output
 
-def chordDebugReprInternal(self: m21.chord.Chord) -> str:
-    if not self.pitches:
-        return super()._reprInternal()
+def chordDebugReprInternal(c: m21.chord.Chord) -> str:
+    if not c.pitches:
+        return m21.note.GeneralNote._reprInternal(c)
 
     allPitches = []
-    for thisPitch in self.pitches:
+    for thisPitch in c.pitches:
         allPitches.append(thisPitch.nameWithOctave)
 
     output = ' '.join(allPitches)
-    if BEAMDEBUG and hasattr(self, 'beams') and self.beams:
-        output += ' beams: ' + self.beams._reprInternal()
+    if BEAMDEBUG and hasattr(c, 'beams') and c.beams:
+        output += ' beams: ' + c.beams._reprInternal()
     if TUPLETDEBUG:
-        output += ' ' + durationWithTupletDebugReprInternal(self.duration)
+        output += ' ' + durationWithTupletDebugReprInternal(c.duration)
     return output
 
 def setDebugReprInternal(self, method):
@@ -141,8 +139,8 @@ class M21Utilities:
         return rest
 
     @staticmethod
-    def getTextExpressionsFromGeneralNote(gnote: m21.note.GeneralNote) -> List[m21.expressions.TextExpression]:
-        output: List[m21.expressions.TextExpression] = []
+    def getTextExpressionsFromGeneralNote(gnote: m21.note.GeneralNote) -> t.List[m21.expressions.TextExpression]:
+        output: t.List[m21.expressions.TextExpression] = []
         for exp in gnote.expressions:
             if isinstance(exp, m21.expressions.TextExpression):
                 output.append(exp)
@@ -150,16 +148,17 @@ class M21Utilities:
         return output
 
     # getAllExpressionsFromGeneralNote returns a list of expression gleaned from
-    # both gnote.expressions as well as a few expressions spanners the note might
+    # both gnote.expressions as well as a few expression spanners the note might
     # be in.
     @staticmethod
-    def getAllExpressionsFromGeneralNote(gnote: m21.note.GeneralNote,
-                                         spannerBundle: m21.spanner.SpannerBundle
-                                         ) -> List[m21.expressions.Expression]:
-        expressions: List[m21.expressions.Expression] = []
+    def getAllExpressionsFromGeneralNote(
+            gnote: m21.note.GeneralNote,
+            spannerBundle: m21.spanner.SpannerBundle
+        ) -> t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]]:
+        expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = []
 
         # start with the expression spanners (TrillExtension and TremoloSpanner)
-        spanners: [m21.spanner.Spanner] = gnote.getSpannerSites()
+        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites()
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -177,9 +176,9 @@ class M21Utilities:
     @staticmethod
     def getDynamicWedgesStartedOrStoppedWithGeneralNote(gnote: m21.note.GeneralNote,
                                                         spannerBundle: m21.spanner.SpannerBundle
-                                                       ) -> [m21.dynamics.DynamicWedge]:
-        output: List[m21.dynamics.DynamicWedge] = []
-        spanners: List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+                                                       ) -> t.List[m21.dynamics.DynamicWedge]:
+        output: t.List[m21.dynamics.DynamicWedge] = []
+        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -192,9 +191,9 @@ class M21Utilities:
     @staticmethod
     def getDynamicWedgesStartedWithGeneralNote(gnote: m21.note.GeneralNote,
                                                spannerBundle: m21.spanner.SpannerBundle
-                                               ) -> [m21.dynamics.DynamicWedge]:
-        output: List[m21.dynamics.DynamicWedge] = []
-        spanners: List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+                                               ) -> t.List[m21.dynamics.DynamicWedge]:
+        output: t.List[m21.dynamics.DynamicWedge] = []
+        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -217,7 +216,7 @@ class M21Utilities:
         if not isinstance(inst, m21.instrument.Instrument):
             return False # not an instrument
 
-        trans: m21.interval.Interval = inst.transposition
+        trans: t.Optional[m21.interval.Interval] = inst.transposition
         if trans is None:
             return False  # not a transposing instrument
 
@@ -232,12 +231,12 @@ class M21Utilities:
         # only handles rests that are in s directly (does not recurse)
         # always in-place, never adds ties (because they're rests)
         # loses all beams, so we can only do this on rests!
-        rest: m21.note.GeneralNote = None
+        rest: m21.note.Rest
         for rest in s.getElementsByClass('Rest'):
             if rest.duration.type != 'complex':
                 continue
             insertPoint = rest.offset
-            restList: [m21.note.Rest] = M21Utilities.splitComplexRestDuration(rest)
+            restList: t.List[m21.note.Rest] = M21Utilities.splitComplexRestDuration(rest)
             s.replace(rest, restList[0])
             insertPoint += restList[0].quarterLength
             for subsequent in restList[1:]:
@@ -260,7 +259,7 @@ class M21Utilities:
 
 
     @staticmethod
-    def m21VersionIsAtLeast(neededVersion: Tuple[int, int, int, str]) -> bool:
+    def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:
         #m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
         if len(m21.VERSION) == 0:
             raise HumdrumInternalError('music21 version must be set!')
@@ -314,17 +313,17 @@ class M21Utilities:
 
 
 class M21StaffGroupTree:
-    def __init__(self, sg: m21.layout.StaffGroup, staffNumbersByM21Part: Dict[m21.stream.Part, int]):
+    def __init__(self, sg: m21.layout.StaffGroup, staffNumbersByM21Part: t.Dict[m21.stream.Part, int]):
         # about this staff group
         self.staffGroup: m21.layout.StaffGroup = sg
-        self.staffNums: Set[int] = set(staffNumbersByM21Part[m21Part]
+        self.staffNums: t.Set[int] = set(staffNumbersByM21Part[m21Part]
                                             for m21Part in
                                                 sg.spannerStorage.elements)
         self.numStaves: int = len(self.staffNums)
         self.lowestStaffNumber: int = min(self.staffNums)
 
         # tree links
-        self.children = [] # List[M21StaffGroupTree]
+        self.children: t.List[M21StaffGroupTree] = []
 
 class M21StaffGroupDescriptionTree:
     def __init__(self):
@@ -334,12 +333,12 @@ class M21StaffGroupDescriptionTree:
         self.barTogether: bool = False  # see m21.layout.StaffGroup.barTogether
         # staves referenced by this group (includes staves in subgroups).
         # staffIndices is in staff order.
-        self.staffIndices: List[int] = []
+        self.staffIndices: t.List[int] = []
         # staves actually in this group (i.e. not in a subgroup).
         # ownedStaffIndices is in staff order.
-        self.ownedStaffIndices: List[int] = []
+        self.ownedStaffIndices: t.List[int] = []
 
         # tree links:
         # children == subgroups, parent = enclosing group (None for top)
-        self.children = [] # List[M21StaffGroupDescriptionTree]
-        self.parent = None # M21StaffGroupDescriptionTree
+        self.children: t.List[M21StaffGroupDescriptionTree] = []
+        self.parent: t.Optional[M21StaffGroupDescriptionTree] = None

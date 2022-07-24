@@ -12,7 +12,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+import typing as t
 
 from music21.common import opFrac
 
@@ -41,7 +41,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
 //   in which they were split, so that the original spine label can
 //   be produced.
 '''
-def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str:
+def getMergedSpineInfo(info: t.List[str], startSpine: int, numExtraSpines: int) -> str:
     #print(funcName(), 'startSpine =', startSpine, 'numExtraSpines =', numExtraSpines, file=sys.stderr)
     #print(funcName(), 'info =', info, file=sys.stderr)
 
@@ -62,7 +62,7 @@ def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str
     // Not fully generalized so that the subspines will always be
     // simplified if not merged in a simple way, though.
     '''
-    newInfo: [str] = [info[i] for i in range(startSpine, startSpine + numExtraSpines + 1)]
+    newInfo: t.List[str] = [info[i] for i in range(startSpine, startSpine + numExtraSpines + 1)]
     while len(newInfo) > 1:
         simplifiedSomething = False
         for i in range(1, len(newInfo)):
@@ -71,7 +71,7 @@ def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str
                 newInfo[i-1] = ''                    # we'll remove this later
                 newInfo[i] = newInfo[i][1:-2]        # strip off leading '(' and trailing ')a' or ')b'
 
-        newInfo2: [str] = []
+        newInfo2: t.List[str] = []
         for infoStr in newInfo:
             if infoStr != '':
                 newInfo2.append(infoStr)
@@ -107,7 +107,7 @@ def getMergedSpineInfo(info: [str], startSpine: int, numExtraSpines: int) -> str
 
     Adds all tokens from source to target, unless they are already in target.
 '''
-def addUniqueTokens(target: [HumdrumToken], source: [HumdrumToken]):
+def addUniqueTokens(target: t.List[HumdrumToken], source: t.List[HumdrumToken]):
     for srcToken in source:
         found = False
         for targToken in target:
@@ -120,12 +120,12 @@ def addUniqueTokens(target: [HumdrumToken], source: [HumdrumToken]):
 
 # simple class to represent a pair of (first, last) related tokens
 class TokenPair:
-    def __init__(self, first: HumdrumToken, last: HumdrumToken):
-        self._first: HumdrumToken = first
-        self._last: HumdrumToken = last
+    def __init__(self, first: t.Optional[HumdrumToken], last: t.Optional[HumdrumToken]):
+        self._first: t.Optional[HumdrumToken] = first
+        self._last: t.Optional[HumdrumToken] = last
 
     @property
-    def first(self) -> HumdrumToken:
+    def first(self) -> t.Optional[HumdrumToken]:
         return self._first
 
     @first.setter
@@ -133,7 +133,7 @@ class TokenPair:
         self._first = newFirst
 
     @property
-    def last(self) -> HumdrumToken:
+    def last(self) -> t.Optional[HumdrumToken]:
         return self._last
 
     @last.setter
@@ -143,10 +143,18 @@ class TokenPair:
     # the following two properties are used for sorting (sort by line index, then by field index)
     @property
     def firstLineIndex(self) -> int:
+        # Let mypy assume all is well... we'll crash appropriately if someone tries to
+        # do this before populating _first.
+        if t.TYPE_CHECKING:
+            assert isinstance(self._first, HumdrumToken)
         return self._first.lineIndex
 
     @property
     def firstFieldIndex(self) -> int:
+        # Let mypy assume all is well... we'll crash appropriately if someone tries to
+        # do this before populating _first.
+        if t.TYPE_CHECKING:
+            assert isinstance(self._first, HumdrumToken)
         return self._first.fieldIndex
 
 
@@ -167,7 +175,7 @@ class HumFileAnalysis:
 
 class HumdrumFileBase(HumHash):
     '''
-        Options bits for getTrackSequence() -> [[HumdrumToken]]
+        Options bits for getTrackSequence() -> t.List[t.List[HumdrumToken]]
     '''
     OPT_PRIMARY     = 0x001
     OPT_NOEMPTY     = 0x002
@@ -193,7 +201,7 @@ class HumdrumFileBase(HumHash):
         // m_lines: an array representing lines from the input file.
         // The contents of lines must be deallocated when deconstructing object.
         '''
-        self._lines: [HumdrumLine] = []
+        self._lines: t.List[HumdrumLine] = []
 
         '''
         // m_filename: name of the file which was loaded.
@@ -211,7 +219,7 @@ class HumdrumFileBase(HumHash):
         // number of tracks (primary spines) is equal to one less than the
         // size of this list.
         '''
-        self._trackStarts: [HumdrumToken] = [None]
+        self._trackStarts: t.List[t.Optional[HumdrumToken]] = [None]
 
         '''
         // m_trackends: list of the addresses of the spine terminators in the
@@ -220,7 +228,7 @@ class HumdrumFileBase(HumHash):
         // a 2d array. The first dimension is the track number, and the second
         // dimension is the list of terminators.
         '''
-        self._trackEnds: [[HumdrumToken]] = [[]] # e.g. trackEnd2 = trackEnds[trackNum][2]
+        self._trackEnds: t.List[t.List[HumdrumToken]] = [[]] # e.g. trackEnd2 = trackEnds[trackNum][2]
 
         '''
         // m_barlines: list of barlines in the data.  If the first measures is
@@ -228,7 +236,7 @@ class HumdrumFileBase(HumHash):
         // starting exclusive interpretation line rather than to a barline.
         // LATER: Maybe also add "measures" which are complete metrical cycles.
         '''
-        self._barlines: [HumdrumLine] = []
+        self._barlines: t.List[HumdrumLine] = []
 
         '''
         // m_ticksperquarternote: this is the number of tick
@@ -244,22 +252,22 @@ class HumdrumFileBase(HumHash):
         '''
         // m_strands1d: one-dimensional list of spine strands.
         '''
-        self._strand1d: [TokenPair] = []
+        self._strand1d: t.List[TokenPair] = []
 
         '''
         // m_strands2d: two-dimensional list of spine strands.
         '''
-        self._strand2d: [[TokenPair]] = []
+        self._strand2d: t.List[t.List[TokenPair]] = []
 
         '''
         // m_strophes1d: one-dimensional list of all *strophe/*Xstrophe pairs.
         '''
-        self._strophes1d: [TokenPair] = []
+        self._strophes1d: t.List[TokenPair] = []
 
         '''
         // m_strophes2d: two-dimensional list of all *strophe/*Xstrophe pairs.
         '''
-        self._strophes2d: [[TokenPair]] = []
+        self._strophes2d: t.List[t.List[TokenPair]] = []
 
         '''
         // m_quietParse: Set to true if error messages should not be
@@ -298,7 +306,7 @@ class HumdrumFileBase(HumHash):
             _spineColor: color, indexed by track and subtrack.  '' means use default color
             from iohumdrum.cpp, now computed in HumdrumFileContent.analyzeNotation()
         '''
-        self._spineColor: [[str]] = [] # [track][subtrack]
+        self._spineColor: t.List[t.List[str]] = [] # [track][subtrack]
 
         # only used by test infrastructure...
         # if we did this, then we skip the str(hf) == fileContents test
@@ -329,7 +337,7 @@ class HumdrumFileBase(HumHash):
         Equivalent to C++: HumdrumLine& operator[](int index)
         Returns None if index is out of bounds.
     '''
-    def __getitem__(self, index: int) -> HumdrumLine:
+    def __getitem__(self, index: int) -> t.Optional[HumdrumLine]:
         if not isinstance(index, int):
             # if its a slice, out-of-range start/stop won't crash
             return self._lines[index]
@@ -452,18 +460,14 @@ class HumdrumFileBase(HumHash):
     //////////////////////////////
     //
     // HumdrumFileBase::getXmlIdPrefix -- Return the HumdrumXML ID attribute prefix.
+    // HumdrumFileBase::setXmlIdPrefix -- Set the prefix for a HumdrumXML ID
+    //     atrribute.  The prefix should not start with a digit, nor have
+    //     spaces in it.
     '''
     @property
     def xmlIdPrefix(self) -> str:
         return self._idPrefix
 
-    '''
-    //////////////////////////////
-    //
-    // HumdrumFileBase::setXmlIdPrefix -- Set the prefix for a HumdrumXML ID
-    //     atrribute.  The prefix should not start with a digit, nor have
-    //     spaces in it.
-    '''
     @xmlIdPrefix.setter
     def xmlIdPrefix(self, newXMLIdPrefix: str):
         self._idPrefix = newXMLIdPrefix
@@ -472,22 +476,16 @@ class HumdrumFileBase(HumHash):
     //////////////////////////////
     //
     // HumdrumFileBase::getParseError -- Return parse fail reason.
-    '''
-    @property
-    def parseError(self) -> str:
-        return self._parseError
-
-    '''
-    //////////////////////////////
-    //
     // HumdrumFileBase::setParseError -- Set an error message from parsing
     //     input data.  The size of the message will keep track of whether
     //     or not an error was generated.  If no error message is generated
     //     when reading data, then the parsing of the data is assumed to be
     //     good.
-
-        Two versions, one is a property setter, the other returns bool
     '''
+    @property
+    def parseError(self) -> str:
+        return self._parseError
+
     @parseError.setter
     def parseError(self, err: str):
         self._parseError = err
@@ -503,6 +501,8 @@ class HumdrumFileBase(HumHash):
     //    messages should be suppressed. By default the parsing
     //    is "noisy" and the error messages will be printed to
     //    standard error.
+    // HumdrumFileBase::setQuietParsing -- Prevent error messages from
+    //   being displayed when reading data.
     // @SEEALSO: setQuietParsing
     // @SEEALSO: setNoisyParsing
     '''
@@ -510,14 +510,6 @@ class HumdrumFileBase(HumHash):
     def isQuiet(self) -> bool:
         return self._isQuiet
 
-    '''
-    //////////////////////////////
-    //
-    // HumdrumFileBase::setQuietParsing -- Prevent error messages from
-    //   being displayed when reading data.
-    // @SEEALSO: setNoisyParsing
-    // @SEEALSO: isQuiet
-    '''
     @isQuiet.setter
     def isQuiet(self, newIsQuiet: bool):
         self._isQuiet = newIsQuiet
@@ -651,8 +643,8 @@ class HumdrumFileBase(HumHash):
     //
     '''
     def analyzeLinks(self) -> bool:
-        nextLine: HumdrumLine = None
-        prevLine: HumdrumLine = None
+        nextLine: t.Optional[HumdrumLine] = None
+        prevLine: t.Optional[HumdrumLine] = None
         for line in self._lines:
             if not line.hasSpines:
                 continue
@@ -665,14 +657,18 @@ class HumdrumFileBase(HumHash):
         return self.isValid
 
     '''
-        analyzeLinksForLineSlice is for use after line insertion.  Make sure
-            the slice starts and ends on pre-existing (non-inserted) lines,
+        analyzeLinksForLines is for use after line insertion.  Make sure
+            the range starts and ends on pre-existing (non-inserted) lines,
             and contains all inserted lines.
     '''
-    def analyzeLinksForLineSlice(self, lineSlice: slice) -> bool:
-        prevLine: HumdrumLine = None
-        nextLine: HumdrumLine = None
-        for line in self[lineSlice]:
+    def analyzeLinksForLineRange(self, rangeStart: int, rangeStop: int) -> bool:
+        prevLine: t.Optional[HumdrumLine] = None
+        nextLine: t.Optional[HumdrumLine] = None
+
+        for lineIdx in range(rangeStart, rangeStop):
+            line = self[lineIdx]
+            if not line:
+                continue
             if not line.hasSpines:
                 continue
             prevLine = nextLine
@@ -786,11 +782,12 @@ class HumdrumFileBase(HumHash):
 
             elif prevTok.isExchangeInterpretation:
                 # swapping the order of two spines.
-                if prevLine[i+1] is None or not prevLine[i+1].isExchangeInterpretation:
+                prevTokPlus1: t.Optional[HumdrumToken] = prevLine[i+1]
+                if prevTokPlus1 is None or not prevTokPlus1.isExchangeInterpretation:
                     return self.setParseError(
                         f'Error: single spine exchange indicator \'*x\' on line: {prevLine.lineNumber}\n{prevLine.text}')
                 if nextLine[nextTokenIdx] is not None:
-                    prevLine[i+1].makeForwardLink(nextLine[nextTokenIdx])
+                    prevTokPlus1.makeForwardLink(nextLine[nextTokenIdx])
                 else:
                     print('Strange error 6', file=sys.stderr)
                 if nextLine[nextTokenIdx+1] is not None:
@@ -808,11 +805,13 @@ class HumdrumFileBase(HumHash):
             elif prevTok.isAddInterpretation:
                 # A new data stream is being added, the next linked token
                 # should be an exclusive interpretation.
-                if not nextLine[nextTokenIdx+1].isExclusiveInterpretation:
+                nextTok: t.Optional[HumdrumToken] = nextLine[nextTokenIdx]
+                nextTokPlus1: t.Optional[HumdrumToken] = nextLine[nextTokenIdx+1]
+                if nextTokPlus1 is None or not nextTokPlus1.isExclusiveInterpretation:
                     return self.setParseError(
-                        f'Error: expecting exclusive interpretation on line {nextLine.lineNumber} at token {i}, but got {nextLine[nextTokenIdx].text}')
-                if nextLine[nextTokenIdx] is not None:
-                    prevTok.makeForwardLink(nextLine[nextTokenIdx])
+                        f'Error: expecting exclusive interpretation on line {nextLine.lineNumber} at token {i}, but got {nextTokPlus1}')
+                if nextTok is not None:
+                    prevTok.makeForwardLink(nextTok)
                     nextTokenIdx += 1
                 else:
                     print('Strange error 8', file=sys.stderr)
@@ -842,9 +841,9 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}''')
     //     data.  Returns false if there was a parse error.
     '''
     def analyzeSpines(self):
-        dataType: [str] = []
-        sinfo: [str] = []
-        lastSpine: [[HumdrumToken]] = []
+        dataType: t.List[str] = []
+        sinfo: t.List[str] = []
+        lastSpine: t.List[t.List[HumdrumToken]] = []
 
         self._trackStarts = [None]
         self._trackEnds = [[]]
@@ -904,7 +903,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}''')
     //    found, so store in the list of track starts.  The first index position
     //    in trackstarts is reserve for non-spine usage.
     '''
-    def addToTrackStarts(self, token: HumdrumToken):
+    def addToTrackStarts(self, token: t.Optional[HumdrumToken]):
         if token is None:
             self._trackStarts.append(None)
             self._trackEnds.append([])
@@ -920,11 +919,15 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}''')
     // HumdrumFileBase::adjustSpines -- adjust dataType and spineInfo values based
     //   on manipulators found in the data.
     '''
-    def adjustSpines(self, line: HumdrumLine, dataType: [str], spineInfo: [str]) -> (bool, [str], [str]):
+    def adjustSpines(self,
+            line: HumdrumLine,
+            dataType: t.List[str],
+            spineInfo: t.List[str]
+    ) -> t.Tuple[bool, t.Optional[t.List[str]], t.Optional[t.List[str]]]:
         # returns success, as well as the newType array, and the newInfo array
         # if there is an error, it returns success=False, and both arrays empty
-        newType: [str] = []
-        newInfo: [str] = []
+        newType: t.List[str] = []
+        newInfo: t.List[str] = []
         mergeCount: int = 0
         skipOneToken: bool = False
 
@@ -987,7 +990,11 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}''')
                 if i >= line.tokenCount - 1:
                     self.setParseError("Error: *x is all alone at end of line")
                     return (False, None, None)
-                if not line[i+1].isExchangeInterpretation: # line[index] is index'th token
+                nextTok: t.Optional[HumdrumToken] = line[i+1]
+                if t.TYPE_CHECKING:
+                    # we know nextTok is not None because of i range check above
+                    assert isinstance(nextTok, HumdrumToken)
+                if not nextTok.isExchangeInterpretation: # line[index] is index'th token
                     self.setParseError('Error: *x is all alone')
                     return (False, None, None)
                 newType.append(dataType[i+1])
@@ -1047,7 +1054,7 @@ Line: {line.text}''')
         if analyzeTokenLinks:
             startIdx: int = self.lineCount-2 # previous last line
             endIdx: int = self.lineCount-1 # new last line
-            self.analyzeLinksForLineSlice(slice(startIdx, endIdx+1))
+            self.analyzeLinksForLineRange(startIdx, endIdx+1)
 
     '''
     ////////////////////////////
@@ -1055,7 +1062,7 @@ Line: {line.text}''')
     // HumdrumFileBase::insertLine -- Add a line to the file's contents.  The file's
     //    spine and rhythmic structure should be recalculated after an append.
     '''
-    def insertLine(self, index: int, aLine: Union[HumdrumLine, str],
+    def insertLine(self, index: int, aLine: t.Union[HumdrumLine, str],
                     asGlobalToken: bool=False,
                     analyzeTokenLinks: bool=False):
         if isinstance(aLine, str):
@@ -1073,7 +1080,7 @@ Line: {line.text}''')
         if analyzeTokenLinks:
             startIdx: int = max(0, index)
             endIdx: int = min(index+1, self.lineCount-1)
-            self.analyzeLinksForLineSlice(slice(startIdx, endIdx+1))
+            self.analyzeLinksForLineRange(startIdx, endIdx+1)
 
     '''
     //////////////////////////////
@@ -1088,8 +1095,8 @@ Line: {line.text}''')
         ts: HumNum = opFrac(timestamp)
         # for now do a linear search for the insertion point, but later
         # do something more efficient.
-        beforet: HumNum = None
-        beforei: int = None
+        beforet: t.Optional[HumNum] = None
+        beforei: t.Optional[int] = None
 
         for i, line in enumerate(self.lines()):
             if not line.isData:
@@ -1108,8 +1115,20 @@ Line: {line.text}''')
         if beforei is None:
             return None
 
-        beforeLine: HumdrumLine = self[beforei]
+        # This check is currently not necessary, since beforei and beforet are
+        # both set at the same time, but will that always be true?
+        # Also, mypy isn't smart enough to know, so this is a mypy hint.
+        if beforet is None:
+            return None
+
+        beforeLine: t.Optional[HumdrumLine] = self[beforei]
+        if t.TYPE_CHECKING:
+            # we know beforeLine is not None because we found it above
+            # in self.lines() which never returns None.
+            assert isinstance(beforeLine, HumdrumLine)
+
         newLine: HumdrumLine = HumdrumLine()
+
         # copyStructure will add null tokens automatically
         newLine.copyStructure(beforeLine, '.')
 
@@ -1138,11 +1157,11 @@ Line: {line.text}''')
     //     local comments that appear immediately before the data line(s) at that timestamp.
     //     Returns NULL if there was a problem.
     '''
-    def insertNullInterpretationLine(self, timestamp: HumNumIn) -> HumdrumLine:
+    def insertNullInterpretationLine(self, timestamp: HumNumIn) -> t.Optional[HumdrumLine]:
         ts: HumNum = opFrac(timestamp)
 	    # for now do a linear search for the insertion point, but later
 	    # do something more efficient.
-        beforei: int = None
+        beforei: t.Optional[int] = None
 
         for i, line in enumerate(self.lines()):
             if not line.isData:
@@ -1161,7 +1180,10 @@ Line: {line.text}''')
         if beforei is None:
             return None
 
-        targetLine: HumdrumLine = self.getLineForInterpretationInsertion(beforei)
+        targetLine: t.Optional[HumdrumLine] = self.getLineForInterpretationInsertion(beforei)
+        if t.TYPE_CHECKING:
+            # we know that targetLine is not None, because beforei is a valid line.
+            assert isinstance(targetLine, HumdrumLine)
         newLine: HumdrumLine = HumdrumLine()
         # copyStructure will add null tokens automatically
         newLine.copyStructure(targetLine, '*')
@@ -1171,7 +1193,12 @@ Line: {line.text}''')
 
         # inserted line will increment beforei by one:
         beforei += 1
-        beforeLine: HumdrumLine = self[beforei]
+        beforeLine: t.Optional[HumdrumLine] = self[beforei]
+        if t.TYPE_CHECKING:
+            # we know beforeLine is not None because we know that beforei
+            # is in range.  We found it in range, then incremented it after
+            # inserting a line before it (so it's still in range).
+            assert isinstance(beforeLine, HumdrumLine)
 
         newLine.durationFromStart = beforeLine.durationFromStart
         newLine.durationFromBarline = beforeLine.durationFromBarline
@@ -1192,9 +1219,9 @@ Line: {line.text}''')
     //     be added before any other lines at that timestamp.
     //     Returns NULL if there was a problem.
     '''
-    def insertNullInterpretationLineAbove(self, timestamp: HumNumIn) -> HumdrumLine:
+    def insertNullInterpretationLineAbove(self, timestamp: HumNumIn) -> t.Optional[HumdrumLine]:
         ts: HumNum = opFrac(timestamp)
-        beforei: int = None
+        beforei: t.Optional[int] = None
 
         for i, line in enumerate(self.lines()):
             current: HumNum = line.durationFromStart
@@ -1209,7 +1236,11 @@ Line: {line.text}''')
         if beforei is None:
             return None
 
-        targetLine: HumdrumLine = self.getLineForInterpretationInsertionAbove(beforei)
+        targetLine: t.Optional[HumdrumLine] = self.getLineForInterpretationInsertionAbove(beforei)
+        if t.TYPE_CHECKING:
+            # we know that targetLine is not None, because beforei is a valid line.
+            assert isinstance(targetLine, HumdrumLine)
+
         newLine: HumdrumLine = HumdrumLine()
         newLine.copyStructure(targetLine, '*')
 
@@ -1218,7 +1249,13 @@ Line: {line.text}''')
         self.insertLine(targeti, newLine)
 
         beforei += 1
-        beforeLine: HumdrumLine = self[beforei]
+        beforeLine: t.Optional[HumdrumLine] = self[beforei]
+        if t.TYPE_CHECKING:
+            # we know beforeLine is not None because we know that beforei
+            # is in range.  We found it in range, then incremented it after
+            # inserting a line well before it (so it's still in range).
+            assert isinstance(beforeLine, HumdrumLine)
+
         newLine.durationFromStart = beforeLine.durationFromStart
         newLine.durationFromBarline = beforeLine.durationFromBarline
         newLine.durationToBarline = beforeLine.durationToBarline
@@ -1245,11 +1282,15 @@ Line: {line.text}''')
             raise HumdrumInternalError('Cannot insert a null interpretion line beyond the EOF')
 
         if lineIndex < self.lineCount:
-            nextLine: HumdrumLine = self[lineIndex]
-            copyLine: HumdrumLine = nextLine
-            if not copyLine.hasSpines:
+            nextLine: t.Optional[HumdrumLine] = self[lineIndex]
+            if t.TYPE_CHECKING:
+                # we know nextLine is not None because lineIndex < self.lineCount
+                assert isinstance(nextLine, HumdrumLine)
+
+            copyLine: t.Optional[HumdrumLine] = nextLine
+            if not nextLine.hasSpines:
                 copyLine = self[lineIndex-1] # problem if previous line is manipulator
-            if not copyLine.hasSpines:
+            if copyLine is None or not copyLine.hasSpines:
                 raise HumdrumInternalError('Cannot insert a null interpretation line between two unspined lines')
             newLine.copyStructure(copyLine, '*')
             newLine.durationFromStart = nextLine.durationFromStart
@@ -1258,7 +1299,13 @@ Line: {line.text}''')
             newLine.duration = opFrac(0)
             self.insertLine(lineIndex, newLine, analyzeTokenLinks=True)
         else: # append the new line
-            prevLine: HumdrumLine = self[lineIndex-1]
+            prevLine: t.Optional[HumdrumLine] = self[lineIndex-1]
+            if t.TYPE_CHECKING:
+                # we know prevLine is not None because we are appending, and if there
+                # is no previous line, then we are appending to an empty file, and
+                # we checked that first thing (if self.lineCount <= 0).
+                assert isinstance(prevLine, HumdrumLine)
+
             newLine.copyStructure(prevLine, '*') # problem if prevLine is manipulator
             newLine.durationFromStart = opFrac(prevLine.durationFromStart + prevLine.duration)
             newLine.durationFromBarline = opFrac(prevLine.durationFromBarline + prevLine.duration)
@@ -1279,11 +1326,18 @@ Line: {line.text}''')
     //    (global or empty lines) are ignored.  This function is used to insert
     //    an empty interpretation before a data line at a specific data line.
     '''
-    def getLineForInterpretationInsertion(self, index: int) -> HumdrumLine:
+    def getLineForInterpretationInsertion(self, index: int) -> t.Optional[HumdrumLine]:
+        if index not in range(0, self.lineCount):
+            return None
+
         current: int = index - 1
         previous: int = index
         while current > 0:
-            currentLine: HumdrumLine = self[current]
+            currentLine: t.Optional[HumdrumLine] = self[current]
+            if t.TYPE_CHECKING:
+                # we know currentLine is not None because current is in range
+                assert isinstance(currentLine, HumdrumLine)
+
             if not currentLine.hasSpines:
                 current -= 1
                 continue
@@ -1302,12 +1356,19 @@ Line: {line.text}''')
     // HumdrumFileBase::getLineForInterpretationInsertionAbove --  Search backwards
     //    in the file for the first line at the same timestamp as the starting line.
     '''
-    def getLineForInterpretationInsertionAbove(self, index: int) -> HumdrumLine:
-        timestamp: HumNum = self[index].durationFromStart
+    def getLineForInterpretationInsertionAbove(self, index: int) -> t.Optional[HumdrumLine]:
+        if index not in range(0, self.lineCount):
+            return None
+
+        timestamp: HumNum = self._lines[index].durationFromStart
         current: int = index - 1
         previous: int = index
         while current > 0:
-            currentLine: HumdrumLine = self[current]
+            currentLine: t.Optional[HumdrumLine] = self[current]
+            if t.TYPE_CHECKING:
+                # we know currentLine is not None because current is in range
+                assert isinstance(currentLine, HumdrumLine)
+
             if not currentLine.hasSpines:
                 current -= 1
                 continue
@@ -1317,7 +1378,6 @@ Line: {line.text}''')
                 current -= 1
                 continue
 
-            assert self[previous].hasSpines
             return self[previous]
 
         return self[index]
@@ -1336,7 +1396,7 @@ Line: {line.text}''')
     //
     // HumdrumFileBase::getReferenceRecords --
     '''
-    def referenceRecords(self) -> [HumdrumLine]:
+    def referenceRecords(self) -> t.List[HumdrumLine]:
         refLines = []
         for line in self._lines:
             if line.isReference:
@@ -1355,7 +1415,7 @@ Line: {line.text}''')
     //
     // HumdrumFileBase::getGlobalReferenceRecords --
     '''
-    def globalReferenceRecords(self) -> [HumdrumLine]:
+    def globalReferenceRecords(self) -> t.List[HumdrumLine]:
         refLines = []
         for line in self._lines:
             if line.isGlobalReference:
@@ -1374,7 +1434,7 @@ Line: {line.text}''')
     //
     // HumdrumFileBase::getUniversalReferenceRecords --
     '''
-    def universalReferenceRecords(self) -> [HumdrumLine]:
+    def universalReferenceRecords(self) -> t.List[HumdrumLine]:
         refLines = []
         for line in self._lines:
             if line.isUniversalReference:
@@ -1434,7 +1494,7 @@ Line: {line.text}''')
     //     points of spine strands.
     '''
     @property
-    def spineStopList(self) -> [HumdrumToken]:
+    def spineStopList(self) -> t.List[HumdrumToken]:
         return [trackEnd for trackEndList in self._trackEnds for trackEnd in trackEndList]
 
     '''
@@ -1451,11 +1511,11 @@ Line: {line.text}''')
     //     this is removed in the return vector.
     '''
     @property
-    def spineStartList(self) -> [HumdrumToken]:
+    def spineStartList(self) -> t.List[t.Optional[HumdrumToken]]:
         return self._trackStarts[1:]
 
-    def spineStartListOfType(self, exInterps) -> [HumdrumToken]: # exInterps can be str or [str]
-        output: [HumdrumToken] = []
+    def spineStartListOfType(self, exInterps: t.Union[str, t.List[str]]) -> t.List[HumdrumToken]:
+        output: t.List[HumdrumToken] = []
 
         if isinstance(exInterps, str):
             exInterps = [exInterps] # convert to [str]
@@ -1470,6 +1530,8 @@ Line: {line.text}''')
         for i, trackStart in enumerate(self._trackStarts):
             if i == 0:
                 continue # skip the first entry (there is no track 0)
+            if trackStart is None:
+                continue
 
             for exInterp in newExInterps:
                 if exInterp == trackStart.text:
@@ -1478,7 +1540,7 @@ Line: {line.text}''')
 
         return output
 
-    def kernSpineStartList(self) -> [HumdrumToken]:
+    def kernSpineStartList(self) -> t.List[HumdrumToken]:
         return self.spineStartListOfType('**kern')
 
     '''
@@ -1489,7 +1551,7 @@ Line: {line.text}''')
 
         Note that spine numbers start at 0, and track numbers start at 1
     '''
-    def getPrimarySpineSequence(self, spine: int, options: int) -> [HumdrumToken]:
+    def getPrimarySpineSequence(self, spine: int, options: int) -> t.List[HumdrumToken]:
         track = spine + 1
         return self.getPrimaryTrackSequence(track, options)
 
@@ -1501,12 +1563,12 @@ Line: {line.text}''')
 
             Clients can specify spine, or startToken.  We will use spine if the client specifies both.
     '''
-    def getSpineSequence(self, spine: int = None, startToken: HumdrumToken = None, options: int = 0) -> [[HumdrumToken]]:
+    def getSpineSequence(self, spine: int, startToken: HumdrumToken = None, options: int = 0) -> t.List[t.List[HumdrumToken]]:
         if startToken is not None:
             track = startToken.track # get the track number from the token
         else:
             track = spine + 1 # get the track number from the spine number
-        return self.getTrackSequence(track, options)
+        return self.getTrackSequence(track=track, options=options)
 
     '''
     //////////////////////////////
@@ -1515,8 +1577,11 @@ Line: {line.text}''')
     //     given primary spine tokens for a given track (indexed starting at
     //     one and going through getMaxTrack().
     '''
-    def getPrimaryTrackSequence(self, track: int, options: int) -> [HumdrumToken]:
-        tempSeq: [[HumdrumToken]] = self.getTrackSequence(track, options | self.OPT_PRIMARY)
+    def getPrimaryTrackSequence(self, track: int, options: int) -> t.List[HumdrumToken]:
+        tempSeq: t.List[t.List[HumdrumToken]] = self.getTrackSequence(
+            track=track,
+            options=options | self.OPT_PRIMARY
+        )
         return [tokenList[0] for tokenList in tempSeq]
 
     '''
@@ -1548,8 +1613,8 @@ Line: {line.text}''')
     // * OPT_ATTACKS   (OPT_DATA | OPT_NOREST | OPT_NOTIE | OPT_NONULL)
     //     Only note-attack tokens (when etracting **kern data)
     '''
-    def getTrackSequence(self, track: int = None, startToken: HumdrumToken = None, options: int = 0) -> [[HumdrumToken]]:
-        output: [[HumdrumToken]] = []
+    def getTrackSequence(self, track: int = None, startToken: HumdrumToken = None, options: int = 0) -> t.List[t.List[HumdrumToken]]:
+        output: t.List[t.List[HumdrumToken]] = []
 
         if startToken is not None:
             track = startToken.track # get the track number from the token
@@ -1571,8 +1636,10 @@ Line: {line.text}''')
             tempTokens = []
             if not optionNoGlobal and line.isGlobal:
                 # append [the entire global line] to output
-                tempTokens.append(line[0])
-                output.append(tempTokens)
+                token0: t.Optional[HumdrumToken] = line[0]
+                if token0 is not None:
+                    tempTokens.append(token0)
+                    output.append(tempTokens)
                 continue
 
             if optionNoEmpty:
@@ -1622,7 +1689,7 @@ Line: {line.text}''')
     //     interpretation for the given track.  Returns NULL if the track
     //     number is out of range.
     '''
-    def trackStart(self, track: int) -> HumdrumToken:
+    def trackStart(self, track: int) -> t.Optional[HumdrumToken]:
         if track is None:
             return None
 
@@ -1643,12 +1710,13 @@ Line: {line.text}''')
     //    it is possible that there are more than one termination points for a
     //    track.  This function returns the number of terminations which are
     //    present in a file for any given spine/track.
+        Returns 0 if track number is out of range.
     '''
     def trackEndCount(self, track: int) -> int:
         if track < 0:
             track += len(self._trackEnds)
         if track < 1 or track >= len(self._trackEnds):
-            return None
+            return 0
 
         return len(self._trackEnds[track])
 
@@ -1659,7 +1727,7 @@ Line: {line.text}''')
     //    token for the given track and subtrack.  Sub-tracks are indexed from 0 up
     //    to but not including getTrackEndCount.
     '''
-    def getTrackEnd(self, track: int, subTrack: int) -> HumdrumToken:
+    def trackEnd(self, track: int, subTrack: int) -> t.Optional[HumdrumToken]:
         if track < 0:
             track += len(self._trackEnds)
 
@@ -1690,11 +1758,15 @@ Line: {line.text}''')
         Not called internally.  Called by HumdrumFileStructure.py
     '''
     def analyzeNonNullDataTokens(self) -> bool:
-        ptokens: [HumdrumToken] = []
+        ptokens: t.List[HumdrumToken] = []
 
         # analyze forward tokens:
         for i in range(1, self.maxTrack+1):
-            if not self.processNonNullDataTokensForTrackForward(self._trackStarts[i], ptokens):
+            trackStart: t.Optional[HumdrumToken] = self._trackStarts[i]
+            if trackStart is None:
+                # I don't think this can happen, but I'm not sure.
+                continue
+            if not self.processNonNullDataTokensForTrackForward(trackStart, ptokens):
                 return False
 
         ptokens = [] # starting another recursion
@@ -1717,15 +1789,18 @@ Line: {line.text}''')
         // and/or the algorithm is probably retracking tokens in the case
         // of spine splits.
         '''
-        stops: [int] = self.spineStopList
-        nexts: HumdrumToken = None
+        stops: t.List[HumdrumToken] = self.spineStopList
+        nexts: t.Optional[HumdrumToken] = None
 
         for stop in stops:
             if stop is None:
                 continue
 
             # start at the track stop token and work backwards
-            token = stop
+            token: t.Optional[HumdrumToken] = stop
+            if t.TYPE_CHECKING:
+                # we know token is not None because stop/stops are not Optional
+                assert isinstance(token, HumdrumToken)
             if token.isNonNullData:
                 nexts = token
 
@@ -1747,16 +1822,25 @@ Line: {line.text}''')
     //    you what is the next non-null data token(s) in the spine after the given
     //    token.
     '''
-    def processNonNullDataTokensForTrackBackward(self, endToken: HumdrumToken, ptokens: [HumdrumToken]) -> bool:
+    def processNonNullDataTokensForTrackBackward(self, endToken: HumdrumToken, ptokens: t.List[HumdrumToken]) -> bool:
         token: HumdrumToken = endToken
         tcount: int = token.previousTokenCount
 
         while tcount > 0:
             for i in range(1, tcount):
-                if not self.processNonNullDataTokensForTrackBackward(token.previousToken(i), ptokens):
+                prevtok: t.Optional[HumdrumToken] = token.previousToken(i)
+                if t.TYPE_CHECKING:
+                    # we know prevtok is not None because i is in range
+                    assert isinstance(prevtok, HumdrumToken)
+
+                if not self.processNonNullDataTokensForTrackBackward(prevtok, ptokens):
                     return False
 
-            prevToken = token.previousToken0
+            prevToken: t.Optional[HumdrumToken] = token.previousToken0
+            if t.TYPE_CHECKING:
+                # we know prevToken is not None because 0 is in range (tcount > 0)
+                assert isinstance(prevToken, HumdrumToken)
+
             if prevToken.isSplitInterpretation:
                 addUniqueTokens(prevToken.nextNonNullDataTokens, ptokens)
                 if token != prevToken.nextToken0:
@@ -1768,7 +1852,7 @@ Line: {line.text}''')
                     ptokens = [token] # nukes the existing ptokens list
 
             # Follow previous data token 0 since 1 and higher are handled above.
-            token = token.previousToken0
+            token = prevToken
             tcount = token.previousTokenCount
 
         return True
@@ -1781,17 +1865,27 @@ Line: {line.text}''')
     //    you what are the previous non-null data token(s) in the spine before
     //    the given token.
     '''
-    def processNonNullDataTokensForTrackForward(self, startToken: HumdrumToken, ptokens: [HumdrumToken]) -> bool:
+    def processNonNullDataTokensForTrackForward(self, startToken: HumdrumToken, ptokens: t.List[HumdrumToken]) -> bool:
         token: HumdrumToken = startToken
         tcount: int = token.nextTokenCount
 
         while tcount > 0:
+            nextToken: t.Optional[HumdrumToken] = None
             if token.isSplitInterpretation:
                 for i in range(1, tcount):
-                    if not self.processNonNullDataTokensForTrackForward(token.nextToken(i), ptokens):
+                    nextTok: t.Optional[HumdrumToken] = token.nextToken(i)
+                    if t.TYPE_CHECKING:
+                        # we know nextTok is not None because i is in range
+                        assert isinstance(nextTok, HumdrumToken)
+
+                    if not self.processNonNullDataTokensForTrackForward(nextTok, ptokens):
                         return False
             elif token.isMergeInterpretation:
                 nextToken = token.nextToken0
+                if t.TYPE_CHECKING:
+                    # we know nextToken is not None because 0 is in range (tcount > 0)
+                    assert isinstance(nextToken, HumdrumToken)
+
                 addUniqueTokens(nextToken.previousNonNullDataTokens, ptokens)
                 if token != nextToken.previousToken0:
                     # terminate if not most primary subspine
@@ -1803,7 +1897,12 @@ Line: {line.text}''')
 
             # Data tokens can only be followed by up to one next token,
             # so no need to check for more than one next token.
-            token = token.nextToken0
+            nextToken = token.nextToken0
+            if t.TYPE_CHECKING:
+                # we know nextToken is not None because 0 is in range (tcount > 0)
+                assert isinstance(nextToken, HumdrumToken)
+
+            token = nextToken
             tcount = token.nextTokenCount
 
         return True

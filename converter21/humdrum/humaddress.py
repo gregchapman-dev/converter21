@@ -9,15 +9,18 @@
 # Copyright:     (c) 2021-2022 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
+import typing as t
+
 from converter21.humdrum import HumdrumSyntaxError
 
 class HumAddress:
     def __init__(self):
+        from converter21.humdrum import HumdrumLine
         self.trackNum = None
         self._subTrack = None
         self._subTrackCount = 0
         self._fieldIndex = None
-        self._ownerLine = None # HumdrumLine
+        self._ownerLine: t.Optional[HumdrumLine] = None
         self._spining = ''
         self._dataTypeTokenCached = None # cache of self.ownerLine.trackStart(self.trackNum)
     '''
@@ -31,7 +34,7 @@ class HumAddress:
     @property
     def lineIndex(self) -> int:
         if self._ownerLine is None:
-            return None
+            return -1
         return self._ownerLine.lineIndex
 
     '''
@@ -49,24 +52,20 @@ class HumAddress:
     // HumAddress::getTrack -- The track number of the given spine.  This is the
     //   first number in the spine info string.  The track number is the same
     //   as a spine number.
-    '''
-    @property
-    def track(self) -> int:
-        return self.trackNum
-
-    '''
-    //////////////////////////////
-    //
     // HumAddress::setTrack -- Set the track number of the associated token.
     //   This should always be the first number in the spine information string,
     //   or -1 if the spine info is empty.  Tracks are limited to an arbitrary
     //   count of 1000 (could be increased in the future if needed).  This function
     //   is used by the HumdrumFileStructure class.
     '''
+    @property
+    def track(self) -> int:
+        return self.trackNum
+
     @track.setter
     def track(self, newTrack: int):
         if newTrack < 0:
-            newTrack = None
+            newTrack = -1
         if newTrack > 1000:
             raise HumdrumSyntaxError("too many tracks (limit is 1000)")
         self.trackNum = newTrack
@@ -86,16 +85,6 @@ class HumAddress:
     //   sub-spine only is split--then the sub-spines are labeled as sub-tracks "1",
     //   "2", "3" respectively.  When a track has only one sub-spine (i.e., it has
     //   been split), the subtrack value will be "0".
-    '''
-    @property
-    def subTrack(self) -> int:
-        if self.subTrackCount == 1:
-            return 0
-        return self._subTrack
-
-    '''
-    //////////////////////////////
-    //
     // HumAddress::setSubtrack -- Set the subtrack of the spine.
     //   If the token is the only one active for a spine, the subtrack should
     //   be set to zero.  If there are more than one sub-tracks for the spine, this
@@ -105,10 +94,16 @@ class HumAddress:
     //   the field index of other sub-tracks for the given track.
     //   This function is used by the HumdrumFileStructure class.
     '''
+    @property
+    def subTrack(self) -> int:
+        if self.subTrackCount == 1:
+            return 0
+        return self._subTrack
+
     @subTrack.setter
     def subTrack(self, newSubTrack: int):
-        if newSubTrack < 0:
-            newSubTrack = None
+        # no negative subtracks
+        newSubTrack = max(newSubTrack, 0)
         if newSubTrack > 1000:
             raise HumdrumSyntaxError("too many subTracks (limit is 1000)")
         self._subTrack = newSubTrack
@@ -124,11 +119,6 @@ class HumAddress:
     def subTrackCount(self) -> int:
         return self._subTrackCount
 
-    '''
-    //////////////////////////////
-    //
-    // HumAddress::setSubtrackCount --
-    '''
     @subTrackCount.setter
     def subTrackCount(self, newSubTrackCount: int):
         self._subTrackCount = newSubTrackCount
@@ -138,24 +128,21 @@ class HumAddress:
     //
     // HumAddress::getFieldIndex -- Returns the field index on the line of the
     //     token associated with the address.
-    '''
-    @property
-    def fieldIndex(self) -> int:
-        return self._fieldIndex
-    @property
-    def fieldNumber(self) -> int:
-        return self.fieldIndex + 1
-
-    '''
-    //////////////////////////////
-    //
     // HumAddress::setFieldIndex -- Set the field index of associated token
     //   in the HumdrumLine owner.  If the token is now owned by a HumdrumLine,
     //   then the input parameter should be -1.
     '''
+    @property
+    def fieldIndex(self) -> int:
+        return self._fieldIndex
+
     @fieldIndex.setter
     def fieldIndex(self, newFieldIndex: int):
         self._fieldIndex = newFieldIndex
+
+    @property
+    def fieldNumber(self) -> int:
+        return self.fieldIndex + 1
 
     '''
     //////////////////////////////
@@ -166,19 +153,16 @@ class HumAddress:
     //     "(1)a"/"(1)b" are the spine descriptions of the two sub-spines after
     //     a split manipulator (*^).  "((1)a)b" is the second sub-spines of the
     //     first sub-spine for spine 1.
-    '''
-    @property
-    def spineInfo(self) -> str:
-        return self._spining
-    '''
-    //////////////////////////////
-    //
     // HumAddress::setSpineInfo -- Set the spine description of the associated
     //     token.  For example "2" for the second spine (from the left), or
     //     "((2)a)b" for a sub-spine created as the left sub-spine of the main
     //     spine and then as the right sub-spine of that sub-spine.  This function
     //     is used by the HumdrumFileStructure class.
     '''
+    @property
+    def spineInfo(self) -> str:
+        return self._spining
+
     @spineInfo.setter
     def spineInfo(self, newSpineInfo: str):
         self._spining = newSpineInfo
@@ -189,18 +173,14 @@ class HumAddress:
     // HumAddress::getLine -- return the HumdrumLine which owns the token
     //    associated with this address.  Returns NULL if it does not belong
     //    to a HumdrumLine object.
+    // HumAddress::setOwner -- Stores a pointer to the HumdrumLine on which
+    //   the token associated with this address belongs.  When not owned by
+    //   a HumdrumLine, the parameter's value should be NULL.
     '''
     @property
     def ownerLine(self): # returns HumdrumLine
         return self._ownerLine
 
-    '''
-    //////////////////////////////
-    //
-    // HumAddress::setOwner -- Stores a pointer to the HumdrumLine on which
-    //   the token associated with this address belongs.  When not owned by
-    //   a HumdrumLine, the parameter's value should be NULL.
-    '''
     @ownerLine.setter
     def ownerLine(self, newOwnerLine): # newOwnerLine: HumdrumLine
         self._ownerLine = newOwnerLine

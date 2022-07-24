@@ -16,7 +16,7 @@
 import sys
 import re
 import math
-from typing import Union, List, Tuple, OrderedDict, Optional, Type
+import typing as t
 from fractions import Fraction
 
 import music21 as m21
@@ -46,7 +46,18 @@ class M21Convert:
         'cut': 'c|',    # modern cut time (2/2)
     }
 
-    diatonicToM21PitchName = {
+    diatonicToM21PitchName: t.Dict[int, str] = {
+        0: 'C',
+        1: 'D',
+        2: 'E',
+        3: 'F',
+        4: 'G',
+        5: 'A',
+        6: 'B',
+    }
+
+    # same as diatonicToM21PitchName, but the values are typed as StepName
+    diatonicToM21StepName: t.Dict[int, m21.common.types.StepName] = {
         0: 'C',
         1: 'D',
         2: 'E',
@@ -90,7 +101,7 @@ class M21Convert:
         'electronic encoder'        : 'ENC'
     }
 
-    humdrumReferenceKeys: Tuple[str] = (
+    humdrumReferenceKeys: t.Tuple[str, ...] = (
         # Authorship information:
         'COM', # composer's name
         'COA', # attributed composer
@@ -256,7 +267,7 @@ class M21Convert:
         -7: 'b-e-a-d-g-c-f-',
     }
 
-    humdrumModeToM21Mode = {
+    humdrumModeToM21Mode: t.Dict[t.Optional[str], t.Optional[str]]  = {
         'dor':  'dorian',
         'phr':  'phrygian',
         'lyd':  'lydian',
@@ -277,7 +288,7 @@ class M21Convert:
     }
 
     # place articulations in stacking order (nearest to furthest from note)
-    humdrumArticulationStringToM21ArticulationClassName: OrderedDict = OrderedDict([
+    humdrumArticulationStringToM21ArticulationClassName: t.OrderedDict = t.OrderedDict([
         ("'",   'Staccato'),
         ('`',   'Staccatissimo'),
         ('~',   'Tenuto'),
@@ -290,7 +301,7 @@ class M21Convert:
         ('"',   'Pizzicato')
     ])
 
-    m21ArticulationClassNameToHumdrumArticulationString: OrderedDict = OrderedDict([
+    m21ArticulationClassNameToHumdrumArticulationString: t.OrderedDict = t.OrderedDict([
         ('Staccato',        "'"),
         ('Staccatissimo',   '`'),
         ('Tenuto',          '~'),
@@ -308,7 +319,7 @@ class M21Convert:
         diatonic: int = Convert.kernToDiatonicPC(subTokenStr) # PC == pitch class; ignores octave
         if diatonic < 0:
             # no pitch here, it's an unpitched note without a note position
-            return None
+            return ''
 
         accidCount: int = 0
         for ch in subTokenStr:
@@ -326,6 +337,15 @@ class M21Convert:
         return M21Convert.diatonicToM21PitchName[diatonic] + accidStr
 
     @staticmethod
+    def m21StepName(subTokenStr: str) -> t.Optional[m21.common.types.StepName]:
+        diatonic: int = Convert.kernToDiatonicPC(subTokenStr) # PC == pitch class; ignores octave
+        if diatonic < 0:
+            # no pitch here, it's an unpitched note without a note position
+            return None
+
+        return M21Convert.diatonicToM21StepName[diatonic]
+
+    @staticmethod
     def m21PitchNameWithOctave(subTokenStr: str) -> str: # returns 'A#5' for A sharp in octave 5
         octaveNumber: int = Convert.kernToOctaveNumber(subTokenStr)
         octaveStr: str = ''
@@ -336,7 +356,7 @@ class M21Convert:
         return M21Convert.m21PitchName(subTokenStr) + octaveStr
 
     @staticmethod
-    def m21Articulations(tokenStr: str, rdfAbove: str, rdfBelow: str) -> List[m21.articulations.Articulation]:
+    def m21Articulations(tokenStr: str, rdfAbove: str, rdfBelow: str) -> t.List[m21.articulations.Articulation]:
         # music21 doesn't have different articulation lists per note in a chord, just a single
         # articulation list for the chord itself.  So we search the entire tokenStr for
         # articulations, and add them all to the chord.  This works for non-chord (note) tokens
@@ -441,7 +461,7 @@ class M21Convert:
 #         addDirection(text, placement, bold, italic, token, staffindex, justification, color, vgroup);
 #     }
 
-        artics: [m21.articulations.Articulation] = []
+        artics: t.List[m21.articulations.Articulation] = []
 
         for humdrumArticString in M21Convert.humdrumArticulationStringToM21ArticulationClassName:
             if articFound.get(humdrumArticString, None):
@@ -464,8 +484,8 @@ class M21Convert:
     @staticmethod
     def m21DurationWithTuplet(token: HumdrumToken, tuplet: m21.duration.Tuplet) -> m21.duration.Duration:
         dur: HumNum = opFrac(token.duration / tuplet.tupletMultiplier())
-        durNoDots: HumNum = None
-        numDots: int = None
+        durNoDots: HumNum
+        numDots: t.Optional[int]
         durNoDots, numDots = Convert.computeDurationNoDotsAndNumDots(dur)
         if numDots is None:
             print(f'Cannot figure out durNoDots + numDots from {token.text} (on line number {token.lineNumber}), tuplet={tuplet}, about to crash in convertQuarterLengthToType()...', file=sys.stderr)
@@ -492,21 +512,27 @@ class M21Convert:
         return timeSignature
 
     @staticmethod
-    def m21KeySignature(keySigToken: HumdrumToken, keyToken: HumdrumToken = None) -> Union[m21.key.KeySignature, m21.key.Key]:
+    def m21KeySignature(
+            keySigToken: HumdrumToken,
+            keyToken: HumdrumToken = None
+        ) -> t.Optional[t.Union[m21.key.KeySignature, m21.key.Key]]:
         keySig = keySigToken.keySignature
 
         # ignore keySigToken if we have keyToken. keyToken has a lot more info.
         if keyToken:
+            keyName: t.Optional[str]
+            mode: t.Optional[str]
             keyName, mode = keyToken.keyDesignation
-            mode = M21Convert.humdrumModeToM21Mode.get(mode, None) # e.g. 'dor' -> 'dorian'
-            return m21.key.Key(keyName, mode)
+            if keyName:
+                mode = M21Convert.humdrumModeToM21Mode.get(mode, None) # e.g. 'dor' -> 'dorian'
+                return m21.key.Key(keyName, mode)
 
         # standard key signature in standard order (if numSharps is negative, it's -numFlats)
         if keySig in M21Convert.humdrumStandardKeyStringsToNumSharps:
             return m21.key.KeySignature(M21Convert.humdrumStandardKeyStringsToNumSharps[keySig])
 
         # non-standard key
-        alteredPitches: [str] = [keySig[i:i+2].upper() for i in range(0, len(keySig), 2)]
+        alteredPitches: t.List[str] = [keySig[i:i+2].upper() for i in range(0, len(keySig), 2)]
         for pitch in alteredPitches:
             if pitch[0] not in 'ABCDEFG':
                 # invalid accidentals in '*k[accidentals]'.
@@ -545,9 +571,9 @@ class M21Convert:
         return m21.clef.clefFromString(clefStrNoShift, octaveShift)
 
     @staticmethod
-    def m21IntervalFromTranspose(transpose: str) -> m21.interval.Interval:
-        dia: int = None
-        chroma: int = None
+    def m21IntervalFromTranspose(transpose: str) -> t.Optional[m21.interval.Interval]:
+        dia: t.Optional[int]
+        chroma: t.Optional[int]
         dia, chroma = Convert.transToDiatonicChromatic(transpose)
         if dia is None or chroma is None:
             return None # we couldn't parse transpose string
@@ -565,8 +591,11 @@ class M21Convert:
         return m21.interval.intervalFromGenericAndChromatic(dia, chroma)
 
     @staticmethod
-    def humdrumTransposeStringFromM21Interval(interval: m21.interval.Interval) -> str:
-        chroma: int = interval.semitones
+    def humdrumTransposeStringFromM21Interval(interval: m21.interval.Interval) -> t.Optional[str]:
+        if interval.generic is None:
+            return None
+
+        chroma: int = int(interval.semitones)
         dia: int = interval.generic.value
 
         # diatonic step count is generic interval type shifted 1 closer to 0
@@ -594,21 +623,23 @@ class M21Convert:
     '''
 
     @staticmethod
-    def kernTokenStringAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
-        if 'Note' in m21GeneralNote.classes:
+    def kernTokenStringAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.Music21Object, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> t.Tuple[str, t.List[str]]:
+        # this method can take any Music21Object, but only GeneralNotes return anything interesting.
+        if isinstance(m21GeneralNote, m21.note.Note):
             return M21Convert.kernTokenStringAndLayoutsFromM21Note(
                                         m21GeneralNote, spannerBundle, owner)
 
-        if 'Rest' in m21GeneralNote.classes:
+        if isinstance(m21GeneralNote, m21.note.Rest):
             return M21Convert.kernTokenStringAndLayoutsFromM21Rest(
                                         m21GeneralNote, spannerBundle, owner)
 
-        if 'Chord' in m21GeneralNote.classes:
+        if isinstance(m21GeneralNote, m21.chord.Chord):
             return M21Convert.kernTokenStringAndLayoutsFromM21Chord(
                                         m21GeneralNote, spannerBundle, owner)
 
-        if 'Unpitched' in m21GeneralNote.classes:
-            return M21Convert.kernTokenStringAndLayoutsFromM21Unpitched(m21GeneralNote, spannerBundle, owner)
+        if isinstance(m21GeneralNote, m21.note.Unpitched):
+            return M21Convert.kernTokenStringAndLayoutsFromM21Unpitched(
+                                        m21GeneralNote, spannerBundle, owner)
 
         # Not a GeneralNote (Chord, Note, Rest, Unpitched).
         return ('', [])
@@ -647,7 +678,7 @@ class M21Convert:
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Unpitched(m21Unpitched: m21.note.Unpitched,
                                                   spannerBundle: m21.spanner.SpannerBundle,
-                                                  owner=None) -> Tuple[str, List[str]]:
+                                                  owner=None) -> t.Tuple[str, t.List[str]]:
         prefix: str = ''
         recip: str = ''
         vdurRecip: str = ''
@@ -655,7 +686,7 @@ class M21Convert:
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Unpitched.duration)
         pitch: str = M21Convert.kernPitchFromM21Unpitched(m21Unpitched, owner)
         postfix: str = ''
-        layouts: [str] = []
+        layouts: t.List[str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
                                                 m21Unpitched,
                                                 recip,
@@ -682,19 +713,19 @@ class M21Convert:
         return (token, layouts)
 
     @staticmethod
-    def kernTokenStringAndLayoutsFromM21Rest(m21Rest: m21.note.Rest, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
+    def kernTokenStringAndLayoutsFromM21Rest(m21Rest: m21.note.Rest, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> t.Tuple[str, t.List[str]]:
         pitch: str = 'r' # "pitch" of a rest is 'r'
         recip: str = ''
         vdurRecip: str = ''
         recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Rest.duration)
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Rest.duration)
-        postfixAndLayouts: Tuple[str, List[str]] = M21Convert.kernPostfixAndLayoutsFromM21Rest(
+        postfixAndLayouts: t.Tuple[str, t.List[str]] = M21Convert.kernPostfixAndLayoutsFromM21Rest(
                                                                 m21Rest,
                                                                 recip,
                                                                 spannerBundle,
                                                                 owner)
         postfix: str = postfixAndLayouts[0]
-        layouts: [str] = postfixAndLayouts[1]
+        layouts: t.List[str] = postfixAndLayouts[1]
 
         token: str = recip + graceType + pitch + postfix
 
@@ -708,9 +739,9 @@ class M21Convert:
                                          recip: str,
                                          _spannerBundle: m21.spanner.SpannerBundle,
                                          owner=None,
-                                         ) -> Tuple[str, List[str]]:
+                                         ) -> t.Tuple[str, t.List[str]]:
         postfix: str = ''
-        layouts: [str] = []
+        layouts: t.List[str] = []
 
         # rest postfix possibility 0: fermata
         postfix += M21Convert._getHumdrumStringFromM21Expressions(
@@ -722,8 +753,15 @@ class M21Convert:
         # rest postfix possibility 1: pitch (for vertical positioning)
         if m21Rest.stepShift != 0:
             # postfix needs a pitch that matches the stepShift
-            clef: m21.clef.Clef = m21Rest.getContextByClass('Clef')
-            if clef is not None:
+            clef: t.Optional[m21.clef.Clef] = m21Rest.getContextByClass(m21.clef.Clef)
+            if t.TYPE_CHECKING:
+                # This is just a mypy-visible assertion that clef has a lowestLine
+                # attribute. We check at runtime for lowestLine existence, but mypy
+                # doesn't notice that, so we do this here to get mypy to shut up.
+                # Note that PitchClef is not the only type of clef that has lowestLine,
+                # but it's sufficient for this check (because we check at runtime below).
+                assert isinstance(clef, m21.clef.PitchClef)
+            if clef is not None and hasattr(clef, 'lowestLine'):
                 baseline: int = clef.lowestLine
                 midline: int = baseline + 4 # TODO: handle other than 5-line staves
                 pitchNum: int = midline + m21Rest.stepShift
@@ -741,7 +779,7 @@ class M21Convert:
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Note(m21Note: m21.note.Note,
                                              spannerBundle: m21.spanner.SpannerBundle,
-                                             owner=None) -> Tuple[str, List[str]]:
+                                             owner=None) -> t.Tuple[str, t.List[str]]:
         prefix: str = ''
         recip: str = ''
         vdurRecip: str = ''
@@ -749,7 +787,7 @@ class M21Convert:
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Note.duration)
         pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
         postfix: str = ''
-        layouts: [str] = []
+        layouts: t.List[str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
                                                 m21Note,
                                                 recip,
@@ -790,13 +828,15 @@ class M21Convert:
         return 'q'
 
     @staticmethod
-    def _getSizeFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str:
+    def _getSizeFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> t.Optional[str]:
         if m21GeneralNote.hasStyleInformation:
+            if t.TYPE_CHECKING:
+                assert isinstance(m21GeneralNote.style, m21.style.NoteStyle)
             return m21GeneralNote.style.noteSize # e.g. None, 'cue'
         return None
 
     @staticmethod
-    def _getColorFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str:
+    def _getColorFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> t.Optional[str]:
         if m21GeneralNote.hasStyleInformation:
             return m21GeneralNote.style.color # e.g. None, 'hotpink', '#00FF00', etc
         return None
@@ -807,10 +847,10 @@ class M21Convert:
                                                spannerBundle: m21.spanner.SpannerBundle,
                                                isFirstNoteInChord: bool = False,
                                                isStandaloneNote: bool = True,
-                                               owner=None) -> Tuple[str, str, List[str]]:
+                                               owner=None) -> t.Tuple[str, str, t.List[str]]:
         prefix: str = ''
         postfix: str = ''
-        layouts: [str] = []
+        layouts: t.List[str] = []
 
         # postfix possibility: invisible note
         invisibleStr: str = M21Convert._getKernInvisibilityFromGeneralNote(m21GeneralNote)
@@ -827,8 +867,9 @@ class M21Convert:
             # if this note is in a chord, we will get this info from the chord itself, not from here
             beamStr = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21GeneralNote)
 
-            expressions: m21.expressions.Expression = \
+            expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
                 M21Utilities.getAllExpressionsFromGeneralNote(m21GeneralNote, spannerBundle)
+            )
             expressionStr = M21Convert._getHumdrumStringFromM21Expressions(
                                             expressions,
                                             m21GeneralNote.duration,
@@ -846,17 +887,17 @@ class M21Convert:
 
         # cue size is assumed to always be set on individual notes in a chord,
         # never just on the chord itself.
-        noteSize: str = M21Convert._getSizeFromGeneralNote(m21GeneralNote)
+        noteSize: t.Optional[str] = M21Convert._getSizeFromGeneralNote(m21GeneralNote)
         if noteSize is not None and noteSize == 'cue':
             cueSizeChar = owner.reportCueSizeToOwner()
 
-        noteColor: str = M21Convert._getColorFromGeneralNote(m21GeneralNote)
+        noteColor: t.Optional[str] = M21Convert._getColorFromGeneralNote(m21GeneralNote)
         if noteColor:
             noteColorChar = owner.reportNoteColorToOwner(noteColor)
 
         postfix = expressionStr + articStr + cueSizeChar + noteColorChar + stemStr + beamStr + invisibleStr
 
-        noteLayouts: [str] = M21Convert._getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote)
+        noteLayouts: t.List[str] = M21Convert._getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote)
         layouts += noteLayouts
 
         # prefix/postfix possibility: ties
@@ -875,7 +916,7 @@ class M21Convert:
         return (prefix, postfix, layouts)
 
     @staticmethod
-    def _getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> List[str]:
+    def _getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> t.List[str]:
         if not isinstance(m21GeneralNote, m21.note.NotRest):
             # no notehead stuff, get out
             return []
@@ -887,7 +928,7 @@ class M21Convert:
                                                    ):
             return []
 
-        head: Optional[str] = None
+        head: t.Optional[str] = None
         if m21GeneralNote.noteheadFill is True:
             head = 'solid'
         elif m21GeneralNote.noteheadFill is False:
@@ -903,17 +944,17 @@ class M21Convert:
         return []
 
     @staticmethod
-    def _getKernSlurStartsAndStopsFromGeneralNote(m21GeneralNote: m21.note.GeneralNote, spannerBundle: m21.spanner.SpannerBundle) -> Tuple[str, str]:
+    def _getKernSlurStartsAndStopsFromGeneralNote(m21GeneralNote: m21.note.GeneralNote, spannerBundle: m21.spanner.SpannerBundle) -> t.Tuple[str, str]:
         # FUTURE: Handle crossing (non-nested) slurs during export to humdrum '&('
         outputStarts: str = ''
         outputStops: str = ''
 
-        spanners: [m21.spanner.Spanner] = m21GeneralNote.getSpannerSites()
-        slurStarts: [str] = [] # 'above', 'below', or None
+        spanners: t.List[m21.spanner.Spanner] = m21GeneralNote.getSpannerSites()
+        slurStarts: t.List[str] = [] # 'above', 'below', or None
         slurEndCount: int = 0
 
         for slur in spanners:
-            if 'Slur' not in slur.classes:
+            if not isinstance(slur, m21.spanner.Slur):
                 continue
             if slur not in spannerBundle: # it's from the flat score, or something (ignore it)
                 continue
@@ -947,15 +988,15 @@ class M21Convert:
         return ''
 
     @staticmethod
-    def kernTokenStringAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[str, List[str]]:
-        pitchPerNote: [str] = M21Convert.kernPitchesFromM21Chord(m21Chord, owner)
+    def kernTokenStringAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> t.Tuple[str, t.List[str]]:
+        pitchPerNote: t.List[str] = M21Convert.kernPitchesFromM21Chord(m21Chord, owner)
         recip: str = ''
         vdurRecip: str = ''
         recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Chord.duration) # same for each
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Chord.duration)
-        prefixPerNote: [str] = []
-        postfixPerNote: [str] = []
-        layoutsForChord: [str] = []
+        prefixPerNote: t.List[str] = []
+        postfixPerNote: t.List[str] = []
+        layoutsForChord: t.List[str] = []
 
         prefixPerNote, postfixPerNote, layoutsForChord = \
             M21Convert.kernPrefixesPostfixesAndLayoutsFromM21Chord(
@@ -985,18 +1026,18 @@ class M21Convert:
         return token, layoutsForChord
 
     @staticmethod
-    def kernPitchesFromM21Chord(m21Chord: m21.chord.Chord, owner=None) -> List[str]:
-        pitches: [str] = []
+    def kernPitchesFromM21Chord(m21Chord: m21.chord.Chord, owner=None) -> t.List[str]:
+        pitches: t.List[str] = []
         for m21Note in m21Chord:
             pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
             pitches.append(pitch)
         return pitches
 
     @staticmethod
-    def kernPrefixesPostfixesAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, recip: str, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> Tuple[List[str], List[str], List[str]]:
-        prefixPerNote:   [str] = [] # one per note
-        postfixPerNote:  [str] = [] # one per note
-        layoutsForNotes: [str] = [] # 0 or more per note
+    def kernPrefixesPostfixesAndLayoutsFromM21Chord(m21Chord: m21.chord.Chord, recip: str, spannerBundle: m21.spanner.SpannerBundle, owner=None) -> t.Tuple[t.List[str], t.List[str], t.List[str]]:
+        prefixPerNote:   t.List[str] = [] # one per note
+        postfixPerNote:  t.List[str] = [] # one per note
+        layoutsForNotes: t.List[str] = [] # 0 or more per note
 
         # Here we get the chord signifiers, which might be applied to each note in the token,
         # or just the first, or just the last.
@@ -1018,7 +1059,7 @@ class M21Convert:
         for noteIdx, m21Note in enumerate(m21Chord):
             prefix:  str   = '' # one for this note
             postfix: str   = '' # one for this note
-            layouts: [str] = [] # 0 or more for this note
+            layouts: t.List[str] = [] # 0 or more for this note
 
             prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
                                             m21Note,
@@ -1056,7 +1097,7 @@ class M21Convert:
     @staticmethod
     def _addNoteNumberToLayout(layout: str, noteNum: int) -> str:
         # split at colons
-        params: [str] = layout.split(':')
+        params: t.List[str] = layout.split(':')
         insertAtIndex: int = len(params) - 2
         params.insert(insertAtIndex, f'n={noteNum}')
         output: str = ':'.join(params)
@@ -1071,10 +1112,10 @@ class M21Convert:
         Also returns any visual duration recip as a second string.
     '''
     @staticmethod
-    def kernRecipFromM21Duration(m21Duration: m21.duration.Duration) -> (str, str):
-        dur: HumNum = None
-        vdur: HumNum = None
-        dots: Optional[str] = None
+    def kernRecipFromM21Duration(m21Duration: m21.duration.Duration) -> t.Tuple[str, str]:
+        dur: HumNum
+        vdur: t.Optional[HumNum] = None
+        dots: t.Optional[str] = None
         inTuplet: bool = False
 
         if m21Duration.isGrace:
@@ -1175,10 +1216,12 @@ class M21Convert:
             m21VDur: m21.duration.Duration = m21.duration.Duration(vdur)
             vdurRecip: str = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
             return out, vdurRecip
-        return out, None
+        return out, ''
 
     @staticmethod
-    def accidentalInfo(m21Accid: m21.pitch.Accidental) -> (int, bool, bool, str):
+    def accidentalInfo(
+            m21Accid: t.Optional[m21.pitch.Accidental]
+    ) -> t.Tuple[int, bool, bool, str]:
         # returns alter, isExplicit, isEditorial, and editorialStyle
         alter: int = 0
         isExplicit: bool = False # forced to display
@@ -1203,9 +1246,9 @@ class M21Convert:
     @staticmethod
     def kernPitchFromM21Pitch(m21Pitch: m21.pitch.Pitch, owner) -> str:
         output: str = ''
-        m21Accid: m21.pitch.Accidental = m21Pitch.accidental
+        m21Accid: t.Optional[m21.pitch.Accidental] = m21Pitch.accidental
         m21Step: str = m21Pitch.step # e.g. 'A' for an A-flat
-        m21Octave: int = m21Pitch.octave
+        m21Octave: t.Optional[int] = m21Pitch.octave
         if m21Octave is None:
             m21Octave = m21Pitch.implicitOctave # 4, most likely
 
@@ -1254,8 +1297,8 @@ class M21Convert:
 
     @staticmethod
     def textLayoutParameterFromM21Pieces(content    : str,
-                                         placement  : str,
-                                         style      : Optional[m21.style.Style]) -> str:
+                                         placement  : t.Optional[str],
+                                         style      : t.Optional[m21.style.TextStyle]) -> str:
         placementString: str = ''
         styleString: str = ''
         justString: str = ''
@@ -1321,16 +1364,10 @@ class M21Convert:
             return ''
 
         contentString: str = textExpression.content
-        placement: Optional[str] = None
-
-        if hasattr(textExpression, 'placement'):
-            # TextExpression.placement showed up in music21 v7
-            placement = textExpression.placement
-        else:
-            # old music21 v6 name is TextExpression.positionPlacement
-            placement = textExpression.positionPlacement
-
+        placement: t.Optional[str] = textExpression.placement
         if textExpression.hasStyleInformation:
+            if t.TYPE_CHECKING:
+                assert isinstance(textExpression.style, m21.style.TextStyle)
             return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement,
                                                                textExpression.style)
         return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
@@ -1368,7 +1405,7 @@ class M21Convert:
         return output
 
     @staticmethod
-    def _floatOrIntString(num: Union[float, int]) -> str:
+    def _floatOrIntString(num: t.Union[float, int]) -> str:
         intNum: int = int(num)
         if num == intNum:
             return str(intNum)
@@ -1377,18 +1414,17 @@ class M21Convert:
     # getMMTokenAndTempoTextLayoutFromM21TempoIndication returns (mmTokenStr, tempoTextLayout). Either can be None.
     @staticmethod
     def getMMTokenAndTempoTextLayoutFromM21TempoIndication(
-                                tempo: m21.tempo.TempoIndication) -> Tuple[str, str]:
+                                tempo: m21.tempo.TempoIndication) -> t.Tuple[str, str]:
         mmTokenStr: str = ''
         tempoTextLayout: str = ''
 
-        textExp: m21.expressions.TextExpression = None
+        textExp: t.Optional[m21.expressions.TextExpression] = None
 
         # a TempoText has only text (no bpm info)
         if isinstance(tempo, m21.tempo.TempoText):
             textExp = tempo.getTextExpression() # only returns explicit text
             if textExp is None:
                 return ('', '')
-            textExp.placement = tempo.placement
             tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
             return ('', tempoTextLayout)
 
@@ -1430,7 +1466,7 @@ class M21Convert:
 
         # '[eighth]=82', for example
         contentString: str = M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
-        placement: Optional[str] = None
+        placement: t.Optional[str] = None
 
         if hasattr(tempo, 'placement'):
             # MetronomeMark.placement showed up in music21 v7
@@ -1440,6 +1476,8 @@ class M21Convert:
             placement = 'above' # assume tempos are above for v6
 
         if tempo.hasStyleInformation:
+            if t.TYPE_CHECKING:
+                assert isinstance(tempo.style, m21.style.TextStyle)
             return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, tempo.style)
         return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
 
@@ -1464,7 +1502,9 @@ class M21Convert:
         return noteName
 
     @staticmethod
-    def durationFromHumdrumTempoNoteName(noteName: str) -> m21.duration.Duration:
+    def durationFromHumdrumTempoNoteName(
+            noteName: t.Optional[str]
+    ) -> t.Optional[m21.duration.Duration]:
         if not noteName:
             return None
 
@@ -1479,7 +1519,7 @@ class M21Convert:
         noteName = noteName.split('|', 1)[0] # splits at first '|' only, or not at all
 
         # generating rhythmic note with optional "-dot" after it. (Only one '-dot' is noticed.)
-        dots: bool = 0
+        dots: int = 0
         if re.search('-dot$', noteName):
             dots = 1
             noteName = noteName[0:-4]
@@ -1537,9 +1577,7 @@ class M21Convert:
     ]
     @staticmethod
     def getDynamicString(dynamic: m21.dynamics.Dynamic) -> str:
-        if not isinstance(dynamic, m21.dynamics.Dynamic):
-            return ''
-
+        output: str
         for patt in M21Convert.dynamicPatterns:
             # look for perfect match of entire value
             m = re.match('^' + patt + '$', dynamic.value)
@@ -1565,7 +1603,7 @@ class M21Convert:
                 for endDelim in (r'\s', '$'):
                     m = re.search(startDelim + patt + endDelim, dynamic.value)
                     if m:
-                        output: str = m.group(0)
+                        output = m.group(0)
                         if startDelim == r'\s':
                             output = output[1:]
                         if endDelim == r'\s':
@@ -1576,7 +1614,9 @@ class M21Convert:
         return dynamic.value
 
     @staticmethod
-    def getDynamicWedgeString(wedge: m21.dynamics.DynamicWedge, isStart: bool, isEnd: bool) -> str:
+    def getDynamicWedgeString(wedge: m21.Music21Object, isStart: bool, isEnd: bool) -> str:
+        # This method can take any Music21Object, but only DynamicWedges return anything
+        # interesting.
         if not isinstance(wedge, m21.dynamics.DynamicWedge):
             return ''
 
@@ -1608,33 +1648,23 @@ class M21Convert:
     '''
     @staticmethod
     def getDynamicParameters(dynamic: m21.dynamics.Dynamic) -> str:
-        if not isinstance(dynamic, m21.dynamics.Dynamic):
-            return ''
+        textStyle: t.Optional[m21.style.TextStyle] = None
+        if dynamic.hasStyleInformation:
+            assert isinstance(dynamic.style, m21.style.TextStyle)
+            textStyle = dynamic.style
 
         output: str = ''
-        if hasattr(dynamic, 'placement'):
-            # Dynamic.placement showed up in music21 v7
-            if dynamic.placement == 'above':
-                output += ':a'
+        if dynamic.placement == 'above':
+            output += ':a'
 
-            if dynamic.placement == 'below':
-                if dynamic.style.alignVertical == 'middle':
-                    output += ':c'
-                else:
-                    output += ':b'
-        else:
-            # in music21 v6 it's called Dynamic.positionPlacement
-            if dynamic.positionPlacement == 'above':
-                output += ':a'
-
-            if dynamic.positionPlacement == 'below':
-                if dynamic.style.alignVertical == 'middle':
-                    output += ':c'
-                else:
-                    output += ':b'
+        if dynamic.placement == 'below':
+            if textStyle is not None and textStyle.alignVertical == 'middle':
+                output += ':c'
+            else:
+                output += ':b'
 
         # right justification
-        if dynamic.hasStyleInformation and dynamic.style.justify == 'right':
+        if textStyle is not None and textStyle.justify == 'right':
             output += ':rj'
 
         if M21Convert.getDynamicString(dynamic) != dynamic.value:
@@ -1671,27 +1701,18 @@ class M21Convert:
         if not isinstance(dynamic, m21.dynamics.DynamicWedge):
             return ''
 
-        if hasattr(dynamic, 'placement'):
-            # Dynamic.placement showed up in music21 v7
-            if dynamic.placement == 'above':
-                return ':a'
+        # Dynamic.placement showed up in music21 v7
+        if dynamic.placement == 'above':
+            return ':a'
 
-            if dynamic.placement == 'below':
-                # don't check alignVertical, it isn't there (only in TextStyle)
-                return '' # music21 never sets to None, always 'below', and humdrum default is below
-        else:
-            # in music21 v6 it's called Dynamic.positionPlacement
-            if dynamic.positionPlacement == 'above':
-                return ':a'
-
-            if dynamic.positionPlacement == 'below':
-                # don't check alignVertical, it isn't there (only in TextStyle)
-                return '' # music21 never sets to None, always 'below', and humdrum default is below
+        if dynamic.placement == 'below':
+            # don't check alignVertical, it isn't there (only in TextStyle)
+            return '' # music21 never sets to None, always 'below', and humdrum default is below
 
         return ''
 
     @staticmethod
-    def clefTokenFromM21Clef(clef: m21.clef.Clef) -> HumdrumToken:
+    def clefTokenFromM21Clef(clef: m21.clef.Clef) -> t.Optional[HumdrumToken]:
         if clef is None:
             return None
 
@@ -1720,13 +1741,19 @@ class M21Convert:
         return HumdrumToken(string)
 
     @staticmethod
-    def timeSigTokenFromM21TimeSignature(timeSig: m21.meter.TimeSignature) -> HumdrumToken:
+    def timeSigTokenFromM21TimeSignature(
+            timeSig: m21.meter.TimeSignature
+    ) -> t.Optional[HumdrumToken]:
         timeSigStr: str = '*M' + timeSig.ratioString
         return HumdrumToken(timeSigStr)
 
     @staticmethod
-    def meterSigTokenFromM21TimeSignature(timeSig: m21.meter.TimeSignature) -> HumdrumToken:
-        mensurationStr: str = M21Convert.m21TimeSignatureSymbolToHumdrumMensurationSymbol.get(timeSig.symbol, None)
+    def meterSigTokenFromM21TimeSignature(
+            timeSig: m21.meter.TimeSignature
+    ) -> t.Optional[HumdrumToken]:
+        mensurationStr: t.Optional[str] = (
+            M21Convert.m21TimeSignatureSymbolToHumdrumMensurationSymbol.get(timeSig.symbol)
+        )
         if mensurationStr is None:
             return None
 
@@ -1735,15 +1762,24 @@ class M21Convert:
         return HumdrumToken(meterSigStr)
 
     @staticmethod
-    def instrumentTransposeTokenFromM21Instrument(inst: m21.instrument.Instrument) -> HumdrumToken:
+    def instrumentTransposeTokenFromM21Instrument(
+            inst: m21.instrument.Instrument
+    ) -> t.Optional[HumdrumToken]:
+        if inst.transposition is None:
+            return None
+
         # Humdrum and music21 have reversed instrument transposition definitions
         transpose: m21.interval.Interval = inst.transposition.reverse()
+        dNcM: t.Optional[str] = M21Convert.humdrumTransposeStringFromM21Interval(transpose)
+        if dNcM is None:
+            return None
+
         transposeStr: str = '*ITr'
-        transposeStr += M21Convert.humdrumTransposeStringFromM21Interval(transpose)
+        transposeStr += dNcM
         return HumdrumToken(transposeStr)
 
     @staticmethod
-    def keySigTokenFromM21KeySignature(keySig: Union[m21.key.KeySignature, m21.key.Key]) -> HumdrumToken:
+    def keySigTokenFromM21KeySignature(keySig: t.Union[m21.key.KeySignature, m21.key.Key]) -> HumdrumToken:
         keySigStr: str = '*k['
         keySigStr += M21Convert.numSharpsToHumdrumStandardKeyStrings[keySig.sharps]
         keySigStr += ']'
@@ -1751,7 +1787,9 @@ class M21Convert:
         return HumdrumToken(keySigStr)
 
     @staticmethod
-    def keyDesignationTokenFromM21KeySignature(keySig: Union[m21.key.KeySignature, m21.key.Key]) -> HumdrumToken:
+    def keyDesignationTokenFromM21KeySignature(
+            keySig: t.Union[m21.key.KeySignature, m21.key.Key]
+    ) -> t.Optional[HumdrumToken]:
         if not isinstance(keySig, m21.key.Key):
             return None
 
@@ -1764,7 +1802,7 @@ class M21Convert:
         return HumdrumToken(keyStr)
 
     @staticmethod
-    def _getHumdrumStringFromM21Articulations(m21Artics: List[m21.articulations.Articulation], owner=None) -> str:
+    def _getHumdrumStringFromM21Articulations(m21Artics: t.List[m21.articulations.Articulation], owner=None) -> str:
         output: str = ''
         for artic in m21Artics:
             humdrumChar = M21Convert.m21ArticulationClassNameToHumdrumArticulationString.get(
@@ -1782,11 +1820,12 @@ class M21Convert:
         return output
 
     @staticmethod
-    def _getHumdrumStringFromM21Expressions(m21Expressions: List[m21.expressions.Expression],
-                                            duration: m21.duration.Duration,
-                                            recip: str,
-                                            beamStarts: int=None,
-                                            owner=None) -> str:
+    def _getHumdrumStringFromM21Expressions(
+            m21Expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]],
+            duration: m21.duration.Duration,
+            recip: str,
+            beamStarts: t.Optional[int]=None,
+            owner=None) -> str:
         # expressions are Fermata, Trill, Mordent, Turn, Tremolo (one note)
         # also the following two Spanners: TrillExtension and TremoloSpanner (multiple notes)
         output: str = ''
@@ -1815,7 +1854,7 @@ class M21Convert:
 
         return output
 
-    numberOfFlagsToDurationReciprocal: dict = {
+    numberOfFlagsToDurationReciprocal: t.Dict[int, int] = {
         0 : 4,
         1 : 8,
         2 : 16,
@@ -1829,14 +1868,14 @@ class M21Convert:
     }
 
     @staticmethod
-    def _getHumdrumStringFromTremolo(tremolo: Union[m21.expressions.Tremolo,
+    def _getHumdrumStringFromTremolo(tremolo: t.Union[m21.expressions.Tremolo,
                                                     m21.expressions.TremoloSpanner],
                                      duration: m21.duration.Duration,
                                      recip: str,
-                                     beamStarts: int,
+                                     beamStarts: t.Optional[int],
                                      _owner=None) -> str:
         output: str = ''
-        fingered: bool = None
+        fingered: bool
         if isinstance(tremolo, m21.expressions.Tremolo):
             fingered = False
         elif isinstance(tremolo, m21.expressions.TremoloSpanner):
@@ -1844,16 +1883,20 @@ class M21Convert:
         else:
             raise HumdrumInternalError('tremolo is not of an appropriate type') # shouldn't happen
 
-        tremolo: int = M21Convert.numberOfFlagsToDurationReciprocal.get(tremolo.numberOfMarks, None)
-        if tremolo is not None:
-            tvalue: HumNum = opFrac(tremolo)
+        tvalue: HumNum
+        tvFraction: Fraction
+        tvInt: t.Optional[int] = (
+            M21Convert.numberOfFlagsToDurationReciprocal.get(tremolo.numberOfMarks, None)
+        )
+        if tvInt is not None:
+            tvalue = opFrac(tremolo)
             if fingered:
                 if beamStarts and duration.quarterLength < 1:
                     # ignore beamStarts for quarter-notes and above
                     tvalue *= beamStarts
                 if duration.tuplets and len(duration.tuplets) == 1:
                     tvalue /= duration.tuplets[0].tupletMultiplier()
-                tvFraction: Fraction = Fraction(tvalue)
+                tvFraction = Fraction(tvalue)
                 if tvFraction.denominator == 1:
                     output = f'@@{tvFraction.numerator}@@'
                 else:
@@ -1866,7 +1909,7 @@ class M21Convert:
                     tvalue *= (1<<twopow)
                 if duration.tuplets and len(duration.tuplets) == 1:
                     tvalue /= duration.tuplets[0].tupletMultiplier()
-                tvFraction: Fraction = Fraction(tvalue)
+                tvFraction = Fraction(tvalue)
                 if tvFraction.denominator == 1:
                     output = f'@{tvFraction.numerator}@'
                 else:
@@ -1925,12 +1968,14 @@ class M21Convert:
         return ''
 
     @staticmethod
-    def _getTieStartStopAndLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> (str, str, List[str]):
+    def _getTieStartStopAndLayoutsFromM21GeneralNote(
+            m21GeneralNote: m21.note.GeneralNote
+    ) -> t.Tuple[str, str, t.List[str]]:
         if m21GeneralNote.tie is None:
             return ('', '', [])
 
         tieStr: str = ''
-        layouts: [str] = []
+        layouts: t.List[str] = []
 
         tieStyle: str = m21GeneralNote.tie.style
         tiePlacement: str = m21GeneralNote.tie.placement
@@ -2113,7 +2158,7 @@ class M21Convert:
 
 
     # m21Barline is ordered, because we want to iterate over the keys, and find '||' before '|', for example
-    m21BarlineTypeFromHumdrumType: OrderedDict = OrderedDict(
+    m21BarlineTypeFromHumdrumType: t.OrderedDict = t.OrderedDict(
     [
         ('||', 'double'),      # a.k.a. 'light-light' in MusicXML
         ('!!', 'heavy-heavy'),
@@ -2179,7 +2224,7 @@ class M21Convert:
     @staticmethod
     def m21BarlineFromHumdrumString(measureString: str, side: str) -> m21.bar.Barline: # could be m21.bar.Repeat
         # side is 'left' or 'right', describing which end of a measure this measureString should be interpreted for
-        outputBarline: m21.bar.Barline = None
+        outputBarline: t.Optional[m21.bar.Barline] = None
         if side == 'right':
             if (':|' in measureString or
                 ':!' in measureString):
@@ -2240,11 +2285,13 @@ class M21Convert:
                                             # date1|date2|date3|date4... (DateSelection: one of these dates)
 
     @staticmethod
-    def m21DateObjectFromString(string: str) -> Union[m21.metadata.DateSingle,
-                                                      m21.metadata.DateRelative,
-                                                      m21.metadata.DateBetween,
-                                                      m21.metadata.DateSelection]:
-        typeNeeded: Type = m21.metadata.DateSingle
+    def m21DateObjectFromString(
+            string: str
+    ) -> t.Optional[t.Union[m21.metadata.DateSingle,
+                            m21.metadata.DateRelative,
+                            m21.metadata.DateBetween,
+                            m21.metadata.DateSelection]]:
+        typeNeeded: t.Type = m21.metadata.DateSingle
         relativeType: str = ''
         if '<' in string[0:1]: # this avoids crash on empty string
             typeNeeded = m21.metadata.DateRelative
@@ -2255,7 +2302,7 @@ class M21Convert:
             string = string.replace('>', '')
             relativeType = 'after'
 
-        dateStrings: List[str] = [string] # if we don't split it, this is what we will parse
+        dateStrings: t.List[str] = [string] # if we don't split it, this is what we will parse
         for divider in M21Convert._dateDividerSymbols:
             if divider in string:
                 if divider == '|':
@@ -2281,9 +2328,9 @@ class M21Convert:
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'uncertain'
 
-        dates: List[m21.metadata.Date] = []
+        dates: t.List[m21.metadata.Date] = []
         for dateString in dateStrings:
-            date: m21.metadata.Date = M21Convert._dateFromString(dateString)
+            date: t.Optional[m21.metadata.Date] = M21Convert._dateFromString(dateString)
             if date is None:
                 # if dateString is unparseable, give up on date parsing of this whole metadata item
                 return None
@@ -2295,18 +2342,18 @@ class M21Convert:
             return m21.metadata.DateSingle(dates[0])
 
         if typeNeeded == m21.metadata.DateRelative:
-            return m21.metadata.DateRelative(dates[0], relevance=relativeType)
+            return m21.metadata.DateRelative(dates[0], relevance=relativeType)  # type: ignore
 
         if typeNeeded == m21.metadata.DateBetween:
-            return m21.metadata.DateBetween(dates)
+            return m21.metadata.DateBetween(dates)  # type: ignore
 
         if typeNeeded == m21.metadata.DateSelection:
-            return m21.metadata.DateSelection(dates)
+            return m21.metadata.DateSelection(dates)  # type: ignore
 
         return None
 
     @staticmethod
-    def _stripDateError(value: str) -> Tuple[str, str]:
+    def _stripDateError(value: str) -> t.Tuple[str, t.Optional[str]]:
         '''
         Strip error symbols from a numerical value. Return cleaned source and
         error symbol. Only one error symbol is expected per string.
@@ -2331,10 +2378,10 @@ class M21Convert:
     _highestSecondString = '59.99' # two digits past decimal point because of '%05.2f' above
 
     @staticmethod
-    def _dateFromString(dateStr: str) -> m21.metadata.Date:
-        values: List[Optional[Union[int, float]]] = []  # year, month, day, hour, minute as ints, second as float
+    def _dateFromString(dateStr: str) -> t.Optional[m21.metadata.Date]:
+        values: t.List[t.Optional[t.Union[int, float]]] = []  # year, month, day, hour, minute as ints, second as float
                                                         # (each can be None if not specified)
-        valueErrors: List[str] = []                     # yearError, monthError, dayError,
+        valueErrors: t.List[t.Optional[str]] = []       # yearError, monthError, dayError,
                                                         #   hourError, minuteError, secondError
         dateStr = dateStr.replace(':', '/')
         dateStr = dateStr.replace(' ', '')
@@ -2377,10 +2424,11 @@ class M21Convert:
         # m21Date is DateSingle, DateRelative, DateBetween, or DateSelection (all derive from DateSingle)
         # pylint: disable=protected-access
         output: str = ''
+        dateString: str
         if isinstance(m21Date, m21.metadata.DateSelection):
             # series of multiple dates, delimited by '|'
             for i, date in enumerate(m21Date._data):
-                dateString: str = M21Convert._stringFromDate(date)
+                dateString = M21Convert._stringFromDate(date)
                 if i > 0:
                     output += '|'
                 output += dateString
@@ -2388,7 +2436,7 @@ class M21Convert:
         elif isinstance(m21Date, m21.metadata.DateBetween):
             # two dates, delimited by '-'
             for i, date in enumerate(m21Date._data):
-                dateString: str = M21Convert._stringFromDate(date)
+                dateString = M21Convert._stringFromDate(date)
                 if i > 0:
                     output += '-'
                 output += dateString
@@ -2399,7 +2447,7 @@ class M21Convert:
             if m21Date.relevance in ('after', 'onorafter'):
                 output = '>'
 
-            dateString: str = M21Convert._stringFromDate(m21Date._data[0])
+            dateString = M21Convert._stringFromDate(m21Date._data[0])
             output += dateString
 
         elif isinstance(m21Date, m21.metadata.DateSingle):
