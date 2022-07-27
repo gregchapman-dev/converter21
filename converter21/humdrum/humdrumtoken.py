@@ -24,35 +24,35 @@ from converter21.humdrum import HumHash
 from converter21.humdrum import HumParamSet
 from converter21.humdrum import Convert
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 # spine manipulators:
-SPLIT_TOKEN     = '*^'
-MERGE_TOKEN     = '*v'
-EXCHANGE_TOKEN  = '*x'
-TERMINATE_TOKEN = '*-'
-ADD_TOKEN       = '*+'
+SPLIT_TOKEN: str = '*^'
+MERGE_TOKEN: str = '*v'
+EXCHANGE_TOKEN: str = '*x'
+TERMINATE_TOKEN: str = '*-'
+ADD_TOKEN: str = '*+'
 # Also exclusive interpretations which start with '**' followed by the data type.
 
 # other special tokens:
-NULL_DATA           = '.'
-NULL_INTERPRETATION = '*'
-NULL_COMMENT_LOCAL  = '!'
-NULL_COMMENT_GLOBAL = '!!'
+NULL_DATA: str = '.'
+NULL_INTERPRETATION: str = '*'
+NULL_COMMENT_LOCAL: str = '!'
+NULL_COMMENT_GLOBAL: str = '!!'
 
 # regex patterns
-KEY_DESIGNATION_PATTERN = r'^\*([a-gA-G][#-]*):([a-z]{3})?'
+KEY_DESIGNATION_PATTERN: str = r'^\*([a-gA-G][#-]*):([a-z]{3})?'
 
 # stria stuff
-DEFAULT_LINES_PER_STAFF = 5
-MAX_LINES_PER_STAFF = 32
+DEFAULT_LINES_PER_STAFF: int = 5
+MAX_LINES_PER_STAFF: int = 32
 
 def makeTag(string: str, num: int) -> str:
     if num > 1:
@@ -63,12 +63,12 @@ def makeTag(string: str, num: int) -> str:
 # in arrays of layerTokens, and will be specially treated.
 class FakeRestToken(HumHash):
     # some attributes so we can be treated (a bit) like a real HumdrumToken
-    isFakeRest: bool = True # HumdrumToken.isFakeRest = False
+    isFakeRest: bool = True  # HumdrumToken.isFakeRest == False
     isBarline: bool = False
     isExclusiveInterpretation: bool = False
 
     def __init__(self, duration: HumNumIn, durationFromBarline: HumNumIn = 0):
-        super().__init__() # initialize the HumHash fields
+        super().__init__()  # initialize the HumHash fields
         self.duration: HumNum = opFrac(duration)
         self.durationFromBarline: HumNum = opFrac(durationFromBarline)
 
@@ -77,14 +77,14 @@ class FakeRestToken(HumHash):
 # pylint: disable=attribute-defined-outside-init
 
 class HumdrumToken(HumHash):
-    # phrase vs. slur
-    PHRASE  = '{'
-    SLUR    = '('
+    isFakeRest: bool = False  # FakeRestToken.isFakeRest == True
 
-    isFakeRest: bool = False
+    # phrase vs. slur
+    PHRASE: str = '{'
+    SLUR: str = '('
 
     def __init__(self, token: t.Optional[str] = ''):
-        super().__init__() # initialize the HumHash fields
+        super().__init__()  # initialize the HumHash fields
 
         '''
             _text: the token's text string
@@ -320,7 +320,7 @@ class HumdrumToken(HumHash):
             self._nextTokens.append(newToken)
             self.updateNextToken0()
         else:
-            oldNextToken = self.nextTokens[0] # HumdrumToken
+            oldNextToken: HumdrumToken = self.nextTokens[0]
             self.nextTokens[0] = newToken
             self.updateNextToken0()
 
@@ -411,8 +411,10 @@ class HumdrumToken(HumHash):
         if self.isDefined('auto', 'slurEnd'):
             slurEndToken = self.getValueToken('auto', 'slurEnd')
             if slurEndToken is not None:
-                return opFrac(slurEndToken.getScaledDurationFromStart(scale) -
-                                self.getScaledDurationFromStart(scale))
+                return opFrac(
+                    slurEndToken.getScaledDurationFromStart(scale)
+                    - self.getScaledDurationFromStart(scale)
+                )
 
         return opFrac(0)
 
@@ -559,11 +561,12 @@ class HumdrumToken(HumHash):
 
     @track.setter
     def track(self, track: int):
-        self._address.track = track # here we set the track property because it has checking code.
+        # here we set track via address property for the checks
+        self._address.track = track
         if self._atLeastOneCachedDataTypePropertyExists:
-            self._clearCachedDataTypeProperties() # some cached properties depend on dataType,
-                                                 # which depends on ownerLine and track
-
+            # some cached properties depend on dataType,
+            # which depends on ownerLine and track
+            self._clearCachedDataTypeProperties()
     '''
     //////////////////////////////
     //
@@ -780,12 +783,12 @@ class HumdrumToken(HumHash):
             return self._isManipulatorCached
         except AttributeError:
             self._isManipulatorCached: bool = (
-                self.isSplitInterpretation or
-                self.isMergeInterpretation or
-                self.isExchangeInterpretation or
-                self.isAddInterpretation or
-                self.isTerminateInterpretation or
-                self.isExclusiveInterpretation
+                self.isSplitInterpretation
+                or self.isMergeInterpretation
+                or self.isExchangeInterpretation
+                or self.isAddInterpretation
+                or self.isTerminateInterpretation
+                or self.isExclusiveInterpretation
             )
             self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isManipulatorCached
@@ -908,14 +911,14 @@ class HumdrumToken(HumHash):
     //   duration line.
     '''
     def getScaledDurationToEnd(self, scale: HumNumIn) -> HumNum:
-        if self.ownerLine is None: # bugfix, but current clients probably don't care --gregc
+        if self.ownerLine is None:  # bugfix, but current clients probably don't care --gregc
             return opFrac(-1)
         return opFrac(self.ownerLine.durationToEnd * opFrac(scale))
 
     ''' durationToEnd property for unscaled getDurationToEnd --gregc '''
     @property
     def durationToEnd(self) -> HumNum:
-        if self.ownerLine is None: # bugfix, but current clients probably don't care --gregc
+        if self.ownerLine is None:  # bugfix, but current clients probably don't care --gregc
             return opFrac(-1)
         return self.ownerLine.durationToEnd
 
@@ -1011,10 +1014,10 @@ class HumdrumToken(HumHash):
             return self._hasBeamCached
         except AttributeError:
             self._hasBeamCached: bool = (
-                'L' in self.text or
-                'J' in self.text or
-                'K' in self.text or
-                'k' in self.text
+                'L' in self.text
+                or 'J' in self.text
+                or 'K' in self.text
+                or 'k' in self.text
             )
             self._atLeastOneCachedTokenTextPropertyExists = True
         return self._hasBeamCached
@@ -1091,9 +1094,12 @@ class HumdrumToken(HumHash):
     def partNum(self) -> int:
         if not self.isPart:
             return -1
-        m = re.match(r'^\*part(\d+).*$', self.text) # ignore characters after the number
+
+        # ignore characters after the number
+        m = re.match(r'^\*part(\d+).*$', self.text)
         if m is None:
             return -1
+
         return int(m.group(1))
 
     @property
@@ -1110,9 +1116,12 @@ class HumdrumToken(HumHash):
     def groupNum(self) -> int:
         if not self.isGroup:
             return -1
-        m = re.match(r'^\*group(\d+).*$', self.text) # ignore characters after the number
+
+        # ignore characters after the number
+        m = re.match(r'^\*group(\d+).*$', self.text)
         if m is None:
             return -1
+
         return int(m.group(1))
 
     @property
@@ -1276,7 +1285,7 @@ class HumdrumToken(HumHash):
 
         if self.isBarline:
             return '-' in self.text
-        if  self.isData:
+        if self.isData:
             return 'yy' in self.text
 
         return False
@@ -1293,7 +1302,8 @@ class HumdrumToken(HumHash):
             return False
         if not self.isData:
             return False
-        return 'q' in self.text # 'q' or 'qq'
+        # return True if 'q' or 'qq' is in self.text
+        return 'q' in self.text
 
     '''
     //////////////////////////////
@@ -1473,16 +1483,16 @@ class HumdrumToken(HumHash):
             top: int = int(m.group(1))
             bot: int = int(m.group(2))
             botStr: str = m.group(2)
-            if botStr == '0': # breve (2 whole notes)
+            if botStr == '0':       # breve (2 whole notes)
                 top *= 2
                 bot = 1
-            elif botStr == '00': # longa (4 whole notes)
+            elif botStr == '00':    # longa (4 whole notes)
                 top *= 4
                 bot = 1
-            elif botStr == '000': # maxima (8 whole notes)
+            elif botStr == '000':   # maxima (8 whole notes)
                 top *= 8
                 bot = 1
-            elif botStr == '0000': # double maxima (16 whole notes)
+            elif botStr == '0000':  # double maxima (16 whole notes)
                 top *= 16
                 bot = 1
             return (top, bot)
@@ -1490,7 +1500,7 @@ class HumdrumToken(HumHash):
         return (None, None)
 
     @property
-    def timeSignatureRatioString(self) -> str: # returns '{top}/{bot}'
+    def timeSignatureRatioString(self) -> str:  # returns '{top}/{bot}'
         top, bot = self.timeSignature
         if top is None or bot is None:
             return ''
@@ -1573,10 +1583,12 @@ class HumdrumToken(HumHash):
     @property
     def isInstrumentCode(self) -> bool:
         if len(self.text) < 3:
-            return False # has to be '*I' and at least one lower-case letter
+            # has to be '*I' and at least one lower-case letter
+            return False
         if not self.text.startswith('*I'):
             return False
-        if not self.text[2:].isalpha(): # return False for '*I""blah', "*I'Blah", etc
+        if not self.text[2:].isalpha():
+            # return False for '*I""blah', "*I'Blah", etc
             return False
         if not self.text[2:].islower():
             return False
@@ -1588,7 +1600,8 @@ class HumdrumToken(HumHash):
     @property
     def isInstrumentClassCode(self) -> bool:
         if len(self.text) < 4:
-            return False # has to be '*IC' and at least one lower-case letter
+            # has to be '*IC' and at least one lower-case letter
+            return False
         if not self.text.startswith('*IC'):
             return False
         if not self.text[3:].isalpha():
@@ -1605,8 +1618,10 @@ class HumdrumToken(HumHash):
     @property
     def isInstrumentName(self) -> bool:
         if len(self.text) < 4:
-            return False # has to be *I" plus at least one character
-        if self.text[3] == '"': # avoid *I""Blah, which is InstrumentGroupName
+            # has to be *I" plus at least one character
+            return False
+        if self.text[3] == '"':
+            # avoid *I""Blah, which is InstrumentGroupName
             return False
         return self.text.startswith('*I"')
 
@@ -1616,7 +1631,8 @@ class HumdrumToken(HumHash):
     @property
     def isInstrumentGroupName(self) -> bool:
         if len(self.text) < 5:
-            return False # has to be *I"" plus at least one character
+            # has to be *I"" plus at least one character
+            return False
         return self.text.startswith('*I""')
 
     '''
@@ -1627,8 +1643,10 @@ class HumdrumToken(HumHash):
     @property
     def isInstrumentAbbreviation(self) -> bool:
         if len(self.text) < 4:
-            return False # has to be *I' plus at least one character
-        if self.text[3] == "'": # avoid *I''Blah, which is InstrumentGroupAbbreviation
+            # has to be *I' plus at least one character
+            return False
+        if self.text[3] == "'":
+            # avoid *I''Blah, which is InstrumentGroupAbbreviation
             return False
         return self.text.startswith("*I'")
 
@@ -1638,7 +1656,8 @@ class HumdrumToken(HumHash):
     @property
     def isInstrumentGroupAbbreviation(self) -> bool:
         if len(self.text) < 5:
-            return False # has to be *I'' plus at least one character
+            # has to be *I'' plus at least one character
+            return False
         return self.text.startswith("*I''")
 
     '''
@@ -1648,7 +1667,8 @@ class HumdrumToken(HumHash):
     def instrumentCode(self) -> str:
         if not self.isInstrumentCode:
             return ''
-        return self.text[2:] # everything after *I
+        # everything after *I
+        return self.text[2:]
 
     '''
         instrumentClassCode -- return 'bras' from '*ICbras', for example
@@ -1657,7 +1677,8 @@ class HumdrumToken(HumHash):
     def instrumentClassCode(self) -> str:
         if not self.isInstrumentClassCode:
             return ''
-        return self.text[3:] # everything after *IC
+        # everything after *IC
+        return self.text[3:]
 
     '''
     //////////////////////////////
@@ -1668,7 +1689,8 @@ class HumdrumToken(HumHash):
     def instrumentName(self) -> str:
         if not self.isInstrumentName:
             return ''
-        return self.text[3:] # everything after *I"
+        # everything after *I"
+        return self.text[3:]
 
     '''
         instrumentGroupName
@@ -1677,7 +1699,8 @@ class HumdrumToken(HumHash):
     def instrumentGroupName(self) -> str:
         if not self.isInstrumentGroupName:
             return ''
-        return self.text[4:] # everything after *I""
+        # everything after *I""
+        return self.text[4:]
 
     '''
     //////////////////////////////
@@ -1688,7 +1711,8 @@ class HumdrumToken(HumHash):
     def instrumentAbbreviation(self) -> str:
         if not self.isInstrumentAbbreviation:
             return ''
-        return self.text[3:] # everything after *I'
+        # everything after *I'
+        return self.text[3:]
 
     '''
         instrumentGroupAbbreviation
@@ -1697,7 +1721,8 @@ class HumdrumToken(HumHash):
     def instrumentGroupAbbreviation(self) -> str:
         if not self.isInstrumentGroupAbbreviation:
             return ''
-        return self.text[4:] # everything after *I''
+        # everything after *I''
+        return self.text[4:]
 
     '''
         isInstrumentTranspose
@@ -1715,7 +1740,8 @@ class HumdrumToken(HumHash):
     def instrumentTranspose(self) -> str:
         if not self.isInstrumentTranspose:
             return ''
-        return self.text[4:] # everything after '*ITr' -> 'dNcM'
+        # everything after '*ITr' -> 'dNcM'
+        return self.text[4:]
 
     '''
         isTranspose
@@ -1733,7 +1759,8 @@ class HumdrumToken(HumHash):
     def transpose(self) -> str:
         if not self.isTranspose:
             return ''
-        return self.text[3:] # everything after '*Tr' -> 'dNcM'
+        # everything after '*Tr' -> 'dNcM'
+        return self.text[3:]
 
     '''
     //////////////////////////////
@@ -2008,7 +2035,8 @@ class HumdrumToken(HumHash):
             return ''
 
         m = re.search(r'([\d]+([a-z]{1}))', self.text)
-        if m and m.group(2): # we have a barlineNumber with a single lower-case character suffix
+        if m and m.group(2):
+            # we have a barlineNumber with a single lower-case character suffix
             return m.group(1)
         return ''
 
@@ -2074,9 +2102,9 @@ class HumdrumToken(HumHash):
             return self._isDataCached
         except AttributeError:
             self._isDataCached: bool = (
-                not self.isInterpretation and
-                not self.isComment and
-                not self.isBarline
+                not self.isInterpretation
+                and not self.isComment
+                and not self.isBarline
             )
             self._atLeastOneCachedTokenTextPropertyExists = True
         return self._isDataCached
@@ -2290,7 +2318,7 @@ class HumdrumToken(HumHash):
 
         track: int = self.track
         # loops from field-1 to 0 (end index -1 is exclusive), incrementing by -1
-        for i in range(self.fieldIndex-1, -1, -1):
+        for i in range(self.fieldIndex - 1, -1, -1):
             xtoken = self.ownerLine.token[i]
             if xtoken.track != track:
                 return False
@@ -2370,11 +2398,13 @@ class HumdrumToken(HumHash):
     //     default value: separator = " "
     '''
     def replaceSubtoken(self, index: int, newSubtoken: str):
-        if index < 0 or index >= self.subtokenCount: # generates subtokens array if necessary
+        if index < 0 or index >= self.subtokenCount:
             return
         self.subtokens[index] = newSubtoken
         self.text = ' '.join(self.subtokens)
-        self._subtokensGenerated = True # because setting self.text clears it, but we're good
+        # Set _subtokensGenerated to True, because setting self.text clears it,
+        # but we know the subtokens are there.
+        self._subtokensGenerated = True
 
     '''
     //////////////////////////////
@@ -2385,7 +2415,7 @@ class HumdrumToken(HumHash):
         if ':ignore' in token.text:
             '''
             // Ignore layout command (store layout command but
-            // do not use it.  This is particularly for adding
+            // do not use it).  This is particularly for adding
             // layout parameters for notation, but the parameters
             // currently cause problems in verovio (so they should
             // be unignored at a future date when the layout
@@ -2411,9 +2441,11 @@ class HumdrumToken(HumHash):
         for i, linkedToken in enumerate(self._linkedParameterTokens):
             if token.lineIndex < linkedToken.lineIndex:
                 self._linkedParameterTokens.insert(i, token)
-                return i # bugfix: C++ version returns len-1.  But no-one cares.
+                return i  # bugfix: C++ version returns len-1
 
-        return -1 # I don't think you can get here, but if you do, you failed
+        # I don't think you can get here, but if you do, you failed.
+        # Treat it as 'ignored' (store layout command but do not use it).
+        return -1
 
     '''
     //////////////////////////////
@@ -2494,15 +2526,16 @@ class HumdrumToken(HumHash):
     //    owns this token.
     '''
     @property
-    def ownerLine(self): # returns HumdrumLine
+    def ownerLine(self):  # returns t.Optional[HumdrumLine]
         return self._address.ownerLine
 
     @ownerLine.setter
-    def ownerLine(self, newOwnerLine): # newOwnerLine: HumdrumLine
+    def ownerLine(self, newOwnerLine):  # newOwnerLine: t.Optional[HumdrumLine]
         self._address.ownerLine = newOwnerLine
         if self._atLeastOneCachedDataTypePropertyExists:
-            self._clearCachedDataTypeProperties() # some cached properties depend on dataType,
-                                                 # which depends on ownerLine and track
+            # some cached properties depend on dataType,
+            # which depends on ownerLine and track
+            self._clearCachedDataTypeProperties()
 
     '''
     //////////////////////////////
@@ -2687,12 +2720,16 @@ class HumdrumToken(HumHash):
     '''
     def copyStructure(self, fromToken):
         # pylint: disable=protected-access
+        from converter21.humdrum import HumdrumLine
         self._strandIndex = fromToken._strandIndex
-        originalOwnerLine = self._address.ownerLine # pick this up before you overwrite _address
+
+        # pick up original ownerLine before you overwrite _address
+        originalOwnerLine: t.Optional[HumdrumLine] = self._address.ownerLine
         self._address = copy.copy(fromToken._address)
-        # pylint: enable=protected-access
-        # ownerLine will in general be different, so do not copy, but preserve the original
+
+        # preserve the original ownerLine
         self._address.ownerLine = originalOwnerLine
+        # pylint: enable=protected-access
 
     '''
     //////////////////////////////

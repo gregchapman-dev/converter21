@@ -36,7 +36,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class GridStaff():
     def __init__(self):
-        self.voices: t.List[GridVoice] = []
+        self.voices: t.List[t.Optional[GridVoice]] = []
         self.sides: GridSide = GridSide()
 
     def __str__(self):
@@ -118,14 +118,14 @@ class GridStaff():
             raise HumdrumInternalError(f'!!STRANGE ERROR: {self}, SLICE TYPE: {sliceType}')
 
         if layerIndex < len(self.voices):
-            if (self.voices[layerIndex] is not None
-                    and self.voices[layerIndex].token is not None):
-                if self.voices[layerIndex].token.text == nullStr:
+            voice: t.Optional[GridVoice] = self.voices[layerIndex]
+            if voice is not None and voice.token is not None:
+                if voice.token.text == nullStr:
                     # there is already a null data token here, so don't
                     # replace it.
                     return
                 raise HumdrumExportError(
-                    f'Warning, existing token: \'{self.voices[layerIndex].token.text}\' where '
+                    f'Warning, existing token: \'{voice.token.text}\' where '
                     'a null token should be.'
                 )
 

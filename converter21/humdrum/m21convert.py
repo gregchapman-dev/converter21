@@ -549,7 +549,9 @@ class M21Convert:
             mode: t.Optional[str]
             keyName, mode = keyToken.keyDesignation
             if keyName:
-                mode = M21Convert.humdrumModeToM21Mode.get(mode, None)  # e.g. 'dor' -> 'dorian'
+                if mode:
+                    # e.g. 'dor' -> 'dorian'
+                    mode = M21Convert.humdrumModeToM21Mode.get(mode, None)
                 return m21.key.Key(keyName, mode)
 
         # standard key signature in standard order (if numSharps is negative, it's -numFlats)
@@ -1223,12 +1225,13 @@ class M21Convert:
             # support nested tuplets, and neither do we)
             dur = m21Duration.quarterLength
 
-        dur = opFrac(dur / 4) # convert to whole-note units
+        dur = opFrac(dur / 4)  # convert to whole-note units
         durFraction: Fraction = Fraction(dur)
 
         if dots is None:
             # compute number of dots from dur (and shrink dur to match)
-            if durFraction.numerator != 1: # if it's 1 we don't need any dots
+            # if it's 1 we don't need any dots
+            if durFraction.numerator != 1:
                 # otherwise check up to three dots
                 oneDotDur: Fraction = Fraction(dur * 2 / 3)
                 if oneDotDur.numerator == 1:
@@ -1303,8 +1306,8 @@ class M21Convert:
     ) -> t.Tuple[int, bool, bool, str]:
         # returns alter, isExplicit, isEditorial, and editorialStyle
         alter: int = 0
-        isExplicit: bool = False # forced to display
-        isEditorial: bool = False # forced to display (with parentheses or bracket)
+        isExplicit: bool = False   # forced to display
+        isEditorial: bool = False  # forced to display (with parentheses or bracket)
         editorialStyle: str = 'normal'
         if m21Accid is not None:
             alter = int(m21Accid.alter)
@@ -1314,7 +1317,7 @@ class M21Convert:
                 alter = 0
                 isExplicit = True
 
-            if m21Accid.displayStatus: # must be displayed
+            if m21Accid.displayStatus:  # must be displayed
                 isExplicit = True
                 editorialStyle = m21Accid.displayStyle
                 if editorialStyle != 'normal':
@@ -1326,13 +1329,13 @@ class M21Convert:
     def kernPitchFromM21Pitch(m21Pitch: m21.pitch.Pitch, owner) -> str:
         output: str = ''
         m21Accid: t.Optional[m21.pitch.Accidental] = m21Pitch.accidental
-        m21Step: str = m21Pitch.step # e.g. 'A' for an A-flat
+        m21Step: str = m21Pitch.step  # e.g. 'A' for an A-flat
         m21Octave: t.Optional[int] = m21Pitch.octave
         if m21Octave is None:
-            m21Octave = m21Pitch.implicitOctave # 4, most likely
+            m21Octave = m21Pitch.implicitOctave  # 4, most likely
 
-        isEditorial: bool = False # forced to display (with parentheses or bracket)
-        isExplicit: bool = False # forced to display
+        isEditorial: bool = False  # forced to display (with parentheses or bracket)
+        isExplicit: bool = False   # forced to display
         alter: int = 0
         editorialStyle: str = ''
 
@@ -1343,7 +1346,8 @@ class M21Convert:
         output = M21Convert.kernPitchFromM21OctaveAndStep(m21Octave, m21Step, owner)
 
         if m21Accid is None:
-            pass # no accidental suffix (it's ok)
+            # no accidental suffix (it's ok)
+            pass
         elif alter > 0:
             # sharps suffix
             for _ in range(0, alter):
@@ -1355,29 +1359,34 @@ class M21Convert:
 
         if isEditorial:
             if alter == 0:
-                output += 'n' + editorialSuffix # explicit natural + editorial suffix
+                # explicit natural + editorial suffix
+                output += 'n' + editorialSuffix
             else:
                 output += editorialSuffix
         elif isExplicit:
             if alter == 0:
-                output += 'n' # explicit natural
+                # explicit natural
+                output += 'n'
             else:
-                output += 'X' # explicit suffix for other accidentals
+                # explicit suffix for other accidentals
+                output += 'X'
 
         return output
 
     @staticmethod
     def _reportEditorialAccidentalToOwner(owner, editorialStyle: str) -> str:
         if owner:
-            from converter21.humdrum import EventData # owner is always an EventData
+            from converter21.humdrum import EventData
             ownerEvent: EventData = owner
             return ownerEvent.reportEditorialAccidentalToOwner(editorialStyle)
         return ''
 
     @staticmethod
-    def textLayoutParameterFromM21Pieces(content    : str,
-                                         placement  : t.Optional[str],
-                                         style      : t.Optional[m21.style.TextStyle]) -> str:
+    def textLayoutParameterFromM21Pieces(
+            content: str,
+            placement: t.Optional[str],
+            style: t.Optional[m21.style.TextStyle]
+    ) -> str:
         placementString: str = ''
         styleString: str = ''
         justString: str = ''
@@ -1431,12 +1440,12 @@ class M21Convert:
             if style.justify == 'right':
                 justString = ':rj'
 
-            if style.color: # not None and != ''
+            if style.color:
                 colorString = f':color={style.color}'
 
         output: str = (
-            '!LO:TX' + placementString + styleString + justString + colorString +
-                ':t=' + contentString
+            '!LO:TX' + placementString + styleString + justString + colorString
+            + ':t=' + contentString
         )
         return output
 
@@ -1452,8 +1461,11 @@ class M21Convert:
         if textExpression.hasStyleInformation:
             if t.TYPE_CHECKING:
                 assert isinstance(textExpression.style, m21.style.TextStyle)
-            return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement,
-                                                               textExpression.style)
+            return M21Convert.textLayoutParameterFromM21Pieces(
+                contentString,
+                placement,
+                textExpression.style
+            )
         return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
     '''
     //////////////////////////////
@@ -1469,16 +1481,19 @@ class M21Convert:
         newLinesAndTabs: str = '\t\n\r\v\f'
         output: str = ''
         for ch in inStr:
-            if ch == '\u00A0': # convert all non-breaking spaces to '&nbsp;'
+            if ch == '\u00A0':
+                # convert all non-breaking spaces to '&nbsp;'
                 output += '&nbsp;'
                 continue
 
-            if ch == ':': # convert all colons to '&colon;'
+            if ch == ':':
+                # convert all colons to '&colon;'
                 output += '&colon;'
                 continue
 
             if ch in newLinesAndTabs:
-                output += ' ' # convert all newLinesAndTabs chars to a space
+                # convert all newLinesAndTabs chars to a space
+                output += ' '
                 continue
 
             output += ch
@@ -1507,7 +1522,7 @@ class M21Convert:
 
         # a TempoText has only text (no bpm info)
         if isinstance(tempo, m21.tempo.TempoText):
-            textExp = tempo.getTextExpression() # only returns explicit text
+            textExp = tempo.getTextExpression()  # only returns explicit text
             if textExp is None:
                 return ('', '')
             tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
@@ -1526,7 +1541,7 @@ class M21Convert:
         # if the MetronomeMark has non-implicit text, we construct some layout text (with style).
         # if the MetronomeMark has non-implicit bpm info, we construct a *MM, and if we also had
         # constructed layout text, we append some humdrum-type bpm text to our layout text.
-        textExp = tempo.getTextExpression() # only returns explicit text
+        textExp = tempo.getTextExpression()  # only returns explicit text
         if textExp is not None:
             # We have some text (like 'Andante') to display (and some textStyle)
             textExp.placement = tempo.placement
@@ -1538,8 +1553,10 @@ class M21Convert:
             # mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
             if not tempoTextLayout:
                 tempoTextLayout = M21Convert.bpmTextLayoutParameterFromM21MetronomeMark(tempo)
-            else: # we have explicit text in a layout already, just add the bpm info
-                tempoTextLayout += ' ' # space delimiter between explicit text and bpm text
+            else:
+                # we have explicit text in a layout already, just add the bpm info
+                # after a space delimiter
+                tempoTextLayout += ' '
                 tempoTextLayout += M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
 
         return (mmTokenStr, tempoTextLayout)
@@ -1551,14 +1568,7 @@ class M21Convert:
 
         # '[eighth]=82', for example
         contentString: str = M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
-        placement: t.Optional[str] = None
-
-        if hasattr(tempo, 'placement'):
-            # MetronomeMark.placement showed up in music21 v7
-            placement = tempo.placement
-        else:
-            # (nothing at all, not even 'positionPlacement' in v6)
-            placement = 'above' # assume tempos are above for v6
+        placement: t.Optional[str] = tempo.placement
 
         if tempo.hasStyleInformation:
             if t.TYPE_CHECKING:
@@ -1603,7 +1613,7 @@ class M21Convert:
             noteName = noteName[:-1]
 
         # remove styling qualifiers
-        noteName = noteName.split('|', 1)[0] # splits at first '|' only, or not at all
+        noteName = noteName.split('|', 1)[0]  # splits at first '|' only, or not at all
 
         # generating rhythmic note with optional "-dot" after it. (Only one '-dot' is noticed.)
         dots: int = 0
@@ -1795,8 +1805,9 @@ class M21Convert:
             return ':a'
 
         if dynamic.placement == 'below':
-            # don't check alignVertical, it isn't there (only in TextStyle)
-            return '' # music21 never sets to None, always 'below', and humdrum default is below
+            # Don't check alignVertical, it isn't there (only in TextStyle).
+            # music21 never sets to None, always 'below', and humdrum default is below
+            return ''
 
         return ''
 
@@ -1816,15 +1827,16 @@ class M21Convert:
                 elif octaveChange > 0:
                     string += '^' * octaveChange
 
-            if isinstance(clef.line, int): # can be None
+            if isinstance(clef.line, int):  # can be None
                 string += str(clef.line)
 
         elif clef.sign == 'percussion':
-            string += 'X' # '*clefX'
-            if isinstance(clef.line, int): # it's usually None (centered), but you can position it
+            string += 'X'  # '*clefX'
+            if isinstance(clef.line, int):  # it's usually None (centered), but you can position it
                 string += str(clef.line)
 
-        else: # humdrum doesn't support other clefs (like 'TAB', 'jianpu')
+        else:
+            # humdrum doesn't support other clefs (like 'TAB', 'jianpu')
             return None
 
         return HumdrumToken(string)
@@ -1899,9 +1911,10 @@ class M21Convert:
     ) -> str:
         output: str = ''
         for artic in m21Artics:
-            humdrumChar = M21Convert.m21ArticulationClassNameToHumdrumArticulationString.get(
-                            artic.classes[0],
-                            '')
+            humdrumChar: str = M21Convert.m21ArticulationClassNameToHumdrumArticulationString.get(
+                artic.classes[0],
+                ''
+            )
             if humdrumChar:
                 output += humdrumChar
                 continue
@@ -1918,8 +1931,9 @@ class M21Convert:
             m21Expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]],
             duration: m21.duration.Duration,
             recip: str,
-            beamStarts: t.Optional[int]=None,
-            owner=None) -> str:
+            beamStarts: t.Optional[int] = None,
+            owner=None
+    ) -> str:
         # expressions are Fermata, Trill, Mordent, Turn, Tremolo (one note)
         # also the following two Spanners: TrillExtension and TremoloSpanner (multiple notes)
         output: str = ''
@@ -1935,7 +1949,8 @@ class M21Convert:
                 continue
             if isinstance(expr, (m21.expressions.Tremolo, m21.expressions.TremoloSpanner)):
                 output += M21Convert._getHumdrumStringFromTremolo(
-                                        expr, duration, recip, beamStarts, owner)
+                    expr, duration, recip, beamStarts, owner
+                )
                 continue
             if isinstance(expr, m21.expressions.TrillExtension):
                 # TODO: print('export of TrillExtension not implemented')
@@ -1949,16 +1964,16 @@ class M21Convert:
         return output
 
     numberOfFlagsToDurationReciprocal: t.Dict[int, int] = {
-        0 : 4,
-        1 : 8,
-        2 : 16,
-        3 : 32,
-        4 : 64,
-        5 : 128,
-        6 : 256,
-        7 : 512,
-        8 : 1024,
-        9 : 2048,
+        0: 4,
+        1: 8,
+        2: 16,
+        3: 32,
+        4: 64,
+        5: 128,
+        6: 256,
+        7: 512,
+        8: 1024,
+        9: 2048,
     }
 
     @staticmethod
@@ -1976,7 +1991,7 @@ class M21Convert:
         elif isinstance(tremolo, m21.expressions.TremoloSpanner):
             fingered = True
         else:
-            raise HumdrumInternalError('tremolo is not of an appropriate type') # shouldn't happen
+            raise HumdrumInternalError('tremolo is not of an appropriate type')
 
         tvalue: HumNum
         tvFraction: Fraction
@@ -1986,6 +2001,7 @@ class M21Convert:
         if tvInt is not None:
             tvalue = opFrac(tremolo)
             if fingered:
+                # fingered tremolo (2 notes)
                 if beamStarts and duration.quarterLength < 1:
                     # ignore beamStarts for quarter-notes and above
                     tvalue *= beamStarts
@@ -1996,12 +2012,13 @@ class M21Convert:
                     output = f'@@{tvFraction.numerator}@@'
                 else:
                     output = f'@@{tvFraction.numerator}%{tvFraction.denominator}@@'
-            else: # not fingered (bowed)
+            else:
+                # bowed tremolo (one note)
                 durNoDots: HumNum = Convert.recipToDurationNoDots(recip)
                 if 0 < durNoDots < 1:
                     dval: float = - math.log2(float(durNoDots))
                     twopow: int = int(dval)
-                    tvalue *= (1<<twopow)
+                    tvalue *= (1 << twopow)
                 if duration.tuplets and len(duration.tuplets) == 1:
                     tvalue /= duration.tuplets[0].tupletMultiplier()
                 tvFraction = Fraction(tvalue)
@@ -2024,7 +2041,7 @@ class M21Convert:
         for beam in m21Beams:
             if beam.type == 'start':
                 beamStarts += 1
-            elif beam.type ==  'stop':
+            elif beam.type == 'stop':
                 beamEnds += 1
             elif beam.type == 'continue':
                 pass
@@ -2085,12 +2102,15 @@ class M21Convert:
         # style and placement are ignored/never set on tie stop
         if tieType in ('start', 'continue'):
             if tieStyle == 'hidden':
+                # ignore placement if hidden
                 tieStr += 'y'
-            else: # ignore placement if hidden (duh)
+            else:
                 if tiePlacement == 'above':
-                    tieStr += '>' # we don't report this up, since we always have '>' RDF signifier
+                    # we don't report this up, since we always have '>' RDF signifier
+                    tieStr += '>'
                 elif tiePlacement == 'below':
-                    tieStr += '<' # we don't report this up, since we always have '<' RDF signifier
+                    # we don't report this up, since we always have '<' RDF signifier
+                    tieStr += '<'
 
                 if tieStyle == 'dotted':
                     layouts.append('!LO:T:dot')
@@ -2122,7 +2142,7 @@ class M21Convert:
             theLookup[(MeasureVisualStyle.HeavyLightHeavy, vStyle)] = (
                 MeasureVisualStyle.HeavyLightHeavy
             )
-            theLookup[(MeasureVisualStyle.LightHeavyLight, vStyle)] =  (
+            theLookup[(MeasureVisualStyle.LightHeavyLight, vStyle)] = (
                 MeasureVisualStyle.LightHeavyLight
             )
 
@@ -2156,8 +2176,8 @@ class M21Convert:
         )
 
         # weird cases humdrum doesn't support (and don't make sense):
-            # heavy + light = heavy-light -> ':!|:' which is just weird
-            # light + heavy = light-heavy -> ':|!:' which is just weird
+        #   heavy + light = heavy-light -> ':!|:' which is just weird
+        #   light + heavy = light-heavy -> ':|!:' which is just weird
         theLookup[(MeasureVisualStyle.Heavy, MeasureVisualStyle.Regular)] = (
             MeasureVisualStyle.HeavyLight
         )
@@ -2175,8 +2195,8 @@ class M21Convert:
                     # different styles, and it's not one of the triple-style cases above
 
                     # Invisible trumps everything
-                    if (vStyle1 is MeasureVisualStyle.Invisible or
-                            vStyle2 is MeasureVisualStyle.Invisible):
+                    if (vStyle1 is MeasureVisualStyle.Invisible
+                            or vStyle2 is MeasureVisualStyle.Invisible):
                         theLookup[(vStyle1, vStyle2)] = MeasureVisualStyle.Invisible
                         continue
 
@@ -2211,8 +2231,9 @@ class M21Convert:
             if currMeasureBeginStyle.mType == MeasureType.RepeatForward:
                 outputMType = MeasureType.RepeatBoth
                 outputVStyle = M21Convert._combineVisualRepeatBothStyles(
-                                                prevMeasureEndStyle.vStyle,
-                                                outputVStyle)
+                    prevMeasureEndStyle.vStyle,
+                    outputVStyle
+                )
             else:
                 outputMType = MeasureType.RepeatBackward
                 outputVStyle = prevMeasureEndStyle.vStyle
@@ -2241,17 +2262,17 @@ class M21Convert:
         return M21Convert._measureStyleLookup[(vStyle, mType)]
 
     measureVisualStyleFromM21BarlineType: dict = {
-        'regular'       : MeasureVisualStyle.Regular,
-        'dotted'        : MeasureVisualStyle.Regular, # no dotted in humdrum
-        'dashed'        : MeasureVisualStyle.Regular, # no dashed in humdrum
-        'heavy'         : MeasureVisualStyle.Heavy,
-        'double'        : MeasureVisualStyle.Double, # light-light
-        'final'         : MeasureVisualStyle.Final,  # light-heavy
-        'heavy-light'   : MeasureVisualStyle.HeavyLight,
-        'heavy-heavy'   : MeasureVisualStyle.HeavyHeavy,
-        'tick'          : MeasureVisualStyle.Tick,
-        'short'         : MeasureVisualStyle.Short,
-        'none'          : MeasureVisualStyle.Invisible
+        'regular': MeasureVisualStyle.Regular,
+        'dotted': MeasureVisualStyle.Regular,  # no dotted in humdrum
+        'dashed': MeasureVisualStyle.Regular,  # no dashed in humdrum
+        'heavy': MeasureVisualStyle.Heavy,
+        'double': MeasureVisualStyle.Double,   # a.k.a. light-light
+        'final': MeasureVisualStyle.Final,     # a.k.a. light-heavy
+        'heavy-light': MeasureVisualStyle.HeavyLight,
+        'heavy-heavy': MeasureVisualStyle.HeavyHeavy,
+        'tick': MeasureVisualStyle.Tick,
+        'short': MeasureVisualStyle.Short,
+        'none': MeasureVisualStyle.Invisible
     }
 
     @staticmethod
@@ -2264,7 +2285,8 @@ class M21Convert:
         if isinstance(m21Barline, m21.bar.Repeat):
             if m21Barline.direction == 'start':
                 mType = MeasureType.RepeatForward
-            else: # direction == 'end'
+            else:
+                # direction == 'end'
                 mType = MeasureType.RepeatBackward
         vStyle = M21Convert.measureVisualStyleFromM21BarlineType[m21Barline.type]
         return M21Convert.getMeasureStyle(vStyle, mType)
@@ -2278,26 +2300,25 @@ class M21Convert:
 
     # m21Barline is ordered, because we want to iterate over the keys,
     # and find '||' before '|', for example
-    m21BarlineTypeFromHumdrumType: t.OrderedDict = t.OrderedDict(
-    [
-        ('||', 'double'),      # a.k.a. 'light-light' in MusicXML
-        ('!!', 'heavy-heavy'),
-        ('!|', 'heavy-light'),
-        ('|!', 'final'),       # a.k.a. 'light-heavy' in MusicXML
-        ('==', 'final'),       # a.k.a. 'light-heavy' in MusicXML
-        ('\'', 'short'),
-        ('`' , 'tick'),
-        ('-' , 'none'),
-        ('|' , 'regular'),     # barlines are 'regular' by default (e.g. '=3' is 'regular')
-        ('!' , 'heavy')
-    ])
+    m21BarlineTypeFromHumdrumType: t.Dict = {
+        '||': 'double',      # a.k.a. 'light-light' in MusicXML
+        '!!': 'heavy-heavy',
+        '!|': 'heavy-light',
+        '|!': 'final',       # a.k.a. 'light-heavy' in MusicXML
+        '==': 'final',       # a.k.a. 'light-heavy' in MusicXML
+        '\'': 'short',
+        '`': 'tick',
+        '-': 'none',
+        '|': 'regular',     # barlines are 'regular' by default (e.g. '=3' is 'regular')
+        '!': 'heavy'
+    }
 
     @staticmethod
     def _m21BarlineTypeFromHumdrumString(measureString: str) -> str:
         for humdrumType in M21Convert.m21BarlineTypeFromHumdrumType:
             if humdrumType in measureString:
                 return M21Convert.m21BarlineTypeFromHumdrumType[humdrumType]
-        return 'regular' # default m21BarlineType
+        return 'regular'  # default m21BarlineType
 
     @staticmethod
     def _m21BarlineTypeFromHumdrumRepeatString(measureString: str, side: str) -> str:
@@ -2350,21 +2371,21 @@ class M21Convert:
     def m21BarlineFromHumdrumString(
             measureString: str,
             side: str
-    ) -> m21.bar.Barline: # could be m21.bar.Repeat
+    ) -> m21.bar.Barline:  # could be m21.bar.Repeat (is a Barline)
         # side is 'left' or 'right', describing which end of a measure this measureString
         # should be interpreted for
         outputBarline: t.Optional[m21.bar.Barline] = None
         if side == 'right':
-            if (':|' in measureString or
-                ':!' in measureString):
+            if (':|' in measureString
+                    or ':!' in measureString):
                 # right barline is an end repeat
                 outputBarline = m21.bar.Repeat(direction='end')
                 outputBarline.type = (
                     M21Convert._m21BarlineTypeFromHumdrumRepeatString(measureString, side)
                 )
         elif side == 'left':
-            if ('|:' in measureString or
-                '!:' in measureString):
+            if ('|:' in measureString
+                    or '!:' in measureString):
                 # left barline is a start repeat
                 outputBarline = m21.bar.Repeat(direction='start')
                 outputBarline.type = (
@@ -2417,10 +2438,15 @@ class M21Convert:
 
     # str -> DateSingle | DateRelative | DateBetween | DateSelection
 
-    _dateApproximateSymbols = ('~', 'x')    # approximate (i.e. not exactly, but reasonably close)
-    _dateUncertainSymbols = ('?', 'z')      # uncertain (i.e. maybe not correct at all)
-    _dateDividerSymbols = ('-', '^', '|')   # date1-date2 or date1^date2 (DateBetween)
-                                            # date1|date2|date3|date4... (DateSelection)
+    # approximate (i.e. not exactly, but reasonably close)
+    _dateApproximateSymbols: t.Tuple[str, ...] = ('~', 'x')
+
+    # uncertain (i.e. maybe not correct at all)
+    _dateUncertainSymbols: t.Tuple[str, ...] = ('?', 'z')
+
+    # date1-date2 or date1^date2 (DateBetween)
+    # date1|date2|date3|date4... (DateSelection)
+    _dateDividerSymbols: t.Tuple[str, ...] = ('-', '^', '|')
 
     @staticmethod
     def m21DateObjectFromString(
@@ -2431,27 +2457,30 @@ class M21Convert:
                             m21.metadata.DateSelection]]:
         typeNeeded: t.Type = m21.metadata.DateSingle
         relativeType: str = ''
-        if '<' in string[0:1]: # this avoids crash on empty string
+        if '<' in string[0:1]:  # this avoids string[0] crash on empty string
             typeNeeded = m21.metadata.DateRelative
             string = string.replace('<', '')
             relativeType = 'before'
-        elif '>' in string[0:1]: # this avoids crash on empty string
+        elif '>' in string[0:1]:  # this avoids string[0] crash on empty string
             typeNeeded = m21.metadata.DateRelative
             string = string.replace('>', '')
             relativeType = 'after'
 
-        dateStrings: t.List[str] = [string] # if we don't split it, this is what we will parse
+        dateStrings: t.List[str] = [string]  # if we don't split it, this is what we will parse
         for divider in M21Convert._dateDividerSymbols:
             if divider in string:
                 if divider == '|':
                     typeNeeded = m21.metadata.DateSelection
-                    dateStrings = string.split(divider)    # split on all '|'s
+                    # split on all '|'s
+                    dateStrings = string.split(divider)
                 else:
                     typeNeeded = m21.metadata.DateBetween
-                    dateStrings = string.split(divider, 1) # split only at first divider
-                break # we assume there is only one type of divider present
+                    # split only at first divider
+                    dateStrings = string.split(divider, 1)
+                # we assume there is only one type of divider present
+                break
 
-        del string # to make sure we never look at it again in this method
+        del string  # to make sure we never look at it again in this method
 
         singleRelevance: str = ''
         if typeNeeded == m21.metadata.DateSingle:
@@ -2459,10 +2488,10 @@ class M21Convert:
             # the DateSingle's relevance to be set to 'approximate' or 'uncertain'.
             # Other DataBlah types use their relevance for other things, so leaving
             # the '~'/'?' in place to cause yearError to be set is a better choice.
-            if '~' in dateStrings[0][0:1]: # avoids crash on empty dateStrings[0]
+            if '~' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'approximate'
-            elif '?' in dateStrings[0][0:1]: # avoids crash on empty dateStrings[0]
+            elif '?' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'uncertain'
 
@@ -2479,6 +2508,9 @@ class M21Convert:
                 return m21.metadata.DateSingle(dates[0], relevance=singleRelevance)
             return m21.metadata.DateSingle(dates[0])
 
+        # the "type ignore" comments below are because DateRelative, DateBetween, and
+        # DateSelection are not declared to take a list of Dates, even though they do
+        # (DateSingle does as well, but it is declared so).
         if typeNeeded == m21.metadata.DateRelative:
             return m21.metadata.DateRelative(dates[0], relevance=relativeType)  # type: ignore
 
@@ -2496,7 +2528,9 @@ class M21Convert:
         Strip error symbols from a numerical value. Return cleaned source and
         error symbol. Only one error symbol is expected per string.
         '''
-        sym = M21Convert._dateApproximateSymbols + M21Convert._dateUncertainSymbols
+        sym: t.Tuple[str, ...] = (
+            M21Convert._dateApproximateSymbols + M21Convert._dateUncertainSymbols
+        )
         found = None
         for char in value:
             if char in sym:
@@ -2507,13 +2541,20 @@ class M21Convert:
         if found in M21Convert._dateApproximateSymbols:
             value = value.replace(found, '')
             return value, 'approximate'
-        #if found in M21Convert._dateUncertainSymbols: # always True
+
+        # found is in M21Convert._dateUncertainSymbols
         value = value.replace(found, '')
         return value, 'uncertain'
 
-    _dateAttrNames     = [ 'year', 'month',   'day',  'hour', 'minute', 'second']
-    _dateAttrStrFormat = [   '%i', '%02.i', '%02.i', '%02.i',  '%02.i', '%05.2f']
-    _highestSecondString = '59.99' # two digits past decimal point because of '%05.2f' above
+    _dateAttrNames: t.List[str] = [
+        'year', 'month', 'day', 'hour', 'minute', 'second'
+    ]
+    _dateAttrStrFormat: t.List[str] = [
+        '%i', '%02.i', '%02.i', '%02.i', '%02.i', '%05.2f'
+    ]
+
+    # two digits past decimal point because of '%05.2f' in _dateAttrStrFormat[5]
+    _highestSecondString: str = '59.99'
 
     @staticmethod
     def _dateFromString(dateStr: str) -> t.Optional[m21.metadata.Date]:
@@ -2536,7 +2577,8 @@ class M21Convert:
 
                 if value == '':
                     values.append(None)
-                elif i == 5: # second is a float
+                elif i == 5:
+                    # second is a float
                     values.append(float(value))
                     gotOne = True
                 else:
@@ -2585,7 +2627,7 @@ class M21Convert:
 
         elif isinstance(m21Date, m21.metadata.DateRelative):
             # one date, prefixed by '<' or '>' for 'prior'/'onorbefore' or 'after'/'onorafter'
-            output = '<' # assume before
+            output = '<'  # assume before
             if m21Date.relevance in ('after', 'onorafter'):
                 output = '>'
 
@@ -2624,11 +2666,11 @@ class M21Convert:
             else:
                 fmt = M21Convert._dateAttrStrFormat[i]
                 sub = fmt % value
-                if i == 0: # year
+                if i == 0:  # year
                     # check for negative year, and replace '-' with '@'
                     if len(sub) >= 2 and sub[0] == '-':
                         sub = '@' + sub[1:]
-                elif i == 5: # seconds
+                elif i == 5:  # seconds
                     # Check for formatted seconds starting with '60' (due to rounding) and
                     # truncate to '59.99'. That's easier than doing rounding correctly
                     # (carrying into minutes, hours, days, etc).
@@ -2657,7 +2699,7 @@ class M21Convert:
     @staticmethod
     def _dateErrorToSymbol(value):
         if value.lower() in M21Convert._dateApproximateSymbols + ('approximate',):
-            return M21Convert._dateApproximateSymbols[1] # [1] is the single value error symbol
+            return M21Convert._dateApproximateSymbols[1]  # [1] is the single value error symbol
         if value.lower() in M21Convert._dateUncertainSymbols + ('uncertain',):
-            return M21Convert._dateUncertainSymbols[1]   # [1] is the single value error symbol
+            return M21Convert._dateUncertainSymbols[1]    # [1] is the single value error symbol
         return ''

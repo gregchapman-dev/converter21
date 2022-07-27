@@ -856,7 +856,10 @@ class HumdrumWriter:
                 if not gridSlice.isGlobalComment:
                     continue
 
-                token = gridSlice.parts[0].staves[0].voices[0].token
+                voice0: t.Optional[GridVoice] = gridSlice.parts[0].staves[0].voices[0]
+                if voice0 is None:
+                    continue
+                token: t.Optional[HumdrumToken] = voice0.token
                 if token is None:
                     continue
 
@@ -1548,9 +1551,9 @@ class HumdrumWriter:
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, lineCount in staffLineCounts:
-            tokenStr: str = '*stria' + str(lineCount)
+            token: HumdrumToken = HumdrumToken('*stria' + str(lineCount))
             staff = part.staves[staffIdx]
-            staff.setTokenLayer(voice0, tokenStr, durationZero)
+            staff.setTokenLayer(voice0, token, durationZero)
 
         # go back and fill in all None tokens with null interpretations
         self._fillEmpties(part, '*')
@@ -1571,8 +1574,7 @@ class HumdrumWriter:
 
             voiceCount: int = len(staff.voices)
             if voiceCount == 0:
-                gv: GridVoice = GridVoice(string, durationZero)
-                staff.voices.append(gv)
+                staff.voices.append(GridVoice(string, durationZero))
             else:
                 for v, gv in enumerate(staff.voices):
                     if gv is None:
@@ -1768,7 +1770,6 @@ class HumdrumWriter:
             event: EventData,
             extraDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]]
     ):
-
         dynamics: t.List[t.Tuple[int, int, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
@@ -1810,10 +1811,13 @@ class HumdrumWriter:
                 outSlice = GridSlice(outgm, outgm.timestamp + outgm.duration, SliceType.Notes)
                 outSlice.initializeBySlice(outgm.slices[-1])
 
-            if outSlice.parts[partIndex].staves[staffIndex].dynamics is None:
+            existingDynamicsToken: t.Optional[HumdrumToken] = (
+                outSlice.parts[partIndex].staves[staffIndex].dynamics
+            )
+            if existingDynamicsToken is None:
                 outSlice.parts[partIndex].staves[staffIndex].dynamics = token
             else:
-                outSlice.parts[partIndex].staves[staffIndex].dynamics.text += ' ' + token.text
+                existingDynamicsToken.text += ' ' + token.text
                 moreThanOneDynamic[(partIndex, staffIndex)] = True
                 currentDynamicIndex[(partIndex, staffIndex)] = 1  # ':n=' is 1-based
 

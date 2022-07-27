@@ -453,7 +453,11 @@ class HumGrid:
             # grace slices are of zero duration; do not extend
             return
 
-        gv: GridVoice = thisSlice.parts[parti].staves[staffi].voices[voicei]
+        gv: t.Optional[GridVoice] = thisSlice.parts[parti].staves[staffi].voices[voicei]
+        if gv is None:
+            # STRANGE: voice should not be None
+            return
+
         token: t.Optional[HumdrumToken] = gv.token
         if token is None:
             # STRANGE: token should not be None
@@ -530,14 +534,16 @@ class HumGrid:
                 elif sSlice.isDataSlice:
                     # if there is already a non-null token here, don't overwrite it,
                     # raise an exception instead.  This should not happen.
-                    if (voicei < len(gs.voices)
-                            and gs.voices[voicei] is not None
-                            and gs.voices[voicei].token is not None
-                            and gs.voices[voicei].token.text != '.'):
-                        raise HumdrumInternalError(
-                            f'Note ({token.text}) duration overlaps next note '
-                            + f'in voice ({gs.voices[voicei].token.text})'
-                        )
+                    if voicei < len(gs.voices):
+                        vi: t.Optional[GridVoice] = gs.voices[voicei]
+                        if vi is not None:
+                            vitok: t.Optional[HumdrumToken] = vi.token
+                            if vitok is not None:
+                                if vitok.text != '.':
+                                    raise HumdrumInternalError(
+                                        f'Note ({token.text}) duration overlaps next note '
+                                        + f'in voice ({vitok.text})'
+                                    )
                     gs.setNullTokenLayer(voicei, sliceType, sliceDur)
                     timeLeft = opFrac(timeLeft - sliceDur)
                 elif sSlice.isInvalidSlice:
@@ -880,7 +886,15 @@ class HumGrid:
             print('missing voice in addInvisibleRest', file=sys.stderr)
             return
 
-        token: HumdrumToken = starting.parts[p].staves[s].voices[0].token
+        voice0: t.Optional[GridVoice] = starting.parts[p].staves[s].voices[0]
+        if voice0 is None:
+            print('voice0 is None in addInvisibleRest', file=sys.stderr)
+            return
+        token: t.Optional[HumdrumToken] = voice0.token
+        if token is None:
+            print('voice0.token is None in addInvisibleRest', file=sys.stderr)
+            return
+
         duration: HumNum = Convert.recipToDuration(token.text)
         if duration == 0:
             # Do not deal with zero duration items (maybe **mens data)
@@ -921,7 +935,9 @@ class HumGrid:
                 # so allocate space for it.
                 staff.voices[0] = GridVoice()
             if len(staff.voices) > 0:
-                staff.voices[0].token = kern
+                if t.TYPE_CHECKING:
+                    assert staff.voices[0] is not None
+                staff.voices[0].token = HumdrumToken(kern)
 
             break
 
@@ -1151,6 +1167,8 @@ class HumGrid:
         for part in tempoSlice.parts:
             for staff in part.staves:
                 for voice in staff.voices:
+                    if voice is None:
+                        continue
                     token = voice.token
                     if token is not None:
                         break
@@ -1166,6 +1184,8 @@ class HumGrid:
         for part in tempoSlice.parts:
             for staff in part.staves:
                 for voice in staff.voices:
+                    if voice is None:
+                        continue
                     if voice.token is None:
                         voice.token = token
 
@@ -1515,7 +1535,11 @@ class HumGrid:
         for part in currSlice.parts:
             for staff in part.staves:
                 for voice in staff.voices:
-                    token: HumdrumToken = voice.token
+                    if voice is None:
+                        continue
+                    token: t.Optional[HumdrumToken] = voice.token
+                    if token is None:
+                        continue
                     if token.text.startswith('*^'):
                         if len(token.text) > 2 and token.text[2].isdigit():
                             needNew = True
@@ -1558,7 +1582,10 @@ class HumGrid:
         # of control.
         cv: int = 0
         for _ in range(0, len(curStaff.voices)):  # loops over original range
-            curVoice: GridVoice = curStaff.voices[cv]
+            curVoice: t.Optional[GridVoice] = curStaff.voices[cv]
+            if curVoice is None:
+                raise HumdrumInternalError('curVoice is None in adjustExpansionsInStaff')
+
             if curVoice.token is not None and curVoice.token.text.startswith('*^'):
                 if len(curVoice.token.text) > 2 and curVoice.token.text[2].isdigit():
                     # transfer *^ to newmanip and replace with * and *^(n-1) in curr
@@ -1610,7 +1637,7 @@ class HumGrid:
         init: bool = False
         lastVoice: t.Optional[GridVoice] = None
         staff: GridStaff
-        voice: GridVoice
+        voice: t.Optional[GridVoice]
 
         for part in reversed(currSlice.parts):
             for staff in reversed(part.staves):
@@ -1621,7 +1648,7 @@ class HumGrid:
                     lastVoice = staff.voices[-1]
                     init = True
                     continue
-                if lastVoice is not None:
+                if lastVoice is not None and voice is not None:
                     if str(voice.token) == '*v' and str(lastVoice.token) == '*v':
                         needNew = True
                         break
@@ -1649,7 +1676,7 @@ class HumGrid:
                 staff = part.staves[s]
                 voice = staff.voices[-1]
                 newStaff: GridStaff = newManip.parts[p].staves[s]
-                if lastVoice is not None:
+                if lastVoice is not None and voice is not None:
                     if str(voice.token) == '*v' and str(lastVoice.token) == '*v':
                         # splitting the slices at this staff boundary
                         newLastStaff: GridStaff = newManip.parts[lastp].staves[lasts]
@@ -1708,7 +1735,7 @@ class HumGrid:
         # First create '*' tokens for newStaff slice where there are
         # '*v' in old staff.  All other tokens should be set to '*'.
         for voice in oldStaff.voices:
-            if voice.token.text == '*v':
+            if voice is not None and voice.token is not None and voice.token.text == '*v':
                 newStaff.voices.append(self.createVoice('*', 'H', 0, pindex, sindex))
             else:
                 newStaff.voices.append(self.createVoice('*', 'I', 0, pindex, sindex))
@@ -1723,7 +1750,7 @@ class HumGrid:
 
         addedNull: bool = False
         for v, voice in enumerate(oldLastStaff.voices):
-            if voice.token.text == '*v':
+            if voice is not None and voice.token is not None and voice.token.text == '*v':
                 newLastStaff.voices.append(voice)
                 if not addedNull:
                     oldLastStaff.voices[v] = self.createVoice('*', 'J', 0, pindex, sindex)
@@ -1765,7 +1792,7 @@ class HumGrid:
                 adjustment: int = 0
                 voices: int = len(newStaff.voices)
                 for voice in newStaff.voices:
-                    if voice is None:
+                    if voice is None or voice.token is None:
                         continue
                     if voice.token.text == '*v':
                         adjustment += 1

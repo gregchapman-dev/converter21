@@ -22,7 +22,7 @@ class HumAddress:
         self._fieldIndex = None
         self._ownerLine: t.Optional[HumdrumLine] = None
         self._spining = ''
-        self._dataTypeTokenCached = None # cache of self.ownerLine.trackStart(self.trackNum)
+        self._dataTypeTokenCached = None  # cache of self.ownerLine.trackStart(self.trackNum)
     '''
     //////////////////////////////
     //
@@ -178,11 +178,11 @@ class HumAddress:
     //   a HumdrumLine, the parameter's value should be NULL.
     '''
     @property
-    def ownerLine(self): # returns HumdrumLine
+    def ownerLine(self):  # returns t.Optional[HumdrumLine]
         return self._ownerLine
 
     @ownerLine.setter
-    def ownerLine(self, newOwnerLine): # newOwnerLine: HumdrumLine
+    def ownerLine(self, newOwnerLine):  # newOwnerLine: t.Optional[HumdrumLine]
         self._ownerLine = newOwnerLine
         # blow away cache of dataType, because it depends on ownerLine
         self._dataTypeTokenCached = None
@@ -205,7 +205,7 @@ class HumAddress:
     //
     '''
     @property
-    def dataType(self): # -> HumdrumToken
+    def dataType(self):  # -> HumdrumToken
         if self._dataTypeTokenCached:
             return self._dataTypeTokenCached
 

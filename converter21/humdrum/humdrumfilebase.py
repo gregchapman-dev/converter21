@@ -1083,7 +1083,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     '''
     def appendLine(
             self,
-            line: t.Optional[HumdrumLine, str],
+            line: t.Union[HumdrumLine, str],
             asGlobalToken=False,
             analyzeTokenLinks=False
     ):

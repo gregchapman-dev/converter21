@@ -20,29 +20,29 @@ from music21.common import opFrac
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumToken
-#from converter21.humdrum import HumdrumLine
+# from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumFile
 
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import SliceType
 from converter21.humdrum import GridVoice
-#from converter21.humdrum import GridSide
+# from converter21.humdrum import GridSide
 from converter21.humdrum import GridStaff
-#from converter21.humdrum import GridPart
+# from converter21.humdrum import GridPart
 from converter21.humdrum import GridSlice
 
 # you can't import this here, because the recursive import causes very weird issues.
-#from converter21.humdrum import HumGrid
+# from converter21.humdrum import HumGrid
 
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridMeasure:
@@ -111,7 +111,8 @@ class GridMeasure:
     //   gracenumber grace note line before the data line at the given
     //   timestamp.
     '''
-    def addGraceToken(self,
+    def addGraceToken(
+            self,
             tok: str,
             timestamp: HumNumIn,
             part: int,
@@ -124,7 +125,7 @@ class GridMeasure:
 
         if graceNumber < 1:
             raise HumdrumInternalError(
-                'ERROR: graceNumber {} has to be larger than 0')
+                'ERROR: graceNumber {graceNumber} has to be larger than 0')
 
         gs: GridSlice
         idx: int
@@ -138,7 +139,7 @@ class GridMeasure:
 
         if ts > self.slices[-1].timestamp:
             # Grace note needs to be added at the end of a measure.
-            idx = len(self.slices) - 1 # pointing at last slice
+            idx = len(self.slices) - 1  # pointing at last slice
             counter = 0
             while idx >= 0:
                 if self.slices[idx].isGraceSlice:
@@ -156,21 +157,22 @@ class GridMeasure:
                     # insert grace note after this note
                     gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
                     gs.addToken(tok, part, staff, voice)
-                    self.slices.insert(idx+1, gs)
+                    self.slices.insert(idx + 1, gs)
                     return gs
 
                 idx -= 1
 
-            return None # couldn't find anywhere to insert
+            return None  # couldn't find anywhere to insert
 
         # search for existing line with same timestamp on a data slice:
         foundIndex: int = -1
         for slicei, gridSlice in enumerate(self.slices):
             if ts < gridSlice.timestamp:
                 raise HumdrumInternalError(
-f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
-\tGRACE TIMESTAMP: {ts}
-\tTEST  TIMESTAMP: {gridSlice.timestamp}''')
+                    'STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN\n'
+                    + f'\tGRACE TIMESTAMP: {ts}\n'
+                    + f'\tTEST  TIMESTAMP: {gridSlice.timestamp}'
+                )
 
             if gridSlice.isDataSlice:
                 if gridSlice.timestamp == ts:
@@ -195,7 +197,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 # insert grace note after this note
                 gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
                 gs.addToken(tok, part, staff, voice)
-                self.slices.insert(idx+1, gs)
+                self.slices.insert(idx + 1, gs)
                 return gs
 
             idx -= 1
@@ -213,7 +215,8 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     //    timestamp (or create a new data slice at that timestamp), placing the
     //    token at the specified part, staff, and voice index.
     '''
-    def addDataToken(self,
+    def addDataToken(
+            self,
             tok: str,
             timestamp: HumNumIn,
             part: int,
@@ -262,7 +265,8 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         addTokenOfSliceType: common code used by several other add*Token
            functions (addTempoToken, addTimeSigToken, addMeterToken, etc).
     '''
-    def addTokenOfSliceType(self,
+    def addTokenOfSliceType(
+            self,
             tok: str,
             timestamp: HumNumIn,
             sliceType: SliceType,
@@ -498,10 +502,14 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 # before the slice.  But don't add if the slice we found is a
                 # global comment with the same text.
                 if gridSlice.isGlobalComment:
-                    if tok == gridSlice.parts[0].staves[0].voices[0].token.text:
-                        # do not insert duplicate global comments
-                        gs = gridSlice
-                        return gs
+                    if len(gridSlice.parts[0].staves[0].voices) > 0:
+                        voice0: t.Optional[GridVoice] = gridSlice.parts[0].staves[0].voices[0]
+                        if (voice0 is not None
+                                and voice0.token is not None
+                                and tok == voice0.token.text):
+                            # do not insert duplicate global comments
+                            gs = gridSlice
+                            return gs
 
                 gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
                 gs.addToken(tok, 0, 0, 0)
@@ -515,14 +523,15 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 self.slices.insert(idx, gs)
                 return gs
 
-        return None # I think we should put it at the beginning in this case --gregc
+        # I think we should put it at the beginning in this case --gregc
+        return None
 
     '''
     //////////////////////////////
     //
     // GridMeasure::transferTokens --
     '''
-    def transferTokens(self, outFile: HumdrumFile, recip: bool, firstBar: bool=False) -> bool:
+    def transferTokens(self, outFile: HumdrumFile, recip: bool, firstBar: bool = False) -> bool:
         # If the last data slice duration is zero, then calculate
         # the true duration from the duration of the measure.
         if self.slices:
@@ -548,7 +557,9 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         firstBarlineSlice: t.Optional[GridSlice] = None
 
         if self.duration == 0:
-            firstBar = False # don't reposition the first barline if the first bar has no notes
+            # don't reposition the first barline if the first bar has no notes
+            # (i.e. do not treat this as the first barline, even if the caller said to)
+            firstBar = False
 
         for gridSlice in self.slices:
             if gridSlice.isInvalidSlice:
@@ -628,32 +639,38 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     // GridMeasure::getOwner --
     '''
     @property
-    def ownerGrid(self): # -> HumGrid:
+    def ownerGrid(self):  # -> HumGrid:
         return self._ownerGrid
 
     @ownerGrid.setter
-    def ownerGrid(self, newOwnerGrid):
+    def ownerGrid(self, newOwnerGrid):  # newOwnerGrid: HumGrid
         self._ownerGrid = newOwnerGrid
 
     # _getIndexedVoice_AppendingIfNecessary appends enough new voices to the list to
     # accommodate voiceIndex, then returns voices[voiceIndex]
     @staticmethod
     def _getIndexedVoice_AppendingIfNecessary(
-            voices: t.List[GridVoice],
+            voices: t.List[t.Optional[GridVoice]],
             voiceIndex: int
     ) -> GridVoice:
         additionalVoicesNeeded: int = voiceIndex + 1 - len(voices)
         for _ in range(0, additionalVoicesNeeded):
             voices.append(GridVoice())
-        return voices[voiceIndex]
+
+        output: t.Optional[GridVoice] = voices[voiceIndex]
+        if t.TYPE_CHECKING:
+            # because we just filled it in
+            assert isinstance(output, GridVoice)
+        return output
 
     def addVerseLabels(self, associatedSlice: GridSlice,
                             partIndex: int, staffIndex: int,
                             verseLabels: t.List[t.Optional[HumdrumToken]]):
         # add these verse labels just before this associatedSlice
         if len(self.slices) == 0:
-		    # something strange happened: expecting at least one item in measure.
-            return # associatedSlice is supposed to already be in the measure
+            # something strange happened: expecting at least one item in measure.
+            # associatedSlice is supposed to already be in the measure.
+            return
 
         associatedSliceIdx: t.Optional[int] = None
         if associatedSlice is None:
@@ -662,7 +679,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            for associatedSliceIdx in range(len(self.slices)-1, -1, -1):
+            for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
                     foundIt = True
@@ -672,7 +689,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 return
 
         # see if the previous slice is a VerseLabels slice we can use
-        prevIdx: int = associatedSliceIdx-1
+        prevIdx: int = associatedSliceIdx - 1
         prevSlice: GridSlice = self.slices[prevIdx]
         if prevSlice.isVerseLabelSlice:
             prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
@@ -711,8 +728,9 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                            locomment: str):
         # add this '!LO:' string just before this associatedSlice
         if len(self.slices) == 0:
-		    # something strange happened: expecting at least one item in measure.
-            return # associatedSlice is supposed to already be in the measure
+            # something strange happened: expecting at least one item in measure.
+            # associatedSlice is supposed to already be in the measure.
+            return
 
         associatedSliceIdx: t.Optional[int] = None
         if associatedSlice is None:
@@ -721,7 +739,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            for associatedSliceIdx in range(len(self.slices)-1, -1, -1):
+            for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
                     foundIt = True
@@ -731,7 +749,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 return
 
         # see if the previous slice is a layout slice we can use
-        prevIdx: int = associatedSliceIdx-1
+        prevIdx: int = associatedSliceIdx - 1
         prevSlice: GridSlice = self.slices[prevIdx]
         if prevSlice.isLocalLayoutSlice:
             prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
@@ -769,8 +787,9 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                                     partIndex: int, staffIndex: int,
                                     locomment: str):
         if len(self.slices) == 0:
-		    # something strange happened: expecting at least one item in measure.
-            return # associatedSlice is supposed to already be in the measure
+            # something strange happened: expecting at least one item in measure.
+            # associatedSlice is supposed to already be in the measure
+            return
 
         associatedSliceIdx: t.Optional[int] = None
         if associatedSlice is None:
@@ -779,7 +798,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            for associatedSliceIdx in range(len(self.slices)-1, -1, -1):
+            for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
                     foundIt = True
@@ -789,7 +808,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
                 return
 
         # see if the previous slice is a layout slice we can use
-        prevIdx: int = associatedSliceIdx-1
+        prevIdx: int = associatedSliceIdx - 1
         prevSlice: GridSlice = self.slices[prevIdx]
         if prevSlice.isLocalLayoutSlice:
             prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]

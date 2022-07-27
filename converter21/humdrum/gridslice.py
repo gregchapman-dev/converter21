@@ -154,7 +154,10 @@ class GridSlice:
             for _ in range(len(staff.voices), voicei + 1):
                 staff.voices.append(GridVoice())
 
-        voice: GridVoice = staff.voices[voicei]
+        voice: t.Optional[GridVoice] = staff.voices[voicei]
+        if t.TYPE_CHECKING:
+            # because we just filled staff.voices[voicei] in with a GridVoice if necessary
+            assert isinstance(voice, GridVoice)
 
         # Ok, finally do what you came to do...
         voice.token = tok
@@ -312,14 +315,14 @@ class GridSlice:
     '''
     def transferTokens(self, outFile: HumdrumFile, recip: bool):
         line: HumdrumLine = HumdrumLine()
-        voice: GridVoice
+        voice: t.Optional[GridVoice]
         emptyStr: str = '.'
 
         if self.isMeasureSlice:
             if len(self.parts) > 0:
                 if len(self.parts[0].staves[0].voices) > 0:
                     voice = self.parts[0].staves[0].voices[0]
-                    if voice.token is not None:
+                    if voice is not None and voice.token is not None:
                         emptyStr = voice.token.text
                     else:
                         emptyStr = '=YYYYYY'
@@ -341,9 +344,9 @@ class GridSlice:
                 token = HumdrumToken('*')
                 emptyStr = '*'
             elif self.isMeasureSlice:
-                if len(self.parts[0].staves[0]) > 0:
+                if len(self.parts[0].staves[0].voices) > 0:
                     voice = self.parts[0].staves[0].voices[0]
-                    if voice.token is not None:
+                    if voice is not None and voice.token is not None:
                         token = HumdrumToken(voice.token.text)
                     else:
                         token = HumdrumToken('=XXXXX')

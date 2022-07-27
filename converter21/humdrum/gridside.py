@@ -28,7 +28,8 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class GridSide:
     def __init__(self):
-        self._verses: t.List[HumdrumToken] = []  # there may be >1 verse of lyrics for a note
+        # there may be >1 verse of lyrics for a note
+        self._verses: t.List[t.Optional[HumdrumToken]] = []
         self._harmony: t.Optional[HumdrumToken] = None
         self._xmlId: t.Optional[HumdrumToken] = None
         self._dynamics: t.Optional[HumdrumToken] = None
@@ -41,7 +42,8 @@ class GridSide:
         if self.verseCount > 0:
             outstr += 'verse:'
             for i, verse in enumerate(self._verses):
-                outstr += verse.text
+                if verse is not None:
+                    outstr += verse.text
                 if i < self.verseCount:
                     outstr += '; '
         if self.dynamicsCount > 0:
@@ -60,7 +62,7 @@ class GridSide:
             return self._verses[index]
         return None
 
-    def setVerse(self, index: int, token: t.Union[HumdrumToken, str]):
+    def setVerse(self, index: int, token: t.Optional[t.Union[HumdrumToken, str]]):
         if isinstance(token, str):
             # make it into a proper token
             token = HumdrumToken(token)

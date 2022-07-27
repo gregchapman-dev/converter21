@@ -799,11 +799,14 @@ class HumdrumLine(HumHash):
         we'll call opFrac, so we actually support int, float, or Fraction here. But we
         always return HumNum (a.k.a. float or Fraction).
     '''
-    def beat(self, beatDuration: t.Union[str, Fraction] = Fraction(1, 4)) -> HumNum:
+    def beat(self, beatDuration: t.Union[str, HumNumIn] = Fraction(1, 4)) -> HumNum:
         if isinstance(beatDuration, str):  # recip format string, e.g. '4' means 1/4
             beatDuration = Convert.recipToDuration(beatDuration)
         else:
             beatDuration = opFrac(beatDuration)
+
+        if t.TYPE_CHECKING:
+            assert isinstance(beatDuration, (float, Fraction))
 
         if beatDuration == 0:
             # avoid divide by 0, just return beatInMeasure = 0

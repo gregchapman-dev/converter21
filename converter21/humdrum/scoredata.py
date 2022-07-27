@@ -21,13 +21,13 @@ from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import EventData
 from converter21.humdrum import PartData
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 # TODO: pass StaffGroup into PartData() so we have another source of partName/partAbbrev
@@ -81,12 +81,12 @@ class ScoreData:
         groupedParts: t.List[m21.stream.PartStaff] = []
         for jg in joinableGroups:
             partsWithMoreThanOneStaff.append([])
-            for partStaff in jg: # we know they are all PartStaffs
+            for partStaff in jg:
                 partsWithMoreThanOneStaff[-1].append(partStaff)
                 groupedParts.append(partStaff)
 
         scorePartsStillToProcess = list(score.parts)
-        for part in score.parts: # includes PartStaffs, too
+        for part in score.parts:  # includes PartStaffs, too
             if part not in scorePartsStillToProcess:
                 # we already processed this due to a staff group
                 continue
@@ -98,7 +98,7 @@ class ScoreData:
                         partOfStavesData: PartData = PartData(partStaffList, self, len(self.parts))
                         self.parts.append(partOfStavesData)
                         for ps in partStaffList:
-                            scorePartsStillToProcess.remove(ps) # so we don't double process
+                            scorePartsStillToProcess.remove(ps)  # so we don't double process
                         break
             else:
                 # make a new partData entry for the Part (one staff which is the part)

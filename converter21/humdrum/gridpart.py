@@ -13,6 +13,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
 
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridSide
