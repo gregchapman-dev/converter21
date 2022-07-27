@@ -9,7 +9,7 @@
 # Copyright:     (c) 2021-2022 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-
+#
 import argparse
 import os
 import sys
@@ -24,7 +24,7 @@ def getInputFormatsList() -> t.List[str]:
     inList = c.subconvertersList('input')
     result = []
     for subc in inList:
-        if subc.registerInputExtensions: # if this subc supports input at all
+        if subc.registerInputExtensions:  # if this subc supports input at all
             for form in subc.registerFormats:
                 result.append(form)
     return result
@@ -43,12 +43,12 @@ def getOutputFormatsList() -> t.List[str]:
     outList = c.subconvertersList('output')
     result = []
     for subc in outList:
-        if subc.registerOutputExtensions: # if this subc supports output at all
+        if subc.registerOutputExtensions:  # if this subc supports output at all
             for form in subc.registerFormats:
                 result.append(form)
     return result
 
-def printSupportedFormats(whichList: str): # whichList should be 'input' or 'output'
+def printSupportedFormats(whichList: str):  # whichList should be 'input' or 'output'
     c = converter.Converter()
     if whichList == 'input':
         inList = c.subconvertersList('input')
@@ -87,6 +87,7 @@ def getOutputExtensionsListForFormat(form: str) -> t.List[str]:
                     result.append('.' + outputExt)
     return result
 
+
 # ------------------------------------------------------------------------------
 
 # main entry point (parse arguments and do conversion)
@@ -96,11 +97,11 @@ if __name__ == "__main__":
     converter.registerSubconverter(HumdrumConverter)
 
     parser = argparse.ArgumentParser(
-                prog='python3 -m converter21',
-                description='Music score file format converter')
+        prog='python3 -m converter21',
+        description='Music score file format converter'
+    )
     parser.add_argument('input_file',
-                        help=
-    'input music file to convert from (extension is used to determine '
+                        help='input music file to convert from (extension is used to determine '
                             + 'input format if --input-from/-f is not specified)')
     parser.add_argument('output_file',
                         help='output music file to convert to (extension is NOT used to '
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     s = converter.parse(
         args.input_file,
         format=args.input_from,
-        forceSource = not args.cached_parse_ok
+        forceSource=not args.cached_parse_ok
     )
 
     # check validity of outputFormat

@@ -20,23 +20,26 @@ import music21 as m21
 from converter21.humdrum import MeasureData
 from converter21.humdrum import M21Utilities
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class StaffData:
-    def __init__(self, partStaff: m21.stream.Part, # could be PartStaff, which is derived from Part
-                       ownerPart,
-                       staffIndex: int):
+    def __init__(
+            self,
+            partStaff: m21.stream.Part,  # could be PartStaff (derived from Part)
+            ownerPart,                   # PartData
+            staffIndex: int
+    ):
         from converter21.humdrum import PartData
         self.ownerPart: PartData = ownerPart
         self.m21PartStaff: m21.stream.Part = partStaff
-        self.spannerBundle = ownerPart.spannerBundle # inherited from ownerScore, ultimately
+        self.spannerBundle = ownerPart.spannerBundle  # inherited from ownerScore, ultimately
         self._transposeWrittenToSounding(partStaff)
         self._staffIndex: int = staffIndex
         self._hasDynamics: bool = False
@@ -54,11 +57,11 @@ class StaffData:
         # Transpose any transposing instrument parts to "sounding pitch" (a.k.a. concert pitch).
         # For performance, check the instruments here, since stream.toSoundingPitch
         # can be expensive, even if there is no transposing instrument.
-        if partStaff and partStaff.atSoundingPitch is False: # might be 'unknown' or True
+        if partStaff and partStaff.atSoundingPitch is False:  # might be 'unknown' or True
             for inst in partStaff.getElementsByClass(m21.instrument.Instrument):
                 if M21Utilities.isTransposingInstrument(inst):
                     partStaff.toSoundingPitch(inPlace=True)
-                    break # you only need to transpose the part once
+                    break  # you only need to transpose the part once
 
     @property
     def measureCount(self) -> int:

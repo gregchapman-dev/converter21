@@ -44,7 +44,7 @@ class ToolTremolo:
             if not self.infile.isValid:
                 return
 
-        for _ in range(0, self.infile.maxTrack+1):
+        for _ in range(0, self.infile.maxTrack + 1):
             self.firstTremoloLinesInTrack.append([])
             self.lastTremoloLinesInTrack.append([])
 
@@ -65,7 +65,7 @@ class ToolTremolo:
                 if not m:
                     continue
 
-                self.markupTokens.insert(0, token) # markupTokens is in forward order
+                self.markupTokens.insert(0, token)  # markupTokens is in forward order
 
                 value: int = int(m.group(1))
                 duration: HumNum = Convert.recipToDuration(token.text)
@@ -105,7 +105,7 @@ class ToolTremolo:
 
     def notesFoundInTrackBetweenLineIndices(self, track: int, startIdx: int, endIdx: int) -> bool:
         # Check every line between startIdx and endIdx, NOT inclusive at either end
-        for i in range(startIdx+1, endIdx):
+        for i in range(startIdx + 1, endIdx):
             line: t.Optional[HumdrumLine] = self.infile[i]
             if line is None:
                 continue
@@ -126,8 +126,8 @@ class ToolTremolo:
         # Or even a stop and then a start with no actual notes between them.
         # So we first "optimize" this.
         for track, (firstLines, lastLines) in enumerate(zip(
-                                                self.firstTremoloLinesInTrack,
-                                                self.lastTremoloLinesInTrack)):
+                self.firstTremoloLinesInTrack,
+                self.lastTremoloLinesInTrack)):
             lastLineRemovalIndices: t.List[int] = []
             firstLineRemovalIndices: t.List[int] = []
             currLastLineIndex: int = None
@@ -141,7 +141,7 @@ class ToolTremolo:
                 if prevLastLineIndex is not None:
                     if not self.notesFoundInTrackBetweenLineIndices(
                             track, prevLastLineIndex, currFirstLineIndex):
-                        lastLineRemovalIndices.append(idx-1)
+                        lastLineRemovalIndices.append(idx - 1)
                         firstLineRemovalIndices.append(idx)
 
             for lineIndexToRemove in reversed(lastLineRemovalIndices):
@@ -152,7 +152,8 @@ class ToolTremolo:
 
         # Insert starting *tremolo(s)
         for track, firstLines in enumerate(self.firstTremoloLinesInTrack):
-            if not firstLines: # no first times in this track
+            if not firstLines:
+                # no first times in this track
                 continue
 
             for firstLine in firstLines:
@@ -160,7 +161,8 @@ class ToolTremolo:
                     continue
 
                 line: HumdrumLine = self.infile.insertNullInterpretationLineAt(
-                                                            firstLine.lineIndex)
+                    firstLine.lineIndex
+                )
                 if line is None:
                     continue
 
@@ -183,7 +185,8 @@ class ToolTremolo:
                     continue
 
                 line: HumdrumLine = self.infile.insertNullInterpretationLineAt(
-                                                            lastLine.lineIndex+1)
+                    lastLine.lineIndex + 1
+                )
                 if line is None:
                     continue
 
@@ -207,8 +210,8 @@ class ToolTremolo:
             token: HumdrumToken = self.markupTokens[i]
             if '@@' in token.text:
                 token2: t.Optional[HumdrumToken] = None
-                if i+1 < len(self.markupTokens):
-                    token2 = self.markupTokens[i+1]
+                if i + 1 < len(self.markupTokens):
+                    token2 = self.markupTokens[i + 1]
                 if token2 is not None:
                     self.expandFingerTremolo(token, token2)
                 i += 2

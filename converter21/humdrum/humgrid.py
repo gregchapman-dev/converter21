@@ -21,9 +21,7 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 
 from converter21.humdrum import SliceType
-#from converter21.humdrum import MeasureStyle
 from converter21.humdrum import GridVoice
-#from converter21.humdrum import GridSide
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridPart
 from converter21.humdrum import GridSlice
@@ -33,38 +31,38 @@ from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumFile
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class HumGrid:
     def __init__(self):
-        self.measures: [GridMeasure] = []
-        self._allSlices: [GridSlice] = []
+        self.measures: t.List[GridMeasure] = []
+        self._allSlices: t.List[GridSlice] = []
 
         # indexed by part (max = 100 parts)
-        self._verseCount: [[int]] = []
+        self._verseCount: t.List[t.List[int]] = []
         for _ in range(0, 100):
             self._verseCount.append([])
-        self._harmonyCount: [int] = [0] * 100
-        self._xmlIds: [bool] = [False] * 100
-        self._figuredBass: [bool] = [False] * 100
-        self._harmony: [bool] = [False] * 100
-        self._partNames: [str] = [] # grows as necessary
+        self._harmonyCount: t.List[int] = [0] * 100
+        self._xmlIds: t.List[bool] = [False] * 100
+        self._figuredBass: t.List[bool] = [False] * 100
+        self._harmony: t.List[bool] = [False] * 100
+        self._partNames: t.List[str] = []  # grows as necessary
 
         # indexed by part,staff (max == 100 parts, max = 4 staves per part)
-        self._dynamics: [[bool]] = []
+        self._dynamics: t.List[t.List[bool]] = []
         for _ in range(0, 100):
             self._dynamics.append([False] * 4)
 
         # options:
         self._pickup: bool = False
-        self._recip: bool = False # include **recip spine in output
+        self._recip: bool = False  # include **recip spine in output
 
     def __str__(self):
         output = 'GRID:'
@@ -209,7 +207,7 @@ class HumGrid:
     def dynamicsCount(self, partIndex: int, staffIndex) -> int:
         if 0 <= partIndex < len(self._dynamics):
             if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                return int(self._dynamics[partIndex][staffIndex]) # cast bool to int (0 or 1)
+                return int(self._dynamics[partIndex][staffIndex])  # cast bool to int (0 or 1)
         return 0
 
 
@@ -230,7 +228,7 @@ class HumGrid:
     '''
     def figuredBassCount(self, partIndex: int) -> int:
         if 0 <= partIndex < len(self._figuredBass):
-            return int(self._figuredBass[partIndex]) # cast bool to int (0 or 1)
+            return int(self._figuredBass[partIndex])  # cast bool to int (0 or 1)
         return 0
 
     def hasHarmony(self, partIndex: int) -> bool:
@@ -293,17 +291,17 @@ class HumGrid:
     '''
     def reportVerseCount(self, partIndex: int, staffIndex: int, newCount: int):
         if newCount <= 0:
-            return # won't be bigger than max so far
+            return  # won't be bigger than max so far
 
         staffNumber: int = staffIndex + 1
         partSize = len(self._verseCount)
         if partIndex >= partSize:
-            for _ in range(partSize, partIndex+1):
+            for _ in range(partSize, partIndex + 1):
                 self._verseCount.append([])
 
         staffCount = len(self._verseCount[partIndex])
         if staffNumber >= staffCount:
-            for _ in range(staffCount, staffNumber+1):
+            for _ in range(staffCount, staffNumber + 1):
                 self._verseCount[partIndex].append(0)
 
         if newCount > self._verseCount[partIndex][staffNumber]:
@@ -340,11 +338,11 @@ class HumGrid:
         self.expandLocalCommentLayers()
         self.calculateGridDurations()
         # move clefs from start of measure to end of prev measure (skip the first measure)
-#        self.adjustClefChanges() # Don't do that. Humdrum don't care.
+#         self.adjustClefChanges() # Don't do that. Humdrum don't care.
         self.addNullTokens()
 #         self.addInvisibleRestsInFirstTrack() what the heck is this for? It's doing bad stuff.
         self.addMeasureLines()
-        self.buildSingleList() # is this needed a second time?
+        self.buildSingleList()  # is this needed a second time?
         self.cleanTempos()
         self.addLastBarline()
         if self.manipulatorCheck():
@@ -467,8 +465,8 @@ class HumGrid:
             return
 
         tokenDur: HumNum = Convert.recipToDuration(token.text)
-        currTs: HumNum   = thisSlice.timestamp
-        nextTs: HumNum   = nextSlice.timestamp
+        currTs: HumNum = thisSlice.timestamp
+        nextTs: HumNum = nextSlice.timestamp
         sliceDur: HumNum = opFrac(nextTs - currTs)
         timeLeft: HumNum = opFrac(tokenDur - sliceDur)
 
@@ -532,13 +530,13 @@ class HumGrid:
                 elif sSlice.isDataSlice:
                     # if there is already a non-null token here, don't overwrite it,
                     # raise an exception instead.  This should not happen.
-                    if (voicei < len(gs.voices) and
-                            gs.voices[voicei] is not None and
-                            gs.voices[voicei].token is not None and
-                            gs.voices[voicei].token.text != '.'):
+                    if (voicei < len(gs.voices)
+                            and gs.voices[voicei] is not None
+                            and gs.voices[voicei].token is not None
+                            and gs.voices[voicei].token.text != '.'):
                         raise HumdrumInternalError(
                             f'Note ({token.text}) duration overlaps next note '
-                                + f'in voice ({gs.voices[voicei].token.text})'
+                            + f'in voice ({gs.voices[voicei].token.text})'
                         )
                     gs.setNullTokenLayer(voicei, sliceType, sliceDur)
                     timeLeft = opFrac(timeLeft - sliceDur)
@@ -604,7 +602,7 @@ class HumGrid:
             lastNote: t.Optional[GridSlice] = None
             nextNote: t.Optional[GridSlice] = None
 
-            for j in range(i+1, len(self._allSlices)):
+            for j in range(i + 1, len(self._allSlices)):
                 if self._allSlices[j].isNoteSlice:
                     nextNote = self._allSlices[j]
                     break
@@ -612,7 +610,7 @@ class HumGrid:
             if nextNote is None:
                 continue
 
-            for j in reversed(range(0, i)): # starts at i-1, ends at 0
+            for j in reversed(range(0, i)):  # starts at i-1, ends at 0
                 if self._allSlices[j].isNoteSlice:
                     lastNote = self._allSlices[j]
                     break
@@ -641,8 +639,8 @@ class HumGrid:
 
         for p, part in enumerate(theSlice.parts):
             for s, staff in enumerate(part.staves):
-                lastCount:  int = len(lastSpined.parts[p].staves[s].voices)
-                nextCount:  int = len(nextSpined.parts[p].staves[s].voices)
+                lastCount: int = len(lastSpined.parts[p].staves[s].voices)
+                nextCount: int = len(nextSpined.parts[p].staves[s].voices)
                 thisCount: int = len(theSlice.parts[p].staves[s].voices)
 
                 lastCount = max(lastCount, 1)
@@ -760,7 +758,7 @@ class HumGrid:
                         # for the next non-null voice in the current part/staff/voice
                         duration: HumNum = gridSlice.duration
 
-                        for q in range(i+1, len(self._allSlices)):
+                        for q in range(i + 1, len(self._allSlices)):
                             slicep: GridSlice = self._allSlices[q]
                             if not slicep.isNoteSlice:
                                 # or isDataSlice?
@@ -799,7 +797,7 @@ class HumGrid:
     //    fill in with invisible rests.
     '''
     def addInvisibleRestsInFirstTrack(self):
-        nextEvent: [[GridSlice]] = []
+        nextEvent: t.List[t.List[GridSlice]] = []
         lastSlice: GridSlice = self._allSlices[-1]
         self.setPartStaffDimensions(nextEvent, lastSlice)
 
@@ -900,7 +898,7 @@ class HumGrid:
         kern: str = Convert.durationToRecip(gap)
         kern += 'ryy'
 
-        for i in range(sliceIndex+1, len(self._allSlices)):
+        for i in range(sliceIndex + 1, len(self._allSlices)):
             gridSlice: GridSlice = self._allSlices[i]
             if not gridSlice.isNoteSlice:
                 continue
@@ -949,7 +947,7 @@ class HumGrid:
             prevMeasure: GridMeasure = None
             prevLastSpined: GridSlice = None
             if m > 0:
-                prevMeasure = self.measures[m-1]
+                prevMeasure = self.measures[m - 1]
                 if len(prevMeasure.slices) > 0:
                     prevLastSpined = prevMeasure.lastSpinedSlice()
 
@@ -960,7 +958,7 @@ class HumGrid:
                 continue
 
             mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
-            measure.slices.insert(0, mslice) # barline is first slice in measure
+            measure.slices.insert(0, mslice)  # barline is first slice in measure
 
             partCount: int = len(firstSpined.parts)
             staffIndex: int = 0
@@ -979,7 +977,7 @@ class HumGrid:
                     # the manipulator(s) should be inserted on the "more" side
                     # of the barline.
                     voiceCount: int = len(firstSpined.parts[p].staves[s].voices)
-                    prevVoiceCount: int = 1 # default, if there is no previous measure
+                    prevVoiceCount: int = 1  # default, if there is no previous measure
                     if prevLastSpined is not None:
                         prevVoiceCount = len(prevLastSpined.parts[p].staves[s].voices)
 
@@ -1071,9 +1069,9 @@ class HumGrid:
 #         if mcount == 0:
 #             return []
 #
-#         output: [int] = [None] * mcount
-#         mdur: [HumNum] = [None] * mcount  # actual measure duration
-#         tsdur: [HumNum] = [None] * mcount # time signature duration
+#         output: t.List[int] = [None] * mcount
+#         mdur: t.List[HumNum] = [None] * mcount  # actual measure duration
+#         tsdur: t.List[HumNum] = [None] * mcount # time signature duration
 #
 #         for m, measure in enumerate(self.measures):
 #             mdur[m]  = measure.duration
@@ -1123,14 +1121,16 @@ class HumGrid:
     def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str:
         output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.measureStyle)
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
-                            measure.fermataStyle(staffIndex))
+            measure.fermataStyle(staffIndex)
+        )
         return output
 
     @staticmethod
     def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str:
         output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.rightBarlineStyle)
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
-                            measure.rightBarlineFermataStyle(staffIndex))
+            measure.rightBarlineFermataStyle(staffIndex)
+        )
         return output
 
     '''
@@ -1201,8 +1201,8 @@ class HumGrid:
                     continue
 
                 output = True
-                measure.slices.insert(i+1, manipulator)
-                i += 2 # skip over the new manipulator line (expand it later)
+                measure.slices.insert(i + 1, manipulator)
+                i += 2  # skip over the new manipulator line (expand it later)
 
         return output
 
@@ -1213,7 +1213,7 @@ class HumGrid:
     '''
     def getNextSpinedLine(self, slicei: int, measurei: int) -> t.Optional[GridSlice]:
         measure: GridMeasure = self.measures[measurei]
-        nextOne: int = slicei+1
+        nextOne: int = slicei + 1
 
         while nextOne != len(measure.slices):
             if measure.slices[nextOne].hasSpines:
@@ -1335,7 +1335,7 @@ class HumGrid:
                             mstaff.voices.append(voice)
                     elif v1Count > 0 and grow > 2 * v1Count:
                         # too large to split all at the same time, deal with later
-                        for _ in range(0, v1Count-1):
+                        for _ in range(0, v1Count - 1):
                             token = self.createHumdrumToken('*^', p, s)
                             voice = GridVoice(token, 0)
                             mstaff.voices.append(voice)
@@ -1356,7 +1356,7 @@ class HumGrid:
                             mstaff.voices.append(voice)
 
                         if doubled > 1:
-                            token = self.createHumdrumToken('*^' + str(doubled+1), p, s)
+                            token = self.createHumdrumToken('*^' + str(doubled + 1), p, s)
                         else:
                             token = self.createHumdrumToken('*^', p, s)
                         voice = GridVoice(token, 0)
@@ -1416,9 +1416,9 @@ class HumGrid:
 
                 # check to see if manipulator needs to be split into
                 # multiple lines.
-                newSlices: [GridSlice] = self.cleanManipulator(currSlice)
+                newSlices: t.List[GridSlice] = self.cleanManipulator(currSlice)
                 if newSlices:
-                    #BUGFIX reversed loop because insert(i) reverses
+                    # BUGFIX: reversed loop because insert(i) reverses
                     for newSlice in reversed(newSlices):
                         measure.slices.insert(i, newSlice)
                 i += 1
@@ -1477,7 +1477,7 @@ class HumGrid:
             _staffIndex: int
     ) -> GridVoice:
         token: str = tok
-        #token += ':' + _post + ':' + str(_partIndex) + ',' + str(_staffIndex)
+        # token += ':' + _post + ':' + str(_partIndex) + ',' + str(_staffIndex)
         gv: GridVoice = GridVoice(token, 0)
         return gv
 
@@ -1557,7 +1557,7 @@ class HumGrid:
         # and we have to do the iteration by hand to have that kind
         # of control.
         cv: int = 0
-        for _ in range(0, len(curStaff.voices)): # loops over original range
+        for _ in range(0, len(curStaff.voices)):  # loops over original range
             curVoice: GridVoice = curStaff.voices[cv]
             if curVoice.token is not None and curVoice.token.text.startswith('*^'):
                 if len(curVoice.token.text) > 2 and curVoice.token.text[2].isdigit():
@@ -1573,12 +1573,12 @@ class HumGrid:
                     newStaff.voices.append(curVoice)
                     curVoice.token.text = '*^'
                     newVoice: GridVoice = self.createVoice('*', 'B', 0, p, s)
-                    curStaff.voices[cv] = newVoice # replace curVoice with newVoice
+                    curStaff.voices[cv] = newVoice  # replace curVoice with newVoice
                     if count <= 3:
                         newVoice = GridVoice('*^', 0)
                     else:
-                        newVoice = GridVoice('*^' + str(count-1), 0)
-                    curStaff.voices.insert(cv+1, newVoice)
+                        newVoice = GridVoice('*^' + str(count - 1), 0)
+                    curStaff.voices.insert(cv + 1, newVoice)
                     cv += 1
                 else:
                     # transfer *^ to newmanip and replace with two * in curr
@@ -1643,9 +1643,9 @@ class HumGrid:
         lasts: int = 0
         partSplit: int = -1
 
-        for p in range(len(currSlice.parts)-1, -1, -1):
+        for p in range(len(currSlice.parts) - 1, -1, -1):
             part = currSlice.parts[p]
-            for s in range(len(part.staves)-1, -1, -1):
+            for s in range(len(part.staves) - 1, -1, -1):
                 staff = part.staves[s]
                 voice = staff.voices[-1]
                 newStaff: GridStaff = newManip.parts[p].staves[s]
@@ -1837,12 +1837,12 @@ class HumGrid:
             text: str = '*'
             pname: str = self._partNames[p]
             if pname:
-                text += 'I"' + pname # *I" is humdrum's instrument name interp
+                text += 'I"' + pname  # *I" is humdrum's instrument name interp
             for s in range(0, len(part.staves)):
                 line.appendToken(HumdrumToken(text))
-                self.insertSideNullInterpretations(line, p, s) # insert staff sides
-            self.insertSideNullInterpretations(line, p, -1) # insert part sides
-        outFile.insertLine(0, line) # insert at line 0
+                self.insertSideNullInterpretations(line, p, s)  # insert staff sides
+            self.insertSideNullInterpretations(line, p, -1)  # insert part sides
+        outFile.insertLine(0, line)  # insert at line 0
 
     '''
     //////////////////////////////
@@ -1858,7 +1858,7 @@ class HumGrid:
                 line.appendToken(HumdrumToken('*'))
         else:
             # staff side info
-            for _ in range(0, self.xmlIdCount(p)): # xmlIdCount is always 0 or 1, but...
+            for _ in range(0, self.xmlIdCount(p)):  # xmlIdCount is always 0 or 1, but...
                 line.appendToken(HumdrumToken('*'))
             if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken('*'))
@@ -1894,12 +1894,12 @@ class HumGrid:
         for p in reversed(range(0, len(gridSlice.parts))):
             part = gridSlice.parts[p]
             for s in reversed(range(0, len(part.staves))):
-                text:str = '*staff' + str(staffCount)
+                text: str = '*staff' + str(staffCount)
                 line.appendToken(HumdrumToken(text))
-                self.insertSideStaffInfo(line, p, s, staffCount) # insert staff sides
+                self.insertSideStaffInfo(line, p, s, staffCount)  # insert staff sides
                 staffCount -= 1
-            self.insertSideStaffInfo(line, p, -1, -1) # insert part sides
-        outFile.insertLine(0, line) # insert at line 0
+            self.insertSideStaffInfo(line, p, -1, -1)  # insert part sides
+        outFile.insertLine(0, line)  # insert at line 0
 
     '''
     //////////////////////////////
@@ -1948,12 +1948,12 @@ class HumGrid:
         gridSlice: GridSlice = self.measures[0].slices[0]
         for p in reversed(range(0, len(gridSlice.parts))):
             part: GridPart = gridSlice.parts[p]
-            text: str = '*part' + str(p+1)
+            text: str = '*part' + str(p + 1)
             for s in reversed(range(0, len(part.staves))):
                 line.appendToken(HumdrumToken(text))
-                self.insertSidePartInfo(line, p, s) # insert staff sides
-            self.insertSidePartInfo(line, p, -1) # insert part sides
-        outFile.insertLine(0, line) # insert at line 0
+                self.insertSidePartInfo(line, p, s)  # insert staff sides
+            self.insertSidePartInfo(line, p, -1)  # insert part sides
+        outFile.insertLine(0, line)  # insert at line 0
 
     '''
     //////////////////////////////
@@ -1961,7 +1961,7 @@ class HumGrid:
     // HumGrid::insertSidePartInfo --
     '''
     def insertSidePartInfo(self, line: HumdrumLine, p: int, s: int):
-        text: str = '*part' + str(p+1)
+        text: str = '*part' + str(p + 1)
         if s < 0:
             # part side info
             if self.hasFiguredBass(p):
@@ -2000,9 +2000,9 @@ class HumGrid:
             part: GridPart = gridSlice.parts[p]
             for s in reversed(range(0, len(part.staves))):
                 line.appendToken(HumdrumToken(interp))
-                self.insertExInterpSides(line, p, s) # insert staff sides
-            self.insertExInterpSides(line, p, -1) # insert part sides
-        outFile.insertLine(0, line) # insert at line 0
+                self.insertExInterpSides(line, p, s)  # insert staff sides
+            self.insertExInterpSides(line, p, -1)  # insert part sides
+        outFile.insertLine(0, line)  # insert at line 0
 
     '''
     //////////////////////////////
@@ -2048,8 +2048,8 @@ class HumGrid:
         for p, part in enumerate(gridSlice.parts):
             for s in range(0, len(part.staves)):
                 line.appendToken(HumdrumToken('*-'))
-                self.insertSideTerminals(line, p, s) # insert staff sides
-            self.insertSideTerminals(line, p, -1) # insert part sides
+                self.insertSideTerminals(line, p, s)  # insert staff sides
+            self.insertSideTerminals(line, p, -1)  # insert part sides
         outFile.appendLine(line)
 
     '''
@@ -2081,7 +2081,7 @@ class HumGrid:
     //		the meter signature.
     def removeRedundantClefChanges(self):
         # curClef is a list of the current staff on the part:staff.
-        curClef: [[str]] = []
+        curClef: t.List[t.List[str]] = []
         hasDuplicate: bool = False
         for measure in self.measures:
             for clefSlice in measure.slices:
@@ -2218,7 +2218,7 @@ class HumGrid:
 
         if partIndex < 100:
             # grow the array and then store name
-            for _ in range(len(self._partNames), partIndex+1):
+            for _ in range(len(self._partNames), partIndex + 1):
                 self._partNames.append('')
             self._partNames[partIndex] = partName
 

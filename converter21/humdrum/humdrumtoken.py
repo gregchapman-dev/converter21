@@ -72,7 +72,8 @@ class FakeRestToken(HumHash):
         self.duration: HumNum = opFrac(duration)
         self.durationFromBarline: HumNum = opFrac(durationFromBarline)
 
-# We use conditionally defined attributes to implement property caching, so make pylint shut up about it
+# We use conditionally defined attributes to implement property caching, so make pylint shut up
+# about it
 # pylint: disable=attribute-defined-outside-init
 
 class HumdrumToken(HumHash):
@@ -553,7 +554,8 @@ class HumdrumToken(HumHash):
     '''
     @property
     def track(self) -> int:
-        return self._address.trackNum # trackNum is a data member, cheaper than using the track property
+        # trackNum is a data member; cheaper than using the track property
+        return self._address.trackNum
 
     @track.setter
     def track(self, track: int):
@@ -706,7 +708,7 @@ class HumdrumToken(HumHash):
     //////////////////////////////
     //
     // HumdrumToken::getPreviousFieldToken --
-        This returns the token representing the previous field in the ownerLine of this token --gregc
+        This returns the token representing the previous field in the ownerLine of this token
     '''
     @property
     def previousFieldToken(self) -> t.Optional['HumdrumToken']:
@@ -817,9 +819,9 @@ class HumdrumToken(HumHash):
     //    in the HumdrumFileStructure class.
     '''
     def scaledDuration(self, scale: HumNumIn) -> HumNum:
-        return opFrac(self.duration * opFrac(scale)) # self.duration will trigger rhythm analysis if necessary
+        # self.duration will trigger rhythm analysis if necessary
+        return opFrac(self.duration * opFrac(scale))
 
-    ''' duration property for unscaled getDuration --gregc '''
     @property
     def duration(self) -> HumNum:
         if not self._rhythmAnalyzed:
@@ -829,7 +831,7 @@ class HumdrumToken(HumHash):
 
     @duration.setter
     def duration(self, newDuration: HumNumIn):
-        self._rhythmAnalyzed = True # bugfix, although current clients probably won't care --gregc
+        self._rhythmAnalyzed = True
         self._duration = opFrac(newDuration)
 
     @property
@@ -1089,7 +1091,7 @@ class HumdrumToken(HumHash):
     def partNum(self) -> int:
         if not self.isPart:
             return -1
-        m = re.match(r'^\*part(\d+).*$', self.text) # ignore any trailing characters after the number
+        m = re.match(r'^\*part(\d+).*$', self.text) # ignore characters after the number
         if m is None:
             return -1
         return int(m.group(1))
@@ -1108,7 +1110,7 @@ class HumdrumToken(HumHash):
     def groupNum(self) -> int:
         if not self.isGroup:
             return -1
-        m = re.match(r'^\*group(\d+).*$', self.text) # ignore any trailing characters after the number
+        m = re.match(r'^\*group(\d+).*$', self.text) # ignore characters after the number
         if m is None:
             return -1
         return int(m.group(1))
@@ -1154,7 +1156,8 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isRest(self) -> bool:
-        # assumption: isRest will only be called after self.nullResolution has been set once and for all
+        # assumption: isRest will only be called after self.nullResolution has been
+        # set once and for all
         try:
             return self._isRestCached
         except AttributeError:
@@ -1163,7 +1166,10 @@ class HumdrumToken(HumHash):
                 tokenText = self.nullResolution.text
 
             self._isRestCached: bool = False
-            if self.isData: # BUGFIX: Without this "if", isRest('**kern') returns True (there's an 'r')
+
+            # BUGFIX: Without this "if self.isData", isRest('**kern') will return True
+            # BUGFIX: (there's an 'r')
+            if self.isData:
                 if self.isKern:
                     self._isRestCached = Convert.isKernRest(tokenText)
                 elif self.isMens:
@@ -1201,8 +1207,6 @@ class HumdrumToken(HumHash):
     //////////////////////////////
     //
     // HumdrumToken::isPitched -- True if not a rest or an unpitched note.
-        Q: Looks like isPitched assumes this is a note-ish thing without checking --gregc
-        Q: isPitched doesn't handle **mens. Why? --gregc
     '''
     @property
     def isPitched(self) -> bool:
@@ -2902,7 +2906,8 @@ class HumdrumToken(HumHash):
     def getVisualDuration(self, subtokenIdx: int = -1) -> str:
         visDurStr = self.layoutParameter('N', 'vis', subtokenIdx)
         # if visDurStr:
-        #     print('visualDuration(recip) = {}, origDur(quarterLength) = {}'.format(visDurStr, self.duration), file=sys.stderr)
+        #     print('visualDuration(recip) = {}, origDur(quarterLength) = {}'.format(
+        #               visDurStr, self.duration), file=sys.stderr)
         return visDurStr
 
     '''

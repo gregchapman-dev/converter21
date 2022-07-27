@@ -17,23 +17,23 @@ import sys
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridSide
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridPart:
     def __init__(self):
-        self.staves: [GridStaff] = []
+        self.staves: t.List[GridStaff] = []
         self.sides: GridSide = GridSide()
         self._partName: str = ''
 
     def __str__(self):
-        output:str = ''
+        output: str = ''
         for s, staff in enumerate(self.staves):
             output += '(s' + str(s) + ':)'
             if staff is None:

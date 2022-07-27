@@ -19,7 +19,7 @@ class HumParamSet:
     //
     // HumParamSet::HumParamSet --
     '''
-    def __init__(self, token = None): # token can be HumdrumToken, or str, or None
+    def __init__(self, token=None):  # token: t.Optional[t.Union[HumdrumToken, str]]
         from converter21.humdrum import HumdrumToken
         self._token: HumdrumToken = None
         self._ns1: str = ''
@@ -159,7 +159,7 @@ class HumParamSet:
                 continue
 
             piece.replace('&colon;', ':')
-            nameValueStrings = piece.split('=', 1) # splits only on first instance of '='
+            nameValueStrings = piece.split('=', 1)  # splits only on first instance of '='
             if len(nameValueStrings) == 1:
                 name = nameValueStrings[0]
                 value = "true"

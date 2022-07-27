@@ -25,18 +25,18 @@ from converter21.humdrum import GridVoice
 from converter21.humdrum import GridSide
 
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridStaff():
     def __init__(self):
-        self.voices: [GridVoice] = []
+        self.voices: t.List[GridVoice] = []
         self.sides: GridSide = GridSide()
 
     def __str__(self):
@@ -88,7 +88,7 @@ class GridStaff():
             raise HumdrumInternalError(f'Error: layer index is {layerIndex} for {token}')
 
         if layerIndex > len(self.voices) - 1:
-            for _ in range(len(self.voices), layerIndex + 1): # range includes layerIndex
+            for _ in range(len(self.voices), layerIndex + 1):  # range includes layerIndex
                 self.voices.append(None)
 
         gv: GridVoice = GridVoice(token, duration)
@@ -121,8 +121,8 @@ class GridStaff():
             if (self.voices[layerIndex] is not None
                     and self.voices[layerIndex].token is not None):
                 if self.voices[layerIndex].token.text == nullStr:
-				    # there is already a null data token here, so don't
-				    # replace it.
+                    # there is already a null data token here, so don't
+                    # replace it.
                     return
                 raise HumdrumExportError(
                     f'Warning, existing token: \'{self.voices[layerIndex].token.text}\' where '

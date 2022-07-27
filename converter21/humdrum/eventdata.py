@@ -20,13 +20,13 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
 from converter21.humdrum import M21Utilities
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class EventData:
@@ -39,7 +39,7 @@ class EventData:
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
         self.ownerMeasure: MeasureData = ownerMeasure
-        self.spannerBundle = self.ownerMeasure.spannerBundle # from ownerScore, ultimately
+        self.spannerBundle = self.ownerMeasure.spannerBundle  # from ownerScore, ultimately
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._voiceIndex: int = voiceIndex
@@ -62,7 +62,7 @@ class EventData:
         output: str = self.kernTokenString()
         if output:
             return output
-        return self.m21Object.classes[0] # at least say what type of m21Object it was
+        return self.m21Object.classes[0]  # at least say what type of m21Object it was
 
     def _parseEvent(self, element: m21.base.Music21Object,
                           offsetInScore: t.Optional[HumNumIn],
@@ -93,9 +93,9 @@ class EventData:
         if not isinstance(self.m21Object, m21.dynamics.DynamicWedge):
             return False
         if len(self.m21Object) == 1:
-            return True # one element? this is both a start and a stop
+            return True  # one element? this is both a start and a stop
         if self.duration == 0:
-            return True # starts always have non-zero duration
+            return True  # starts always have non-zero duration
         return False
 
     @property
@@ -103,7 +103,7 @@ class EventData:
         if not isinstance(self.m21Object, m21.dynamics.DynamicWedge):
             return False
         if self.duration == 0:
-            return False # starts always have non-zero duration
+            return False  # starts always have non-zero duration
         return True
 
     @property

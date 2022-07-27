@@ -25,21 +25,21 @@ from converter21.humdrum import Convert
 from converter21.humdrum import M21Utilities
 from converter21.humdrum import M21Convert
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class SimultaneousEvents:
     def __init__(self):
-        self.startTime : HumNum = opFrac(-1) # start time of events
-        self.duration  : HumNum = opFrac(-1) # max duration of events?
-        self.zeroDur   : [EventData] = []    # zero-duration events at this time
-        self.nonZeroDur: [EventData] = []    # non-zero-duration events at this time
+        self.startTime: HumNum = opFrac(-1)      # start time of events
+        self.duration: HumNum = opFrac(-1)       # max duration of events?
+        self.zeroDur: t.List[EventData] = []     # zero-duration events at this time
+        self.nonZeroDur: t.List[EventData] = []  # non-zero-duration events at this time
 
 class MeasureData:
     def __init__(self, measure: m21.stream.Measure,
@@ -49,7 +49,7 @@ class MeasureData:
         from converter21.humdrum import StaffData
         self.m21Measure: m21.stream.Measure = measure
         self.ownerStaff: StaffData = ownerStaff
-        self.spannerBundle = ownerStaff.spannerBundle # inherited from ownerScore, ultimately
+        self.spannerBundle = ownerStaff.spannerBundle  # inherited from ownerScore, ultimately
         self._prevMeasData: t.Optional[MeasureData] = prevMeasData
         self._measureIndex: int = measureIndex
         self._startTime: HumNum = opFrac(-1)
@@ -73,9 +73,9 @@ class MeasureData:
 
         self._measureNumberString: str = ''
         self.events: t.List[EventData] = []
-        self.sortedEvents: t.List[SimultaneousEvents] = [] # public list of startTime-binned events
+        self.sortedEvents: t.List[SimultaneousEvents] = []  # list of startTime-binned events
 
-        self._parseMeasure() # generates _events and then sortedEvents (also barlines)
+        self._parseMeasure()  # generates _events and then sortedEvents (also barlines)
 
     @property
     def measureIndex(self) -> int:
@@ -170,9 +170,11 @@ class MeasureData:
                                                                prevRightMeasureStyle)
         # Extract left and right barline Fermata
         self.leftBarlineFermataStyle = M21Convert.fermataStyleFromM21Barline(
-                                                        self.m21Measure.leftBarline)
+            self.m21Measure.leftBarline
+        )
         self.rightBarlineFermataStyle = M21Convert.fermataStyleFromM21Barline(
-                                                        self.m21Measure.rightBarline)
+            self.m21Measure.rightBarline
+        )
 
         # Grab the previous measure's right barline fermata style (if there is one) and
         # combine it with our left barline fermata style, giving our fermataStyle.
@@ -180,8 +182,9 @@ class MeasureData:
         if self._prevMeasData is not None:
             prevRightBarlineFermataStyle = self._prevMeasData.rightBarlineFermataStyle
         self.fermataStyle = M21Convert.combineTwoFermataStyles(
-                                self.leftBarlineFermataStyle,
-                                prevRightBarlineFermataStyle)
+            self.leftBarlineFermataStyle,
+            prevRightBarlineFermataStyle
+        )
 
         # measure index 0 only: add events for any Instruments found in ownerStaff.m21PartStaff
         if self.measureIndex == 0:
@@ -198,9 +201,9 @@ class MeasureData:
             # first parse the voices...
             for voiceIndex, voice in enumerate(self.m21Measure.voices):
                 emptyStartDuration: HumNum = voice.offset
-                emptyEndDuration: HumNum = opFrac(self.duration -
-                                                    (voice.offset +
-                                                        voice.duration.quarterLength))
+                emptyEndDuration: HumNum = opFrac(
+                    self.duration - (voice.offset + voice.duration.quarterLength)
+                )
                 self._parseEventsIn(voice, voiceIndex, emptyStartDuration, emptyEndDuration)
 
             # ... then parse the non-streams last, so that the ending barline lands after
@@ -268,10 +271,10 @@ class MeasureData:
             assert isinstance(event.m21Object, m21.note.GeneralNote)
         output: t.List[EventData] = []
         wedges: t.List[m21.dynamics.DynamicWedge] = (
-                    M21Utilities.getDynamicWedgesStartedOrStoppedWithGeneralNote(
-                        event.m21Object,
-                        self.spannerBundle)
-                )
+            M21Utilities.getDynamicWedgesStartedOrStoppedWithGeneralNote(
+                event.m21Object,
+                self.spannerBundle)
+        )
         wedge: m21.dynamics.DynamicWedge
         for wedge in wedges:
             ownerScore = self.ownerStaff.ownerPart.ownerScore
@@ -282,8 +285,9 @@ class MeasureData:
             thisEventIsEnd: bool = endNote is event.m21Object
             wedgeStartTime: t.Optional[HumNum] = None
             wedgeDuration: t.Optional[HumNum] = None
-            wedgeEndTime: HumNum = opFrac(endNote.getOffsetInHierarchy(score) +
-                                            endNote.duration.quarterLength)
+            wedgeEndTime: HumNum = opFrac(
+                endNote.getOffsetInHierarchy(score) + endNote.duration.quarterLength
+            )
             if thisEventIsStart:
                 wedgeStartTime = startNote.getOffsetInHierarchy(score)
                 wedgeDuration = opFrac(wedgeEndTime - wedgeStartTime)
@@ -352,7 +356,7 @@ class MeasureData:
     '''
     def _sortEvents(self):
         self.events.sort(key=lambda event: event.startTime)
-        times: [HumNum] = [] # sorted same as self.events (by time)
+        times: t.List[HumNum] = []  # sorted same as self.events (by time)
         for event in self.events:
             # don't add duplicated time entries (like a set)
             if not times or event.startTime != times[-1]:

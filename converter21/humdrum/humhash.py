@@ -40,7 +40,7 @@ def fixupNamespace1Namespace2Key(*ns1ns2key) -> t.Tuple[str, str, str]:
     elif len(ns1ns2key) == 2:
         ns2 = ns1ns2key[0]
         key = ns1ns2key[1]
-    else: # len(ns1ns2key) == 3
+    else:  # len(ns1ns2key) == 3
         ns1 = ns1ns2key[0]
         ns2 = ns1ns2key[1]
         key = ns1ns2key[2]
@@ -64,7 +64,7 @@ def fixupNamespace1Namespace2(
         ns2: str = None
 ) -> t.Tuple[t.Optional[str], t.Optional[str]]:
     if ns1 is None and ns2 is not None:
-        ns1, ns2 = ns2, ns1 # make ns2 be the one that is None, if one of them is
+        ns1, ns2 = ns2, ns1  # make ns2 be the one that is None, if one of them is
 
     if ns1 is not None and ns2 is None:
         # check for a colon in ns1 -> generate ns1, ns2 from ns2 in that case
@@ -76,7 +76,7 @@ def fixupNamespace1Namespace2(
     return (ns1, ns2)
 
 class HumParameter:
-    def __init__(self, value: t.Optional[t.Any], origin = None):  # origin: t.Optional[HumdrumToken]
+    def __init__(self, value: t.Optional[t.Any], origin=None):  # origin: t.Optional[HumdrumToken]
         # value can be of any type (different from humlib, where it's always a string)
         self._value = value
         self._origin = origin
@@ -100,7 +100,7 @@ class HumParameter:
 
 class HumHash:
     def __init__(self):
-        self._parameters: dict = None # {ns1...,{ns2..., {key..., value...}}}
+        self._parameters: dict = None  # {ns1...,{ns2..., {key..., value...}}}
         self._prefix: str = ''
 
     '''
@@ -141,8 +141,8 @@ class HumHash:
         Q: instead, to avoid circular references?
     '''
     def setValue(self, *ns1ns2keyvalue):
-        value = ns1ns2keyvalue[-1] # value is last
-        ns1ns2key = ns1ns2keyvalue[:-1] # ns1ns2key is all but last
+        value = ns1ns2keyvalue[-1]       # value is last
+        ns1ns2key = ns1ns2keyvalue[:-1]  # ns1ns2key is all but last
 
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
@@ -199,7 +199,7 @@ class HumHash:
 
         # pylint: disable=bare-except
         try:
-            return str(value) # can convert from int, HumNum, Fraction, float, str, etc
+            return str(value)  # can convert from int, HumNum, Fraction, float, str, etc
         except:
             return None
         # pylint: enable=bare-except
@@ -213,7 +213,7 @@ class HumHash:
         if isinstance(value, HumdrumToken):
             return value
 
-        return None # can't convert to anything else
+        return None  # can't convert to anything else
 
     def getValueM21Object(self, *ns1ns2key):  # -> t.Optional[Music21Object]:
         from music21 import Music21Object
@@ -224,7 +224,7 @@ class HumHash:
         if isinstance(value, Music21Object):
             return value
 
-        return None # can't convert to anything else
+        return None  # can't convert to anything else
 
     def getValueInt(self, *ns1ns2key) -> int:
         from converter21.humdrum import HumdrumToken
@@ -237,7 +237,7 @@ class HumHash:
 
         # pylint: disable=bare-except
         try:
-            return int(value) # can convert from int, float, HumNum, Fraction, str
+            return int(value)  # can convert from int, float, HumNum, Fraction, str
         except:
             return 0
         # pylint: enable=bare-except
@@ -253,7 +253,7 @@ class HumHash:
 
         # pylint: disable=bare-except
         try:
-            return opFrac(value) # can convert from int, float, Fraction, str
+            return opFrac(value)  # can convert from int, float, Fraction, str
         except:
             return opFrac(0)
         # pylint: enable=bare-except
@@ -269,7 +269,7 @@ class HumHash:
 
         # pylint: disable=bare-except
         try:
-            return float(value) # can convert from int, HumNum, Fraction, str
+            return float(value)  # can convert from int, HumNum, Fraction, str
         except:
             return 0.0
         # pylint: enable=bare-except
@@ -286,7 +286,7 @@ class HumHash:
             return value
 
         if isinstance(value, HumdrumToken):
-            return True # it's not None, so...
+            return True  # it's not None, so...
 
         if isinstance(value, str):
             if value == 'false':
@@ -299,7 +299,7 @@ class HumHash:
         try:
             return int(value) != 0
         except:
-            return True # it's not None, so...
+            return True  # it's not None, so...
         # pylint: enable=bare-except
 
     '''
@@ -329,7 +329,7 @@ class HumHash:
     //   object.  Three string version is N1,NS2,key; two string version is
     //   "",NS2,key; and one argument version is "","",key.
     '''
-    def deleteValue(self,*ns1ns2key):
+    def deleteValue(self, *ns1ns2key):
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
         if self._parameters is None:
@@ -349,7 +349,7 @@ class HumHash:
     //
     // HumHash::setOrigin -- Set the source token for the parameter.
     '''
-    def setOrigin(self, *ns1ns2keyvalue): # origin: HumdrumToken
+    def setOrigin(self, *ns1ns2keyvalue):  # origin: HumdrumToken
         origin = ns1ns2keyvalue[-1]
         ns1ns2key = ns1ns2keyvalue[:-1]
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
@@ -374,7 +374,7 @@ class HumHash:
     // HumHash::getOrigin -- Get the source token for the parameter.
     //    Returns NULL if there is no origin.
     '''
-    def getOrigin(self, *ns1ns2key): # returns HumdrumToken
+    def getOrigin(self, *ns1ns2key):  # returns HumdrumToken
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
         if self._parameters is None:

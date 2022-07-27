@@ -49,7 +49,7 @@ class GridMeasure:
     def __init__(self, ownerGrid):
         from converter21.humdrum import HumGrid
         self._ownerGrid: HumGrid = ownerGrid
-        self.slices: [GridSlice] = []
+        self.slices: t.List[GridSlice] = []
         self._timestamp: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
@@ -638,7 +638,10 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
     # _getIndexedVoice_AppendingIfNecessary appends enough new voices to the list to
     # accommodate voiceIndex, then returns voices[voiceIndex]
     @staticmethod
-    def _getIndexedVoice_AppendingIfNecessary(voices: t.List[GridVoice], voiceIndex: int) -> GridVoice:
+    def _getIndexedVoice_AppendingIfNecessary(
+            voices: t.List[GridVoice],
+            voiceIndex: int
+    ) -> GridVoice:
         additionalVoicesNeeded: int = voiceIndex + 1 - len(voices)
         for _ in range(0, additionalVoicesNeeded):
             voices.append(GridVoice())
@@ -659,7 +662,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
+            for associatedSliceIdx in range(len(self.slices)-1, -1, -1):
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
                     foundIt = True
@@ -718,7 +721,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
+            for associatedSliceIdx in range(len(self.slices)-1, -1, -1):
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
                     foundIt = True
@@ -776,7 +779,7 @@ f'''STRANGE CASE 2 IN GRIDMEASURE::ADDGRACETOKEN
         else:
             # find owning line (associatedSlice)
             foundIt: bool = False
-            for associatedSliceIdx in range(len(self.slices)-1, -1, -1): # loop in reverse index order
+            for associatedSliceIdx in range(len(self.slices)-1, -1, -1):
                 gridSlice: GridSlice = self.slices[associatedSliceIdx]
                 if gridSlice is associatedSlice:
                     foundIt = True

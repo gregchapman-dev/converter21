@@ -139,7 +139,9 @@ class M21Utilities:
         return rest
 
     @staticmethod
-    def getTextExpressionsFromGeneralNote(gnote: m21.note.GeneralNote) -> t.List[m21.expressions.TextExpression]:
+    def getTextExpressionsFromGeneralNote(
+            gnote: m21.note.GeneralNote
+    ) -> t.List[m21.expressions.TextExpression]:
         output: t.List[m21.expressions.TextExpression] = []
         for exp in gnote.expressions:
             if isinstance(exp, m21.expressions.TextExpression):
@@ -154,7 +156,7 @@ class M21Utilities:
     def getAllExpressionsFromGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-        ) -> t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]]:
+    ) -> t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]]:
         expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = []
 
         # start with the expression spanners (TrillExtension and TremoloSpanner)
@@ -174,15 +176,17 @@ class M21Utilities:
         return expressions
 
     @staticmethod
-    def getDynamicWedgesStartedOrStoppedWithGeneralNote(gnote: m21.note.GeneralNote,
-                                                        spannerBundle: m21.spanner.SpannerBundle
-                                                       ) -> t.List[m21.dynamics.DynamicWedge]:
+    def getDynamicWedgesStartedOrStoppedWithGeneralNote(
+            gnote: m21.note.GeneralNote,
+            spannerBundle: m21.spanner.SpannerBundle
+    ) -> t.List[m21.dynamics.DynamicWedge]:
         output: t.List[m21.dynamics.DynamicWedge] = []
         spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
-            if not spanner.isFirst(gnote) and not spanner.isLast(gnote): # not started/stopped with general note, forget it
+            if not spanner.isFirst(gnote) and not spanner.isLast(gnote):
+                # not started/stopped with general note, forget it
                 continue
             if isinstance(spanner, m21.dynamics.DynamicWedge):
                 output.append(spanner)
@@ -197,7 +201,7 @@ class M21Utilities:
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
-            if not spanner.isFirst(gnote): # not started with general note, forget it
+            if not spanner.isFirst(gnote):  # not started with general note, forget it
                 continue
             if isinstance(spanner, m21.dynamics.DynamicWedge):
                 output.append(spanner)
@@ -214,15 +218,14 @@ class M21Utilities:
     @staticmethod
     def isTransposingInstrument(inst: m21.instrument.Instrument) -> bool:
         if not isinstance(inst, m21.instrument.Instrument):
-            return False # not an instrument
+            return False  # not an instrument
 
         trans: t.Optional[m21.interval.Interval] = inst.transposition
         if trans is None:
             return False  # not a transposing instrument
 
-        if (trans.semitones == 0 and
-            trans.specifier == m21.interval.Specifier.PERFECT):
-            return False # instrument transposition is a no-op
+        if (trans.semitones == 0 and trans.specifier == m21.interval.Specifier.PERFECT):
+            return False  # instrument transposition is a no-op
 
         return True
 
@@ -260,7 +263,7 @@ class M21Utilities:
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:
-        #m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
+        # m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
         if len(m21.VERSION) == 0:
             raise HumdrumInternalError('music21 version must be set!')
 
@@ -309,11 +312,15 @@ class M21Utilities:
         if m21.VERSION[3] > neededVersion[3]:
             return True
 
-        return True # four elements equal, that's all we care about
+        return True  # four elements equal, that's all we care about
 
 
 class M21StaffGroupTree:
-    def __init__(self, sg: m21.layout.StaffGroup, staffNumbersByM21Part: t.Dict[m21.stream.Part, int]):
+    def __init__(
+            self,
+            sg: m21.layout.StaffGroup,
+            staffNumbersByM21Part: t.Dict[m21.stream.Part, int]
+    ):
         # about this staff group
         self.staffGroup: m21.layout.StaffGroup = sg
         self.staffNums: t.Set[int] = set(staffNumbersByM21Part[m21Part]

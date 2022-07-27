@@ -23,17 +23,18 @@ from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumToken
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridVoice:
-    def __init__(self,
+    def __init__(
+            self,
             token: t.Optional[t.Union[HumdrumToken, str]] = None,
             duration: HumNumIn = opFrac(0)
     ):
@@ -111,7 +112,7 @@ class GridVoice:
     '''
     @property
     def duration(self) -> HumNum:
-        return self._nextDur # + self._prevDur # prevDur is always zero, it seems
+        return self._nextDur  # + self._prevDur # prevDur is always zero, it seems
 
     @duration.setter
     def duration(self, newDuration: HumNumIn):

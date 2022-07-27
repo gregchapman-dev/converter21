@@ -11,7 +11,7 @@ from converter21.humdrum import HumSignifiers
 import music21 as m21
 from music21.common import opFrac
 
-from typing import Tuple
+import typing as t
 from fractions import Fraction
 import random
 import json
@@ -77,11 +77,11 @@ isGlobalTypeTuple = (LINETYPE_EMPTY,
 class HumdrumFileTestResults:
     ''' HumdrumFileTestResults holds the original Humdrum test file contents, the original results file contents,
         and the extra results derived from those two things.
-        self.fileContents: [str] = the original Humdrum test file contents
+        self.fileContents: t.List[str] = the original Humdrum test file contents
         self.results: dict = the original results file contents, as follows:
-            self.results["exclusiveInterpretationlineNumbers"]: [int] = list of line nums of the '**' lines
-            self.results["manipulatorLineNumbers"]: [int] = list of line nums of '*^', '*v', etc lines
-            self.results["tokenDataTypeChanges"]: {} = dict(lineNumberOfChange: str(int), newTokenDataTypes: [str])
+            self.results["exclusiveInterpretationlineNumbers"]: t.List[int] = list of line nums of the '**' lines
+            self.results["manipulatorLineNumbers"]: t.List[int] = list of line nums of '*^', '*v', etc lines
+            self.results["tokenDataTypeChanges"]: {} = dict(lineNumberOfChange: str(int), newTokenDataTypes: t.List[str])
         self.extraResults: dict = the results derived from Humdrum test file contents and results file contents
             self.extraResults["lines"]
             self.extraResults["lineCount"]
@@ -249,7 +249,7 @@ class HumdrumFileTestResults:
                                                 lineCount),
             )
 
-    def generateExpectedMaxTrack(self, tokens: [[str]], initialTrackCount: int) -> int:
+    def generateExpectedMaxTrack(self, tokens: t.List[t.List[str]], initialTrackCount: int) -> int:
         currentTrackCount = initialTrackCount
         expectedMaxTrack = currentTrackCount
 
@@ -264,11 +264,11 @@ class HumdrumFileTestResults:
 
         return expectedMaxTrack
 
-    def generateExpectedLines(self, entireHumdrumFileString: str) -> [str]:
+    def generateExpectedLines(self, entireHumdrumFileString: str) -> t.List[str]:
         return entireHumdrumFileString.split('\n')
 
-    def generateExpectedTokens(self, allLines: [str]) -> [[str]]:
-        tokens: [[str]] = []
+    def generateExpectedTokens(self, allLines: t.List[str]) -> t.List[t.List[str]]:
+        tokens: t.List[t.List[str]] = []
         for line in allLines:
             if line.startswith('!!'): # because (e.g. beethoven.../sonata04-1.krn) someone might have commented out a
                 tokens.append([line])   # line with '!!', so we can't use the presence of tabs to mean there are spines
@@ -278,8 +278,8 @@ class HumdrumFileTestResults:
                 tokens.append(self.splitIntoTokens(line))
         return tokens
 
-    def splitIntoTokens(self, line: str) -> [str]:
-        output: [str] = []
+    def splitIntoTokens(self, line: str) -> t.List[str]:
+        output: t.List[str] = []
         for m in re.finditer(r'([^\t]+)(\t*)', line):
             # m is a match object containing two groups: first the token, then any trailing tabs
             tokenStr = m.group(1)
@@ -312,7 +312,7 @@ class HumdrumFileTestResults:
         else:
             return LINETYPE_DATA
 
-    def generateExpectedLineTypes(self, allLines: [str]) -> [str]:
+    def generateExpectedLineTypes(self, allLines: t.List[str]) -> t.List[str]:
         lineTypes = []
         for line in allLines:
             lineTypes.append(self.getExpectedLineType(line))
@@ -336,7 +336,7 @@ class HumdrumFileTestResults:
             result[lineIdx] = currValue
         return result
 
-    def generateExpectedTokenStrings(self, stringListChanges: dict, lineCount: int) -> [list]:
+    def generateExpectedTokenStrings(self, stringListChanges: dict, lineCount: int) -> t.List[t.List[str]]:
         result = [['']] * lineCount # a single empty token on every line
         changeLineNumbers = []
         # We want integers for sorting and comparison with lineNumbers, but the keys are strings representing integers.
@@ -345,7 +345,7 @@ class HumdrumFileTestResults:
             changeLineNumbers.append(int(key))
         changeLineNumbers.sort()
         changeLineNumbers_Idx: int = 0
-        currValue: [str] = ['']
+        currValue: t.List[str] = ['']
         for lineIdx in range(0, lineCount):
             lineNumber = lineIdx+1  # lineNumber is 1-based, lineIdx is 0-based
             if changeLineNumbers_Idx < len(changeLineNumbers) and lineNumber == changeLineNumbers[changeLineNumbers_Idx]:
@@ -354,8 +354,8 @@ class HumdrumFileTestResults:
             result[lineIdx] = currValue
         return result
 
-    def generateExpectedIs__FromTrueLineNumbers(self, trueLineNumbers: [int], numValues: int) -> [bool]:
-        expectedIs__: [bool] = [False] * numValues
+    def generateExpectedIs__FromTrueLineNumbers(self, trueLineNumbers: t.List[int], numValues: int) -> t.List[bool]:
+        expectedIs__: t.List[bool] = [False] * numValues
         for trueLineNumber in trueLineNumbers: # 1-based
             expectedIs__[trueLineNumber - 1] = True # 0-based
         return expectedIs__
@@ -460,7 +460,7 @@ def CheckHumdrumLine( line: HumdrumLine,
                         expectedTokenCount: int = 1,
                         expectedIsExclusiveInterpretation: bool = False,
                         expectedIsManipulator: bool = False,
-                        expectedTokens: [str] = None ):
+                        expectedTokens: t.List[str] = None ):
     # set up some derived expectations
     expectedIsData = expectedType == LINETYPE_DATA
     expectedIsBarline = expectedType == LINETYPE_BARLINE
@@ -530,7 +530,7 @@ def CheckHumAddress(addr: HumAddress,
     assert addr.subToken == expectedSubToken
     assert str(addr) == expectedStr
 
-def getTokenDataTypes(hf: HumdrumFile) -> [[str]]:
+def getTokenDataTypes(hf: HumdrumFile) -> t.List[t.List[str]]:
     #returns a '**blah' string for every token in every line in the file
     return [[token.dataType.text for token in line.tokens()] for line in hf.lines()]
 
@@ -667,29 +667,29 @@ def _checkM21DateBetweenOrSelection(dateBetweenOrSelection,
                                     expectedDayError, expectedHourError,
                                     expectedMinuteError, expectedSecondError):
     assert len(dateBetweenOrSelection._data) == expectedNumDates
-    if not isinstance(expectedYear, Tuple):
+    if not isinstance(expectedYear, t.Tuple):
         expectedYear = (expectedYear,) * expectedNumDates
-    if not isinstance(expectedMonth, Tuple):
+    if not isinstance(expectedMonth, t.Tuple):
         expectedMonth = (expectedMonth,) * expectedNumDates
-    if not isinstance(expectedDay, Tuple):
+    if not isinstance(expectedDay, t.Tuple):
         expectedDay = (expectedDay,) * expectedNumDates
-    if not isinstance(expectedHour, Tuple):
+    if not isinstance(expectedHour, t.Tuple):
         expectedHour = (expectedHour,) * expectedNumDates
-    if not isinstance(expectedMinute, Tuple):
+    if not isinstance(expectedMinute, t.Tuple):
         expectedMinute = (expectedMinute,) * expectedNumDates
-    if not isinstance(expectedSecond, Tuple):
+    if not isinstance(expectedSecond, t.Tuple):
         expectedSecond = (expectedSecond,) * expectedNumDates
-    if not isinstance(expectedYearError, Tuple):
+    if not isinstance(expectedYearError, t.Tuple):
         expectedYearError = (expectedYearError,) * expectedNumDates
-    if not isinstance(expectedMonthError, Tuple):
+    if not isinstance(expectedMonthError, t.Tuple):
         expectedMonthError = (expectedMonthError,) * expectedNumDates
-    if not isinstance(expectedDayError, Tuple):
+    if not isinstance(expectedDayError, t.Tuple):
         expectedDayError = (expectedDayError,) * expectedNumDates
-    if not isinstance(expectedHourError, Tuple):
+    if not isinstance(expectedHourError, t.Tuple):
         expectedHourError = (expectedHourError,) * expectedNumDates
-    if not isinstance(expectedMinuteError, Tuple):
+    if not isinstance(expectedMinuteError, t.Tuple):
         expectedMinuteError = (expectedMinuteError,) * expectedNumDates
-    if not isinstance(expectedSecondError, Tuple):
+    if not isinstance(expectedSecondError, t.Tuple):
         expectedSecondError = (expectedSecondError,) * expectedNumDates
 
     for i in range(0, expectedNumDates):

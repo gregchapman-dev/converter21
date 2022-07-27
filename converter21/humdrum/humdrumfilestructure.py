@@ -131,8 +131,10 @@ class HumdrumFileStructure(HumdrumFileBase):
     def scoreDuration(self) -> HumNum:
         if self.lineCount == 0:
             return 0
-        return opFrac(self._lines[-1].durationFromStart +
-                        self._lines[-1].duration) # BUGFIX: Added last line duration
+        return opFrac(
+            # BUGFIX: Added last line duration
+            self._lines[-1].durationFromStart + self._lines[-1].duration
+        )
 
     '''
     //////////////////////////////
@@ -224,7 +226,7 @@ class HumdrumFileStructure(HumdrumFileBase):
     //     of the data.  Returns false if there was a parse error.
     '''
     def analyzeRhythm(self) -> bool:
-        #self.setLinesRhythmAnalyzed() # already happened in analyzeRhythmStructure
+        # self.setLinesRhythmAnalyzed() # already happened in analyzeRhythmStructure
         if self.maxTrack == 0:
             return True
 
@@ -234,7 +236,7 @@ class HumdrumFileStructure(HumdrumFileBase):
 
         startLine: int = trackStartTok.lineIndex
 
-        for i in range(1, self.maxTrack+1):
+        for i in range(1, self.maxTrack + 1):
             trackStartTok = self.trackStart(i)
             if trackStartTok is None:
                 continue
@@ -253,9 +255,9 @@ class HumdrumFileStructure(HumdrumFileBase):
                 # outwards from that position.
                 continue
 
-	    # Go back and analyze spines that do not start at the
-	    # beginning of the data stream.
-        for i in range(1, self.maxTrack+1):
+        # Go back and analyze spines that do not start at the
+        # beginning of the data stream.
+        for i in range(1, self.maxTrack + 1):
             trackStartTok = self.trackStart(i)
             if trackStartTok is None:
                 continue
@@ -341,11 +343,11 @@ class HumdrumFileStructure(HumdrumFileBase):
     //    considered.
     '''
     def analyzeGlobalParameters(self) -> bool:
-        globalParamLines : t.List[HumdrumLine] = []
+        globalParamLines: t.List[HumdrumLine] = []
 
         for line in self._lines:
             if line.isGlobalComment and line.text.startswith('!!LO:'):
-                line.storeGlobalLinkedParameters() # stores those params in zeroth token of line
+                line.storeGlobalLinkedParameters()  # stores those params in zeroth token of line
                 globalParamLines.append(line)
                 continue
 
@@ -355,7 +357,7 @@ class HumdrumFileStructure(HumdrumFileBase):
                 continue
             if line.isLocalComment:
                 continue
-            if not globalParamLines: # if globalParamLines is empty
+            if not globalParamLines:
                 continue
 
             # Filter manipulators or not?  At the moment allow
@@ -392,7 +394,7 @@ class HumdrumFileStructure(HumdrumFileBase):
     //    duration of non-null data token in non-rhythmic spines.
     '''
     def analyzeDurationsOfNonRhythmicSpines(self) -> bool:
-        for track in range(1, self.maxTrack+1): # tracks are 1-based
+        for track in range(1, self.maxTrack + 1):  # tracks are 1-based
             for endIdx in range(0, self.trackEndCount(track)):
                 trackEnd: t.Optional[HumdrumToken] = self.trackEnd(track, endIdx)
                 if trackEnd is None or trackEnd.hasRhythm:
@@ -437,7 +439,7 @@ class HumdrumFileStructure(HumdrumFileBase):
 
         token.incrementRhythmAnalysisState()
 
-        durSum : HumNum = opFrac(startDur)
+        durSum: HumNum = opFrac(startDur)
 
         success = self.setLineDurationFromStart(token, durSum)
         if not success:
@@ -454,7 +456,8 @@ class HumdrumFileStructure(HumdrumFileBase):
         while tcount > 0:
             for i, tok in enumerate(token.nextTokens):
                 if i == 0:
-                    continue # we'll deal with token 0 ourselves below
+                    # we'll deal with token 0 ourselves below
+                    continue
                 reservoir.append(tok)
                 startDurs.append(durSum)
 
@@ -498,7 +501,7 @@ class HumdrumFileStructure(HumdrumFileBase):
     def setLineDurationFromStart(self, token: HumdrumToken, durSum: HumNumIn) -> bool:
         dSum: HumNum = opFrac(durSum)
         if not token.isTerminateInterpretation and token.duration < 0:
-		    # undefined rhythm, so don't assign line duration information:
+            # undefined rhythm, so don't assign line duration information
             return self.isValid
 
         line: HumdrumLine = token.ownerLine
@@ -507,9 +510,10 @@ class HumdrumFileStructure(HumdrumFileBase):
         elif line.durationFromStart != dSum:
             if not token.isTerminateInterpretation:
                 return self.setParseError(
-f'''Error: Inconsistent rhythm analysis occurring near line {token.lineNumber}
+                    f'''Error: Inconsistent rhythm analysis occurring near line {token.lineNumber}
 Expected durationFromStart to be: {dSum} but found it to be {line.durationFromStart}
-Line: {line.text}''')
+Line: {line.text}'''
+                )
             line.durationFromStart = max(line.durationFromStart, dSum)
 
         return self.isValid
@@ -530,7 +534,7 @@ Line: {line.text}''')
         token: HumdrumToken = spineStart
 
         # Find a known durationFromStart for a line in the Humdrum file, then
-	    # use that to calculate the starting duration of the floating spine.
+        # use that to calculate the starting duration of the floating spine.
         if token.durationFromStart is not None:
             foundDur = token.durationFromStart
         else:
@@ -593,8 +597,10 @@ Line: {line.text}''')
             if line.durationFromStart is None:
                 if line.isData:
                     return self.setParseError(
-f'''Error: found an unexpectedly missing durationFromStart on data line {line.durationFromStart}
-Line: {line.text}''')
+                        'Error: found an unexpectedly missing durationFromStart on '
+                        + f'data line {line.durationFromStart}\n'
+                        + f'Line: {line.text}'
+                    )
                 continue
 
             nextLine = line
@@ -612,7 +618,7 @@ Line: {line.text}''')
             gapDur: HumNum = opFrac(endDur - startDur)
             nullDur: HumNum = opFrac(gapDur / (len(nullLines) + 1))
             for j, nullLine in enumerate(nullLines):
-                nullLine.durationFromStart = opFrac(startDur + opFrac(nullDur * (j+1)))
+                nullLine.durationFromStart = opFrac(startDur + opFrac(nullDur * (j + 1)))
 
             previousLine = nextLine
             nullLines = []
@@ -656,7 +662,7 @@ Line: {line.text}''')
                 self._lines[i].duration = opFrac(0)
             else:
                 startDur = self._lines[i].durationFromStart
-                endDur = self._lines[i+1].durationFromStart
+                endDur = self._lines[i + 1].durationFromStart
                 self._lines[i].duration = opFrac(endDur - startDur)
 
     '''
@@ -668,7 +674,8 @@ Line: {line.text}''')
     //   occur on as well as the distance in the file to the next non-null token for
     //   that spine.
     '''
-    def assignDurationsToNonRhythmicTrack(self,
+    def assignDurationsToNonRhythmicTrack(
+            self,
             endToken: HumdrumToken,
             current: HumdrumToken
     ) -> bool:
@@ -713,7 +720,7 @@ Line: {line.text}''')
     def processLocalParametersForStrand(self, index: int):
         sStart: HumdrumToken = self.strandStart1d(index)
         sEnd: HumdrumToken = self.strandEnd1d(index)
-        tok: t.Optional[HumdrumToken] = sEnd # start at the end and work backward
+        tok: t.Optional[HumdrumToken] = sEnd  # start at the end and work backward
         dtok: t.Optional[HumdrumToken] = None
 
         while tok is not None:
@@ -748,7 +755,7 @@ Line: {line.text}''')
 
         for i in range(0, self.spineCount):
             tok: t.Optional[HumdrumToken] = self.spineStartList[i]
-            self._strand2d.append([]) # append a new empty list
+            self._strand2d.append([])
             self.analyzeSpineStrands(self._strand2d[-1], tok)
 
         for i in range(0, len(self._strand2d)):
@@ -825,9 +832,9 @@ Line: {line.text}''')
         tok: t.Optional[HumdrumToken] = startToken
         while tok is not None:
             if tok.isMergeInterpretation and tok.subTrack > 1:
-			    # check to the left: if the left primary/sub spine also has
-			    # a *v, then this is the end of this strand; otherwise, the
-			    # strand continues.
+                # check to the left: if the left primary/sub spine also has
+                # a *v, then this is the end of this strand; otherwise, the
+                # strand continues.
                 if tok.previousFieldToken is not None:
                     if tok.previousFieldToken.isMergeInterpretation:
                         newStrand.last = tok

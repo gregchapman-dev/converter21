@@ -30,10 +30,12 @@ class HumdrumFileContent(HumdrumFileStructure):
     # So... no __init__.  Well, OK, to keep pylint happy about attribute-defined-outside-init,
     # a quick __init__ that sets a few attributes that are already set in HumdrumFileBase.py
     def __init__(self, fileName: str = None):
-        super().__init__(fileName) # initialize the HumdrumFileBase fields
+        super().__init__(fileName)  # initialize the HumdrumFileBase fields
         self._hasInformalBreaks: bool = False
         self._hasFormalBreaks: bool = False
-        self._spineColor: t.List[t.List[str]] = [] # [track][subtrack]
+
+        # spinecolor = self._spineColor[track][subtrack]
+        self._spineColor: t.List[t.List[str]] = []
 
     def readString(self, contents: str) -> bool:
         if not super().readString(contents):
@@ -47,7 +49,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         # HumdrumFile.createM21Stream)
 
         # Might be worth adding to HumdrumFileContent at some point
-#         m_multirest = analyzeMultiRest(infile);
+        # m_multirest = analyzeMultiRest(infile);
 
         self.analyzeBreaks()
         self.analyzeSlurs()
@@ -144,19 +146,19 @@ class HumdrumFileContent(HumdrumFileStructure):
         # check for informal breaking markers such as:
         # !!pagebreak:original
         # !!linebreak:original
-# we don't pay attention to informal breaks (these are the breaks that happened to be in the
-# original score, not breaks that were specified as part of that score)
-#         for line in self._lines:
-#             if not line.isGlobalComment:
-#                 continue
-#
-#             if line[0].text.startswith('!!pagebreak:'):
-#                 self._hasInformalBreaks = True
-#                 break
-#
-#             if line[0].text.startswith('!!linebreak:'):
-#                 self._hasInformalBreaks = True
-#                 break
+        # we don't pay attention to informal breaks (these are the breaks that happened
+        # to be in the original score, not breaks that were specified as part of that score)
+        #   for line in self._lines:
+        #       if not line.isGlobalComment:
+        #           continue
+        #
+        #       if line[0].text.startswith('!!pagebreak:'):
+        #           self._hasInformalBreaks = True
+        #           break
+        #
+        #       if line[0].text.startswith('!!linebreak:'):
+        #           self._hasInformalBreaks = True
+        #           break
 
         # check for formal breaking markers such as:
         # !!LO:PB:g=z
@@ -269,28 +271,31 @@ class HumdrumFileContent(HumdrumFileStructure):
         slurEnds: t.List[HumdrumToken] = []
         linkSignifier: str = self._signifiers.linked
         for spineStart in spineStarts:
-            output = (output and
-                self.analyzeSpineSlursOrPhrases(
+            output = (
+                output and self.analyzeSpineSlursOrPhrases(
                     slurOrPhrase,
                     spineStart,
                     slurStarts,
                     slurEnds,
                     labels,
                     endings,
-                    linkSignifier)
+                    linkSignifier
+                )
             )
 
         self.createLinkedSlursOrPhrases(slurOrPhrase, slurStarts, slurEnds)
         return output
 
-    def analyzeSpineSlursOrPhrases(self,
-                     slurOrPhrase: str,
-                     spineStart: HumdrumToken,
-                     linkStarts: t.List[HumdrumToken],
-                     linkEnds: t.List[HumdrumToken],
-                     labels: t.List[TokenPair],
-                     endings: t.List[int],
-                     linkSig: str) -> bool:
+    def analyzeSpineSlursOrPhrases(
+            self,
+            slurOrPhrase: str,
+            spineStart: HumdrumToken,
+            linkStarts: t.List[HumdrumToken],
+            linkEnds: t.List[HumdrumToken],
+            labels: t.List[TokenPair],
+            endings: t.List[int],
+            linkSig: str
+    ) -> bool:
         beginStr: str = ''
         endStr: str = ''
         endingBackTag: str = ''
@@ -325,8 +330,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         # tracktokens == the 2-D data list for the track,
         # arranged in layers with the second dimension.
         trackTokens: t.List[t.List[HumdrumToken]] = self.getTrackSequence(
-            startToken = spineStart,
-            options = self.OPT_DATA | self.OPT_NOEMPTY
+            startToken=spineStart, options=self.OPT_DATA | self.OPT_NOEMPTY
         )
 
         # opens == list of phrase/slur openings for each track and elision level
@@ -360,7 +364,8 @@ class HumdrumFileContent(HumdrumFileStructure):
                     if elision < 0:
                         continue
 
-                    if opens[elision][track]: # not empty list of slur/phrase opens
+                    if opens[elision][track]:
+                        # list of slur/phrase opens is not empty
                         self._linkSlurOrPhraseEndpoints(
                             slurOrPhrase, opens[elision][track][-1], token
                         )
@@ -369,10 +374,11 @@ class HumdrumFileContent(HumdrumFileStructure):
                     else:
                         # No starting slur/phrase marker to match to this slur/phrase end in the
                         # given track.
-                        # search for an open slur/phrase in another track:
+                        # Search for an open slur/phrase in another track:
                         found: bool = False
                         for iTrack in range(0, len(opens[elision])):
-                            if opens[elision][iTrack]: # not empty list of slur/phrase opens
+                            if opens[elision][iTrack]:
+                                # list of slur/phrase opens is not empty
                                 self._linkSlurOrPhraseEndpoints(slurOrPhrase,
                                                                opens[elision][iTrack][-1],
                                                                token)
@@ -393,8 +399,8 @@ class HumdrumFileContent(HumdrumFileStructure):
                                 endNumPre = endings[pIndex]
 
                             if endNumPre > 0 and endNum > 0 and endNumPre != endNum:
-    							# This is a slur/phrase in an ending that starts at the
-    							# start of an ending.
+                                # This is a slur/phrase in an ending that starts at the
+                                # start of an ending.
                                 duration: HumNum = token.durationFromStart
                                 first = labels[token.lineIndex].first
                                 if first is not None:
@@ -489,7 +495,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                 return True
             return False
 
-        return False # I don't think you can get here, unless token.text = ''
+        return False
 
     '''
     //////////////////////////////
@@ -620,9 +626,9 @@ class HumdrumFileContent(HumdrumFileStructure):
         if linkSignifier is None or linkSignifier == '':
             return True
 
-        lstart: str     = linkSignifier + '['
-        lmiddle: str    = linkSignifier + '_'
-        lend: str       = linkSignifier + ']'
+        lstart: str = linkSignifier + '['
+        lmiddle: str = linkSignifier + '_'
+        lend: str = linkSignifier + ']'
 
         startDatabase: t.List[t.Tuple[t.Optional[HumdrumToken], int]] = [(None, -1)] * 400
 
@@ -652,7 +658,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                             if t.TYPE_CHECKING:
                                 assert isinstance(endEntry[0], HumdrumToken)
                             linkedTieStarts.append((endEntry[0], endEntry[1]))
-                            linkedTieEnds.append( (tok, subtokenIdx) )
+                            linkedTieEnds.append((tok, subtokenIdx))
                             startDatabase[endb40] = (None, -1)
 
                     if lmiddle in subtokenStr:
@@ -664,7 +670,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                             if t.TYPE_CHECKING:
                                 assert isinstance(middleEntry[0], HumdrumToken)
                             linkedTieStarts.append((middleEntry[0], middleEntry[1]))
-                            linkedTieEnds.append( (tok, subtokenIdx) )
+                            linkedTieEnds.append((tok, subtokenIdx))
                         startDatabase[middleb40] = (tok, subtokenIdx)
 
         return True
@@ -695,16 +701,20 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::linkTieEndpoints --
     '''
     @staticmethod
-    def _linkTieEndpoints(tieStart: HumdrumToken, startSubtokenIdx: int,
-                          tieEnd: HumdrumToken,   endSubtokenIdx: int):
-        durTag: str         = 'tieDuration'
-        startTag: str       = 'tieStart'
-        endTag: str         = 'tieEnd'
-        startNumTag: str    = 'tieStartSubtokenNumber'
-        endNumTag: str      = 'tieEndSubtokenNumber'
+    def _linkTieEndpoints(
+            tieStart: HumdrumToken,
+            startSubtokenIdx: int,
+            tieEnd: HumdrumToken,
+            endSubtokenIdx: int
+    ):
+        durTag: str = 'tieDuration'
+        startTag: str = 'tieStart'
+        endTag: str = 'tieEnd'
+        startNumTag: str = 'tieStartSubtokenNumber'
+        endNumTag: str = 'tieEndSubtokenNumber'
 
-        startSubtokenNumber: int    = startSubtokenIdx + 1
-        endSubtokenNumber: int      = endSubtokenIdx + 1
+        startSubtokenNumber: int = startSubtokenIdx + 1
+        endSubtokenNumber: int = endSubtokenIdx + 1
 
         if tieStart.isChord:
             if startSubtokenNumber > 0:
@@ -751,8 +761,10 @@ class HumdrumFileContent(HumdrumFileStructure):
     //     current layer, check all rests in the same track for vertical positioning.
     '''
     def checkForExplicitVerticalRestPositions(self):
-        defaultBaseline = Convert.kernClefToBaseline('*clefG2') # default to treble clef
-        baselines: [int] = [defaultBaseline] * (self.maxTrack + 1)
+        # default to treble clef
+        defaultBaseline = Convert.kernClefToBaseline('*clefG2')
+        baselines: t.List[int] = [defaultBaseline] * (self.maxTrack + 1)
+
         for line in self._lines:
             if line.isInterpretation:
                 for tok in line.tokens():
@@ -864,10 +876,8 @@ class HumdrumFileContent(HumdrumFileStructure):
                 for k, subtok in enumerate(token.subtokens):
                     accid: int = Convert.kernToAccidentalCount(subtok)
                     isHidden = False
-                    if 'yy' not in subtok: # if note is hidden accidental hiding isn't necessary
-                        if 'ny' in subtok or \
-                            '#y' in subtok or \
-                            '-y' in subtok:
+                    if 'yy' not in subtok:  # if note is hidden accidental hiding isn't necessary
+                        if ('ny' in subtok or '#y' in subtok or '-y' in subtok):
                             isHidden = True
 
                     if accid == 0 and 'n' in subtok and not isHidden:
@@ -947,9 +957,9 @@ class HumdrumFileContent(HumdrumFileStructure):
         Q: handling nesting of ottavas. --gregc
     '''
     def analyzeOttavas(self):
-        trackCount:   int   = self.maxTrack
-        activeOttava: [int] = [0] * (trackCount+1) # 0th element goes unused
-        octaveState:  [int] = [0] * (trackCount+1) # ditto
+        trackCount: int = self.maxTrack
+        activeOttava: t.List[int] = [0] * (trackCount + 1)  # 0th element goes unused
+        octaveState: t.List[int] = [0] * (trackCount + 1)   # 0th element goes unused
 
         for line in self._lines:
             if line.isInterpretation:
@@ -986,16 +996,16 @@ class HumdrumFileContent(HumdrumFileStructure):
                     if not token.isKern:
                         continue
                     ttrack: int = token.track
-                    if activeOttava[ttrack] == 0: # if nesting level is 0
+                    if activeOttava[ttrack] == 0:  # if nesting level is 0
                         continue
-                    if octaveState[ttrack] == 0: # if octave adjustment is 0
+                    if octaveState[ttrack] == 0:  # if octave adjustment is 0
                         continue
                     if token.isNull:
                         continue
                     # do not exclude rests, since the vertical placement of the rest
                     # on the staff may need to be updated by the ottava mark.
-                    #if token.isRest:
-                        #continue
+                    # if token.isRest:
+                    #     continue
 
                     token.setValue('auto', 'ottava', str(octaveState[ttrack]))
 
@@ -1011,12 +1021,12 @@ class HumdrumFileContent(HumdrumFileStructure):
     // Returns true if there are any *ij/*Xij markers in the data.
     '''
     def analyzeTextRepetition(self):
-        spineStarts: [HumdrumToken] = self.spineStartList
+        spineStarts: t.List[HumdrumToken] = self.spineStartList
 
         for start in spineStarts:
             ijstate: bool = False
             startij: bool = False
-            lastIJToken: HumdrumToken = None # last token seen in ij range
+            lastIJToken: HumdrumToken = None  # last token seen in ij range
 
             # BUGFIX: **sylb -> **silbe
             if not start.isDataType('**text') and not start.isDataType('**silbe'):
@@ -1057,8 +1067,8 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::analyzeRScale --
     '''
     def analyzeRScale(self) -> bool:
-        numActiveTracks: int = 0 # number of tracks currently having an active rscale parameter
-        rscales: t.List[HumNum] = [opFrac(1)] * (self.maxTrack+1)
+        numActiveTracks: int = 0  # number of tracks currently having an active rscale parameter
+        rscales: t.List[HumNum] = [opFrac(1)] * (self.maxTrack + 1)
         ttrack: int
 
         for line in self._lines:

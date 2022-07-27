@@ -17,18 +17,18 @@ import typing as t
 
 from converter21.humdrum import HumdrumToken
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridSide:
     def __init__(self):
-        self._verses: [HumdrumToken] = [] # there may be more than one verse of lyrics for a note
+        self._verses: t.List[HumdrumToken] = []  # there may be >1 verse of lyrics for a note
         self._harmony: t.Optional[HumdrumToken] = None
         self._xmlId: t.Optional[HumdrumToken] = None
         self._dynamics: t.Optional[HumdrumToken] = None
@@ -72,7 +72,7 @@ class GridSide:
             self._verses[index] = token
         else:
             # add more than one verse spot, and insert verse:
-            for _ in range(self.verseCount, index+1): # verseCount through index, inclusive
+            for _ in range(self.verseCount, index + 1):  # verseCount through index, inclusive
                 self._verses.append(None)
             self._verses[index] = token
 

@@ -18,20 +18,22 @@ import music21 as m21
 
 from converter21.humdrum import StaffData
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class PartData:
-    def __init__(self,
-            partStaves: t.List[m21.stream.Part], # or PartStaff (derived from Part)
-            ownerScore,  # ScoreData
-            partIndex: int):
+    def __init__(
+            self,
+            partStaves: t.List[m21.stream.Part],    # or PartStaff (derived from Part)
+            ownerScore,                             # ScoreData
+            partIndex: int
+    ):
         from converter21.humdrum import ScoreData
         self.ownerScore: ScoreData = ownerScore
         self.spannerBundle = ownerScore.spannerBundle
@@ -66,7 +68,7 @@ class PartData:
     @staticmethod
     def _findPartName(
             partStaves: t.List[m21.stream.Part]  # or PartStaff (derived from Part)
-        ) -> str:
+    ) -> str:
         if len(partStaves) == 0:
             return ''
 
@@ -75,15 +77,15 @@ class PartData:
 
         possibleNames: t.List[str] = [partStaff.partName for partStaff in partStaves]
         for possibleName in possibleNames:
-            if possibleName: # skip any '' or None partNames
-                return possibleName # return the first real name you see
+            if possibleName:  # skip any '' or None partNames
+                return possibleName  # return the first real name you see
 
         return ''
 
     @staticmethod
     def _findPartAbbrev(
             partStaves: t.List[m21.stream.Part]  # or PartStaff (derived from Part)
-        ) -> str:
+    ) -> str:
         if len(partStaves) == 0:
             return ''
 
@@ -92,8 +94,8 @@ class PartData:
 
         possibleAbbrevs: t.List[str] = [partStaff.partAbbreviation for partStaff in partStaves]
         for possibleAbbrev in possibleAbbrevs:
-            if possibleAbbrev: # skip any '' or None partAbbrevs
-                return possibleAbbrev # return the first real abbrev you see
+            if possibleAbbrev:  # skip any '' or None partAbbrevs
+                return possibleAbbrev  # return the first real abbrev you see
 
         return ''
 

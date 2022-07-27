@@ -22,13 +22,13 @@ from converter21.humdrum import HumHash
 from converter21.humdrum import Convert
 from converter21.humdrum import HumdrumToken
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 '''
@@ -38,7 +38,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cov
     from the resulting strings.
 '''
 def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> t.Tuple[str, str]:
-    keyAndValueStrList = keyValueStr.split(delimiter, 1) # ignore ':' in value
+    keyAndValueStrList = keyValueStr.split(delimiter, 1)  # ignore any ':' in value
     if len(keyAndValueStrList) == 1:
         return (keyAndValueStrList[0].strip(), '')
 
@@ -49,9 +49,9 @@ class HumdrumLine(HumHash):
     def __init__(self,
             line: str = '',
             asGlobalToken: bool = False,
-            ownerFile = None):  # ownerFile: HumdrumFile
+            ownerFile=None):  # ownerFile: HumdrumFile
         from converter21.humdrum import HumdrumFile
-        super().__init__() # initialize the HumHash fields
+        super().__init__()  # initialize the HumHash fields
 
         '''
             _text: the line's text string
@@ -59,7 +59,8 @@ class HumdrumLine(HumHash):
         if line is None:
             line = ''
         elif len(line) > 0 and line[-1] == '\n':
-            line = line[:-1] # strip off any trailing LF
+            # strip off any trailing LF
+            line = line[:-1]
 
         self._text: str = ''
         if not asGlobalToken:
@@ -338,9 +339,11 @@ class HumdrumLine(HumHash):
         if ':' not in self.text:
             return False
         preAndPostColon = ':'.split(self.text)
-        if ' ' in preAndPostColon[0]: # there was a space pre-colon
+        if ' ' in preAndPostColon[0]:
+            # there was a space pre-colon
             return False
-        if '\t' in preAndPostColon[0]: # there was a tab pre-colon
+        if '\t' in preAndPostColon[0]:
+            # there was a tab pre-colon
             return False
 
         return True
@@ -362,9 +365,11 @@ class HumdrumLine(HumHash):
         if ':' not in self.text:
             return False
         preAndPostColon = ':'.split(self.text)
-        if ' ' in preAndPostColon[0]: # there was a space pre-colon
+        if ' ' in preAndPostColon[0]:
+            # there was a space pre-colon
             return False
-        if '\t' in preAndPostColon[0]: # there was a tab pre-colon
+        if '\t' in preAndPostColon[0]:
+            # there was a tab pre-colon
             return False
 
         return True
@@ -493,7 +498,7 @@ class HumdrumLine(HumHash):
     def isTerminateInterpretation(self) -> bool:
         if self.tokenCount == 0:
             # if tokens have not been parsed, check line text
-            return self.text.startswith('*-') # BUGFIX: *! -> *-
+            return self.text.startswith('*-')  # BUGFIX: *! -> *-
 
         for token in self._tokens:
             if not token.isTerminateInterpretation:
@@ -697,9 +702,10 @@ class HumdrumLine(HumHash):
             if self._ownerFile:
                 self._ownerFile.analyzeRhythmStructure()
             else:
-                return opFrac(0) # there's no owner, so we can't get the score duration
+                # there's no owner, so we can't get the score duration
+                return opFrac(0)
 
-        return opFrac(self._ownerFile.scoreDuration -  self.durationFromStart)
+        return opFrac(self._ownerFile.scoreDuration - self.durationFromStart)
 
     def scaledDurationToEnd(self, scale: HumNumIn) -> HumNum:
         return opFrac(self.durationToEnd * opFrac(scale))
@@ -793,8 +799,8 @@ class HumdrumLine(HumHash):
         we'll call opFrac, so we actually support int, float, or Fraction here. But we
         always return HumNum (a.k.a. float or Fraction).
     '''
-    def beat(self, beatDuration = Fraction(1,4)) -> HumNum:
-        if isinstance(beatDuration, str): # recip format string, e.g. '4' means 1/4
+    def beat(self, beatDuration: t.Union[str, Fraction] = Fraction(1, 4)) -> HumNum:
+        if isinstance(beatDuration, str):  # recip format string, e.g. '4' means 1/4
             beatDuration = Convert.recipToDuration(beatDuration)
         else:
             beatDuration = opFrac(beatDuration)
@@ -870,12 +876,11 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::createTokensFromLine -- Chop up a HumdrumLine string into
     //     individual tokens.
+        Returns number of tokens created
     '''
-    def createTokensFromLine(self) -> int: # returns number of tokens created
-        '''
-        // delete previous tokens (will need to re-analyze structure
-        // of file after this).
-        '''
+    def createTokensFromLine(self) -> int:
+        # delete previous tokens (will need to re-analyze structure
+        # of file after this).
         self._tokens = []
         self._numTabsAfterToken = []
 
@@ -895,7 +900,7 @@ class HumdrumLine(HumHash):
             self._numTabsAfterToken = [0]
             return 1
 
-        # tokenStrList: [str] = self.text.split('\t')
+        # tokenStrList: t.List[str] = self.text.split('\t')
         # for tokenStr in tokenStrList:
         #     token = HumdrumToken(tokenStr)
         #     token.ownerLine = self
@@ -936,10 +941,10 @@ class HumdrumLine(HumHash):
         numEntriesNeeded = len(self._tokens) - len(self._numTabsAfterToken)
         if numEntriesNeeded > 0:
             self._numTabsAfterToken += [1] * (numEntriesNeeded - 1)
-            self._numTabsAfterToken += [0] # zero tabs after the last token, please
+            self._numTabsAfterToken += [0]  # zero tabs after the last token, please
 
         # 2. repair any zeroes in _numTabsAfterToken to be ones (except the last one)
-        for i in range(0, len(self._numTabsAfterToken)-1):
+        for i in range(0, len(self._numTabsAfterToken) - 1):
             if self._numTabsAfterToken[i] == 0:
                 self._numTabsAfterToken[i] = 1
 
@@ -979,7 +984,7 @@ class HumdrumLine(HumHash):
             if thisTrack != lastTrack and lastTrack > 0:
                 diff = trackWidths[lastTrack] - localWidths[lastTrack]
                 if diff > 0 and j > 0:
-                    self._numTabsAfterToken[j-1] += diff
+                    self._numTabsAfterToken[j - 1] += diff
 
             localWidths[thisTrack] += 1
 
@@ -1024,8 +1029,8 @@ class HumdrumLine(HumHash):
 
             token.track = track
 
-        subTracks = [0] * (maxTrack+1)
-        currSubTrack = [0] * (maxTrack+1)
+        subTracks = [0] * (maxTrack + 1)
+        currSubTrack = [0] * (maxTrack + 1)
 
         for token in self._tokens:
             subTracks[token.track] += 1
@@ -1080,11 +1085,11 @@ class HumdrumLine(HumHash):
     //   (owns) this line.
     '''
     @property
-    def ownerFile(self): # -> HumdrumFile
+    def ownerFile(self):  # -> HumdrumFile
         return self._ownerFile
 
     @ownerFile.setter
-    def ownerFile(self, newOwnerFile): # newOwnerFile: HumdrumFile
+    def ownerFile(self, newOwnerFile):  # newOwnerFile: HumdrumFile
         self._ownerFile = newOwnerFile
 
     '''
@@ -1111,7 +1116,8 @@ class HumdrumLine(HumHash):
     def setLayoutParameters(self):
         if not self.text.startswith('!!LO:'):
             return
-        self.setParameters(self.text[2:]) # strip off the leading '!!'
+        # strip off the leading '!!'
+        self.setParameters(self.text[2:])
 
     '''
     //////////////////////////////
@@ -1151,7 +1157,7 @@ class HumdrumLine(HumHash):
 
         Q: shouldn't this also set ownerLine on the token? especially if it was a string
     '''
-    def appendToken(self, token, tabCount: int = 0): # token can be HumdrumToken or str
+    def appendToken(self, token: t.Union[HumdrumToken, str], tabCount: int = 0):
         if isinstance(token, str):
             token = HumdrumToken(token)
         self._tokens.append(token)
@@ -1162,12 +1168,11 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::insertToken -- Add a token before the given token position.
     '''
-    def insertToken(self, index: int, token, tabCount: int): # token can be HumdrumToken or str
+    def insertToken(self, index: int, token: t.Union[HumdrumToken, str], tabCount: int):
         if isinstance(token, HumdrumToken):
             self._tokens.insert(index, token)
             self._numTabsAfterToken.insert(index, tabCount)
-            return
-        if isinstance(token, str):
+        elif isinstance(token, str):
             self._tokens.insert(index, HumdrumToken(token))
             self._numTabsAfterToken.insert(index, tabCount)
 
