@@ -507,8 +507,8 @@ class HumdrumFile(HumdrumFileContent):
 
 
         # section labels and non-numbered labels (len = lineCount)
-        self._sectionLabels: t.List[HumdrumToken] = []
-        self._numberlessLabels: t.List[HumdrumToken] = []
+        self._sectionLabels: t.List[t.Optional[HumdrumToken]] = []
+        self._numberlessLabels: t.List[t.Optional[HumdrumToken]] = []
 
         # staff group names and abbreviations
         self._groupNames: t.Dict[int, str] = {}
@@ -10313,11 +10313,11 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::prepareSections --
     '''
     def _prepareSections(self) -> None:
-        self._sectionLabels = [HumdrumToken('placeholder')] * self.lineCount
-        self._numberlessLabels = [HumdrumToken('placeholder')] * self.lineCount
+        self._sectionLabels = [None] * self.lineCount
+        self._numberlessLabels = [None] * self.lineCount
 
-        secName: HumdrumToken = HumdrumToken('placeholder')
-        noNumName: HumdrumToken = HumdrumToken('placeholder')
+        secName: t.Optional[HumdrumToken] = None
+        noNumName: t.Optional[HumdrumToken] = None
 
         for i, line in enumerate(self._lines):
             self._sectionLabels[i] = secName
@@ -10365,10 +10365,6 @@ class HumdrumFile(HumdrumFileContent):
             if self._numberlessLabels[i] is None:
                 if self._numberlessLabels[i + 1] is not None:
                     self._numberlessLabels[i] = self._numberlessLabels[i + 1]
-
-        for secLabel, numberlessLabel in zip(self._sectionLabels, self._numberlessLabels):
-            if secLabel.text == 'placeholder' or numberlessLabel.text == 'placeholder':
-                raise HumdrumInternalError('failed to replace placeholder section label')
 
     def _measureKey(self, lineIdx: int) -> t.Tuple[t.Optional[int], int]:
         startIdx: int = lineIdx
@@ -10423,6 +10419,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # create ss.tgs list for this measure == [[], [], ...] of the correct length,
         # to be filled in by the staff's first pass
+        ss.tgs[measureKey] = []
         layerCount = len(measureStaffLayerDatas)
         for _ in range(0, layerCount):
             # append an empty list (i.e. containing zero BeamAndTupletGroups) for each layer

@@ -506,7 +506,7 @@ class HumdrumFileStructure(HumdrumFileBase):
             return self.isValid
 
         line: HumdrumLine = token.ownerLine
-        if line.durationFromStart is None:
+        if line.durationFromStart == -1:
             line.durationFromStart = dSum
         elif line.durationFromStart != dSum:
             if not token.isTerminateInterpretation:
@@ -536,12 +536,12 @@ Line: {line.text}'''
 
         # Find a known durationFromStart for a line in the Humdrum file, then
         # use that to calculate the starting duration of the floating spine.
-        if token.durationFromStart is not None:
+        if token.durationFromStart >= 0:
             foundDur = token.durationFromStart
         else:
             tcount: int = token.nextTokenCount
             while tcount > 0:
-                if token.durationFromStart is not None:
+                if token.durationFromStart >= 0:
                     foundDur = token.durationFromStart
                     break
                 if token.duration > 0:
@@ -595,7 +595,7 @@ Line: {line.text}'''
                     nullLines.append(line)
                 continue
 
-            if line.durationFromStart is None:
+            if line.durationFromStart < 0:
                 if line.isData:
                     return self.setParseError(
                         'Error: found an unexpectedly missing durationFromStart on '
@@ -639,14 +639,14 @@ Line: {line.text}'''
         lastDur: t.Optional[HumNum] = None
 
         for line in reversed(self._lines):
-            if line.durationFromStart is None and lastDur is not None:
+            if line.durationFromStart < 0 and lastDur is not None:
                 line.durationFromStart = lastDur
-            if line.durationFromStart is not None:
+            if line.durationFromStart >= 0:
                 lastDur = line.durationFromStart
 
         # fill in start times for ending comments
         for line in self._lines:
-            if line.durationFromStart is not None:
+            if line.durationFromStart >= 0:
                 lastDur = line.durationFromStart
             else:
                 line.durationFromStart = lastDur

@@ -884,6 +884,7 @@ class HumdrumWriter:
             assert isinstance(self._scoreData, ScoreData)
 
         hasAbbr: bool = False
+        hasName: bool = False
 
         for partData in self._scoreData.parts:
             if partData.partName:

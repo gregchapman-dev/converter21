@@ -455,7 +455,7 @@ def CheckHumdrumToken( token: HumdrumToken,
 
 def CheckHumdrumLine( line: HumdrumLine,
                         expectedLine: str = '',
-                        expectedLineNumber: int = None,
+                        expectedLineNumber: int = 0,
                         expectedType: str = LINETYPE_EMPTY,
                         expectedTokenCount: int = 1,
                         expectedIsExclusiveInterpretation: bool = False,

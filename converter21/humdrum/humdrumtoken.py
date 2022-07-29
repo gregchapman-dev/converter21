@@ -911,14 +911,14 @@ class HumdrumToken(HumHash):
     '''
     def getScaledDurationToEnd(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:  # bugfix, but current clients probably don't care --gregc
-            return opFrac(-1)
+            return opFrac(0)
         return opFrac(self.ownerLine.durationToEnd * opFrac(scale))
 
     ''' durationToEnd property for unscaled getDurationToEnd --gregc '''
     @property
     def durationToEnd(self) -> HumNum:
         if self.ownerLine is None:  # bugfix, but current clients probably don't care --gregc
-            return opFrac(-1)
+            return opFrac(0)
         return self.ownerLine.durationToEnd
 
     '''
@@ -934,13 +934,13 @@ class HumdrumToken(HumHash):
     '''
     def getScaledBarlineDuration(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:
-            return opFrac(-1)
+            return opFrac(0)
         return opFrac(self.ownerLine.barlineDuration * opFrac(scale))
 
     @property
     def barlineDuration(self) -> HumNum:
         if self.ownerLine is None:
-            return opFrac(-1)
+            return opFrac(0)
         return self.ownerLine.barlineDuration
 
     '''
@@ -952,13 +952,13 @@ class HumdrumToken(HumHash):
     '''
     def getScaledDurationToBarline(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:
-            return opFrac(-1)
+            return opFrac(0)
         return opFrac(self.ownerLine.durationToBarline * opFrac(scale))
 
     @property
     def durationToBarline(self) -> HumNum:
         if self.ownerLine is None:
-            return opFrac(-1)
+            return opFrac(0)
         return self.ownerLine.durationToBarline
 
     '''
@@ -970,13 +970,13 @@ class HumdrumToken(HumHash):
     '''
     def getScaledDurationFromBarline(self, scale: HumNumIn) -> HumNum:
         if self.ownerLine is None:
-            return opFrac(-1)
+            return opFrac(0)
         return opFrac(self.ownerLine.durationFromBarline * opFrac(scale))
 
     @property
     def durationFromBarline(self) -> HumNum:
         if self.ownerLine is None:
-            return opFrac(-1)
+            return opFrac(0)
         return self.ownerLine.durationFromBarline
 
     '''

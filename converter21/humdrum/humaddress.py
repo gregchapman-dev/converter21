@@ -17,7 +17,7 @@ class HumAddress:
     def __init__(self) -> None:
         from converter21.humdrum import HumdrumToken
         from converter21.humdrum import HumdrumLine
-        self.trackNum: int = -1
+        self.trackNum: t.Optional[int] = None
         self._subTrack: int = -1
         self._subTrackCount: int = 0
         self._fieldIndex: int = -1
@@ -63,13 +63,13 @@ class HumAddress:
     //   is used by the HumdrumFileStructure class.
     '''
     @property
-    def track(self) -> int:
+    def track(self) -> t.Optional[int]:
         return self.trackNum
 
     @track.setter
-    def track(self, newTrack: int) -> None:
+    def track(self, newTrack: t.Optional[int]) -> None:
         if newTrack < 0:
-            newTrack = -1
+            newTrack = None
         if newTrack > 1000:
             raise HumdrumSyntaxError("too many tracks (limit is 1000)")
         self.trackNum = newTrack

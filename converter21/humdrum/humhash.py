@@ -84,10 +84,7 @@ class HumParameter:
         # value can be of any type (different from humlib, where it's always a string)
         from converter21.humdrum import HumdrumToken
         self._value: t.Optional[t.Any] = value
-        if not isinstance(origin, HumdrumToken):
-            raise HumdrumInternalError('invalid origin token')
         self._origin: t.Optional[HumdrumToken] = origin
-
 
     @property
     def value(self) -> t.Optional[t.Any]:

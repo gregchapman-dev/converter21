@@ -763,7 +763,7 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getTrackStart --  Returns the starting exclusive interpretation
     //    for the given spine/track.
     '''
-    def trackStart(self, track: int) -> t.Optional[HumdrumToken]:
+    def trackStart(self, track: t.Optional[int]) -> t.Optional[HumdrumToken]:
         if self._ownerFile is None:
             return None
 

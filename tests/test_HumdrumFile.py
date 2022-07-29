@@ -6,7 +6,6 @@ import tempfile
 from converter21.humdrum import HumdrumFileBase
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
-from converter21.humdrum.humdrumfilebase import getMergedSpineInfo
 
 
 # The check routine that every test calls at least once
@@ -21,13 +20,13 @@ from tests.Utilities import CheckHumdrumFile, HumdrumFileTestResults
 #     CheckHumdrumFile(f, results)
 
 def test_getMergedSpineInfo():
-    assert getMergedSpineInfo(['1'], 0, 0) == '1'
+    assert HumdrumFile.getMergedSpineInfo(['1'], 0, 0) == '1'
     #assert getMergedSpineInfo(['1', '2'], 0, 1) == '1 2'
-    assert getMergedSpineInfo(['(1)a', '((1)b)a', '((1)b)b', '(2)a', '(2)b', '3'], 1, 1) == '(1)b'
-    assert getMergedSpineInfo(['(1)a', '((1)b)a', '((1)b)b', '(2)a', '(2)b', '3'], 0, 2) == '1'
-    assert getMergedSpineInfo(['(1)a', '(((1)b)a)a', '(((1)b)a)b', '(((1)b)b)a', '(((1)b)b)b', '(2)a', '(2)b', '3'], 0, 4) == '1'
-    assert getMergedSpineInfo(['(1)a', '(((1)b)a)a', '(((1)b)a)b', '(((1)b)b)a', '(((1)b)b)b', '(2)a', '(2)b', '3'], 5, 1) == '2'
-    assert getMergedSpineInfo(['(1)a', '((((1)b)a)a)a', '((((1)b)a)a)b', '((((1)b)a)b)a', '((((1)b)a)b)b', '((((1)b)b)a)a', '((((1)b)b)a)b', '((((1)b)b)b)a', '((((1)b)b)b)b', '(2)a', '(2)b', '3'], 0, 8) == '1'
+    assert HumdrumFile.getMergedSpineInfo(['(1)a', '((1)b)a', '((1)b)b', '(2)a', '(2)b', '3'], 1, 1) == '(1)b'
+    assert HumdrumFile.getMergedSpineInfo(['(1)a', '((1)b)a', '((1)b)b', '(2)a', '(2)b', '3'], 0, 2) == '1'
+    assert HumdrumFile.getMergedSpineInfo(['(1)a', '(((1)b)a)a', '(((1)b)a)b', '(((1)b)b)a', '(((1)b)b)b', '(2)a', '(2)b', '3'], 0, 4) == '1'
+    assert HumdrumFile.getMergedSpineInfo(['(1)a', '(((1)b)a)a', '(((1)b)a)b', '(((1)b)b)a', '(((1)b)b)b', '(2)a', '(2)b', '3'], 5, 1) == '2'
+    assert HumdrumFile.getMergedSpineInfo(['(1)a', '((((1)b)a)a)a', '((((1)b)a)a)b', '((((1)b)a)b)a', '((((1)b)a)b)b', '((((1)b)b)a)a', '((((1)b)b)a)b', '((((1)b)b)b)a', '((((1)b)b)b)b', '(2)a', '(2)b', '3'], 0, 8) == '1'
 
 def test_HumdrumFile_default_init():
     f = HumdrumFile()
