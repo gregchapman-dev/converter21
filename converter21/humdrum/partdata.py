@@ -33,11 +33,11 @@ class PartData:
             partStaves: t.List[m21.stream.Part],    # or PartStaff (derived from Part)
             ownerScore,                             # ScoreData
             partIndex: int
-    ):
+    ) -> None:
         from converter21.humdrum import ScoreData
         self.ownerScore: ScoreData = ownerScore
-        self.spannerBundle = ownerScore.spannerBundle
-        self._partIndex = partIndex
+        self.spannerBundle: m21.spanner.SpannerBundle = ownerScore.spannerBundle
+        self._partIndex: int = partIndex
 
         # partStaves will be a list of one Part, or a list of multiple PartStaffs,
         # but we don't really care. We make a StaffData out of each one.
@@ -46,8 +46,8 @@ class PartData:
             staffData: StaffData = StaffData(partStaff, self, s)
             self.staves.append(staffData)
 
-        self._partName = self._findPartName(partStaves)
-        self._partAbbrev = self._findPartAbbrev(partStaves)
+        self._partName: str = self._findPartName(partStaves)
+        self._partAbbrev: str = self._findPartAbbrev(partStaves)
 
     @property
     def partIndex(self) -> int:

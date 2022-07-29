@@ -90,7 +90,7 @@ class HumdrumWriter:
         'bracket': 'editorial accidental (bracket)',
     }
 
-    def __init__(self, obj: m21.prebase.ProtoM21Object):
+    def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21Score: t.Optional[m21.stream.Score] = None
         self.spannerBundle: t.Optional[m21.spanner.SpannerBundle] = None
@@ -221,7 +221,7 @@ class HumdrumWriter:
         return self._reservedRDFKernSignifiers
 
     @reservedRDFKernSignifiers.setter
-    def reservedRDFKernSignifiers(self, newReservedRDFKernSignifiers: str):
+    def reservedRDFKernSignifiers(self, newReservedRDFKernSignifiers: str) -> None:
         if newReservedRDFKernSignifiers is None:
             self._reservedRDFKernSignifiers = ''
             return
@@ -242,7 +242,7 @@ class HumdrumWriter:
 
         self._reservedRDFKernSignifiers = newReservedRDFKernSignifiers
 
-    def write(self, fp):
+    def write(self, fp) -> bool:
         # First: HumdrumWriter.write likes to modify the input stream (e.g. transposing to
         # concert pitch, etc), so we need to make a copy of the input stream before we start.
         # TODO: do the transposition in Humdrum-land, following C++ code 'transpose -c'
@@ -281,6 +281,9 @@ class HumdrumWriter:
         status = status and self._stitchParts(outgrid, self._m21Score)
         if not status:
             return status
+
+        if self._scoreData is None:
+            raise HumdrumInternalError('stitchParts failed, but returned True')
 
 #         outgrid.removeRedundantClefChanges() # don't do this; not our business
 #         outgrid.removeSibeliusIncipit()
@@ -339,6 +342,8 @@ class HumdrumWriter:
         # TODO: ... the trick is that we need to know exactly which parts/staves to
         # TODO: ... translate, and only the music21 Score knows that. So this can't be
         # TODO: ... a HumdrumFile or HumdrumFileUtilities function, it has to be here.
+        # TODO: ... Or it can be in HumdrumFile{Utilities}, but it needs to take instructions
+        # TODO: ... about which parts/staves to translate (which we would compute here).
         # if self._hasTranspositions:
         #     self.transposeToConcertPitch(outfile)
 
@@ -357,7 +362,7 @@ class HumdrumWriter:
     // the file.
     '''
     @staticmethod
-    def _printResult(fp, outfile: HumdrumFile):
+    def _printResult(fp, outfile: HumdrumFile) -> None:
         outfile.write(fp)
 
     '''
@@ -365,7 +370,7 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::addFooterRecords --
     '''
-    def _addFooterRecords(self, outfile: HumdrumFile):
+    def _addFooterRecords(self, outfile: HumdrumFile) -> None:
         for definition, signifier in self._rdfKernSignifierLookup.items():
             rdfLine = f'!!!RDF**kern: {signifier} = '
             if isinstance(definition, tuple):  # it's a tuple of k/v pairs (tuples)
@@ -438,7 +443,7 @@ class HumdrumWriter:
             outfile: HumdrumFile,
             c: m21.metadata.Contributor,
             skipName: m21.metadata.Text = None
-    ):
+    ) -> None:
         k: t.Optional[str] = M21Convert.m21ContributorRoleToHumdrumReferenceKey.get(c.role, None)
         if k is None:
             print(f'music21 contributor role {c.role} maps to no Humdrum ref key', file=sys.stderr)
@@ -480,7 +485,7 @@ class HumdrumWriter:
             outfile.appendLine('!!!' + hdKey + ': ' + vStr, asGlobalToken=True)
         # pylint: enable=protected-access
 
-    def _addHeaderRecords(self, outfile: HumdrumFile):
+    def _addHeaderRecords(self, outfile: HumdrumFile) -> None:
         systemDecoration: str = self._getSystemDecoration()
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
@@ -771,7 +776,7 @@ class HumdrumWriter:
         return topLevelParents
 
     @staticmethod
-    def _sortStaffGroupTrees(trees: t.List[M21StaffGroupTree]):
+    def _sortStaffGroupTrees(trees: t.List[M21StaffGroupTree]) -> None:
         # Sort every list of siblings in the tree (including the
         # passed-in trees list itself) by lowest staff number.
         if not trees:
@@ -836,7 +841,7 @@ class HumdrumWriter:
     // moveBreaksToEndOfPreviousMeasure --
     '''
     @staticmethod
-    def _moveBreaksToEndOfPreviousMeasure(outgrid: HumGrid):
+    def _moveBreaksToEndOfPreviousMeasure(outgrid: HumGrid) -> None:
         for m in range(1, len(outgrid.measures)):
             gm: GridMeasure = outgrid.measures[m]
             gmlast: GridMeasure = outgrid.measures[m - 1]
@@ -874,7 +879,7 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::insertPartNames --
     '''
-    def _insertPartNames(self, outgrid: HumGrid):
+    def _insertPartNames(self, outgrid: HumGrid) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -941,7 +946,7 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::insertMeasure --
     '''
-    def _insertMeasure(self, outgrid: HumGrid, mIndex: int):
+    def _insertMeasure(self, outgrid: HumGrid, mIndex: int) -> bool:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1102,7 +1107,7 @@ class HumdrumWriter:
     def _appendZeroDurationEvents(self,
             outgm: GridMeasure,
             nowEvents: t.List[SimultaneousEvents],
-            nowTime: HumNumIn):
+            nowTime: HumNumIn) -> None:
 
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
@@ -1219,7 +1224,10 @@ class HumdrumWriter:
     // Tool_musicxml2hum::addEventToList --
     '''
     @staticmethod
-    def _addEventToList(eventList: t.List[t.List[t.List[t.List[EventData]]]], event: EventData):
+    def _addEventToList(
+            eventList: t.List[t.List[t.List[t.List[EventData]]]],
+            event: EventData
+    ) -> None:
         p: int = event.partIndex
         s: int = event.staffIndex
         v: int = event.voiceIndex
@@ -1254,7 +1262,7 @@ class HumdrumWriter:
     '''
     def _addGraceLines(self, outgm: GridMeasure,
                              notes: t.List[t.List[t.List[t.List[EventData]]]],
-                             nowTime: HumNumIn):
+                             nowTime: HumNumIn) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1291,7 +1299,7 @@ class HumdrumWriter:
             outgm: GridMeasure,
             clefs: t.List[t.List[t.Tuple[int, m21.clef.Clef]]],
             nowTime: HumNumIn
-    ):
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1318,7 +1326,7 @@ class HumdrumWriter:
             outgm: GridMeasure,
             staffLines: t.List[t.List[t.Tuple[int, int]]],
             nowTime: HumNumIn
-    ):
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Stria)
@@ -1342,7 +1350,7 @@ class HumdrumWriter:
     def _addTimeSigLine(self, outgm: GridMeasure,
                               timeSigs: t.List[t.List[t.Tuple[int, m21.meter.TimeSignature]]],
                               nowTime: HumNumIn,
-                              hasMeterSig: bool):
+                              hasMeterSig: bool) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1369,7 +1377,7 @@ class HumdrumWriter:
                 self._insertPartMeterSigs(partTimeSigs, part)
 
     def _insertPartTimeSigs(self, timeSigs: t.List[t.Tuple[int, m21.meter.TimeSignature]],
-                                  part: GridPart):
+                                  part: GridPart) -> None:
         if part is None:
             return
 
@@ -1385,7 +1393,7 @@ class HumdrumWriter:
         self._fillEmpties(part, '*')
 
     def _insertPartMeterSigs(self, timeSigs: t.List[t.Tuple[int, m21.meter.TimeSignature]],
-                                  part: GridPart):
+                                  part: GridPart) -> None:
         if part is None:
             return
 
@@ -1412,7 +1420,7 @@ class HumdrumWriter:
             keySigs: t.List[t.List[t.Tuple[int, t.Union[m21.key.KeySignature, m21.key.Key]]]],
             nowTime: HumNumIn,
             hasKeyDesignation: bool
-    ):
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1440,7 +1448,7 @@ class HumdrumWriter:
             self,
             keySigs: t.List[t.Tuple[int, t.Union[m21.key.KeySignature, m21.key.Key]]],
             part: GridPart
-    ):
+    ) -> None:
         if part is None:
             return
 
@@ -1458,7 +1466,7 @@ class HumdrumWriter:
     def _insertPartKeyDesignations(self,
             keySigs: t.List[t.Tuple[int, t.Union[m21.key.KeySignature, m21.key.Key]]],
             part: GridPart
-    ):
+    ) -> None:
 
         if part is None:
             return
@@ -1486,7 +1494,7 @@ class HumdrumWriter:
     def _addTranspositionLine(self,
             outgm: GridMeasure,
             transposingInstruments: t.List[t.List[t.Tuple[int, m21.instrument.Instrument]]],
-            nowTime: HumNumIn):
+            nowTime: HumNumIn) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1502,7 +1510,7 @@ class HumdrumWriter:
             self,
             transposingInstruments: t.List[t.Tuple[int, m21.instrument.Instrument]],
             part: GridPart
-    ):
+    ) -> None:
         if part is None:
             return
 
@@ -1524,7 +1532,7 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::insertPartClefs --
     '''
-    def _insertPartClefs(self, clefs: t.List[t.Tuple[int, m21.clef.Clef]], part: GridPart):
+    def _insertPartClefs(self, clefs: t.List[t.Tuple[int, m21.clef.Clef]], part: GridPart) -> None:
         if part is None:
             return
 
@@ -1544,7 +1552,7 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::insertPartStria --
     '''
-    def _insertPartStria(self, staffLineCounts: t.List[t.Tuple[int, int]], part: GridPart):
+    def _insertPartStria(self, staffLineCounts: t.List[t.Tuple[int, int]], part: GridPart) -> None:
         if part is None:
             return
 
@@ -1564,7 +1572,7 @@ class HumdrumWriter:
     // Tool_musicxml2hum::fillEmpties --
     '''
     @staticmethod
-    def _fillEmpties(part: GridPart, string: str):
+    def _fillEmpties(part: GridPart, string: str) -> None:
         durationZero: HumNum = opFrac(0)
 
         for staff in part.staves:
@@ -1586,7 +1594,7 @@ class HumdrumWriter:
     @staticmethod
     def _processPrintElement(outgm: GridMeasure,
                              m21Obj: t.Union[m21.layout.PageLayout, m21.layout.SystemLayout],
-                             nowTime: HumNumIn):
+                             nowTime: HumNumIn) -> None:
         isPageBreak: bool = isinstance(m21Obj, m21.layout.PageLayout) and m21Obj.isNew
         isSystemBreak: bool = isinstance(m21Obj, m21.layout.SystemLayout) and m21Obj.isNew
 
@@ -1620,7 +1628,7 @@ class HumdrumWriter:
     '''
     def _appendNonZeroDurationEvents(self, outgm: GridMeasure,
                                            nowEvents: t.List[SimultaneousEvents],
-                                           nowTime: HumNumIn):
+                                           nowTime: HumNumIn) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
@@ -1656,7 +1664,7 @@ class HumdrumWriter:
             outSlice: t.Optional[GridSlice],
             outgm: GridMeasure,
             event: t.Optional[EventData],
-            nowTime: HumNumIn):
+            nowTime: HumNumIn) -> None:
         partIndex: int   # event.partIndex
         staffIndex: int  # event.staffIndex
         voiceIndex: int  # event.voiceIndex
@@ -1769,7 +1777,7 @@ class HumdrumWriter:
             outgm: GridMeasure,
             event: EventData,
             extraDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]]
-    ):
+    ) -> None:
         dynamics: t.List[t.Tuple[int, int, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
@@ -1863,7 +1871,7 @@ class HumdrumWriter:
             outgm: GridMeasure,
             event: EventData,
             extraTexts: t.List[t.Tuple[int, int, int, m21.expressions.TextExpression]]
-    ):
+    ) -> None:
         if event is not None:
             partIndex: int = event.partIndex
             staffIndex: int = event.staffIndex
@@ -1887,7 +1895,7 @@ class HumdrumWriter:
     @staticmethod
     def _addText(outSlice: GridSlice, outgm: GridMeasure,
                  partIndex: int, staffIndex: int, voiceIndex: int,
-                 textExpression: m21.expressions.TextExpression):
+                 textExpression: m21.expressions.TextExpression) -> None:
         textString: str = M21Convert.textLayoutParameterFromM21TextExpression(textExpression)
         outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, textString)
 
@@ -1898,7 +1906,7 @@ class HumdrumWriter:
     '''
     def _addTempos(self, outSlice: GridSlice,
                          outgm: GridMeasure,
-                         tempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]]):
+                         tempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]]) -> None:
         # we have to deduplicate because sometimes MusicXML export from music21 adds
         # extra metronome marks when exporting from PartStaffs.
         # We only want one metronome mark in this slice, preferably in the top-most part
@@ -1947,7 +1955,7 @@ class HumdrumWriter:
     // Tool_musicxml2hum::addTempo -- Add a tempo direction to the grid.
     '''
     def _addTempo(self, outSlice: GridSlice, outgm: GridMeasure, partIndex: int,
-                  tempoIndication: m21.tempo.TempoIndication):
+                  tempoIndication: m21.tempo.TempoIndication) -> None:
         mmTokenStr: str = ''       # e.g. '*MM128'
         tempoTextLayout: str = ''  # e.g. '!LO:TX:a:t=[eighth]=82','!LO:TX:t=Andantino [eighth]=82'
         mmTokenStr, tempoTextLayout = (
@@ -2084,7 +2092,7 @@ class HumdrumWriter:
         can avoid this if they init with a Score, and set self.makeNotation to False before
         calling write().
     '''
-    def _makeScoreFromObject(self, obj: m21.base.Music21Object) -> m21.stream.Score:
+    def _makeScoreFromObject(self, obj: m21.prebase.ProtoM21Object) -> m21.stream.Score:
         classes = obj.classes
         outScore: t.Optional[m21.stream.Score] = None
         for cM, methName in self._classMapping.items():
@@ -2276,7 +2284,7 @@ class HumdrumWriter:
         m.timeSignature = m.bestTimeSignature()
         return self._fromMeasure(m)
 
-    def _fromMusic21Object(self, obj):
+    def _fromMusic21Object(self, obj) -> m21.stream.Score:
         '''
         return things such as a single TimeSignature as a score
         '''
@@ -2286,7 +2294,7 @@ class HumdrumWriter:
         return self._fromMeasure(out)
 
     @staticmethod
-    def _getMetadataFromContext(s: m21.stream.Stream):
+    def _getMetadataFromContext(s: m21.stream.Stream) -> t.Optional[m21.metadata.Metadata]:
         '''
         Get metadata from site or context, so that a Part
         can be shown and have the rich metadata of its Score

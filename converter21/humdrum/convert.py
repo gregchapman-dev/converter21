@@ -124,11 +124,13 @@ class Convert:
     '''
     @staticmethod
     def timeSigToDuration(token, scale: HumNumIn = opFrac(4)) -> HumNum:
-        if not token.isTimeSignature:
+        from converter21.humdrum import HumdrumToken
+        tok: HumdrumToken = token
+        if not tok.isTimeSignature:
             return opFrac(0)
 
         # LATER: Handle extended **recip for time signature denominator
-        m = re.search(r'^\*M(\d+)/(\d+)', token.text)
+        m = re.search(r'^\*M(\d+)/(\d+)', tok.text)
         if m is None:
             return opFrac(0)
 
@@ -393,7 +395,8 @@ class Convert:
         *** Tempo ***
     '''
 
-    namedTempoPatterns = {  # some of these are actually regular expression patterns
+    namedTempoPatterns: t.Dict[str, int] = {
+        # some of these are actually regular expression patterns
         'larghissimo': 24,
         'adagissimo': 35,
         'all.*molto': 146,
@@ -436,7 +439,7 @@ class Convert:
     // in the input text.
     '''
     @staticmethod
-    def tempoNameToBPM(name: str, timeSig: tuple) -> float:
+    def tempoNameToBPM(name: str, timeSig: t.Tuple[int, int]) -> float:
         # timeSig tuple is (top: int, bot: int, ... other stuff)
         top: int = timeSig[0]
         bot: int = timeSig[1]
@@ -526,13 +529,13 @@ class Convert:
     // Convert::getLcm -- Return the Least Common Multiple of a list of numbers.
     '''
     @staticmethod
-    def getLcm(numbers: t.List[int]) -> int:
-        if len(numbers) == 0:
+    def getLcm(nums: t.List[int]) -> int:
+        if len(nums) == 0:
             return 1
 
-        output: int = numbers[0]
-        for i in range(1, len(numbers)):
-            output = (output * numbers[i]) // math.gcd(output, numbers[i])
+        output: int = nums[0]
+        for i in range(1, len(nums)):
+            output = (output * nums[i]) // math.gcd(output, nums[i])
 
         return output
 
@@ -909,7 +912,7 @@ class Convert:
     // Convert::kernClefToBaseline -- returns the diatonic pitch
     //    of the bottom line on the staff.
     '''
-    CLEF_TO_BASELINE_PITCH = {
+    CLEF_TO_BASELINE_PITCH: t.Dict[str, str] = {
         'G2': 'e',      # treble clef
         'F4': 'GG',     # bass clef
         'C3': 'F',      # alto clef
@@ -1016,6 +1019,7 @@ class Convert:
         'C^^4': 'dd',
         'C^^5': 'b',
     }
+
     @staticmethod
     def kernClefToBaseline(text: str) -> int:
         clefName: str = ''
@@ -1375,7 +1379,7 @@ class Convert:
         MeasureStyle.Double: '||',
         MeasureStyle.HeavyHeavy: '!!',
         MeasureStyle.HeavyLight: '!|',
-        MeasureStyle.Final: '=',  # first '=' of '==' is already there
+        MeasureStyle.Final: '=',                    # first '=' of '==' is already there
         MeasureStyle.Short: "'",
         MeasureStyle.Tick: '`',
         MeasureStyle.Invisible: '-',
@@ -1396,7 +1400,7 @@ class Convert:
         MeasureStyle.RepeatBothRegular: ':|:',
         MeasureStyle.RepeatBothHeavy: ':!:',
         MeasureStyle.RepeatBothHeavyLight: ':!|:',  # unexpected asymmetry
-        MeasureStyle.RepeatBothFinal: ':|!:',  # unexpected asymmetry
+        MeasureStyle.RepeatBothFinal: ':|!:',       # unexpected asymmetry
         MeasureStyle.RepeatBothHeavyHeavy: ':!!:',
         MeasureStyle.RepeatBothDouble: ':||:',
         MeasureStyle.RepeatBothHeavyLightHeavy: ':!|!:',

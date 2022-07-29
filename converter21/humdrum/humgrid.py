@@ -41,7 +41,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class HumGrid:
-    def __init__(self):
+    def __init__(self) -> None:
         self.measures: t.List[GridMeasure] = []
         self._allSlices: t.List[GridSlice] = []
 
@@ -64,7 +64,7 @@ class HumGrid:
         self._pickup: bool = False
         self._recip: bool = False  # include **recip spine in output
 
-    def __str__(self):
+    def __str__(self) -> str:
         output = 'GRID:'
         for i, measure in enumerate(self.measures):
             output += '\nMEASURE ' + str(i) + ' =========================\n' + str(measure)
@@ -86,7 +86,7 @@ class HumGrid:
     //
     // HumGrid::deleteMeasure --
     '''
-    def deleteMeasure(self, measureIndex: int):
+    def deleteMeasure(self, measureIndex: int) -> None:
         self.measures.pop(measureIndex)
 
     '''
@@ -94,7 +94,7 @@ class HumGrid:
     //
     // HumGrid::enableRecipSpine --
     '''
-    def enableRecipSpine(self):
+    def enableRecipSpine(self) -> None:
         self._recip = True
 
     '''
@@ -124,7 +124,7 @@ class HumGrid:
     // HumGrid::hasPickup --
     '''
     @property
-    def hasPickup(self):
+    def hasPickup(self) -> bool:
         return self._pickup
 
     '''
@@ -242,7 +242,7 @@ class HumGrid:
     // HumGrid::setDynamicsPresent -- Indicate that part needs a **dynam spine.
         Actually, indicate that part,staff needs a **dynam spine.  Dynamics are on the staff.
     '''
-    def setDynamicsPresent(self, partIndex: int, staffIndex: int):
+    def setDynamicsPresent(self, partIndex: int, staffIndex: int) -> None:
         if 0 <= partIndex < len(self._dynamics):
             if 0 <= staffIndex < len(self._dynamics[partIndex]):
                 self._dynamics[partIndex][staffIndex] = True
@@ -252,7 +252,7 @@ class HumGrid:
     //
     // HumGrid::setXmlidsPresent -- Indicate that part needs an **xmlid spine.
     '''
-    def setXmlIdsPresent(self, partIndex: int):
+    def setXmlIdsPresent(self, partIndex: int) -> None:
         if 0 <= partIndex < len(self._xmlIds):
             self._xmlIds[partIndex] = True
 
@@ -261,7 +261,7 @@ class HumGrid:
     //
     // HumGrid::setFiguredBassPresent -- Indicate that part needs a **fb spine.
     '''
-    def setFiguredBassPresent(self, partIndex: int):
+    def setFiguredBassPresent(self, partIndex: int) -> None:
         if 0 <= partIndex < len(self._figuredBass):
             self._figuredBass[partIndex] = True
 
@@ -270,7 +270,7 @@ class HumGrid:
     //
     // HumGrid::setHarmonyPresent -- Indicate that part needs a **harm spine.
     '''
-    def setHarmonyPresent(self, partIndex: int):
+    def setHarmonyPresent(self, partIndex: int) -> None:
         if 0 <= partIndex < len(self._harmony):
             self._harmony[partIndex] = True
 
@@ -279,7 +279,7 @@ class HumGrid:
     //
     // HumGrid::setHarmonyCount -- part size hardwired to 100 for now.
     '''
-    def setHarmonyCount(self, partIndex: int, newCount: int):
+    def setHarmonyCount(self, partIndex: int, newCount: int) -> None:
         if 0 <= partIndex < len(self._harmonyCount):
             self._harmonyCount[partIndex] = newCount
 
@@ -289,17 +289,17 @@ class HumGrid:
     // HumGrid::reportVerseCount --
         What is actually stored is max verseCount for part/staff seen so far
     '''
-    def reportVerseCount(self, partIndex: int, staffIndex: int, newCount: int):
+    def reportVerseCount(self, partIndex: int, staffIndex: int, newCount: int) -> None:
         if newCount <= 0:
             return  # won't be bigger than max so far
 
         staffNumber: int = staffIndex + 1
-        partSize = len(self._verseCount)
+        partSize: int = len(self._verseCount)
         if partIndex >= partSize:
             for _ in range(partSize, partIndex + 1):
                 self._verseCount.append([])
 
-        staffCount = len(self._verseCount[partIndex])
+        staffCount: int = len(self._verseCount[partIndex])
         if staffNumber >= staffCount:
             for _ in range(staffCount, staffNumber + 1):
                 self._verseCount[partIndex].append(0)
@@ -313,7 +313,7 @@ class HumGrid:
     // HumGrid::setVerseCount --
         Overwrites any existing verse count for this part/staff
     '''
-    def setVerseCount(self, partIndex: int, staffIndex: int, newCount: int):
+    def setVerseCount(self, partIndex: int, staffIndex: int, newCount: int) -> None:
         if 0 <= partIndex < len(self._verseCount):
             staffNumber: int = staffIndex + 1
             if staffNumber <= 0:
@@ -392,14 +392,14 @@ class HumGrid:
     //
     // HumGrid::calculateGridDurations --
     '''
-    def calculateGridDurations(self):
+    def calculateGridDurations(self) -> None:
 
         # the last line has to be calculated from the shortest or
         # longest duration on the line.  Acutally all durations
         # starting on this line must be the same, so just search for
         # the first duration.
 
-        lastSlice = self._allSlices[-1]
+        lastSlice: GridSlice = self._allSlices[-1]
 
         # set to zero in case not a duration type of line:
         lastSlice.duration = opFrac(0)
@@ -421,7 +421,7 @@ class HumGrid:
     //
     // HumGrid::addNullTokens --
     '''
-    def addNullTokens(self):
+    def addNullTokens(self) -> None:
         # make sure every note has enough '.'s to cover duration
         self.addNullTokensForNoteDurations()
 
@@ -439,7 +439,7 @@ class HumGrid:
     //
     // HumGrid::extendDurationToken --
     '''
-    def extendDurationToken(self, slicei: int, parti: int, staffi: int, voicei: int):
+    def extendDurationToken(self, slicei: int, parti: int, staffi: int, voicei: int) -> None:
         if not 0 <= slicei < len(self._allSlices) - 1:
             return
 
@@ -570,7 +570,7 @@ class HumGrid:
     // HumGrid::addNullTokensForGraceNotes -- Avoid grace notes at
     //     starts of measures from contracting the subspine count.
     '''
-    def addNullTokensForGraceNotes(self):
+    def addNullTokensForGraceNotes(self) -> None:
         # add null tokens for grace notes in other voices
         self._addNullTokensForSliceType(SliceType.GraceNotes)
 
@@ -580,7 +580,7 @@ class HumGrid:
     // HumGrid::addNullTokensForLayoutComments -- Avoid layout in multi-subspine
     //     regions from contracting to a single spine.
     '''
-    def addNullTokensForLayoutComments(self):
+    def addNullTokensForLayoutComments(self) -> None:
         # add null tokens for layout comments in other voices
         self._addNullTokensForSliceType(SliceType.Layouts)
 
@@ -590,14 +590,14 @@ class HumGrid:
     // HumGrid::addNullTokensForClefChanges -- Avoid clef in multi-subspine
     //     regions from contracting to a single spine.
     '''
-    def addNullTokensForClefChanges(self):
+    def addNullTokensForClefChanges(self) -> None:
         # add null tokens for clef changes in other voices
         self._addNullTokensForSliceType(SliceType.Clefs)
 
     '''
         _addNullTokensForSliceType
     '''
-    def _addNullTokensForSliceType(self, sliceType: SliceType):
+    def _addNullTokensForSliceType(self, sliceType: SliceType) -> None:
         # add null tokens in other voices in slices of this type
         for i, theSlice in enumerate(self._allSlices):
             if theSlice.sliceType != sliceType:
@@ -633,14 +633,7 @@ class HumGrid:
     @staticmethod
     def _fillInNullTokensForSlice(theSlice: GridSlice,
                                   lastSpined: GridSlice,
-                                  nextSpined: GridSlice):
-        if theSlice is None:
-            return
-        if nextSpined is None:
-            return
-        if lastSpined is None:
-            return
-
+                                  nextSpined: GridSlice) -> None:
         nullChar: str = theSlice.nullTokenStringForSlice()
 
         for p, part in enumerate(theSlice.parts):
@@ -669,7 +662,7 @@ class HumGrid:
                     elif voice.token is None:
                         voice.token = HumdrumToken(nullChar)
 
-    def addNullTokensForNoteDurations(self):
+    def addNullTokensForNoteDurations(self) -> None:
         # make sure every note has enough null tokens after it to cover
         # its entire duration.  This is critical to do before manipulator
         # checking, so that spines don't get merged in the middle of a
@@ -699,7 +692,7 @@ class HumGrid:
     // HumGrid::adjustClefChanges -- If a clef change starts at the
     //     beginning of a measure, move it to before the measure (unless
     //     the measure has zero duration).
-    def adjustClefChanges(self):
+    def adjustClefChanges(self) -> None:
         for i in range(1, len(self.measures)):
             thisMeasure: GridMeasure = self.measures[i]
             prevMeasure: GridMeasure = self.measures[i-1]
@@ -722,7 +715,7 @@ class HumGrid:
             prevMeasure.slices.append(firstSliceOfThisMeasure)
     '''
 
-    def checkForMissingNullTokens(self, sliceType=None):
+    def checkForMissingNullTokens(self, sliceType: t.Optional[SliceType] = None) -> None:
         for i, gridSlice in enumerate(self._allSlices):
             if sliceType is not None:
                 if not gridSlice.isSliceOfType(sliceType):
@@ -746,7 +739,7 @@ class HumGrid:
     //     pointers and allocate invisible rests for them by finding the next
     //     durational item in the particular staff/layer.
     '''
-    def checkForNullDataHoles(self):
+    def checkForNullDataHoles(self) -> None:
         for i, gridSlice in enumerate(self._allSlices):
             if not gridSlice.isNoteSlice:
                 continue
@@ -780,7 +773,7 @@ class HumGrid:
                                 # add slice duration to cumulative duration.
                                 duration = opFrac(duration + slicep.duration)
                                 continue
-                            vp: GridVoice = sp.voices[v]
+                            vp: t.Optional[GridVoice] = sp.voices[v]
                             if vp is None:
                                 # found another void spot which should be dealt with later
                                 break
@@ -793,7 +786,7 @@ class HumGrid:
                         recip: str = Convert.durationToRecip(duration)
                         # ggg @ marker is added to keep track of them for more debugging
                         recip += 'ryy@'
-                        voice.token = recip
+                        voice.token = HumdrumToken(recip)
 
     '''
     //////////////////////////////
@@ -802,7 +795,7 @@ class HumGrid:
     //    timing gaps in the first track of a **kern spine, then
     //    fill in with invisible rests.
     '''
-    def addInvisibleRestsInFirstTrack(self):
+    def addInvisibleRestsInFirstTrack(self) -> None:
         nextEvent: t.List[t.List[GridSlice]] = []
         lastSlice: GridSlice = self._allSlices[-1]
         self.setPartStaffDimensions(nextEvent, lastSlice)
@@ -846,7 +839,7 @@ class HumGrid:
     '''
     def setPartStaffDimensions(self,
             nextEvent: t.List[t.List[GridSlice]],
-            startSlice: GridSlice):
+            startSlice: GridSlice) -> None:
         nextEvent.clear()
         for gridSlice in self._allSlices:
             if not gridSlice.isNoteSlice:
@@ -873,8 +866,8 @@ class HumGrid:
             nextEvent: t.List[t.List[GridSlice]],
             sliceIndex: int,
             p: int,
-            s: int):
-        ending: GridSlice = nextEvent[p][s]
+            s: int) -> None:
+        ending: t.Optional[GridSlice] = nextEvent[p][s]
         if ending is None:
             print('Not handling this case yet at end of data.', file=sys.stderr)
             return
@@ -956,12 +949,16 @@ class HumGrid:
         to the measure number, which is good, because in music21 it's a string (might have
         an alphabetic suffix, like '124a').
     '''
-    def addMeasureLines(self):
+    def addMeasureLines(self) -> None:
         for m, measure in enumerate(self.measures):
-            firstSpined: GridSlice = measure.firstSpinedSlice()
+            firstSpined: t.Optional[GridSlice] = measure.firstSpinedSlice()
+            if firstSpined is None:
+                # no spined slices in this measure?!? no barline for you.
+                continue
+
             timestamp: HumNum = firstSpined.timestamp
-            prevMeasure: GridMeasure = None
-            prevLastSpined: GridSlice = None
+            prevMeasure: t.Optional[GridMeasure] = None
+            prevLastSpined: t.Optional[GridSlice] = None
             if m > 0:
                 prevMeasure = self.measures[m - 1]
                 if len(prevMeasure.slices) > 0:
@@ -1015,7 +1012,7 @@ class HumGrid:
     //
     // HumGrid::addLastMeasure --
     '''
-    def addLastBarline(self):
+    def addLastBarline(self) -> None:
         # add the last barline, which will be only one voice
         # for each part/staff
         if not self.measures:
@@ -1154,13 +1151,13 @@ class HumGrid:
     //
     // HumGrid::cleanTempos --
     '''
-    def cleanTempos(self):
+    def cleanTempos(self) -> None:
         for gridSlice in self._allSlices:
             if gridSlice.isTempoSlice:
                 self._cleanTempoSlice(gridSlice)
 
     @staticmethod
-    def _cleanTempoSlice(tempoSlice: GridSlice):
+    def _cleanTempoSlice(tempoSlice: GridSlice) -> None:
         token: t.Optional[HumdrumToken] = None
 
         # find first real tempo token
@@ -1413,9 +1410,9 @@ class HumGrid:
     //
     // HumGrid::cleanupManipulators --
     '''
-    def cleanupManipulators(self):
-        currSlice: GridSlice = None
-        lastSlice: GridSlice = None
+    def cleanupManipulators(self) -> None:
+        currSlice: t.Optional[GridSlice] = None
+        lastSlice: t.Optional[GridSlice] = None
         for measure in self.measures:
             # This is a while loop instead of a for loop because we're
             # carefully inserting into the list we are iterating over,
@@ -1448,7 +1445,7 @@ class HumGrid:
     //
     // HumGrid::matchVoices --
     '''
-    def matchVoices(self, currSlice: GridSlice, lastSlice: GridSlice):
+    def matchVoices(self, currSlice: GridSlice, lastSlice: GridSlice) -> None:
         if currSlice is None:
             return
         if lastSlice is None:
@@ -1572,7 +1569,7 @@ class HumGrid:
     //   next line.  The "newmanip" will be placed before curr, so
     '''
     def adjustExpansionsInStaff(self, newManip: GridSlice, currSlice: GridSlice,
-                                p: int, s: int):
+                                p: int, s: int) -> None:
         newStaff: GridStaff = newManip.parts[p].staves[s]
         curStaff: GridStaff = currSlice.parts[p].staves[s]
 
@@ -1724,7 +1721,7 @@ class HumGrid:
             newStaff: GridStaff,
             newLastStaff: GridStaff,
             pindex: int,
-            sindex: int):
+            sindex: int) -> None:
 
         if oldStaff is None or oldLastStaff is None:
             print('Weird error in HumGrid.transferMerges()', file=sys.stderr)
@@ -1775,7 +1772,7 @@ class HumGrid:
     // HumGrid::transferOtherParts -- after a line split due to merges
     //    occurring at the same time.
     '''
-    def transferOtherParts(self, oldLine: GridSlice, newLine: GridSlice, maxPart: int):
+    def transferOtherParts(self, oldLine: GridSlice, newLine: GridSlice, maxPart: int) -> None:
         if maxPart >= len(oldLine.parts):
             return
 
@@ -1818,7 +1815,7 @@ class HumGrid:
     //
     // HumGrid::adjustVoices --
     '''
-    def adjustVoices(self, currSlice: GridSlice, newManip: GridSlice, _partSplit: int):
+    def adjustVoices(self, currSlice: GridSlice, newManip: GridSlice, _partSplit: int) -> None:
         for p, (part1, part2) in enumerate(zip(currSlice.parts, newManip.parts)):
             for s, (staff1, staff2) in enumerate(zip(part1.staves, part2.staves)):
                 if len(staff1.voices) == 0 and len(staff2.voices) > 0:
@@ -1831,7 +1828,7 @@ class HumGrid:
     //
     // HumGrid::createMatchedVoiceCount --
     '''
-    def createMatchedVoiceCount(self, snew: GridStaff, sold: GridStaff, p: int, s: int):
+    def createMatchedVoiceCount(self, snew: GridStaff, sold: GridStaff, p: int, s: int) -> None:
         if len(snew.voices) != 0:
             raise HumdrumInternalError(
                 'createMatchedVoiceCount is only for creating a totally new voice list'
@@ -1845,7 +1842,7 @@ class HumGrid:
     //
     // HumGrid::insertPartNames --
     '''
-    def insertPartNames(self, outFile: HumdrumFile):
+    def insertPartNames(self, outFile: HumdrumFile) -> None:
         if not self._partNames:
             return
 
@@ -1876,7 +1873,7 @@ class HumGrid:
     //
     // HumGrid::insertSideNullInterpretations --
     '''
-    def insertSideNullInterpretations(self, line: HumdrumLine, p: int, s: int):
+    def insertSideNullInterpretations(self, line: HumdrumLine, p: int, s: int) -> None:
         if s < 0:
             # part side info
             if self.hasFiguredBass(p):
@@ -1901,7 +1898,7 @@ class HumGrid:
     //    MusicXML Part number. (Some parts will contain more than one
     //    staff).
     '''
-    def insertStaffIndications(self, outFile: HumdrumFile):
+    def insertStaffIndications(self, outFile: HumdrumFile) -> None:
         if not self.measures:
             return
         if not self.measures[0].slices:
@@ -1933,7 +1930,7 @@ class HumGrid:
     //
     // HumGrid::insertSideStaffInfo --
     '''
-    def insertSideStaffInfo(self, line: HumdrumLine, p: int, s: int, staffNum: int):
+    def insertSideStaffInfo(self, line: HumdrumLine, p: int, s: int, staffNum: int) -> None:
         if staffNum < 0:
             # part side info (no staff markers)
             if self.hasFiguredBass(p):
@@ -1961,7 +1958,7 @@ class HumGrid:
     //    MusicXML Part number. (Some parts will contain more than one
     //    staff).
     '''
-    def insertPartIndications(self, outFile: HumdrumFile):
+    def insertPartIndications(self, outFile: HumdrumFile) -> None:
         if not self.measures:
             return
         if not self.measures[0].slices:
@@ -1987,7 +1984,7 @@ class HumGrid:
     //
     // HumGrid::insertSidePartInfo --
     '''
-    def insertSidePartInfo(self, line: HumdrumLine, p: int, s: int):
+    def insertSidePartInfo(self, line: HumdrumLine, p: int, s: int) -> None:
         text: str = '*part' + str(p + 1)
         if s < 0:
             # part side info
@@ -2011,7 +2008,7 @@ class HumGrid:
     //    that the first entry contains spines.  And the first measure
     //    in the HumGrid object must contain a slice.
     '''
-    def insertExclusiveInterpretationLine(self, outFile: HumdrumFile, interp: str):
+    def insertExclusiveInterpretationLine(self, outFile: HumdrumFile, interp: str) -> None:
         if not self.measures:
             return
         if not self.measures[0].slices:
@@ -2036,7 +2033,7 @@ class HumGrid:
     //
     // HumGrid::insertExInterpSides --
     '''
-    def insertExInterpSides(self, line: HumdrumLine, p: int, s: int):
+    def insertExInterpSides(self, line: HumdrumLine, p: int, s: int) -> None:
         if s < 0:
             # part side info
             if self.hasFiguredBass(p):
@@ -2060,7 +2057,7 @@ class HumGrid:
     //    measure in the HumGrid object must contain a slice.
     //    Also need to compensate for *v on previous line.
     '''
-    def insertDataTerminationLine(self, outFile: HumdrumFile):
+    def insertDataTerminationLine(self, outFile: HumdrumFile) -> None:
         if not self.measures:
             return
         if not self.measures[0].slices:
@@ -2084,7 +2081,7 @@ class HumGrid:
     //
     // HumGrid::insertSideTerminals --
     '''
-    def insertSideTerminals(self, line: HumdrumLine, p: int, s: int):
+    def insertSideTerminals(self, line: HumdrumLine, p: int, s: int) -> None:
         text: str = '*-'
         if s < 0:
             # part side info
@@ -2106,7 +2103,7 @@ class HumGrid:
     //
     // HumGrid::removeRedundantClefChanges -- Will also have to consider
     //		the meter signature.
-    def removeRedundantClefChanges(self):
+    def removeRedundantClefChanges(self) -> None:
         # curClef is a list of the current staff on the part:staff.
         curClef: t.List[t.List[str]] = []
         hasDuplicate: bool = False
@@ -2172,9 +2169,9 @@ class HumGrid:
     //   For now just adjust local layout parameter slices, but maybe
     //   later do all types of local comments.
     '''
-    def expandLocalCommentLayers(self):
-        dataSlice: GridSlice = None
-        localSlice: GridSlice = None
+    def expandLocalCommentLayers(self) -> None:
+        dataSlice: t.Optional[GridSlice] = None
+        localSlice: t.Optional[GridSlice] = None
         for gridSlice in self._allSlices:
             if gridSlice.isDataSlice:
                 dataSlice = gridSlice
@@ -2200,7 +2197,7 @@ class HumGrid:
     // HumGrid::matchLayers -- Make sure every staff in both inputs
     //   have the same number of voices.
     '''
-    def matchLocalCommentLayers(self, oslice: GridSlice, islice: GridSlice):
+    def matchLocalCommentLayers(self, oslice: GridSlice, islice: GridSlice) -> None:
         if len(oslice.parts) != len(islice.parts):
             # something wrong or one of the slices
             # could be a non-spined line
@@ -2216,7 +2213,7 @@ class HumGrid:
 
     # matchLocalCommentStaffLayers (also originally called HumGrid::matchLayers)
     @staticmethod
-    def matchLocalCommentStaffLayers(ostaff: GridStaff, istaff: GridStaff):
+    def matchLocalCommentStaffLayers(ostaff: GridStaff, istaff: GridStaff) -> None:
         iVoiceCount: int = len(istaff.voices)
         oVoiceCount: int = len(ostaff.voices)
         if iVoiceCount == oVoiceCount:
@@ -2235,7 +2232,7 @@ class HumGrid:
     //
     // HumGrid::setPartName --
     '''
-    def setPartName(self, partIndex: int, partName: str):
+    def setPartName(self, partIndex: int, partName: str) -> None:
         if partIndex < 0:
             return
 

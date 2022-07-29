@@ -35,21 +35,20 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class GridStaff():
-    def __init__(self):
+    def __init__(self) -> None:
         self.voices: t.List[t.Optional[GridVoice]] = []
         self.sides: GridSide = GridSide()
 
-    def __str__(self):
+    def __str__(self) -> str:
         output: str = ''
 
         for i, gv in enumerate(self.voices):
             if gv is None:
                 output += '{nv}'
+            elif gv.token is None:
+                output += '{n}'
             else:
-                if gv.token is None:
-                    output += '{n}'
-                else:
-                    output += gv.token.text
+                output += gv.token.text
 
             if i < len(self.voices) - 1:
                 output += '\t'
@@ -71,7 +70,7 @@ class GridStaff():
         return self.sides.dynamics
 
     @dynamics.setter
-    def dynamics(self, newDynamics: t.Optional[HumdrumToken]):
+    def dynamics(self, newDynamics: t.Optional[HumdrumToken]) -> None:
         self.sides.dynamics = newDynamics
 
 
@@ -95,7 +94,7 @@ class GridStaff():
         self.voices[layerIndex] = gv
         return gv
 
-    def setNullTokenLayer(self, layerIndex: int, sliceType: SliceType, nextDur: HumNum):
+    def setNullTokenLayer(self, layerIndex: int, sliceType: SliceType, nextDur: HumNum) -> None:
         if sliceType == SliceType.Invalid:
             return
         if sliceType == SliceType.GlobalLayouts:
@@ -132,7 +131,7 @@ class GridStaff():
         token: HumdrumToken = HumdrumToken(nullStr)
         self.setTokenLayer(layerIndex, token, nextDur)
 
-# appendTokenLayer goes here, but no-one calls it
+    # appendTokenLayer goes here, but no-one calls it
 
     @property
     def maxVerseCount(self) -> int:

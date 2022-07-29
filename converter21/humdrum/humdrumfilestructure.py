@@ -15,9 +15,11 @@ import sys
 import typing as t
 from operator import attrgetter
 from fractions import Fraction
+from pathlib import Path
 
 from music21.common import opFrac
 
+from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 from converter21.humdrum import HumdrumToken
@@ -30,7 +32,7 @@ class HumdrumFileStructure(HumdrumFileBase):
     # So... no __init__
     # Except... pylint is unhappy about some data it thinks is uninitialized (because it's
     # initialized in HumdrumFileBase), so let's initialize it here, too.
-    def __init__(self, fileName: str = None):
+    def __init__(self, fileName: t.Optional[t.Union[str, Path]] = None) -> None:
         super().__init__(fileName)
         self._ticksPerQuarterNote: int = -1
         self._barlines: t.List[HumdrumLine] = []
@@ -215,7 +217,7 @@ class HumdrumFileStructure(HumdrumFileBase):
     //
     // HumdrumFileStructure::setLineRhythmAnalyzed --
     '''
-    def setLinesRhythmAnalyzed(self):
+    def setLinesRhythmAnalyzed(self) -> None:
         for line in self._lines:
             line.rhythmAnalyzed = True
 
@@ -230,11 +232,13 @@ class HumdrumFileStructure(HumdrumFileBase):
         if self.maxTrack == 0:
             return True
 
+
         trackStartTok: t.Optional[HumdrumToken] = self.trackStart(1)
         if trackStartTok is None:
             return False
 
         startLine: int = trackStartTok.lineIndex
+        success: bool
 
         for i in range(1, self.maxTrack + 1):
             trackStartTok = self.trackStart(i)
@@ -278,10 +282,7 @@ class HumdrumFileStructure(HumdrumFileBase):
         if not success:
             return False
         success = self.analyzeNonNullDataTokens()
-        if not success:
-            return False
-
-        return True
+        return success
 
     '''
     //////////////////////////////
@@ -421,7 +422,7 @@ class HumdrumFileStructure(HumdrumFileBase):
         if not startToken.hasRhythm:
             return self.isValid
 
-        success = self.prepareDurations(startToken, startToken.rhythmAnalysisState, sDur)
+        success: bool = self.prepareDurations(startToken, startToken.rhythmAnalysisState, sDur)
         if not success:
             return self.isValid
         return self.isValid
@@ -550,7 +551,7 @@ Line: {line.text}'''
         if foundDur == 0:
             return self.setParseError('Error: cannot link floating spine to score.')
 
-        success = self.assignDurationsToTrack(spineStart, foundDur - durSum)
+        success: bool = self.assignDurationsToTrack(spineStart, foundDur - durSum)
         if not success:
             return self.isValid
 
@@ -634,8 +635,8 @@ Line: {line.text}'''
     //    durations.
         "negative" is now "None" -- gregc
     '''
-    def fillInMissingStartTimes(self):
-        lastDur: HumNum = None
+    def fillInMissingStartTimes(self) -> None:
+        lastDur: t.Optional[HumNum] = None
 
         for line in reversed(self._lines):
             if line.durationFromStart is None and lastDur is not None:
@@ -656,13 +657,13 @@ Line: {line.text}'''
     // HumdrumFileStructure::assignLineDurations --  Calculate the duration of lines
     //   based on the durationFromStart of the current line and the next line.
     '''
-    def assignLineDurations(self):
+    def assignLineDurations(self) -> None:
         for i in range(0, len(self._lines)):
             if i == len(self._lines) - 1:
                 self._lines[i].duration = opFrac(0)
             else:
-                startDur = self._lines[i].durationFromStart
-                endDur = self._lines[i + 1].durationFromStart
+                startDur: HumNum = self._lines[i].durationFromStart
+                endDur: HumNum = self._lines[i + 1].durationFromStart
                 self._lines[i].duration = opFrac(endDur - startDur)
 
     '''
@@ -717,7 +718,7 @@ Line: {line.text}'''
     //
     // HumdrumFileStructure::processLocalParametersForStrand --
     '''
-    def processLocalParametersForStrand(self, index: int):
+    def processLocalParametersForStrand(self, index: int) -> None:
         sStart: HumdrumToken = self.strandStart1d(index)
         sEnd: HumdrumToken = self.strandEnd1d(index)
         tok: t.Optional[HumdrumToken] = sEnd  # start at the end and work backward
@@ -775,7 +776,7 @@ Line: {line.text}'''
     //
     // HumdrumFileStructure::resolveNullTokens --
     '''
-    def resolveNullTokens(self):
+    def resolveNullTokens(self) -> None:
         if self._analyses.nullsAnalyzed:
             return
 
@@ -783,11 +784,21 @@ Line: {line.text}'''
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 
-        data: HumdrumToken = None
+        data: t.Optional[HumdrumToken] = None
+        strandPair: TokenPair
         for strandPair in self._strand1d:
-            token: HumdrumToken = strandPair.first
-            strandEnd: HumdrumToken = strandPair.last
+            token: t.Optional[HumdrumToken] = strandPair.first
+            strandEnd: t.Optional[HumdrumToken] = strandPair.last
+            if t.TYPE_CHECKING:
+                # after analyzeStrands, no pair in self._strand1d will have Nones in it.
+                assert token is not None
+                assert strandEnd is not None
+
             while token != strandEnd:
+                if token is None:
+                    # we never reached strandEnd, but we're done
+                    raise HumdrumInternalError(f'never found strandEnd ({strandEnd})')
+
                 if not token.isData:
                     token = token.nextToken0
                     continue
@@ -812,9 +823,10 @@ Line: {line.text}'''
     //    index number for each token in the file.  Global tokens will have
     //    strand index set to -1.
     '''
-    def assignStrandsToTokens(self):
+    def assignStrandsToTokens(self) -> None:
+        strandPair: TokenPair
         for i, strandPair in enumerate(self._strand1d):
-            tok: HumdrumToken = strandPair.first
+            tok: t.Optional[HumdrumToken] = strandPair.first
             while tok is not None:
                 tok.strandIndex = i
                 tok = tok.nextToken0
@@ -825,7 +837,11 @@ Line: {line.text}'''
     // HumdrumFileStructure::analyzeSpineStrands -- Fill in the list of
     //   strands in a single spine.
     '''
-    def analyzeSpineStrands(self, ends: t.List[TokenPair], startToken: t.Optional[HumdrumToken]):
+    def analyzeSpineStrands(
+            self,
+            ends: t.List[TokenPair],
+            startToken: t.Optional[HumdrumToken]
+    ) -> None:
         newStrand: TokenPair = TokenPair(startToken, None)
         ends.append(newStrand)
 
@@ -861,7 +877,7 @@ Line: {line.text}'''
     //
     // HumdrumFileStructure::getStrandCount --
     '''
-    def strandCount(self, spineIndex: int = None):
+    def strandCount(self, spineIndex: int = None) -> int:
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 
@@ -974,7 +990,7 @@ Line: {line.text}'''
     // HumdrumFileStructure::analyzeSignifiers --
         Analyzes all the RDF lines
     '''
-    def analyzeSignifiers(self):
+    def analyzeSignifiers(self) -> None:
         for line in self._lines:
             if line.isSignifier:
                 self._signifiers.addSignifier(line.text)

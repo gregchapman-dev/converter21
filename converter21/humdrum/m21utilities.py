@@ -16,14 +16,15 @@
 import typing as t
 
 import music21 as m21
+from music21.common.types import OffsetQL
 
 from converter21.humdrum import HumdrumInternalError
 
 # pylint: disable=protected-access
 
-DEBUG = 0
-TUPLETDEBUG = 1
-BEAMDEBUG = 1
+DEBUG: bool = False
+TUPLETDEBUG: bool = True
+BEAMDEBUG: bool = True
 
 def durationWithTupletDebugReprInternal(dur: m21.duration.Duration) -> str:
     output: str = f'dur.qL={dur.quarterLength}'
@@ -65,8 +66,8 @@ def chordDebugReprInternal(c: m21.chord.Chord) -> str:
         output += ' ' + durationWithTupletDebugReprInternal(c.duration)
     return output
 
-def setDebugReprInternal(self, method):
-    if DEBUG != 0:
+def setDebugReprInternal(self, method) -> None:
+    if DEBUG:
         import types
         self._reprInternal = types.MethodType(method, self)
 
@@ -75,7 +76,9 @@ def setDebugReprInternal(self, method):
 class M21Utilities:
 
     @staticmethod
-    def createNote(placeHolder: m21.note.GeneralNote = None) -> m21.note.Note:
+    def createNote(
+            placeHolder: t.Optional[m21.Music21Object] = None
+    ) -> m21.note.Note:
         note = m21.note.Note()
 
         # for debugging, override this note's _reprInternal so we can see any Beams.
@@ -83,7 +86,7 @@ class M21Utilities:
 
         # Now replace placeHolder with note in every spanner that references it.
         # (This is for, e.g., slurs that were created before this note was there.)
-        if placeHolder:
+        if placeHolder is not None:
             spanners = placeHolder.getSpannerSites()
             for spanner in spanners:
                 spanner.replaceSpannedElement(placeHolder, note)
@@ -91,7 +94,9 @@ class M21Utilities:
         return note
 
     @staticmethod
-    def createUnpitched(placeHolder: m21.note.GeneralNote = None) -> m21.note.Unpitched:
+    def createUnpitched(
+            placeHolder: t.Optional[m21.Music21Object] = None
+    ) -> m21.note.Unpitched:
         unpitched = m21.note.Unpitched()
 
         # for debugging, override this unpitched's _reprInternal so we can see any Beams.
@@ -99,7 +104,7 @@ class M21Utilities:
 
         # Now replace placeHolder with unpitched in every spanner that references it.
         # (This is for, e.g., slurs that were created before this unpitched was there.)
-        if placeHolder:
+        if placeHolder is not None:
             spanners = placeHolder.getSpannerSites()
             for spanner in spanners:
                 spanner.replaceSpannedElement(placeHolder, unpitched)
@@ -107,7 +112,9 @@ class M21Utilities:
         return unpitched
 
     @staticmethod
-    def createChord(placeHolder: m21.note.GeneralNote = None) -> m21.chord.Chord:
+    def createChord(
+            placeHolder: t.Optional[m21.Music21Object] = None
+    ) -> m21.chord.Chord:
         chord = m21.chord.Chord()
 
         # for debugging, override this chord's _reprInternal so we can see any Beams.
@@ -123,7 +130,9 @@ class M21Utilities:
         return chord
 
     @staticmethod
-    def createRest(placeHolder: m21.note.GeneralNote = None) -> m21.note.Rest:
+    def createRest(
+            placeHolder: t.Optional[m21.Music21Object] = None
+    ) -> m21.note.Rest:
         rest = m21.note.Rest()
 
         # for debugging, override this rest's _reprInternal so we can see any Beams.
@@ -193,9 +202,10 @@ class M21Utilities:
         return output
 
     @staticmethod
-    def getDynamicWedgesStartedWithGeneralNote(gnote: m21.note.GeneralNote,
-                                               spannerBundle: m21.spanner.SpannerBundle
-                                               ) -> t.List[m21.dynamics.DynamicWedge]:
+    def getDynamicWedgesStartedWithGeneralNote(
+            gnote: m21.note.GeneralNote,
+            spannerBundle: m21.spanner.SpannerBundle
+    ) -> t.List[m21.dynamics.DynamicWedge]:
         output: t.List[m21.dynamics.DynamicWedge] = []
         spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
@@ -209,17 +219,12 @@ class M21Utilities:
 
     @staticmethod
     def hasMeterSymbol(timeSig: m21.meter.TimeSignature) -> bool:
-        if not isinstance(timeSig, m21.meter.TimeSignature):
-            return False
         if timeSig.symbol in ('common', 'cut'):
             return True
         return False
 
     @staticmethod
     def isTransposingInstrument(inst: m21.instrument.Instrument) -> bool:
-        if not isinstance(inst, m21.instrument.Instrument):
-            return False  # not an instrument
-
         trans: t.Optional[m21.interval.Interval] = inst.transposition
         if trans is None:
             return False  # not a transposing instrument
@@ -230,7 +235,7 @@ class M21Utilities:
         return True
 
     @staticmethod
-    def splitComplexRestDurations(s: m21.stream.Stream):
+    def splitComplexRestDurations(s: m21.stream.Stream) -> None:
         # only handles rests that are in s directly (does not recurse)
         # always in-place, never adds ties (because they're rests)
         # loses all beams, so we can only do this on rests!
@@ -239,7 +244,7 @@ class M21Utilities:
             if rest.duration.type != 'complex':
                 continue
             insertPoint = rest.offset
-            restList: t.List[m21.note.Rest] = M21Utilities.splitComplexRestDuration(rest)
+            restList: t.Tuple[m21.note.Rest, ...] = M21Utilities.splitComplexRestDuration(rest)
             s.replace(rest, restList[0])
             insertPoint += restList[0].quarterLength
             for subsequent in restList[1:]:
@@ -254,11 +259,16 @@ class M21Utilities:
                     sp.replaceSpannedElement(rest, restList[-1])
 
     @staticmethod
-    def splitComplexRestDuration(rest: m21.note.Rest):
-        atm = rest.duration.aggregateTupletMultiplier()
-        quarterLengthList = [c.quarterLength * atm for c in rest.duration.components]
-        splitList = rest.splitByQuarterLengths(quarterLengthList, addTies=False)
-        return splitList
+    def splitComplexRestDuration(rest: m21.note.Rest) -> t.Tuple[m21.note.Rest, ...]:
+        atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
+        quarterLengthList: t.List[t.Union[int, float]] = [
+            float(c.quarterLength * atm) for c in rest.duration.components
+        ]
+        splits: t.Tuple[m21.note.Rest, ...] = (
+            rest.splitByQuarterLengths(quarterLengthList, addTies=False)
+        )
+
+        return splits
 
 
     @staticmethod
@@ -320,7 +330,7 @@ class M21StaffGroupTree:
             self,
             sg: m21.layout.StaffGroup,
             staffNumbersByM21Part: t.Dict[m21.stream.Part, int]
-    ):
+    ) -> None:
         # about this staff group
         self.staffGroup: m21.layout.StaffGroup = sg
         self.staffNums: t.Set[int] = set(staffNumbersByM21Part[m21Part]
@@ -333,7 +343,7 @@ class M21StaffGroupTree:
         self.children: t.List[M21StaffGroupTree] = []
 
 class M21StaffGroupDescriptionTree:
-    def __init__(self):
+    def __init__(self) -> None:
         # about this group description
         self.groupNum: int = 0
         self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol

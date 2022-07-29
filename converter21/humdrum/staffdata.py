@@ -35,12 +35,16 @@ class StaffData:
             partStaff: m21.stream.Part,  # could be PartStaff (derived from Part)
             ownerPart,                   # PartData
             staffIndex: int
-    ):
+    ) -> None:
         from converter21.humdrum import PartData
         self.ownerPart: PartData = ownerPart
         self.m21PartStaff: m21.stream.Part = partStaff
-        self.spannerBundle = ownerPart.spannerBundle  # inherited from ownerScore, ultimately
+
+        # inherited from ownerScore, ultimately
+        self.spannerBundle: m21.spanner.SpannerBundle = ownerPart.spannerBundle
+
         self._transposeWrittenToSounding(partStaff)
+
         self._staffIndex: int = staffIndex
         self._hasDynamics: bool = False
         self._verseCount: int = 0
@@ -53,7 +57,7 @@ class StaffData:
             prevMeasData = measData
 
     @staticmethod
-    def _transposeWrittenToSounding(partStaff: m21.stream.Part):
+    def _transposeWrittenToSounding(partStaff: m21.stream.Part) -> None:
         # Transpose any transposing instrument parts to "sounding pitch" (a.k.a. concert pitch).
         # For performance, check the instruments here, since stream.toSoundingPitch
         # can be expensive, even if there is no transposing instrument.
@@ -98,12 +102,12 @@ class StaffData:
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerPart.reportLinkedSlurToOwner()
 
-    def receiveVerseCount(self, verseCount: int):
+    def receiveVerseCount(self, verseCount: int) -> None:
         # don't propagate up to PartData, verses are per staff
         # accumulate the maximum verseCount seen
         if verseCount > self._verseCount:
             self._verseCount = verseCount
 
-    def receiveDynamic(self):
+    def receiveDynamic(self) -> None:
         # don't propagate up to PartData, we do per-staff dynamics
         self._hasDynamics = True

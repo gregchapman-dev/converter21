@@ -28,12 +28,12 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class GridPart:
-    def __init__(self):
+    def __init__(self) -> None:
         self.staves: t.List[GridStaff] = []
         self.sides: GridSide = GridSide()
         self._partName: str = ''
 
-    def __str__(self):
+    def __str__(self) -> str:
         output: str = ''
         for s, staff in enumerate(self.staves):
             output += '(s' + str(s) + ':)'
@@ -43,11 +43,11 @@ class GridPart:
             for v, voice in enumerate(staff.voices):
                 output += '(v' + str(v) + ':)'
                 if voice is None:
-                    output += '{n}'
+                    output += '{nv}'
                     continue
                 if voice.token is None:
                     output += '{n}'
-                else:
-                    output += voice.token.text
+                    continue
+                output += voice.token.text
         output += ' ppp ' + str(self.sides)
         return output

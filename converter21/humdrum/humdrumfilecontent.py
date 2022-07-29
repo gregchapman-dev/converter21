@@ -13,9 +13,11 @@
 import re
 import typing as t
 from fractions import Fraction
+from pathlib import Path
 
 from music21.common import opFrac
 
+from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum
 from converter21.humdrum import Convert
 from converter21.humdrum import HumdrumToken
@@ -23,13 +25,13 @@ from converter21.humdrum import HumdrumFileStructure
 from converter21.humdrum import TokenPair
 
 # spineColors array will contains slots for this many subtracks
-MAXCOLORSUBTRACK = 30
+MAXCOLORSUBTRACK: int = 30
 
 class HumdrumFileContent(HumdrumFileStructure):
     # HumdrumFileContent has no private data to initialize, just a bunch more functions
     # So... no __init__.  Well, OK, to keep pylint happy about attribute-defined-outside-init,
     # a quick __init__ that sets a few attributes that are already set in HumdrumFileBase.py
-    def __init__(self, fileName: str = None):
+    def __init__(self, fileName: t.Optional[t.Union[str, Path]] = None) -> None:
         super().__init__(fileName)  # initialize the HumdrumFileBase fields
         self._hasInformalBreaks: bool = False
         self._hasFormalBreaks: bool = False
@@ -42,7 +44,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             return self.isValid
         return self.isValid
 
-    def analyzeNotation(self):
+    def analyzeNotation(self) -> None:
         # This code originally was in verovio/iohumdrum.cpp (by Craig Sapp)
         # Here I am consolidating this into one HumdrumFileContent method which
         # can be called from any client that wants notation support (e.g.
@@ -90,7 +92,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumInput::analyzeClefNulls -- Mark all null interpretations
     //    that are in the same track as a clef interpretation.
     '''
-    def analyzeClefNulls(self):
+    def analyzeClefNulls(self) -> None:
         for line in self.lines():
             if not line.isInterpretation:
                 continue
@@ -112,7 +114,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         ... and music21 likes this (in all voices) too. --gregc
     '''
     @staticmethod
-    def markAdjacentNullsWithClef(clef: HumdrumToken):
+    def markAdjacentNullsWithClef(clef: HumdrumToken) -> None:
         ctrack: int = clef.track
         track: int = 0
 
@@ -142,7 +144,7 @@ class HumdrumFileContent(HumdrumFileStructure):
 
         Actually sets self._hasFormalBreaks and self._hasInformalBreaks
     '''
-    def analyzeBreaks(self):
+    def analyzeBreaks(self) -> None:
         # check for informal breaking markers such as:
         # !!pagebreak:original
         # !!linebreak:original
@@ -165,6 +167,10 @@ class HumdrumFileContent(HumdrumFileStructure):
         # !!LO:LB:g=z
         for line in self._lines:
             if not line.isComment:
+                continue
+
+            if line[0] is None:
+                # shouldn't happen, but...
                 continue
 
             if '!LO:LB' in line[0].text:
@@ -279,8 +285,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                     slurEnds,
                     labels,
                     endings,
-                    linkSignifier
-                )
+                    linkSignifier)
             )
 
         self.createLinkedSlursOrPhrases(slurOrPhrase, slurStarts, slurEnds)
@@ -444,7 +449,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     def createLinkedSlursOrPhrases(self,
             slurOrPhrase: str,
             linkStarts: t.List[HumdrumToken],
-            linkEnds: t.List[HumdrumToken]):
+            linkEnds: t.List[HumdrumToken]) -> None:
         shortest: int = len(linkStarts)
         if shortest > len(linkEnds):
             shortest = len(linkEnds)
@@ -542,7 +547,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             slurOrPhrase: str,
             startTok: HumdrumToken,
             endTok: HumdrumToken
-    ):
+    ) -> None:
         if slurOrPhrase == HumdrumToken.SLUR:
             prefix = 'slur'
         else:
@@ -613,10 +618,12 @@ class HumdrumFileContent(HumdrumFileStructure):
     // Currently all spines are checked for linked ties.
     '''
 
-    def generateLinkedTieStartsAndEnds(self,
-                                       linkedTieStarts: t.List[t.Tuple[HumdrumToken, int]],
-                                       linkedTieEnds: t.List[t.Tuple[HumdrumToken, int]],
-                                       linkSignifier: str) -> bool:
+    def generateLinkedTieStartsAndEnds(
+            self,
+            linkedTieStarts: t.List[t.Tuple[HumdrumToken, int]],
+            linkedTieEnds: t.List[t.Tuple[HumdrumToken, int]],
+            linkSignifier: str
+    ) -> bool:
         # Use this in the future to limit to grand-staff search (or 3 staves for organ):
         # vector<vector<HTp> > tracktokens;
         # this->getTrackSeq(tracktokens, spinestart, OPT_DATA | OPT_NOEMPTY);
@@ -680,9 +687,11 @@ class HumdrumFileContent(HumdrumFileStructure):
     //
     // HumdrumFileContent::createLinkedTies --
     '''
-    def createLinkedTies(self,
+    def createLinkedTies(
+            self,
             linkStarts: t.List[t.Tuple[HumdrumToken, int]],
-            linkEnds: t.List[t.Tuple[HumdrumToken, int]]):
+            linkEnds: t.List[t.Tuple[HumdrumToken, int]]
+    ) -> None:
         shortest = len(linkStarts)
         if shortest > len(linkEnds):
             shortest = len(linkEnds)
@@ -706,7 +715,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             startSubtokenIdx: int,
             tieEnd: HumdrumToken,
             endSubtokenIdx: int
-    ):
+    ) -> None:
         durTag: str = 'tieDuration'
         startTag: str = 'tieStart'
         endTag: str = 'tieEnd'
@@ -748,7 +757,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::analyzeRestPositions -- Calculate the vertical position
     //    of rests on staves with two layers.
     '''
-    def analyzeRestPositions(self):
+    def analyzeRestPositions(self) -> None:
         # I will not be assigning implicit vertical rest positions to workaround
         # verovio's subsequent adjustments.  I will just be noting explicit vertical
         # rest positions.  --gregc
@@ -760,9 +769,9 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::checkForExplicitVerticalRestPositions -- Starting at the
     //     current layer, check all rests in the same track for vertical positioning.
     '''
-    def checkForExplicitVerticalRestPositions(self):
+    def checkForExplicitVerticalRestPositions(self) -> None:
         # default to treble clef
-        defaultBaseline = Convert.kernClefToBaseline('*clefG2')
+        defaultBaseline: int = Convert.kernClefToBaseline('*clefG2')
         baselines: t.List[int] = [defaultBaseline] * (self.maxTrack + 1)
 
         for line in self._lines:
@@ -875,7 +884,7 @@ class HumdrumFileContent(HumdrumFileStructure):
 
                 for k, subtok in enumerate(token.subtokens):
                     accid: int = Convert.kernToAccidentalCount(subtok)
-                    isHidden = False
+                    isHidden: bool = False
                     if 'yy' not in subtok:  # if note is hidden accidental hiding isn't necessary
                         if ('ny' in subtok or '#y' in subtok or '-y' in subtok):
                             isHidden = True
@@ -956,17 +965,19 @@ class HumdrumFileContent(HumdrumFileStructure):
         Q: octaveState assumes no nesting of ottavas, but activeOttava is all about
         Q: handling nesting of ottavas. --gregc
     '''
-    def analyzeOttavas(self):
+    def analyzeOttavas(self) -> None:
         trackCount: int = self.maxTrack
         activeOttava: t.List[int] = [0] * (trackCount + 1)  # 0th element goes unused
         octaveState: t.List[int] = [0] * (trackCount + 1)   # 0th element goes unused
+
+        ttrack: int
 
         for line in self._lines:
             if line.isInterpretation:
                 for token in line.tokens():
                     if not token.isKern:
                         continue
-                    ttrack: int = token.track
+                    ttrack = token.track
                     if token.text == '*8va':
                         octaveState[ttrack] = +1
                         activeOttava[ttrack] += 1
@@ -995,7 +1006,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                 for token in line.tokens():
                     if not token.isKern:
                         continue
-                    ttrack: int = token.track
+                    ttrack = token.track
                     if activeOttava[ttrack] == 0:  # if nesting level is 0
                         continue
                     if octaveState[ttrack] == 0:  # if octave adjustment is 0
@@ -1020,19 +1031,22 @@ class HumdrumFileContent(HumdrumFileStructure):
     //
     // Returns true if there are any *ij/*Xij markers in the data.
     '''
-    def analyzeTextRepetition(self):
-        spineStarts: t.List[HumdrumToken] = self.spineStartList
+    def analyzeTextRepetition(self) -> None:
+        spineStarts: t.List[t.Optional[HumdrumToken]] = self.spineStartList
 
         for start in spineStarts:
             ijstate: bool = False
             startij: bool = False
-            lastIJToken: HumdrumToken = None  # last token seen in ij range
+            lastIJToken: t.Optional[HumdrumToken] = None  # last token seen in ij range
+
+            if start is None:
+                raise HumdrumInternalError('start that is None found in spineStarts')
 
             # BUGFIX: **sylb -> **silbe
             if not start.isDataType('**text') and not start.isDataType('**silbe'):
                 continue
 
-            current: HumdrumToken = start
+            current: t.Optional[HumdrumToken] = start
             while current is not None:
                 if current.isNull:
                     current = current.nextToken0
@@ -1136,7 +1150,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         Later, we will update self._spineColor when necessary as we process the file.
 
     '''
-    def initializeSpineColor(self):
+    def initializeSpineColor(self) -> None:
         self._spineColor = [[''] * MAXCOLORSUBTRACK] * (self.maxTrack + 1)
         for line in self.lines():
             if line.isData:
@@ -1155,7 +1169,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         setSpineColorFromColorInterpToken - factored from several places in HumdrumFileContent.py
         and HumdrumFile.py
     '''
-    def setSpineColorFromColorInterpToken(self, token: HumdrumToken):
+    def setSpineColorFromColorInterpToken(self, token: HumdrumToken) -> None:
         m = re.search(r'^\*color:(.*)', token.text)
         if m:
             ctrack: int = token.track

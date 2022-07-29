@@ -30,16 +30,21 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class EventData:
-    def __init__(self, element: m21.base.Music21Object,
-                       elementIndex: int,
-                       voiceIndex: int,
-                       ownerMeasure,
-                       offsetInScore: t.Optional[HumNumIn] = None,
-                       duration: t.Optional[HumNumIn] = None):
+    def __init__(
+            self,
+            element: m21.base.Music21Object,
+            elementIndex: int,
+            voiceIndex: int,
+            ownerMeasure,
+            offsetInScore: t.Optional[HumNumIn] = None,
+            duration: t.Optional[HumNumIn] = None
+    ) -> None:
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
         self.ownerMeasure: MeasureData = ownerMeasure
-        self.spannerBundle = self.ownerMeasure.spannerBundle  # from ownerScore, ultimately
+        self.spannerBundle: m21.spanner.SpannerBundle = (
+            self.ownerMeasure.spannerBundle  # from ownerScore, ultimately
+        )
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._voiceIndex: int = voiceIndex
@@ -56,7 +61,7 @@ class EventData:
         self._parseEvent(element, offsetInScore, duration)
 
         ownerScore: ScoreData = ownerMeasure.ownerStaff.ownerPart.ownerScore
-        ownerScore.eventFromM21Object[element.id] = self
+        ownerScore.eventFromM21Object[id(element)] = self
 
     def __str__(self) -> str:
         output: str = self.kernTokenString()
@@ -64,9 +69,12 @@ class EventData:
             return output
         return self.m21Object.classes[0]  # at least say what type of m21Object it was
 
-    def _parseEvent(self, element: m21.base.Music21Object,
-                          offsetInScore: t.Optional[HumNumIn],
-                          duration: t.Optional[HumNumIn]):
+    def _parseEvent(
+            self,
+            element: m21.base.Music21Object,
+            offsetInScore: t.Optional[HumNumIn],
+            duration: t.Optional[HumNumIn]
+    ) -> None:
         if offsetInScore is not None:
             self._startTime = opFrac(offsetInScore)
         else:
@@ -77,6 +85,7 @@ class EventData:
             self._duration = opFrac(duration)
         else:
             self._duration = opFrac(element.duration.quarterLength)
+
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
         # the mro() for the object.
@@ -234,8 +243,8 @@ class EventData:
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerMeasure.reportLinkedSlurToOwner()
 
-    def reportDynamicToOwner(self):
+    def reportDynamicToOwner(self) -> None:
         self.ownerMeasure.reportDynamicToOwner()
 
-    def reportVerseCountToOwner(self, verseCount: int):
+    def reportVerseCountToOwner(self, verseCount: int) -> None:
         self.ownerMeasure.reportVerseCountToOwner(verseCount)

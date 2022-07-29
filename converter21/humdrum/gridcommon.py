@@ -151,7 +151,7 @@ class MeasureStyle(Enum):
 
     # This is just here so clients can do blah.measureType and blah.measureVisualType instead
     # of having to know the layout of the tuple.
-    def __init__(self, vStyle: MeasureVisualStyle, mType: MeasureType):
+    def __init__(self, vStyle: MeasureVisualStyle, mType: MeasureType) -> None:
         self.vStyle = vStyle
         self.mType = mType
 

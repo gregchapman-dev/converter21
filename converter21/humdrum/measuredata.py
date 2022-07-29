@@ -35,21 +35,27 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class SimultaneousEvents:
-    def __init__(self):
+    def __init__(self) -> None:
         self.startTime: HumNum = opFrac(-1)      # start time of events
         self.duration: HumNum = opFrac(-1)       # max duration of events?
         self.zeroDur: t.List[EventData] = []     # zero-duration events at this time
         self.nonZeroDur: t.List[EventData] = []  # non-zero-duration events at this time
 
 class MeasureData:
-    def __init__(self, measure: m21.stream.Measure,
-                       ownerStaff,      # StaffData
-                       measureIndex: int,
-                       prevMeasData):   # prevMeasData: t.Optional[MeasureData]
+    def __init__(
+            self,
+            measure: m21.stream.Measure,
+            ownerStaff,      # StaffData
+            measureIndex: int,
+            prevMeasData: t.Optional['MeasureData']
+    ) -> None:
         from converter21.humdrum import StaffData
         self.m21Measure: m21.stream.Measure = measure
         self.ownerStaff: StaffData = ownerStaff
-        self.spannerBundle = ownerStaff.spannerBundle  # inherited from ownerScore, ultimately
+
+        # inherited from ownerScore, ultimately
+        self.spannerBundle: m21.spanner.SpannerBundle = ownerStaff.spannerBundle
+
         self._prevMeasData: t.Optional[MeasureData] = prevMeasData
         self._measureIndex: int = measureIndex
         self._startTime: HumNum = opFrac(-1)
@@ -133,7 +139,7 @@ class MeasureData:
     //
     // MxmlMeasure::parseMeasure -- Reads music21 data for one staff's measure.
     '''
-    def _parseMeasure(self):
+    def _parseMeasure(self) -> None:
         self._setStartTimeOfMeasure()
         self._duration = self.m21Measure.duration.quarterLength
 
@@ -213,10 +219,13 @@ class MeasureData:
 
         self._sortEvents()
 
-    def _parseEventsIn(self, m21Stream: t.Union[m21.stream.Voice, m21.stream.Measure],
-                             voiceIndex: int,
-                             emptyStartDuration: HumNumIn = 0,
-                             emptyEndDuration: HumNumIn = 0):
+    def _parseEventsIn(
+            self,
+            m21Stream: t.Union[m21.stream.Voice, m21.stream.Measure],
+            voiceIndex: int,
+            emptyStartDuration: HumNumIn = 0,
+            emptyEndDuration: HumNumIn = 0
+    ) -> None:
         event: EventData
         durations: t.List[HumNum]
         startTime: HumNum
@@ -311,7 +320,7 @@ class MeasureData:
                 # but add it to the same measure/voice as the wedge start event
                 # print(f'wedgeStopEvent: {event}', file=sys.stderr)
                 matchingStartEvent: t.Optional[EventData] = (
-                    ownerScore.eventFromM21Object.get(wedge.id, None)
+                    ownerScore.eventFromM21Object.get(id(wedge), None)
                 )
                 endVoiceIndex: int
                 if matchingStartEvent is None:
@@ -329,7 +338,7 @@ class MeasureData:
 
         return output
 
-    def _parseEventsAtTopLevelOf(self, m21Stream: m21.stream.Measure):
+    def _parseEventsAtTopLevelOf(self, m21Stream: m21.stream.Measure) -> None:
         for elementIndex, element in enumerate(m21Stream):
             if 'Stream' in element.classes:
                 # skip substreams, just parse the top-level objects
@@ -354,9 +363,10 @@ class MeasureData:
     //   eventually including basso continuo figuration having the
     //   same situation).
     '''
-    def _sortEvents(self):
+    def _sortEvents(self) -> None:
         self.events.sort(key=lambda event: event.startTime)
-        times: t.List[HumNum] = []  # sorted same as self.events (by time)
+
+        times: t.List[HumNum] = []  # will be sorted same as self.events (by startTime)
         for event in self.events:
             # don't add duplicated time entries (like a set)
             if not times or event.startTime != times[-1]:
@@ -368,7 +378,7 @@ class MeasureData:
             self.sortedEvents[-1].startTime = val
 
         # setup sorted access:
-        mapping: dict = {}
+        mapping: t.Dict[HumNum, SimultaneousEvents] = {}
         for sortedEvent in self.sortedEvents:
             mapping[sortedEvent.startTime] = sortedEvent
 
@@ -412,7 +422,7 @@ class MeasureData:
     //
     // MxmlMeasure::setStartTimeOfMeasure --
     '''
-    def _setStartTimeOfMeasure(self):
+    def _setStartTimeOfMeasure(self) -> None:
         if self.ownerStaff is None:
             self._startTime = opFrac(0)
             return
@@ -451,7 +461,7 @@ class MeasureData:
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerStaff.reportLinkedSlurToOwner()
 
-    def reportVerseCountToOwner(self, verseCount: int):
+    def reportVerseCountToOwner(self, verseCount: int) -> None:
         self.ownerStaff.receiveVerseCount(verseCount)
 
     '''
@@ -459,5 +469,5 @@ class MeasureData:
     //
     // MxmlMeasure::reportDynamicToOwner --
     '''
-    def reportDynamicToOwner(self):
+    def reportDynamicToOwner(self) -> None:
         self.ownerStaff.receiveDynamic()

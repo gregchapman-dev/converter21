@@ -46,8 +46,10 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class GridMeasure:
-    def __init__(self, ownerGrid):
+    def __init__(self, ownerGrid) -> None:
         from converter21.humdrum import HumGrid
+        if not isinstance(ownerGrid, HumGrid):
+            raise HumdrumInternalError('invalid ownerGrid')
         self._ownerGrid: HumGrid = ownerGrid
         self.slices: t.List[GridSlice] = []
         self._timestamp: HumNum = opFrac(-1)
@@ -73,7 +75,7 @@ class GridMeasure:
         return self._timestamp
 
     @timestamp.setter
-    def timestamp(self, newTimestamp: HumNumIn):
+    def timestamp(self, newTimestamp: HumNumIn) -> None:
         self._timestamp = opFrac(newTimestamp)
 
     @property
@@ -81,7 +83,7 @@ class GridMeasure:
         return self._duration
 
     @duration.setter
-    def duration(self, newDuration: HumNumIn):
+    def duration(self, newDuration: HumNumIn) -> None:
         self._duration = opFrac(newDuration)
 
     @property
@@ -89,7 +91,7 @@ class GridMeasure:
         return self._timeSigDur
 
     @timeSigDur.setter
-    def timeSigDur(self, newTimeSigDur: HumNumIn):
+    def timeSigDur(self, newTimeSigDur: HumNumIn) -> None:
         self._timeSigDur = opFrac(newTimeSigDur)
 
     '''
@@ -130,6 +132,7 @@ class GridMeasure:
         gs: GridSlice
         idx: int
         counter: int
+
         if not self.slices:
             # add a new GridSlice to an empty list.
             gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
@@ -604,7 +607,7 @@ class GridMeasure:
 #     //    duplicated to all spines later.
 #         Looks like it actually gets duplicated to all (current) spines here --gregc
 #     '''
-#     def appendInitialBarline(self, outFile: HumdrumFile, startBarline: int = 0):
+#     def appendInitialBarline(self, outFile: HumdrumFile, startBarline: int = 0) -> None:
 #         if outFile.lineCount == 0:
 #             # strange case which should never happen
 #             return
@@ -643,7 +646,10 @@ class GridMeasure:
         return self._ownerGrid
 
     @ownerGrid.setter
-    def ownerGrid(self, newOwnerGrid):  # newOwnerGrid: HumGrid
+    def ownerGrid(self, newOwnerGrid) -> None:  # newOwnerGrid: HumGrid
+        from converter21.humdrum import HumGrid
+        if not isinstance(newOwnerGrid, HumGrid):
+            raise HumdrumInternalError('invalid newOwnerGrid')
         self._ownerGrid = newOwnerGrid
 
     # _getIndexedVoice_AppendingIfNecessary appends enough new voices to the list to
@@ -665,7 +671,7 @@ class GridMeasure:
 
     def addVerseLabels(self, associatedSlice: GridSlice,
                             partIndex: int, staffIndex: int,
-                            verseLabels: t.List[t.Optional[HumdrumToken]]):
+                            verseLabels: t.List[t.Optional[HumdrumToken]]) -> None:
         # add these verse labels just before this associatedSlice
         if len(self.slices) == 0:
             # something strange happened: expecting at least one item in measure.
@@ -725,7 +731,7 @@ class GridMeasure:
     '''
     def addLayoutParameter(self, associatedSlice: GridSlice,
                            partIndex: int, staffIndex: int, voiceIndex: int,
-                           locomment: str):
+                           locomment: str) -> None:
         # add this '!LO:' string just before this associatedSlice
         if len(self.slices) == 0:
             # something strange happened: expecting at least one item in measure.
@@ -785,7 +791,7 @@ class GridMeasure:
     '''
     def addDynamicsLayoutParameters(self, associatedSlice: GridSlice,
                                     partIndex: int, staffIndex: int,
-                                    locomment: str):
+                                    locomment: str) -> None:
         if len(self.slices) == 0:
             # something strange happened: expecting at least one item in measure.
             # associatedSlice is supposed to already be in the measure

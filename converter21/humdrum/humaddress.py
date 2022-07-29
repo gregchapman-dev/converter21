@@ -14,15 +14,19 @@ import typing as t
 from converter21.humdrum import HumdrumSyntaxError
 
 class HumAddress:
-    def __init__(self):
+    def __init__(self) -> None:
+        from converter21.humdrum import HumdrumToken
         from converter21.humdrum import HumdrumLine
-        self.trackNum = None
-        self._subTrack = None
-        self._subTrackCount = 0
-        self._fieldIndex = None
+        self.trackNum: int = -1
+        self._subTrack: int = -1
+        self._subTrackCount: int = 0
+        self._fieldIndex: int = -1
         self._ownerLine: t.Optional[HumdrumLine] = None
-        self._spining = ''
-        self._dataTypeTokenCached = None  # cache of self.ownerLine.trackStart(self.trackNum)
+        self._spining: str = ''
+
+        # cache of self.ownerLine.trackStart(self.trackNum)
+        self._dataTypeTokenCached: t.Optional[HumdrumToken] = None
+
     '''
     //////////////////////////////
     //
@@ -63,7 +67,7 @@ class HumAddress:
         return self.trackNum
 
     @track.setter
-    def track(self, newTrack: int):
+    def track(self, newTrack: int) -> None:
         if newTrack < 0:
             newTrack = -1
         if newTrack > 1000:
@@ -101,7 +105,7 @@ class HumAddress:
         return self._subTrack
 
     @subTrack.setter
-    def subTrack(self, newSubTrack: int):
+    def subTrack(self, newSubTrack: int) -> None:
         # no negative subtracks
         newSubTrack = max(newSubTrack, 0)
         if newSubTrack > 1000:
@@ -120,7 +124,7 @@ class HumAddress:
         return self._subTrackCount
 
     @subTrackCount.setter
-    def subTrackCount(self, newSubTrackCount: int):
+    def subTrackCount(self, newSubTrackCount: int) -> None:
         self._subTrackCount = newSubTrackCount
 
     '''
@@ -137,7 +141,7 @@ class HumAddress:
         return self._fieldIndex
 
     @fieldIndex.setter
-    def fieldIndex(self, newFieldIndex: int):
+    def fieldIndex(self, newFieldIndex: int) -> None:
         self._fieldIndex = newFieldIndex
 
     @property
@@ -164,7 +168,7 @@ class HumAddress:
         return self._spining
 
     @spineInfo.setter
-    def spineInfo(self, newSpineInfo: str):
+    def spineInfo(self, newSpineInfo: str) -> None:
         self._spining = newSpineInfo
 
     '''
@@ -182,7 +186,7 @@ class HumAddress:
         return self._ownerLine
 
     @ownerLine.setter
-    def ownerLine(self, newOwnerLine):  # newOwnerLine: t.Optional[HumdrumLine]
+    def ownerLine(self, newOwnerLine) -> None:  # newOwnerLine: t.Optional[HumdrumLine]
         self._ownerLine = newOwnerLine
         # blow away cache of dataType, because it depends on ownerLine
         self._dataTypeTokenCached = None
@@ -206,7 +210,7 @@ class HumAddress:
     '''
     @property
     def dataType(self):  # -> HumdrumToken
-        if self._dataTypeTokenCached:
+        if self._dataTypeTokenCached is not None:
             return self._dataTypeTokenCached
 
         from converter21.humdrum import HumdrumToken

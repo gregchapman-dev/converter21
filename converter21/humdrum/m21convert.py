@@ -473,7 +473,7 @@ class M21Convert:
         artics: t.List[m21.articulations.Articulation] = []
 
         for humdrumArticString in M21Convert.humdrumArticulationStringToM21ArticulationClassName:
-            if articFound.get(humdrumArticString, None):
+            if articFound.get(humdrumArticString, False):
                 m21ArticClassName: str = (
                     M21Convert.humdrumArticulationStringToM21ArticulationClassName[
                         humdrumArticString
@@ -520,7 +520,7 @@ class M21Convert:
     @staticmethod
     def m21TimeSignature(
             timeSigToken: HumdrumToken,
-            meterSigToken: HumdrumToken = None
+            meterSigToken: t.Optional[HumdrumToken] = None
     ) -> m21.meter.TimeSignature:
         meterRatio: str = timeSigToken.timeSignatureRatioString
         timeSignature: m21.meter.TimeSignature = m21.meter.TimeSignature(meterRatio)
@@ -539,17 +539,17 @@ class M21Convert:
     @staticmethod
     def m21KeySignature(
             keySigToken: HumdrumToken,
-            keyToken: HumdrumToken = None
+            keyToken: t.Optional[HumdrumToken] = None
     ) -> t.Optional[t.Union[m21.key.KeySignature, m21.key.Key]]:
         keySig = keySigToken.keySignature
 
         # ignore keySigToken if we have keyToken. keyToken has a lot more info.
-        if keyToken:
+        if keyToken is not None:
             keyName: t.Optional[str]
             mode: t.Optional[str]
             keyName, mode = keyToken.keyDesignation
             if keyName:
-                if mode:
+                if mode is not None:
                     # e.g. 'dor' -> 'dorian'
                     mode = M21Convert.humdrumModeToM21Mode.get(mode, None)
                 return m21.key.Key(keyName, mode)
@@ -826,12 +826,12 @@ class M21Convert:
     def kernTokenStringAndLayoutsFromM21Note(m21Note: m21.note.Note,
                                              spannerBundle: m21.spanner.SpannerBundle,
                                              owner=None) -> t.Tuple[str, t.List[str]]:
-        prefix: str = ''
         recip: str = ''
         vdurRecip: str = ''
         recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Note.duration)
         graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Note.duration)
         pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
+        prefix: str = ''
         postfix: str = ''
         layouts: t.List[str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
@@ -912,6 +912,7 @@ class M21Convert:
         beamStr: str = ''
         cueSizeChar: str = ''
         noteColorChar: str = ''
+
         if isStandaloneNote:
             # if this note is in a chord, we will get this info from the chord itself,
             # not from this note
@@ -1180,6 +1181,7 @@ class M21Convert:
         params: t.List[str] = layout.split(':')
         insertAtIndex: int = len(params) - 2
         params.insert(insertAtIndex, f'n={noteNum}')
+
         output: str = ':'.join(params)
         return output
 
@@ -1659,7 +1661,7 @@ class M21Convert:
 
         return None
 
-    dynamicPatterns = [
+    dynamicPatterns: t.List[str] = [
         # These have to be in a search order where you won't find a substring of the real
         # pattern first. For example, if you reverse the middle two, then 'fp' will match
         # as 'f' before it matches as 'fp'.
@@ -1668,12 +1670,13 @@ class M21Convert:
         '[sr]?f+z?',    # 'sf, 'sfz', 'f', 'fff', etc
         'p+',           # 'p', 'ppp', etc
     ]
-    dynamicBrackets = [
+    dynamicBrackets: t.List[t.Tuple[str, str, str]] = [
         ('brack', r'\[ ', r' \]'),
         ('paren', r'\( ', r' \)'),
         ('curly', r'\{ ', r' \}'),
         ('angle', '< ', ' >'),
     ]
+
     @staticmethod
     def getDynamicString(dynamic: m21.dynamics.Dynamic) -> str:
         output: str
@@ -2127,7 +2130,7 @@ class M21Convert:
     _repeatBothStyleCombos: dict = {}
 
     @staticmethod
-    def _setupRepeatBothStyleComboLookup():
+    def _setupRepeatBothStyleComboLookup() -> None:
         theLookup: dict = {}
 
         # both the same = same (don't add them together)
@@ -2213,8 +2216,10 @@ class M21Convert:
                     theLookup[(vStyle1, vStyle2)] = vStyle1
 
     @staticmethod
-    def _combineVisualRepeatBothStyles(style1: MeasureVisualStyle,
-                                       style2: MeasureVisualStyle) -> MeasureVisualStyle:
+    def _combineVisualRepeatBothStyles(
+            style1: MeasureVisualStyle,
+            style2: MeasureVisualStyle
+    ) -> MeasureVisualStyle:
         if not M21Convert._repeatBothStyleCombos:
             M21Convert._setupRepeatBothStyleComboLookup()
 
@@ -2247,7 +2252,7 @@ class M21Convert:
     _measureStyleLookup: dict = {}
 
     @staticmethod
-    def _computeMeasureStyleLookup():
+    def _computeMeasureStyleLookup() -> None:
         theLookup: dict = {}
 
         for style in MeasureStyle:
@@ -2261,7 +2266,7 @@ class M21Convert:
             M21Convert._computeMeasureStyleLookup()
         return M21Convert._measureStyleLookup[(vStyle, mType)]
 
-    measureVisualStyleFromM21BarlineType: dict = {
+    measureVisualStyleFromM21BarlineType: t.Dict[str, MeasureVisualStyle] = {
         'regular': MeasureVisualStyle.Regular,
         'dotted': MeasureVisualStyle.Regular,  # no dotted in humdrum
         'dashed': MeasureVisualStyle.Regular,  # no dashed in humdrum
@@ -2300,7 +2305,7 @@ class M21Convert:
 
     # m21Barline is ordered, because we want to iterate over the keys,
     # and find '||' before '|', for example
-    m21BarlineTypeFromHumdrumType: t.Dict = {
+    m21BarlineTypeFromHumdrumType: t.Dict[str, str] = {
         '||': 'double',      # a.k.a. 'light-light' in MusicXML
         '!!': 'heavy-heavy',
         '!|': 'heavy-light',
@@ -2309,7 +2314,7 @@ class M21Convert:
         '\'': 'short',
         '`': 'tick',
         '-': 'none',
-        '|': 'regular',     # barlines are 'regular' by default (e.g. '=3' is 'regular')
+        '|': 'regular',      # barlines are 'regular' by default (e.g. '=3' is 'regular')
         '!': 'heavy'
     }
 
@@ -2371,7 +2376,7 @@ class M21Convert:
     def m21BarlineFromHumdrumString(
             measureString: str,
             side: str
-    ) -> m21.bar.Barline:  # could be m21.bar.Repeat (is a Barline)
+    ) -> m21.bar.Barline:  # can return m21.bar.Repeat (which is a Barline)
         # side is 'left' or 'right', describing which end of a measure this measureString
         # should be interpreted for
         outputBarline: t.Optional[m21.bar.Barline] = None
@@ -2697,7 +2702,7 @@ class M21Convert:
         return output
 
     @staticmethod
-    def _dateErrorToSymbol(value):
+    def _dateErrorToSymbol(value: str) -> str:
         if value.lower() in M21Convert._dateApproximateSymbols + ('approximate',):
             return M21Convert._dateApproximateSymbols[1]  # [1] is the single value error symbol
         if value.lower() in M21Convert._dateUncertainSymbols + ('uncertain',):

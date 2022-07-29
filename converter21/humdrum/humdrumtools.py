@@ -26,10 +26,10 @@ from converter21.humdrum import Convert
 
 class ToolTremolo:
     # Tremolo expansion tool.
-    def __init__(self, infile: HumdrumFile):
+    def __init__(self, infile: HumdrumFile) -> None:
         self.infile: HumdrumFile = infile
         self.markupTokens: t.List[HumdrumToken] = []
-        self.firstTremoloLinesInTrack: t.List[t.List[t.Optional[HumNum]]] = []
+        self.firstTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
         self.lastTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
 
     '''
@@ -37,7 +37,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::processFile --
     '''
-    def processFile(self):
+    def processFile(self) -> None:
         if self.infileNeedsToBeParsed():
             self.infile.analyzeBase()
             self.infile.analyzeStructure()
@@ -120,7 +120,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::addTremoloInterpretations --
     '''
-    def addTremoloInterpretations(self):
+    def addTremoloInterpretations(self) -> None:
         # These starts/stops are exactly what music21 has, which is per beam-group.
         # We would like to avoid a stop immediately followed by a start (as redundant).
         # Or even a stop and then a start with no actual notes between them.
@@ -130,10 +130,15 @@ class ToolTremolo:
                 self.lastTremoloLinesInTrack)):
             lastLineRemovalIndices: t.List[int] = []
             firstLineRemovalIndices: t.List[int] = []
-            currLastLineIndex: int = None
-            prevLastLineIndex: int = None
-            currFirstLineIndex: int = None
+            currLastLineIndex: t.Optional[int] = None
+            prevLastLineIndex: t.Optional[int] = None
+            currFirstLineIndex: t.Optional[int] = None
             for idx, (firstLine, lastLine) in enumerate(zip(firstLines, lastLines)):
+                if t.TYPE_CHECKING:
+                    # self.{first,last}TremoloLinesInTrack should be filled in by now
+                    assert firstLine is not None
+                    assert lastLine is not None
+
                 prevLastLineIndex = currLastLineIndex
                 currFirstLineIndex = firstLine.lineIndex
                 currLastLineIndex = lastLine.lineIndex
@@ -150,6 +155,8 @@ class ToolTremolo:
                 firstLines.pop(lineIndexToRemove)
 
 
+        line: HumdrumLine
+
         # Insert starting *tremolo(s)
         for track, firstLines in enumerate(self.firstTremoloLinesInTrack):
             if not firstLines:
@@ -160,7 +167,7 @@ class ToolTremolo:
                 if firstLine is None:
                     continue
 
-                line: HumdrumLine = self.infile.insertNullInterpretationLineAt(
+                line = self.infile.insertNullInterpretationLineAt(
                     firstLine.lineIndex
                 )
                 if line is None:
@@ -184,7 +191,7 @@ class ToolTremolo:
                 if lastLine is None:
                     continue
 
-                line: HumdrumLine = self.infile.insertNullInterpretationLineAt(
+                line = self.infile.insertNullInterpretationLineAt(
                     lastLine.lineIndex + 1
                 )
                 if line is None:
@@ -204,7 +211,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::expandTremolos --
     '''
-    def expandTremolos(self):
+    def expandTremolos(self) -> None:
         i = 0
         while i < len(self.markupTokens):
             token: HumdrumToken = self.markupTokens[i]
@@ -224,7 +231,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::expandTremolo --
     '''
-    def expandTremolo(self, token: HumdrumToken):
+    def expandTremolo(self, token: HumdrumToken) -> None:
         addBeam: bool = False
         tnotes: int = -1
 
@@ -351,7 +358,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::expandFingerTremolos --
     '''
-    def expandFingerTremolo(self, token1: HumdrumToken, token2: HumdrumToken):
+    def expandFingerTremolo(self, token1: HumdrumToken, token2: HumdrumToken) -> None:
         m = re.search(r'@@(\d+)@@', token1.text)
         if not m:
             return
@@ -459,7 +466,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::storeFirstTremoloNote --
     '''
-    def storeFirstTremoloNoteInfo(self, token: HumdrumToken):
+    def storeFirstTremoloNoteInfo(self, token: HumdrumToken) -> None:
         if token is None:
             return
 
@@ -475,7 +482,7 @@ class ToolTremolo:
     //
     // Tool_tremolo::storeLastTremoloNote --
     '''
-    def storeLastTremoloNoteInfo(self, token: HumdrumToken):
+    def storeLastTremoloNoteInfo(self, token: HumdrumToken) -> None:
         if token is None:
             return
 

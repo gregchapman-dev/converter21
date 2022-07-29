@@ -14,7 +14,10 @@
 
 import typing as t
 
+from music21 import Music21Object
 from music21.common import opFrac
+
+from converter21.humdrum import HumdrumInternalError
 
 def getKeyTuple(inKey: str) -> t.Tuple[str, str, str]:
     keyList: t.List[str] = inKey.split(':')
@@ -26,7 +29,7 @@ def getKeyTuple(inKey: str) -> t.Tuple[str, str, str]:
 
     return (keyList[0], keyList[1], keyList[2])
 
-def fixupNamespace1Namespace2Key(*ns1ns2key) -> t.Tuple[str, str, str]:
+def fixupNamespace1Namespace2Key(*ns1ns2key: str) -> t.Tuple[str, str, str]:
     if len(ns1ns2key) < 1:
         raise Exception("too few specifiers (need at least a key)")
     if len(ns1ns2key) > 3:
@@ -60,8 +63,8 @@ def fixupNamespace1Namespace2Key(*ns1ns2key) -> t.Tuple[str, str, str]:
     return (ns1, ns2, key)
 
 def fixupNamespace1Namespace2(
-        ns1: str = None,
-        ns2: str = None
+        ns1: t.Optional[str] = None,
+        ns2: t.Optional[str] = None
 ) -> t.Tuple[t.Optional[str], t.Optional[str]]:
     if ns1 is None and ns2 is not None:
         ns1, ns2 = ns2, ns1  # make ns2 be the one that is None, if one of them is
@@ -76,10 +79,14 @@ def fixupNamespace1Namespace2(
     return (ns1, ns2)
 
 class HumParameter:
-    def __init__(self, value: t.Optional[t.Any], origin=None):  # origin: t.Optional[HumdrumToken]
+    def __init__(self, value: t.Optional[t.Any], origin=None) -> None:
+        # origin: t.Optional[HumdrumToken]
         # value can be of any type (different from humlib, where it's always a string)
-        self._value = value
-        self._origin = origin
+        from converter21.humdrum import HumdrumToken
+        self._value: t.Optional[t.Any] = value
+        if not isinstance(origin, HumdrumToken):
+            raise HumdrumInternalError('invalid origin token')
+        self._origin: t.Optional[HumdrumToken] = origin
 
 
     @property
@@ -87,7 +94,7 @@ class HumParameter:
         return self._value
 
     @value.setter
-    def value(self, newValue: t.Optional[t.Any]):
+    def value(self, newValue: t.Optional[t.Any]) -> None:
         self._value = newValue
 
     @property
@@ -95,12 +102,13 @@ class HumParameter:
         return self._origin
 
     @origin.setter
-    def origin(self, newOrigin):  # newOrigin: t.Optional['HumdrumToken']
+    def origin(self, newOrigin) -> None:  # newOrigin: t.Optional['HumdrumToken']
         self._origin = newOrigin
 
 class HumHash:
-    def __init__(self):
-        self._parameters: dict = None  # {ns1...,{ns2..., {key..., value...}}}
+    def __init__(self) -> None:
+        # {ns1...,{ns2..., {key..., value...}}}
+        self._parameters: t.Optional[t.Dict[str, t.Dict[str, t.Dict[str, HumParameter]]]] = None
         self._prefix: str = ''
 
     '''
@@ -117,7 +125,7 @@ class HumHash:
         return self._prefix
 
     @prefix.setter
-    def prefix(self, newPrefix: str):
+    def prefix(self, newPrefix: str) -> None:
         self._prefix = newPrefix
 
     '''
@@ -140,10 +148,12 @@ class HumHash:
         Q: Perhaps we should store a weak reference to the HumdrumToken value
         Q: instead, to avoid circular references?
     '''
-    def setValue(self, *ns1ns2keyvalue):
-        value = ns1ns2keyvalue[-1]       # value is last
+    def setValue(self, *ns1ns2keyvalue) -> None:
+        value: t.Optional[t.Any] = ns1ns2keyvalue[-1]       # value is last
         ns1ns2key = ns1ns2keyvalue[:-1]  # ns1ns2key is all but last
-
+        ns1: str
+        ns2: str
+        key: str
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
         if self._parameters is None:
@@ -186,7 +196,6 @@ class HumHash:
 
     def getValueString(self, *ns1ns2key) -> t.Optional[str]:
         from converter21.humdrum import HumdrumToken
-        from music21 import Music21Object
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
@@ -215,8 +224,7 @@ class HumHash:
 
         return None  # can't convert to anything else
 
-    def getValueM21Object(self, *ns1ns2key):  # -> t.Optional[Music21Object]:
-        from music21 import Music21Object
+    def getValueM21Object(self, *ns1ns2key) -> t.Optional[Music21Object]:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
@@ -329,7 +337,7 @@ class HumHash:
     //   object.  Three string version is N1,NS2,key; two string version is
     //   "",NS2,key; and one argument version is "","",key.
     '''
-    def deleteValue(self, *ns1ns2key):
+    def deleteValue(self, *ns1ns2key) -> None:
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
         if self._parameters is None:
@@ -350,9 +358,13 @@ class HumHash:
     // HumHash::setOrigin -- Set the source token for the parameter.
     '''
     def setOrigin(self, *ns1ns2keyvalue):  # origin: HumdrumToken
+        from converter21.humdrum import HumdrumToken
         origin = ns1ns2keyvalue[-1]
         ns1ns2key = ns1ns2keyvalue[:-1]
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
+
+        if not isinstance(origin, HumdrumToken):
+            raise HumdrumInternalError('invalid origin token in HumHash.setOrigin')
 
         if self._parameters is None:
             return
@@ -402,7 +414,7 @@ class HumHash:
     //     then this will be interpreted as "NS1", "NS2" version of the parameters
     //     described above.
     '''
-    def getKeys(self, ns1: str = None, ns2: str = None) -> t.List[str]:
+    def getKeys(self, ns1: t.Optional[str] = None, ns2: t.Optional[str] = None) -> t.List[str]:
         retKeys: t.List[str] = []
 
         ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)
@@ -444,7 +456,7 @@ class HumHash:
     //     then check if the given NS1 has any parameters, unless there is a
     //     colon in the string which means to check NS1:NS2.
     '''
-    def hasParameters(self, ns1: str = None, ns2: str = None) -> bool:
+    def hasParameters(self, ns1: t.Optional[str] = None, ns2: t.Optional[str] = None) -> bool:
         ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)
 
         if self._parameters is None:
@@ -485,7 +497,7 @@ class HumHash:
     //     return the parameters in NS1:NS2.
     //
     '''
-    def getParameterCount(self, ns1: str = None, ns2: str = None) -> int:
+    def getParameterCount(self, ns1: t.Optional[str] = None, ns2: t.Optional[str] = None) -> int:
         if self._parameters is None:
             return 0
 

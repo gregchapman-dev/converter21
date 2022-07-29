@@ -13,6 +13,7 @@
 # ------------------------------------------------------------------------------
 import sys
 import typing as t
+from pathlib import Path
 
 from music21.common import opFrac
 
@@ -32,100 +33,13 @@ from converter21.humdrum import HumdrumLine
 funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
-'''
-//////////////////////////////
-//
-// HumdrumFileBase::getMergedSpineInfo -- Will only simplify a two-spine
-//   merge.  Should be expanded to larger spine mergers in the future.
-//   In other words, it is best to currently merge spines in the order
-//   in which they were split, so that the original spine label can
-//   be produced.
-'''
-def getMergedSpineInfo(info: t.List[str], startSpine: int, numExtraSpines: int) -> str:
-    # print(funcName(), 'startSpine =', startSpine, 'numExtraSpines =', numExtraSpines,
-    #       file=sys.stderr)
-    # print(funcName(), 'info =', info, file=sys.stderr)
-
-    output: str = ''
-    if numExtraSpines < 1:
-        # Strange if get here. Nothing to merge.
-        return info[startSpine]
-
-    if numExtraSpines == 1:
-        # two-spine merge
-        # compare all but trailing 'a' or 'b'
-        if info[startSpine][:-1] == info[startSpine + 1][:-1]:
-            # print(funcName(), 'merged spineInfo =', info[startSpine][1:-2], file=sys.stderr)
-            return info[startSpine][1:-2]  # strip off leading '(' and the trailing ')a' or ')b'
-        # print(funcName(), 'merged spineInfo =', info[startSpine] + ' ' + info[startSpine+1],
-        #       file=sys.stderr)
-        return info[startSpine] + ' ' + info[startSpine + 1]
-    '''
-    // Generalized code for simplifying up to N subspines at once
-    // Not fully generalized so that the subspines will always be
-    // simplified if not merged in a simple way, though.
-    '''
-    newInfo: t.List[str] = [info[i] for i in range(startSpine, startSpine + numExtraSpines + 1)]
-    while len(newInfo) > 1:
-        simplifiedSomething = False
-        for i in range(1, len(newInfo)):
-            if newInfo[i - 1][:-1] == newInfo[i][:-1]:  # compare all but trailing a or b
-                simplifiedSomething = True
-                newInfo[i - 1] = ''             # we'll remove this later
-                newInfo[i] = newInfo[i][1:-2]   # strip off leading ( and trailing )a or )b
-
-        newInfo2: t.List[str] = []
-        for infoStr in newInfo:
-            if infoStr != '':
-                newInfo2.append(infoStr)
-
-        for i in range(1, len(newInfo2)):
-            if newInfo2[i - 1][:-1] == newInfo2[i][:-1]:  # compare all but trailing a or b
-                simplifiedSomething = True
-                newInfo2[i - 1] = ''             # we'll remove this later
-                newInfo2[i] = newInfo2[i][1:-2]  # strip off leading ( and trailing )a or ')b'
-
-        # do it again back into newInfo
-        newInfo = []
-        for infoStr in newInfo2:
-            if infoStr != '':
-                newInfo.append(infoStr)
-
-        if not simplifiedSomething:
-            # we've simplified as much as we can, don't loop forever
-            break
-
-    output = newInfo[0]
-
-    # Anything left beyond newInfo[0]? Just join with ' ' as delimiter.
-    for i in range(1, len(newInfo)):
-        output += ' ' + newInfo[i]
-
-    # print(funcName(), 'merged spineInfo =', output, file=sys.stderr)
-    return output
-
-
-'''
-//////////////////////////////
-//
-// HumdrumFileBase::addUniqueTokens -- Used for non-null token analysis.
-
-    Adds all tokens from source to target, unless they are already in target.
-'''
-def addUniqueTokens(target: t.List[HumdrumToken], source: t.List[HumdrumToken]):
-    for srcToken in source:
-        found = False
-        for targToken in target:
-            if srcToken == targToken:
-                found = True
-                break
-        if not found:
-            target.append(srcToken)
-
-
 # simple class to represent a pair of (first, last) related tokens
 class TokenPair:
-    def __init__(self, first: t.Optional[HumdrumToken], last: t.Optional[HumdrumToken]):
+    def __init__(
+            self,
+            first: t.Optional[HumdrumToken],
+            last: t.Optional[HumdrumToken]
+    ) -> None:
         self._first: t.Optional[HumdrumToken] = first
         self._last: t.Optional[HumdrumToken] = last
 
@@ -134,7 +48,7 @@ class TokenPair:
         return self._first
 
     @first.setter
-    def first(self, newFirst: HumdrumToken):
+    def first(self, newFirst: HumdrumToken) -> None:
         self._first = newFirst
 
     @property
@@ -142,14 +56,12 @@ class TokenPair:
         return self._last
 
     @last.setter
-    def last(self, newLast: HumdrumToken):
+    def last(self, newLast: HumdrumToken) -> None:
         self._last = newLast
 
     # the following two properties are used for sorting (sort by line index, then by field index)
     @property
     def firstLineIndex(self) -> int:
-        # Let mypy assume all is well... we'll crash appropriately if someone tries to
-        # do this before populating _first.
         if t.TYPE_CHECKING:
             assert isinstance(self._first, HumdrumToken)
         return self._first.lineIndex
@@ -164,10 +76,10 @@ class TokenPair:
 
 
 class HumFileAnalysis:
-    def __init__(self):
+    def __init__(self) -> None:
         self.clear()
 
-    def clear(self):
+    def clear(self) -> None:
         self.structureAnalyzed: bool = False
         self.rhythmAnalyzed: bool = False
         self.strandsAnalyzed: bool = False
@@ -183,24 +95,24 @@ class HumdrumFileBase(HumHash):
     '''
         Options bits for getTrackSequence() -> t.List[t.List[HumdrumToken]]
     '''
-    OPT_PRIMARY = 0x001
-    OPT_NOEMPTY = 0x002
-    OPT_NONULL = 0x004
-    OPT_NOINTERP = 0x008
-    OPT_NOMANIP = 0x010
-    OPT_NOCOMMENT = 0x020
-    OPT_NOGLOBAL = 0x040
-    OPT_NOREST = 0x080
-    OPT_NOTIE = 0x100
-    OPT_DATA = (OPT_NOMANIP
-                    | OPT_NOCOMMENT
-                    | OPT_NOGLOBAL)
-    OPT_ATTACKS = (OPT_DATA
-                    | OPT_NOREST
-                    | OPT_NOTIE
-                    | OPT_NONULL)
+    OPT_PRIMARY: int = 0x001
+    OPT_NOEMPTY: int = 0x002
+    OPT_NONULL: int = 0x004
+    OPT_NOINTERP: int = 0x008
+    OPT_NOMANIP: int = 0x010
+    OPT_NOCOMMENT: int = 0x020
+    OPT_NOGLOBAL: int = 0x040
+    OPT_NOREST: int = 0x080
+    OPT_NOTIE: int = 0x100
+    OPT_DATA: int = (OPT_NOMANIP
+                            | OPT_NOCOMMENT
+                            | OPT_NOGLOBAL)
+    OPT_ATTACKS: int = (OPT_DATA
+                            | OPT_NOREST
+                            | OPT_NOTIE
+                            | OPT_NONULL)
 
-    def __init__(self, fileName: str = None):
+    def __init__(self, fileName: t.Optional[t.Union[str, Path]] = None) -> None:
         super().__init__()  # initialize the HumHash fields
 
         '''
@@ -314,11 +226,11 @@ class HumdrumFileBase(HumHash):
             _spineColor: color, indexed by track and subtrack.  '' means use default color
             from iohumdrum.cpp, now computed in HumdrumFileContent.analyzeNotation()
         '''
-        self._spineColor: t.List[t.List[str]] = []  # [track][subtrack]
+        self._spineColor: t.List[t.List[str]] = []
 
         # only used by test infrastructure...
         # if we did this, then we skip the str(hf) == fileContents test
-        self.fixedUpRecipOnlyToken = False
+        self.fixedUpRecipOnlyToken: bool = False
 
         '''
             We are also a HumHash, and that was initialized via super() above.
@@ -333,7 +245,7 @@ class HumdrumFileBase(HumHash):
         Conversion to str.  All the lines, with '\n' between them.
     '''
     def __str__(self) -> str:
-        contents = ''
+        contents: str = ''
         for i, line in enumerate(self._lines):
             if i > 0:
                 contents += '\n'
@@ -373,7 +285,7 @@ class HumdrumFileBase(HumHash):
     //
     // HumdrumFileBase::clear -- Reset the contents of a file to be empty.
     '''
-    def clear(self):
+    def clear(self) -> None:
         self._lines = []
         # self._fileName = ''
         self._trackStarts = [None]
@@ -393,7 +305,7 @@ class HumdrumFileBase(HumHash):
     //
     // HumdrumFileBase::read -- Load file contents from an input stream or file.
     '''
-    def read(self, fileName: str) -> bool:
+    def read(self, fileName: t.Union[str, Path]) -> bool:
         # with open(fileName, errors='backslashreplace') as f: <- this always succeeds, but...
         try:
             with open(fileName, encoding='utf-8') as f:
@@ -427,6 +339,108 @@ class HumdrumFileBase(HumHash):
         self.analyzeBaseFromLines()
         # print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
         return self.isValid
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::getMergedSpineInfo -- Will only simplify a two-spine
+    //   merge.  Should be expanded to larger spine mergers in the future.
+    //   In other words, it is best to currently merge spines in the order
+    //   in which they were split, so that the original spine label can
+    //   be produced.
+    '''
+    @staticmethod
+    def getMergedSpineInfo(
+            info: t.List[str],
+            startSpine: int,
+            numExtraSpines: int
+    ) -> str:
+        # print(funcName(), 'startSpine =', startSpine, 'numExtraSpines =', numExtraSpines,
+        #       file=sys.stderr)
+        # print(funcName(), 'info =', info, file=sys.stderr)
+
+        output: str = ''
+        if numExtraSpines < 1:
+            # Strange if get here. Nothing to merge.
+            return info[startSpine]
+
+        if numExtraSpines == 1:
+            # two-spine merge
+            # compare all but trailing 'a' or 'b'
+            if info[startSpine][:-1] == info[startSpine + 1][:-1]:
+                # print(funcName(), 'merged spineInfo =', info[startSpine][1:-2], file=sys.stderr)
+                # strip off leading '(' and the trailing ')a' or ')b'
+                return info[startSpine][1:-2]
+            # print(funcName(), 'merged spineInfo =', info[startSpine] + ' ' + info[startSpine+1],
+            #       file=sys.stderr)
+            return info[startSpine] + ' ' + info[startSpine + 1]
+        '''
+        // Generalized code for simplifying up to N subspines at once
+        // Not fully generalized so that the subspines will always be
+        // simplified if not merged in a simple way, though.
+        '''
+        newInfo: t.List[str] = [
+            info[i] for i in range(startSpine, startSpine + numExtraSpines + 1)
+        ]
+        while len(newInfo) > 1:
+            simplifiedSomething = False
+            for i in range(1, len(newInfo)):
+                if newInfo[i - 1][:-1] == newInfo[i][:-1]:  # compare all but trailing a or b
+                    simplifiedSomething = True
+                    newInfo[i - 1] = ''             # we'll remove this later
+                    newInfo[i] = newInfo[i][1:-2]   # strip off leading ( and trailing )a or )b
+
+            newInfo2: t.List[str] = []
+            for infoStr in newInfo:
+                if infoStr != '':
+                    newInfo2.append(infoStr)
+
+            for i in range(1, len(newInfo2)):
+                if newInfo2[i - 1][:-1] == newInfo2[i][:-1]:  # compare all but trailing a or b
+                    simplifiedSomething = True
+                    newInfo2[i - 1] = ''             # we'll remove this later
+                    newInfo2[i] = newInfo2[i][1:-2]  # strip off leading ( and trailing )a or ')b'
+
+            # do it again back into newInfo
+            newInfo = []
+            for infoStr in newInfo2:
+                if infoStr != '':
+                    newInfo.append(infoStr)
+
+            if not simplifiedSomething:
+                # we've simplified as much as we can, don't loop forever
+                break
+
+        output = newInfo[0]
+
+        # Anything left beyond newInfo[0]? Just join with ' ' as delimiter.
+        for i in range(1, len(newInfo)):
+            output += ' ' + newInfo[i]
+
+        # print(funcName(), 'merged spineInfo =', output, file=sys.stderr)
+        return output
+
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::addUniqueTokens -- Used for non-null token analysis.
+
+        Adds all tokens from source to target, unless they are already in target.
+    '''
+    @staticmethod
+    def addUniqueTokens(
+            target: t.List[HumdrumToken],
+            source: t.List[HumdrumToken]
+    ) -> None:
+        for srcToken in source:
+            found = False
+            for targToken in target:
+                if srcToken == targToken:
+                    found = True
+                    break
+            if not found:
+                target.append(srcToken)
 
     '''
     //////////////////////////////
@@ -477,7 +491,7 @@ class HumdrumFileBase(HumHash):
         return self._idPrefix
 
     @xmlIdPrefix.setter
-    def xmlIdPrefix(self, newXMLIdPrefix: str):
+    def xmlIdPrefix(self, newXMLIdPrefix: str) -> None:
         self._idPrefix = newXMLIdPrefix
 
     '''
@@ -495,7 +509,7 @@ class HumdrumFileBase(HumHash):
         return self._parseError
 
     @parseError.setter
-    def parseError(self, err: str):
+    def parseError(self, err: str) -> None:
         self._parseError = err
 
     def setParseError(self, err: str) -> bool:
@@ -519,7 +533,7 @@ class HumdrumFileBase(HumHash):
         return self._isQuiet
 
     @isQuiet.setter
-    def isQuiet(self, newIsQuiet: bool):
+    def isQuiet(self, newIsQuiet: bool) -> None:
         self._isQuiet = newIsQuiet
 
     '''
@@ -694,7 +708,7 @@ class HumdrumFileBase(HumHash):
     //    tokens on each line.
     '''
     def stitchLinesTogether(self, prevLine: HumdrumLine, nextLine: HumdrumLine) -> bool:
-        ''' first handle simple cases where the spine assignments are one-to-one:'''
+        # first handle simple cases where the spine assignments are one-to-one:
         if not prevLine.isInterpretation and not nextLine.isInterpretation:
             if prevLine.tokenCount != nextLine.tokenCount:
                 return self.setParseError(
@@ -711,10 +725,10 @@ class HumdrumFileBase(HumHash):
 
             return True
 
-        ''' Complicated case: spine manipulators have wreaked havoc '''
-        nextTokenIdx = 0
-        skipOneToken = False
-        mergeCount = 0
+        # Complicated case: spine manipulators have wreaked havoc
+        nextTokenIdx: int = 0
+        skipOneToken: bool = False
+        mergeCount: int = 0
         for i, prevTok in enumerate(prevLine.tokens()):
             if skipOneToken:
                 # print('skip one token', file=sys.stderr)
@@ -805,12 +819,15 @@ class HumdrumFileBase(HumHash):
                         'Error: single spine exchange indicator \'*x\' on line: '
                         + f'{prevLine.lineNumber}\n{prevLine.text}'
                     )
-                if nextLine[nextTokenIdx] is not None:
-                    prevTokPlus1.makeForwardLink(nextLine[nextTokenIdx])
+
+                nextNext: t.Optional[HumdrumToken] = nextLine[nextTokenIdx]
+                if nextNext is not None:
+                    prevTokPlus1.makeForwardLink(nextNext)
                 else:
                     print('Strange error 6', file=sys.stderr)
-                if nextLine[nextTokenIdx + 1] is not None:
-                    prevTok.makeForwardLink(nextLine[nextTokenIdx + 1])
+                nextNextPlus1: t.Optional[HumdrumToken] = nextLine[nextTokenIdx + 1]
+                if nextNextPlus1 is not None:
+                    prevTok.makeForwardLink(nextNextPlus1)
                 else:
                     print('Strange error 7', file=sys.stderr)
                 nextTokenIdx += 2
@@ -821,6 +838,7 @@ class HumdrumFileBase(HumHash):
                 # new segment is given (this should be handled by a
                 # HumdrumSet class, not HumdrumFileBase.
                 pass
+
             elif prevTok.isAddInterpretation:
                 # A new data stream is being added, the next linked token
                 # should be an exclusive interpretation.
@@ -837,12 +855,14 @@ class HumdrumFileBase(HumHash):
                 else:
                     print('Strange error 8', file=sys.stderr)
                 nextTokenIdx += 1
+
             elif prevTok.isExclusiveInterpretation:
                 if nextLine[nextTokenIdx] is not None:
                     prevTok.makeForwardLink(nextLine[nextTokenIdx])
                     nextTokenIdx += 1
                 else:
                     print('Strange error 9', file=sys.stderr)
+
             else:
                 return self.setParseError('Error: should not get here')
 
@@ -862,7 +882,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     // HumdrumFileBase::analyzeSpines -- Analyze the spine structure of the
     //     data.  Returns false if there was a parse error.
     '''
-    def analyzeSpines(self):
+    def analyzeSpines(self) -> bool:
         dataType: t.List[str] = []
         sinfo: t.List[str] = []
         lastSpine: t.List[t.List[HumdrumToken]] = []
@@ -872,7 +892,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
 
         seenFirstExInterp = False
         for i, line in enumerate(self._lines):
-            if not line.hasSpines:
+            if not line.hasSpines and line[0] is not None:
                 line[0].fieldIndex = 0  # the only token on the line has fieldIndex 0
                 continue
 
@@ -932,7 +952,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     //    found, so store in the list of track starts.  The first index position
     //    in trackstarts is reserve for non-spine usage.
     '''
-    def addToTrackStarts(self, token: t.Optional[HumdrumToken]):
+    def addToTrackStarts(self, token: t.Optional[HumdrumToken]) -> None:
         if token is None:
             self._trackStarts.append(None)
             self._trackEnds.append([])
@@ -953,7 +973,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
             line: HumdrumLine,
             dataType: t.List[str],
             spineInfo: t.List[str]
-    ) -> t.Tuple[bool, t.Optional[t.List[str]], t.Optional[t.List[str]]]:
+    ) -> t.Tuple[bool, t.List[str], t.List[str]]:
         # returns success, as well as the newType array, and the newInfo array
         # if there is an error, it returns success=False, and both arrays empty
         newType: t.List[str] = []
@@ -990,7 +1010,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     self.setParseError(
                         'Error: single spine merge indicator \'*v\' on line: '
                         + f'{line.lineNumber}\n{line.text}')
-                    return (False, None, None)
+                    return (False, [], [])
 
                 # print('spineInfo = ', spineInfo, 'i-mergeCount =', i-mergeCount,
                 #       'mergeCount-1 =', mergeCount-1, file=sys.stderr)
@@ -998,7 +1018,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 if token.isMergeInterpretation:
                     # we stopped at the end, so i is one less than usual
                     startSpine += 1
-                newInfo.append(getMergedSpineInfo(spineInfo, startSpine, mergeCount - 1))
+                newInfo.append(self.getMergedSpineInfo(spineInfo, startSpine, mergeCount - 1))
                 # print('mergedSpineInfo =', newInfo[-1], file=sys.stderr)
                 newType.append(dataType[startSpine])
                 # print('new dataType =', newType[-1], file=sys.stderr)
@@ -1026,14 +1046,14 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
             elif token.isExchangeInterpretation:
                 if i >= line.tokenCount - 1:
                     self.setParseError("Error: *x is all alone at end of line")
-                    return (False, None, None)
+                    return (False, [], [])
                 nextTok: t.Optional[HumdrumToken] = line[i + 1]
                 if t.TYPE_CHECKING:
                     # we know nextTok is not None because of i range check above
                     assert isinstance(nextTok, HumdrumToken)
                 if not nextTok.isExchangeInterpretation:  # line[index] is index'th token
                     self.setParseError('Error: *x is all alone')
-                    return (False, None, None)
+                    return (False, [], [])
                 newType.append(dataType[i + 1])
                 newType.append(dataType[i])
                 newInfo.append(spineInfo[i + 1])
@@ -1053,7 +1073,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                         + f'on line {line.lineNumber} spine index {i}\n'
                         + f'Line: {line.text}'
                     )
-                    return (False, None, None)
+                    return (False, [], [])
                 if self._trackStarts[-1] is None:
                     self.addToTrackStarts(token)
             else:
@@ -1071,7 +1091,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     // HumdrumFileBase::createLinesFromTokens -- Generate Humdrum lines strings
     //   from the stored list of tokens.
     '''
-    def createLinesFromTokens(self):
+    def createLinesFromTokens(self) -> None:
         for line in self._lines:
             line.createLineFromTokens()
 
@@ -1084,9 +1104,9 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     def appendLine(
             self,
             line: t.Union[HumdrumLine, str],
-            asGlobalToken=False,
-            analyzeTokenLinks=False
-    ):
+            asGlobalToken: bool = False,
+            analyzeTokenLinks: bool = False
+    ) -> None:
         if isinstance(line, str):
             line = HumdrumLine(line, asGlobalToken=asGlobalToken)
         if not isinstance(line, HumdrumLine):
@@ -1110,7 +1130,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
             index: int,
             aLine: t.Union[HumdrumLine, str],
             asGlobalToken: bool = False,
-            analyzeTokenLinks: bool = False):
+            analyzeTokenLinks: bool = False) -> None:
         if isinstance(aLine, str):
             aLine = HumdrumLine(aLine, asGlobalToken=asGlobalToken)
         if not isinstance(aLine, HumdrumLine):
@@ -1137,7 +1157,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     //     a line and instead return a pointer to the existing line.  Returns
     //     NULL if there was a problem.
     '''
-    def insertNullDataLine(self, timestamp: HumNumIn):
+    def insertNullDataLine(self, timestamp: HumNumIn) -> t.Optional[HumdrumLine]:
         ts: HumNum = opFrac(timestamp)
         # for now do a linear search for the insertion point, but later
         # do something more efficient.
@@ -1636,7 +1656,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     def getPrimaryTrackSequence(self, track: int, options: int) -> t.List[HumdrumToken]:
         tempSeq: t.List[t.List[HumdrumToken]] = self.getTrackSequence(
             track=track,
-            options=options | self.OPT_PRIMARY
+            options=(options | self.OPT_PRIMARY)
         )
         return [tokenList[0] for tokenList in tempSeq]
 
@@ -1705,7 +1725,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
 
             if optionNoEmpty:
                 # if all tokens on line (in this track) are null, continue
-                allNull = True
+                allNull: bool = True
                 for token in line.tokens():
                     if token.track != track:
                         continue
@@ -1715,7 +1735,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 if allNull:
                     continue
 
-            foundTrack = False
+            foundTrack: bool = False
             for token in line.tokens():
                 if token.track != track:
                     continue
@@ -1907,12 +1927,12 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 assert isinstance(prevToken, HumdrumToken)
 
             if prevToken.isSplitInterpretation:
-                addUniqueTokens(prevToken.nextNonNullDataTokens, ptokens)
+                self.addUniqueTokens(prevToken.nextNonNullDataTokens, ptokens)
                 if token != prevToken.nextToken0:
                     # terminate if not most primary subspine
                     return True
             elif token.isData:
-                addUniqueTokens(token.nextNonNullDataTokens, ptokens)
+                self.addUniqueTokens(token.nextNonNullDataTokens, ptokens)
                 if not token.isNull:
                     ptokens = [token]  # nukes the existing ptokens list
 
@@ -1954,12 +1974,12 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     # we know nextToken is not None because 0 is in range (tcount > 0)
                     assert isinstance(nextToken, HumdrumToken)
 
-                addUniqueTokens(nextToken.previousNonNullDataTokens, ptokens)
+                self.addUniqueTokens(nextToken.previousNonNullDataTokens, ptokens)
                 if token != nextToken.previousToken0:
                     # terminate if not most primary subspine
                     return True
             else:
-                addUniqueTokens(token.previousNonNullDataTokens, ptokens)
+                self.addUniqueTokens(token.previousNonNullDataTokens, ptokens)
                 if token.isNonNullData:
                     ptokens = [token]  # nukes the existing ptokens list
 
@@ -1983,6 +2003,6 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     //    in the file, the HumdrumFileBase::createLinesFromTokens() before printing
     //    the contents of the line.
     '''
-    def write(self, fp):
+    def write(self, fp) -> None:
         for line in self._lines:
             line.write(fp)

@@ -46,25 +46,23 @@ def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> t.Tuple[str, str]
 
 
 class HumdrumLine(HumHash):
-    def __init__(self,
+    def __init__(
+            self,
             line: str = '',
             asGlobalToken: bool = False,
-            ownerFile=None):  # ownerFile: HumdrumFile
+            ownerFile=None  # HumdrumFile
+    ) -> None:
         from converter21.humdrum import HumdrumFile
         super().__init__()  # initialize the HumHash fields
 
         '''
             _text: the line's text string
         '''
-        if line is None:
-            line = ''
-        elif len(line) > 0 and line[-1] == '\n':
+        if len(line) > 0 and line[-1] == '\n':
             # strip off any trailing LF
             line = line[:-1]
 
-        self._text: str = ''
-        if not asGlobalToken:
-            self._text = line
+        self._text: str = line
 
         '''
         // owner: This is the HumdrumFile which manages the given line.
@@ -209,7 +207,7 @@ class HumdrumLine(HumHash):
         return self._text
 
     @text.setter
-    def text(self, newText: str):
+    def text(self, newText: str) -> None:
         self._text = newText
 
     '''
@@ -222,7 +220,7 @@ class HumdrumLine(HumHash):
         return self._rhythmAnalyzed
 
     @rhythmAnalyzed.setter
-    def rhythmAnalyzed(self, newRhythmAnalyzed: bool):
+    def rhythmAnalyzed(self, newRhythmAnalyzed: bool) -> None:
         self._rhythmAnalyzed = newRhythmAnalyzed
 
 
@@ -602,7 +600,7 @@ class HumdrumLine(HumHash):
         return self._lineIndex
 
     @lineIndex.setter
-    def lineIndex(self, newLineIndex: int):
+    def lineIndex(self, newLineIndex: int) -> None:
         self._lineIndex = newLineIndex
 
     '''
@@ -632,7 +630,7 @@ class HumdrumLine(HumHash):
         return self._duration
 
     @duration.setter
-    def duration(self, newDuration: HumNumIn):
+    def duration(self, newDuration: HumNumIn) -> None:
         if newDuration >= 0:
             self._duration = opFrac(newDuration)
         else:
@@ -683,7 +681,7 @@ class HumdrumLine(HumHash):
         return self._durationFromStart
 
     @durationFromStart.setter
-    def durationFromStart(self, newDurationFromStart: HumNumIn):
+    def durationFromStart(self, newDurationFromStart: HumNumIn) -> None:
         self._durationFromStart = opFrac(newDurationFromStart)
 
     def scaledDurationFromStart(self, scale: HumNumIn) -> HumNum:
@@ -729,7 +727,7 @@ class HumdrumLine(HumHash):
         return self._durationFromBarline
 
     @durationFromBarline.setter
-    def durationFromBarline(self, newDurationFromBarline: HumNumIn):
+    def durationFromBarline(self, newDurationFromBarline: HumNumIn) -> None:
         self._durationFromBarline = opFrac(newDurationFromBarline)
 
     def scaledDurationFromBarline(self, scale: HumNumIn) -> HumNum:
@@ -753,7 +751,7 @@ class HumdrumLine(HumHash):
         return self._durationToBarline
 
     @durationToBarline.setter
-    def durationToBarline(self, newDurationToBarline: HumNumIn):
+    def durationToBarline(self, newDurationToBarline: HumNumIn) -> None:
         self._durationToBarline = opFrac(newDurationToBarline)
 
     def scaledDurationToBarline(self, scale: HumNumIn) -> HumNum:
@@ -939,7 +937,7 @@ class HumdrumLine(HumHash):
     //    line.  Otherwise, changes in the tokens will not be passed on to the
     ///   printing of the line.
     '''
-    def createLineFromTokens(self):
+    def createLineFromTokens(self) -> None:
         # 1. make sure that _numTabsAfterToken is full by appending hard-coded values (mostly 1s)
         numEntriesNeeded = len(self._tokens) - len(self._numTabsAfterToken)
         if numEntriesNeeded > 0:
@@ -970,7 +968,7 @@ class HumdrumLine(HumHash):
     //    HumdrumFileBase::getTrackWidths().  The first indexed value is unused,
     //    since there is no track 0.
     '''
-    def addExtraTabs(self, trackWidths: t.List[int]):
+    def addExtraTabs(self, trackWidths: t.List[int]) -> None:
         if not self.hasSpines:
             return
 
@@ -1070,7 +1068,7 @@ class HumdrumLine(HumHash):
     //
     // default value: out = cout
     '''
-    def printTrackInfo(self):
+    def printTrackInfo(self) -> None:
         if self.isManipulator:
             print(self.text, file=sys.stderr)
             return
@@ -1092,7 +1090,7 @@ class HumdrumLine(HumHash):
         return self._ownerFile
 
     @ownerFile.setter
-    def ownerFile(self, newOwnerFile):  # newOwnerFile: HumdrumFile
+    def ownerFile(self, newOwnerFile) -> None:  # newOwnerFile: HumdrumFile
         self._ownerFile = newOwnerFile
 
     '''
@@ -1116,7 +1114,7 @@ class HumdrumLine(HumHash):
     //        !!LO:NS2:key1=value1:key2=value2:key3=value3
     //     and stores it in the HumHash parent class of the line.
     '''
-    def setLayoutParameters(self):
+    def setLayoutParameters(self) -> None:
         if not self.text.startswith('!!LO:'):
             return
         # strip off the leading '!!'
@@ -1130,7 +1128,7 @@ class HumdrumLine(HumHash):
     //    that the parameters are global rather than local.  (Global text directions
     //    will behave differently from local text directions, for example).
     '''
-    def setParameters(self, pdata: str):
+    def setParameters(self, pdata: str) -> None:
         # pdata is 'LO:blah:bleah=value' (no leading '!' or '!!')
         pieces: t.List[str] = pdata.split(':')
         if len(pieces) < 3:
@@ -1160,7 +1158,7 @@ class HumdrumLine(HumHash):
 
         Q: shouldn't this also set ownerLine on the token? especially if it was a string
     '''
-    def appendToken(self, token: t.Union[HumdrumToken, str], tabCount: int = 0):
+    def appendToken(self, token: t.Union[HumdrumToken, str], tabCount: int = 0) -> None:
         if isinstance(token, str):
             token = HumdrumToken(token)
         self._tokens.append(token)
@@ -1171,13 +1169,11 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::insertToken -- Add a token before the given token position.
     '''
-    def insertToken(self, index: int, token: t.Union[HumdrumToken, str], tabCount: int):
-        if isinstance(token, HumdrumToken):
-            self._tokens.insert(index, token)
-            self._numTabsAfterToken.insert(index, tabCount)
-        elif isinstance(token, str):
-            self._tokens.insert(index, HumdrumToken(token))
-            self._numTabsAfterToken.insert(index, tabCount)
+    def insertToken(self, index: int, token: t.Union[HumdrumToken, str], tabCount: int = 0) -> None:
+        if isinstance(token, str):
+            token = HumdrumToken(token)
+        self._tokens.insert(index, token)
+        self._numTabsAfterToken.insert(index, tabCount)
 
     '''
     //////////////////////////////
@@ -1200,7 +1196,7 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::storeGlobalLinkedParameters --
     '''
-    def storeGlobalLinkedParameters(self):
+    def storeGlobalLinkedParameters(self) -> None:
         if self._tokens:
             self._tokens[0].storeParameterSet()
 
@@ -1233,7 +1229,7 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::copyStructure -- For data lines only at the moment.
     '''
-    def copyStructure(self, fromLine: 'HumdrumLine', nullStr: str):
+    def copyStructure(self, fromLine: 'HumdrumLine', nullStr: str) -> None:
         for fromToken in fromLine.tokens():
             newToken: HumdrumToken = HumdrumToken(nullStr)
             newToken.ownerLine = self
@@ -1269,5 +1265,5 @@ class HumdrumLine(HumHash):
     //
     // operator<< -- Print a HumdrumLine.
     '''
-    def write(self, fp):
+    def write(self, fp) -> None:
         fp.write(self._text + '\n')

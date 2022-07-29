@@ -12,13 +12,13 @@
 import re
 import typing as t
 
-SIGNIFIER_UNKNOWN = 'unknown'
-SIGNIFIER_LINK = 'link'
-SIGNIFIER_ABOVE = 'above'
-SIGNIFIER_BELOW = 'below'
+SIGNIFIER_UNKNOWN: str = 'unknown'
+SIGNIFIER_LINK: str = 'link'
+SIGNIFIER_ABOVE: str = 'above'
+SIGNIFIER_BELOW: str = 'below'
 
 class HumSignifier:
-    def __init__(self):
+    def __init__(self) -> None:
         self._exInterp: str = ''
         self._signifier: str = ''
 
@@ -45,6 +45,7 @@ class HumSignifier:
         m1 = re.search(r'!!!RDF(\*\*[^\s:]+)\s*:\s*(.*)\s*$', rdfLine)
         if m1 is None:
             return False
+
         self._exInterp = m1.group(1)
         rdfValue = m1.group(2)
 
@@ -90,14 +91,14 @@ class HumSignifier:
         return self._exInterp
 
 
-QUOTEDSTRING_PATTERN = r'\s*"\s*([^"]+)\s*"'
-SPACEDSTRING_PATTERN = r'\s*([^\s]+)'
-EQUALSVALUE_PATTERN = r'\s*=\s*"?\s*([^"\s]+)\s*"?'
-EQUALSVALUEWITHSPACES_PATTERN = r'\s*=\s*"?([^"]+)"?'
+QUOTEDSTRING_PATTERN: str = r'\s*"\s*([^"]+)\s*"'
+SPACEDSTRING_PATTERN: str = r'\s*([^\s]+)'
+EQUALSVALUE_PATTERN: str = r'\s*=\s*"?\s*([^"\s]+)\s*"?'
+EQUALSVALUEWITHSPACES_PATTERN: str = r'\s*=\s*"?([^"]+)"?'
 
 
 class HumSignifiers:
-    def __init__(self):
+    def __init__(self) -> None:
         self._signifiers: t.List[HumSignifier] = []
 
         # pre-chewed known info
@@ -182,7 +183,7 @@ class HumSignifiers:
         If your Humdrum file has custom RDF signifiers in it, you can still look through
         the parsed RDF signifiers yourself to see what they say.
     '''
-    def generateKnownInfo(self):
+    def generateKnownInfo(self) -> None:
         for rdf in self._signifiers:
             if rdf.signifier == '' and rdf.exInterp == '**kern':
                 # meta signifier (no actual signifier)

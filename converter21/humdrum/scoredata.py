@@ -33,20 +33,21 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # TODO: pass StaffGroup into PartData() so we have another source of partName/partAbbrev
 
 class ScoreData:
-    def __init__(self, score: m21.stream.Score, ownerWriter):
+    def __init__(self, score: m21.stream.Score, ownerWriter) -> None:
         from converter21.humdrum import HumdrumWriter
         self.ownerWriter: HumdrumWriter = ownerWriter
 
-        if 'Score' not in score.classes:
+        if not isinstance(score, m21.stream.Score):
             raise HumdrumInternalError('ScoreData must be initialized with a music21 Score object')
 
         self.m21Score: m21.stream.Score = score
-        self.spannerBundle = ownerWriter.spannerBundle
+        self.spannerBundle: m21.spanner.SpannerBundle = ownerWriter.spannerBundle
         self.m21Metadata: m21.metadata.Metadata = score.metadata
 
         self.parts: t.List[PartData] = []
 
-        self.eventFromM21Object: t.Dict[t.Union[int, str], EventData] = {}
+        # key is id(m21Object): a large integer that is actually the mem address of m21Object
+        self.eventFromM21Object: t.Dict[int, EventData] = {}
 
         # Following staff group code stolen from musicxml exporter in music21.
         # Keep it up-to-date!

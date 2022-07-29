@@ -11,17 +11,18 @@
 # ------------------------------------------------------------------------------
 import typing as t
 
-NAME_IDX = 0
-VALUE_IDX = 1
+NAME_IDX: int = 0
+VALUE_IDX: int = 1
+
 class HumParamSet:
     '''
     //////////////////////////////
     //
     // HumParamSet::HumParamSet --
     '''
-    def __init__(self, token=None):  # token: t.Optional[t.Union[HumdrumToken, str]]
+    def __init__(self, token=None) -> None:  # token: t.Optional[t.Union[HumdrumToken, str]]
         from converter21.humdrum import HumdrumToken
-        self._token: HumdrumToken = None
+        self._token: t.Optional[HumdrumToken] = None
         self._ns1: str = ''
         self._ns2: str = ''
         # _parameters is a list of parameters.
@@ -39,7 +40,7 @@ class HumParamSet:
         return self._ns1
 
     @namespace1.setter
-    def namespace1(self, newNS1: str):
+    def namespace1(self, newNS1: str) -> None:
         self._ns1 = newNS1
 
     @property
@@ -47,7 +48,7 @@ class HumParamSet:
         return self._ns2
 
     @namespace2.setter
-    def namespace2(self, newNS2: str):
+    def namespace2(self, newNS2: str) -> None:
         self._ns2 = newNS2
 
     @property
@@ -55,7 +56,7 @@ class HumParamSet:
         return self._ns1 + ':' + self._ns2
 
     @namespace.setter
-    def namespace(self, newNS: str):
+    def namespace(self, newNS: str) -> None:
         namespaces = newNS.split(':')
         if len(namespaces) == 1:
             self._ns1 = ''
@@ -69,7 +70,7 @@ class HumParamSet:
     //
     // HumParamSet::setNamespace --
     '''
-    def setNamespace(self, ns1: str, ns2: str):
+    def setNamespace(self, ns1: str, ns2: str) -> None:
         self._ns1 = ns1
         self._ns2 = ns2
 
@@ -135,9 +136,9 @@ class HumParamSet:
     //
     // HumParamSet::readString --
     '''
-    def readString(self, text: str):
+    def readString(self, text: str) -> None:
         # step over any bangs
-        firstNonBang = 0
+        firstNonBang: int = 0
         for i, ch in enumerate(text):
             if ch == '!':
                 continue

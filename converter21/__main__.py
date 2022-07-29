@@ -48,7 +48,7 @@ def getOutputFormatsList() -> t.List[str]:
                 result.append(form)
     return result
 
-def printSupportedFormats(whichList: str):  # whichList should be 'input' or 'output'
+def printSupportedFormats(whichList: str) -> None:  # whichList should be 'input' or 'output'
     c = converter.Converter()
     if whichList == 'input':
         inList = c.subconvertersList('input')

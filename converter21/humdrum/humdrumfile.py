@@ -14,10 +14,11 @@
 import re
 import sys
 import math
-import typing as t
-from fractions import Fraction
 import html
 import copy
+import typing as t
+from fractions import Fraction
+from pathlib import Path
 
 import music21 as m21
 from music21.common import opFrac
@@ -52,7 +53,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # Note that these durations are expressed in quarter notes,
 # so Fraction(1,2), a.k.a "a half" actually means an eighth note,
 # which has one beam.
-durationNoDotsToNumBeams = {
+durationNoDotsToNumBeams: t.Dict[HumNum, int] = {
     opFrac(Fraction(1, 2)): 1,    # eighth note has 1 beam
     opFrac(Fraction(1, 4)): 2,    # 16th note has 2 beams
     opFrac(Fraction(1, 8)): 3,    # 32nd note has 3 beams
@@ -64,7 +65,7 @@ durationNoDotsToNumBeams = {
     opFrac(Fraction(1, 512)): 9,  # 2048th note has 9 beams
 }
 
-humdrumInstrumentClassCodeToInstrumentName = {
+humdrumInstrumentClassCodeToInstrumentName: t.Dict[str, str] = {
     'vox': 'Vocalist',
     'str': 'StringInstrument',
     'ww': 'WoodwindInstrument',
@@ -73,7 +74,7 @@ humdrumInstrumentClassCodeToInstrumentName = {
     'perc': 'Percussion',
 }
 
-humdrumInstrumentCodeToInstrumentName = {
+humdrumInstrumentCodeToInstrumentName: t.Dict[str, str] = {
     'soprn': 'Soprano',
     'cant': 'Soprano',  # Found in many sources, but not a predefined humdrum instrument
     'mezzo': 'MezzoSoprano',
@@ -262,37 +263,6 @@ humdrumInstrumentCodeToInstrumentName = {
     'synth': 'Synthesizer',      # keyboard synthesizer
 }
 
-def getInstrumentNameFromCode(instrumentCode: str, iTrans: t.Optional[str]) -> str:
-    iName: str = ''
-    if instrumentCode not in humdrumInstrumentCodeToInstrumentName:
-        return instrumentCode
-
-    iName = humdrumInstrumentCodeToInstrumentName[instrumentCode]
-
-    if iTrans is None or iTrans == '':
-        return iName
-
-    # Some instruments always have a specific key, such as
-    # alto flute, which is in G, but the transposition is
-    # often not given in the name.  These are the transpositions
-    # that need to be given in the name...
-    if iTrans == '*ITrd1c2':
-        return iName + ' in B-flat'  # sounds B-flat below C
-    if iTrans == '*ITrd2c3':
-        return iName + ' in A'       # sounds A below C
-    if iTrans == '*ITrd5c9':
-        return iName + ' in E-flat'  # sounds E-flat below C
-    if iTrans == '*ITrd-2c-3':
-        return iName + ' in E-flat'  # sounds E-flat above C
-
-    return iName
-
-def getInstrumentNameFromClassCode(instrumentClassCode: str) -> str:
-    if instrumentClassCode in humdrumInstrumentClassCodeToInstrumentName:
-        return humdrumInstrumentClassCodeToInstrumentName[instrumentClassCode]
-
-    return instrumentClassCode
-
 class Phrase(m21.spanner.Slur):
     '''
     A Slur that represents a Phrase.  Code that doesn't know about Phrases will
@@ -301,38 +271,29 @@ class Phrase(m21.spanner.Slur):
     '''
 
 class HumdrumTie:
-    def __init__(self):
-        self.startNote: m21.note.Note = None
-        self.startLayerIndex: int = None
-        self.startToken: HumdrumToken = None
-        self.startSubTokenStr: str = None
-        self.startSubTokenIdx: int = None
-
-        self.pitch: int = None
-        self.startTime: HumNum = None
-        self.endTime: HumNum = None
-
-        self.wasInserted: bool = False
-
-    def setStart(self,
-                 startLayerIndex: int,
-                 startNote: m21.note.Note,
-                 startToken: HumdrumToken,
-                 startSubTokenStr: str,
-                 startSubTokenIdx: int):
-        self.startLayerIndex = startLayerIndex
-        self.startNote = startNote
-        self.startToken = startToken
-        self.startSubTokenStr = startSubTokenStr
-        self.startSubTokenIdx = startSubTokenIdx
+    def __init__(
+            self,
+            startLayerIndex: int,
+            startNote: m21.note.Note,
+            startToken: HumdrumToken,
+            startSubTokenStr: str,
+            startSubTokenIdx: int
+    ) -> None:
+        self.startLayerIndex: int = startLayerIndex
+        self.startNote: m21.note.Note = startNote
+        self.startToken: HumdrumToken = startToken
+        self.startSubTokenStr: str = startSubTokenStr
+        self.startSubTokenIdx: int = startSubTokenIdx
 
         # pitch computation is a little sloppy (on purpose?).
         # This will (e.g.) allow a C-flat to be tied to a B-natural.
         # base40 would be more stringent, but wouldn't work for triple
         # flats and triple sharps.
-        self.pitch = Convert.kernToMidiNoteNumber(startSubTokenStr)
-        self.startTime = startToken.durationFromStart
-        self.endTime = self.startTime + startToken.duration
+        self.pitch: int = Convert.kernToMidiNoteNumber(startSubTokenStr)
+        self.startTime: HumNum = opFrac(startToken.durationFromStart)
+        self.endTime: HumNum = opFrac(self.startTime + opFrac(startToken.duration))
+
+        self.wasInserted: bool = False
 
     def setEndAndInsert(self, endNote: m21.note.Note, endSubTokenStr: str) -> m21.tie.Tie:
         startTieType: str = 'start'
@@ -352,10 +313,12 @@ class HumdrumTie:
 
 class HumdrumBeamAndTuplet:
     # A struct (per note/chord/rest) describing a beam and/or tuplet group.
-    # Tuplets can contain rests, but beams cannot. --gregc
-    def __init__(self):
+    # Tuplets can contain rests, but beams cannot.
+    def __init__(self) -> None:
         # for tuplets
-        self.group: int = 0      # tuplet group number (within layer)
+
+        # tuplet group number (within layer)
+        self.group: int = 0
 
         self.duration: HumNum = opFrac(0)
         self.durationNoDots: HumNum = opFrac(0)
@@ -385,35 +348,37 @@ class HumdrumBeamAndTuplet:
         self.gbeamEnd: int = 0    # set to beam number on ending grace note
 
         # for all
-        self.token: t.Union[HumdrumToken, FakeRestToken] = None  # the token for this note/rest
+
+        # the token for this note/rest
+        self.token: t.Optional[t.Union[HumdrumToken, FakeRestToken]] = None
 
 
 class BeamAndTupletGroupState:
     # A struct containing the current state of beams and tuplets as we walk the tokens in a layer
-    def __init__(self):
+    def __init__(self) -> None:
         # for beams
-        self.inBeam: bool = False             # set to True when a beam starts, False when it ends
+        self.inBeam: bool = False             # set True when a beam starts, False when it ends
         self.previousBeamTokenIdx: int = -1   # index (in layer) of the previous token in a beam
 
         # for grace note beams
-        self.inGBeam: bool = False            # set to True when a gbeam starts, False when it ends
+        self.inGBeam: bool = False            # set True when a gbeam starts, False when it ends
         self.previousGBeamTokenIdx: int = -1  # index (in layer) of the previous token in a gbeam
 
         # for tuplets
-        self.inTuplet: bool = False           # set to True when a tuplet starts, False when it ends
+        self.inTuplet: bool = False           # set True when a tuplet starts, False when it ends
         # tuplet template for every note in the current tuplet
         self.m21Tuplet: t.Optional[m21.duration.Tuplet] = None
 
 
-MAX_LAYERS_FOR_STAFF_STATE_LISTS = 100
+MAX_LAYERS_FOR_STAFF_STATE_LISTS: int = 100
 
 class StaffStateVariables:
-    def __init__(self):
+    def __init__(self) -> None:
         '''
             First we have permanent info we have figured out about this staff
         '''
         # the m21 Part for the staff
-        self.m21Part: m21.stream.Part = None
+        self.m21Part: t.Optional[m21.stream.Part] = None
 
         # Whether the Part is actually a PartStaff (or should be when created)
         # Set when perusing *part and *staff exInterps.  If a particular *part
@@ -432,11 +397,11 @@ class StaffStateVariables:
         self.verseLabels: t.List[HumdrumToken] = []
 
         # figured bass
-        self.figuredBassState: int = None
+        self.figuredBassState: t.Optional[int] = None
         self.isStaffWithFiguredBass: bool = False  # true if staff has figured bass
 
         # instrument info
-        self.instrumentClass: str = None  # e.g. 'bras' is BrassInstrument
+        self.instrumentClass: str = ''  # e.g. 'bras' is BrassInstrument
 
         # hand-transposition info (we have to undo it as we translate to music21, since
         # there is no way in music21 to mark a staff has having been transposed from the
@@ -454,16 +419,16 @@ class StaffStateVariables:
         self.dynamStaffAdj: int = 0
 
         self.tgs: t.Dict[
-            t.Tuple[t.Optional[int], int],
-            t.List[t.List[t.Optional[HumdrumBeamAndTuplet]]]
+            t.Tuple[t.Optional[int], int],  # MeasureKey
+            t.List[t.List[t.Optional[HumdrumBeamAndTuplet]]]  # top list is per layer
         ] = {}
 
         # first info in part (we hang on to these here, waiting for a Measure to put them in)
-        self.firstM21Clef: m21.clef.Clef = None
+        self.firstM21Clef: t.Optional[m21.clef.Clef] = None
         self.firstM21KeySig: t.Optional[
             t.Union[m21.key.Key, m21.key.KeySignature]
         ] = None
-        self.firstM21TimeSig: m21.meter.TimeSignature = None
+        self.firstM21TimeSig: t.Optional[m21.meter.TimeSignature] = None
 
         # ties (list of starts that we search when we see an end)
         self.ties: t.List[HumdrumTie] = []
@@ -488,9 +453,9 @@ class StaffStateVariables:
         '''
             Next we have temporary (processing) state about this staff (current measure, etc)
         '''
-        self.mostRecentlySeenClefTok: HumdrumToken = None
+        self.mostRecentlySeenClefTok: t.Optional[HumdrumToken] = None
 
-    def printState(self, prefix: str):
+    def printState(self, prefix: str) -> None:
         print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
         print(f'{prefix}verseLabels: {self.verseLabels}', file=sys.stderr)
 
@@ -498,7 +463,7 @@ class StaffStateVariables:
 class HumdrumFile(HumdrumFileContent):
     # add XML print routines?
 
-    def __init__(self, fileName: str = None):
+    def __init__(self, fileName: t.Optional[t.Union[str, Path]] = None) -> None:
         super().__init__(fileName)  # initialize the HumdrumFileBase fields
 
         # The m21Score attribute will not exist until it is set up (in createMusic21Stream)
@@ -546,10 +511,10 @@ class HumdrumFile(HumdrumFileContent):
         self._numberlessLabels: t.List[HumdrumToken] = []
 
         # staff group names and abbreviations
-        self._groupNames: dict = {}         # {int, str}
-        self._groupNameTokens: dict = {}    # {int, HumdrumToken}
-        self._groupAbbrevs: dict = {}       # {int, str}
-        self._groupAbbrevTokens: dict = {}  # {int, HumdrumToken}
+        self._groupNames: t.Dict[int, str] = {}
+        self._groupNameTokens: t.Dict[int, HumdrumToken] = {}
+        self._groupAbbrevs: t.Dict[int, str] = {}
+        self._groupAbbrevTokens: t.Dict[int, HumdrumToken] = {}
 
         # metadata (from biblio records)
         # We use a list of key/value pairs instead of a dictionary
@@ -569,7 +534,7 @@ class HumdrumFile(HumdrumFileContent):
         # held in a dictionary, one element per system measure, where the key is a t.Tuple
         # holding the start and end line index for the measure (startIdx -> '=N', endIdx -> '=N+1')
         self._scoreLayerTokens: t.Dict[
-            t.Tuple[t.Optional[int], int],
+            t.Tuple[t.Optional[int], int],  # MeasureKey
             t.List[t.List[t.List[t.Union[HumdrumToken, FakeRestToken]]]]
         ] = {}
 
@@ -577,7 +542,10 @@ class HumdrumFile(HumdrumFileContent):
         #   (or 0 for first bar)
         # We need to be able to get a measureIndex from measureKey, or from startIdx or endIdx.
         # Here is where we build up that picture.
-        self._measureIndexFromKey: t.Dict[t.Tuple[t.Optional[int], int], int] = {}
+        self._measureIndexFromKey: t.Dict[
+            t.Tuple[t.Optional[int], int],  # measureKey
+            int                             # measureIndex
+        ] = {}
 
         # We need to be able to get a measureIndex from a lineIndex as well.
         # This array of measure indices has an element for every line in the file.
@@ -596,6 +564,39 @@ class HumdrumFile(HumdrumFileContent):
         self._m21BreakAtStartOfNextMeasure: t.Optional[m21.Music21Object] = None
 
         self._currentOMDDurationFromStart: HumNum = opFrac(0)
+
+    @staticmethod
+    def getInstrumentNameFromCode(instrumentCode: str, iTrans: t.Optional[str]) -> str:
+        iName: str = ''
+        if instrumentCode not in humdrumInstrumentCodeToInstrumentName:
+            return instrumentCode
+
+        iName = humdrumInstrumentCodeToInstrumentName[instrumentCode]
+
+        if iTrans is None or iTrans == '':
+            return iName
+
+        # Some instruments always have a specific key, such as
+        # alto flute, which is in G, but the transposition is
+        # often not given in the name.  These are the transpositions
+        # that need to be given in the name...
+        if iTrans == '*ITrd1c2':
+            return iName + ' in B-flat'  # sounds B-flat below C
+        if iTrans == '*ITrd2c3':
+            return iName + ' in A'       # sounds A below C
+        if iTrans == '*ITrd5c9':
+            return iName + ' in E-flat'  # sounds E-flat below C
+        if iTrans == '*ITrd-2c-3':
+            return iName + ' in E-flat'  # sounds E-flat above C
+
+        return iName
+
+    @staticmethod
+    def getInstrumentNameFromClassCode(instrumentClassCode: str) -> str:
+        if instrumentClassCode in humdrumInstrumentClassCodeToInstrumentName:
+            return humdrumInstrumentClassCodeToInstrumentName[instrumentClassCode]
+
+        return instrumentClassCode
 
     def createMusic21Stream(self) -> m21.stream.Score:
         # First, analyze notation: this is extra analysis, not done by default,
@@ -703,7 +704,7 @@ class HumdrumFile(HumdrumFileContent):
 
         return self.m21Score
 
-    def _prepareForSecondPass(self):
+    def _prepareForSecondPass(self) -> None:
         for ss in self._staffStates:
             # ss.tremolo is set to True and False as we run across *tremolo and *Xtremolo
             # while traversing the layers during first pass. At start of second pass, it
@@ -716,9 +717,9 @@ class HumdrumFile(HumdrumFileContent):
     def measureIndexFromLineIndex(self, lineIndex: int) -> int:
         return self._measureIndexFromLineIndex[lineIndex]
 
-    def _prepareSystemMeasures(self):
+    def _prepareSystemMeasures(self) -> None:
         # create measureIndexFromLineIndex list
-        self._measureIndexFromLineIndex = [None] * self.lineCount
+        self._measureIndexFromLineIndex = [-1] * self.lineCount
 
         # assume no staff starts earlier than the first
         lineIdx: int = self._staffStarts[0].lineIndex
@@ -758,8 +759,8 @@ class HumdrumFile(HumdrumFileContent):
         Note that we only pay attention to this at barlines (and if the barline is commented
         out, we ignore the entire following measure).
     '''
-    def _initializeIgnoreLineVector(self):
-        self.ignoreLine: t.List[bool] = [False] * self.lineCount
+    def _initializeIgnoreLineVector(self) -> None:
+        self.ignoreLine = [False] * self.lineCount
         state: bool = False
         for i, line in enumerate(self._lines):
             self.ignoreLine[i] = state
@@ -770,7 +771,7 @@ class HumdrumFile(HumdrumFileContent):
             elif line.text == '!!Xignore':
                 state = False
 
-    def _makeAccidentals(self):
+    def _makeAccidentals(self) -> None:
         # call on each part, or it doesn't work right.
         for part in self.m21Score.parts:
             # I'm not too happy with one feature here:
@@ -804,7 +805,7 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::processHangingTieStarts -- Deal with tie starts that were
     //    never matched with tie ends.
     '''
-    def _processHangingTieStarts(self):
+    def _processHangingTieStarts(self) -> None:
         for ss in self._staffStates:
             for tie in ss.ties:
                 self._processHangingTieStart(tie)
@@ -819,7 +820,7 @@ class HumdrumFile(HumdrumFileContent):
         and we can leave the problem of what to do in this case to the individual
         exporters.
     '''
-    def _processHangingTieStart(self, tieInfo: HumdrumTie):
+    def _processHangingTieStart(self, tieInfo: HumdrumTie) -> None:
         tieType: str = 'start'
         if '_' in tieInfo.startSubTokenStr:
             tieType = 'continue'
@@ -839,7 +840,7 @@ class HumdrumFile(HumdrumFileContent):
         exporters.
     '''
     @staticmethod
-    def _processHangingTieEnd(note: m21.note.Note, tstring: str):
+    def _processHangingTieEnd(note: m21.note.Note, tstring: str) -> None:
         if '_' in tstring:
             return  # 'continue' will be handled in the ss.ties list as a tieStart
 
@@ -849,12 +850,12 @@ class HumdrumFile(HumdrumFileContent):
     def staffCount(self) -> int:
         return len(self._staffStarts)
 
-    def _initializeStaffStates(self):
+    def _initializeStaffStates(self) -> None:
         self._staffStates = []
         for _ in range(0, self.staffCount):
             self._staffStates.append(StaffStateVariables())
 
-    def _prepareMetadata(self):
+    def _prepareMetadata(self) -> None:
         # We take every instance of each key, but... I make an exception for OMD,
         # because it is also used as a tempo change at start of any measure, so you
         # really want the first OMD for the "movement name".  I give you beethoven
@@ -864,7 +865,7 @@ class HumdrumFile(HumdrumFileContent):
         # Clarification: the first OMD only becomes the movement name if it is
         # seen before any data lines (i.e. notes/rests).  If the first OMD is
         # seen after some notes, it's just a tempo change.
-        firstDataLineIdx: HumdrumLine = self.lineCount  # one off the end
+        firstDataLineIdx: int = self.lineCount  # one off the end
         for line in self._lines:
             if line.isData:
                 firstDataLineIdx = line.lineIndex
@@ -912,9 +913,9 @@ class HumdrumFile(HumdrumFileContent):
     //      signatures in the file, indexed by hum::HumdrumFile line number.  Only
     //      the first spine in the file is considered.
     '''
-    def _prepareTimeSignatures(self):
-        top: int = -1
-        bot: int = -1
+    def _prepareTimeSignatures(self) -> None:
+        top: t.Optional[int] = None
+        bot: t.Optional[int] = None
 
         self._timeSigDurationsByLine = [opFrac(-1)] * self.lineCount
         self._timeSignaturesWithLineIdx = []
@@ -940,6 +941,11 @@ class HumdrumFile(HumdrumFileContent):
                 token = token.nextToken0  # stay left if there's a split
                 continue
             top, bot = token.timeSignature
+            if top is None or bot is None:
+                # token is a timeSig, but it's malformed, so don't use it
+                self._timeSigDurationsByLine[lineIdx] = curDur
+                token = token.nextToken0  # stay left if there's a split
+                continue
             self._timeSignaturesWithLineIdx.append((top, bot, lineIdx))
             curDur = opFrac(Fraction(top, bot))
             curDur = opFrac(curDur * 4)  # convert to duration in quarter notes
@@ -1036,6 +1042,9 @@ class HumdrumFile(HumdrumFileContent):
             ss: StaffStateVariables = self._staffStates[i]
             measure: m21.stream.Measure = m21.stream.Measure(measureNumber)
             currentMeasurePerStaff.append(measure)
+            if t.TYPE_CHECKING:
+                # By the time we get here, all the m21Parts are set up.
+                assert ss.m21Part is not None
             ss.m21Part.coreInsert(mOffset, measure)
             ss.m21Part.coreElementsChanged()
 
@@ -1094,7 +1103,7 @@ class HumdrumFile(HumdrumFileContent):
         Sets the style of the right barline of this measure, and (maybe) tells
         the next measure what to do with it's left barline (usually nothing).
     '''
-    def _setSystemMeasureStyle(self, measureKey: t.Tuple[t.Optional[int], int]):
+    def _setSystemMeasureStyle(self, measureKey: t.Tuple[t.Optional[int], int]) -> None:
         _, endLineIdx = measureKey
         endToken = self._lines[endLineIdx][0]
         if endToken is None:
@@ -1201,7 +1210,10 @@ class HumdrumFile(HumdrumFileContent):
         handle signature changes mid-Measure, and insert them at the appropriate
         time offset.
     '''
-    def _addKeyTimeChangesToSystemMeasures(self, measureKey: t.Tuple[t.Optional[int], int]):
+    def _addKeyTimeChangesToSystemMeasures(
+            self,
+            measureKey: t.Tuple[t.Optional[int], int]
+    ) -> None:
         startLineIdx, endLineIdx = measureKey
         if startLineIdx is None:
             # this method should not be called without a startLineIdx in measureKey
@@ -1475,14 +1487,20 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::printMeasureTokens -- For debugging.
     '''
-    def _printCurrentMeasureLayerTokens(self):
+    def _printCurrentMeasureLayerTokens(self) -> None:
         print('self._currentMeasureLayerTokens:', file=sys.stderr)
         for i, staff in enumerate(self._currentMeasureLayerTokens):
             print(f'STAFF {i + 1}\t', end='', flush=True, file=sys.stderr)
             for j, layer in enumerate(staff):
                 print(f'LAYER {j + 1}:\t', end='', flush=True, file=sys.stderr)
                 for token in layer:
-                    print(' ', token.text, end='', flush=True, file=sys.stderr)
+                    if token.isFakeRest:
+                        print(' FAKE REST', end='', flush=True, file=sys.stderr)
+                    else:
+                        if t.TYPE_CHECKING:
+                            # it's not a fake rest
+                            assert isinstance(token, HumdrumToken)
+                        print(' ', token.text, end='', flush=True, file=sys.stderr)
                 print('', flush=True, file=sys.stderr)
 
     '''
@@ -1494,7 +1512,7 @@ class HumdrumFile(HumdrumFileContent):
         We actually create and fill in a Measure per staff and append to each Part
         (that's how music21 likes it). --gregc
     '''
-    def _convertMeasureStaves(self, measureKey: t.Tuple[t.Optional[int], int]):
+    def _convertMeasureStaves(self, measureKey: t.Tuple[t.Optional[int], int]) -> None:
         layerCounts: t.List[int] = self.staffLayerCounts
 
         # TODO: Figured Bass
@@ -1528,7 +1546,7 @@ class HumdrumFile(HumdrumFileContent):
             track: int,
             measureKey: t.Tuple[t.Optional[int], int],
             layerCount: int
-    ):
+    ) -> None:
         # do the layers backward, so highest in the score (right-most in humdrum)
         # comes first in the m21Score
         # There are a lot of humdrum scores where this is not correct ordering, so I'm
@@ -1554,7 +1572,7 @@ class HumdrumFile(HumdrumFileContent):
             track: int,
             measureKey: t.Tuple[t.Optional[int], int],
             layerIndex: int
-    ):
+    ) -> None:
         staffIndex: int = self._staffStartsIndexByTrack[track]
         if staffIndex < 0:
             # not a kern/mens spine
@@ -1574,13 +1592,15 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::printGroupInfo --
     '''
     @staticmethod
-    def _printGroupInfo(tgs: t.List[t.Optional[HumdrumBeamAndTuplet]]):
+    def _printGroupInfo(tgs: t.List[t.Optional[HumdrumBeamAndTuplet]]) -> None:
         for tg in tgs:
             if t.TYPE_CHECKING:
                 # tgs has been filled in completely
                 assert isinstance(tg, HumdrumBeamAndTuplet)
             token = tg.token
-            if isinstance(token, FakeRestToken):
+            if token is None:
+                print('None', end='\t', file=sys.stderr)
+            elif isinstance(token, FakeRestToken):
                 print('FakeRest', end='\t', file=sys.stderr)
             else:
                 print(token.text, end='\t', file=sys.stderr)
@@ -1604,7 +1624,7 @@ class HumdrumFile(HumdrumFileContent):
     def _fillContentsOfLayer(self,
                              track: int,
                              measureKey: t.Tuple[t.Optional[int], int],
-                             layerIndex: int):
+                             layerIndex: int) -> None:
         staffIndex: int = self._staffStartsIndexByTrack[track]
         if staffIndex < 0:
             # not a kern/mens spine
@@ -1874,7 +1894,7 @@ class HumdrumFile(HumdrumFileContent):
         # TODO: *rep (repetition element)
         pass  # returns None from _handleRepInterp, which will evaluate to False appropriately
 
-    def _handleColorInterp(self, measureIndex: int, token: HumdrumToken):
+    def _handleColorInterp(self, measureIndex: int, token: HumdrumToken) -> None:
         # TODO: *color (spine color)
         # if '*color:' not in token.text:
         #     return
@@ -1972,7 +1992,7 @@ class HumdrumFile(HumdrumFileContent):
             _measureIndex: int,
             token: HumdrumToken,
             staffIndex: int
-    ):
+    ) -> None:
         ss: StaffStateVariables = self._staffStates[staffIndex]
 
         tok: t.Optional[HumdrumToken] = token.nextFieldToken
@@ -2058,7 +2078,7 @@ class HumdrumFile(HumdrumFileContent):
             token: HumdrumToken,
             layerIndex: int,
             staffIndex: int
-    ):
+    ) -> None:
         ss: StaffStateVariables = self._staffStates[staffIndex]
         if token.text in ('*Xbeamtup', '*Xtuplet'):
             ss.suppressTupletNumber = True
@@ -2131,7 +2151,7 @@ class HumdrumFile(HumdrumFileContent):
     //    long as there is no <tempo> text that will use the tempo *MM# as @midi.bpm.
     //    *MM at the start of the music is ignored (placed separately into scoreDef).
     '''
-    def _handleTempoChange(self, measureIndex: int, token: HumdrumToken, staffIndex: int):
+    def _handleTempoChange(self, measureIndex: int, token: HumdrumToken, staffIndex: int) -> None:
         if not token.isTempo:
             return
 
@@ -2704,7 +2724,7 @@ class HumdrumFile(HumdrumFileContent):
             self,
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
             startTokenIdx: int
-    ):
+    ) -> None:
         token: t.Union[HumdrumToken, FakeRestToken] = layerData[startTokenIdx]
         if token.isFakeRest:
             return
@@ -2713,7 +2733,10 @@ class HumdrumFile(HumdrumFileContent):
             # We know because token.isFakeRest is False
             assert isinstance(token, HumdrumToken)
 
-        obj: m21.note.NotRest = token.getValueM21Object('music21', 'generalNote')
+        obj: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
+        if not isinstance(obj, m21.note.NotRest):
+            print(f'startBeam failed: no m21 NotRest found in token ({token})')
+            return
 
         # We append explicitly (instead of with a single call to beams.fill(numBeams))
         # because we may need more than 6 (dur == 1/256), and 6 is beams.fill's hard-
@@ -2740,7 +2763,7 @@ class HumdrumFile(HumdrumFileContent):
             prevBeamTokenIdx: int,
             beamType: str = 'continue',
             tremoloBeam: bool = False
-    ):
+    ) -> None:
         if tremoloBeam and beamType == 'stop':  # last note in a beamed group of tremolos
             # search back for first note in this last tremolo of a beamed group of tremolos
             tokenIdx = self._findStartOfTremolo(layerData, tokenIdx)
@@ -2749,9 +2772,9 @@ class HumdrumFile(HumdrumFileContent):
         if token.isFakeRest:
             return
 
-        obj: m21.note.NotRest = token.getValueM21Object('music21', 'generalNote')
-
-        if obj is None or isinstance(obj, m21.note.Rest):
+        obj: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
+        if not isinstance(obj, m21.note.NotRest):
+            print(f'continueBeam failed: no m21 NotRest found in token ({token})')
             return
 
         if tremoloBeam and beamType == 'stop':
@@ -2764,8 +2787,14 @@ class HumdrumFile(HumdrumFileContent):
             return
 
         prevToken: t.Union[HumdrumToken, FakeRestToken] = layerData[prevBeamTokenIdx]
-        prevObj: m21.note.NotRest = prevToken.getValueM21Object('music21',
-                                                                'generalNote')
+        prevObj: t.Optional[m21.Music21Object] = prevToken.getValueM21Object(
+            'music21',
+            'generalNote'
+        )
+        if not isinstance(prevObj, m21.note.NotRest):
+            print(f'continueBeam failed: no m21 NotRest found in prevToken ({prevToken})')
+            return
+
         numBeams: int = self._getNumBeamsForNoteOrChord(token, obj)
         prevNumBeams: int = self._getNumBeamsForNoteOrChord(prevToken, prevObj)
         if 0 < numBeams < prevNumBeams:
@@ -2818,7 +2847,7 @@ class HumdrumFile(HumdrumFileContent):
             tokenIdx: int,
             prevBeamTokenIdx: int,
             tremoloBeam: bool = False
-    ):
+    ) -> None:
         # the implementation here is exactly the same as _continueBeam, so just call him.
         self._continueBeam(
             layerData, tokenIdx, prevBeamTokenIdx, beamType='stop', tremoloBeam=tremoloBeam
@@ -2828,7 +2857,7 @@ class HumdrumFile(HumdrumFileContent):
             self,
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
             startTokenIdx: int
-    ):
+    ) -> None:
         self._startBeam(layerData, startTokenIdx)
 
     def _continueGBeam(
@@ -2836,7 +2865,7 @@ class HumdrumFile(HumdrumFileContent):
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
             tokenIdx: int,
             prevGBeamTokenIdx: int
-    ):
+    ) -> None:
         self._continueBeam(layerData, tokenIdx, prevGBeamTokenIdx)
 
     def _endGBeam(
@@ -2844,7 +2873,7 @@ class HumdrumFile(HumdrumFileContent):
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
             tokenIdx: int,
             prevGBeamTokenIdx: int
-    ):
+    ) -> None:
         self._endBeam(layerData, tokenIdx, prevGBeamTokenIdx)
 
     def _startTuplet(
@@ -2854,7 +2883,7 @@ class HumdrumFile(HumdrumFileContent):
             tupletTemplate: m21.duration.Tuplet,
             staffIndex: int,
             tremolo: bool
-    ):
+    ) -> None:
         ss: StaffStateVariables = self._staffStates[staffIndex]
         startTok: t.Union[HumdrumToken, FakeRestToken] = layerData[startTokenIdx]
         if startTok.isFakeRest:
@@ -2864,9 +2893,14 @@ class HumdrumFile(HumdrumFileContent):
             # We know because startTok.isFakeRest is False
             assert isinstance(startTok, HumdrumToken)
 
-        startNote: m21.note.GeneralNote = startTok.getValueM21Object('music21', 'generalNote')
-        if not startNote:
-            raise HumdrumInternalError('no note/chord/rest at start of tuplet')
+        startNote: t.Optional[m21.Music21Object] = startTok.getValueM21Object(
+            'music21',
+            'generalNote'
+        )
+        if not isinstance(startNote, m21.note.GeneralNote):
+            raise HumdrumInternalError(
+                f'no note/chord/rest at start of tuplet (startTok: {startTok})'
+            )
 
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
@@ -2993,7 +3027,7 @@ class HumdrumFile(HumdrumFileContent):
             tokenIdx: int,
             tupletTemplate: m21.duration.Tuplet,
             tremolo: bool
-    ):
+    ) -> None:
         token: t.Union[HumdrumToken, FakeRestToken] = layerData[tokenIdx]
         if token.isFakeRest:
             return
@@ -3002,10 +3036,11 @@ class HumdrumFile(HumdrumFileContent):
             # We know because token.isFakeRest is False
             assert isinstance(token, HumdrumToken)
 
-        note: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
-        if not note:
+        note: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
+        if not isinstance(note, m21.note.GeneralNote):
             # This could be a *something interp token (or a suppressed note); just skip it.
             return
+
         if token.isGrace:  # grace note in the middle of a tuplet, but it's not _in_ the tuplet
             return
 
@@ -3096,7 +3131,7 @@ class HumdrumFile(HumdrumFileContent):
             tokenIdx: int,
             tupletTemplate: m21.duration.Tuplet,
             tremolo: bool
-    ):
+    ) -> None:
         if tremolo:
             tokenIdx = HumdrumFile._findStartOfTremolo(layerData, tokenIdx)
         endToken: t.Union[HumdrumToken, FakeRestToken] = layerData[tokenIdx]
@@ -3107,9 +3142,14 @@ class HumdrumFile(HumdrumFileContent):
             # We know because endToken.isFakeRest is False
             assert isinstance(endToken, HumdrumToken)
 
-        endNote: m21.note.GeneralNote = endToken.getValueM21Object('music21', 'generalNote')
-        if not endNote:
-            raise HumdrumInternalError('no note/chord/rest at end of tuplet')
+        endNote: t.Optional[m21.Music21Object] = endToken.getValueM21Object(
+            'music21',
+            'generalNote'
+        )
+        if not isinstance(endNote, m21.note.GeneralNote):
+            raise HumdrumInternalError(
+                f'no note/chord/rest at end of tuplet (endToken = {endToken})'
+            )
 
         # remember the original duration value, so we can do a debug check at the end
         # to make sure it didn't change (things like changing actual number from 6 to 3
@@ -3206,7 +3246,7 @@ class HumdrumFile(HumdrumFileContent):
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
             tokenIdx: int,
             isGrace: bool
-    ):
+    ) -> None:
         upOrDown: str = ''
         if direction == 1:
             upOrDown = 'up'
@@ -3257,7 +3297,7 @@ class HumdrumFile(HumdrumFileContent):
             # do it (directly to the music21 note or chord)
             # (too late to set stem.dir, the note/chord has already been created)
             # token.setValue('auto', 'stem.dir', str(direction))
-            obj: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
+            obj: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
             if not obj:
                 continue  # no durational object
 
@@ -3290,7 +3330,7 @@ class HumdrumFile(HumdrumFileContent):
             beamNums: t.List[int],
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
             isGrace: bool = False
-    ):
+    ) -> None:
         # a list of "beams", each of which is actually a list of the note indices in that beam
         beamedNotes: t.List[t.List[int]] = []
 
@@ -3350,7 +3390,7 @@ class HumdrumFile(HumdrumFileContent):
             beamNums: t.List[int],
             gbeamNums: t.List[int],
             layerData: t.List[t.Union[HumdrumToken, FakeRestToken]]
-    ):
+    ) -> None:
         beamState: t.List[int] = [0] * len(layerData)
         gbeamState: t.List[int] = [0] * len(layerData)  # for grace notes
         didBeamStateGoNegative: bool = False
@@ -3939,7 +3979,7 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::fixLargeTuplets -- fix triple-breve/triplet-wholenote cases.
     '''
     @staticmethod
-    def _fixLargeTuplets(tgs: t.List[HumdrumBeamAndTuplet]):
+    def _fixLargeTuplets(tgs: t.List[HumdrumBeamAndTuplet]) -> None:
         tgi: t.Optional[HumdrumBeamAndTuplet]
         tgiPrev1: t.Optional[HumdrumBeamAndTuplet]
         tgiPrev2: t.Optional[HumdrumBeamAndTuplet]
@@ -3983,7 +4023,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::assignTupletScalings --
     '''
-    def _assignTupletScalings(self, tgs: t.List[HumdrumBeamAndTuplet]):
+    def _assignTupletScalings(self, tgs: t.List[HumdrumBeamAndTuplet]) -> None:
         maxGroup: int = 0
         for tg in tgs:
             if maxGroup < tg.group:
@@ -4016,13 +4056,13 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::assignScalingToTupletGroup --
     '''
     @staticmethod
-    def _assignScalingToTupletGroup(tggroup: t.List[HumdrumBeamAndTuplet]):
+    def _assignScalingToTupletGroup(tggroup: t.List[HumdrumBeamAndTuplet]) -> None:
         if not tggroup:  # tggroup is None or [], so bail out
             return
 
-        firstTokenInGroup: t.Union[HumdrumToken, FakeRestToken] = tggroup[0].token
+        firstTokenInGroup: t.Optional[t.Union[HumdrumToken, FakeRestToken]] = tggroup[0].token
         if t.TYPE_CHECKING:
-            # FakeRestTokens are never in a tggroup
+            # FakeRestTokens/Nones are never in a tggroup
             assert isinstance(firstTokenInGroup, HumdrumToken)
 
         # Set the Humdrum-specified numNotesActual for the tuplet (if it makes sense).
@@ -4127,7 +4167,7 @@ class HumdrumFile(HumdrumFileContent):
     //     than the beat according to the time signature.
     '''
     @staticmethod
-    def _mergeTupletsCuttingBeam(tgs: t.List[HumdrumBeamAndTuplet]):
+    def _mergeTupletsCuttingBeam(tgs: t.List[HumdrumBeamAndTuplet]) -> None:
 
         # newtgs is a list of only durational items, removing things like clefs and barlines.
         # Actually it looks like it only has the tuplet-y items in it. --gregc
@@ -4703,7 +4743,7 @@ class HumdrumFile(HumdrumFileContent):
         # but we declare it as a HumHash, since the only thing we read is
         # 'placeHolder'.
         # The actual construction of the note contents from the token is done elsewhere.
-        placeHolder: t.Optional[m21.note.GeneralNote] = None
+        placeHolder: t.Optional[m21.Music21Object] = None
         if infoHash is not None:
             placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
 
@@ -4748,7 +4788,7 @@ class HumdrumFile(HumdrumFileContent):
         # but we declare it as a HumHash, since the only thing we read is
         # 'placeHolder'.
         # The actual construction of the chord contents from the token is done elsewhere.
-        placeHolder: t.Optional[m21.note.GeneralNote] = None
+        placeHolder: t.Optional[m21.Music21Object] = None
         if infoHash:
             placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
 
@@ -4778,7 +4818,7 @@ class HumdrumFile(HumdrumFileContent):
         # but we declare it as a HumHash, since the only thing we read is
         # 'placeHolder'.
         # The actual construction of the rest contents from the token is done elsewhere.
-        placeHolder: t.Optional[m21.note.GeneralNote] = None
+        placeHolder: t.Optional[m21.Music21Object] = None
         if infoHash:
             placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
 
@@ -4808,7 +4848,7 @@ class HumdrumFile(HumdrumFileContent):
         return rest
 
     @staticmethod
-    def _processUnexpandedTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken):
+    def _processUnexpandedTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken) -> None:
         m = re.search(r'@(\d+)@', layerTok.text)
         if not m:
             # it wasn't an unexpanded tremolo after all
@@ -4834,7 +4874,7 @@ class HumdrumFile(HumdrumFileContent):
             return
 
     @staticmethod
-    def _processTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken):
+    def _processTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken) -> None:
         tremolo: m21.expressions.Tremolo = m21.expressions.Tremolo()
         slashes: int = layerTok.getValueInt('auto', 'slashes')
         try:
@@ -4935,7 +4975,7 @@ class HumdrumFile(HumdrumFileContent):
         return skippedEndOfTremolo2
 
     @staticmethod
-    def _fixupUnexpandedTremolo2Duration(noteOrChord: m21.note.NotRest):
+    def _fixupUnexpandedTremolo2Duration(noteOrChord: m21.note.NotRest) -> None:
         # double the duration
         originalDuration: HumNum = opFrac(noteOrChord.duration.quarterLength)
         noteOrChord.duration.quarterLength = opFrac(originalDuration * opFrac(2))
@@ -4953,7 +4993,7 @@ class HumdrumFile(HumdrumFileContent):
                          layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
                          tokenIdx: int,
                          staffIndex: int,
-                         layerIndex: int):
+                         layerIndex: int) -> None:
         layerTok: t.Union[HumdrumToken, FakeRestToken] = layerData[tokenIdx]
         if layerTok.isFakeRest:
             return
@@ -5026,7 +5066,7 @@ class HumdrumFile(HumdrumFileContent):
             tremoloSpanner: m21.expressions.TremoloSpanner,
             start: HumdrumToken,
             ending: HumdrumToken
-    ):
+    ) -> None:
         if ')' not in ending.text:
             # no slur ending
             return
@@ -5058,7 +5098,7 @@ class HumdrumFile(HumdrumFileContent):
             self,
             tremoloSpanner: m21.expressions.TremoloSpanner,
             start: HumdrumToken
-    ):
+    ) -> None:
         direction: int = 0
         if '/' in start.text:
             direction = +1
@@ -5354,7 +5394,7 @@ class HumdrumFile(HumdrumFileContent):
         _adjustStaff: moves a note/rest/whatever to the staff above or
             below if necessary.
     '''
-    def _adjustStaff(self, rest: m21.note.Rest, token: HumdrumToken, staffIndex: int):
+    def _adjustStaff(self, rest: m21.note.Rest, token: HumdrumToken, staffIndex: int) -> None:
         pass  # LATER: _adjustStaff
 
     '''
@@ -5362,7 +5402,7 @@ class HumdrumFile(HumdrumFileContent):
             computed by HumdrumFileContent.analyzeRestPositions
     '''
     @staticmethod
-    def _positionRestVertically(rest: m21.note.Rest, token: HumdrumToken):
+    def _positionRestVertically(rest: m21.note.Rest, token: HumdrumToken) -> None:
         # I don't use getValueInt here because the default is 0, and I
         # need the default to be "don't set rest.stepShift at all" --gregc
         stepShiftStr: t.Optional[str] = token.getValue('auto', 'stepShift')
@@ -5429,17 +5469,17 @@ class HumdrumFile(HumdrumFileContent):
         voice.coreInsert(noteOffsetInVoice, note)
         return True  # we did insert into the voice
 
-    def _addArpeggio(self, gnote, layerTok):
+    def _addArpeggio(self, gnote, layerTok) -> None:
         pass  # TODO: arpeggios (_addArpeggio)
 
-    def _addArticulations(self, note: m21.note.GeneralNote, token: HumdrumToken):
+    def _addArticulations(self, note: m21.note.GeneralNote, token: HumdrumToken) -> None:
         note.articulations += M21Convert.m21Articulations(
             token.text,
             self._signifiers.above,
             self._signifiers.below
         )
 
-    def _addOrnaments(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+    def _addOrnaments(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         lowerText = token.text.lower()
         if 't' in lowerText:
             self._addTrill(gnote, token)
@@ -5458,8 +5498,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::addTrill -- Add trill for note.
     '''
-    def _addTrill(self, startNote: m21.note.GeneralNote, token: HumdrumToken):
-        endNote: t.Optional[m21.note.GeneralNote] = None
+    def _addTrill(self, startNote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         subTokenIdx: int = 0
         tpos: int = -1
         for i, ch in enumerate(token.text):
@@ -5594,7 +5633,9 @@ class HumdrumFile(HumdrumFileContent):
             if t.TYPE_CHECKING:
                 # endTok is not None (if it were, justOneNote would be True)
                 assert isinstance(endTok, HumdrumToken)
-            endNote = endTok.getValueM21Object('music21', 'generalNote')
+            endNote: t.Optional[m21.Music21Object] = (
+                endTok.getValueM21Object('music21', 'generalNote')
+            )
             if not endNote:
                 # endNote may not have been created yet. If so, we will use a
                 # placeHolder GeneralNote instead, from which createNote will
@@ -5604,6 +5645,10 @@ class HumdrumFile(HumdrumFileContent):
                 if endNote is None:
                     endNote = m21.note.GeneralNote()
                     endTok.setValue('music21', 'placeHolder', endNote)
+            elif not isinstance(endNote, m21.note.GeneralNote):
+                raise HumdrumInternalError(
+                    f'trill extension endNote is not GeneralNote (endTok = {endTok})'
+                )
             trillExtension = m21.expressions.TrillExtension(startNote, endNote)
 
         self.m21Score.coreInsert(0, trillExtension)
@@ -5613,7 +5658,7 @@ class HumdrumFile(HumdrumFileContent):
             self,
             obj: t.Union[m21.note.GeneralNote, m21.bar.Barline],
             token: HumdrumToken
-    ):
+    ) -> None:
         if ';' not in token.text:
             return
         if 'yy' in token.text:
@@ -5660,7 +5705,7 @@ class HumdrumFile(HumdrumFileContent):
 #     // HumdrumInput::addBreath -- Add floating breath for note/chord.
 #         Only used for barlines now, and that doesn't work yet.
 #     '''
-#     def _addBreath(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+#     def _addBreath(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
 #         if ',' not in token.text:
 #             return
 #
@@ -5712,7 +5757,7 @@ class HumdrumFile(HumdrumFileContent):
         so... --gregc
 
     '''
-    def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+    def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         isLower: bool = False
         isHalfStep: bool = False
         subTokenIdx: int = 0
@@ -5806,7 +5851,7 @@ class HumdrumFile(HumdrumFileContent):
     # TODO: merge new iohumdrum.cpp changes in addTurn/addMordent (accidental stuff)
     # --gregc 01July2021
     '''
-    def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken):
+    def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         tok: str = token.text
         turnStart: int = -1
         turnEnd: int = -1
@@ -5876,7 +5921,7 @@ class HumdrumFile(HumdrumFileContent):
 
         return 0
 
-    def _processSlurs(self, endNote: m21.note.GeneralNote, token: HumdrumToken):
+    def _processSlurs(self, endNote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         slurEndCount: int = token.getValueInt('auto', 'slurEndCount')
         if slurEndCount <= 0:
             # not a slur end
@@ -5900,7 +5945,7 @@ class HumdrumFile(HumdrumFileContent):
             if isInvisible:
                 continue
 
-            startNote: m21.note.GeneralNote = slurStartTok.getValueM21Object(
+            startNote: t.Optional[m21.Music21Object] = slurStartTok.getValueM21Object(
                 'music21', 'generalNote'
             )
             if not startNote:
@@ -5912,6 +5957,10 @@ class HumdrumFile(HumdrumFileContent):
                 if startNote is None:
                     startNote = m21.note.GeneralNote()
                     slurStartTok.setValue('music21', 'placeHolder', startNote)
+            elif not isinstance(startNote, m21.note.GeneralNote):
+                raise HumdrumInternalError(
+                    f'slur startNote is not GeneralNote (slurStartTok = {slurStartTok})'
+                )
 
             slur: m21.spanner.Slur = m21.spanner.Slur(startNote, endNote)
             self._addSlurLineStyle(slur, slurStartTok, slurStartNumber)
@@ -5957,14 +6006,14 @@ class HumdrumFile(HumdrumFileContent):
             self.m21Score.coreInsert(0, slur)
             self.m21Score.coreElementsChanged()
 
-    def _setLayoutSlurDirection(self, slur: m21.spanner.Slur, token: HumdrumToken):
+    def _setLayoutSlurDirection(self, slur: m21.spanner.Slur, token: HumdrumToken) -> None:
         if self._hasAboveParameter(token, 'S'):
             slur.placement = 'above'
         elif self._hasBelowParameter(token, 'S'):
             slur.placement = 'below'
 
     @staticmethod
-    def _addSlurLineStyle(slur: m21.spanner.Slur, token: HumdrumToken, slurNumber: int):
+    def _addSlurLineStyle(slur: m21.spanner.Slur, token: HumdrumToken, slurNumber: int) -> None:
         slurNumber = max(slurNumber, 1)  # never let it be < 1
         slurIndex: int = slurNumber - 1
         dashed: str = token.layoutParameter('S', 'dash', slurIndex)
@@ -5991,7 +6040,7 @@ class HumdrumFile(HumdrumFileContent):
                 return False
         return False
 
-    def _processPhrases(self, note: m21.note.GeneralNote, token: HumdrumToken):
+    def _processPhrases(self, note: m21.note.GeneralNote, token: HumdrumToken) -> None:
         pass  # LATER: phrases (_processPhrases)
 
     @staticmethod
@@ -6312,7 +6361,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // processTerminalLong -- Not set up for chords yet.
     '''
-    def _processTerminalLong(self, token: HumdrumToken):
+    def _processTerminalLong(self, token: HumdrumToken) -> None:
         if not self._signifiers.terminalLong:
             return
         if self._signifiers.terminalLong not in token.text:
@@ -6330,7 +6379,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::colorNote --
     '''
-    def _colorNote(self, note: m21.note.Note, token: HumdrumToken, tstring: str):
+    def _colorNote(self, note: m21.note.Note, token: HumdrumToken, tstring: str) -> None:
         spineColor: str = self._getSpineColor(token)
         if spineColor:
             note.style.color = spineColor
@@ -6394,7 +6443,7 @@ class HumdrumFile(HumdrumFileContent):
             token: HumdrumToken,
             subTokenIdx: int,
             staffIndex: int
-    ):
+    ) -> None:
         head: str = token.layoutParameter('N', 'head', subTokenIdx)
         if not head:
             head = self._staffStates[staffIndex].noteHead
@@ -6418,7 +6467,7 @@ class HumdrumFile(HumdrumFileContent):
                     pass
 
     @staticmethod
-    def _setStemDirection(note: m21.note.Note, tstring: str):
+    def _setStemDirection(note: m21.note.Note, tstring: str) -> None:
         # stem direction (if any)
         if '/' in tstring:
             note.stemDirection = 'up'
@@ -6440,7 +6489,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::convertVerses --
     '''
-    def _convertVerses(self, obj: m21.note.NotRest, token: HumdrumToken):
+    def _convertVerses(self, obj: m21.note.NotRest, token: HumdrumToken) -> None:
         staffIndex: int = self._staffStartsIndexByTrack[token.track]
         ss: StaffStateVariables = self._staffStates[staffIndex]
         if not ss.hasLyrics:
@@ -6627,7 +6676,7 @@ class HumdrumFile(HumdrumFileContent):
     //    according to spaces.  Default value spacer = ' ');
     '''
     @staticmethod
-    def _splitSyllableBySpaces(vtext: t.List[str], spacer: str = ' '):
+    def _splitSyllableBySpaces(vtext: t.List[str], spacer: str = ' ') -> None:
         if len(vtext) != 1:
             return
 
@@ -6649,7 +6698,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::checkForVerseLabels --
     '''
-    def _checkForVerseLabels(self, token: HumdrumToken):
+    def _checkForVerseLabels(self, token: HumdrumToken) -> None:
         if token is None:
             return
         if not token.isInterpretation:
@@ -6722,7 +6771,7 @@ class HumdrumFile(HumdrumFileContent):
             tstring: str,
             subTokenIdx: int,
             layerIndex: int
-    ):
+    ) -> None:
         if token.isMens:
             return
 
@@ -6758,12 +6807,13 @@ class HumdrumFile(HumdrumFileContent):
         # stack of tie-starts, and carry on.
 
 
-        tie = HumdrumTie()
-        tie.setStart(layerIndex,
-                     note,
-                     token,
-                     tstring,
-                     subTokenIdx)
+        tie = HumdrumTie(
+            layerIndex,
+            note,
+            token,
+            tstring,
+            subTokenIdx
+        )
 
         # above and below placement is handled with a call to _setTieStyle
         # after tie.setEndAndInsert, not here, as it is in iohumdrum.cpp
@@ -6785,7 +6835,7 @@ class HumdrumFile(HumdrumFileContent):
             tstring: str,
             subTokenIdx: int,
             layerIndex: int
-    ):
+    ) -> None:
         if token.isMens:
             return
 
@@ -6879,7 +6929,13 @@ class HumdrumFile(HumdrumFileContent):
         Sadly, music21 doesn't support tie coloring.  tie.style is a string, not
         a music21.style.Style...
     '''
-    def _addTieStyle(self, tie: m21.tie.Tie, token: HumdrumToken, tstring: str, subTokenIdx: int):
+    def _addTieStyle(
+            self,
+            tie: m21.tie.Tie,
+            token: HumdrumToken,
+            tstring: str,
+            subTokenIdx: int
+    ) -> None:
         if '[y' in tstring or '_y' in tstring:
             tie.style = 'hidden'
         elif token.layoutParameter('T', 'dot', subTokenIdx):
@@ -6913,7 +6969,12 @@ class HumdrumFile(HumdrumFileContent):
         _convertRhythm: computes token/subtoken duration and sets it on obj
                         (note, rest, chord).  Returns the computed duration.
     '''
-    def _convertRhythm(self, obj: m21.Music21Object, token: HumdrumToken, subTokenIdx: int = -1):
+    def _convertRhythm(
+            self,
+            obj: m21.Music21Object,
+            token: HumdrumToken,
+            subTokenIdx: int = -1
+    ) -> None:
         # if token.isMens:
         #     return self._convertMensuralRhythm(obj, token, subTokenIdx)
         isGrace: bool = False
@@ -7394,7 +7455,7 @@ class HumdrumFile(HumdrumFileContent):
             restMeasure: m21.stream.Measure
             voiceDuration: HumNum
             transitionOffset: HumNum
-            startNote: t.Optional[m21.note.GeneralNote] = None
+            startNote: t.Optional[m21.Music21Object] = None
             if startNoteToken:
                 startNote = startNoteToken.getValueM21Object('music21', 'generalNote')
                 if not startNote:
@@ -7418,7 +7479,7 @@ class HumdrumFile(HumdrumFileContent):
                 _, startNote = self._createAndInsertInvisibleRestVoice(restMeasure,
                                                                        voiceDuration,
                                                                        transitionOffset)
-            endNote: t.Optional[m21.note.GeneralNote] = None
+            endNote: t.Optional[m21.Music21Object] = None
             if endNoteToken:
                 endNote = endNoteToken.getValueM21Object('music21', 'generalNote')
                 if not endNote:
@@ -8653,7 +8714,7 @@ class HumdrumFile(HumdrumFileContent):
 #             output[i] = len(listOfLayersForStaff)
 
 
-    def _checkForOmd(self, measureKey: t.Tuple[t.Optional[int], int]):
+    def _checkForOmd(self, measureKey: t.Tuple[t.Optional[int], int]) -> None:
         startLineIdx, endLineIdx = measureKey
         if startLineIdx is None:
             # this method should not be called without a startLineIdx in measureKey
@@ -8750,7 +8811,7 @@ class HumdrumFile(HumdrumFileContent):
     // to the layout system as need.  Search for a break message anywhere
     // around the barline but before any data is found.
     '''
-#     def _checkForInformalBreak(self, lineIdx: int):
+#     def _checkForInformalBreak(self, lineIdx: int) -> None:
 #         if lineIdx >= self.lineCount - 1:
 #             return
 #
@@ -8807,7 +8868,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::checkForLayoutBreak --
     '''
-    def _checkForFormalBreak(self, lineIdx: int):
+    def _checkForFormalBreak(self, lineIdx: int) -> None:
         if lineIdx >= self.lineCount - 1:
             return
 
@@ -8952,7 +9013,7 @@ class HumdrumFile(HumdrumFileContent):
 
         return newk
 
-    def _createScoreMetadata(self):
+    def _createScoreMetadata(self) -> None:
         if not self._biblio:
             # there is no metadata to be had
             return
@@ -8965,9 +9026,9 @@ class HumdrumFile(HumdrumFileContent):
         # is so we can put any others that would overwrite them into metadata.editorial.
         parsedKeysAdded = []
         for k, v in self._biblio:
-            parsedKey: str = None
-            parsedValue: m21.metadata.Text = None
-            isStandardHumdrumKey: bool = False
+            parsedKey: str
+            parsedValue: m21.metadata.Text
+            isStandardHumdrumKey: bool
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
             alreadyAddedSomethingLikeThis: bool = parsedKey in parsedKeysAdded
 
@@ -9045,7 +9106,7 @@ class HumdrumFile(HumdrumFileContent):
                     print(f'dropping non-unique metadata key \'{k}\': \'{v}\' on the floor',
                             file=sys.stderr)
 
-    def _createStaffGroupsAndParts(self):
+    def _createStaffGroupsAndParts(self) -> None:
         decoration: str = self.getReferenceValueForKey('system-decoration')
         # Don't optimize by not calling _processSystemDecoration for empty/None decoration.
         # _processSystemDecoration also figures out ss.isPartStaff, even if there is
@@ -9654,7 +9715,7 @@ class HumdrumFile(HumdrumFileContent):
         return True
 
     @staticmethod
-    def _sortGroupDescriptionTrees(trees: t.List[M21StaffGroupDescriptionTree]):
+    def _sortGroupDescriptionTrees(trees: t.List[M21StaffGroupDescriptionTree]) -> None:
         # Sort the staffIndices and ownedStaffIndices in every node in the tree.
         # Sort every list of children in the tree (including the
         # passed-in trees list itself) by lowest staff index.
@@ -9713,6 +9774,8 @@ class HumdrumFile(HumdrumFileContent):
                 ss = self._staffStates[ownedStaffIdx]
                 startTok = self._staffStarts[ownedStaffIdx]
                 self._createPart(startTok, ownedStaffIdx + 1, self.staffCount)
+                if t.TYPE_CHECKING:
+                    assert ss.m21Part is not None
                 staffGroups[0].addSpannedElements(ss.m21Part)
                 staves.append(ss.m21Part)
                 staffIndices.append(ownedStaffIdx)
@@ -9755,6 +9818,8 @@ class HumdrumFile(HumdrumFileContent):
                 ss = self._staffStates[ownedStaffIdx]
                 startTok = self._staffStarts[ownedStaffIdx]
                 self._createPart(startTok, ownedStaffIdx + 1, self.staffCount)
+                if t.TYPE_CHECKING:
+                    assert ss.m21Part is not None
                 staffGroups[0].addSpannedElements(ss.m21Part)
                 staves.append(ss.m21Part)
                 staffIndices.append(ownedStaffIdx)
@@ -9788,7 +9853,7 @@ class HumdrumFile(HumdrumFileContent):
         return (staffGroups, staves, staffIndices)
 
     @staticmethod
-    def _promoteCommonInstrumentToStaffGroup(staffGroup: m21.layout.StaffGroup):
+    def _promoteCommonInstrumentToStaffGroup(staffGroup: m21.layout.StaffGroup) -> None:
         # Note: MuseScore doesn't support StaffGroup.name/abbrev, but Finale does.
         partsAndInstruments: t.List[t.Tuple[int, m21.instrument.Instrument]] = []
         commonInstrument: t.Optional[m21.instrument.Instrument] = None
@@ -9823,7 +9888,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::fillPartInfo --
     '''
-    def _createPart(self, partStartTok: HumdrumToken, staffNum: int, partCount: int):
+    def _createPart(self, partStartTok: HumdrumToken, staffNum: int, partCount: int) -> None:
         # staffNum is 1-based, but _staffStates is 0-based
         ss: StaffStateVariables = self._staffStates[staffNum - 1]
         if ss.isPartStaff:
@@ -9975,9 +10040,9 @@ class HumdrumFile(HumdrumFileContent):
         # Make an instrument name if we need to...
         if iName is None:
             if iCode is not None:
-                iName = getInstrumentNameFromCode(iCode, iTranspose)
+                iName = self.getInstrumentNameFromCode(iCode, iTranspose)
             elif iClassCode is not None:
-                iName = getInstrumentNameFromClassCode(iClassCode)
+                iName = self.getInstrumentNameFromClassCode(iClassCode)
             elif iAbbrev is not None:
                 iName = iAbbrev
             elif iTranspose is not None:
@@ -10099,7 +10164,7 @@ class HumdrumFile(HumdrumFileContent):
     //     be converted as clef changes.
     '''
     @staticmethod
-    def _markOtherClefsAsChange(clef: HumdrumToken):
+    def _markOtherClefsAsChange(clef: HumdrumToken) -> None:
         ctrack: int = clef.track
         track: int = 0
 
@@ -10124,7 +10189,7 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::storeStemInterpretation --
     '''
-    def _storeStemInterpretation(self, value: str, staffIndex: int, layerIndex: int):
+    def _storeStemInterpretation(self, value: str, staffIndex: int, layerIndex: int) -> None:
         if 'stem' not in value:
             return
 
@@ -10142,7 +10207,7 @@ class HumdrumFile(HumdrumFileContent):
 #     // HumdrumInput::storeAcclev --
 #     // Used for **mens accidental conversion to @accid+@edit or @accid.ges.
 #     '''
-#     def _storeAcclev(self,  value: str, staffIndex: int):
+#     def _storeAcclev(self,  value: str, staffIndex: int) -> None:
 #         if 'acclev' not in value:
 #             return
 #
@@ -10247,18 +10312,21 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::prepareSections --
     '''
-    def _prepareSections(self):
-        self._sectionLabels = [None] * self.lineCount
-        self._numberlessLabels = [None] * self.lineCount
+    def _prepareSections(self) -> None:
+        self._sectionLabels = [HumdrumToken('placeholder')] * self.lineCount
+        self._numberlessLabels = [HumdrumToken('placeholder')] * self.lineCount
 
-        secName: HumdrumToken = None
-        noNumName: HumdrumToken = None
+        secName: HumdrumToken = HumdrumToken('placeholder')
+        noNumName: HumdrumToken = HumdrumToken('placeholder')
 
         for i, line in enumerate(self._lines):
             self._sectionLabels[i] = secName
             self._numberlessLabels[i] = noNumName
 
             if not line.isInterpretation:
+                continue
+
+            if line[0] is None:
                 continue
 
             if not line[0].text.startswith('*>'):
@@ -10298,6 +10366,10 @@ class HumdrumFile(HumdrumFileContent):
                 if self._numberlessLabels[i + 1] is not None:
                     self._numberlessLabels[i] = self._numberlessLabels[i + 1]
 
+        for secLabel, numberlessLabel in zip(self._sectionLabels, self._numberlessLabels):
+            if secLabel.text == 'placeholder' or numberlessLabel.text == 'placeholder':
+                raise HumdrumInternalError('failed to replace placeholder section label')
+
     def _measureKey(self, lineIdx: int) -> t.Tuple[t.Optional[int], int]:
         startIdx: int = lineIdx
         endIdx: int = self._measureEndLineIndex(startIdx)
@@ -10324,7 +10396,7 @@ class HumdrumFile(HumdrumFileContent):
 
         return endIdx
 
-    def _firstPassMeasureStaves(self, measureKey: t.Tuple[t.Optional[int], int]):
+    def _firstPassMeasureStaves(self, measureKey: t.Tuple[t.Optional[int], int]) -> None:
         measureStavesLayerDatas: t.List[t.List[t.List[t.Union[HumdrumToken, FakeRestToken]]]] = (
             self._scoreLayerTokens[measureKey]
         )
@@ -10342,7 +10414,7 @@ class HumdrumFile(HumdrumFileContent):
             track: int,
             measureStaffLayerDatas: t.List[t.List[t.Union[HumdrumToken, FakeRestToken]]],
             measureKey: t.Tuple[t.Optional[int], int]
-    ):
+    ) -> None:
         if self._staffStartsIndexByTrack[track] < 0:
             # not a kern/mens spine
             return
@@ -10363,7 +10435,7 @@ class HumdrumFile(HumdrumFileContent):
     def _firstPassContentsOfLayer(self, staffIndex: int,
                                         layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
                                         layerIndex: int,
-                                        measureKey: t.Tuple[t.Optional[int], int]):
+                                        measureKey: t.Tuple[t.Optional[int], int]) -> None:
         if not layerData:
             # empty layer?!
             return
@@ -10405,7 +10477,7 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::prepareVerses -- Assumes that m_staffstarts has been
     //      filled already.
     '''
-    def _prepareVerses(self):
+    def _prepareVerses(self) -> None:
         if self.staffCount == 0:
             return
 
@@ -10413,17 +10485,21 @@ class HumdrumFile(HumdrumFileContent):
         for i, startTok in enumerate(self._staffStarts):
             fieldIdx: int = startTok.fieldIndex
             for j in range(fieldIdx + 1, line.tokenCount):
-                if line[j].isStaffDataType:
+                token: t.Optional[HumdrumToken] = line[j]
+                if t.TYPE_CHECKING:
+                    # because j is in range
+                    assert token is not None
+                if token.isStaffDataType:
                     # we're done looking for associated lyrics spines
                     break
 
-                if line[j].isDataType('**text') \
-                        or line[j].isDataType('**silbe') \
-                        or line[j].dataType.text.startswith('**vdata') \
-                        or line[j].dataType.text.startswith('**vvdata'):
+                if token.isDataType('**text') \
+                        or token.isDataType('**silbe') \
+                        or token.dataType.text.startswith('**vdata') \
+                        or token.dataType.text.startswith('**vvdata'):
                     self._staffStates[i].hasLyrics = True
 
-    def _prepareScoreLayerTokens(self):
+    def _prepareScoreLayerTokens(self) -> None:
         # assume no staff starts earlier than the first staff
         lineIdx: int = self._staffStarts[0].lineIndex
         while lineIdx < self.lineCount - 1:
@@ -10441,14 +10517,18 @@ class HumdrumFile(HumdrumFileContent):
             )
             lineIdx = endIdx
 
-    def _calculateStaffStartsIndexByTrack(self):
+    def _calculateStaffStartsIndexByTrack(self) -> None:
         self._staffStartsIndexByTrack = [-1] * (self.maxTrack + 1)
         for i, startTok in enumerate(self._staffStarts):
             self._staffStartsIndexByTrack[startTok.track] = i
 
-    def _analyzeSpineDataTypes(self):
+    def _analyzeSpineDataTypes(self) -> None:
         staffIndex: int = -1
         for startTok in self.spineStartList:
+            if startTok is None:
+                print('startTok is None in hf.spineStartList', file=sys.stderr)
+                continue
+
             if startTok.isDataType('**kern'):
                 staffIndex += 1
             elif startTok.isDataType('**mxhm'):

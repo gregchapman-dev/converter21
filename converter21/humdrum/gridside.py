@@ -27,7 +27,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class GridSide:
-    def __init__(self):
+    def __init__(self) -> None:
         # there may be >1 verse of lyrics for a note
         self._verses: t.List[t.Optional[HumdrumToken]] = []
         self._harmony: t.Optional[HumdrumToken] = None
@@ -35,10 +35,10 @@ class GridSide:
         self._dynamics: t.Optional[HumdrumToken] = None
         self._figuredBass: t.Optional[HumdrumToken] = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         outstr: str = ' ['
         if self.xmlIdCount > 0:
-            outstr += 'xmlid:' + self.xmlId
+            outstr += 'xmlid:' + str(self.xmlId)
         if self.verseCount > 0:
             outstr += 'verse:'
             for i, verse in enumerate(self._verses):
@@ -47,9 +47,9 @@ class GridSide:
                 if i < self.verseCount:
                     outstr += '; '
         if self.dynamicsCount > 0:
-            outstr += 'dyn:' + self.dynamics.text
+            outstr += 'dyn:' + str(self.dynamics)
         if self.harmonyCount > 0:
-            outstr += 'harm:' + self.harmony.text
+            outstr += 'harm:' + str(self.harmony)
         outstr += '] '
         return outstr
 
@@ -62,7 +62,7 @@ class GridSide:
             return self._verses[index]
         return None
 
-    def setVerse(self, index: int, token: t.Optional[t.Union[HumdrumToken, str]]):
+    def setVerse(self, index: int, token: t.Optional[t.Union[HumdrumToken, str]]) -> None:
         if isinstance(token, str):
             # make it into a proper token
             token = HumdrumToken(token)
@@ -89,7 +89,7 @@ class GridSide:
         return self._harmony
 
     @harmony.setter
-    def harmony(self, newHarmony: HumdrumToken):
+    def harmony(self, newHarmony: t.Optional[HumdrumToken]) -> None:
         self._harmony = newHarmony
 
     @property
@@ -103,7 +103,7 @@ class GridSide:
         return self._xmlId
 
     @xmlId.setter
-    def xmlId(self, newXmlId: t.Optional[HumdrumToken]):
+    def xmlId(self, newXmlId: t.Optional[HumdrumToken]) -> None:
         self._xmlId = newXmlId
 
     @property
@@ -117,7 +117,7 @@ class GridSide:
         return self._dynamics
 
     @dynamics.setter
-    def dynamics(self, newDynamics: t.Optional[HumdrumToken]):
+    def dynamics(self, newDynamics: t.Optional[HumdrumToken]) -> None:
         self._dynamics = newDynamics
 
     @property
@@ -131,5 +131,5 @@ class GridSide:
         return self._figuredBass
 
     @figuredBass.setter
-    def figuredBass(self, newFiguredBass: t.Optional[HumdrumToken]):
+    def figuredBass(self, newFiguredBass: t.Optional[HumdrumToken]) -> None:
         self._figuredBass = newFiguredBass
