@@ -2002,7 +2002,7 @@ class M21Convert:
             M21Convert.numberOfFlagsToDurationReciprocal.get(tremolo.numberOfMarks, None)
         )
         if tvInt is not None:
-            tvalue = opFrac(tremolo)
+            tvalue = opFrac(tvInt)
             if fingered:
                 # fingered tremolo (2 notes)
                 if beamStarts and duration.quarterLength < 1:

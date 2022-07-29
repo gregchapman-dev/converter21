@@ -7605,7 +7605,7 @@ class HumdrumFile(HumdrumFileContent):
         ttElementDurFraction: Fraction = Fraction(transitionalTupletElementDuration)
         amountToFill: HumNum = tOffset
         fillerRestDuration: HumNum = opFrac(64)  # start with duplex-maxima (16 whole notes)
-        fillerRest: m21.note.Rest
+        fillerRest: t.Optional[m21.note.Rest] = None
         currOffset: HumNum = opFrac(0)
 
         # offsetOfTransitionalTuplet is the same as tOffset
@@ -7632,7 +7632,7 @@ class HumdrumFile(HumdrumFileContent):
                 amountToFill = opFrac(amountToFill - transitionalTupletElementDuration)
                 numElementsAdded += 1
 
-        restEndingAtTransition: m21.note.Rest = fillerRest
+        restEndingAtTransition: t.Optional[m21.note.Rest] = fillerRest
         restStartingAtTransition: t.Optional[m21.note.Rest] = None
 
         # Now we fill the voice _after_ the tOffset
