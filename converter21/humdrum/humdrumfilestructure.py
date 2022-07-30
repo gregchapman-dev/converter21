@@ -532,15 +532,14 @@ Line: {line.text}'''
     def analyzeRhythmOfFloatingSpine(self, spineStart: HumdrumToken) -> bool:
         durSum: HumNum = opFrac(0)
         foundDur: HumNum = opFrac(0)
-        token: HumdrumToken = spineStart
 
         # Find a known durationFromStart for a line in the Humdrum file, then
         # use that to calculate the starting duration of the floating spine.
-        if token.durationFromStart >= 0:
-            foundDur = token.durationFromStart
+        if spineStart.durationFromStart >= 0:
+            foundDur = spineStart.durationFromStart
         else:
-            tcount: int = token.nextTokenCount
-            while tcount > 0:
+            token: t.Optional[HumdrumToken] = spineStart
+            while token is not None:
                 if token.durationFromStart >= 0:
                     foundDur = token.durationFromStart
                     break
@@ -636,10 +635,10 @@ Line: {line.text}'''
         "negative" is now "None" -- gregc
     '''
     def fillInMissingStartTimes(self) -> None:
-        lastDur: t.Optional[HumNum] = None
+        lastDur: HumNum = opFrac(-1)
 
         for line in reversed(self._lines):
-            if line.durationFromStart < 0 and lastDur is not None:
+            if line.durationFromStart < 0 and lastDur >= 0:
                 line.durationFromStart = lastDur
             if line.durationFromStart >= 0:
                 lastDur = line.durationFromStart
@@ -719,8 +718,8 @@ Line: {line.text}'''
     // HumdrumFileStructure::processLocalParametersForStrand --
     '''
     def processLocalParametersForStrand(self, index: int) -> None:
-        sStart: HumdrumToken = self.strandStart1d(index)
-        sEnd: HumdrumToken = self.strandEnd1d(index)
+        sStart: t.Optional[HumdrumToken] = self.strandStart1d(index)
+        sEnd: t.Optional[HumdrumToken] = self.strandEnd1d(index)
         tok: t.Optional[HumdrumToken] = sEnd  # start at the end and work backward
         dtok: t.Optional[HumdrumToken] = None
 
@@ -897,49 +896,29 @@ Line: {line.text}'''
     // HumdrumFileStructure::getStrandStart -- Return the first token
     //    in the a strand.
     '''
-    def strandStart2d(self, spineIndex: int, strandIndex: int) -> HumdrumToken:
+    def strandStart2d(self, spineIndex: int, strandIndex: int) -> t.Optional[HumdrumToken]:
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 
-        # After analyzeStrands(), every TokenPair in self._strand2d should not
-        # have any Nones in it. Crash if that is not so (and also inform mypy
-        # of our expectations).
-        first: t.Optional[HumdrumToken] = self._strand2d[spineIndex][strandIndex].first
-        assert isinstance(first, HumdrumToken)
-        return first
+        return self._strand2d[spineIndex][strandIndex].first
 
-    def strandStart1d(self, strandIndex: int) -> HumdrumToken:
+    def strandStart1d(self, strandIndex: int) -> t.Optional[HumdrumToken]:
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 
-        # After analyzeStrands(), every TokenPair in self._strand1d should not
-        # have any Nones in it. Crash if that is not so (and also inform mypy
-        # of our expectations).
-        first: t.Optional[HumdrumToken] = self._strand1d[strandIndex].first
-        assert isinstance(first, HumdrumToken)
-        return first
+        return self._strand1d[strandIndex].first
 
-    def strandEnd2d(self, spineIndex: int, strandIndex: int) -> HumdrumToken:
+    def strandEnd2d(self, spineIndex: int, strandIndex: int) -> t.Optional[HumdrumToken]:
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 
-        # After analyzeStrands(), every TokenPair in self._strand2d should not
-        # have any Nones in it. Crash if that is not so (and also inform mypy
-        # of our expectations).
-        last: t.Optional[HumdrumToken] = self._strand2d[spineIndex][strandIndex].last
-        assert isinstance(last, HumdrumToken)
-        return last
+        return self._strand2d[spineIndex][strandIndex].last
 
-    def strandEnd1d(self, strandIndex: int) -> HumdrumToken:
+    def strandEnd1d(self, strandIndex: int) -> t.Optional[HumdrumToken]:
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 
-        # After analyzeStrands(), every TokenPair in self._strand1d should not
-        # have any Nones in it. Crash if that is not so (and also inform mypy
-        # of our expectations).
-        last: t.Optional[HumdrumToken] = self._strand1d[strandIndex].last
-        assert isinstance(last, HumdrumToken)
-        return last
+        return self._strand1d[strandIndex].last
 
     '''
     //////////////////////////////

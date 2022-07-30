@@ -964,7 +964,7 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::addExtraTabs -- Adds extra tabs between primary spines so that the
     //    first token of a spine is vertically aligned.  The input array to this
-    //    function is a list of maximum widths.  This is typically caluclated by
+    //    function is a list of maximum widths.  This is typically calculated by
     //    HumdrumFileBase::getTrackWidths().  The first indexed value is unused,
     //    since there is no track 0.
     '''
@@ -977,12 +977,15 @@ class HumdrumLine(HumHash):
         # start with 1 tab after every token
         self._numTabsAfterToken = [1] * len(self._numTabsAfterToken)
 
-        lastTrack: int = 0
-        thisTrack: int = 0
+        lastTrack: t.Optional[int] = 0
+        thisTrack: t.Optional[int] = 0
         for j, token in enumerate(self._tokens):
             lastTrack = thisTrack
             thisTrack = token.track
-            if thisTrack != lastTrack and lastTrack > 0:
+            if thisTrack is None:
+                continue
+
+            if lastTrack is not None and thisTrack != lastTrack and lastTrack > 0:
                 diff = trackWidths[lastTrack] - localWidths[lastTrack]
                 if diff > 0 and j > 0:
                     self._numTabsAfterToken[j - 1] += diff
@@ -1034,11 +1037,13 @@ class HumdrumLine(HumHash):
         currSubTrack = [0] * (maxTrack + 1)
 
         for token in self._tokens:
-            subTracks[token.track] += 1
+            if token.track is not None:
+                subTracks[token.track] += 1
 
         for token in self._tokens:
-            tokenTrack: int = token.track
-            if subTracks[tokenTrack] > 1:
+            tokenTrack: t.Optional[int] = token.track
+
+            if tokenTrack is not None and subTracks[tokenTrack] > 1:
                 currSubTrack[tokenTrack] += 1
                 token.subTrack = currSubTrack[tokenTrack]
             else:

@@ -115,8 +115,11 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     @staticmethod
     def markAdjacentNullsWithClef(clef: HumdrumToken) -> None:
-        ctrack: int = clef.track
-        track: int = 0
+        ctrack: t.Optional[int] = clef.track
+        if ctrack is None:
+            return
+
+        track: t.Optional[int] = 0
 
         current: t.Optional[HumdrumToken] = clef.nextFieldToken
         while current is not None:
@@ -1172,8 +1175,10 @@ class HumdrumFileContent(HumdrumFileStructure):
     def setSpineColorFromColorInterpToken(self, token: HumdrumToken) -> None:
         m = re.search(r'^\*color:(.*)', token.text)
         if m:
-            ctrack: int = token.track
-            strack: int = token.subTrack
+            ctrack: t.Optional[int] = token.track
+            strack: t.Optional[int] = token.subTrack
+            if ctrack is None or strack is None:
+                return
             if strack < MAXCOLORSUBTRACK:
                 self._spineColor[ctrack][strack] = m.group(1)
                 if strack == 1:

@@ -68,9 +68,9 @@ class HumAddress:
 
     @track.setter
     def track(self, newTrack: t.Optional[int]) -> None:
-        if newTrack < 0:
+        if newTrack is None or newTrack < 0:
             newTrack = None
-        if newTrack > 1000:
+        elif newTrack > 1000:
             raise HumdrumSyntaxError("too many tracks (limit is 1000)")
         self.trackNum = newTrack
         # blow away self._dataTypeTokenCached since it depends on self.trackNum

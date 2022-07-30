@@ -470,8 +470,8 @@ class ToolTremolo:
         if token is None:
             return
 
-        track: int = token.track
-        if track < 1:
+        track: t.Optional[int] = token.track
+        if track is None:
             print(f'Track is not set for token: {token}', file=sys.stderr)
             return
 
@@ -486,8 +486,8 @@ class ToolTremolo:
         if token is None:
             return
 
-        track: int = token.track
-        if track < 1:
+        track: t.Optional[int] = token.track
+        if track is None:
             print(f'Track is not set for token: {token}', file=sys.stderr)
             return
 

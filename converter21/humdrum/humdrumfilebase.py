@@ -1770,7 +1770,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     //     interpretation for the given track.  Returns NULL if the track
     //     number is out of range.
     '''
-    def trackStart(self, track: int) -> t.Optional[HumdrumToken]:
+    def trackStart(self, track: t.Optional[int]) -> t.Optional[HumdrumToken]:
         if track is None:
             return None
 

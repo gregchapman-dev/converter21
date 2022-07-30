@@ -555,12 +555,12 @@ class HumdrumToken(HumHash):
     // HumdrumToken::getTrack -- Get the track (similar to a staff in MEI).
     '''
     @property
-    def track(self) -> int:
+    def track(self) -> t.Optional[int]:
         # trackNum is a data member; cheaper than using the track property
         return self._address.trackNum
 
     @track.setter
-    def track(self, track: int) -> None:
+    def track(self, track: t.Optional[int]) -> None:
         # here we set track via address property for the checks
         self._address.track = track
         if self._atLeastOneCachedDataTypePropertyExists:
@@ -2310,7 +2310,10 @@ class HumdrumToken(HumHash):
         if self.ownerLine is None:
             return False
 
-        track: int = self.track
+        track: t.Optional[int] = self.track
+        if track is None:
+            return False
+
         # loops from field-1 to 0 (end index -1 is exclusive), incrementing by -1
         for i in range(self.fieldIndex - 1, -1, -1):
             xtoken = self.ownerLine.token[i]

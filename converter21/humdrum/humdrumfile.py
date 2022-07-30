@@ -1471,7 +1471,10 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _getCurrentLayerCount(token: HumdrumToken) -> int:
         output: int = 1
-        ttrack: int = token.track
+        ttrack: t.Optional[int] = token.track
+
+        if ttrack is None:
+            return output
 
         currTok: t.Optional[HumdrumToken] = token.nextFieldToken
         while currTok is not None:
@@ -1523,6 +1526,9 @@ class HumdrumFile(HumdrumFileContent):
         self._checkForOmd(measureKey)
 
         for i, startTok in enumerate(self._staffStarts):
+            if t.TYPE_CHECKING:
+                # assume that at least all the _staffStarts have track numbers
+                assert startTok.track is not None
             self._convertMeasureStaff(startTok.track, measureKey, layerCounts[i])
 
         # TODO: Harmony, fingering, string numbers
@@ -2774,7 +2780,6 @@ class HumdrumFile(HumdrumFileContent):
 
         obj: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
         if not isinstance(obj, m21.note.NotRest):
-            print(f'continueBeam failed: no m21 NotRest found in token ({token})')
             return
 
         if tremoloBeam and beamType == 'stop':
@@ -2792,7 +2797,6 @@ class HumdrumFile(HumdrumFileContent):
             'generalNote'
         )
         if not isinstance(prevObj, m21.note.NotRest):
-            print(f'continueBeam failed: no m21 NotRest found in prevToken ({prevToken})')
             return
 
         numBeams: int = self._getNumBeamsForNoteOrChord(token, obj)
@@ -6404,8 +6408,11 @@ class HumdrumFile(HumdrumFileContent):
         data doesn't say anything. --gregc
     '''
     def _getSpineColor(self, token: HumdrumToken) -> str:
-        track: int = token.track
+        track: t.Optional[int] = token.track
         strack: int = token.subTrack
+        if track is None:
+            return ''
+
         output: str = self._spineColor[track][strack]
 
         if not self._hasColorSpine:
@@ -6490,6 +6497,8 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::convertVerses --
     '''
     def _convertVerses(self, obj: m21.note.NotRest, token: HumdrumToken) -> None:
+        if token.track is None:
+            return
         staffIndex: int = self._staffStartsIndexByTrack[token.track]
         ss: StaffStateVariables = self._staffStates[staffIndex]
         if not ss.hasLyrics:
@@ -6703,6 +6712,8 @@ class HumdrumFile(HumdrumFileContent):
             return
         if not token.isInterpretation:
             return
+        if token.track is None:
+            return
 
         track: int = token.track
         staffIndex: int = self._staffStartsIndexByTrack[token.track]
@@ -6774,6 +6785,8 @@ class HumdrumFile(HumdrumFileContent):
     ) -> None:
         if token.isMens:
             return
+        if token.track is None:
+            return
 
         isContinue: bool = '_' in tstring
 
@@ -6837,6 +6850,8 @@ class HumdrumFile(HumdrumFileContent):
             layerIndex: int
     ) -> None:
         if token.isMens:
+            return
+        if token.track is None:
             return
 
         startTag = 'tieStart'
@@ -7085,6 +7100,8 @@ class HumdrumFile(HumdrumFileContent):
 
         if not line:
             return insertedIntoVoice
+        if token.track is None:
+            return insertedIntoVoice
 
         vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         dynamicOffsetInMeasure: HumNum = token.durationFromBarline
@@ -7204,11 +7221,12 @@ class HumdrumFile(HumdrumFileContent):
                 active = False
             if dynTok.isKern:
                 active = True
-                ttrack = dynTok.track
-                if ttrack != track:
-                    if ttrack != lastTrack:
-                        trackDiff += 1
-                        lastTrack = ttrack
+                if dynTok.track is not None:
+                    ttrack = dynTok.track
+                    if ttrack != track:
+                        if ttrack != lastTrack:
+                            trackDiff += 1
+                            lastTrack = ttrack
                     if isGrace:
                         continue
                     break
@@ -7756,6 +7774,8 @@ class HumdrumFile(HumdrumFileContent):
 
         if current is None:
             return None
+        if current.track is None:
+            return None
 
         ttrack: int = current.track
 #         tStartTok: HumdrumToken = self._staffStarts[self._staffStartsIndexByTrack[ttrack]]
@@ -7786,6 +7806,8 @@ class HumdrumFile(HumdrumFileContent):
         output: t.Optional[HumdrumToken] = None
         if not token.isKern:
             # there are no interesting kern tokens to the right (only to the left)
+            return None
+        if token.track is None:
             return None
 
         ttrack: int = token.track
@@ -8323,8 +8345,10 @@ class HumdrumFile(HumdrumFileContent):
     '''
     @staticmethod
     def _isFirstTokenOnStaff(token: HumdrumToken) -> bool:
+        if token.track is None:
+            return False
         target: int = token.track
-        track: int = -1
+        track: t.Optional[int]
         tok: t.Optional[HumdrumToken] = token.previousFieldToken
         while tok is not None:
             track = tok.track
@@ -9226,6 +9250,9 @@ class HumdrumFile(HumdrumFileContent):
         trackList: t.List[int] = []
         startTok: HumdrumToken
         for startTok in self._staffStarts:
+            if t.TYPE_CHECKING:
+                # assume at least the _staffStarts all have track numbers
+                assert startTok.track is not None
             trackList.append(startTok.track)
 
         isValid: bool = True
@@ -9285,6 +9312,10 @@ class HumdrumFile(HumdrumFileContent):
 
         for staffStartIndex, (ss, startTok) in enumerate(
                 zip(self._staffStates, self._staffStarts)):
+            if t.TYPE_CHECKING:
+                # assume at least the _staffStarts all have track numbers
+                assert startTok.track is not None
+
             staffNum: int = self._getStaffNumberLabel(startTok)
             groupNum: int = self._getGroupNumberLabel(startTok)
             partNum: int = self._getPartNumberLabel(startTok)
@@ -10165,21 +10196,20 @@ class HumdrumFile(HumdrumFileContent):
     '''
     @staticmethod
     def _markOtherClefsAsChange(clef: HumdrumToken) -> None:
+        if clef.track is None:
+            return
         ctrack: int = clef.track
-        track: int = 0
 
         current: t.Optional[HumdrumToken] = clef.nextFieldToken
         while current is not None:
-            track = current.track
-            if track != ctrack:
+            if current.track != ctrack:
                 break
             current.setValue('auto', 'clefChange', 1)
             current = current.nextFieldToken
 
         current = clef.previousFieldToken
         while current is not None:
-            track = current.track
-            if track != ctrack:
+            if current.track != ctrack:
                 break
             current.setValue('auto', 'clefChange', 1)
             current = current.previousFieldToken
@@ -10273,9 +10303,10 @@ class HumdrumFile(HumdrumFileContent):
     def previousStaffToken(token: t.Optional[HumdrumToken]) -> t.Optional[HumdrumToken]:
         if token is None:
             return None
+        if token.track is None:
+            return None
 
         track: int = token.track
-        ttrack: int = -1
         current: t.Optional[HumdrumToken] = token.previousFieldToken
         while current is not None:
             if not current.isStaffDataType:
@@ -10283,8 +10314,7 @@ class HumdrumFile(HumdrumFileContent):
                 current = current.previousFieldToken
                 continue
 
-            ttrack = current.track
-            if ttrack == track:
+            if current.track == track:
                 # step over anything in the same track as the starting token
                 current = current.previousFieldToken
                 continue
@@ -10294,6 +10324,10 @@ class HumdrumFile(HumdrumFileContent):
 
         if current is None:
             return None
+        if current.track is None:
+            return None
+
+        ttrack: int = current.track
 
         # keep going to find the first subspine of that track (ttrack)
         firstSubspine: HumdrumToken = current
@@ -10399,6 +10433,9 @@ class HumdrumFile(HumdrumFileContent):
 
         for staffIndex, (startTok, measureStaffLayerDatas) in enumerate(
                 zip(self._staffStarts, measureStavesLayerDatas)):
+            if t.TYPE_CHECKING:
+                # assume at least the _staffStarts all have track numbers
+                assert startTok.track is not None
             self._firstPassMeasureStaff(staffIndex,
                                         startTok.track,
                                         measureStaffLayerDatas,
@@ -10517,6 +10554,9 @@ class HumdrumFile(HumdrumFileContent):
     def _calculateStaffStartsIndexByTrack(self) -> None:
         self._staffStartsIndexByTrack = [-1] * (self.maxTrack + 1)
         for i, startTok in enumerate(self._staffStarts):
+            if t.TYPE_CHECKING:
+                # assume at least the _staffStarts all have track numbers
+                assert startTok.track is not None
             self._staffStartsIndexByTrack[startTok.track] = i
 
     def _analyzeSpineDataTypes(self) -> None:
