@@ -2771,7 +2771,7 @@ class HumdrumFile(HumdrumFileContent):
             tremoloBeam: bool = False
     ) -> None:
         if tremoloBeam and beamType == 'stop':  # last note in a beamed group of tremolos
-            # search back for first note in this last tremolo of a beamed group of tremolos
+            # search back for first note in the first tremolo of a beamed group of tremolos
             tokenIdx = self._findStartOfTremolo(layerData, tokenIdx)
 
         token: t.Union[HumdrumToken, FakeRestToken] = layerData[tokenIdx]
@@ -2788,7 +2788,9 @@ class HumdrumFile(HumdrumFileContent):
             beamNum: int = len(obj.beams.beamsList)
             if beamNum > 0:
                 obj.beams.setByNumber(beamNum, beamType)
-            # no 'breakBeamCount' check for you...
+            else:
+                # there are no existing beams, create a 'stop' beam
+                obj.beams.append(beamType)
             return
 
         prevToken: t.Union[HumdrumToken, FakeRestToken] = layerData[prevBeamTokenIdx]
