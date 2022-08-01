@@ -305,7 +305,14 @@ class ToolTremolo:
         if hasBeamStop:
             terminal += endBeam
 
-        # remove slur end from start of tremolo:
+        # remove tie continue from start of tremolo (leave tie start/end in place)
+        initial = re.sub(r'_+[<>]?', '', initial)
+        # remove tie information from middle of tremolo
+        base = re.sub(r'[\[_\]]+[<>]?', '', base)
+        # remove tie information from end of tremolo
+        terminal = re.sub(r'[\[_\]]+[<>]?', '', terminal)
+
+        # remove slur start from end of tremolo:
         terminal = re.sub(r'[(]+[<>]', '', terminal)
 
         token.text = initial
@@ -403,9 +410,13 @@ class ToolTremolo:
         initial: str = base1 + startBeam
         # remove slur end from start of tremolo
         initial = re.sub(r'[)]+[<>]?', '', initial)
+        # remove tie continue from start of tremolo (leave tie start/end in place)
+        initial = re.sub(r'_+[<>]?', '', initial)
 
         # remove slur information from middle of tremolo
         base1 = re.sub(r'[()]+[<>]?', '', base1)
+        # remove tie information from middle of tremolo
+        base1 = re.sub(r'[\[_\]]+[<>]?', '', base1)
 
         token1.text = initial
         token1.ownerLine.createLineFromTokens()
@@ -418,6 +429,8 @@ class ToolTremolo:
         terminal: str = base2 + endBeam
         # remove slur start information from end of tremolo:
         terminal = re.sub(r'[(]+[<>]?', '', terminal)
+        # remove tie information from end of tremolo
+        terminal = re.sub(r'[\[_\]]+[<>]?', '', terminal)
 
         state: bool = False
 

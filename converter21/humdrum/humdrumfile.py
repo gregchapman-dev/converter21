@@ -4340,18 +4340,14 @@ class HumdrumFile(HumdrumFileContent):
         for _ in range(0, len(notes)):
             pitches.append([])
 
-        firstHasTie: bool = False
-        lastHasTie: bool = False
         for i, note in enumerate(notes):
-            if '_' in note.text or '[' in note.text or ']' in note.text:
-                # Note/chord involved a tie is present,
-                # so disallow any bowed tremolo on this beamed group.
-                # Disallow any tremolo if a tie is on an internal note.
-                if i == 0:
-                    firstHasTie = True
-                elif i == len(notes) - 1:
-                    lastHasTie = True
-                else:
+            # Disallow any tremolo with a tie anywhere except the start token (and disable continue there)
+            if '_' in note.text:
+                # tie continuation on any note: disallow tremolo
+                return False
+            if i != 0:
+                # start/end tie allowed on first note, but not on any other
+                if '[' in note.text or ']' in note.text:
                     return False
 
             if i > 0:
@@ -4367,23 +4363,21 @@ class HumdrumFile(HumdrumFileContent):
         # Check for single note tremolo (bowed tremolo)
         nextSame: t.List[bool] = [True] * len(notes)
         allPitchesEqual: bool = True
-        if firstHasTie or lastHasTie:
-            allPitchesEqual = False  # disable bowed tremolo
-        else:
-            for i in range(1, len(pitches)):
-                if len(pitches[i]) != len(pitches[i - 1]):
+
+        for i in range(1, len(pitches)):
+            if len(pitches[i]) != len(pitches[i - 1]):
+                allPitchesEqual = False
+                nextSame[i - 1] = False
+                continue
+
+            # Check if each note in the successive chords is the same.
+            # The ordering of notes in each chord is assumed to be the same
+            # (i.e., this function is not going to waste time sorting
+            # the pitches to check if the chords are equivalent).
+            for j in range(0, len(pitches[i])):
+                if pitches[i][j] != pitches[i - 1][j]:
                     allPitchesEqual = False
                     nextSame[i - 1] = False
-                    continue
-
-                # Check if each note in the successive chords is the same.
-                # The ordering of notes in each chord is assumed to be the same
-                # (i.e., this function is not going to waste time sorting
-                # the pitches to check if the chords are equivalent).
-                for j in range(0, len(pitches[i])):
-                    if pitches[i][j] != pitches[i - 1][j]:
-                        allPitchesEqual = False
-                        nextSame[i - 1] = False
 
         tdur: HumNum
         recip: str
@@ -4418,21 +4412,18 @@ class HumdrumFile(HumdrumFileContent):
         # same duration (this requirement can be loosened in the future
         # if necessary).
         hasInternalTrem: bool = True
-        if firstHasTie or lastHasTie:
-            hasInternalTrem = False  # disable multiple bowed tremolos in a single beam group
-        else:
-            for i in range(1, len(nextSame) - 1):
-                if nextSame[i]:
-                    continue
-                if not nextSame[i - 1]:
-                    hasInternalTrem = False
-                    break
-                if not nextSame[i + 1]:
-                    hasInternalTrem = False
-                    break
-            if len(nextSame) == 2:
-                if not nextSame[0] and nextSame[1]:
-                    hasInternalTrem = False
+        for i in range(1, len(nextSame) - 1):
+            if nextSame[i]:
+                continue
+            if not nextSame[i - 1]:
+                hasInternalTrem = False
+                break
+            if not nextSame[i + 1]:
+                hasInternalTrem = False
+                break
+        if len(nextSame) == 2:
+            if not nextSame[0] and nextSame[1]:
+                hasInternalTrem = False
 
         # Group separate tremolo groups within a single beam
         groupings: t.List[t.List[t.Union[HumdrumToken, FakeRestToken]]] = []
