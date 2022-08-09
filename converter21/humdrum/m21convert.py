@@ -1930,6 +1930,22 @@ class M21Convert:
         return output
 
     @staticmethod
+    def _getMeasureContaining(gnote: m21.note.GeneralNote) -> Optional[m21.stream.Measure]:
+        measure: m21.stream.Measure = gnote.getContextByClass(m21.stream.Measure)
+        return measure
+
+    @staticmethod
+    def _allSpannedGeneralNotesInSameMeasure(spanner: m21.spanner.Spanner) -> bool:
+        measureOfFirstSpanned: Optional[m21.stream.Measure] = None
+        for i, gnote in enumerate(spanner):
+            if i == 0:
+                measureOfFirstSpanned = gnote.getContextByClass(m21.stream.Measure)
+                continue
+            if gnote.getContextByClass(m21.stream.Measure) is not measureOfFirstSpanned:
+                return False
+        return True
+
+    @staticmethod
     def _getHumdrumStringFromM21Expressions(
             m21Expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]],
             duration: m21.duration.Duration,
@@ -1963,7 +1979,16 @@ class M21Convert:
                 if expr.type == 'upright':
                     output += '<'
                 continue
-
+            if M21Utilities.m21SupportsArpeggioMarks():
+                if isinstance(expr, m21.expressions.ArpeggioMark):
+                    output += ':'
+                    continue
+                if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):
+                    if M21Convert._allSpannedGeneralNotesInSameMeasure(expr):
+                        output += ':'
+                    else:
+                        output += '::'
+                    continue
         return output
 
     numberOfFlagsToDurationReciprocal: t.Dict[int, int] = {

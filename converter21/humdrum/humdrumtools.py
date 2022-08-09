@@ -444,6 +444,11 @@ class ToolTremolo:
                 currTok = currTok.nextToken(0)
                 continue
 
+            # We also skip zero-duration lines (grace notes)
+            if currTok.ownerLine.duration == 0:
+                currTok = currTok.nextToken(0)
+                continue
+
             cstamp: HumNum = currTok.durationFromStart
             if cstamp < timestamp:
                 currTok = currTok.nextToken(0)

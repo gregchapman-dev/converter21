@@ -58,6 +58,9 @@ def runTheFullTest(krnPath: Path):
 #         score1.show('musicxml.pdf')
     assert success
 
+    # compare with bbdiff:
+    subprocess.run(['bbdiff', str(krnPath), str(fp)], check=False)
+
     # and then try to parse the exported humdrum file
 
     hfb2 = HumdrumFile(str(fp))
@@ -74,11 +77,7 @@ def runTheFullTest(krnPath: Path):
 #     score2.show('musicxml.pdf')
 
     # compare the two music21 scores
-
-    # first with bbdiff:
-    subprocess.run(['bbdiff', str(krnPath), str(fp)], check=False)
-
-    # next with music-score-diff:
+    # with music-score-diff:
     print('comparing the two m21 scores')
     score_lin1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
     print('loaded first score')
@@ -96,6 +95,7 @@ def runTheFullTest(krnPath: Path):
         print('displayed both annotated scores')
 #     print('score1 written to: ', score1.write('musicxml', makeNotation=False))
 #     print('score2 written to: ', score2.write('musicxml', makeNotation=False))
+    return
 
 # ------------------------------------------------------------------------------
 
