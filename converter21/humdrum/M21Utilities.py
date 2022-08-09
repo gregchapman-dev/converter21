@@ -169,6 +169,9 @@ class M21Utilities:
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 expressions.append(spanner)
                 continue
+            if M21Utilities.m21SupportsArpeggioMarks():
+                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                    expressions.append(spanner)
 
         # finish up with gnote.expressions
         expressions += gnote.expressions
@@ -311,6 +314,32 @@ class M21Utilities:
             return True
 
         return True # four elements equal, that's all we care about
+
+    _cachedM21SupportsDublinCoreMetadata: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsDublinCoreMetadata() -> bool:
+        if M21Utilities._cachedM21SupportsDublinCoreMetadata is not None:
+            return M21Utilities._cachedM21SupportsDublinCoreMetadata
+
+        if hasattr(m21.metadata, '_contents'):
+            M21Utilities._cachedM21SupportsDublinCoreMetadata = True
+            return True
+
+        M21Utilities._cachedM21SupportsDublinCoreMetadata = False
+        return False
+
+    _cachedM21SupportsArpeggioMarks: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsArpeggioMarks() -> bool:
+        if M21Utilities._cachedM21SupportsArpeggioMarks is not None:
+            return M21Utilities._cachedM21SupportsArpeggioMarks
+
+        if hasattr(m21.expressions, 'ArpeggioMark'):
+            M21Utilities._cachedM21SupportsArpeggioMarks = True
+            return True
+
+        M21Utilities._cachedM21SupportsArpeggioMarks = False
+        return False
 
 
 class M21StaffGroupTree:

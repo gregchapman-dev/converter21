@@ -47,7 +47,7 @@ class GridVoice:
         self._isTransfered: bool = False
 
     def __str__(self) -> str:
-        if self.token is None:
+        if self._token is None:
             return '{n}'
         return self._token.text
 
@@ -104,7 +104,7 @@ class GridVoice:
     '''
     @property
     def isNull(self) -> bool:
-        if self.token is None:
+        if self._token is None:
             return True
         return self._token.isNull
 
