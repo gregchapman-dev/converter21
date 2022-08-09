@@ -180,7 +180,7 @@ class M21Utilities:
                 expressions.append(spanner)
                 continue
             if M21Utilities.m21SupportsArpeggioMarks():
-                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):  # type: ignore
                     expressions.append(spanner)
 
         # finish up with gnote.expressions
@@ -327,7 +327,7 @@ class M21Utilities:
 
         return True  # four elements equal, that's all we care about
 
-    _cachedM21SupportsArpeggioMarks: bool = None
+    _cachedM21SupportsArpeggioMarks: t.Optional[bool] = None
     @staticmethod
     def m21SupportsArpeggioMarks() -> bool:
         if M21Utilities._cachedM21SupportsArpeggioMarks is not None:

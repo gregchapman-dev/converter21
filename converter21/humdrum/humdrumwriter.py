@@ -509,7 +509,9 @@ class HumdrumWriter:
         copyrightEmitted: bool = False
 
         atLine: int = 0
-        composers: t.List[m21.metadata.Contributor] = m21Metadata.getContributorsByRole('composer')
+        composers: t.Tuple[m21.metadata.Contributor, ...] = (
+            m21Metadata.getContributorsByRole('composer')
+        )
         mdTitle: m21.metadata.Text = m21Metadata._workIds['title']
         mdMovementName: m21.metadata.Text = m21Metadata._workIds['movementName']
         mdCopyright: m21.metadata.Copyright = m21Metadata.copyright

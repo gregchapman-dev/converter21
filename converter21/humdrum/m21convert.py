@@ -1930,13 +1930,13 @@ class M21Convert:
         return output
 
     @staticmethod
-    def _getMeasureContaining(gnote: m21.note.GeneralNote) -> Optional[m21.stream.Measure]:
-        measure: m21.stream.Measure = gnote.getContextByClass(m21.stream.Measure)
+    def _getMeasureContaining(gnote: m21.note.GeneralNote) -> t.Optional[m21.stream.Measure]:
+        measure: t.Optional[m21.stream.Measure] = gnote.getContextByClass(m21.stream.Measure)
         return measure
 
     @staticmethod
     def _allSpannedGeneralNotesInSameMeasure(spanner: m21.spanner.Spanner) -> bool:
-        measureOfFirstSpanned: Optional[m21.stream.Measure] = None
+        measureOfFirstSpanned: t.Optional[m21.stream.Measure] = None
         for i, gnote in enumerate(spanner):
             if i == 0:
                 measureOfFirstSpanned = gnote.getContextByClass(m21.stream.Measure)
@@ -1980,10 +1980,10 @@ class M21Convert:
                     output += '<'
                 continue
             if M21Utilities.m21SupportsArpeggioMarks():
-                if isinstance(expr, m21.expressions.ArpeggioMark):
+                if isinstance(expr, m21.expressions.ArpeggioMark):  # type: ignore
                     output += ':'
                     continue
-                if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):
+                if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):  # type: ignore
                     if M21Convert._allSpannedGeneralNotesInSameMeasure(expr):
                         output += ':'
                     else:

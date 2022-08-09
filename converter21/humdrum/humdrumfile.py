@@ -4343,7 +4343,8 @@ class HumdrumFile(HumdrumFileContent):
             pitches.append([])
 
         for i, note in enumerate(notes):
-            # Disallow any tremolo with a tie anywhere except the start token (and disable continue there)
+            # Disallow any tremolo with a tie anywhere except the start token (and disable
+            # continue there)
             if '_' in note.text:
                 # tie continuation on any note: disallow tremolo
                 return False
@@ -4736,7 +4737,7 @@ class HumdrumFile(HumdrumFileContent):
 
     @staticmethod
     def _getGeneralNoteOrPlaceHolder(token: HumdrumToken) -> m21.note.GeneralNote:
-        gnote: m21.note.GeneralNote = token.getValueM21Object('music21', 'generalNote')
+        gnote: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
         if not gnote:
             # gnote may not have been created yet. If so, we will use a
             # placeHolder GeneralNote instead, from which createNote will
@@ -4746,6 +4747,8 @@ class HumdrumFile(HumdrumFileContent):
             if gnote is None:
                 gnote = m21.note.GeneralNote()
                 token.setValue('music21', 'placeHolder', gnote)
+        if t.TYPE_CHECKING:
+            assert isinstance(gnote, m21.note.GeneralNote)
         return gnote
 
     @staticmethod
@@ -5503,7 +5506,7 @@ class HumdrumFile(HumdrumFileContent):
             # arpeggio code.
             return
 
-        arpeggiatedTokens: List[HumdrumToken] = []
+        arpeggiatedTokens: t.List[HumdrumToken] = []
 
         if '::' in layerTok.text:
             # it's a cross-staff arpeggio (a.k.a. system arpeggio)
@@ -5526,9 +5529,9 @@ class HumdrumFile(HumdrumFileContent):
             return
 
         if len(arpeggiatedTokens) == 1:
-            gnote.expressions.append(m21.expressions.ArpeggioMark())
+            gnote.expressions.append(m21.expressions.ArpeggioMark())  # type: ignore
         elif len(arpeggiatedTokens) > 1:
-            arpeggioSpanner = m21.expressions.ArpeggioMarkSpanner()
+            arpeggioSpanner = m21.expressions.ArpeggioMarkSpanner()  # type: ignore
             for arpTok in arpeggiatedTokens:
                 gn: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(arpTok)
                 arpeggioSpanner.addSpannedElements(gn)
@@ -5537,7 +5540,7 @@ class HumdrumFile(HumdrumFileContent):
 
     @staticmethod
     def _isLeftmostSystemArpeggioToken(token: HumdrumToken) -> bool:
-        tok: Optional[HumdrumToken] = token.previousFieldToken
+        tok: t.Optional[HumdrumToken] = token.previousFieldToken
 
         # loop over tokens to our left, to see if there are any arpeggiated chords/notes
         while tok is not None:
@@ -5560,9 +5563,9 @@ class HumdrumFile(HumdrumFileContent):
         return True
 
     @staticmethod
-    def _getSystemArpeggioTokens(leftmostToken: HumdrumToken) -> List[HumdrumToken]:
-        output: List[HumdrumToken] = [leftmostToken]
-        tok: Optional[HumdrumToken] = leftmostToken.nextFieldToken
+    def _getSystemArpeggioTokens(leftmostToken: HumdrumToken) -> t.List[HumdrumToken]:
+        output: t.List[HumdrumToken] = [leftmostToken]
+        tok: t.Optional[HumdrumToken] = leftmostToken.nextFieldToken
 
         # loop over tokens to our right, adding them to the output list until we see
         # a token without ':'.
@@ -5588,8 +5591,12 @@ class HumdrumFile(HumdrumFileContent):
 
     @staticmethod
     def _isLeftmostStaffArpeggioToken(token: HumdrumToken) -> bool:
-        staffTrack: int = token.track
-        tok: Optional[HumdrumToken] = token.previousFieldToken
+        staffTrack: t.Optional[int] = token.track
+        if t.TYPE_CHECKING:
+            # at this point, tokens must have track numbers
+            assert staffTrack is not None
+
+        tok: t.Optional[HumdrumToken] = token.previousFieldToken
 
         # loop over tokens to our left, to see if there are any arpeggiated chords/notes
         while tok is not None:
@@ -5616,10 +5623,14 @@ class HumdrumFile(HumdrumFileContent):
         return True
 
     @staticmethod
-    def _getStaffArpeggioTokens(leftmostToken: HumdrumToken) -> List[HumdrumToken]:
-        output: List[HumdrumToken] = [leftmostToken]
-        staffTrack: int = leftmostToken.track
-        tok: Optional[HumdrumToken] = leftmostToken.nextFieldToken
+    def _getStaffArpeggioTokens(leftmostToken: HumdrumToken) -> t.List[HumdrumToken]:
+        output: t.List[HumdrumToken] = [leftmostToken]
+        staffTrack: t.Optional[int] = leftmostToken.track
+        if t.TYPE_CHECKING:
+            # at this point, tokens must have track numbers
+            assert staffTrack is not None
+
+        tok: t.Optional[HumdrumToken] = leftmostToken.nextFieldToken
 
         # loop over tokens to our right, adding them to the output list until we see
         # a token without ':'.
@@ -5740,7 +5751,6 @@ class HumdrumFile(HumdrumFileContent):
         endTok: t.Optional[HumdrumToken] = token.nextToken0
         lastNoteOrBar: HumdrumToken = token
         nextToLastNote: HumdrumToken = token
-        justOneNote: bool = False
 
         while endTok:
             if endTok.isBarline:
@@ -5799,10 +5809,10 @@ class HumdrumFile(HumdrumFileContent):
             endTok = lastNoteOrBar
         else:
             # it must start and end on the same note
-            justOneNote = True
+            endTok = None
 
         trillExtension: m21.expressions.TrillExtension
-        if justOneNote:
+        if endTok is None:
             trillExtension = m21.expressions.TrillExtension(startNote)
         else:
             endNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(endTok)
