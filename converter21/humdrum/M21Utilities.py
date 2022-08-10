@@ -321,7 +321,7 @@ class M21Utilities:
         if M21Utilities._cachedM21SupportsDublinCoreMetadata is not None:
             return M21Utilities._cachedM21SupportsDublinCoreMetadata
 
-        if hasattr(m21.metadata.Metadata, '_contents'):
+        if hasattr(m21.metadata.Metadata, 'bestTitle'):
             M21Utilities._cachedM21SupportsDublinCoreMetadata = True
             return True
 
