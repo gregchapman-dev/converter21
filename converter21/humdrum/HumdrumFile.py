@@ -8251,8 +8251,9 @@ class HumdrumFile(HumdrumFileContent):
         m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
 
-        if M21Utilities.m21SupportsDublinCoreMetadata():
-            parsedKeysAdded = []
+        # parsedKeysAdded is only used in the old (pre-DublinCore) path,
+        # but we will leave its initialization here to keep pylint et al happy.
+        parsedKeysAdded = []
 
         for k, v in self._biblio:
             parsedKey: str = None

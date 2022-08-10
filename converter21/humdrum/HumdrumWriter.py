@@ -471,17 +471,17 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
 
+        # Here's the old code (pre-DublinCore)
+        if not M21Utilities.m21SupportsDublinCoreMetadata():
+            self._addMetadataHeaderRecordsPreDublinCore(outfile)
+            return
+
+        # Here's the new DublinCore code
+
         m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
         if m21Metadata is None:
             return
-
-        # Here's the old code (pre-DublinCore)
-        if not M21Utilities.m21SupportsDublinCoreMetadata():
-            self._addMetadataHeaderRecordsPreDublinCore(m21Metadata)
-            return
-
-        # Here's the new DublinCore code
 
         # get all metadata tuples (uniqueName, singleValue)
         # m21Metadata.all() returns a large tuple instead of a list, so we have to convert
@@ -639,12 +639,17 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
-    def _addMetadataHeaderRecordsPreDublinCore(self, m21Metadata: m21.metadata.Metadata):
+    def _addMetadataHeaderRecordsPreDublinCore(self, outfile: HumdrumFile):
         # Only called for pre-DublinCore music21 versions
         if M21Utilities.m21SupportsDublinCoreMetadata():
             raise HumdrumInternalError(
                 'inappropriate call to _addMetadataHeaderRecordsPreDublinCore'
             )
+
+        m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
+#        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
+        if m21Metadata is None:
+            return
 
         # Top of Humdrum file is (in order):
         # 1. Composer(s): COM = m21Metadata.getContributorsByRole('composer')[0].name
