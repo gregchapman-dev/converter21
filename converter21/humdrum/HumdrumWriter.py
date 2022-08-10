@@ -382,6 +382,90 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         'date': 'ODT'
     }
 
+    @staticmethod
+    def _allMetadataAsTextObjects(m21Metadata: m21.metadata.Metadata) -> List[Tuple[str, m21.prebase.ProtoM21Object]]: # value can be m21.metadata.Text or m21.metadata.Date et al
+
+        # Only used by old code (pre-DublinCore).
+        if M21Utilities.m21SupportsDublinCoreMetadata():
+            raise HumdrumInternalError('inappropriate call to _allMetadataAsTextObjects')
+
+        # this is straightup equivalent to Metadata.all(), but it (1) returns the full value
+        # objects, so I can see the language codes for text, (2) doesn't delete title if
+        # movementName is the same (dammit), and (3) I never want contributors.
+        # To get the full objects I have to access _workIds directly instead of calling getattr,
+        # which means I have to handle copyright and date separately.
+
+        # pylint: disable=protected-access
+        allOut = {}
+
+        # first the real workIds
+        for thisAttribute in sorted(set(m21Metadata.workIdAbbreviationDict.values())):
+            val = m21Metadata._workIds.get(thisAttribute, None)
+
+            if val == 'None' or not val:
+                continue
+            allOut[str(thisAttribute)] = val # NOT str(val), I want Text (or whatever), not str
+
+        # then copyright and date (which are not stored in workIds)
+        val = m21Metadata.copyright
+        if val is not None and val != 'None':
+            allOut['copyright'] = val
+
+        val = m21Metadata._date # internal object for real Date object
+        if val is not None and val != 'None':
+            allOut['date'] = val
+
+        # pylint: enable=protected-access
+        return list(sorted(allOut.items()))
+
+    @staticmethod
+    def _emitContributorNameList(outfile: HumdrumFile, c: m21.metadata.Contributor, skipName: m21.metadata.Text=None):
+
+        # Only used by old code (pre-DublinCore).
+        if M21Utilities.m21SupportsDublinCoreMetadata():
+            raise HumdrumInternalError('inappropriate call to _allMetadataAsTextObjects')
+
+        k: str = M21Convert.m21ContributorRoleToHumdrumReferenceKey.get(c.role, None)
+        if k is None:
+            print(f'music21 contributor role {c.role} maps to no Humdrum ref key', file=sys.stderr)
+            return
+
+        # pylint: disable=protected-access
+        needToSkipOne: bool = skipName is not None
+        skippedIt: bool = False
+        for idx, v in enumerate(c._names):
+            if needToSkipOne and v is skipName: # is, instead of ==.  Same object, not equal object
+                skippedIt = True
+                continue
+
+            # We need to carefully manage the number suffix, since if there is a skipped name,
+            # it has already been emitted with num=0 (no number suffix), so we can't use that
+            # here.
+            # if there is no skipped name, we can just use 0..n
+            # if there is a skipped name (at index s), then the numbers we use must be:
+            # indices: 0..s-1, s,    s+1..n
+            # nums:    1..s,   skip, s+1..n
+            # so the only tricky bit is if we have a skipName, and we haven't skipped it yet.
+            # in that case, num must be idx + 1. In all other cases, num should be idx.
+            num: int = idx
+            if needToSkipOne and not skippedIt:
+                num = idx+1
+
+            vStr: str = '' # no name is cool if v is None
+            langCode: str = ''
+            if v is not None:
+                vStr = str(v)
+                langCode = v.language
+
+            hdKey: str = k
+            if num > 0:
+                hdKey += str(num)
+
+            if langCode:
+                hdKey += '@' + langCode.upper()
+            outfile.appendLine('!!!' + hdKey + ': ' + vStr, asGlobalToken=True)
+        # pylint: enable=protected-access
+
     def _addHeaderRecords(self, outfile: HumdrumFile):
         systemDecoration: str = self._getSystemDecoration()
         if systemDecoration and systemDecoration != 's1':
@@ -391,6 +475,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
         if m21Metadata is None:
             return
+
+        # Here's the old code (pre-DublinCore)
+        if not M21Utilities.m21SupportsDublinCoreMetadata():
+            self._addMetadataHeaderRecordsPreDublinCore(m21Metadata)
+            return
+
+        # Here's the new DublinCore code
 
         # get all metadata tuples (uniqueName, singleValue)
         # m21Metadata.all() returns a large tuple instead of a list, so we have to convert
@@ -547,6 +638,153 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(0, uniqueName, value)
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
+
+    def _addMetadataHeaderRecordsPreDublinCore(self, m21Metadata: m21.metadata.Metadata):
+        # Only called for pre-DublinCore music21 versions
+        if M21Utilities.m21SupportsDublinCoreMetadata():
+            raise HumdrumInternalError(
+                'inappropriate call to _addMetadataHeaderRecordsPreDublinCore'
+            )
+
+        # Top of Humdrum file is (in order):
+        # 1. Composer(s): COM = m21Metadata.getContributorsByRole('composer')[0].name
+        # 2. Title: OTL = metadata._workIds['title']
+        # 3. Movement name: OMD = metadata._workIDs['movementName']
+        # 4. Copyright: YEC = metadata.copyright
+
+        # pylint: enable=protected-access
+        firstComposerEmitted: m21.metadata.Contributor = None
+        titleEmitted: bool = False
+        movementNameEmitted: bool = False
+        copyrightEmitted: bool = False
+
+        atLine: int = 0
+        composers: List[m21.metadata.Text] = m21Metadata.getContributorsByRole('composer')
+        mdTitle: m21.metadata.Text = m21Metadata._workIds['title']
+        mdMovementName: m21.metadata.Text = m21Metadata._workIds['movementName']
+        mdCopyright: m21.metadata.Copyright = m21Metadata.copyright
+
+
+        if composers:
+            composer: m21.metadata.Contributor = composers[0]
+            nameText: m21.metadata.Text = composer.names[0]
+
+            # default to names[0], but if you can find a name
+            # without a language, use that one instead (it's
+            # probably the composer's name in their own language)
+            for ntext in composer._names:
+                if ntext.language is None:
+                    nameText = ntext
+                    break
+
+            langCode: str = nameText.language
+            hdKey: str = 'COM'
+            if langCode:
+                hdKey += '@' + langCode.upper()
+            outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(nameText), asGlobalToken=True)
+            atLine += 1
+            firstComposerEmitted = nameText
+
+        if mdTitle:
+            langCode: str = mdTitle.language
+            hdKey: str = 'OTL'
+            if langCode:
+                hdKey += '@' + langCode.upper()
+            outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdTitle), asGlobalToken=True)
+            atLine += 1
+            titleEmitted = True
+
+        if mdMovementName:
+            langCode: str = mdMovementName.language
+            hdKey: str = 'OMD'
+            if langCode:
+                hdKey += '@' + langCode.upper()
+            outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdMovementName), asGlobalToken=True)
+            atLine += 1
+            movementNameEmitted = True
+
+        if mdCopyright:
+            langCode: str = mdCopyright.language
+            hdKey: str = 'YEC'
+            if langCode:
+                hdKey += '@' + langCode.upper()
+            outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdCopyright), asGlobalToken=True)
+            atLine += 1
+            copyrightEmitted = True
+
+        # the rest of the workIds go at the bottom of the file
+        titleSkipped: bool = False
+        movementNameSkipped: bool = False
+        copyrightSkipped: bool = False
+        for workId, metaValue in self._allMetadataAsTextObjects(m21Metadata):
+            if titleEmitted and not titleSkipped and workId == 'title':
+                titleSkipped = True
+                continue
+
+            if movementNameEmitted and not movementNameSkipped and workId == 'movementName':
+                movementNameSkipped = True
+                continue
+
+            if copyrightEmitted and not copyrightSkipped and workId == 'copyright':
+                copyrightSkipped = True
+                continue
+
+            workIdKey: str = workId.lower()
+            if workIdKey in m21.metadata.Metadata.workIdLookupDict:
+                abbrev = m21.metadata.Metadata.workIdToAbbreviation(workIdKey)
+                abbrev = abbrev.upper()
+            elif workIdKey in HumdrumWriter.otherWorkIdLookupDict:
+                abbrev = HumdrumWriter.otherWorkIdLookupDict[workIdKey]
+            else:
+                abbrev = workId
+
+            hdKey: str = abbrev
+            valueStr: str = ''
+            if metaValue is not None:
+                valueStr = str(metaValue)
+            else:
+                valueStr = '' # no string is cool
+
+            if isinstance(metaValue, m21.metadata.DateSingle):
+                # all metadata DateBlah types derive from DateSingle
+                # We don't like str(DateBlah)'s results so we do our own.
+                valueStr = M21Convert.stringFromM21DateObject(metaValue)
+            elif isinstance(metaValue, m21.metadata.Text):
+                langCode: str = metaValue.language
+                if langCode:
+                    hdKey += '@' + langCode.upper()
+
+            outfile.appendLine('!!!' + hdKey + ': ' + valueStr, asGlobalToken=True)
+
+        # contributors after the workIds, at the bottom of the file
+        firstComposerSkipped: bool = False
+        for c in m21Metadata.contributors:
+            if (firstComposerEmitted is not None
+                    and not firstComposerSkipped
+                    and c.role == 'composer'
+                    and firstComposerEmitted in c._names):
+                # emit all but firstComposerEmitted from c.names
+                self._emitContributorNameList(outfile, c, skipName=firstComposerEmitted)
+                firstComposerSkipped = True
+                continue
+
+            # emit all contributor names from c.names
+            self._emitContributorNameList(outfile, c)
+
+        # metadata.editorial stuff (things that aren't supported by m21 metadata).
+        # Put them at the bottom of the file, after all the other metadata
+        if m21Metadata.hasEditorialInformation:
+            for k, v in m21Metadata.editorial.items():
+                if ' ' not in k and '\t' not in k: # can't do keys with space or tab in them!
+                    hdKey: str = k
+                    hdValue: str = str(v)
+                    if hdKey.startswith('humdrum:'):
+                        hdKey = hdKey[8:] # lose that 'humdrum:' prefix
+                    colonBeforeValue: str = ': '
+                    if hdValue == '':
+                        colonBeforeValue = ':'
+                    outfile.appendLine('!!!' + hdKey + colonBeforeValue + hdValue, asGlobalToken=True)
+        # pylint: enable=protected-access
 
     def _getSystemDecoration(self) -> str:
         output: str = ''

@@ -186,6 +186,42 @@ class M21Convert:
         uniqueName: hdKey for (hdKey, uniqueName) in
             humdrumReferenceKeyToM21MetadataPropertyUniqueName.items() if uniqueName != ''}
 
+    # Only used by old (pre-DublinCore) metadata code
+    humdrumReferenceKeyToM21ContributorRole = {
+        'COM': 'composer',
+        'COA': 'attributed composer',
+        'COS': 'suspected composer',
+        'COL': 'composer alias',
+        'COC': 'corporate composer',
+        'LYR': 'lyricist',
+        'LIB': 'librettist',
+        'LAR': 'arranger',
+        'LOR': 'orchestrator',
+        'TRN': 'translator',
+        'YOO': 'original document owner',
+        'YOE': 'original editor',
+        'EED': 'electronic editor',
+        'ENC': 'electronic encoder'
+    }
+
+    # Only used by old (pre-DublinCore) metadata code
+    m21ContributorRoleToHumdrumReferenceKey = {
+        'composer'                  : 'COM',
+        'attributed composer'       : 'COA',
+        'suspected composer'        : 'COS',
+        'composer alias'            : 'COL',
+        'corporate composer'        : 'COC',
+        'lyricist'                  : 'LYR',
+        'librettist'                : 'LIB',
+        'arranger'                  : 'LAR',
+        'orchestrator'              : 'LOR',
+        'translator'                : 'TRN',
+        'original document owner'   : 'YOO',
+        'original editor'           : 'YOE',
+        'electronic editor'         : 'EED',
+        'electronic encoder'        : 'ENC'
+    }
+
     humdrumDecoGroupStyleToM21GroupSymbol: dict = {
         '{':    'brace',
         '[':    'bracket',
