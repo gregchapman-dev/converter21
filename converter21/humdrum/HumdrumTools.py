@@ -29,7 +29,7 @@ class ToolTremolo:
     def __init__(self, infile: HumdrumFile):
         self.infile: HumdrumFile = infile
         self.markupTokens: List[HumdrumToken] = []
-        self.firstTremoloLinesInTrack: List[List[Optional[HumNum]]] = []
+        self.firstTremoloLinesInTrack: List[List[Optional[HumdrumLine]]] = []
         self.lastTremoloLinesInTrack: List[List[Optional[HumdrumLine]]] = []
 
     '''
@@ -361,7 +361,6 @@ class ToolTremolo:
         if value < 8:
             print(f'Error: tremolo can only be eighth-notes or shorter: {token1}', file=sys.stderr)
             return
-
 
         duration: HumNum = Convert.recipToDuration(token1.text)
         four: HumNum = opFrac(4)

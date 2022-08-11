@@ -15,7 +15,7 @@ import re
 import sys
 import math
 from fractions import Fraction
-from typing import Union, List, Tuple, Dict, Set, Optional
+from typing import Union, List, Tuple, Dict, Set, Optional, Any
 import html
 import copy
 
@@ -8176,22 +8176,36 @@ class HumdrumFile(HumdrumFileContent):
         else:
             isParseable = True
             parsedKey = m.group(1)
-            parsedValue = m21.metadata.Text(v)
             langCode: str = m.group(5)
-            isOriginalLanguage: bool = m.group(4) == '@@'
-            # There's no way in m21 metadata Text to say that this one is
-            # the original language, except to leave off the language code.
-            # Which sucks, because now we've dropped what that original
-            # language is on the floor.
-            if langCode and not isOriginalLanguage:
-                parsedValue.language = langCode.lower() # ISO 639-1 and 639-2 codes are lower-case
+            isTranslated: bool = langCode and m.group(4) != '@@'
+            if M21Utilities.m21SupportsDublinCoreMetadata():
+                encodingScheme: Optional[str] = (
+                    M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
+                )
+                parsedValue = m21.metadata.Text(
+                    v,
+                    language=langCode.lower() if langCode else None,
+                    isTranslated=isTranslated,
+                    encodingScheme=encodingScheme
+                )
+            else:
+                parsedValue = m21.metadata.Text(v)
+                # There's no way in m21 metadata Text to say that this one is
+                # not translated, except to leave off the language code.
+                # Which sucks, because now we've dropped what that original
+                # language is on the floor.
+                if langCode and isTranslated:
+                    parsedValue.language = langCode.lower() # ISO 639-1 and 639-2 codes are lower-case
+
 
         # we consider any key a humdrum standard key if it is parseable, and starts with 3 chars
-        # that are in the list of humdrumReferenceKeys ('COM', 'OTL', etc)
+        # that are in the list of humdrum reference keys ('COM', 'OTL', etc)
         # This includes parsed keys such as: 'COM-viaf-url' because it starts with COM.
-        isHumdrumStandardKey: bool = (isParseable and
-                                        len(parsedKey) >= 3 and
-                                        parsedKey[0:3] in M21Convert.humdrumReferenceKeys)
+        isHumdrumStandardKey: bool = (
+            isParseable
+            and len(parsedKey) >= 3
+            and parsedKey[0:3] in M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName
+        )
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
     @staticmethod
@@ -8237,15 +8251,40 @@ class HumdrumFile(HumdrumFileContent):
         m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
 
-        # Keep track of workIds (including copyright and date) we've added to the
-        # metadata itself (not metadata.editorial, or metadata.contributors). This
-        # is so we can put any others that would overwrite them into metadata.editorial.
+        # parsedKeysAdded is only used in the old (pre-DublinCore) path,
+        # but we will leave its initialization here to keep pylint et al happy.
         parsedKeysAdded = []
+
         for k, v in self._biblio:
             parsedKey: str = None
             parsedValue: m21.metadata.Text = None
             isStandardHumdrumKey: bool = False
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
+
+            if M21Utilities.m21SupportsDublinCoreMetadata():
+                m21UniqueName: Optional[str] = (
+                    M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                        parsedKey, None)
+                )
+                if m21UniqueName:
+                    m21Value: Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
+                    m21Metadata.add(m21UniqueName, m21Value)
+                    continue
+
+                # Doesn't match any known m21.metadata-supported metadata (or it does, and
+                # we couldn't parse it, so we'll have to treat it verbatim).
+                if isStandardHumdrumKey:
+                    # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
+                    # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
+                    # it in as "custom" unparsed
+                    m21Metadata.addCustom('humdrumraw:' + k, v)
+                else:
+                    # freeform key/value, put it in as custom
+                    m21Metadata.addCustom(k, v)
+
+                continue
+
+            # old code (pre-DublinCore)
             alreadyAddedSomethingLikeThis: bool = parsedKey in parsedKeysAdded
 
             # contributors can handle more than one of a particular role, so don't check

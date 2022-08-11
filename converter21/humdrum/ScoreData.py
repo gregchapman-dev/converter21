@@ -41,7 +41,6 @@ class ScoreData:
 
         self.m21Score: m21.stream.Score = score
         self.spannerBundle = ownerWriter.spannerBundle
-        self.m21Metadata: m21.metadata.Metadata = score.metadata
 
         self.parts: [PartData] = []
 
