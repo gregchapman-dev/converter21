@@ -500,16 +500,15 @@ class HumdrumWriter:
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
 
-        # pylint: disable=protected-access
-        if t.TYPE_CHECKING:
-            assert isinstance(self._m21Score, m21.stream.Score)
-
         # Here's the old code (pre-DublinCore)
         if not M21Utilities.m21SupportsDublinCoreMetadata():
             self._addMetadataHeaderRecordsPreDublinCore(outfile)
             return
 
         # Here's the new DublinCore code
+
+        if t.TYPE_CHECKING:
+            assert isinstance(self._m21Score, m21.stream.Score)
 
         m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
@@ -519,7 +518,9 @@ class HumdrumWriter:
         # get all metadata tuples (uniqueName, singleValue)
         # m21Metadata.all() returns a large tuple instead of a list, so we have to convert
         # to a list, since we want to remove things from it as we process them.
-        allItems = list(m21Metadata.all(returnPrimitives=True, returnSorted=False))
+        allItems: t.List[t.Tuple[str, m21.metadata.ValueType]] = list(
+            m21Metadata.all(returnPrimitives=True, returnSorted=False)
+        )
 
         # Top of Humdrum file is (in order):
         # 1. Composer name(s)
@@ -527,9 +528,12 @@ class HumdrumWriter:
         # 3. Movement name (should only be one, but we'll take 'em all)
         # 4. Copyright(s) including original and electronic
 
-        def returnAndRemoveAllItemsWithUniqueName(allItems: List[Tuple], uniqueName: str) -> List[Tuple]:
+        def returnAndRemoveAllItemsWithUniqueName(
+                allItems: t.List[t.Tuple[str, m21.metadata.ValueType]],
+                uniqueName: str
+        ) -> t.List[t.Tuple[str, m21.metadata.ValueType]]:
             # uniqueName is 0th element of tuple
-            output: List[Tuple] = []
+            output: t.List[t.Tuple[str, m21.metadata.ValueType]] = []
             for item in allItems:
                 if item[0] == uniqueName:
                     output.append(item)
@@ -539,136 +543,208 @@ class HumdrumWriter:
 
             return output
 
-        mdComposerItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'composer')
+        mdComposerItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'composer')
 
-        mdTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'title')
-        mdAlternateTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'alternativeTitle')
-        mdPopularTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'popularTitle')
-        mdParentTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'parentTitle')
-        mdGroupTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'groupTitle')
-        mdMovementNameItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementName')
-        mdMovementNumberItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementNumber')
+        mdTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'title')
+        mdAlternateTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'alternativeTitle')
+        mdPopularTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'popularTitle')
+        mdParentTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'parentTitle')
+        mdGroupTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'groupTitle')
+        mdMovementNameItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementName')
+        mdMovementNumberItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementNumber')
 
-        mdCopyrightItems: List[
-                            Tuple[str, m21.metadata.Copyright]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
+        mdCopyrightItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
-
         atLine: int = 0
 
+        hdKeyWithoutIndex: t.Optional[str]
+        refLineStr: t.Optional[str]
+        idx: int
+
         for uniqueName, value in mdComposerItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'composer' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'title' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdAlternateTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'alternateTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdPopularTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'popularTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdParentTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'parentTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdGroupTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'groupTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdMovementNameItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'movementName' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdMovementNumberItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'movementNumber' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdCopyrightItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'copyright' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         # what's left in allItems goes at the bottom of the file
         for uniqueName, value in allItems:
-            nsName: Optional[str] = m21Metadata.uniqueNameToNamespaceName(uniqueName)
+            nsName: t.Optional[str] = m21Metadata.uniqueNameToNamespaceName(uniqueName)
             if nsName and nsName.startswith('m21FileInfo:'):
-                # We don't write fileInfo (which is about the original file, not the one we're writing)
-                # to the output Humdrum file.
+                # We don't write fileInfo (which is about the original file, not the one we're
+                # writing) to the output Humdrum file.
                 continue
-            refLineStr: Optional[str] = None
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            refLineStr = None
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
             if hdKeyWithoutIndex is not None:
-                idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+                idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                    idx, uniqueName, value
+                )
             else:
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(0, uniqueName, value)
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                    0, uniqueName, value
+                )
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
@@ -678,6 +754,9 @@ class HumdrumWriter:
             raise HumdrumInternalError(
                 'inappropriate call to _addMetadataHeaderRecordsPreDublinCore'
             )
+
+        if t.TYPE_CHECKING:
+            assert isinstance(self._m21Score, m21.stream.Score)
 
         m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
@@ -690,7 +769,7 @@ class HumdrumWriter:
         # 3. Movement name: OMD = metadata._workIDs['movementName']
         # 4. Copyright: YEC = metadata.copyright
 
-        # pylint: enable=protected-access
+        # pylint: disable=protected-access
         firstComposerNameEmitted: t.Optional[m21.metadata.Text] = None
         titleEmitted: bool = False
         movementNameEmitted: bool = False
@@ -773,8 +852,8 @@ class HumdrumWriter:
                 continue
 
             workIdKey: str = workId.lower()
-            if workIdKey in m21.metadata.Metadata.workIdLookupDict:
-                abbrev = m21.metadata.Metadata.workIdToAbbreviation(workIdKey)
+            if workIdKey in m21.metadata.Metadata.workIdLookupDict:  # type: ignore
+                abbrev = m21.metadata.Metadata.workIdToAbbreviation(workIdKey)  # type: ignore
                 abbrev = abbrev.upper()
             elif workIdKey in HumdrumWriter.otherWorkIdLookupDict:
                 abbrev = HumdrumWriter.otherWorkIdLookupDict[workIdKey]

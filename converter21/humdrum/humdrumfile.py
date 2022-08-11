@@ -9111,17 +9111,21 @@ class HumdrumFile(HumdrumFileContent):
             isParseable = True
             parsedKey = m.group(1)
             langCode: str = m.group(5)
-            isTranslated: bool = langCode and m.group(4) != '@@'
+            isTranslated: bool = langCode != '' and m.group(4) != '@@'
             if M21Utilities.m21SupportsDublinCoreMetadata():
                 encodingScheme: t.Optional[str] = (
                     M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
                 )
+                # pylint: disable=unexpected-keyword-arg
+                # Make pylint ignore unexpected keywords (because we won't make this
+                # call unless those keyword args are actually there)
                 parsedValue = m21.metadata.Text(
                     v,
                     language=langCode.lower() if langCode else None,
                     isTranslated=isTranslated,
                     encodingScheme=encodingScheme
                 )
+                # pylint: enable=unexpected-keyword-arg
             else:
                 parsedValue = m21.metadata.Text(v)
                 # There's no way in m21 metadata Text to say that this one is
@@ -9129,7 +9133,8 @@ class HumdrumFile(HumdrumFileContent):
                 # Which sucks, because now we've dropped what that original
                 # language is on the floor.
                 if langCode and isTranslated:
-                    parsedValue.language = langCode.lower() # ISO 639-1 and 639-2 codes are lower-case
+                    # ISO 639-1 and 639-2 codes are lower-case
+                    parsedValue.language = langCode.lower()
 
         # we consider any key a humdrum standard key if it is parseable, and starts with 3 chars
         # that are in the list of humdrum reference keys ('COM', 'OTL', etc)
