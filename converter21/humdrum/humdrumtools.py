@@ -379,7 +379,6 @@ class ToolTremolo:
             print(f'Error: tremolo can only be eighth-notes or shorter: {token1}', file=sys.stderr)
             return
 
-
         duration: HumNum = Convert.recipToDuration(token1.text)
         four: HumNum = opFrac(4)
         count: HumNum = opFrac((duration * valueHumNum) / four)

@@ -327,6 +327,19 @@ class M21Utilities:
 
         return True  # four elements equal, that's all we care about
 
+    _cachedM21SupportsDublinCoreMetadata: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsDublinCoreMetadata() -> bool:
+        if M21Utilities._cachedM21SupportsDublinCoreMetadata is not None:
+            return M21Utilities._cachedM21SupportsDublinCoreMetadata
+
+        if hasattr(m21.metadata.Metadata, 'bestTitle'):
+            M21Utilities._cachedM21SupportsDublinCoreMetadata = True
+            return True
+
+        M21Utilities._cachedM21SupportsDublinCoreMetadata = False
+        return False
+
     _cachedM21SupportsArpeggioMarks: t.Optional[bool] = None
     @staticmethod
     def m21SupportsArpeggioMarks() -> bool:
@@ -339,6 +352,7 @@ class M21Utilities:
 
         M21Utilities._cachedM21SupportsArpeggioMarks = False
         return False
+
 
 class M21StaffGroupTree:
     def __init__(
