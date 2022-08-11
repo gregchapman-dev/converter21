@@ -7600,7 +7600,12 @@ class HumdrumFile(HumdrumFileContent):
             startTime: HumNum = token.durationFromStart
             endTime: HumNum = endTok.durationFromStart
             if endAtEndOfEndToken:
-                endTime += endTok.duration
+                if endTok.duration == -1:
+                    # null token, perhaps.  Use line duration instead.
+                    endTime += endTok.ownerLine.duration
+                else:
+                    endTime += endTok.duration
+
             startNoteToken: t.Optional[HumdrumToken] = (
                 self._getNearbyNoteTokenWithAppropriateTimestamp(
                     token,

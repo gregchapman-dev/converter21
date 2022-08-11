@@ -1146,8 +1146,11 @@ class M21Convert:
             m21Chord.articulations,
             owner
         )
+        expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
+            M21Utilities.getAllExpressionsFromGeneralNote(m21Chord, spannerBundle)
+        )
         exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(
-            m21Chord.expressions,
+            expressions,
             m21Chord.duration,
             recip,
             beamStr.count('L'),  # beamStarts
