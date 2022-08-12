@@ -6299,10 +6299,21 @@ class HumdrumFile(HumdrumFileContent):
 
         if isUnpitched:
             unpitched: m21.note.Unpitched = self._replaceGeneralNoteWithUnpitched(note)
-            displayStep: t.Optional[m21.common.types.StepName] = M21Convert.m21StepName(tstring)
-            if octave >= 0 and displayStep is not None:
-                unpitched.displayOctave = octave
-                unpitched.displayStep = displayStep
+            if hasattr(m21.common.types, 'StepName'):
+                displayStepV8: t.Optional[m21.common.types.StepName] = (
+                    M21Convert.m21StepNameV8(tstring)
+                )
+                if octave >= 0 and displayStepV8 is not None:
+                    unpitched.displayOctave = octave
+                    unpitched.displayStep = displayStepV8
+            else:
+                # we can remove this code in favor of StepName once we no longer
+                # support music21 v7
+                displayStep: t.Optional[str] = M21Convert.m21StepName(tstring)
+                if octave >= 0 and displayStep is not None:
+                    unpitched.displayOctave = octave
+                    unpitched.displayStep = displayStep  # type: ignore
+
             # From here we assign unpitched back to note, and treat it like a note
             if t.TYPE_CHECKING:
                 # we lie here, but we will live this lie consistently from here on

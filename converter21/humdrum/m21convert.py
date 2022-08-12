@@ -56,16 +56,17 @@ class M21Convert:
         6: 'B',
     }
 
-    # same as diatonicToM21PitchName, but the values are typed as StepName
-    diatonicToM21StepName: t.Dict[int, m21.common.types.StepName] = {
-        0: 'C',
-        1: 'D',
-        2: 'E',
-        3: 'F',
-        4: 'G',
-        5: 'A',
-        6: 'B',
-    }
+    if hasattr(m21.common.types, 'StepName'):
+        # same as diatonicToM21PitchName, but the values are typed as StepName
+        diatonicToM21StepName: t.Dict[int, m21.common.types.StepName] = {
+            0: 'C',
+            1: 'D',
+            2: 'E',
+            3: 'F',
+            4: 'G',
+            5: 'A',
+            6: 'B',
+        }
 
     humdrumReferenceKeyToEncodingScheme: t.Dict[str, str] = {
         # Note that we only enter things in this dict that aren't free-form text (that's the
@@ -362,14 +363,28 @@ class M21Convert:
 
         return M21Convert.diatonicToM21PitchName[diatonic] + accidStr
 
+    if hasattr(m21.common.types, 'StepName'):
+        @staticmethod
+        def m21StepNameV8(subTokenStr: str) -> t.Optional[m21.common.types.StepName]:
+            # PC == pitch class; ignores octave
+            diatonic: int = Convert.kernToDiatonicPC(subTokenStr)
+            if diatonic < 0:
+                # no pitch here, it's an unpitched note without a note position
+                return None
+
+            return M21Convert.diatonicToM21StepName[diatonic]
+
+    # We can remove the following (and unconditionalize and rename m21StepNameV8)
+    # once we no longer need to support music21 v7
     @staticmethod
-    def m21StepName(subTokenStr: str) -> t.Optional[m21.common.types.StepName]:
+    def m21StepName(subTokenStr: str) -> t.Optional[str]:
+        # e.g. returns 'A' for A sharp (ignores octave and accidental)
         diatonic: int = Convert.kernToDiatonicPC(subTokenStr)  # PC == pitch class; ignores octave
         if diatonic < 0:
             # no pitch here, it's an unpitched note without a note position
             return None
 
-        return M21Convert.diatonicToM21StepName[diatonic]
+        return M21Convert.diatonicToM21PitchName[diatonic]
 
     @staticmethod
     def m21PitchNameWithOctave(subTokenStr: str) -> str:

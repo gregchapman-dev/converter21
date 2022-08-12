@@ -212,19 +212,16 @@ class ToolTremolo:
     // Tool_tremolo::expandTremolos --
     '''
     def expandTremolos(self) -> None:
-        i = 0
-        while i < len(self.markupTokens):
-            token: HumdrumToken = self.markupTokens[i]
+        for token in self.markupTokens:
+            # if we have already replaced the '@' or '@@' token with an expansion note,
+            # we just skip it here.
+            if '@' not in token.text:
+                continue
+
             if '@@' in token.text:
-                token2: t.Optional[HumdrumToken] = None
-                if i + 1 < len(self.markupTokens):
-                    token2 = self.markupTokens[i + 1]
-                if token2 is not None:
-                    self.expandFingerTremolo(token, token2)
-                i += 2
+                self.expandFingerTremolo(token)
             else:
-                self.expandTremolo(self.markupTokens[i])
-                i += 1
+                self.expandTremolo(token)
 
     '''
     //////////////////////////////
@@ -363,11 +360,41 @@ class ToolTremolo:
     '''
     //////////////////////////////
     //
+    // Tool_tremolo::getNextNote --
+    '''
+    def getNextNote(self, token: HumdrumToken) -> t.Optional[HumdrumToken]:
+        output: t.Optional[HumdrumToken] = None
+        current: t.Optional[HumdrumToken] = token.nextToken0
+
+        while current is not None:
+            if not current.isData:
+                current = current.nextToken0
+                continue
+            if current.duration == 0:
+                # ignore grace notes
+                current = current.nextToken0
+                continue
+            if current.isNull or current.isRest:
+                current = current.nextToken0
+                continue
+
+            output = current
+            break
+
+        return output
+
+    '''
+    //////////////////////////////
+    //
     // Tool_tremolo::expandFingerTremolos --
     '''
-    def expandFingerTremolo(self, token1: HumdrumToken, token2: HumdrumToken) -> None:
+    def expandFingerTremolo(self, token1: HumdrumToken) -> None:
+        token2: t.Optional[HumdrumToken] = self.getNextNote(token1)
+        if token2 is None:
+            return
+
         m = re.search(r'@@(\d+)@@', token1.text)
-        if not m:
+        if m is None:
             return
 
         value: int = int(m.group(1))
