@@ -13,44 +13,46 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Dict, Union
+import typing as t
+
 import music21 as m21
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import EventData
 from converter21.humdrum import PartData
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 # TODO: pass StaffGroup into PartData() so we have another source of partName/partAbbrev
 
 class ScoreData:
-    def __init__(self, score: m21.stream.Score, ownerWriter):
+    def __init__(self, score: m21.stream.Score, ownerWriter) -> None:
         from converter21.humdrum import HumdrumWriter
         self.ownerWriter: HumdrumWriter = ownerWriter
 
-        if 'Score' not in score.classes:
+        if not isinstance(score, m21.stream.Score):
             raise HumdrumInternalError('ScoreData must be initialized with a music21 Score object')
 
         self.m21Score: m21.stream.Score = score
-        self.spannerBundle = ownerWriter.spannerBundle
+        self.spannerBundle: m21.spanner.SpannerBundle = ownerWriter.spannerBundle
 
-        self.parts: [PartData] = []
+        self.parts: t.List[PartData] = []
 
-        self.eventFromM21Object: Dict[Union[int, str], EventData] = {}
+        # key is id(m21Object): a large integer that is actually the mem address of m21Object
+        self.eventFromM21Object: t.Dict[int, EventData] = {}
 
         # Following staff group code stolen from musicxml exporter in music21.
         # Keep it up-to-date!
 
         staffGroups = self.m21Score.getElementsByClass('StaffGroup')
-        joinableGroups: [m21.layout.StaffGroup] = []
+        joinableGroups: t.List[m21.layout.StaffGroup] = []
 
         # Joinable groups must consist of only PartStaffs with Measures
         # that exist in self.m21Score
@@ -67,7 +69,7 @@ class ScoreData:
 
         # Deduplicate joinable groups (ex: bracket and brace enclose same PartStaffs)
         permutations = set()
-        deduplicatedGroups: [m21.layout.StaffGroup] = []
+        deduplicatedGroups: t.List[m21.layout.StaffGroup] = []
         for jg in joinableGroups:
             containedParts = tuple(jg)
             if containedParts not in permutations:
@@ -75,16 +77,16 @@ class ScoreData:
             permutations.add(containedParts)
         joinableGroups = deduplicatedGroups
 
-        partsWithMoreThanOneStaff: [[m21.stream.PartStaff]] = []
-        groupedParts: [m21.stream.PartStaff] = []
+        partsWithMoreThanOneStaff: t.List[t.List[m21.stream.Part]] = []
+        groupedParts: t.List[m21.stream.PartStaff] = []
         for jg in joinableGroups:
             partsWithMoreThanOneStaff.append([])
-            for partStaff in jg: # we know they are all PartStaffs
+            for partStaff in jg:
                 partsWithMoreThanOneStaff[-1].append(partStaff)
                 groupedParts.append(partStaff)
 
         scorePartsStillToProcess = list(score.parts)
-        for part in score.parts: # includes PartStaffs, too
+        for part in score.parts:  # includes PartStaffs, too
             if part not in scorePartsStillToProcess:
                 # we already processed this due to a staff group
                 continue
@@ -93,10 +95,10 @@ class ScoreData:
                 # make a new partData entry for these PartStaffs and fill it
                 for partStaffList in partsWithMoreThanOneStaff:
                     if part in partStaffList:
-                        partData: PartData = PartData(partStaffList, self, len(self.parts))
-                        self.parts.append(partData)
+                        partOfStavesData: PartData = PartData(partStaffList, self, len(self.parts))
+                        self.parts.append(partOfStavesData)
                         for ps in partStaffList:
-                            scorePartsStillToProcess.remove(ps) # so we don't double process
+                            scorePartsStillToProcess.remove(ps)  # so we don't double process
                         break
             else:
                 # make a new partData entry for the Part (one staff which is the part)

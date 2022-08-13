@@ -11,7 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union, List, Tuple
+import typing as t
 
 import music21 as m21
 from music21.common import opFrac
@@ -20,53 +20,61 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
 from converter21.humdrum import M21Utilities
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class EventData:
-    def __init__(self, element: m21.base.Music21Object,
-                       elementIndex: int,
-                       voiceIndex: int,
-                       ownerMeasure,
-                       offsetInScore: HumNumIn = None,
-                       duration: HumNumIn = None):
+    def __init__(
+            self,
+            element: m21.base.Music21Object,
+            elementIndex: int,
+            voiceIndex: int,
+            ownerMeasure,
+            offsetInScore: t.Optional[HumNumIn] = None,
+            duration: t.Optional[HumNumIn] = None
+    ) -> None:
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
-        ownerMeasure: MeasureData
         self.ownerMeasure: MeasureData = ownerMeasure
-        self.spannerBundle = ownerMeasure.spannerBundle # inherited from ownerScore, ultimately
+        self.spannerBundle: m21.spanner.SpannerBundle = (
+            self.ownerMeasure.spannerBundle  # from ownerScore, ultimately
+        )
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._voiceIndex: int = voiceIndex
         self._elementIndex: int = elementIndex
         self._element: m21.base.Music21Object = element
+        self._elementType: t.Type = type(element)
         self._name: str = ''
-        self._texts: [m21.expressions.TextExpression] = []
-        self._tempos: [m21.tempo.TempoIndication] = []
-        self._dynamics: List[Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
+        self._texts: t.List[m21.expressions.TextExpression] = []
+        self._tempos: t.List[m21.tempo.TempoIndication] = []
+        self._dynamics: t.List[t.Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
         self._myTextsComputed: bool = False
         self._myDynamicsComputed: bool = False
 
         self._parseEvent(element, offsetInScore, duration)
 
         ownerScore: ScoreData = ownerMeasure.ownerStaff.ownerPart.ownerScore
-        ownerScore.eventFromM21Object[element.id] = self
+        ownerScore.eventFromM21Object[id(element)] = self
 
     def __str__(self) -> str:
         output: str = self.kernTokenString()
         if output:
             return output
-        return self.m21Object.classes[0] # at least say what type of m21Object it was
+        return self.m21Object.classes[0]  # at least say what type of m21Object it was
 
-    def _parseEvent(self, element: m21.base.Music21Object,
-                          offsetInScore: HumNumIn,
-                          duration: HumNumIn):
+    def _parseEvent(
+            self,
+            element: m21.base.Music21Object,
+            offsetInScore: t.Optional[HumNumIn],
+            duration: t.Optional[HumNumIn]
+    ) -> None:
         if offsetInScore is not None:
             self._startTime = opFrac(offsetInScore)
         else:
@@ -77,6 +85,7 @@ class EventData:
             self._duration = opFrac(duration)
         else:
             self._duration = opFrac(element.duration.quarterLength)
+
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
         # the mro() for the object.
@@ -93,9 +102,9 @@ class EventData:
         if not isinstance(self.m21Object, m21.dynamics.DynamicWedge):
             return False
         if len(self.m21Object) == 1:
-            return True # one element? this is both a start and a stop
+            return True  # one element? this is both a start and a stop
         if self.duration == 0:
-            return True # starts always have non-zero duration
+            return True  # starts always have non-zero duration
         return False
 
     @property
@@ -103,7 +112,7 @@ class EventData:
         if not isinstance(self.m21Object, m21.dynamics.DynamicWedge):
             return False
         if self.duration == 0:
-            return False # starts always have non-zero duration
+            return False  # starts always have non-zero duration
         return True
 
     @property
@@ -163,14 +172,15 @@ class EventData:
         return self._element
 
     @property
-    def texts(self) -> List[m21.expressions.TextExpression]:
+    def texts(self) -> t.List[m21.expressions.TextExpression]:
         if not self._myTextsComputed:
-            self._texts = M21Utilities.getTextExpressionsFromGeneralNote(self.m21Object)
+            if isinstance(self.m21Object, m21.note.GeneralNote):
+                self._texts = M21Utilities.getTextExpressionsFromGeneralNote(self.m21Object)
             self._myTextsComputed = True
         return self._texts
 
     @property
-    def tempos(self) -> List[m21.tempo.TempoIndication]:
+    def tempos(self) -> t.List[m21.tempo.TempoIndication]:
         return self._tempos
 
     '''
@@ -180,11 +190,13 @@ class EventData:
         If event is a Chord, we return a space-delimited token string containing all the
         appropriate subtokens, and a list of all the layouts for the chord.
     '''
-    def getNoteKernTokenStringAndLayouts(self) -> Tuple[str, List[str]]:
+    def getNoteKernTokenStringAndLayouts(self) -> t.Tuple[str, t.List[str]]:
         # We pass in self to get reports of the existence of editorial accidentals, ornaments,
         # etc. These reports get passed up the EventData.py/MeasureData.py reporting chain up
         # to PartData.py, where they are stored and/or acted upon.
-        return M21Convert.kernTokenStringAndLayoutsFromM21GeneralNote(self.m21Object, self.spannerBundle, self)
+        return M21Convert.kernTokenStringAndLayoutsFromM21GeneralNote(
+            self.m21Object, self.spannerBundle, self
+        )
 
     def kernTokenString(self) -> str:
         # for debugging output; real code uses getNoteKernTokenStringAndLayouts() or
@@ -199,7 +211,9 @@ class EventData:
         if not self.isDynamicWedgeStartOrStop:
             return ''
 
-        return M21Convert.getDynamicWedgeString(self.m21Object, self.isDynamicWedgeStart, self.isDynamicWedgeStop)
+        return M21Convert.getDynamicWedgeString(
+            self.m21Object, self.isDynamicWedgeStart, self.isDynamicWedgeStop
+        )
 
     '''
     //////////////////////////////
@@ -229,8 +243,8 @@ class EventData:
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerMeasure.reportLinkedSlurToOwner()
 
-    def reportDynamicToOwner(self):
+    def reportDynamicToOwner(self) -> None:
         self.ownerMeasure.reportDynamicToOwner()
 
-    def reportVerseCountToOwner(self, verseCount: int):
+    def reportVerseCountToOwner(self, verseCount: int) -> None:
         self.ownerMeasure.reportVerseCountToOwner(verseCount)

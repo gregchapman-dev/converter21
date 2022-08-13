@@ -13,7 +13,7 @@
 import sys
 import copy
 from collections import OrderedDict
-from typing import List, Tuple, Dict, Set, Union, Optional
+import typing as t
 
 import music21 as m21
 from music21.common import opFrac
@@ -29,9 +29,9 @@ from converter21.humdrum import MeasureData, SimultaneousEvents
 from converter21.humdrum import ScoreData
 
 from converter21.humdrum import SliceType
-#from converter21.humdrum import MeasureStyle
+# from converter21.humdrum import MeasureStyle
 from converter21.humdrum import GridVoice
-#from converter21.humdrum import GridSide
+# from converter21.humdrum import GridSide
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridPart
 from converter21.humdrum import GridSlice
@@ -42,17 +42,17 @@ from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import ToolTremolo
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class HumdrumWriter:
-    Debug: bool = False # can be set to True for more debugging
+    Debug: bool = False  # can be set to True for more debugging
 
     _classMapping = OrderedDict([
         ('Score', '_fromScore'),
@@ -72,62 +72,72 @@ class HumdrumWriter:
 
     # '<>' are not considered reservable, they are hard-coded to below/above, and
     # used as such without coordination here.
-    # '@' is not considered reservable (damn) because we use it in tremolos (e.g. '@16@' and '@@32@@')
+    # '@' is not considered reservable (damn) because we use it in tremolos
+    # (e.g. '@16@' and '@@32@@')
     _reservableRDFKernSignifiers: str = 'ijZVNl!+|'
 
-    _m21EditorialStyleToHumdrumEditorialStyle: dict = {
+    _m21EditorialStyleToHumdrumEditorialStyle: t.Dict[str, str] = {
         # m21 editorial style: RDF definition string we will write
         'parentheses': 'paren',
         'bracket': 'bracket',
     }
-    _humdrumEditorialStyleToFavoriteSignifier: dict = {
+    _humdrumEditorialStyleToFavoriteSignifier: t.Dict[str, str] = {
         'paren': 'i',
         'bracket': 'j',
     }
-    _humdrumEditorialStyleToRDFDefinitionString: dict = {
+    _humdrumEditorialStyleToRDFDefinitionString: t.Dict[str, str] = {
         'paren': 'editorial accidental (paren)',
         'bracket': 'editorial accidental (bracket)',
     }
 
-    def __init__(self, obj: m21.prebase.ProtoM21Object):
+    def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
         self._m21Object: m21.prebase.ProtoM21Object = obj
-        self._m21Score: m21.stream.Score = None
-        self.spannerBundle = None
-        self._scoreData: ScoreData = None
+        self._m21Score: t.Optional[m21.stream.Score] = None
+        self.spannerBundle: t.Optional[m21.spanner.SpannerBundle] = None
+        self._scoreData: t.Optional[ScoreData] = None
         self._maxStaff: int = 0
 
         # default options (these can be set to non-default values by clients,
         # as long as they do it before they call write())
-        self.makeNotation : bool = True  # client can set to False if obj is a Score
-        self.addRecipSpine: bool = False # client can set to True to add a recip spine to the output
-        self.expandTremolos: bool = True # can be set to False if you want to keep the '@32@'-style
-                                         # bowed tremolos, and the '@@16@@'-style fingered tremolos
+        # client can set to False if obj is a Score
+        self.makeNotation: bool = True
+        # client can set to True to add a recip spine
+        self.addRecipSpine: bool = False
+        # client can set to False if they want to keep the '@32@'-style
+        # bowed tremolos, and the '@@16@@'-style fingered tremolos
+        self.expandTremolos: bool = True
+        # can be set to True for debugging output
+        self.VoiceDebug: bool = False
 
-        self.VoiceDebug: bool = False # can be set to True for debugging output
-        self._reservedRDFKernSignifiers: str = '' # set by property, so we can vet it
-        self._assignedRDFKernSignifiers: str = '' # set internally, as we use them for various things
+        self._reservedRDFKernSignifiers: str = ''  # set by property, so we can vet it
+        self._assignedRDFKernSignifiers: str = ''  # set internally
 
         # _rdfKernSignifierLookup will be computed from what is needed in the score,
         # taking into account any reservedRDFKernSignifiers set by the user
-        self._rdfKernSignifierLookup: dict = {} # key: definition (str or tuple), value: signifier
+        # key: definition, value: signifier
+        # definition might be a str, but can get pretty complicated...
+        self._rdfKernSignifierLookup: t.Dict[
+            t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
+            str
+        ] = {}
 
         # private data, computed along the way...
-        self._forceRecipSpine: bool = False # set to true sometimes in figured bass, harmony code
-        self._hasTremolo: bool = False      # has fingered or bowed tremolo(s) that need expanding
-        self._hasOrnaments: bool = False    # has trills, mordents, or turns that need refinement
+        self._forceRecipSpine: bool = False  # set to true sometimes in figured bass, harmony code
+        self._hasTremolo: bool = False       # has fingered or bowed tremolo(s) that need expanding
+        self._hasOrnaments: bool = False     # has trills, mordents, or turns that need refinement
 
         # temporary data (to be emitted with next durational object)
         # First elements of text tuple are part index, staff index, voice index
-        self._currentTexts:  List[Tuple[int, int, int, m21.expressions.TextExpression]] = []
+        self._currentTexts: t.List[t.Tuple[int, int, int, m21.expressions.TextExpression]] = []
         # First elements of dynamic tuple are part index, staff index (dynamics are at staff level)
-        self._currentDynamics: List[Tuple[int, int, m21.dynamics.Dynamic]] = []
+        self._currentDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]] = []
         # First element of tempo tuple is part index (tempo is at the part level)
-        self._currentTempos: List[Tuple[int, m21.tempo.TempoIndication]] = []
+        self._currentTempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]] = []
 
     def _chosenSignifierForRDFDefinition(self,
-                                         rdfDefinition: Union[str, Tuple[str, Optional[str]]],
-                                         favoriteSignifier: str) -> str:
-        chosenSignifier: Optional[str] = None
+            rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
+            favoriteSignifier: str) -> str:
+        chosenSignifier: t.Optional[str] = None
         # if we've already chosen a signifier, just return that
         chosenSignifier = self._rdfKernSignifierLookup.get(rdfDefinition, None)
         if chosenSignifier is not None:
@@ -139,7 +149,8 @@ class HumdrumWriter:
             chosenSignifier = favoriteSignifier
             self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
             self._assignedRDFKernSignifiers += chosenSignifier
-        else: # choose an unreserved, unassigned signifier
+        else:
+            # choose an unreserved, unassigned signifier
             for ch in self._reservableRDFKernSignifiers:
                 if ch in self.reservedRDFKernSignifiers:
                     continue
@@ -158,18 +169,22 @@ class HumdrumWriter:
                     chosenSignifier = ch
                     self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
                     self._assignedRDFKernSignifiers += chosenSignifier
-                    print(f'Too many reserved RDF signifiers for this score, using reserved signifier \'{chosenSignifier}\' for \'{rdfDefinition}\'', file=sys.stderr)
+                    print('Too many reserved RDF signifiers for this score, '
+                            f'using reserved signifier \'{chosenSignifier}\' '
+                            f'for \'{rdfDefinition}\'', file=sys.stderr)
                     break
 
         if not chosenSignifier:
-            raise HumdrumInternalError('Ran out of RDF signifier chars') # shouldn't ever happen
+            # shouldn't ever happen
+            raise HumdrumInternalError('Ran out of RDF signifier chars')
 
         return chosenSignifier
 
     def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
         humdrumStyle: str = self._m21EditorialStyleToHumdrumEditorialStyle.get(editorialStyle, '')
         if not humdrumStyle:
-            print(f'Unrecognized music21 editorial accidental style \'{editorialStyle}\': treating as parentheses.',
+            print(f'Unrecognized music21 editorial accidental style \'{editorialStyle}\': '
+                    'treating as parentheses.',
                     file=sys.stderr)
             humdrumStyle = 'paren'
 
@@ -189,10 +204,10 @@ class HumdrumWriter:
 
     def reportNoteColorToOwner(self, color: str) -> str:
         # 'marked note, color=hotpink'
-        rdfDefinition: Tuple[str, Optional[str]] = (
+        rdfDefinition: t.Tuple[t.Tuple[str, t.Optional[str]], ...] = (
             ('marked note', None),
             ('color', color),
-                                                   )
+        )
         favoriteSignifier: str = 'i'
         return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
 
@@ -206,7 +221,7 @@ class HumdrumWriter:
         return self._reservedRDFKernSignifiers
 
     @reservedRDFKernSignifiers.setter
-    def reservedRDFKernSignifiers(self, newReservedRDFKernSignifiers: str):
+    def reservedRDFKernSignifiers(self, newReservedRDFKernSignifiers: str) -> None:
         if newReservedRDFKernSignifiers is None:
             self._reservedRDFKernSignifiers = ''
             return
@@ -220,14 +235,14 @@ class HumdrumWriter:
                 badSignifiers += ch
 
         if badSignifiers:
-            raise ValueError(f'''
-The following signifier chars are not reservable: \'{badSignifiers}\'.
-Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
-                            )
+            raise ValueError(
+                f'The following signifier chars are not reservable: \'{badSignifiers}\'.\n'
+                + f'Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''
+            )
 
         self._reservedRDFKernSignifiers = newReservedRDFKernSignifiers
 
-    def write(self, fp):
+    def write(self, fp) -> bool:
         # First: HumdrumWriter.write likes to modify the input stream (e.g. transposing to
         # concert pitch, etc), so we need to make a copy of the input stream before we start.
         # TODO: do the transposition in Humdrum-land, following C++ code 'transpose -c'
@@ -240,12 +255,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # note, for example).  This code is swiped from music21 v7's musicxml exporter.  The hope
         # is that someday it will become an API in music21 that every exporter can call.
         if self.makeNotation:
-            self._m21Score = self._makeScoreFromObject(self._m21Object) # always creates a new Score
+            self._m21Score = self._makeScoreFromObject(self._m21Object)
         else:
             if not isinstance(self._m21Object, m21.stream.Score):
-                raise HumdrumExportError('Since makeNotation=False, source obj must be a music21 Score, and it is not.')
+                raise HumdrumExportError(
+                    'Since makeNotation=False, source obj must be a music21 Score, and it is not.'
+                )
             self._m21Score = self._m21Object
-        del self._m21Object # everything after this uses self._m21Score
+        del self._m21Object  # everything after this uses self._m21Score
 
         self.spannerBundle = self._m21Score.spannerBundle
 
@@ -254,8 +271,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # 2. convert HumGrid to HumdrumFile
         # 3. write HumdrumFile to fp
 
-        # 888: Tool_musicxml2hum::convert loops over the parts, doing prepareVoiceMapping
-        # 888: ...on each one, then calls reindexVoices.  m_maxstaff is computed as well.
+        # Tool_musicxml2hum::convert loops over the parts, doing prepareVoiceMapping
+        # on each one, then calls reindexVoices.  m_maxstaff is computed as well.
         self._maxStaff = len(self._m21Score.parts)
 
         status: bool = True
@@ -265,7 +282,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if not status:
             return status
 
-#         outgrid.removeRedundantClefChanges() # don't do this; we're not in the business of prettying things
+        if self._scoreData is None:
+            raise HumdrumInternalError('stitchParts failed, but returned True')
+
+#         outgrid.removeRedundantClefChanges() # don't do this; not our business
 #         outgrid.removeSibeliusIncipit()
 
         # transfer verse counts and dynamics boolean from staves to HumGrid:
@@ -276,7 +296,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 verseCount: int = staffData.verseCount
                 outgrid.setVerseCount(p, s, verseCount)
 
-	    # transfer harmony counts from parts to HumGrid:
+        # transfer harmony counts from parts to HumGrid:
         # for p, partData in enumerate(self._scoreData.parts):
         #     harmonyCount: int = partData.harmonyCount
         #     outgrid.setHarmonyCount(p, harmonyCount)
@@ -298,18 +318,19 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         self._addHeaderRecords(outfile)
         self._addFooterRecords(outfile)
-        #888 self._addMeasureOneNumber(outfile)
+        # self._addMeasureOneNumber(outfile)
 
         for hline in outfile.lines():
             hline.createLineFromTokens()
 
 #         chord.run(outfile) # makes sure each note in the chord has the right stuff on it?
 
-#         if self._hasOrnaments: # maybe outgrid.hasOrnaments? or m21Score.hasOrnaments?
-#             trillspell.run(outfile) # figures out actual trill, mordent, turn type
-                                      # based on current key and accidentals
+#           if self._hasOrnaments: # maybe outgrid.hasOrnaments? or m21Score.hasOrnaments?
+#               # figures out actual trill, mordent, turn type based on current key and accidentals
+#               trillspell.run(outfile)
 
-        if self._hasTremolo and self.expandTremolos: # client can disable tremolo expansion
+        # client can disable tremolo expansion by setting self.expandTremolos to False
+        if self._hasTremolo and self.expandTremolos:
             # tremolos have been inserted as single tokens (or token pairs) that describe
             # the tremolo (e.g. with '@@16@@' or '@32@').  This needs to be expanded into
             # all the actual notes in the tremolo, surrounded by *tremolo/*Xtremolo to tell
@@ -321,6 +342,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # TODO: ... the trick is that we need to know exactly which parts/staves to
         # TODO: ... translate, and only the music21 Score knows that. So this can't be
         # TODO: ... a HumdrumFile or HumdrumFileUtilities function, it has to be here.
+        # TODO: ... Or it can be in HumdrumFile{Utilities}, but it needs to take instructions
+        # TODO: ... about which parts/staves to translate (which we would compute here).
         # if self._hasTranspositions:
         #     self.transposeToConcertPitch(outfile)
 
@@ -339,7 +362,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // the file.
     '''
     @staticmethod
-    def _printResult(fp, outfile: HumdrumFile):
+    def _printResult(fp, outfile: HumdrumFile) -> None:
         outfile.write(fp)
 
     '''
@@ -347,10 +370,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addFooterRecords --
     '''
-    def _addFooterRecords(self, outfile: HumdrumFile):
+    def _addFooterRecords(self, outfile: HumdrumFile) -> None:
         for definition, signifier in self._rdfKernSignifierLookup.items():
             rdfLine = f'!!!RDF**kern: {signifier} = '
-            if isinstance(definition, tuple): # it's a tuple of k/v pairs
+            if isinstance(definition, tuple):  # it's a tuple of k/v pairs (tuples)
                 # multiple definitions: key1, key2 = value2, key3, etc...
                 for i, (k, v) in enumerate(definition):
                     if i > 0:
@@ -360,7 +383,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     elif v == '':
                         rdfLine += f'{k}='
                     else:
-                        rdfLine += f'{k}="{v}"' # double quotes, or parse will include any following ','
+                        rdfLine += f'{k}="{v}"'  # double quotes are required
             else:
                 rdfLine += f'{definition}'
             outfile.appendLine(rdfLine, asGlobalToken=True)
@@ -376,14 +399,16 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //      (last record inserted first).
     '''
 
-    otherWorkIdLookupDict: dict = {
-#        'composer': 'COM', # we do contributors NOT by workId
+    otherWorkIdLookupDict: t.Dict[str, str] = {
+        # 'composer': 'COM', # we do contributors NOT by workId
         'copyright': 'YEC',
         'date': 'ODT'
     }
 
     @staticmethod
-    def _allMetadataAsTextObjects(m21Metadata: m21.metadata.Metadata) -> List[Tuple[str, m21.prebase.ProtoM21Object]]: # value can be m21.metadata.Text or m21.metadata.Date et al
+    def _allMetadataAsTextObjects(
+            m21Metadata: m21.metadata.Metadata
+    ) -> t.List[t.Tuple[str, m21.prebase.ProtoM21Object]]:
 
         # Only used by old code (pre-DublinCore).
         if M21Utilities.m21SupportsDublinCoreMetadata():
@@ -404,14 +429,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
             if val == 'None' or not val:
                 continue
-            allOut[str(thisAttribute)] = val # NOT str(val), I want Text (or whatever), not str
+            allOut[str(thisAttribute)] = val  # NOT str(val), I want Text (or whatever), not str
 
         # then copyright and date (which are not stored in workIds)
         val = m21Metadata.copyright
         if val is not None and val != 'None':
             allOut['copyright'] = val
 
-        val = m21Metadata._date # internal object for real Date object
+        val = m21Metadata._date  # internal object for real Date object
         if val is not None and val != 'None':
             allOut['date'] = val
 
@@ -419,13 +444,17 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         return list(sorted(allOut.items()))
 
     @staticmethod
-    def _emitContributorNameList(outfile: HumdrumFile, c: m21.metadata.Contributor, skipName: m21.metadata.Text=None):
+    def _emitContributorNameList(
+            outfile: HumdrumFile,
+            c: m21.metadata.Contributor,
+            skipName: m21.metadata.Text = None
+    ) -> None:
 
         # Only used by old code (pre-DublinCore).
         if M21Utilities.m21SupportsDublinCoreMetadata():
             raise HumdrumInternalError('inappropriate call to _allMetadataAsTextObjects')
 
-        k: str = M21Convert.m21ContributorRoleToHumdrumReferenceKey.get(c.role, None)
+        k: t.Optional[str] = M21Convert.m21ContributorRoleToHumdrumReferenceKey.get(c.role, None)
         if k is None:
             print(f'music21 contributor role {c.role} maps to no Humdrum ref key', file=sys.stderr)
             return
@@ -434,7 +463,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         needToSkipOne: bool = skipName is not None
         skippedIt: bool = False
         for idx, v in enumerate(c._names):
-            if needToSkipOne and v is skipName: # is, instead of ==.  Same object, not equal object
+            if needToSkipOne and v is skipName:  # is instead of ==.  Same object, not just equal
                 skippedIt = True
                 continue
 
@@ -449,9 +478,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             # in that case, num must be idx + 1. In all other cases, num should be idx.
             num: int = idx
             if needToSkipOne and not skippedIt:
-                num = idx+1
+                num = idx + 1
 
-            vStr: str = '' # no name is cool if v is None
+            vStr: str = ''  # no name is cool if v is None
             langCode: str = ''
             if v is not None:
                 vStr = str(v)
@@ -466,7 +495,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             outfile.appendLine('!!!' + hdKey + ': ' + vStr, asGlobalToken=True)
         # pylint: enable=protected-access
 
-    def _addHeaderRecords(self, outfile: HumdrumFile):
+    def _addHeaderRecords(self, outfile: HumdrumFile) -> None:
         systemDecoration: str = self._getSystemDecoration()
         if systemDecoration and systemDecoration != 's1':
             outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
@@ -478,6 +507,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # Here's the new DublinCore code
 
+        if t.TYPE_CHECKING:
+            assert isinstance(self._m21Score, m21.stream.Score)
+
         m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
         if m21Metadata is None:
@@ -486,7 +518,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # get all metadata tuples (uniqueName, singleValue)
         # m21Metadata.all() returns a large tuple instead of a list, so we have to convert
         # to a list, since we want to remove things from it as we process them.
-        allItems = list(m21Metadata.all(returnPrimitives=True, returnSorted=False))
+        allItems: t.List[t.Tuple[str, m21.metadata.ValueType]] = list(
+            m21Metadata.all(returnPrimitives=True, returnSorted=False)
+        )
 
         # Top of Humdrum file is (in order):
         # 1. Composer name(s)
@@ -494,9 +528,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # 3. Movement name (should only be one, but we'll take 'em all)
         # 4. Copyright(s) including original and electronic
 
-        def returnAndRemoveAllItemsWithUniqueName(allItems: List[Tuple], uniqueName: str) -> List[Tuple]:
+        def returnAndRemoveAllItemsWithUniqueName(
+                allItems: t.List[t.Tuple[str, m21.metadata.ValueType]],
+                uniqueName: str
+        ) -> t.List[t.Tuple[str, m21.metadata.ValueType]]:
             # uniqueName is 0th element of tuple
-            output: List[Tuple] = []
+            output: t.List[t.Tuple[str, m21.metadata.ValueType]] = []
             for item in allItems:
                 if item[0] == uniqueName:
                     output.append(item)
@@ -506,136 +543,208 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
             return output
 
-        mdComposerItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'composer')
+        mdComposerItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'composer')
 
-        mdTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'title')
-        mdAlternateTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'alternativeTitle')
-        mdPopularTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'popularTitle')
-        mdParentTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'parentTitle')
-        mdGroupTitleItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'groupTitle')
-        mdMovementNameItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementName')
-        mdMovementNumberItems: List[
-                            Tuple[str, m21.metadata.Text]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementNumber')
+        mdTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'title')
+        mdAlternateTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'alternativeTitle')
+        mdPopularTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'popularTitle')
+        mdParentTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'parentTitle')
+        mdGroupTitleItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'groupTitle')
+        mdMovementNameItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementName')
+        mdMovementNumberItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'movementNumber')
 
-        mdCopyrightItems: List[
-                            Tuple[str, m21.metadata.Copyright]
-                        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
+        mdCopyrightItems: t.List[
+            t.Tuple[str, m21.metadata.ValueType]
+        ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
-
         atLine: int = 0
 
+        hdKeyWithoutIndex: t.Optional[str]
+        refLineStr: t.Optional[str]
+        idx: int
+
         for uniqueName, value in mdComposerItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'composer' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'title' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdAlternateTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'alternateTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdPopularTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'popularTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdParentTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'parentTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdGroupTitleItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'groupTitle' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdMovementNameItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'movementName' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdMovementNumberItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'movementNumber' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         for uniqueName, value in mdCopyrightItems:
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-            refLineStr: str = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
+            if t.TYPE_CHECKING:
+                # because 'copyright' has a humdrum key
+                assert hdKeyWithoutIndex is not None
+            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                idx, uniqueName, value
+            )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
             atLine += 1
 
         # what's left in allItems goes at the bottom of the file
         for uniqueName, value in allItems:
-            nsName: Optional[str] = m21Metadata.uniqueNameToNamespaceName(uniqueName)
+            nsName: t.Optional[str] = m21Metadata.uniqueNameToNamespaceName(uniqueName)
             if nsName and nsName.startswith('m21FileInfo:'):
-                # We don't write fileInfo (which is about the original file, not the one we're writing)
-                # to the output Humdrum file.
+                # We don't write fileInfo (which is about the original file, not the one we're
+                # writing) to the output Humdrum file.
                 continue
-            refLineStr: Optional[str] = None
-            hdKeyWithoutIndex: str = M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            refLineStr = None
+            hdKeyWithoutIndex = (
+                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+            )
             if hdKeyWithoutIndex is not None:
-                idx: int = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx+1 # for next time
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(idx, uniqueName, value)
+                idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                    idx, uniqueName, value
+                )
             else:
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(0, uniqueName, value)
+                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                    0, uniqueName, value
+                )
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
@@ -645,6 +754,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             raise HumdrumInternalError(
                 'inappropriate call to _addMetadataHeaderRecordsPreDublinCore'
             )
+
+        if t.TYPE_CHECKING:
+            assert isinstance(self._m21Score, m21.stream.Score)
 
         m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
@@ -657,19 +769,22 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # 3. Movement name: OMD = metadata._workIDs['movementName']
         # 4. Copyright: YEC = metadata.copyright
 
-        # pylint: enable=protected-access
-        firstComposerEmitted: m21.metadata.Contributor = None
+        # pylint: disable=protected-access
+        firstComposerNameEmitted: t.Optional[m21.metadata.Text] = None
         titleEmitted: bool = False
         movementNameEmitted: bool = False
         copyrightEmitted: bool = False
 
         atLine: int = 0
-        composers: List[m21.metadata.Text] = m21Metadata.getContributorsByRole('composer')
+        composers: t.Tuple[m21.metadata.Contributor, ...] = (
+            m21Metadata.getContributorsByRole('composer')
+        )
         mdTitle: m21.metadata.Text = m21Metadata._workIds['title']
         mdMovementName: m21.metadata.Text = m21Metadata._workIds['movementName']
         mdCopyright: m21.metadata.Copyright = m21Metadata.copyright
 
-
+        langCode: t.Optional[str]
+        hdKey: str
         if composers:
             composer: m21.metadata.Contributor = composers[0]
             nameText: m21.metadata.Text = composer.names[0]
@@ -682,17 +797,17 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     nameText = ntext
                     break
 
-            langCode: str = nameText.language
-            hdKey: str = 'COM'
+            langCode = nameText.language
+            hdKey = 'COM'
             if langCode:
                 hdKey += '@' + langCode.upper()
             outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(nameText), asGlobalToken=True)
             atLine += 1
-            firstComposerEmitted = nameText
+            firstComposerNameEmitted = nameText
 
         if mdTitle:
-            langCode: str = mdTitle.language
-            hdKey: str = 'OTL'
+            langCode = mdTitle.language
+            hdKey = 'OTL'
             if langCode:
                 hdKey += '@' + langCode.upper()
             outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdTitle), asGlobalToken=True)
@@ -700,17 +815,19 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             titleEmitted = True
 
         if mdMovementName:
-            langCode: str = mdMovementName.language
-            hdKey: str = 'OMD'
+            langCode = mdMovementName.language
+            hdKey = 'OMD'
             if langCode:
                 hdKey += '@' + langCode.upper()
-            outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdMovementName), asGlobalToken=True)
+            outfile.insertLine(
+                atLine, '!!!' + hdKey + ': ' + str(mdMovementName), asGlobalToken=True
+            )
             atLine += 1
             movementNameEmitted = True
 
         if mdCopyright:
-            langCode: str = mdCopyright.language
-            hdKey: str = 'YEC'
+            langCode = mdCopyright.language
+            hdKey = 'YEC'
             if langCode:
                 hdKey += '@' + langCode.upper()
             outfile.insertLine(atLine, '!!!' + hdKey + ': ' + str(mdCopyright), asGlobalToken=True)
@@ -735,27 +852,28 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 continue
 
             workIdKey: str = workId.lower()
-            if workIdKey in m21.metadata.Metadata.workIdLookupDict:
-                abbrev = m21.metadata.Metadata.workIdToAbbreviation(workIdKey)
+            if workIdKey in m21.metadata.Metadata.workIdLookupDict:  # type: ignore
+                abbrev = m21.metadata.Metadata.workIdToAbbreviation(workIdKey)  # type: ignore
                 abbrev = abbrev.upper()
             elif workIdKey in HumdrumWriter.otherWorkIdLookupDict:
                 abbrev = HumdrumWriter.otherWorkIdLookupDict[workIdKey]
             else:
                 abbrev = workId
 
-            hdKey: str = abbrev
+            hdKey = abbrev
+
             valueStr: str = ''
             if metaValue is not None:
                 valueStr = str(metaValue)
             else:
-                valueStr = '' # no string is cool
+                valueStr = ''  # no string is cool
 
             if isinstance(metaValue, m21.metadata.DateSingle):
                 # all metadata DateBlah types derive from DateSingle
                 # We don't like str(DateBlah)'s results so we do our own.
                 valueStr = M21Convert.stringFromM21DateObject(metaValue)
             elif isinstance(metaValue, m21.metadata.Text):
-                langCode: str = metaValue.language
+                langCode = metaValue.language
                 if langCode:
                     hdKey += '@' + langCode.upper()
 
@@ -764,12 +882,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # contributors after the workIds, at the bottom of the file
         firstComposerSkipped: bool = False
         for c in m21Metadata.contributors:
-            if (firstComposerEmitted is not None
+            if (firstComposerNameEmitted is not None
                     and not firstComposerSkipped
                     and c.role == 'composer'
-                    and firstComposerEmitted in c._names):
-                # emit all but firstComposerEmitted from c.names
-                self._emitContributorNameList(outfile, c, skipName=firstComposerEmitted)
+                    and firstComposerNameEmitted in c._names):
+                # emit all but firstComposerNameEmitted from c.names
+                self._emitContributorNameList(outfile, c, skipName=firstComposerNameEmitted)
                 firstComposerSkipped = True
                 continue
 
@@ -780,15 +898,17 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # Put them at the bottom of the file, after all the other metadata
         if m21Metadata.hasEditorialInformation:
             for k, v in m21Metadata.editorial.items():
-                if ' ' not in k and '\t' not in k: # can't do keys with space or tab in them!
-                    hdKey: str = k
+                if ' ' not in k and '\t' not in k:  # can't do keys with space or tab in them!
+                    hdKey = k
                     hdValue: str = str(v)
                     if hdKey.startswith('humdrum:'):
-                        hdKey = hdKey[8:] # lose that 'humdrum:' prefix
+                        hdKey = hdKey[8:]  # lose that 'humdrum:' prefix
                     colonBeforeValue: str = ': '
                     if hdValue == '':
                         colonBeforeValue = ':'
-                    outfile.appendLine('!!!' + hdKey + colonBeforeValue + hdValue, asGlobalToken=True)
+                    outfile.appendLine(
+                        '!!!' + hdKey + colonBeforeValue + hdValue, asGlobalToken=True
+                    )
         # pylint: enable=protected-access
 
     def _getSystemDecoration(self) -> str:
@@ -797,11 +917,18 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # Find all the StaffGroups in the score, and use sg.spannerStorage.elements (the parts)
         # as well as sg.symbol and sg.barTogether from each one to generate a 'sN'-based
         # system-decoration string.
-        staffNumbersByM21Part: Dict[m21.stream.Part, int] = self._getGlobalStaffNumbersForM21Parts(
-                                                                    self._scoreData)
-        staffGroups: List[m21.layout.StaffGroup] = list(self.spannerBundle.getByClass('StaffGroup'))
-        staffGroupTrees: List[M21StaffGroupTree] = self._getStaffGroupTrees(
-                                                                staffGroups, staffNumbersByM21Part)
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+            assert isinstance(self.spannerBundle, m21.spanner.SpannerBundle)
+        staffNumbersByM21Part: t.Dict[m21.stream.Part, int] = (
+            self._getGlobalStaffNumbersForM21Parts(self._scoreData)
+        )
+        staffGroups: t.List[m21.layout.StaffGroup] = (
+            list(self.spannerBundle.getByClass('StaffGroup'))
+        )
+        staffGroupTrees: t.List[M21StaffGroupTree] = (
+            self._getStaffGroupTrees(staffGroups, staffNumbersByM21Part)
+        )
 
         for sgtree in staffGroupTrees:
             output, _ = self._appendRecursiveDecoString(output, sgtree)
@@ -809,7 +936,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         return output
 
     @staticmethod
-    def _appendRecursiveDecoString(output: str, sgtree: M21StaffGroupTree) -> Tuple[str, List[int]]:
+    def _appendRecursiveDecoString(
+            output: str,
+            sgtree: M21StaffGroupTree
+    ) -> t.Tuple[str, t.List[int]]:
         if sgtree is None:
             return (output, [])
         if sgtree.numStaves == 0:
@@ -818,21 +948,21 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         preString: str = ''
         postString: str = ''
         symbol: str = sgtree.staffGroup.symbol
-        barTogether: bool = sgtree.staffGroup.barTogether # might be 'mensurstrich'
+        barTogether: bool = sgtree.staffGroup.barTogether  # might be 'mensurstrich'
 
         if symbol in M21Convert.m21GroupSymbolToHumdrumDecoGroupStyleStart:
             preString += M21Convert.m21GroupSymbolToHumdrumDecoGroupStyleStart[symbol]
             postString = M21Convert.m21GroupSymbolToHumdrumDecoGroupStyleStop[symbol] + postString
 
-        if barTogether: # 'mensurstrich' will evaluate to True, which is OK...
+        if barTogether:  # 'mensurstrich' will evaluate to True, which is OK...
             preString += '('
             postString = ')' + postString
 
         output += preString
 
-        sortedStaffNums: List[int] = sorted(list(sgtree.staffNums))
-        staffNumsToProcess: Set[int] = set(sortedStaffNums)
-        staffNums: List[int] = []
+        sortedStaffNums: t.List[int] = sorted(list(sgtree.staffNums))
+        staffNumsToProcess: t.Set[int] = set(sortedStaffNums)
+        staffNums: t.List[int] = []
 
         for subgroup in sgtree.children:
             lowestStaffNumInSubgroup: int = min(subgroup.staffNums)
@@ -855,7 +985,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
             # 2. now the subgroup (adds more text to output)
             output, newStaffNums = HumdrumWriter._appendRecursiveDecoString(output, subgroup)
-            staffNumsProcessed: Set[int] = set(newStaffNums) # for speed of "in" checking
+            staffNumsProcessed: t.Set[int] = set(newStaffNums)  # for speed of "in" checking
             staffNumsToProcess = set(num for num in staffNumsToProcess
                                             if num not in staffNumsProcessed)
             staffNums += newStaffNums
@@ -874,31 +1004,33 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         return (output, staffNums)
 
     @staticmethod
-    def _getStaffGroupTrees(staffGroups: List[m21.layout.StaffGroup],
-                            staffNumbersByM21Part: Dict[m21.stream.Part, int]
-                           ) -> List[M21StaffGroupTree]:
-        topLevelParents: List[M21StaffGroupTree] = []
+    def _getStaffGroupTrees(
+            staffGroups: t.List[m21.layout.StaffGroup],
+            staffNumbersByM21Part: t.Dict[m21.stream.Part, int]
+    ) -> t.List[M21StaffGroupTree]:
+        topLevelParents: t.List[M21StaffGroupTree] = []
 
         # Start with the tree being completely flat. Sort it by number of staves, so
         # we can bail early when searching for smallest parent, since the first one
         # we find will be the smallest.
-        staffGroupTrees: List[M21StaffGroupTree] = (
-                [M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups]
-        )
+        staffGroupTrees: t.List[M21StaffGroupTree] = [
+            M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
+        ]
         staffGroupTrees.sort(key=lambda tree: tree.numStaves)
 
         # Hook up each child node to the parent with the smallest superset of the child's staves.
         # If there is no parent with a superset of the child's staves at all, the child is actually
         # a top level parent.
         for child in staffGroupTrees:
-            smallestParent: M21StaffGroupTree = None
+            smallestParent: t.Optional[M21StaffGroupTree] = None
             for parent in staffGroupTrees:
                 if parent is child or parent in child.children:
                     continue
 
                 if child.staffNums.issubset(parent.staffNums):
                     smallestParent = parent
-                    break # we know it's smallest because they're sorted by size
+                    # we know it's smallest because they're sorted by size
+                    break
 
             if smallestParent is None:
                 topLevelParents.append(child)
@@ -913,7 +1045,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         return topLevelParents
 
     @staticmethod
-    def _sortStaffGroupTrees(trees: List[M21StaffGroupTree]):
+    def _sortStaffGroupTrees(trees: t.List[M21StaffGroupTree]) -> None:
         # Sort every list of siblings in the tree (including the
         # passed-in trees list itself) by lowest staff number.
         if not trees:
@@ -924,12 +1056,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             HumdrumWriter._sortStaffGroupTrees(tree.children)
 
     @staticmethod
-    def _getGlobalStaffNumbersForM21Parts(scoreData: ScoreData) -> Dict[m21.stream.Part, int]:
-        output: Dict[m21.stream.Part, int] = {}
-        staffNumber: int = 0 # global staff numbers are 1-based
+    def _getGlobalStaffNumbersForM21Parts(scoreData: ScoreData) -> t.Dict[m21.stream.Part, int]:
+        output: t.Dict[m21.stream.Part, int] = {}
+        staffNumber: int = 0  # global staff numbers are 1-based
         for partData in scoreData.parts:
             for staffData in partData.staves:
-                staffNumber += 1 # global staff numbers are 1-based
+                staffNumber += 1  # global staff numbers are 1-based
                 output[staffData.m21PartStaff] = staffNumber
         return output
 
@@ -943,8 +1075,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # First, count parts (and each part's measures)
         partCount: int = 0
-        measureCount: [int] = []
-        for part in score.parts: # includes PartStaffs, too
+        measureCount: t.List[int] = []
+        for part in score.parts:  # includes PartStaffs, too
             partCount += 1
             measureCount.append(0)
             for _ in part.getElementsByClass('Measure'):
@@ -956,7 +1088,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         mCount0 = measureCount[0]
         for mCount in measureCount:
             if mCount != mCount0:
-                raise HumdrumExportError('ERROR: cannot handle parts with different measure counts')
+                raise HumdrumExportError(
+                    'ERROR: cannot handle parts with different measure counts'
+                )
 
         self._scoreData = ScoreData(score, self)
 
@@ -976,10 +1110,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // moveBreaksToEndOfPreviousMeasure --
     '''
     @staticmethod
-    def _moveBreaksToEndOfPreviousMeasure(outgrid: HumGrid):
+    def _moveBreaksToEndOfPreviousMeasure(outgrid: HumGrid) -> None:
         for m in range(1, len(outgrid.measures)):
             gm: GridMeasure = outgrid.measures[m]
-            gmlast: GridMeasure = outgrid.measures[m-1]
+            gmlast: GridMeasure = outgrid.measures[m - 1]
             if gm is None or gmlast is None:
                 continue
 
@@ -996,7 +1130,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 if not gridSlice.isGlobalComment:
                     continue
 
-                token = gridSlice.parts[0].staves[0].voices[0].token
+                voice0: t.Optional[GridVoice] = gridSlice.parts[0].staves[0].voices[0]
+                if voice0 is None:
+                    continue
+                token: t.Optional[HumdrumToken] = voice0.token
                 if token is None:
                     continue
 
@@ -1011,9 +1148,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::insertPartNames --
     '''
-    def _insertPartNames(self, outgrid: HumGrid):
-        hasName: bool = False
+    def _insertPartNames(self, outgrid: HumGrid) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         hasAbbr: bool = False
+        hasName: bool = False
 
         for partData in self._scoreData.parts:
             if partData.partName:
@@ -1028,7 +1168,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if not hasAbbr and not hasName:
             return
 
-        gm: GridMeasure = None
+        gm: GridMeasure
         if not outgrid.measures:
             gm = GridMeasure(outgrid)
             outgrid.measures.append(gm)
@@ -1037,15 +1177,18 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # We do abbreviation first, since addLabelAbbrToken and addLabelToken put the
         # token as early in the measure as possible, so the order will be reversed.
+        maxStaff: int
+        s: int
+        v: int
         if hasAbbr:
             for p, partData in enumerate(self._scoreData.parts):
                 partAbbr: str = partData.partAbbrev
                 if not partAbbr:
                     continue
                 abbr: str = "*I'" + partAbbr
-                maxStaff: int = outgrid.staffCount(p)
-                s: int = maxStaff - 1 # put it in last staff (which is first on the Humdrum line)
-                v: int = 0 # voice 0
+                maxStaff = outgrid.staffCount(p)
+                s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
+                v = 0  # voice 0
                 gm.addLabelAbbrToken(abbr, 0, p, s, v, self._scoreData.partCount)
 
         if hasName:
@@ -1063,9 +1206,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     # ignore Sibelius dummy part names
                     continue
                 iname: str = '*I"' + partName
-                maxStaff: int = outgrid.staffCount(p)
-                s: int = maxStaff - 1 # put it in last staff (which is first on the Humdrum line)
-                v: int = 0 # voice 0
+                maxStaff = outgrid.staffCount(p)
+                s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
+                v = 0  # voice 0
                 gm.addLabelToken(iname, 0, p, s, v, self._scoreData.partCount)
 
     '''
@@ -1073,12 +1216,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::insertMeasure --
     '''
-    def _insertMeasure(self, outgrid: HumGrid, mIndex: int):
+    def _insertMeasure(self, outgrid: HumGrid, mIndex: int) -> bool:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         gm: GridMeasure = outgrid.appendMeasure()
 
-        xmeasure: MeasureData = None
-        measureDatas: [MeasureData] = []
-        sevents: [[SimultaneousEvents]] = []
+        measureDatas: t.List[MeasureData] = []
+        sevents: t.List[t.List[SimultaneousEvents]] = []
 
         for p, part in enumerate(self._scoreData.parts):
             for s, staff in enumerate(part.staves):
@@ -1095,20 +1240,20 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     gm.leftBarlineStyle = xmeasure.leftBarlineStyle
                     gm.rightBarlineStyle = xmeasure.rightBarlineStyle
                     gm.measureStyle = xmeasure.measureStyle
-                    gm.measureNumberString = xmeasure.measureNumberString # might be '124a'
+                    gm.measureNumberString = xmeasure.measureNumberString  # might be '124a'
 
                 # barline fermatas, on the other hand, need to be checked in every staff
                 gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
                 gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
 
-        curTime: [HumNum] = [None] * len(measureDatas)
-        measureDurs: [HumNum] = [None] * len(measureDatas)
-        curIndex: [int] = [0] * len(measureDatas)
+        curTime: t.List[HumNum] = [opFrac(-1)] * len(measureDatas)
+        measureDurs: t.List[t.Optional[HumNum]] = [None] * len(measureDatas)
+        curIndex: t.List[int] = [0] * len(measureDatas)
         nextTime: HumNum = opFrac(-1)
 
         tsDur: HumNum = opFrac(-1)
         for ps, mdata in enumerate(measureDatas):
-            events: [EventData] = mdata.events
+            events: t.List[EventData] = mdata.events
             # Keep track of hairpin endings that should be attached
             # the the previous note (and doubling the ending marker
             # to indicate that the timestamp of the ending is at the
@@ -1122,10 +1267,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     print(f'\tSTi:   {event.staffIndex}', end='', file=sys.stderr)
                     print(f'\tVi:    {event.voiceIndex}', end='', file=sys.stderr)
                     print(f'\tDUR:   {event.duration}', end='', file=sys.stderr)
-                    print(f'\tTOKEN: {event.kernTokenString(self.spannerBundle)}',
+                    print(f'\tTOKEN: {event.kernTokenString()}',
                                 end='', file=sys.stderr)
                     print(f'\tNAME:  {event.name}', end='', file=sys.stderr)
-                    print('', file=sys.stderr) # line feed (one line per event)
+                    print('', file=sys.stderr)  # line feed (one line per event)
                 print('======================================', file=sys.stderr)
 
             if sevents[ps]:
@@ -1141,8 +1286,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # end of loop over parts' staves' measures at measure # mIndex
 
         allEnd: bool = False
-        nowEvents: [SimultaneousEvents] = []
-#         nowPartStaves: [int] = []
+        nowEvents: t.List[SimultaneousEvents] = []
+#         nowPartStaves: t.List[int] = []
         status: bool = True
 
         # Q: I believe the following loop is trying to process nowEvents for each "now" in
@@ -1176,7 +1321,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                         nextTime = sevents[ps][curIndex[ps]].startTime
             # end reversed loop over parts
             status = status and self._convertNowEvents(gm, nowEvents, processTime)
-        #end loop over slices (i.e. events in the measure across all partstaves)
+        # end loop over slices (i.e. events in the measure across all partstaves)
 
         if self._currentTexts or self._currentDynamics or self._currentTempos:
             # one more _addEvent (no slice, no event) to flush out these
@@ -1186,10 +1331,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             # move to the next measure... which we are NOT).
             self._addEvent(None, gm, None, processTime)
 
-        #888 if self._offsetHarmony:
-            #888 self._insertOffsetHarmonyIntoMeasure(gm)
-        #888 if self._offsetFiguredBass:
-            #888 self._insertOffsetFiguredBassIntoMeasure(gm)
+        # if self._offsetHarmony:
+            # self._insertOffsetHarmonyIntoMeasure(gm)
+        # if self._offsetFiguredBass:
+            # self._insertOffsetFiguredBassIntoMeasure(gm)
 
         return status
 
@@ -1199,10 +1344,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::convertNowEvents --
     '''
     def _convertNowEvents(self, outgm: GridMeasure,
-                          nowEvents: [SimultaneousEvents],
+                          nowEvents: t.List[SimultaneousEvents],
                           nowTime: HumNumIn) -> bool:
         if not nowEvents:
-#             print('NOW EVENTS ARE EMPTY', file=sys.stderr)
+            # print('NOW EVENTS ARE EMPTY', file=sys.stderr)
             return True
 
         self._appendZeroDurationEvents(outgm, nowEvents, nowTime)
@@ -1216,7 +1361,6 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 weHaveDurationEvents = True
                 break
 
-        #if not nowEvents[0].nonZeroDur:
         if not weHaveDurationEvents:
             # no duration events (should be a terminal barline)
             # ignore and deal with in calling function
@@ -1230,29 +1374,34 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::appendZeroEvents --
     '''
-    def _appendZeroDurationEvents(self, outgm: GridMeasure,
-                                  nowEvents: [SimultaneousEvents],
-                                  nowTime: HumNumIn):
-        hasClef:            bool = False
-        hasKeySig:          bool = False
-        hasKeyDesignation:  bool = False
-        hasTransposition:   bool = False
-        hasTimeSig:         bool = False
-#        hasOttava:          bool = False
-        hasStaffLines:      bool = False
+    def _appendZeroDurationEvents(self,
+            outgm: GridMeasure,
+            nowEvents: t.List[SimultaneousEvents],
+            nowTime: HumNumIn) -> None:
+
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
+        hasClef: bool = False
+        hasKeySig: bool = False
+        hasKeyDesignation: bool = False
+        hasTransposition: bool = False
+        hasTimeSig: bool = False
+#        hasOttava: bool = False
+        hasStaffLines: bool = False
 
         # These are all indexed by part, and include a staff index with each element
         # Some have further indexes for voice, and maybe note
-        clefs: [[Tuple[int, m21.clef.Clef]]] = []
-        keySigs: [[Tuple[int, m21.key.KeySignature]]] = []
-        timeSigs: [[Tuple[m21.meter.TimeSignature]]] = []
-        staffLines: [[Tuple[int, int]]] = [] # number of staff lines (if specified)
-        transposingInstruments: [[Tuple[int, m21.instrument.Instrument]]] = []
-#        hairPins: [[m21.dynamics.DynamicWedge]] = []
-#        ottavas: [[[m21.spanner.Ottava]]] = []
+        clefs: t.List[t.List[t.Tuple[int, m21.clef.Clef]]] = []
+        keySigs: t.List[t.List[t.Tuple[int, m21.key.KeySignature]]] = []
+        timeSigs: t.List[t.List[t.Tuple[int, m21.meter.TimeSignature]]] = []
+        staffLines: t.List[t.List[t.Tuple[int, int]]] = []  # number of staff lines (if specified)
+        transposingInstruments: t.List[t.List[t.Tuple[int, m21.instrument.Instrument]]] = []
+#        hairPins: t.List[t.List[m21.dynamics.DynamicWedge]] = []
+#        ottavas: t.List[t.List[t.List[m21.spanner.Ottava]]] = []
 
-        graceBefore: [[[[EventData]]]] = []
-        graceAfter: [[[[EventData]]]] = []
+        graceBefore: t.List[t.List[t.List[t.List[EventData]]]] = []
+        graceAfter: t.List[t.List[t.List[t.List[EventData]]]] = []
         foundNonGrace: bool = False
 
         # pre-populate the top level list with an empty list for each part
@@ -1269,52 +1418,52 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         for simultaneousEventList in nowEvents:
             for zeroDurEvent in simultaneousEventList.zeroDur:
-                m21Obj: m21.base.Music21Object = zeroDurEvent.m21Object # getNode
+                m21Obj: m21.base.Music21Object = zeroDurEvent.m21Object  # getNode
                 pindex: int = zeroDurEvent.partIndex
                 sindex: int = zeroDurEvent.staffIndex
                 vindex: int = zeroDurEvent.voiceIndex
 
-                if 'Clef' in m21Obj.classes:
+                if isinstance(m21Obj, m21.clef.Clef):
                     clefs[pindex].append((sindex, m21Obj))
                     hasClef = True
                     foundNonGrace = True
-                elif 'Key' in m21Obj.classes or 'KeySignature' in m21Obj.classes:
+                elif isinstance(m21Obj, (m21.key.Key, m21.key.KeySignature)):
                     keySigs[pindex].append((sindex, m21Obj))
                     hasKeySig = True
                     hasKeyDesignation = 'Key' in m21Obj.classes
                     foundNonGrace = True
-                elif 'Instrument' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.instrument.Instrument):
                     if M21Utilities.isTransposingInstrument(m21Obj):
                         transposingInstruments[pindex].append((sindex, m21Obj))
                         hasTransposition = True
                         foundNonGrace = True
-                elif 'StaffLayout' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.layout.StaffLayout):
                     staffLines[pindex].append((sindex, m21Obj.staffLines))
                     hasStaffLines = True
                     foundNonGrace = True
-                elif 'TimeSignature' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.meter.TimeSignature):
                     timeSigs[pindex].append((sindex, m21Obj))
                     hasTimeSig = True
                     hasMeterSig = M21Utilities.hasMeterSymbol(m21Obj)
                     foundNonGrace = True
-                elif 'TextExpression' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.expressions.TextExpression):
                     # put in self._currentTexts, so it can be emitted
                     # during the immediately following call to
                     # appendNonZeroEvents() -> addEvent()
                     self._currentTexts.append((pindex, sindex, vindex, m21Obj))
-                elif 'MetronomeMark' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.tempo.MetronomeMark):
                     self._currentTempos.append((pindex, m21Obj))
-                elif 'Dynamic' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
                     zeroDurEvent.reportDynamicToOwner()
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
-                elif 'GeneralNote' in m21Obj.classes:
+                elif isinstance(m21Obj, m21.note.GeneralNote):
                     if foundNonGrace:
                         self._addEventToList(graceAfter, zeroDurEvent)
                     else:
                         self._addEventToList(graceBefore, zeroDurEvent)
-                elif 'PageLayout' in m21Obj.classes or 'SystemLayout' in m21Obj.classes:
+                elif isinstance(m21Obj, (m21.layout.PageLayout, m21.layout.SystemLayout)):
                     self._processPrintElement(outgm, m21Obj, nowTime)
 
         self._addGraceLines(outgm, graceBefore, nowTime)
@@ -1345,7 +1494,10 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addEventToList --
     '''
     @staticmethod
-    def _addEventToList(eventList: [[[[EventData]]]], event: EventData):
+    def _addEventToList(
+            eventList: t.List[t.List[t.List[t.List[EventData]]]],
+            event: EventData
+    ) -> None:
         p: int = event.partIndex
         s: int = event.staffIndex
         v: int = event.voiceIndex
@@ -1379,10 +1531,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //     any part.  Grace notes are filled in reverse sequence.
     '''
     def _addGraceLines(self, outgm: GridMeasure,
-                             notes: List[List[List[List[EventData]]]],
-                             nowTime: HumNumIn):
+                             notes: t.List[t.List[t.List[t.List[EventData]]]],
+                             nowTime: HumNumIn) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         maxGraceNoteCount: int = 0
-        for staffList in notes: # notes is a list of staffLists, one staffList per part
+        for staffList in notes:  # notes is a list of staffLists, one staffList per part
             for voiceList in staffList:
                 for noteList in voiceList:
                     if maxGraceNoteCount < len(noteList):
@@ -1391,30 +1546,41 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if maxGraceNoteCount == 0:
             return
 
-        slices: List[GridSlice] = []
+        slices: t.List[GridSlice] = []
         for _ in range(0, maxGraceNoteCount):
             slices.append(GridSlice(outgm, nowTime, SliceType.GraceNotes))
             outgm.slices.append(slices[-1])
             slices[-1].initializePartStaves(self._scoreData)
 
-        for staffList in notes: # notes is a list of staffLists, one staffList per part
+        for staffList in notes:  # notes is a list of staffLists, one staffList per part
             for voiceList in staffList:
                 for noteList in voiceList:
                     startn: int = maxGraceNoteCount - len(noteList)
                     for n, note in enumerate(noteList):
-                        self._addEvent(slices[startn+n], outgm, note, nowTime)
+                        self._addEvent(slices[startn + n], outgm, note, nowTime)
 
     '''
     //////////////////////////////
     //
     // Tool_musicxml2hum::addClefLine --
     '''
-    def _addClefLine(self, outgm: GridMeasure, clefs: List[List[Tuple[int, m21.clef.Clef]]], nowTime: HumNumIn):
+    def _addClefLine(
+            self,
+            outgm: GridMeasure,
+            clefs: t.List[t.List[t.Tuple[int, m21.clef.Clef]]],
+            nowTime: HumNumIn
+    ) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Clefs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
 
-        assert len(clefs) == len(gridSlice.parts), 'number of clef lists does not match number of parts'
+        if len(clefs) != len(gridSlice.parts):
+            raise HumdrumExportError(
+                'Number of clef lists does not match number of parts'
+            )
 
         for p, partClefs in enumerate(clefs):
             if partClefs:
@@ -1425,12 +1591,22 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addStriaLine --
     '''
-    def _addStriaLine(self, outgm: GridMeasure, staffLines: List[List[Tuple[int, int]]], nowTime: HumNumIn):
+    def _addStriaLine(
+            self,
+            outgm: GridMeasure,
+            staffLines: t.List[t.List[t.Tuple[int, int]]],
+            nowTime: HumNumIn
+    ) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Stria)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
 
-        assert len(staffLines) == len(gridSlice.parts), 'number of staffLine lists does not match number of parts'
+        if len(staffLines) != len(gridSlice.parts):
+            raise HumdrumExportError(
+                'number of staffLine lists does not match number of parts'
+            )
 
         for p, partStaffLines in enumerate(staffLines):
             if partStaffLines is not None:
@@ -1442,9 +1618,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addTimeSigLine --
     '''
     def _addTimeSigLine(self, outgm: GridMeasure,
-                              timeSigs: List[List[Tuple[int, m21.meter.TimeSignature]]],
+                              timeSigs: t.List[t.List[t.Tuple[int, m21.meter.TimeSignature]]],
                               nowTime: HumNumIn,
-                              hasMeterSig: bool):
+                              hasMeterSig: bool) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.TimeSigs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
@@ -1457,7 +1636,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             return
 
         # Add meter sigs related to time signatures (e.g. common time, cut time)
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.MeterSigs)
+        gridSlice = GridSlice(outgm, nowTime, SliceType.MeterSigs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
 
@@ -1467,15 +1646,15 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             if partTimeSigs:
                 self._insertPartMeterSigs(partTimeSigs, part)
 
-    def _insertPartTimeSigs(self, timeSigs: List[Tuple[int, m21.meter.TimeSignature]],
-                                  part: GridPart):
+    def _insertPartTimeSigs(self, timeSigs: t.List[t.Tuple[int, m21.meter.TimeSignature]],
+                                  part: GridPart) -> None:
         if part is None:
             return
 
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, timeSig in timeSigs:
-            token: HumdrumToken = M21Convert.timeSigTokenFromM21TimeSignature(timeSig)
+            token: t.Optional[HumdrumToken] = M21Convert.timeSigTokenFromM21TimeSignature(timeSig)
             if token:
                 staff = part.staves[staffIdx]
                 staff.setTokenLayer(voice0, token, durationZero)
@@ -1483,16 +1662,16 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # go back and fill in all None tokens with null interpretations
         self._fillEmpties(part, '*')
 
-    def _insertPartMeterSigs(self, timeSigs: List[m21.meter.TimeSignature],
-                                  part: GridPart):
+    def _insertPartMeterSigs(self, timeSigs: t.List[t.Tuple[int, m21.meter.TimeSignature]],
+                                  part: GridPart) -> None:
         if part is None:
             return
 
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, timeSig in timeSigs:
-            token: HumdrumToken = M21Convert.meterSigTokenFromM21TimeSignature(timeSig)
-            if token: # returns None if meterSig info doesn't exist
+            token: t.Optional[HumdrumToken] = M21Convert.meterSigTokenFromM21TimeSignature(timeSig)
+            if token is not None:
                 staff = part.staves[staffIdx]
                 staff.setTokenLayer(voice0, token, durationZero)
 
@@ -1505,10 +1684,16 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addKeySigLine -- Only adding one key signature
     //   for each part for now.
     '''
-    def _addKeySigLine(self, outgm: GridMeasure,
-                             keySigs: List[List[Tuple[int, Union[m21.key.KeySignature, m21.key.Key]]]],
-                             nowTime: HumNumIn,
-                             hasKeyDesignation: bool):
+    def _addKeySigLine(
+            self,
+            outgm: GridMeasure,
+            keySigs: t.List[t.List[t.Tuple[int, t.Union[m21.key.KeySignature, m21.key.Key]]]],
+            nowTime: HumNumIn,
+            hasKeyDesignation: bool
+    ) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
@@ -1521,7 +1706,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         if not hasKeyDesignation:
             return
 
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeyDesignations)
+        gridSlice = GridSlice(outgm, nowTime, SliceType.KeyDesignations)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
 
@@ -1529,8 +1714,11 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             if partKeySigs:
                 self._insertPartKeyDesignations(partKeySigs, part)
 
-    def _insertPartKeySigs(self, keySigs: List[Tuple[int, Union[m21.key.KeySignature, m21.key.Key]]],
-                                         part: GridPart):
+    def _insertPartKeySigs(
+            self,
+            keySigs: t.List[t.Tuple[int, t.Union[m21.key.KeySignature, m21.key.Key]]],
+            part: GridPart
+    ) -> None:
         if part is None:
             return
 
@@ -1545,16 +1733,21 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # go back and fill in all None tokens with null interpretations
         self._fillEmpties(part, '*')
 
-    def _insertPartKeyDesignations(self, keySigs: List[Union[m21.key.KeySignature, m21.key.Key]],
-                                         part: GridPart):
+    def _insertPartKeyDesignations(self,
+            keySigs: t.List[t.Tuple[int, t.Union[m21.key.KeySignature, m21.key.Key]]],
+            part: GridPart
+    ) -> None:
+
         if part is None:
             return
 
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, keySig in keySigs:
-            if isinstance(keySig, m21.key.Key): # we can only generate KeyDesignation from Key
-                token: HumdrumToken = M21Convert.keyDesignationTokenFromM21KeySignature(keySig)
+            if isinstance(keySig, m21.key.Key):  # we can only generate KeyDesignation from Key
+                token: t.Optional[HumdrumToken] = (
+                    M21Convert.keyDesignationTokenFromM21KeySignature(keySig)
+                )
                 if token:
                     staff = part.staves[staffIdx]
                     staff.setTokenLayer(voice0, token, durationZero)
@@ -1568,7 +1761,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addTranspositionLine -- Transposition codes to
     //   produce written parts.
     '''
-    def _addTranspositionLine(self, outgm: GridMeasure, transposingInstruments: List[List[Tuple[int, m21.instrument.Instrument]]], nowTime: HumNumIn):
+    def _addTranspositionLine(self,
+            outgm: GridMeasure,
+            transposingInstruments: t.List[t.List[t.Tuple[int, m21.instrument.Instrument]]],
+            nowTime: HumNumIn) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs)
         outgm.slices.append(gridSlice)
         gridSlice.initializePartStaves(self._scoreData)
@@ -1577,16 +1776,20 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             if partTransposingInstruments:
                 self._insertPartTranspositions(partTransposingInstruments, part)
 
-    def _insertPartTranspositions(self,
-                                  transposingInstruments: List[Tuple[int, m21.instrument.Instrument]],
-                                  part: GridPart):
+    def _insertPartTranspositions(
+            self,
+            transposingInstruments: t.List[t.Tuple[int, m21.instrument.Instrument]],
+            part: GridPart
+    ) -> None:
         if part is None:
             return
 
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, inst in transposingInstruments:
-            token: HumdrumToken = M21Convert.instrumentTransposeTokenFromM21Instrument(inst)
+            token: t.Optional[HumdrumToken] = (
+                M21Convert.instrumentTransposeTokenFromM21Instrument(inst)
+            )
             if token:
                 staff = part.staves[staffIdx]
                 staff.setTokenLayer(voice0, token, durationZero)
@@ -1599,14 +1802,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::insertPartClefs --
     '''
-    def _insertPartClefs(self, clefs: List[Tuple[int, m21.clef.Clef]], part: GridPart):
+    def _insertPartClefs(self, clefs: t.List[t.Tuple[int, m21.clef.Clef]], part: GridPart) -> None:
         if part is None:
             return
 
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, clef in clefs:
-            token: HumdrumToken = M21Convert.clefTokenFromM21Clef(clef)
+            token: t.Optional[HumdrumToken] = M21Convert.clefTokenFromM21Clef(clef)
             if token:
                 staff = part.staves[staffIdx]
                 staff.setTokenLayer(voice0, token, durationZero)
@@ -1619,16 +1822,16 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::insertPartStria --
     '''
-    def _insertPartStria(self, staffLineCounts: List[Tuple[int, int]], part: GridPart):
+    def _insertPartStria(self, staffLineCounts: t.List[t.Tuple[int, int]], part: GridPart) -> None:
         if part is None:
             return
 
         durationZero: HumNum = opFrac(0)
         voice0: int = 0
         for staffIdx, lineCount in staffLineCounts:
-            tokenStr: str = '*stria' + str(lineCount)
+            token: HumdrumToken = HumdrumToken('*stria' + str(lineCount))
             staff = part.staves[staffIdx]
-            staff.setTokenLayer(voice0, tokenStr, durationZero)
+            staff.setTokenLayer(voice0, token, durationZero)
 
         # go back and fill in all None tokens with null interpretations
         self._fillEmpties(part, '*')
@@ -1639,7 +1842,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::fillEmpties --
     '''
     @staticmethod
-    def _fillEmpties(part: GridPart, string: str):
+    def _fillEmpties(part: GridPart, string: str) -> None:
         durationZero: HumNum = opFrac(0)
 
         for staff in part.staves:
@@ -1649,8 +1852,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
             voiceCount: int = len(staff.voices)
             if voiceCount == 0:
-                gv: GridVoice = GridVoice(string, durationZero)
-                staff.voices.append(gv)
+                staff.voices.append(GridVoice(string, durationZero))
             else:
                 for v, gv in enumerate(staff.voices):
                     if gv is None:
@@ -1661,8 +1863,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
     @staticmethod
     def _processPrintElement(outgm: GridMeasure,
-                             m21Obj: Union[m21.layout.PageLayout, m21.layout.SystemLayout],
-                             nowTime: HumNumIn):
+                             m21Obj: t.Union[m21.layout.PageLayout, m21.layout.SystemLayout],
+                             nowTime: HumNumIn) -> None:
         isPageBreak: bool = isinstance(m21Obj, m21.layout.PageLayout) and m21Obj.isNew
         isSystemBreak: bool = isinstance(m21Obj, m21.layout.SystemLayout) and m21Obj.isNew
 
@@ -1670,8 +1872,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             return
 
         # C++ code (musicxml2hum) checks the last slice to see if it's already a page/system break
-        # and does nothing if it is.  Maybe that's MusicXML-specific?  If music21 Score has multiple
-        # page or system breaks in a row, it seems like I should honor that.
+        # and does nothing if it is.  Maybe that's MusicXML-specific?  If music21 Score has
+        # multiple page or system breaks in a row, it seems like I should honor that.
 #         gs: GridSlice = outgm.slices[-1]
 #
 #         token: HumdrumToken = None
@@ -1684,10 +1886,8 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 #                     token = voice.token
 
         if isPageBreak:
-#             if token is None or token.text != '!!pagebreak:original':
             outgm.addGlobalComment('!!LO:PB:g=z', nowTime)
         elif isSystemBreak:
-#             if token is None or token.text != '!!linebreak:original':
             outgm.addGlobalComment('!!LO:LB:g=z', nowTime)
 
 
@@ -1697,8 +1897,11 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::appendNonZeroEvents --
     '''
     def _appendNonZeroDurationEvents(self, outgm: GridMeasure,
-                                           nowEvents: [SimultaneousEvents],
-                                           nowTime: HumNumIn):
+                                           nowEvents: t.List[SimultaneousEvents],
+                                           nowTime: HumNumIn) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
         outSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Notes)
 
         if len(outgm.slices) == 0:
@@ -1718,7 +1921,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         outSlice.initializePartStaves(self._scoreData)
 
         for ne in nowEvents:
-            events: [EventData] = ne.nonZeroDur
+            events: t.List[EventData] = ne.nonZeroDur
             for event in events:
                 self._addEvent(outSlice, outgm, event, nowTime)
 
@@ -1727,10 +1930,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addEvent -- Add a note or rest to a grid slice
     '''
-    def _addEvent(self, outSlice: GridSlice, outgm: MeasureData, event: EventData, nowTime: HumNumIn):
-        partIndex: int = None # event.partIndex
-        staffIndex: int = None # event.staffIndex
-        voiceIndex: int = None # event.voiceIndex
+    def _addEvent(self,
+            outSlice: t.Optional[GridSlice],
+            outgm: GridMeasure,
+            event: t.Optional[EventData],
+            nowTime: HumNumIn) -> None:
+        partIndex: int   # event.partIndex
+        staffIndex: int  # event.staffIndex
+        voiceIndex: int  # event.voiceIndex
 
         if event is not None:
             partIndex = event.partIndex
@@ -1738,9 +1945,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             voiceIndex = event.voiceIndex
 
         tokenString: str = ''
-        layouts: [str] = []
+        layouts: t.List[str] = []
         if event is None or not event.isDynamicWedgeStartOrStop:
             if event is not None:
+                if t.TYPE_CHECKING:
+                    assert isinstance(outSlice, GridSlice)
+
                 tokenString, layouts = event.getNoteKernTokenStringAndLayouts()
                 if '@' in tokenString:
                     self._hasTremolo = True
@@ -1756,20 +1966,28 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                     print(f'eName: {event.name}', file=sys.stderr)
 
                 token = HumdrumToken(tokenString)
-                outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(voiceIndex, token, event.duration)
+                outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(
+                    voiceIndex, token, event.duration
+                )
                 for layoutString in layouts:
-                    outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, layoutString)
+                    outgm.addLayoutParameter(
+                        outSlice, partIndex, staffIndex, voiceIndex, layoutString
+                    )
 
                 vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
                 if vcount > 0:
                     event.reportVerseCountToOwner(vcount)
 
-                hcount: int = self._addHarmony(outSlice.parts[partIndex], event, nowTime, partIndex)
+                hcount: int = self._addHarmony(
+                    outSlice.parts[partIndex], event, nowTime, partIndex
+                )
                 if hcount > 0:
-                    event.reportHarmonyCountToOwner(hcount)
+                    pass
+                    # event.reportHarmonyCountToOwner(hcount)
 
         # LATER: implement figured bass
-        #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex], event, nowTime, partIndex)
+        #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex],
+        #                                               event, nowTime, partIndex)
         #         if fcount > 0:
         #             event.reportFiguredBassToOwner()
 
@@ -1786,29 +2004,37 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 # now.
                 # event.texts contains any TextExpressions associated with this note (in this
                 # part/staff/voice).
+                if t.TYPE_CHECKING:
+                    assert isinstance(outSlice, GridSlice)
+                    assert isinstance(event, EventData)
                 self._addTexts(outSlice, outgm, event, self._currentTexts)
-                self._currentTexts = [] # they've all been added
+                self._currentTexts = []  # they've all been added
 
             if self._currentTempos:
                 # self._currentTempos contains all the TempoIndications that could be in any part.
                 # There is no event.tempos (music21 tempos are always unassociated).  But we take
                 # the opportunity to add them now.
+                if t.TYPE_CHECKING:
+                    assert isinstance(outSlice, GridSlice)
                 self._addTempos(outSlice, outgm, self._currentTempos)
-                self._currentTempos = [] # they've all been added
+                self._currentTempos = []  # they've all been added
 
         if (event is not None and event.isDynamicWedgeStartOrStop) or self._currentDynamics:
             # self._currentDynamics contains any zero-duration (unassociated) dynamics ('pp' et al)
             # that could be in any part/staff.
             # event has a single dynamic wedge start or stop, that is in this part/staff.
+            if t.TYPE_CHECKING:
+                assert isinstance(outSlice, GridSlice)
+                assert isinstance(event, EventData)
             self._addDynamics(outSlice, outgm, event, self._currentDynamics)
             self._currentDynamics = []
             if event is not None and event.isDynamicWedgeStartOrStop:
-                event.reportDynamicToOwner() # reports that dynamics exist in this part/staff
+                event.reportDynamicToOwner()  # reports that dynamics exist in this part/staff
 
-        # 888 might need special hairpin ending processing here (or might be musicXML-specific).
+        # might need special hairpin ending processing here (or might be musicXML-specific).
 
-        # 888 might need postNoteText processing, but it looks like that's only for a case
-        # 888 ... where '**blah' (a humdrum exInterp) occurs in a musicXML direction node. (Why?!?)
+        # might need postNoteText processing, but it looks like that's only for a case
+        # ... where '**blah' (a humdrum exInterp) occurs in a musicXML direction node. (Why?!?)
 
     '''
     //////////////////////////////
@@ -1816,10 +2042,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addDynamic -- extract any dynamics for the event
     '''
     @staticmethod
-    def _addDynamics(outSlice: GridSlice, outgm: GridMeasure,
-                     event: EventData, extraDynamics: List[Tuple[int, int, m21.dynamics.Dynamic]]):
-
-        dynamics: List[Tuple[int, int, str]] = []
+    def _addDynamics(
+            outSlice: GridSlice,
+            outgm: GridMeasure,
+            event: EventData,
+            extraDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]]
+    ) -> None:
+        dynamics: t.List[t.Tuple[int, int, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
         eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
@@ -1832,11 +2061,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             dynamics.append((partIndex, staffIndex, dstring))
 
         if not dynamics:
-            return # we shouldn't have been called
+            # we shouldn't have been called
+            return
 
-        dynTokens: Dict[Tuple[int, int], HumdrumToken] = {}
-        moreThanOneDynamic: Dict[Tuple[int, int], bool] = {}
-        currentDynamicIndex: Dict[Tuple[int, int], int] = {}
+        dynTokens: t.Dict[t.Tuple[int, int], HumdrumToken] = {}
+        moreThanOneDynamic: t.Dict[t.Tuple[int, int], bool] = {}
+        currentDynamicIndex: t.Dict[t.Tuple[int, int], int] = {}
 
         for partIndex, staffIndex, dstring in dynamics:
             if not dstring:
@@ -1848,29 +2078,39 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
             else:
                 dynTokens[(partIndex, staffIndex)].text += ' ' + dstring
                 moreThanOneDynamic[(partIndex, staffIndex)] = True
-                currentDynamicIndex[(partIndex, staffIndex)] = 1 # ':n=' is 1-based
+                currentDynamicIndex[(partIndex, staffIndex)] = 1  # ':n=' is 1-based
 
-        for (partIndex, staffIndex), token in dynTokens.items(): # key is Tuple[int, int], value is token
+        # dynTokens key is t.Tuple[int, int], value is token
+        for (partIndex, staffIndex), token in dynTokens.items():
             if outSlice is None:
                 # we better make one, timestamped at end of measure, type Notes (even though it
-                # will only have '.' in the **kern spines, and a 'p' (or whatever) in the **dynam spine)
-                outSlice = GridSlice(outgm, outgm.timestamp+outgm.duration, SliceType.Notes)
+                # will only have '.' in the **kern spines, and a 'p' (or whatever) in the
+                # **dynam spine)
+                outSlice = GridSlice(outgm, outgm.timestamp + outgm.duration, SliceType.Notes)
                 outSlice.initializeBySlice(outgm.slices[-1])
 
-            if outSlice.parts[partIndex].staves[staffIndex].dynamics is None:
+            existingDynamicsToken: t.Optional[HumdrumToken] = (
+                outSlice.parts[partIndex].staves[staffIndex].dynamics
+            )
+            if existingDynamicsToken is None:
                 outSlice.parts[partIndex].staves[staffIndex].dynamics = token
             else:
-                outSlice.parts[partIndex].staves[staffIndex].dynamics.text += ' ' + token.text
+                existingDynamicsToken.text += ' ' + token.text
                 moreThanOneDynamic[(partIndex, staffIndex)] = True
-                currentDynamicIndex[(partIndex, staffIndex)] = 1 # ':n=' is 1-based
+                currentDynamicIndex[(partIndex, staffIndex)] = 1  # ':n=' is 1-based
 
         # add any necessary layout params
+        dparam: t.Optional[str]
+        fullParam: str
 
         # first the one DynamicWedge start or stop that is this event (but only if it's a start)
         if eventIsDynamicWedgeStart:
-            dparam: str = M21Convert.getDynamicWedgeStartParameters(event.m21Object)
+            if t.TYPE_CHECKING:
+                assert isinstance(event.m21Object, m21.dynamics.DynamicWedge)
+
+            dparam = M21Convert.getDynamicWedgeStartParameters(event.m21Object)
             if dparam:
-                fullParam: str = '!LO:HP'
+                fullParam = '!LO:HP'
                 if moreThanOneDynamic[(partIndex, staffIndex)]:
                     fullParam += ':n=' + str(currentDynamicIndex[(partIndex, staffIndex)])
                     currentDynamicIndex[(partIndex, staffIndex)] += 1
@@ -1879,9 +2119,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
 
         # next the Dynamic objects ('pp', etc) in extraDynamics
         for partIndex, staffIndex, dynamic in extraDynamics:
-            dparam: str = M21Convert.getDynamicParameters(dynamic)
+            dparam = M21Convert.getDynamicParameters(dynamic)
             if dparam:
-                fullParam: str = '!LO:DY'
+                fullParam = '!LO:DY'
 
                 if moreThanOneDynamic[(partIndex, staffIndex)]:
                     fullParam += ':n=' + str(currentDynamicIndex[(partIndex, staffIndex)])
@@ -1895,10 +2135,13 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addTexts -- Add all text direction for a note.
     '''
-    def _addTexts(self, outSlice: GridSlice,
-                        outgm: GridMeasure,
-                        event: EventData,
-                        extraTexts: List[Tuple[int, int, int, m21.expressions.TextExpression]]):
+    def _addTexts(
+            self,
+            outSlice: GridSlice,
+            outgm: GridMeasure,
+            event: EventData,
+            extraTexts: t.List[t.Tuple[int, int, int, m21.expressions.TextExpression]]
+    ) -> None:
         if event is not None:
             partIndex: int = event.partIndex
             staffIndex: int = event.staffIndex
@@ -1922,7 +2165,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     @staticmethod
     def _addText(outSlice: GridSlice, outgm: GridMeasure,
                  partIndex: int, staffIndex: int, voiceIndex: int,
-                 textExpression: m21.expressions.TextExpression):
+                 textExpression: m21.expressions.TextExpression) -> None:
         textString: str = M21Convert.textLayoutParameterFromM21TextExpression(textExpression)
         outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, textString)
 
@@ -1933,23 +2176,25 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     '''
     def _addTempos(self, outSlice: GridSlice,
                          outgm: GridMeasure,
-                         tempos: List[Tuple[int, m21.tempo.TempoIndication]]):
+                         tempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]]) -> None:
         # we have to deduplicate because sometimes MusicXML export from music21 adds
         # extra metronome marks when exporting from PartStaffs.
         # We only want one metronome mark in this slice, preferably in the top-most part
         # We'll be content with the highest partIndex seen.
-        # Note: The original routine over-deleted if there were multiple _different_ metronome marks.
+        # Note: The original routine over-deleted if there were multiple _different_
+        # metronome marks.
         # This is now rewritten to only delete actual duplicates. --gregc
         # And now de-duplication is disabled; it was causing more problems than it was worth.
-        emittedTempos: List[m21.tempo.TempoIndication] = []
+        emittedTempos: t.List[m21.tempo.TempoIndication] = []
 
         # First, sort by partIndex (highest first)
         # Then loop over all the tempos, adding only the first one you see of each unique mark
-        def partIndexOf(tempo: Tuple[int, m21.tempo.TempoIndication]) -> int:
+        def partIndexOf(tempo: t.Tuple[int, m21.tempo.TempoIndication]) -> int:
             return tempo[0]
 
         def isAlreadyEmitted(_tempo: m21.tempo.TempoIndication) -> bool:
-            return False # disable de-duplication to see if it causes any problems (helps with a few scores)
+            # disable de-duplication to see if it causes any problems (helps with a few scores)
+            return False
 #             tempoMM: m21.tempo.MetronomeMark = tempo.getSoundingMetronomeMark()
 #             for e in emittedTempos:
 #                 if type(tempo) is not type(e): # original type, not MM
@@ -1980,11 +2225,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     // Tool_musicxml2hum::addTempo -- Add a tempo direction to the grid.
     '''
     def _addTempo(self, outSlice: GridSlice, outgm: GridMeasure, partIndex: int,
-                  tempoIndication: m21.tempo.TempoIndication):
-        mmTokenStr: str = ''      # '*MM128' for example
-        tempoTextLayout: str = '' # '!LO:TX:a:t=[eighth]=82', or '!LO:TX:t=Andantino [eighth]=82', for example
-        mmTokenStr, tempoTextLayout = M21Convert.getMMTokenAndTempoTextLayoutFromM21TempoIndication(
-                                            tempoIndication)
+                  tempoIndication: m21.tempo.TempoIndication) -> None:
+        mmTokenStr: str = ''       # e.g. '*MM128'
+        tempoTextLayout: str = ''  # e.g. '!LO:TX:a:t=[eighth]=82','!LO:TX:t=Andantino [eighth]=82'
+        mmTokenStr, tempoTextLayout = (
+            M21Convert.getMMTokenAndTempoTextLayoutFromM21TempoIndication(tempoIndication)
+        )
         staffIndex: int = 0
         voiceIndex: int = 0
         if mmTokenStr:
@@ -2006,9 +2252,12 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                    partIndex: int,
                    staffIndex: int,
                    event: EventData) -> int:
+        if t.TYPE_CHECKING:
+            assert isinstance(event.m21Object, m21.note.GeneralNote)
+
         staff: GridStaff = outSlice.parts[partIndex].staves[staffIndex]
         gnote: m21.note.GeneralNote = event.m21Object
-        verses: List[m21.note.Lyric] = []
+        verses: t.List[t.Optional[m21.note.Lyric]] = []
         if not hasattr(gnote, 'lyrics'):
             return 0
         if not gnote.lyrics:
@@ -2025,28 +2274,28 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 verses.append(lyric)
             elif 0 < number < len(verses):
                 # replace a verse for some reason
-                verses[number-1] = lyric
+                verses[number - 1] = lyric
             elif number > 0:
                 # more than one off the end, fill in with empty slots
                 oldLen: int = len(verses)
                 newLen: int = number
                 for _ in range(oldLen, newLen):
                     verses.append(None)
-                verses[number-1] = lyric
+                verses[number - 1] = lyric
 
         # now, in number order (with maybe some empty slots)
-        vLabelTokens: List[HumdrumToken] = [None] * len(verses)
+        vLabelTokens: t.List[t.Optional[HumdrumToken]] = [None] * len(verses)
         thereAreVerseLabels: bool = False
 
         for i, verse in enumerate(verses):
-            verseText: str = None
-            verseLabel: str = None
+            verseText: str = ''
+            verseLabel: str = ''
             if verse is not None:
                 # rawText handles elisions as well as syllabic-based hyphens
                 verseText = self._cleanSpaces(verse.rawText)
 
-				# escape text which would otherwise be reinterpreated
-				# as Humdrum syntax.
+                # escape text which would otherwise be reinterpreated
+                # as Humdrum syntax.
                 if verseText and verseText[0] in ('!', '*'):
                     verseText = '\\' + verseText
 
@@ -2054,13 +2303,15 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
                 # (which is always set to an integer for ordering), and we're uninterested
                 # in that for verse labeling purposes.  We're already ordering by number.
                 if verse.identifier != verse.number:
-                    verseLabel = verse.identifier
+                    # verse.identifier can return an int, but if set explicitly
+                    # we expect it to be set to str.  We cast to str, just in case.
+                    verseLabel = str(verse.identifier)
 
             if verseLabel:
                 vLabelTokens[i] = HumdrumToken('*v:' + verseLabel)
                 thereAreVerseLabels = True
 
-            verseToken: HumdrumToken = None
+            verseToken: HumdrumToken
             if verseText:
                 verseToken = HumdrumToken(verseText)
             else:
@@ -2097,7 +2348,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
     //
     // Tool_musicxml2hum::addHarmony --
     '''
-    def _addHarmony(self, part: GridPart,  #LATER: needs implementation
+    def _addHarmony(self, part: GridPart,  # LATER: needs implementation
                           event: EventData,
                           nowTime: HumNumIn,
                           partIndex: int) -> int:
@@ -2106,12 +2357,14 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         return 0
 
     '''
-        _makeScoreFromObject (et al) are here to turn any ProtoM21Object into a well-formed Score/Part/Measure/whatever stream.  stream.makeNotation will also be called.  Clients can avoid
-        this if they init with a Score, and set self.makeNotation to False before calling write().
+        _makeScoreFromObject (et al) are here to turn any ProtoM21Object into a well-formed
+        Score/Part/Measure/whatever stream.  stream.makeNotation will also be called.  Clients
+        can avoid this if they init with a Score, and set self.makeNotation to False before
+        calling write().
     '''
-    def _makeScoreFromObject(self, obj: m21.base.Music21Object) -> m21.stream.Score:
+    def _makeScoreFromObject(self, obj: m21.prebase.ProtoM21Object) -> m21.stream.Score:
         classes = obj.classes
-        outScore: m21.stream.Score = None
+        outScore: t.Optional[m21.stream.Score] = None
         for cM, methName in self._classMapping.items():
             if cM in classes:
                 meth = getattr(self, methName)
@@ -2171,33 +2424,34 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         '''
         if st.isFlat:
             # if it's flat, treat it like a Part (which will make measures)
-            st2 = m21.stream.Part()
-            st2.mergeAttributes(st)
-            st2.elements = copy.deepcopy(st)
+            part = m21.stream.Part()
+            part.mergeAttributes(st)
+            part.elements = copy.deepcopy(st)  # type: ignore
             if not st.getElementsByClass('Clef').getElementsByOffset(0.0):
-                st2.clef = m21.clef.bestClef(st2)
-            st2.makeNotation(inPlace=True)
-            st2.metadata = copy.deepcopy(self._getMetadataFromContext(st))
-            return self._fromPart(st2)
+                part.clef = m21.clef.bestClef(part)
+            part.makeNotation(inPlace=True)
+            part.metadata = copy.deepcopy(self._getMetadataFromContext(st))
+            return self._fromPart(part)
 
         if st.hasPartLikeStreams():
             # if it has part-like streams, treat it like a Score
-            st2 = m21.stream.Score()
-            st2.mergeAttributes(st)
-            st2.elements = copy.deepcopy(st)
-            st2.makeNotation(inPlace=True)
-            st2.metadata = copy.deepcopy(self._getMetadataFromContext(st))
-            return self._fromScore(st2)
+            score = m21.stream.Score()
+            score.mergeAttributes(st)
+            score.elements = copy.deepcopy(st)  # type: ignore
+            score.makeNotation(inPlace=True)
+            score.metadata = copy.deepcopy(self._getMetadataFromContext(st))
+            return self._fromScore(score)
 
-        if st.getElementsByClass('Stream').first().isFlat:
+        firstSubStream = st.getElementsByClass('Stream').first()
+        if firstSubStream is not None and firstSubStream.isFlat:
             # like a part w/ measures...
-            st2 = m21.stream.Part()
-            st2.mergeAttributes(st)
-            st2.elements = copy.deepcopy(st)
+            part = m21.stream.Part()
+            part.mergeAttributes(st)
+            part.elements = copy.deepcopy(st)  # type: ignore
             bestClef = not st.getElementsByClass('Clef').getElementsByOffset(0.0)
-            st2.makeNotation(inPlace=True, bestClef=bestClef)
-            st2.metadata = copy.deepcopy(self._getMetadataFromContext(st))
-            return self._fromPart(st2)
+            part.makeNotation(inPlace=True, bestClef=bestClef)
+            part.metadata = copy.deepcopy(self._getMetadataFromContext(st))
+            return self._fromPart(part)
 
         # probably a problem? or a voice...
         bestClef = not st.getElementsByClass('Clef').getElementsByOffset(0.0)
@@ -2213,10 +2467,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         # note
         nCopy = copy.deepcopy(n)
 
-        # modifies in place
-        m21.stream.makeNotation.makeTupletBrackets([nCopy.duration], inPlace=True)
         out = m21.stream.Measure(number=1)
         out.append(nCopy)
+        m21.stream.makeNotation.makeTupletBrackets(out, inPlace=True)
         return self._fromMeasure(out)
 
     def _fromPitch(self, p: m21.pitch.Pitch) -> m21.stream.Score:
@@ -2248,7 +2501,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         Rarely rarely used.  Only if you call .show() on a dynamic object
         '''
         dCopy = copy.deepcopy(dynamicObject)
-        out = m21.stream.Stream()
+        out: m21.stream.Stream = m21.stream.Stream()
         out.append(dCopy)
         return self._fromStream(out)
 
@@ -2282,6 +2535,9 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         and put it into a stream.Measure, then call
         fromMeasure on it.
         '''
+        if t.TYPE_CHECKING:
+            assert isinstance(scaleObject, m21.scale.ConcreteScale)
+
         m = m21.stream.Measure(number=1)
         for i in range(1, scaleObject.abstract.getDegreeMaxUnique() + 1):
             p = scaleObject.pitchFromDegree(i)
@@ -2298,7 +2554,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         m.timeSignature = m.bestTimeSignature()
         return self._fromMeasure(m)
 
-    def _fromMusic21Object(self, obj):
+    def _fromMusic21Object(self, obj) -> m21.stream.Score:
         '''
         return things such as a single TimeSignature as a score
         '''
@@ -2308,7 +2564,7 @@ Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''''
         return self._fromMeasure(out)
 
     @staticmethod
-    def _getMetadataFromContext(s: m21.stream.Stream):
+    def _getMetadataFromContext(s: m21.stream.Stream) -> t.Optional[m21.metadata.Metadata]:
         '''
         Get metadata from site or context, so that a Part
         can be shown and have the rich metadata of its Score

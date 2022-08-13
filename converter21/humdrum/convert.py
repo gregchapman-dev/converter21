@@ -13,8 +13,8 @@
 import sys
 import re
 import math
+import typing as t
 from fractions import Fraction
-from typing import Dict, List
 
 from music21.common import opFrac
 
@@ -46,7 +46,8 @@ class Convert:
     // default value: scale = 4 (duration in terms of quarter notes)
     // default value: separator = " " (sub-token separator)
     '''
-    _knownRecipDurationCache: Dict[str, HumNum] = {} # key is recip, value is duration: HumNum
+    # key is recip, value is duration
+    _knownRecipDurationCache: t.Dict[str, HumNum] = {}
 
     @staticmethod
     def recipToDuration(recip: str, scale: HumNumIn = opFrac(4)) -> HumNum:
@@ -57,9 +58,9 @@ class Convert:
         if 'q' in recip:
             # grace note, ignore printed rhythm
             Convert._knownRecipDurationCache[recip] = output
-            return output # 0
+            return output  # 0
 
-        subToken = recip.split(' ')[0] # we're only interested in the first subtoken
+        subToken = recip.split(' ')[0]  # we're only interested in the first subtoken
         dotCount = subToken.count('.')
 
         m = re.search(r'([\d]+)%([\d]+)', subToken)
@@ -70,8 +71,9 @@ class Convert:
             m = re.search(r'([\d]+)', subToken)
             if m is None:
                 # no rhythm found
-                # Convert._knownRecipDurationCache[recip] = output # don't fill cache with bad strings
-                return output # 0
+                # don't fill cache with bad strings
+                # Convert._knownRecipDurationCache[recip] = output
+                return output  # 0
 
             if m.group(1).startswith('0'):
                 # 0-symbol (e.g. '0' is 2/1, '00' is 4/1, '000' is 8/1, etc)
@@ -92,7 +94,7 @@ class Convert:
             # dotFactor =   2^(dotCount+1) - 1
             #               ------------------
             #                   2^dotCount
-            dotFactor = Fraction(pow(2, dotCount+1)-1, pow(2, dotCount))
+            dotFactor = Fraction(pow(2, dotCount + 1) - 1, pow(2, dotCount))
             dotFactor = opFrac(dotFactor)
 
         output = opFrac(output * dotFactor * scale)
@@ -122,11 +124,13 @@ class Convert:
     '''
     @staticmethod
     def timeSigToDuration(token, scale: HumNumIn = opFrac(4)) -> HumNum:
-        if not token.isTimeSignature:
+        from converter21.humdrum import HumdrumToken
+        tok: HumdrumToken = token
+        if not tok.isTimeSignature:
             return opFrac(0)
 
         # LATER: Handle extended **recip for time signature denominator
-        m = re.search(r'^\*M(\d+)/(\d+)', token.text)
+        m = re.search(r'^\*M(\d+)/(\d+)', tok.text)
         if m is None:
             return opFrac(0)
 
@@ -154,17 +158,17 @@ class Convert:
             return str(durFraction.denominator)
 
         if dur == 2:
-            return '0'    # breve
+            return '0'     # breve
         if dur == 3:
-            return '0.'   # dotted breve
+            return '0.'    # dotted breve
         if dur == 4:
-            return '00'   # long
+            return '00'    # long
         if dur == 6:
-            return '00.'  # dotted long
+            return '00.'   # dotted long
         if dur == 8:
-            return '000'  # maxima
+            return '000'   # maxima
         if dur == 12:
-            return '000.' # dotted maxima
+            return '000.'  # dotted maxima
 
         if durFraction.numerator == 0:
             # grace note
@@ -252,7 +256,7 @@ class Convert:
             if ch == 'u':
                 output = opFrac(Fraction(1, 16))
                 break
-            if ch == ' ': # token separator, we're done
+            if ch == ' ':  # token separator, we're done
                 # only get duration of first note in chord
                 break
 
@@ -287,7 +291,7 @@ class Convert:
                 output = opFrac(1)
                 break
             if ch == 'M':
-                output = opFrac(Fraction(1,2))
+                output = opFrac(Fraction(1, 2))
                 break
             if ch == 'm':
                 output = opFrac(Fraction(1, 4))
@@ -298,7 +302,7 @@ class Convert:
             if ch == 'u':
                 output = opFrac(Fraction(1, 16))
                 break
-            if ch == ' ': # token separator, we're done
+            if ch == ' ':  # token separator, we're done
                 # only get duration of first note in chord
                 break
 
@@ -391,37 +395,38 @@ class Convert:
         *** Tempo ***
     '''
 
-    namedTempoPatterns = { # some of these are actually regular expression patterns
-        'larghissimo'       : 24,
-        'adagissimo'        : 35,
-        'all.*molto'        : 146,
-        'all.*vivace'       : 144,
-        'all.*moderato'     : 116,
-        'all.*fuoco'        : 138,
-        'all.*presto'       : 160,
-        'grave'             : 40,
-        'largo'             : 45,
-        'lento?'            : 50,
-        'larghetto'         : 63,
-        'adagio'            : 70,
-        'adagietto'         : 74,
-        'andantino'         : 90,
-        'marcia moderato'   : 85,
-        'andante moderato'  : 92,
-        'allegretto'        : 116,
-        'rasch'             : 128,
-        'vivo'              : 152,
-        'vif'               : 152,
-        'vivace'            : 164,
-        'vivacissimo'       : 172,
-        'allegrissimo'      : 176,
-        'moderato'          : 108,
-        'andante'           : 88,
-        'presto'            : 180,
-        'allegro'           : 128,
-        'prestissimo'       : 208,
-        'bewegt'            : 144,
-        'all(?!a)'          : 128,
+    namedTempoPatterns: t.Dict[str, int] = {
+        # some of these are actually regular expression patterns
+        'larghissimo': 24,
+        'adagissimo': 35,
+        'all.*molto': 146,
+        'all.*vivace': 144,
+        'all.*moderato': 116,
+        'all.*fuoco': 138,
+        'all.*presto': 160,
+        'grave': 40,
+        'largo': 45,
+        'lento?': 50,
+        'larghetto': 63,
+        'adagio': 70,
+        'adagietto': 74,
+        'andantino': 90,
+        'marcia moderato': 85,
+        'andante moderato': 92,
+        'allegretto': 116,
+        'rasch': 128,
+        'vivo': 152,
+        'vif': 152,
+        'vivace': 164,
+        'vivacissimo': 172,
+        'allegrissimo': 176,
+        'moderato': 108,
+        'andante': 88,
+        'presto': 180,
+        'allegro': 128,
+        'prestissimo': 208,
+        'bewegt': 144,
+        'all(?!a)': 128,
     }
 
     '''
@@ -434,7 +439,7 @@ class Convert:
     // in the input text.
     '''
     @staticmethod
-    def tempoNameToBPM(name: str, timeSig: tuple) -> float:
+    def tempoNameToBPM(name: str, timeSig: t.Tuple[int, int]) -> float:
         # timeSig tuple is (top: int, bot: int, ... other stuff)
         top: int = timeSig[0]
         bot: int = timeSig[1]
@@ -478,15 +483,19 @@ class Convert:
 
         return output
 
-    _METRONOME_MARK_PATTERNS : List[str] = [
+    _METRONOME_MARK_PATTERNS: t.List[str] = [
         # the one with parens needs to come first or a string with parens will match the wrong
         # pattern, and instead of 'Allegro', you'll get 'Allegro ('.
-        r'(.*?)\s*(M\.M\.|M\. M\.|M\:M\:|M M)?\s*\(\[([^=\]]*)\]\s*=\s*(\d+\.?\d*)',   # e.g. 'Allegro M.M. ([quarter] = 128.0'
-        r'(.*?)\s*(M\.M\.|M\. M\.|M\:M\:|M M)?\s*\[([^=\]]*)\]\s*=\s*(\d+\.?\d*)',     # e.g. 'Allegro M.M. [quarter] = 128.0'
+        # With parens, e.g. 'Allegro M.M. ([quarter] = 128.0)'
+        r'(.*?)\s*(M\.M\.|M\. M\.|M\:M\:|M M)?\s*\(\[([^=\]]*)\]\s*=\s*(\d+\.?\d*)',
+        # Without parens, e.g. 'Allegro M.M. [quarter] = 128.0'
+        r'(.*?)\s*(M\.M\.|M\. M\.|M\:M\:|M M)?\s*\[([^=\]]*)\]\s*=\s*(\d+\.?\d*)',
     ]
 
     @staticmethod
-    def getMetronomeMarkInfo(text: str) -> (str, str, str, str):
+    def getMetronomeMarkInfo(
+            text: str
+    ) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[str], t.Optional[str]]:
         # takes strings like
         # "Andante M.M. [quarter] = 88.1"  # PATTERNS[0]
         # or
@@ -520,13 +529,13 @@ class Convert:
     // Convert::getLcm -- Return the Least Common Multiple of a list of numbers.
     '''
     @staticmethod
-    def getLcm(numbers: [int]) -> int:
-        if len(numbers) == 0:
+    def getLcm(nums: t.List[int]) -> int:
+        if len(nums) == 0:
             return 1
 
-        output: int = numbers[0]
-        for i in range(1, len(numbers)):
-            output = (output * numbers[i]) // math.gcd(output, numbers[i])
+        output: int = nums[0]
+        for i in range(1, len(nums)):
+            output = (output * nums[i]) // math.gcd(output, nums[i])
 
         return output
 
@@ -698,7 +707,7 @@ class Convert:
         renamed to getKernStemDirection, returns '/' or '\' or None
     '''
     @staticmethod
-    def getKernStemDirection(text: str) -> str:
+    def getKernStemDirection(text: str) -> t.Optional[str]:
         for ch in text:
             if ch == '/':
                 return '/'
@@ -903,7 +912,7 @@ class Convert:
     // Convert::kernClefToBaseline -- returns the diatonic pitch
     //    of the bottom line on the staff.
     '''
-    CLEF_TO_BASELINE_PITCH = {
+    CLEF_TO_BASELINE_PITCH: t.Dict[str, str] = {
         'G2': 'e',      # treble clef
         'F4': 'GG',     # bass clef
         'C3': 'F',      # alto clef
@@ -1010,6 +1019,7 @@ class Convert:
         'C^^4': 'dd',
         'C^^5': 'b',
     }
+
     @staticmethod
     def kernClefToBaseline(text: str) -> int:
         clefName: str = ''
@@ -1056,21 +1066,21 @@ class Convert:
         b40pc: int = 0
 
         if b7pc == 0:
-            b40pc = 0 # C
+            b40pc = 0   # C
         elif b7pc == 1:
-            b40pc = 6 # D
+            b40pc = 6   # D
         elif b7pc == 2:
-            b40pc = 12 # E
+            b40pc = 12  # E
         elif b7pc == 3:
-            b40pc = 17 # F
+            b40pc = 17  # F
         elif b7pc == 4:
-            b40pc = 23 # G
+            b40pc = 23  # G
         elif b7pc == 5:
-            b40pc = 29 # A
+            b40pc = 29  # A
         elif b7pc == 6:
-            b40pc = 35 # B
+            b40pc = 35  # B
 
-        return (octave * 40) + 2 + b40pc # +2, I assume, because 0 is C-double-flat --gregc
+        return (octave * 40) + 2 + b40pc  # +2, I assume, because 0 is C-double-flat --gregc
 
     '''
     //////////////////////////////
@@ -1142,24 +1152,24 @@ class Convert:
     @staticmethod
     def base40ToDiatonic(b40: int) -> int:
         if b40 < 0:
-            return -1 # rest
+            return -1  # rest
 
         chroma: int = b40 % 40
         octaveOffset: int = (b40 // 40) * 7
 
-        if chroma in (0,1,2,3,4):       # C-- to C##
+        if chroma in (0, 1, 2, 3, 4):       # C-- to C##
             return 0 + octaveOffset
-        if chroma in (6,7,8,9,10):      # D-- to D##
+        if chroma in (6, 7, 8, 9, 10):      # D-- to D##
             return 1 + octaveOffset
-        if chroma in (12,13,14,15,16):  # E-- to E##
+        if chroma in (12, 13, 14, 15, 16):  # E-- to E##
             return 2 + octaveOffset
-        if chroma in (17,18,19,20,21):  # F-- to F##
+        if chroma in (17, 18, 19, 20, 21):  # F-- to F##
             return 3 + octaveOffset
-        if chroma in (23,24,25,26,27):  # G-- to G##
+        if chroma in (23, 24, 25, 26, 27):  # G-- to G##
             return 4 + octaveOffset
-        if chroma in (29,30,31,32,33):  # A-- to A##
+        if chroma in (29, 30, 31, 32, 33):  # A-- to A##
             return 5 + octaveOffset
-        if chroma in (35,36,37,38,39):  # B-- to B##
+        if chroma in (35, 36, 37, 38, 39):  # B-- to B##
             return 6 + octaveOffset
 
         # found an empty slot, so return rest:
@@ -1178,7 +1188,7 @@ class Convert:
             # below would need fixing.
             return 0
 
-        b40pc: int = b40 % 40 # get rid of octave
+        b40pc: int = b40 % 40  # get rid of octave
         if b40pc == 0:
             return -2       # C-double-flat
         if b40pc == 1:
@@ -1301,7 +1311,7 @@ class Convert:
         return False
 
     @staticmethod
-    def computeDurationNoDotsAndNumDots(durWithDots: HumNumIn) -> (HumNum, int):
+    def computeDurationNoDotsAndNumDots(durWithDots: HumNumIn) -> t.Tuple[HumNum, t.Optional[int]]:
         dd: HumNum = opFrac(durWithDots)
         attemptedPowerOfTwo: HumNum = dd
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
@@ -1327,8 +1337,8 @@ class Convert:
         return (dd, None)
 
     @staticmethod
-    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNumIn) -> List[HumNum]:
-        output: List[HumNum] = []
+    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNumIn) -> t.List[HumNum]:
+        output: t.List[HumNum] = []
         ql: HumNum = opFrac(quarterLength)
 
         if Convert.isPowerOfTwoWithDots(ql):
@@ -1336,7 +1346,7 @@ class Convert:
             output.append(ql)
             return output
 
-        powerOfTwoQLAttempt: HumNum = opFrac(4) # start with whole note
+        powerOfTwoQLAttempt: HumNum = opFrac(4)  # start with whole note
         smallest: HumNum = opFrac(Fraction(1, 2048))
         while powerOfTwoQLAttempt >= smallest:
             if ql >= powerOfTwoQLAttempt:
@@ -1354,8 +1364,9 @@ class Convert:
         return [opFrac(quarterLength)]
 
     @staticmethod
-    def transToDiatonicChromatic(trans: str) -> (int, int):
-        m = re.search(r'd([+-]?\d+)c([+-]?\d+)', trans) # will match *ITrdNcM and *TrdNcM and dNcM
+    def transToDiatonicChromatic(trans: str) -> t.Tuple[t.Optional[int], t.Optional[int]]:
+        # This pattern will match *ITrdNcM and *TrdNcM and dNcM
+        m = re.search(r'd([+-]?\d+)c([+-]?\d+)', trans)
         if not m:
             return (None, None)
         return (int(m.group(1)), int(m.group(2)))
@@ -1364,36 +1375,36 @@ class Convert:
     def diatonicChromaticToTrans(d: int, c: int) -> str:
         return 'd' + str(d) + 'c' + str(c)
 
-    _humdrumBarlineStyleFromMeasureStyle: dict = {
-        MeasureStyle.Double                      : '||',
-        MeasureStyle.HeavyHeavy                  : '!!',
-        MeasureStyle.HeavyLight                  : '!|',
-        MeasureStyle.Final                       : '=', # actually '==', but first '=' is already there
-        MeasureStyle.Short                       : "'",
-        MeasureStyle.Tick                        : '`',
-        MeasureStyle.Invisible                   : '-',
-        MeasureStyle.Regular                     : '',
-        MeasureStyle.Heavy                       : '!',
-        MeasureStyle.RepeatBackwardRegular       : ':|',
-        MeasureStyle.RepeatBackwardHeavy         : ':!',
-        MeasureStyle.RepeatBackwardHeavyLight    : ':!|',
-        MeasureStyle.RepeatBackwardFinal         : ':|!',
-        MeasureStyle.RepeatBackwardHeavyHeavy    : ':!!',
-        MeasureStyle.RepeatBackwardDouble        : ':||',
-        MeasureStyle.RepeatForwardRegular        : '|:',
-        MeasureStyle.RepeatForwardHeavy          : '!:',
-        MeasureStyle.RepeatForwardHeavyLight     : '!|:',
-        MeasureStyle.RepeatForwardFinal          : '|!:',
-        MeasureStyle.RepeatForwardHeavyHeavy     : '!!:',
-        MeasureStyle.RepeatForwardDouble         : '||:',
-        MeasureStyle.RepeatBothRegular           : ':|:',
-        MeasureStyle.RepeatBothHeavy             : ':!:',
-        MeasureStyle.RepeatBothHeavyLight        : ':!|:', # unexpected asymmetry
-        MeasureStyle.RepeatBothFinal             : ':|!:', # unexpected asymmetry
-        MeasureStyle.RepeatBothHeavyHeavy        : ':!!:',
-        MeasureStyle.RepeatBothDouble            : ':||:',
-        MeasureStyle.RepeatBothHeavyLightHeavy   : ':!|!:',
-        MeasureStyle.RepeatBothLightHeavyLight   : ':|!|:'
+    _humdrumBarlineStyleFromMeasureStyle: t.Dict[MeasureStyle, str] = {
+        MeasureStyle.Double: '||',
+        MeasureStyle.HeavyHeavy: '!!',
+        MeasureStyle.HeavyLight: '!|',
+        MeasureStyle.Final: '=',                    # first '=' of '==' is already there
+        MeasureStyle.Short: "'",
+        MeasureStyle.Tick: '`',
+        MeasureStyle.Invisible: '-',
+        MeasureStyle.Regular: '',
+        MeasureStyle.Heavy: '!',
+        MeasureStyle.RepeatBackwardRegular: ':|',
+        MeasureStyle.RepeatBackwardHeavy: ':!',
+        MeasureStyle.RepeatBackwardHeavyLight: ':!|',
+        MeasureStyle.RepeatBackwardFinal: ':|!',
+        MeasureStyle.RepeatBackwardHeavyHeavy: ':!!',
+        MeasureStyle.RepeatBackwardDouble: ':||',
+        MeasureStyle.RepeatForwardRegular: '|:',
+        MeasureStyle.RepeatForwardHeavy: '!:',
+        MeasureStyle.RepeatForwardHeavyLight: '!|:',
+        MeasureStyle.RepeatForwardFinal: '|!:',
+        MeasureStyle.RepeatForwardHeavyHeavy: '!!:',
+        MeasureStyle.RepeatForwardDouble: '||:',
+        MeasureStyle.RepeatBothRegular: ':|:',
+        MeasureStyle.RepeatBothHeavy: ':!:',
+        MeasureStyle.RepeatBothHeavyLight: ':!|:',  # unexpected asymmetry
+        MeasureStyle.RepeatBothFinal: ':|!:',       # unexpected asymmetry
+        MeasureStyle.RepeatBothHeavyHeavy: ':!!:',
+        MeasureStyle.RepeatBothDouble: ':||:',
+        MeasureStyle.RepeatBothHeavyLightHeavy: ':!|!:',
+        MeasureStyle.RepeatBothLightHeavyLight: ':|!|:'
     }
 
     @staticmethod
@@ -1401,11 +1412,11 @@ class Convert:
         output: str = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
         return output
 
-    _humdrumFermataStyleFromFermataStyle: dict = {
-        FermataStyle.NoFermata      : '',
-        FermataStyle.Fermata        : ';',
-        FermataStyle.FermataAbove   : ';>',
-        FermataStyle.FermataBelow   : ';<',
+    _humdrumFermataStyleFromFermataStyle: t.Dict[FermataStyle, str] = {
+        FermataStyle.NoFermata: '',
+        FermataStyle.Fermata: ';',
+        FermataStyle.FermataAbove: ';>',
+        FermataStyle.FermataBelow: ';<',
     }
 
     @staticmethod

@@ -15,32 +15,31 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from typing import Union
+import typing as t
 
 from music21.common import opFrac
 
-from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumToken
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridVoice:
-    def __init__(self, token: Union[HumdrumToken,str] = None, duration: HumNumIn = opFrac(0)):
-        self._token: HumdrumToken = None
-        if isinstance(token, HumdrumToken) or token is None:
-            self._token = token
-        elif isinstance(token, str):
-            self._token = HumdrumToken(token)
-        else:
-            raise HumdrumInternalError(f'invalid type of token: {token}')
+    def __init__(
+            self,
+            token: t.Optional[t.Union[HumdrumToken, str]] = None,
+            duration: HumNumIn = opFrac(0)
+    ) -> None:
+        if isinstance(token, str):
+            token = HumdrumToken(token)
+        self._token: t.Optional[HumdrumToken] = token
 
         self._nextDur = opFrac(duration)
 #         self._prevDur = opFrac(0) # appears to be unused (never set to anything but zero)
@@ -56,20 +55,16 @@ class GridVoice:
     //
     // GridVoice::isTransfered -- True if token was copied to a HumdrumFile
     //      object.
+    // GridVoice::setTransfered -- True if the object should not be
+    //    deleted with the object is destroyed.  False if the token
+    //    is not NULL and should be deleted when object is destroyed.
     '''
     @property
     def isTransfered(self) -> bool:
         return self._isTransfered
 
-    '''
-    //////////////////////////////
-    //
-    // GridVoice::setTransfered -- True if the object should not be
-    //    deleted with the object is destroyed.  False if the token
-    //    is not NULL and should be deleted when object is destroyed.
-    '''
     @isTransfered.setter
-    def isTransfered(self, newIsTransfered: bool):
+    def isTransfered(self, newIsTransfered: bool) -> None:
         self._isTransfered = newIsTransfered
 
     '''
@@ -78,22 +73,14 @@ class GridVoice:
     // GridVoice::getToken --
     '''
     @property
-    def token(self) -> HumdrumToken:
+    def token(self) -> t.Optional[HumdrumToken]:
         return self._token
 
-    '''
-    //////////////////////////////
-    //
-    // GridVoice::setToken --
-    '''
     @token.setter
-    def token(self, newToken: Union[HumdrumToken, str]):
-        if isinstance(newToken, HumdrumToken) or newToken is None:
-            self._token = newToken
-        elif isinstance(newToken, str):
-            self._token = HumdrumToken(newToken)
-        else:
-            raise HumdrumInternalError(f'invalid type of token: {newToken}')
+    def token(self, newToken: t.Optional[t.Union[HumdrumToken, str]]) -> None:
+        if isinstance(newToken, str):
+            newToken = HumdrumToken(newToken)
+        self._token = newToken
 
         self._isTransfered = False
 
@@ -117,10 +104,10 @@ class GridVoice:
     '''
     @property
     def duration(self) -> HumNum:
-        return self._nextDur # + self._prevDur # prevDur is always zero, it seems
+        return self._nextDur  # + self._prevDur # prevDur is always zero, it seems
 
     @duration.setter
-    def duration(self, newDuration: HumNumIn):
+    def duration(self, newDuration: HumNumIn) -> None:
         self._nextDur = opFrac(newDuration)
 #         self._prevDur = opFrac(0)
 
@@ -131,6 +118,6 @@ class GridVoice:
     //      to some other object which is now responsible for
     //      deleting it.
     '''
-    def forgetToken(self):
+    def forgetToken(self) -> None:
         self.isTransfered = True
         self.token = None

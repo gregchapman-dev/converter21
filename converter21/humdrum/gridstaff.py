@@ -14,6 +14,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumdrumExportError
@@ -24,31 +25,30 @@ from converter21.humdrum import GridVoice
 from converter21.humdrum import GridSide
 
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridStaff():
-    def __init__(self):
-        self.voices: [GridVoice] = []
+    def __init__(self) -> None:
+        self.voices: t.List[t.Optional[GridVoice]] = []
         self.sides: GridSide = GridSide()
 
-    def __str__(self):
+    def __str__(self) -> str:
         output: str = ''
 
         for i, gv in enumerate(self.voices):
             if gv is None:
                 output += '{nv}'
+            elif gv.token is None:
+                output += '{n}'
             else:
-                if gv.token is None:
-                    output += '{n}'
-                else:
-                    output += gv.token.text
+                output += gv.token.text
 
             if i < len(self.voices) - 1:
                 output += '\t'
@@ -66,11 +66,11 @@ class GridStaff():
         return 1
 
     @property
-    def dynamics(self) -> HumdrumToken:
+    def dynamics(self) -> t.Optional[HumdrumToken]:
         return self.sides.dynamics
 
     @dynamics.setter
-    def dynamics(self, newDynamics: HumdrumToken):
+    def dynamics(self, newDynamics: t.Optional[HumdrumToken]) -> None:
         self.sides.dynamics = newDynamics
 
 
@@ -87,14 +87,14 @@ class GridStaff():
             raise HumdrumInternalError(f'Error: layer index is {layerIndex} for {token}')
 
         if layerIndex > len(self.voices) - 1:
-            for _ in range(len(self.voices), layerIndex + 1): # range includes layerIndex
+            for _ in range(len(self.voices), layerIndex + 1):  # range includes layerIndex
                 self.voices.append(None)
 
         gv: GridVoice = GridVoice(token, duration)
         self.voices[layerIndex] = gv
         return gv
 
-    def setNullTokenLayer(self, layerIndex: int, sliceType: SliceType, nextDur: HumNum):
+    def setNullTokenLayer(self, layerIndex: int, sliceType: SliceType, nextDur: HumNum) -> None:
         if sliceType == SliceType.Invalid:
             return
         if sliceType == SliceType.GlobalLayouts:
@@ -117,18 +117,21 @@ class GridStaff():
             raise HumdrumInternalError(f'!!STRANGE ERROR: {self}, SLICE TYPE: {sliceType}')
 
         if layerIndex < len(self.voices):
-            if (self.voices[layerIndex] is not None
-                    and self.voices[layerIndex].token is not None):
-                if self.voices[layerIndex].token.text == nullStr:
-				    # there is already a null data token here, so don't
-				    # replace it.
+            voice: t.Optional[GridVoice] = self.voices[layerIndex]
+            if voice is not None and voice.token is not None:
+                if voice.token.text == nullStr:
+                    # there is already a null data token here, so don't
+                    # replace it.
                     return
-                raise HumdrumExportError('Warning, existing token: \'{self.voices[layerIndex].token.text}\' where a null token should be.')
+                raise HumdrumExportError(
+                    f'Warning, existing token: \'{voice.token.text}\' where '
+                    'a null token should be.'
+                )
 
         token: HumdrumToken = HumdrumToken(nullStr)
         self.setTokenLayer(layerIndex, token, nextDur)
 
-# appendTokenLayer goes here, but no-one calls it
+    # appendTokenLayer goes here, but no-one calls it
 
     @property
     def maxVerseCount(self) -> int:

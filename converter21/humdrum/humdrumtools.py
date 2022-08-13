@@ -13,8 +13,8 @@
 import sys
 import re
 import math
+import typing as t
 from fractions import Fraction
-from typing import List, Optional
 
 from music21.common import opFrac
 
@@ -26,25 +26,25 @@ from converter21.humdrum import Convert
 
 class ToolTremolo:
     # Tremolo expansion tool.
-    def __init__(self, infile: HumdrumFile):
+    def __init__(self, infile: HumdrumFile) -> None:
         self.infile: HumdrumFile = infile
-        self.markupTokens: List[HumdrumToken] = []
-        self.firstTremoloLinesInTrack: List[List[Optional[HumdrumLine]]] = []
-        self.lastTremoloLinesInTrack: List[List[Optional[HumdrumLine]]] = []
+        self.markupTokens: t.List[HumdrumToken] = []
+        self.firstTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
+        self.lastTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
 
     '''
     //////////////////////////////
     //
     // Tool_tremolo::processFile --
     '''
-    def processFile(self):
+    def processFile(self) -> None:
         if self.infileNeedsToBeParsed():
             self.infile.analyzeBase()
             self.infile.analyzeStructure()
             if not self.infile.isValid:
                 return
 
-        for _ in range(0, self.infile.maxTrack+1):
+        for _ in range(0, self.infile.maxTrack + 1):
             self.firstTremoloLinesInTrack.append([])
             self.lastTremoloLinesInTrack.append([])
 
@@ -65,7 +65,7 @@ class ToolTremolo:
                 if not m:
                     continue
 
-                self.markupTokens.insert(0, token) # markupTokens is in forward order
+                self.markupTokens.insert(0, token)  # markupTokens is in forward order
 
                 value: int = int(m.group(1))
                 duration: HumNum = Convert.recipToDuration(token.text)
@@ -105,8 +105,10 @@ class ToolTremolo:
 
     def notesFoundInTrackBetweenLineIndices(self, track: int, startIdx: int, endIdx: int) -> bool:
         # Check every line between startIdx and endIdx, NOT inclusive at either end
-        for i in range(startIdx+1, endIdx):
-            line: HumdrumLine = self.infile[i]
+        for i in range(startIdx + 1, endIdx):
+            line: t.Optional[HumdrumLine] = self.infile[i]
+            if line is None:
+                continue
             for token in line.tokens():
                 if token.track == track:
                     if token.isNote:
@@ -118,27 +120,33 @@ class ToolTremolo:
     //
     // Tool_tremolo::addTremoloInterpretations --
     '''
-    def addTremoloInterpretations(self):
+    def addTremoloInterpretations(self) -> None:
         # These starts/stops are exactly what music21 has, which is per beam-group.
         # We would like to avoid a stop immediately followed by a start (as redundant).
         # Or even a stop and then a start with no actual notes between them.
         # So we first "optimize" this.
         for track, (firstLines, lastLines) in enumerate(zip(
-                                                self.firstTremoloLinesInTrack,
-                                                self.lastTremoloLinesInTrack)):
-            lastLineRemovalIndices: List[int] = []
-            firstLineRemovalIndices: List[int] = []
-            currLastLineIndex: int = None
-            prevLastLineIndex: int = None
-            currFirstLineIndex: int = None
+                self.firstTremoloLinesInTrack,
+                self.lastTremoloLinesInTrack)):
+            lastLineRemovalIndices: t.List[int] = []
+            firstLineRemovalIndices: t.List[int] = []
+            currLastLineIndex: t.Optional[int] = None
+            prevLastLineIndex: t.Optional[int] = None
+            currFirstLineIndex: t.Optional[int] = None
             for idx, (firstLine, lastLine) in enumerate(zip(firstLines, lastLines)):
+                if t.TYPE_CHECKING:
+                    # self.{first,last}TremoloLinesInTrack should be filled in by now
+                    assert firstLine is not None
+                    assert lastLine is not None
+
                 prevLastLineIndex = currLastLineIndex
                 currFirstLineIndex = firstLine.lineIndex
                 currLastLineIndex = lastLine.lineIndex
 
                 if prevLastLineIndex is not None:
-                    if not self.notesFoundInTrackBetweenLineIndices(track, prevLastLineIndex, currFirstLineIndex):
-                        lastLineRemovalIndices.append(idx-1)
+                    if not self.notesFoundInTrackBetweenLineIndices(
+                            track, prevLastLineIndex, currFirstLineIndex):
+                        lastLineRemovalIndices.append(idx - 1)
                         firstLineRemovalIndices.append(idx)
 
             for lineIndexToRemove in reversed(lastLineRemovalIndices):
@@ -147,17 +155,21 @@ class ToolTremolo:
                 firstLines.pop(lineIndexToRemove)
 
 
+        line: HumdrumLine
+
         # Insert starting *tremolo(s)
         for track, firstLines in enumerate(self.firstTremoloLinesInTrack):
-            if not firstLines: # no first times in this track
+            if not firstLines:
+                # no first times in this track
                 continue
 
             for firstLine in firstLines:
                 if firstLine is None:
                     continue
 
-                line: HumdrumLine = self.infile.insertNullInterpretationLineAt(
-                                                            firstLine.lineIndex)
+                line = self.infile.insertNullInterpretationLineAt(
+                    firstLine.lineIndex
+                )
                 if line is None:
                     continue
 
@@ -179,8 +191,9 @@ class ToolTremolo:
                 if lastLine is None:
                     continue
 
-                line: HumdrumLine = self.infile.insertNullInterpretationLineAt(
-                                                            lastLine.lineIndex+1)
+                line = self.infile.insertNullInterpretationLineAt(
+                    lastLine.lineIndex + 1
+                )
                 if line is None:
                     continue
 
@@ -198,27 +211,24 @@ class ToolTremolo:
     //
     // Tool_tremolo::expandTremolos --
     '''
-    def expandTremolos(self):
-        i = 0
-        while i < len(self.markupTokens):
-            token: HumdrumToken = self.markupTokens[i]
+    def expandTremolos(self) -> None:
+        for token in self.markupTokens:
+            # if we have already replaced the '@' or '@@' token with an expansion note,
+            # we just skip it here.
+            if '@' not in token.text:
+                continue
+
             if '@@' in token.text:
-                token2: Optional[HumdrumToken] = None
-                if i+1 < len(self.markupTokens):
-                    token2 = self.markupTokens[i+1]
-                self.expandFingerTremolo(token, token2)
-                i += 2
+                self.expandFingerTremolo(token)
             else:
-                self.expandTremolo(self.markupTokens[i])
-                i += 1
+                self.expandTremolo(token)
 
     '''
     //////////////////////////////
     //
     // Tool_tremolo::expandTremolo --
     '''
-    def expandTremolo(self, token: HumdrumToken):
-        value: int = 0
+    def expandTremolo(self, token: HumdrumToken) -> None:
         addBeam: bool = False
         tnotes: int = -1
 
@@ -292,7 +302,14 @@ class ToolTremolo:
         if hasBeamStop:
             terminal += endBeam
 
-        # remove slur end from start of tremolo:
+        # remove tie continue from start of tremolo (leave tie start/end in place)
+        initial = re.sub(r'_+[<>]?', '', initial)
+        # remove tie information from middle of tremolo
+        base = re.sub(r'[\[_\]]+[<>]?', '', base)
+        # remove tie information from end of tremolo
+        terminal = re.sub(r'[\[_\]]+[<>]?', '', terminal)
+
+        # remove slur start from end of tremolo:
         terminal = re.sub(r'[(]+[<>]', '', terminal)
 
         token.text = initial
@@ -301,7 +318,7 @@ class ToolTremolo:
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token.durationFromStart
         timestamp: HumNum = opFrac(startTime + increment)
-        currTok: HumdrumToken = token.nextToken(0)
+        currTok: t.Optional[HumdrumToken] = token.nextToken(0)
         counter: int = 1
 
         while currTok is not None:
@@ -309,7 +326,7 @@ class ToolTremolo:
                 currTok = currTok.nextToken(0)
                 continue
 
-            duration: HumNum = currTok.ownerLine.duration
+            duration = currTok.ownerLine.duration
             if duration == 0:
                 # grace note line, so skip
                 currTok = currTok.nextToken(0)
@@ -343,14 +360,41 @@ class ToolTremolo:
     '''
     //////////////////////////////
     //
+    // Tool_tremolo::getNextNote --
+    '''
+    def getNextNote(self, token: HumdrumToken) -> t.Optional[HumdrumToken]:
+        output: t.Optional[HumdrumToken] = None
+        current: t.Optional[HumdrumToken] = token.nextToken0
+
+        while current is not None:
+            if not current.isData:
+                current = current.nextToken0
+                continue
+            if current.duration == 0:
+                # ignore grace notes
+                current = current.nextToken0
+                continue
+            if current.isNull or current.isRest:
+                current = current.nextToken0
+                continue
+
+            output = current
+            break
+
+        return output
+
+    '''
+    //////////////////////////////
+    //
     // Tool_tremolo::expandFingerTremolos --
     '''
-    def expandFingerTremolo(self, token1: HumdrumToken, token2: HumdrumToken):
+    def expandFingerTremolo(self, token1: HumdrumToken) -> None:
+        token2: t.Optional[HumdrumToken] = self.getNextNote(token1)
         if token2 is None:
             return
 
         m = re.search(r'@@(\d+)@@', token1.text)
-        if not m:
+        if m is None:
             return
 
         value: int = int(m.group(1))
@@ -392,9 +436,13 @@ class ToolTremolo:
         initial: str = base1 + startBeam
         # remove slur end from start of tremolo
         initial = re.sub(r'[)]+[<>]?', '', initial)
+        # remove tie continue from start of tremolo (leave tie start/end in place)
+        initial = re.sub(r'_+[<>]?', '', initial)
 
         # remove slur information from middle of tremolo
         base1 = re.sub(r'[()]+[<>]?', '', base1)
+        # remove tie information from middle of tremolo
+        base1 = re.sub(r'[\[_\]]+[<>]?', '', base1)
 
         token1.text = initial
         token1.ownerLine.createLineFromTokens()
@@ -407,13 +455,15 @@ class ToolTremolo:
         terminal: str = base2 + endBeam
         # remove slur start information from end of tremolo:
         terminal = re.sub(r'[(]+[<>]?', '', terminal)
+        # remove tie information from end of tremolo
+        terminal = re.sub(r'[\[_\]]+[<>]?', '', terminal)
 
         state: bool = False
 
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token1.durationFromStart
         timestamp: HumNum = opFrac(startTime + increment)
-        currTok: HumdrumToken = token1.nextToken(0)
+        currTok: t.Optional[HumdrumToken] = token1.nextToken(0)
         counter: int = 1
         while currTok is not None:
             if not currTok.isData:
@@ -460,12 +510,12 @@ class ToolTremolo:
     //
     // Tool_tremolo::storeFirstTremoloNote --
     '''
-    def storeFirstTremoloNoteInfo(self, token: HumdrumToken):
+    def storeFirstTremoloNoteInfo(self, token: HumdrumToken) -> None:
         if token is None:
             return
 
-        track: int = token.track
-        if track < 1:
+        track: t.Optional[int] = token.track
+        if track is None:
             print(f'Track is not set for token: {token}', file=sys.stderr)
             return
 
@@ -476,12 +526,12 @@ class ToolTremolo:
     //
     // Tool_tremolo::storeLastTremoloNote --
     '''
-    def storeLastTremoloNoteInfo(self, token: HumdrumToken):
+    def storeLastTremoloNoteInfo(self, token: HumdrumToken) -> None:
         if token is None:
             return
 
-        track: int = token.track
-        if track < 1:
+        track: t.Optional[int] = token.track
+        if track is None:
             print(f'Track is not set for token: {token}', file=sys.stderr)
             return
 

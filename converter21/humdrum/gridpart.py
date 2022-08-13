@@ -13,27 +13,28 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
 
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridSide
 
-### For debug or unit test print, a simple way to get a string which is the current function name
-### with a colon appended.
+# For debug or unit test print, a simple way to get a string which is the current function name
+# with a colon appended.
 # for current func name, specify 0 or no argument.
 # for name of caller of current func, specify 1.
 # for name of caller of caller of current func, specify 2. etc.
 # pylint: disable=protected-access
-funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  #pragma no cover
+funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
 
 class GridPart:
-    def __init__(self):
-        self.staves: [GridStaff] = []
+    def __init__(self) -> None:
+        self.staves: t.List[GridStaff] = []
         self.sides: GridSide = GridSide()
         self._partName: str = ''
 
-    def __str__(self):
-        output:str = ''
+    def __str__(self) -> str:
+        output: str = ''
         for s, staff in enumerate(self.staves):
             output += '(s' + str(s) + ':)'
             if staff is None:
@@ -42,11 +43,11 @@ class GridPart:
             for v, voice in enumerate(staff.voices):
                 output += '(v' + str(v) + ':)'
                 if voice is None:
-                    output += '{n}'
+                    output += '{nv}'
                     continue
                 if voice.token is None:
                     output += '{n}'
-                else:
-                    output += voice.token.text
+                    continue
+                output += voice.token.text
         output += ' ppp ' + str(self.sides)
         return output
