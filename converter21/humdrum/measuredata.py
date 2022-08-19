@@ -77,6 +77,11 @@ class MeasureData:
         # use when writing a barline ('=') token.
         self.fermataStyle: FermataStyle = FermataStyle.NoFermata
 
+        self.inRepeatBracket: bool = False
+        self.startsRepeatBracket: bool = False
+        self.stopsRepeatBracket: bool = False
+        self.repeatBracketName: str = ''
+
         self._measureNumberString: str = ''
         self.events: t.List[EventData] = []
         self.sortedEvents: t.List[SimultaneousEvents] = []  # list of startTime-binned events
@@ -199,6 +204,34 @@ class MeasureData:
                 event: EventData = EventData(inst, elementIndex, -1, self)
                 if event is not None:
                     self.events.append(event)
+
+        # parse any RepeatBracket this measure is in.
+        for rb in self.spannerBundle:
+            if not isinstance(rb, m21.spanner.RepeatBracket):
+                # not a repeat bracket
+                continue
+
+            if self.m21Measure not in rb:
+                # not our repeat bracket
+                continue
+
+            # measure is in this RepeatBracket
+            self.inRepeatBracket = True
+            if rb.overrideDisplay:
+                self.repeatBracketName = rb.overrideDisplay
+            else:
+                self.repeatBracketName = rb.number
+
+            if rb.getFirst() == self.m21Measure:
+                # this measure starts the RepeatBracket (it may also stop it)
+                self.startsRepeatBracket = True
+
+            if rb.getLast() == self.m21Measure:
+                # this measure stops the RepeatBracket (it may also start it)
+                self.stopsRepeatBracket = True
+
+            # a measure can only be in one RepeatBracket, so stop looking
+            break
 
         if len(list(self.m21Measure.voices)) == 0:
             # treat the measure itself as voice 0

@@ -510,6 +510,7 @@ class HumdrumFile(HumdrumFileContent):
         self._sectionLabels: t.List[t.Optional[HumdrumToken]] = []
         self._numberlessLabels: t.List[t.Optional[HumdrumToken]] = []
         self._lastSection: str = ''
+        self._endingNum: int = 0
         self._currentEndingPerStaff: t.List[m21.spanner.RepeatBracket] = []
 
         # staff group names and abbreviations

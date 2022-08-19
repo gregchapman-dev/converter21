@@ -13,6 +13,7 @@
 import sys
 import copy
 from collections import OrderedDict
+from enum import IntEnum, auto
 import typing as t
 
 import music21 as m21
@@ -50,6 +51,15 @@ from converter21.humdrum import ToolTremolo
 # pylint: disable=protected-access
 funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
+
+class RepeatBracketState(IntEnum):
+    NoSet = 0
+    SetStart = 1
+    BracketStart = 2
+    BracketContinue = 3
+    BracketStop = 4
+    SetStop = 5
+
 
 class HumdrumWriter:
     Debug: bool = False  # can be set to True for more debugging
@@ -1100,9 +1110,115 @@ class HumdrumWriter:
             status = status and self._insertMeasure(outgrid, m)
 
         self._moveBreaksToEndOfPreviousMeasure(outgrid)
+        self._insertRepeatBracketSlices(outgrid)
         self._insertPartNames(outgrid)
 
         return status
+
+
+    @staticmethod
+    def _insertRepeatBracketSlices(outgrid: HumGrid) -> None:
+        if not outgrid.hasRepeatBrackets:
+            return
+
+        # the suffix of a bracket's section name in a Humdrum file must be numeric
+        # if the bracket name is not numeric, just use 1, 2, 3 instead (it ain't
+        # right, but it's better than no bracket at all).
+        fallbackNumber: int = 1
+
+        def getName(sectionName: str, bracketName: str) -> str:
+            try:
+                bracketNumber = int(bracketName)
+            except ValueError:
+                bracketNumber = fallbackNumber
+                fallbackNumber += 1
+            return f'*>{sectionName}{bracketNumber}'
+
+        currSectionName: str = 'A'
+        state: RepeatBracketState = RepeatBracketState.NoSet
+
+        for m, gm in enumerate(outgrid.measures):
+            gmprev: t.Optional[GridMeasure]
+            if m == 0:
+                gmprev = None
+            else:
+                gmprev = outgrid.measures[i - 1]
+
+            gmnext: t.Optional[GridMeasure]
+            if m == len(outgrid.measures) - 1:
+                gmnext = None
+            else:
+                gmnext = outgrid.measures[i + 1]
+
+            if state == RepeatBracketState.NoSet and not gm.inRepeatBracket:
+                # this is almost always true: we're not currently within repeat
+                # brackets and this measure isn't in one either.  Get out quick
+                # to avoid the state machine gauntlet.
+                continue
+
+            # state machine
+            if state == RepeatBracketState.NoSet:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # emit '*>An'
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # emit '*>An'
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a start/stop,
+                    # and emit '*>An' even though there was no start.
+                    # emit '*>An'
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # illegal, but we will treat it like a start,
+                    # and emit '*>An' even though there was no start.
+                    # emit '*>An'
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket
+                    # This won't happen, we already handled it before the state machine code.
+                    state = RepeatBracketState.NoSet
+
+            elif state == RepeatBracketState.InBracket:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a stopsRepeatBracket
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # illegal, but we will fake a stop to make it legal.
+                    # InBracket + stopsRepeatBracket -> FinishedBracket
+                    # FinishedBracket + startsRepeatBracket does:
+                    # emit '*>An'
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket:
+                    # illegal, but we will fake a stop to make it legal.
+                    # InBracket + stopsRepeatBracket -> FinishedBracket
+                    # FinishedBracket + not inRepeatBracket does:
+                    # emit '*>B' to make it clear that A endings are done
+                    state = RepeatBracketState.NoSet
+
+            elif state == RepeatBracketState.FinishedBracket:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # emit '*>An'
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # emit '*>An'
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a start/stop,
+                    # and emit '*>An' even though there was no start.
+                    # emit '*>An'
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # illegal, but we will treat it like a start,
+                    # and emit '*>An' even though there was no start.
+                    # emit '*>An'
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket:
+                    # emit '*>B' to make it clear that A endings are done
+                    state = RepeatBracketState.NoSet
 
     '''
     //////////////////////////////
@@ -1245,6 +1361,14 @@ class HumdrumWriter:
                 # barline fermatas, on the other hand, need to be checked in every staff
                 gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
                 gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
+
+                # repeat brackets
+                gm.inRepeatBracket = xmeasure.inRepeatBracket
+                gm.startsRepeatBracket = xmeasure.startsRepeatBracket
+                gm.stopsRepeatBracket = xmeasure.stopsRepeatBracket
+                gm.repeatBracketName = xmeasure.repeatBracketName
+                if gm.inRepeatBracket:
+                    outgrid.hasRepeatBrackets = True
 
         curTime: t.List[HumNum] = [opFrac(-1)] * len(measureDatas)
         measureDurs: t.List[t.Optional[HumNum]] = [None] * len(measureDatas)
