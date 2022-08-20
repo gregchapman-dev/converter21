@@ -10,9 +10,9 @@ from tests.Utilities import *
 def test_DateSingle():
     string = '///::.11'  # eleven one-hundredths of a second
     dateSingle = M21Convert.m21DateObjectFromString(string)
-    CheckM21DateSingle(dateSingle, expectedSecond = 0.11)
+    CheckM21DateSingle(dateSingle, expectedSecond = 0)
     newString: str = M21Convert.stringFromM21DateObject(dateSingle)
-    CheckString(newString, expectedString = '///::00.11') # adds leading '00'
+    CheckString(newString, expectedString = '///::') # truncates the 11 milliseconds, so no seconds at all
 
     string = 'year/month/day/hour:minutes:.11'  # unparseable (but reasonably well-formed)
     dateSingle = M21Convert.m21DateObjectFromString(string)
@@ -22,9 +22,9 @@ def test_DateSingle():
 
     string = '///::11' # 11th second
     dateSingle = M21Convert.m21DateObjectFromString(string)
-    CheckM21DateSingle(dateSingle, expectedSecond = 11.0)
+    CheckM21DateSingle(dateSingle, expectedSecond = 11)
     newString: str = M21Convert.stringFromM21DateObject(dateSingle)
-    CheckString(newString, expectedString = '///::11.00') # adds trailing '.00'
+    CheckString(newString, expectedString = '///::11')
 
     string = '///:11' # 11th minute
     dateSingle = M21Convert.m21DateObjectFromString(string)
@@ -182,13 +182,13 @@ def test_DateSingle():
                                    expectedDay = 1,
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 58.999,
+                                   expectedSecond = 58,  # truncated off the 999 milliseconds
                                    expectedYearError = 'uncertain',
                                    expectedMonthError = 'approximate',
                                    expectedDayError = 'uncertain',
                                    expectedRelevance = 'uncertain')
     newString: str = M21Convert.stringFromM21DateObject(dateSingle)
-    CheckString(newString, expectedString = '?1979z/06x/01z/17:03:59.00') # rounds to 2 decimal places
+    CheckString(newString, expectedString = '?1979z/06x/01z/17:03:58')
 
     string = '?1979z/06x/01z/17:03:59.999'
     dateSingle = M21Convert.m21DateObjectFromString(string)
@@ -197,13 +197,13 @@ def test_DateSingle():
                                    expectedDay = 1,
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 59.999,
+                                   expectedSecond = 59,
                                    expectedYearError = 'uncertain',
                                    expectedMonthError = 'approximate',
                                    expectedDayError = 'uncertain',
                                    expectedRelevance = 'uncertain')
     newString: str = M21Convert.stringFromM21DateObject(dateSingle)
-    CheckString(newString, expectedString = '?1979z/06x/01z/17:03:59.99') # truncates to 2 decimal places if it would have rounded to '60.00', which makes no sense in a timestamp.
+    CheckString(newString, expectedString = '?1979z/06x/01z/17:03:59')
 
     string = '1979z/06x/01z/17x:03z:59.999x'
     dateSingle = M21Convert.m21DateObjectFromString(string)
@@ -212,7 +212,7 @@ def test_DateSingle():
                                    expectedDay = 1,
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 59.999,
+                                   expectedSecond = 59,
                                    expectedYearError = 'uncertain',
                                    expectedMonthError = 'approximate',
                                    expectedDayError = 'uncertain',
@@ -221,7 +221,7 @@ def test_DateSingle():
                                    expectedSecondError = 'approximate',
                                    expectedRelevance = 'certain')
     newString: str = M21Convert.stringFromM21DateObject(dateSingle)
-    CheckString(newString, expectedString = '1979z/06x/01z/17x:03z:59.99x') # truncates to 2 decimal places if it would have rounded to '60.00', which makes no sense in a timestamp.
+    CheckString(newString, expectedString = '1979z/06x/01z/17x:03z:59x')
 
     # test a DateSingle object that was created by hand to be problematic for the writer...
     # We have an invalid yearError, which we should ignore, since it has no associated
@@ -242,7 +242,7 @@ def test_DateRelative():
                                    expectedDay = 1,
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 59.999,
+                                   expectedSecond = 59,
                                    expectedYearError = 'uncertain',
                                    expectedMonthError = 'approximate',
                                    expectedDayError = 'uncertain',
@@ -251,7 +251,7 @@ def test_DateRelative():
                                    expectedSecondError = 'approximate',
                                    expectedRelevance = 'after')
     newString: str = M21Convert.stringFromM21DateObject(dateRelative)
-    CheckString(newString, expectedString = '>1979z/06x/01z/17x:03z:59.99x') # truncates to 2 decimal places if it would have rounded to '60.00', which makes no sense in a timestamp.
+    CheckString(newString, expectedString = '>1979z/06x/01z/17x:03z:59x')
 
     string = '<1979z/06x/01z/17x:03z:59.999x'
     dateRelative = M21Convert.m21DateObjectFromString(string)
@@ -260,7 +260,7 @@ def test_DateRelative():
                                    expectedDay = 1,
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 59.999,
+                                   expectedSecond = 59,
                                    expectedYearError = 'uncertain',
                                    expectedMonthError = 'approximate',
                                    expectedDayError = 'uncertain',
@@ -269,7 +269,7 @@ def test_DateRelative():
                                    expectedSecondError = 'approximate',
                                    expectedRelevance = 'prior')
     newString: str = M21Convert.stringFromM21DateObject(dateRelative)
-    CheckString(newString, expectedString = '<1979z/06x/01z/17x:03z:59.99x') # truncates to 2 decimal places if it would have rounded to '60.00', which makes no sense in a timestamp.
+    CheckString(newString, expectedString = '<1979z/06x/01z/17x:03z:59x')
 
     # Try one with a '<' in the wrong location to make sure it doesn't parse
     string = '1979</06/01/17:03:56'
@@ -284,37 +284,37 @@ def test_DateRelative():
 def test_DateBetween():
     # a few straightforward examples (using both '-' and '^'), then some malformed ones (e.g.
     # 3 dates instead of two, or two dates, one of which is malformed, or 1 date)
-    string = '1979/06/01/17:03:56.00-1979/06/30/17:03:56.00' # June 1-30, 1979 (timestamps equal)
+    string = '1979/06/01/17:03:56-1979/06/30/17:03:56' # June 1-30, 1979 (timestamps equal)
     dateBetween = M21Convert.m21DateObjectFromString(string)
     CheckM21DateBetween(dateBetween, expectedYear = 1979,
                                    expectedMonth = 6,
                                    expectedDay = (1, 30),
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 56.0)
+                                   expectedSecond = 56)
     newString: str = M21Convert.stringFromM21DateObject(dateBetween)
     CheckString(newString, expectedString = string)
 
-    string = '1979/06/01/17:03:56.00^1979/06/30/17:03:56.00' # June 1-30, 1979 (timestamps equal)
+    string = '1979/06/01/17:03:56^1979/06/30/17:03:56' # June 1-30, 1979 (timestamps equal)
     dateBetween = M21Convert.m21DateObjectFromString(string)
     CheckM21DateBetween(dateBetween, expectedYear = 1979,
                                    expectedMonth = 6,
                                    expectedDay = (1, 30),
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 56.0)
+                                   expectedSecond = 56)
     newString: str = M21Convert.stringFromM21DateObject(dateBetween)
-    CheckString(newString, expectedString = '1979/06/01/17:03:56.00-1979/06/30/17:03:56.00') # ^ -> -
+    CheckString(newString, expectedString = '1979/06/01/17:03:56-1979/06/30/17:03:56') # ^ -> -
 
     # this one has a backward range.  Apparently no-one cares...
-    string = '1979/06/30/17:03:56.00-1979/06/01/17:03:56.00' # June 30-1, 1979 (timestamps equal)
+    string = '1979/06/30/17:03:56-1979/06/01/17:03:56' # June 30-1, 1979 (timestamps equal)
     dateBetween = M21Convert.m21DateObjectFromString(string)
     CheckM21DateBetween(dateBetween, expectedYear = 1979,
                                    expectedMonth = 6,
                                    expectedDay = (30, 1),
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 56.0)
+                                   expectedSecond = 56)
     newString: str = M21Convert.stringFromM21DateObject(dateBetween)
     CheckString(newString, expectedString = string)
 
@@ -337,7 +337,7 @@ def test_DateBetween():
 
 def test_DateSelection():
     # a few straightforward examples, then some malformed ones
-    string = '1979/06/01/17:03:56.00|1979/06/30/17:03:56.00' # June 1 or June 30, 1979 (timestamps equal)
+    string = '1979/06/01/17:03:56|1979/06/30/17:03:56' # June 1 or June 30, 1979 (timestamps equal)
     dateSelection = M21Convert.m21DateObjectFromString(string)
     CheckM21DateSelection(dateSelection, expectedNumDates = 2,
                                    expectedYear = 1979,
@@ -345,12 +345,12 @@ def test_DateSelection():
                                    expectedDay = (1, 30),
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 56.0)
+                                   expectedSecond = 56)
     newString: str = M21Convert.stringFromM21DateObject(dateSelection)
     CheckString(newString, expectedString = string)
 
     # June 1, June 15, or June 30, 1979 (timestamps equal)
-    string = '1979/06/01/17:03:56.00|1979/06/15/17:03:56.00|1979/06/30/17:03:56.00'
+    string = '1979/06/01/17:03:56|1979/06/15/17:03:56|1979/06/30/17:03:56'
     dateSelection = M21Convert.m21DateObjectFromString(string)
     CheckM21DateSelection(dateSelection, expectedNumDates = 3,
                                    expectedYear = 1979,
@@ -358,7 +358,7 @@ def test_DateSelection():
                                    expectedDay = (1, 15, 30),
                                    expectedHour = 17,
                                    expectedMinute = 3,
-                                   expectedSecond = 56.0)
+                                   expectedSecond = 56)
     newString: str = M21Convert.stringFromM21DateObject(dateSelection)
     CheckString(newString, expectedString = string)
 

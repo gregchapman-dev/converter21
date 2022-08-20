@@ -31,6 +31,7 @@ from converter21.humdrum import HumdrumToken
 from converter21.humdrum import Convert
 from converter21.humdrum import M21Utilities
 
+
 class M21Convert:
     humdrumMensurationSymbolToM21TimeSignatureSymbol: t.Dict[str, str] = {
         'c': 'common',  # modern common time (4/4)
@@ -1989,7 +1990,7 @@ class M21Convert:
 
     @staticmethod
     def _getHumdrumStringFromM21Expressions(
-            m21Expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]],
+            m21Expressions: t.Sequence[t.Union[m21.expressions.Expression, m21.spanner.Spanner]],
             duration: m21.duration.Duration,
             recip: str,
             beamStarts: t.Optional[int] = None,
@@ -2622,11 +2623,10 @@ class M21Convert:
         'year', 'month', 'day', 'hour', 'minute', 'second'
     ]
     _dateAttrStrFormat: t.List[str] = [
-        '%i', '%02.i', '%02.i', '%02.i', '%02.i', '%05.2f'
+        '%i', '%02.i', '%02.i', '%02.i', '%02.i', '%02.i'
     ]
 
-    # two digits past decimal point because of '%05.2f' in _dateAttrStrFormat[5]
-    _highestSecondString: str = '59.99'
+    _highestSecondString: str = '59'
 
     @staticmethod
     def _dateFromString(dateStr: str) -> t.Optional[m21.metadata.Date]:
@@ -2650,8 +2650,9 @@ class M21Convert:
                 if value == '':
                     values.append(None)
                 elif i == 5:
-                    # second is a float
-                    values.append(float(value))
+                    # second is a float, but music21 has started ignoring milliseconds recently
+                    # so we convert from str to float and then to int (truncating).
+                    values.append(int(float(value)))
                     gotOne = True
                 else:
                     values.append(int(value))
@@ -2675,9 +2676,15 @@ class M21Convert:
         return date
 
     @staticmethod
-    def stringFromM21DateObject(m21Date: m21.metadata.DateSingle) -> str:
+    def stringFromM21DateObject(
+        m21Date: t.Union[
+            m21.metadata.DateSingle,
+            m21.metadata.DateRelative,
+            m21.metadata.DateBetween,
+            m21.metadata.DateSelection]
+    ) -> str:
         # m21Date is DateSingle, DateRelative, DateBetween, or DateSelection
-        # (all derive from DateSingle)
+        # (all derive from DateSingle (v7) or DatePrimitive (v8))
         # pylint: disable=protected-access
         output: str = ''
         dateString: str
@@ -2737,14 +2744,14 @@ class M21Convert:
                 msg.append('')
             else:
                 fmt = M21Convert._dateAttrStrFormat[i]
-                sub = fmt % value
+                sub = fmt % int(value)
                 if i == 0:  # year
                     # check for negative year, and replace '-' with '@'
                     if len(sub) >= 2 and sub[0] == '-':
                         sub = '@' + sub[1:]
                 elif i == 5:  # seconds
                     # Check for formatted seconds starting with '60' (due to rounding) and
-                    # truncate to '59.99'. That's easier than doing rounding correctly
+                    # truncate to '59'. That's easier than doing rounding correctly
                     # (carrying into minutes, hours, days, etc).
                     if sub.startswith('60'):
                         sub = M21Convert._highestSecondString
@@ -2778,7 +2785,12 @@ class M21Convert:
 
     @staticmethod
     def humdrumMetadataValueToM21MetadataValue(humdrumValue: m21.metadata.Text) -> t.Any:
-        m21Value: t.Optional[t.Union[m21.metadata.Text, m21.metadata.DateSingle]] = None
+        m21Value: t.Optional[t.Union[
+            m21.metadata.Text,
+            m21.metadata.DateSingle,
+            m21.metadata.DateRelative,
+            m21.metadata.DateBetween,
+            m21.metadata.DateSelection]] = None
 
         if humdrumValue.encodingScheme == 'humdrum:date':
             # convert to m21.metadata.DateXxxx
@@ -2860,8 +2872,12 @@ class M21Convert:
                 else:
                     hdKey += '@@' + value.language.upper()
             valueStr = str(value)
-        elif isinstance(value, m21.metadata.DateSingle):
-            # all metadata DateXxxx types derive from DateSingle
+        elif isinstance(value,
+                (m21.metadata.DateSingle,
+                m21.metadata.DateRelative,
+                m21.metadata.DateBetween,
+                m21.metadata.DateSelection)
+        ):
             # We don't like str(DateXxxx)'s results so we do our own.
             valueStr = M21Convert.stringFromM21DateObject(value)
         elif isinstance(value, m21.metadata.Contributor):

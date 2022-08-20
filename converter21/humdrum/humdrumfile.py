@@ -2651,14 +2651,16 @@ class HumdrumFile(HumdrumFileContent):
         # can see is m21ToXML.py, which handles placement == None by not specifying placement
         # in the output XML.  That is exactly what we want as default behavior, so we will
         # always set tuplet.placement to None as a default.
-        tuplet.placement = None  # our better default
+
+        # our better default
+        tuplet.placement = None  # type: ignore
 
         # I have the same issue with music21's default tuplet bracket, which is True.
         # I want to default to unspecified, which is None.  Unfortunately, m21ToXML.py
         # doesn't check for tuplet.bracket == None, like it does for tuplet.placement,
         # so I'll need to update that at some point.  For now, m21ToXML.py will treat
         # None as False, which seems wrong, but not fatally so. --gregc
-        tuplet.bracket = None
+        tuplet.bracket = None  # type: ignore
 
         # print('_makeTuplet: tuplet =', tuplet, file=sys.stderr)
         return tuplet

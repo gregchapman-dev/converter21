@@ -1438,9 +1438,10 @@ class HumdrumWriter:
                         hasTransposition = True
                         foundNonGrace = True
                 elif isinstance(m21Obj, m21.layout.StaffLayout):
-                    staffLines[pindex].append((sindex, m21Obj.staffLines))
-                    hasStaffLines = True
-                    foundNonGrace = True
+                    if m21Obj.staffLines is not None:
+                        staffLines[pindex].append((sindex, m21Obj.staffLines))
+                        hasStaffLines = True
+                        foundNonGrace = True
                 elif isinstance(m21Obj, m21.meter.TimeSignature):
                     timeSigs[pindex].append((sindex, m21Obj))
                     hasTimeSig = True
@@ -1865,8 +1866,8 @@ class HumdrumWriter:
     def _processPrintElement(outgm: GridMeasure,
                              m21Obj: t.Union[m21.layout.PageLayout, m21.layout.SystemLayout],
                              nowTime: HumNumIn) -> None:
-        isPageBreak: bool = isinstance(m21Obj, m21.layout.PageLayout) and m21Obj.isNew
-        isSystemBreak: bool = isinstance(m21Obj, m21.layout.SystemLayout) and m21Obj.isNew
+        isPageBreak: bool = isinstance(m21Obj, m21.layout.PageLayout) and m21Obj.isNew is True
+        isSystemBreak: bool = isinstance(m21Obj, m21.layout.SystemLayout) and m21Obj.isNew is True
 
         if not isPageBreak and not isSystemBreak:
             return
