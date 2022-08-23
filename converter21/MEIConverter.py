@@ -11,6 +11,14 @@
 # Note:         This was copied verbatim from music21/converter/subConverters.py, and then modified
 #               to live in converter21.  My hope is to eventually re-submit this as a PR to music21.
 # ------------------------------------------------------------------------------
+import typing as t
+import pathlib
+
+from music21 import stream
+from music21.converter.subConverters import SubConverter
+
+from converter21.mei import MeiToM21Converter
+
 class ConverterMEI(SubConverter):
     '''
     Converter for MEI. You must use an ".mei" file extension for MEI files because music21 will
@@ -22,7 +30,11 @@ class ConverterMEI(SubConverter):
     # registerShowFormats = ('mei',)
     # registerOutputExtensions = ('mei',)
 
-    def parseData(self, dataString: str, number=None) -> 'music21.stream.Stream':
+    def parseData(
+        self,
+        dataString: str,
+        number: t.Optional[int] = None
+    ) -> t.Union[stream.Score, stream.Part, stream.Opus]:
         '''
         Convert a string with an MEI document into its corresponding music21 elements.
 
@@ -32,20 +44,27 @@ class ConverterMEI(SubConverter):
 
         Returns the music21 objects corresponding to the MEI file.
         '''
-        from music21 import mei
         if dataString.startswith('mei:'):
             dataString = dataString[4:]
 
-        self.stream = mei.MeiToM21Converter(dataString).run()
+        self.stream = MeiToM21Converter(dataString).run()
 
-        return self.stream
+        output: stream.Stream = self.stream
+
+        if t.TYPE_CHECKING:
+            # self.stream is a property defined in SubConverter, and it's not
+            # type-hinted properly.  But we know what this is.
+            assert isinstance(output, (stream.Score, stream.Part, stream.Opus))
+
+        return output
+
 
     def parseFile(
         self,
         filePath: t.Union[str, pathlib.Path],
         number: t.Optional[int] = None,
         **keywords,
-    ) -> 'music21.stream.Stream':
+    ) -> stream.Stream:
         '''
         Convert a file with an MEI document into its corresponding music21 elements.
 
@@ -57,6 +76,7 @@ class ConverterMEI(SubConverter):
         '''
         # In Python 3 we try the two most likely encodings to work. (UTF-16 is outputted from
         # "sibmei", the Sibelius-to-MEI exporter).
+        dataStream: str
         try:
             with open(filePath, 'rt', encoding='utf-8') as f:
                 dataStream = f.read()
