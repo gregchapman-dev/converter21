@@ -53,12 +53,9 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class RepeatBracketState(IntEnum):
-    NoSet = 0
-    SetStart = 1
-    BracketStart = 2
-    BracketContinue = 3
-    BracketStop = 4
-    SetStop = 5
+    NoEndings = 0
+    InBracket = 1
+    FinishedBracket = 2
 
 
 class HumdrumWriter:
@@ -1135,29 +1132,29 @@ class HumdrumWriter:
             return f'*>{sectionName}{bracketNumber}'
 
         currSectionName: str = 'A'
-        state: RepeatBracketState = RepeatBracketState.NoSet
+        state: RepeatBracketState = RepeatBracketState.NoEndings
 
         for m, gm in enumerate(outgrid.measures):
             gmprev: t.Optional[GridMeasure]
             if m == 0:
                 gmprev = None
             else:
-                gmprev = outgrid.measures[i - 1]
+                gmprev = outgrid.measures[m - 1]
 
             gmnext: t.Optional[GridMeasure]
             if m == len(outgrid.measures) - 1:
                 gmnext = None
             else:
-                gmnext = outgrid.measures[i + 1]
+                gmnext = outgrid.measures[m + 1]
 
-            if state == RepeatBracketState.NoSet and not gm.inRepeatBracket:
+            if state == RepeatBracketState.NoEndings and not gm.inRepeatBracket:
                 # this is almost always true: we're not currently within repeat
                 # brackets and this measure isn't in one either.  Get out quick
                 # to avoid the state machine gauntlet.
                 continue
 
             # state machine
-            if state == RepeatBracketState.NoSet:
+            if state == RepeatBracketState.NoEndings:
                 if gm.startsRepeatBracket and gm.stopsRepeatBracket:
                     # emit '*>An'
                     state = RepeatBracketState.FinishedBracket
@@ -1176,7 +1173,7 @@ class HumdrumWriter:
                     state = RepeatBracketState.InBracket
                 else:  # not gm.inRepeatBracket
                     # This won't happen, we already handled it before the state machine code.
-                    state = RepeatBracketState.NoSet
+                    state = RepeatBracketState.NoEndings
 
             elif state == RepeatBracketState.InBracket:
                 if gm.startsRepeatBracket and gm.stopsRepeatBracket:
@@ -1197,7 +1194,7 @@ class HumdrumWriter:
                     # InBracket + stopsRepeatBracket -> FinishedBracket
                     # FinishedBracket + not inRepeatBracket does:
                     # emit '*>B' to make it clear that A endings are done
-                    state = RepeatBracketState.NoSet
+                    state = RepeatBracketState.NoEndings
 
             elif state == RepeatBracketState.FinishedBracket:
                 if gm.startsRepeatBracket and gm.stopsRepeatBracket:
@@ -1218,7 +1215,7 @@ class HumdrumWriter:
                     state = RepeatBracketState.InBracket
                 else:  # not gm.inRepeatBracket:
                     # emit '*>B' to make it clear that A endings are done
-                    state = RepeatBracketState.NoSet
+                    state = RepeatBracketState.NoEndings
 
     '''
     //////////////////////////////
