@@ -25,4 +25,4 @@ refer to the :mod:`~music21.mei.base` module's documentation.
 #       and functions that will be used regularly by other parts of music21, which is probably just
 #       the MeiToM21Converter used by the MEI-specific SubConverter class. Everything else belongs
 #       in its 'music21.mei.base.*' module, or similar.
-from music21.mei.base import MeiToM21Converter
+from .base import MeiToM21Converter

@@ -12,7 +12,7 @@
 These are the public interfaces for the MEI module by Christopher Antila
 
 To convert a string with MEI markup into music21 objects,
-use :meth:`~music21.mei.MeiToM21Converter.convertFromString`.
+use :meth:`~converter21.mei.MeiToM21Converter.convertFromString`.
 
 In the future, most of the functions in this module should be moved to a separate, import-only
 module, so that functions for writing music21-to-MEI will fit nicely.
@@ -54,8 +54,8 @@ document.
 ...     </music>
 ... </mei>
 ... """
->>> from music21 import *
->>> conv = mei.MeiToM21Converter(meiString)
+>>> from converter21.mei.base import MeiToM21Converter
+>>> conv = MeiToM21Converter(meiString)
 >>> result = conv.run()
 >>> result
 <music21.stream.Score 0x10ee474f0>
@@ -183,6 +183,8 @@ from uuid import uuid4
 
 # music21
 from music21.base import Music21Object
+from music21.common.types import OffsetQL
+from music21.common.numberTools import opFrac
 from music21 import articulations
 from music21 import bar
 from music21 import chord
@@ -201,7 +203,7 @@ from music21 import stream
 from music21 import spanner
 from music21 import tie
 
-environLocal = environment.Environment('mei.base')
+environLocal = environment.Environment('converter21.mei.base')
 
 
 # Module-Level Constants
@@ -253,9 +255,11 @@ _WRONG_ROOT_ELEMENT = 'Root element should be <mei> in the MEI namespace, not <{
 _UNKNOWN_TAG = 'Found unexpected tag while parsing MEI: <{}>.'
 _UNEXPECTED_ATTR_VALUE = 'Unexpected value for "{}" attribute: {}'
 _SEEMINGLY_NO_PARTS = 'There appear to be no <staffDef> tags in this score.'
+_STAFF_MUST_HAVE_N = 'Found a <staff> tag with no @n attribute'
 _MISSING_VOICE_ID = 'Found a <layer> without @n attribute and no override.'
 _CANNOT_FIND_XMLID = 'Could not find the @{} so we could not create the {}.'
 _MISSING_TUPLET_DATA = 'Both @num and @numbase attributes are required on <tuplet> tags.'
+_TUPLET_WITH_NO_NOTES = '<tuplet> must contain at least one note/chord/rest'
 _UNIMPLEMENTED_IMPORT = 'Importing {} without {} is not yet supported.'
 _UNPROCESSED_SUBELEMENT = 'Found an unprocessed <{}> element in a <{}>.'
 _MISSED_DATE = 'Unable to decipher the composition date "{}"'
@@ -309,9 +313,9 @@ class MeiToM21Converter:
         # corresponding to those attributes' values.
         self.m21Attr: defaultdict = defaultdict(lambda: {})
 
-        # This SpannerBundle holds the slurs that will be created by _ppSlurs() and used while
-        # importing whatever note, rest, chord, or other object.
-        self.slurBundle: spanner.SpannerBundle = spanner.SpannerBundle()
+        # This SpannerBundle holds (among other things) the slurs that will be created by
+        # _ppSlurs() and used while importing whatever note, rest, chord, or other object.
+        self.spannerBundle: spanner.SpannerBundle = spanner.SpannerBundle()
 
     def run(self) -> t.Union[stream.Score, stream.Part, stream.Opus]:
         '''
@@ -328,9 +332,12 @@ class MeiToM21Converter:
         _ppConclude(self)
 
         environLocal.printDebug('*** processing <score> elements')
-        theScore: stream.Score = scoreFromElement(
-            self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}score'),
-            self.slurBundle)
+        scoreElem: t.Optional[Element] = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}score')
+        if scoreElem is None:
+            # no <score> found, return an empty Score
+            return stream.Score()
+
+        theScore: stream.Score = scoreFromElement(scoreElem, self.spannerBundle)
 
         environLocal.printDebug('*** preparing metadata')
         theScore.metadata = makeMetadata(self.documentRoot)
@@ -360,7 +367,7 @@ def safePitch(
 
     Returns A :class:`~music21.pitch.Pitch` with the appropriate properties.
 
-    >>> from music21.mei.base import safePitch  # OMIT_FROM_DOCS
+    >>> from converter21.mei.base import safePitch  # OMIT_FROM_DOCS
     >>> safePitch('D#6')
     <music21.pitch.Pitch D#6>
     >>> safePitch('D', '#', '6')
@@ -393,19 +400,19 @@ def makeDuration(
 
     **Examples**
 
-    >>> from music21 import *
+    >>> from converter21.mei.base import makeDuration
     >>> from fractions import Fraction
-    >>> mei.base.makeDuration(base=2.0, dots=0).quarterLength  # half note, no dots
+    >>> makeDuration(base=2.0, dots=0).quarterLength  # half note, no dots
     2.0
-    >>> mei.base.makeDuration(base=2.0, dots=1).quarterLength  # half note, one dot
+    >>> makeDuration(base=2.0, dots=1).quarterLength  # half note, one dot
     3.0
-    >>> mei.base.makeDuration(base=2, dots=2).quarterLength  # 'base' can be an int or float
+    >>> makeDuration(base=2, dots=2).quarterLength  # 'base' can be an int or float
     3.5
-    >>> mei.base.makeDuration(2.0, 10).quarterLength  # you want ridiculous dots? Sure...
+    >>> makeDuration(2.0, 10).quarterLength  # you want ridiculous dots? Sure...
     3.998046875
-    >>> mei.base.makeDuration(0.33333333333333333333, 0).quarterLength  # works with fractions too
+    >>> makeDuration(0.33333333333333333333, 0).quarterLength  # works with fractions too
     Fraction(1, 3)
-    >>> mei.base.makeDuration(Fraction(1, 3), 1).quarterLength
+    >>> makeDuration(Fraction(1, 3), 1).quarterLength
     0.5
     '''
     returnDuration: duration.Duration = duration.Duration(base)
@@ -413,7 +420,7 @@ def makeDuration(
     return returnDuration
 
 
-def allPartsPresent(scoreElem) -> t.Tuple[str, ...]:
+def allPartsPresent(scoreElem: Element) -> t.Tuple[str, ...]:
     # noinspection PyShadowingNames
     '''
     Find the @n values for all <staffDef> elements in a <score> element. This assumes that every
@@ -439,9 +446,9 @@ def allPartsPresent(scoreElem) -> t.Tuple[str, ...]:
     ...     </section>
     ... </score>"""
     >>> import xml.etree.ElementTree as ETree
-    >>> from music21 import *
+    >>> from converter21.mei.base import allPartsPresent
     >>> meiDoc = ETree.fromstring(meiDoc)
-    >>> mei.base.allPartsPresent(meiDoc)
+    >>> allPartsPresent(meiDoc)
     ('1', '2')
 
     Even though there are three <staffDef> elements in the document, there are only two unique @n
@@ -449,12 +456,13 @@ def allPartsPresent(scoreElem) -> t.Tuple[str, ...]:
     same staff---not that there is a new staff.
     '''
     # xpathQuery = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}staffDef'
-    xpathQuery = f'.//{MEI_NS}staffDef'
-    partNs = []  # hold the @n attribute for all the parts
+    xpathQuery: str = f'.//{MEI_NS}staffDef'
+    partNs: t.List[str] = []  # hold the @n attribute for all the parts
 
     for staffDef in scoreElem.findall(xpathQuery):
-        if staffDef.get('n') not in partNs:
-            partNs.append(staffDef.get('n'))
+        nStr: t.Optional[str] = staffDef.get('n')
+        if nStr and nStr not in partNs:
+            partNs.append(nStr)
     if not partNs:
         raise MeiValidityError(_SEEMINGLY_NO_PARTS)
     return tuple(partNs)
@@ -552,12 +560,12 @@ def _attrTranslator(
 
     Examples:
 
-    >>> from music21.mei.base import _attrTranslator, _ACCID_ATTR_DICT, _DUR_ATTR_DICT
+    >>> from converter21.mei.base import _attrTranslator, _ACCID_ATTR_DICT, _DUR_ATTR_DICT
     >>> _attrTranslator('s', 'accid', _ACCID_ATTR_DICT)
     '#'
     >>> _attrTranslator('9', 'dur', _DUR_ATTR_DICT)
     Traceback (most recent call last):
-    music21.mei.base.MeiValueError: Unexpected value for "dur" attribute: 9
+    converter21.mei.base.MeiValueError: Unexpected value for "dur" attribute: 9
     '''
     try:
         return mapping[attr]
@@ -569,8 +577,8 @@ def _accidentalFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
     '''
     Use :func:`_attrTranslator` to convert the value of an "accid" attribute to its music21 string.
 
-    >>> from music21 import *
-    >>> mei.base._accidentalFromAttr('s')
+    >>> from converter21.mei.base import _accidentalFromAttr
+    >>> _accidentalFromAttr('s')
     '#'
     '''
     return _attrTranslator(attr, 'accid', _ACCID_ATTR_DICT)
@@ -581,8 +589,8 @@ def _accidGesFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
     Use :func:`_attrTranslator` to convert the value of an @accid.ges
     attribute to its music21 string.
 
-    >>> from music21 import *
-    >>> mei.base._accidGesFromAttr('s')
+    >>> from converter21.mei.base import _accidGesFromAttr
+    >>> _accidGesFromAttr('s')
     '#'
     '''
     return _attrTranslator(attr, 'accid.ges', _ACCID_GES_ATTR_DICT)
@@ -592,8 +600,8 @@ def _qlDurationFromAttr(attr: t.Optional[str]) -> float:
     '''
     Use :func:`_attrTranslator` to convert an MEI "dur" attribute to a music21 quarterLength.
 
-    >>> from music21 import *
-    >>> mei.base._qlDurationFromAttr('4')
+    >>> from converter21.mei.base import _qlDurationFromAttr
+    >>> _qlDurationFromAttr('4')
     1.0
 
     .. note:: This function only handles data.DURATION.cmn, not data.DURATION.mensural.
@@ -631,7 +639,7 @@ def _makeArticList(attr: str) -> t.List[articulations.Articulation]:
     return articList
 
 
-def _getOctaveShift(dis: t.Optional[t.Literal['8', '15', '22']], disPlace: str) -> int:
+def _getOctaveShift(dis: t.Optional[str], disPlace: t.Optional[str]) -> int:
     '''
     Use :func:`_getOctaveShift` to calculate the :attr:`octaveShift` attribute for a
     :class:`~music21.clef.Clef` subclass. Any of the arguments may be ``None``.
@@ -645,6 +653,9 @@ def _getOctaveShift(dis: t.Optional[t.Literal['8', '15', '22']], disPlace: str) 
     # NB: dis: 8, 15, or 22 (or "ottava" clefs)
     # NB: dis.place: "above" or "below" depending on whether the ottava clef is Xva or Xvb
     octavesDict = {None: 0, '8': 1, '15': 2, '22': 3}
+    if dis not in octavesDict:
+        return 0
+
     if 'below' == disPlace:
         return -1 * octavesDict[dis]
     else:
@@ -660,7 +671,7 @@ def _sharpsFromAttr(signature: t.Optional[str]) -> int:
     :returns: The number of sharps.
     :rtype: int
 
-    >>> from music21.mei.base import _sharpsFromAttr
+    >>> from converter21.mei.base import _sharpsFromAttr
     >>> _sharpsFromAttr('3s')
     3
     >>> _sharpsFromAttr('3f')
@@ -688,7 +699,7 @@ def _ppSlurs(theConverter: MeiToM21Converter):
     Pre-processing helper for :func:`convertFromString` that handles slurs specified in <slur>
     elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
     processed. This function reads from ``theConverter.documentRoot`` and writes into
-    ``theConverter.m21Attr`` and ``theConverter.slurBundle``.
+    ``theConverter.m21Attr`` and ``theConverter.spannerBundle``.
 
     :param theConverter: The object responsible for storing data about this import.
     :type theConverter: :class:`MeiToM21Converter`.
@@ -697,8 +708,8 @@ def _ppSlurs(theConverter: MeiToM21Converter):
 
     The slur preprocessor adds @m21SlurStart and @m21SlurEnd attributes to elements that are at the
     beginning or end of a slur. The value of these attributes is the ``idLocal`` of a :class:`Slur`
-    in the :attr:`slurBundle` attribute of ``theConverter``. This attribute is not part of the MEI
-    specification, and must therefore be handled specially.
+    in the :attr:`spannerBundle` attribute of ``theConverter``. This attribute is not part of the
+    MEI specification, and must therefore be handled specially.
 
     If :func:`noteFromElement` encounters an element like ``<note m21SlurStart="82f87cd7"/>``, the
     resulting :class:`music21.note.Note` should be set as the starting point of the slur with an
@@ -728,26 +739,27 @@ def _ppSlurs(theConverter: MeiToM21Converter):
     ...     </section>
     ...     </score></music>
     ... </mei>"""
-    >>> from music21 import *
-    >>> theConverter = mei.base.MeiToM21Converter(meiDoc)
+    >>> from converter21.mei import MeiToM21Converter
+    >>> from converter21.mei.base import _ppSlurs
+    >>> theConverter = MeiToM21Converter(meiDoc)
     >>>
-    >>> mei.base._ppSlurs(theConverter)
+    >>> _ppSlurs(theConverter)
     >>> 'm21SlurStart' in theConverter.m21Attr['1234']
     True
     >>> 'm21SlurEnd' in theConverter.m21Attr['2345']
     True
-    >>> theConverter.slurBundle
+    >>> theConverter.spannerBundle
     <music21.spanner.SpannerBundle of size 1>
-    >>> firstSpanner = list(theConverter.slurBundle)[0]
+    >>> firstSpanner = list(theConverter.spannerBundle)[0]
     >>> (theConverter.m21Attr['1234']['m21SlurStart'] ==
     ...  theConverter.m21Attr['2345']['m21SlurEnd'] ==
     ...  firstSpanner.idLocal)
     True
 
-    This example is a little artificial because of the limitations of a doctest, where we need to
-    know all values in advance. The point here is that the values of 'm21SlurStart' and 'm21SlurEnd'
-    of a particular slur-attached object will match the 'idLocal' of a slur in :attr:`slurBundle`.
-    The "id" is a UUID determined at runtime, which looks something like
+    This example is a little artificial because of the limitations of a doctest, where we need
+    to know all values in advance. The point here is that the values of 'm21SlurStart' and
+    'm21SlurEnd' of a particular slur-attached object will match the 'idLocal' of a slur in
+    :attr:`spannerBundle`. The "id" is a UUID determined at runtime, which looks something like
     ``'d3731f89-8a2f-4b82-ad02-f0bc6f5f8b04'``.
     '''
     environLocal.printDebug('*** pre-processing slurs')
@@ -764,7 +776,7 @@ def _ppSlurs(theConverter: MeiToM21Converter):
                 # work around Spanner.idLocal being incorrectly type-hinted as None
                 assert isinstance(thisSlur.idLocal, str)
             thisSlur.idLocal = thisIdLocal
-            c.slurBundle.append(thisSlur)
+            c.spannerBundle.append(thisSlur)
 
             c.m21Attr[removeOctothorpe(eachSlur.get('startid'))]['m21SlurStart'] = thisIdLocal
             c.m21Attr[removeOctothorpe(eachSlur.get('endid'))]['m21SlurEnd'] = thisIdLocal
@@ -969,11 +981,11 @@ def _ppConclude(theConverter: MeiToM21Converter):
 # Helper Functions
 # -----------------------------------------------------------------------------
 def _processEmbeddedElements(
-    elements: t.List[Element],
-    mapping: t.Dict[str, t.Callable],
+    elements: t.Iterable[Element],
+    mapping: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]],
     callerTag: t.Optional[str] = None,
-    slurBundle: t.Optional[spanner.SpannerBundle] = None
-):
+    spannerBundle: t.Optional[spanner.SpannerBundle] = None
+) -> t.List[Music21Object]:
     # noinspection PyShadowingNames
     '''
     From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each element
@@ -992,8 +1004,8 @@ def _processEmbeddedElements(
     :param str callerTag: The tag of the element on behalf of which this function is processing
         sub-elements (e.g., 'note' or 'staffDef'). Do not include < and >. This is used in a
         warning message on finding an unprocessed element.
-    :param slurBundle: A slur bundle, as used by the other :func:`*fromElements` functions.
-    :type slurBundle: :class:`music21.spanner.SlurBundle`
+    :param spannerBundle: A slur bundle, as used by the other :func:`*fromElements` functions.
+    :type spannerBundle: :class:`music21.spanner.SpannerBundle`
     :returns: A list of the music21 objects returned by the converter functions, or an empty list
         if no objects were returned.
     :rtype: sequence of :class:`~music21.base.Music21Object`
@@ -1003,10 +1015,11 @@ def _processEmbeddedElements(
     Because there is no ``'rest'`` key in the ``mapping``, that :class:`Element` is ignored.
 
     >>> from xml.etree.ElementTree import Element
-    >>> from music21 import *
+    >>> from music21 import note
+    >>> from converter21.mei.base import _processEmbeddedElements
     >>> elements = [Element('note'), Element('rest'), Element('note')]
     >>> mapping = {'note': lambda x, y: note.Note('D2')}
-    >>> mei.base._processEmbeddedElements(elements, mapping, 'doctest')
+    >>> _processEmbeddedElements(elements, mapping, 'doctest')
     [<music21.note.Note D>, <music21.note.Note D>]
 
     If debugging is enabled for the previous example, this warning would be displayed:
@@ -1018,14 +1031,15 @@ def _processEmbeddedElements(
     >>> elements = [Element('note'), Element('beam'), Element('note')]
     >>> mapping = {'note': lambda x, y: note.Note('D2'),
     ...            'beam': lambda x, y: [note.Note('E2') for _ in range(2)]}
-    >>> mei.base._processEmbeddedElements(elements, mapping)
+    >>> _processEmbeddedElements(elements, mapping)
     [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
     '''
-    processed = []
+    processed: t.List[Music21Object] = []
+    result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]]
 
     for eachElem in elements:
         if eachElem.tag in mapping:
-            result = mapping[eachElem.tag](eachElem, slurBundle)
+            result = mapping[eachElem.tag](eachElem, spannerBundle)
             if isinstance(result, (tuple, list)):
                 for eachObject in result:
                     processed.append(eachObject)
@@ -1119,7 +1133,7 @@ def _transpositionFromAttrs(elem: Element) -> interval.Interval:
 
 def _barlineFromAttr(
     attr: t.Optional[str]
-) -> t.Union[bar.Barline, bar.Repeat, t.Tuple[bar.Repeat, ...]]:
+) -> t.Union[bar.Barline, bar.Repeat, t.Tuple[bar.Repeat, bar.Repeat]]:
     '''
     Use :func:`_attrTranslator` to convert the value of a "left" or "right" attribute to a
     :class:`Barline` or :class:`Repeat` or occasionally a tuple of :class:`Repeat`. The only time a
@@ -1167,7 +1181,7 @@ def _tieFromAttr(attr: str) -> tie.Tie:
 def addSlurs(
     elem: Element,
     obj: note.NotRest,
-    slurBundle: spanner.SpannerBundle
+    spannerBundle: spanner.SpannerBundle
 ) -> bool:
     '''
     If relevant, add a slur to an ``obj`` (object) that was created from an ``elem`` (element).
@@ -1177,9 +1191,9 @@ def addSlurs(
     :param obj: The musical object (:class:`Note`, :class:`Chord`, etc.) created from ``elem``, to
         which a slur might be attached.
     :type obj: :class:`music21.base.Music21Object`
-    :param slurBundle: The :class:`Slur`-holding :class:`SpannerBundle` associated with the
+    :param spannerBundle: The :class:`Slur`-holding :class:`SpannerBundle` associated with the
         :class:`Stream` that holds ``obj``.
-    :type slurBundle: :class:`music21.spanner.SpannerBundle`
+    :type spannerBundle: :class:`music21.spanner.SpannerBundle`
     :returns: Whether at least one slur was added.
     :rtype: bool
 
@@ -1190,23 +1204,23 @@ def addSlurs(
 
     #. With a ``@slur`` attribute, in which case :func:`addSlurs` reads the attribute and manages
        creating a :class:`Slur` object, adding the affected objects to it, and storing the
-       :class:`Slur` in the ``slurBundle``.
+       :class:`Slur` in the ``spannerBundle``.
     #. With a ``<slur>`` element, which requires pre-processing. In this case, :class:`Slur` objects
-       must already exist in the ``slurBundle``, and special attributes must be added to the
+       must already exist in the ``spannerBundle``, and special attributes must be added to the
        affected elements (``@m21SlurStart`` to the element at the start of the slur and
        ``@m21SlurEnd`` to the element at the end). These attributes hold the ``id`` of a
-       :class:`Slur` in the ``slurBundle``, allowing :func:`addSlurs` to find the slur and add
+       :class:`Slur` in the ``spannerBundle``, allowing :func:`addSlurs` to find the slur and add
        ``obj`` to it.
 
     .. caution:: If an ``elem`` has an @m21SlurStart or @m21SlurEnd attribute that refer to an
-        object not found in the ``slurBundle``, the slur is silently dropped.
+        object not found in the ``spannerBundle``, the slur is silently dropped.
     '''
     addedSlur: bool = False
 
-    def wrapGetByIdLocal(theId):
+    def wrapGetByIdLocal(theId: str):
         '''Avoid crashing when getByIdLocal() doesn't find the slur'''
         try:
-            slurBundle.getByIdLocal(theId)[0].addSpannedElements(obj)
+            spannerBundle.getByIdLocal(theId)[0].addSpannedElements(obj)
             return True
         except IndexError:
             # when getByIdLocal() couldn't find the Slur
@@ -1215,13 +1229,15 @@ def addSlurs(
     def getSlurNumAndType(eachSlur: str) -> t.Tuple[str, str]:
         # eachSlur is of the form 'i1', 't2', 'm1' etc
         slurNum: str = eachSlur[1:]
-        slurType: str = eachSlur[0]
+        slurType: str = eachSlur[:1]
         return slurNum, slurType
 
-    if elem.get('m21SlurStart') is not None:
-        addedSlur = wrapGetByIdLocal(elem.get('m21SlurStart'))
-    if elem.get('m21SlurEnd') is not None:
-        addedSlur = wrapGetByIdLocal(elem.get('m21SlurEnd'))
+    startStr: t.Optional[str] = elem.get('m21SlurStart')
+    endStr: t.Optional[str] = elem.get('m21SlurEnd')
+    if startStr is not None:
+        addedSlur = wrapGetByIdLocal(startStr)
+    if endStr is not None:
+        addedSlur = wrapGetByIdLocal(endStr)
 
     slurStr: t.Optional[str] = elem.get('slur')
     if slurStr is not None:
@@ -1234,7 +1250,7 @@ def addSlurs(
                     # work around Spanner.idLocal being incorrectly type-hinted as None
                     assert isinstance(newSlur.idLocal, str)
                 newSlur.idLocal = slurNum
-                slurBundle.append(newSlur)
+                spannerBundle.append(newSlur)
                 newSlur.addSpannedElements(obj)
                 addedSlur = True
             elif 't' == slurType:
@@ -1244,7 +1260,7 @@ def addSlurs(
     return addedSlur
 
 
-def beamTogether(someThings: t.Sequence[Music21Object]) -> t.Sequence[Music21Object]:
+def beamTogether(someThings: t.List[Music21Object]) -> t.List[Music21Object]:
     '''
     Beam some things together. The function beams every object that has a :attr:`beams` attribute,
     leaving the other objects unmodified.
@@ -1282,7 +1298,7 @@ def removeOctothorpe(xmlid: t.Optional[str]) -> t.Optional[str]:
     '''
     Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
 
-    >>> from music21.mei.base import removeOctothorpe
+    >>> from converter21.mei.base import removeOctothorpe
     >>> removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
     '110a923d-a13a-4a2e-b85c-e1d438e4c5d6'
     >>> removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
@@ -1410,27 +1426,27 @@ def metaSetDate(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
     return meta
 
 
-def getVoiceId(fromThese):
-    '''
-    From a list of objects with mixed type, find the "id" of the :class:`music21.stream.Voice`
-    instance.
-
-    :param list fromThese: A list of objects of any type, at least one of which must be a
-        :class:`~music21.stream.Voice` instance.
-    :returns: The ``id`` of the :class:`Voice` instance.
-    :raises: :exc:`RuntimeError` if zero or many :class:`Voice` objects are found.
-    '''
-    fromThese = [item for item in fromThese if isinstance(item, stream.Voice)]
-    if len(fromThese) == 1:
-        return fromThese[0].id
-    else:
-        raise RuntimeError('getVoiceId: found too few or too many Voice objects')
+# def getVoiceId(fromThese):
+#     '''
+#     From a list of objects with mixed type, find the "id" of the :class:`music21.stream.Voice`
+#     instance.
+#
+#     :param list fromThese: A list of objects of any type, at least one of which must be a
+#         :class:`~music21.stream.Voice` instance.
+#     :returns: The ``id`` of the :class:`Voice` instance.
+#     :raises: :exc:`RuntimeError` if zero or many :class:`Voice` objects are found.
+#     '''
+#     fromThese = [item for item in fromThese if isinstance(item, stream.Voice)]
+#     if len(fromThese) == 1:
+#         return fromThese[0].id
+#     else:
+#         raise RuntimeError('getVoiceId: found too few or too many Voice objects')
 
 # noinspection PyTypeChecker
 def scaleToTuplet(
-    objs: t.Union[Music21Object, t.Sequence[Music21Object]],
+    objs: t.Union[Music21Object, t.List[Music21Object]],
     elem: Element
-) -> t.Union[Music21Object, t.Sequence[Music21Object]]:
+) -> t.Union[Music21Object, t.List[Music21Object]]:
     '''
     Scale the duration of some objects by a ratio indicated by a tuplet. The ``elem`` must have the
     @m21TupletNum and @m21TupletNumbase attributes set, and optionally the @m21TupletSearch or
@@ -1470,6 +1486,9 @@ def scaleToTuplet(
         if not isinstance(obj, (note.Note, note.Rest, chord.Chord)):
             # silently skip objects that don't have a duration
             continue
+        if isinstance(obj, note.Note) and isinstance(obj.duration, duration.GraceDuration):
+            # silently skip grace notes (they don't have a duration either)
+            continue
 
         elif elem.get('m21TupletSearch') is not None:
             obj.m21TupletSearch = elem.get('m21TupletSearch')  # type: ignore
@@ -1504,7 +1523,7 @@ def scaleToTuplet(
         return objs[0]
 
 
-def _guessTuplets(theLayer: t.Iterable[Music21Object]) -> t.Iterable[Music21Object]:
+def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
     # TODO: nested tuplets don't work when they're both specified with <tupletSpan>
     # TODO: adjust this to work with cross-measure tuplets (i.e., where only the "start" or "end"
     #       is found in theLayer)
@@ -1571,7 +1590,7 @@ def _guessTuplets(theLayer: t.Iterable[Music21Object]) -> t.Iterable[Music21Obje
 # -----------------------------------------------------------------------------
 def scoreDefFromElement(
     elem: Element,
-    slurBundle: t.Optional[spanner.SpannerBundle] = None
+    spannerBundle: t.Optional[spanner.SpannerBundle] = None
 ) -> t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]:
     '''
     <scoreDef> Container for score meta-information.
@@ -1606,10 +1625,10 @@ def scoreDefFromElement(
     ...     </staffGrp>
     ... </scoreDef>
     ... """
-    >>> from music21 import *
+    >>> from converter21.mei.base import scoreDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> scoreDef = ET.fromstring(meiDoc)
-    >>> result = mei.base.scoreDefFromElement(scoreDef)
+    >>> result = scoreDefFromElement(scoreDef)
     >>> len(result)
     5
     >>> result['1']
@@ -1674,10 +1693,12 @@ def scoreDefFromElement(
     }
 
     # 1.) process all-part attributes
-    # --> time signature
-    postAllParts = post[allParts]
+    pap = post[allParts]
     if t.TYPE_CHECKING:
-        assert isinstance(postAllParts, list)
+        assert isinstance(pap, list)
+    postAllParts: t.List[Music21Object] = pap
+
+    # --> time signature
     if elem.get('meter.count') is not None:
         postAllParts.append(_timeSigFromAttrs(elem))
 
@@ -1687,14 +1708,14 @@ def scoreDefFromElement(
 
     # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
     for eachGrp in elem.iterfind(f'{MEI_NS}staffGrp'):
-        post.update(staffGrpFromElement(eachGrp, slurBundle))
+        post.update(staffGrpFromElement(eachGrp, spannerBundle))
 
     return post
 
 
 def staffGrpFromElement(
     elem: Element,
-    slurBundle: t.Optional[spanner.SpannerBundle] = None,
+    spannerBundle: t.Optional[spanner.SpannerBundle] = None,
     staffDefDict: t.Optional[
         t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]
     ] = None
@@ -1750,18 +1771,18 @@ def staffGrpFromElement(
         # return all staff defs in this staff group
         nStr: t.Optional[str] = el.get('n')
         if el.tag == staffDefTag and nStr:
-            staffDefDict[nStr] = staffDefFromElement(el, slurBundle)
+            staffDefDict[nStr] = staffDefFromElement(el, spannerBundle)
 
         # recurse if there are more groups, append to the working staffDefDict
         elif el.tag == staffGroupTag:
-            staffGrpFromElement(el, slurBundle, staffDefDict)
+            staffGrpFromElement(el, spannerBundle, staffDefDict)
 
     return staffDefDict
 
 
 def staffDefFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None
+    spannerBundle: spanner.SpannerBundle = None
 ) -> t.Dict[str, Music21Object]:
     '''
     <staffDef> Container for staff meta-information.
@@ -1789,10 +1810,10 @@ def staffDefFromElement(
     >>> meiDoc = """<?xml version="1.0" encoding="UTF-8"?>
     ... <staffDef n="1" label="Clarinet" xmlns="http://www.music-encoding.org/ns/mei"/>
     ... """
-    >>> from music21 import *
+    >>> from converter21.mei.base import staffDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> staffDef = ET.fromstring(meiDoc)
-    >>> result = mei.base.staffDefFromElement(staffDef)
+    >>> result = staffDefFromElement(staffDef)
     >>> len(result)
     1
     >>> result
@@ -1810,10 +1831,10 @@ def staffDefFromElement(
     ...     <clef shape="F" line="4"/>
     ... </staffDef>
     ... """
-    >>> from music21 import *
+    >>> from converter21.mei.base import staffDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> staffDef = ET.fromstring(meiDoc)
-    >>> result = mei.base.staffDefFromElement(staffDef)
+    >>> result = staffDefFromElement(staffDef)
     >>> len(result)
     3
     >>> result['instrument']
@@ -1868,7 +1889,9 @@ def staffDefFromElement(
     - MEI.shared: clefGrp keySig label layerDef
     '''
     # mapping from tag name to our converter function
-    tagToFunction = {f'{MEI_NS}clef': clefFromElement}
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
+        f'{MEI_NS}clef': clefFromElement
+    }
 
     # first make the Instrument
     instrDefElem = elem.find(f'{MEI_NS}instrDef')
@@ -1925,7 +1948,10 @@ def staffDefFromElement(
         el = Element('clef', attribDict)
         post['clef'] = clefFromElement(el)
 
-    embeddedItems = _processEmbeddedElements(elem.findall('*'), tagToFunction, elem.tag, slurBundle)
+    embeddedItems = _processEmbeddedElements(
+        elem.findall('*'), tagToFunction, elem.tag, spannerBundle
+    )
+
     for eachItem in embeddedItems:
         if isinstance(eachItem, clef.Clef):
             post['clef'] = eachItem
@@ -1933,7 +1959,7 @@ def staffDefFromElement(
     return post
 
 
-def dotFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def dotFromElement(elem, spannerBundle=None):  # pylint: disable=unused-argument
     '''
     Returns ``1`` no matter what is passed in.
 
@@ -1963,7 +1989,7 @@ def dotFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
 
 def articFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
 ) -> t.List[articulations.Articulation]:
     '''
     <artic> An indication of how to play a note or chord.
@@ -1979,17 +2005,17 @@ def articFromElement(
     :attr:`~music21.note.GeneralNote.articulations` attribute.
 
     >>> from xml.etree import ElementTree as ET
-    >>> from music21 import *
+    >>> from converter21.mei.base import articFromElement
     >>> meiSnippet = """<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> mei.base.articFromElement(meiSnippet)
+    >>> articFromElement(meiSnippet)
     [<music21.articulations.Accent>]
 
     A single <artic> element may indicate many :class:`Articulation` objects.
 
     >>> meiSnippet = """<artic artic="acc ten" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> mei.base.articFromElement(meiSnippet)
+    >>> articFromElement(meiSnippet)
     [<music21.articulations.Accent>, <music21.articulations.Tenuto>]
 
     **Attributes Implemented:**
@@ -2027,7 +2053,7 @@ def articFromElement(
 
 def accidFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
 ) -> t.Optional[str]:
     '''
     <accid> Records a temporary alteration to the pitch of a note.
@@ -2042,14 +2068,14 @@ def accidFromElement(
     a string. Accidentals up to triple-sharp and triple-flat are supported.
 
     >>> from xml.etree import ElementTree as ET
-    >>> from music21 import *
+    >>> from converter21.mei.base import accidFromElement
     >>> meiSnippet = """<accid accid="s" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> mei.base.accidFromElement(meiSnippet)
+    >>> accidFromElement(meiSnippet)
     '#'
     >>> meiSnippet = """<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> mei.base.accidFromElement(meiSnippet)
+    >>> accidFromElement(meiSnippet)
     '---'
 
     **Attributes/Elements Implemented:**
@@ -2089,7 +2115,7 @@ def accidFromElement(
 
 def sylFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
 ) -> note.Lyric:
     '''
     <syl> Individual lyric syllable.
@@ -2165,7 +2191,7 @@ def sylFromElement(
 def verseFromElement(
     elem: Element,
     backupN: t.Optional[int] = None,
-    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
 ) -> t.List[note.Lyric]:
     '''
     <verse> Lyric verse.
@@ -2214,7 +2240,7 @@ def verseFromElement(
 
 def noteFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None
+    spannerBundle: t.Optional[spanner.SpannerBundle] = None
 ) -> note.Note:
     # NOTE: this function should stay in sync with chordFromElement() where sensible
     '''
@@ -2293,10 +2319,12 @@ def noteFromElement(
     - MEI.critapp: app
     - MEI.edittrans: (all)
     '''
-    tagToFunction = {f'{MEI_NS}dot': dotFromElement,
-                     f'{MEI_NS}artic': articFromElement,
-                     f'{MEI_NS}accid': accidFromElement,
-                     f'{MEI_NS}syl': sylFromElement}
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
+        f'{MEI_NS}dot': dotFromElement,
+        f'{MEI_NS}artic': articFromElement,
+        f'{MEI_NS}accid': accidFromElement,
+        f'{MEI_NS}syl': sylFromElement
+    }
 
     # start with a Note with Pitch
     theAccid: t.Optional[str] = _accidentalFromAttr(elem.get('accid'))
@@ -2304,8 +2332,8 @@ def noteFromElement(
     theNote: note.Note = note.Note(thePitch)
 
     # set the Note's duration (we will update this if we find any inner <dot> elements)
-    floatDur: float = _qlDurationFromAttr(elem.get('dur'))
-    theDuration: duration.Duration = makeDuration(floatDur, int(elem.get('dots', 0)))
+    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
+    theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
     theNote.duration = theDuration
 
     # iterate all immediate children
@@ -2313,7 +2341,7 @@ def noteFromElement(
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                tagToFunction,
                                                elem.tag,
-                                               slurBundle):
+                                               spannerBundle):
         if isinstance(subElement, int):
             dotElements += subElement
         elif isinstance(subElement, articulations.Articulation):
@@ -2329,9 +2357,9 @@ def noteFromElement(
         if accid is not None:
             theNote.pitch.accidental = pitch.Accidental(accid)
 
-    # we can only process slurs if we got a SpannerBundle as the "slurBundle" argument
-    if slurBundle is not None:
-        addSlurs(elem, theNote, slurBundle)
+    # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
+    if spannerBundle is not None:
+        addSlurs(elem, theNote, spannerBundle)
 
     # id in the @xml:id attribute
     xmlId: t.Optional[str] = elem.get(_XMLID)
@@ -2381,7 +2409,7 @@ def noteFromElement(
 
 def restFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+    spannerBundle: t.Optional[spanner.SpannerBundle] = None  # pylint: disable=unused-argument
 ) -> note.Rest:
     '''
     <rest/> is a non-sounding event found in the source being transcribed
@@ -2443,7 +2471,7 @@ def restFromElement(
 
 def mRestFromElement(
     elem: Element,
-    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+    spannerBundle: t.Optional[spanner.SpannerBundle] = None  # pylint: disable=unused-argument
 ) -> note.Rest:
     '''
     <mRest/> Complete measure rest in any meter.
@@ -2459,14 +2487,17 @@ def mRestFromElement(
     # NOTE: keep this in sync with mSpaceFromElement()
 
     if elem.get('dur') is not None:
-        return restFromElement(elem, slurBundle)
+        return restFromElement(elem, spannerBundle)
     else:
-        theRest = restFromElement(elem, slurBundle)
+        theRest = restFromElement(elem, spannerBundle)
         theRest.m21wasMRest = True  # type: ignore
         return theRest
 
 
-def spaceFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def spaceFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> note.Rest:
     '''
     <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that the
     combined duration of the events equals the number of beats in the measure.
@@ -2477,22 +2508,30 @@ def spaceFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
     '''
     # NOTE: keep this in sync with restFromElement()
 
-    theDuration = _qlDurationFromAttr(elem.get('dur'))
-    theDuration = makeDuration(theDuration, int(elem.get('dots', 0)))
-    theSpace = note.Rest(duration=theDuration)
+    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
+    theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
+    theSpace: note.Rest = note.Rest(duration=theDuration)
     theSpace.style.hideObjectOnPrint = True
 
-    if elem.get(_XMLID) is not None:
-        theSpace.id = elem.get(_XMLID)
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theSpace.id = xmlId
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
-        theSpace = scaleToTuplet(theSpace, elem)
+        obj = scaleToTuplet(theSpace, elem)
+        if t.TYPE_CHECKING:
+            # because scaleToTuplet returns the same type it was passed
+            assert isinstance(obj, note.Rest)
+        theSpace = obj
 
     return theSpace
 
 
-def mSpaceFromElement(elem, slurBundle=None):
+def mSpaceFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None
+) -> note.Rest:
     '''
     <mSpace/> A measure containing only empty space in any meter.
 
@@ -2507,14 +2546,17 @@ def mSpaceFromElement(elem, slurBundle=None):
     # NOTE: keep this in sync with mRestFromElement()
 
     if elem.get('dur') is not None:
-        return spaceFromElement(elem, slurBundle)
+        return spaceFromElement(elem, spannerBundle)
     else:
-        theSpace = spaceFromElement(elem, slurBundle)
-        theSpace.m21wasMRest = True
+        theSpace = spaceFromElement(elem, spannerBundle)
+        theSpace.m21wasMRest = True  # type: ignore
         return theSpace
 
 
-def chordFromElement(elem, slurBundle=None):
+def chordFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None
+) -> chord.Chord:
     # NOTE: this function should stay in sync with noteFromElement() where sensible
     '''
     <chord> is a simultaneous sounding of two or
@@ -2572,61 +2614,74 @@ def chordFromElement(elem, slurBundle=None):
 
     - MEI.edittrans: (all)
     '''
-    tagToFunction = {f'{MEI_NS}note': lambda *x: None,
-                     f'{MEI_NS}artic': articFromElement}
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
+        f'{MEI_NS}note': lambda *x: None,
+        f'{MEI_NS}artic': articFromElement
+    }
 
     # start with a Chord with a bunch of Notes
-    theChord = []
+    theNoteList: t.List[note.Note] = []
     for eachNote in elem.iterfind(f'{MEI_NS}note'):
-        theChord.append(noteFromElement(eachNote, slurBundle))
-    theChord = chord.Chord(notes=theChord)
+        theNoteList.append(noteFromElement(eachNote, spannerBundle))
+    theChord: chord.Chord = chord.Chord(notes=theNoteList)
 
     # set the Chord's duration
-    theDuration = _qlDurationFromAttr(elem.get('dur'))
-    theDuration = makeDuration(theDuration, int(elem.get('dots', 0)))
+    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
+    theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
     theChord.duration = theDuration
 
     # iterate all immediate children
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                tagToFunction,
                                                elem.tag,
-                                               slurBundle):
+                                               spannerBundle):
         if isinstance(subElement, articulations.Articulation):
             theChord.articulations.append(subElement)
 
-    # we can only process slurs if we got a SpannerBundle as the "slurBundle" argument
-    if slurBundle is not None:
-        addSlurs(elem, theChord, slurBundle)
+    # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
+    if spannerBundle is not None:
+        addSlurs(elem, theChord, spannerBundle)
 
     # id in the @xml:id attribute
-    if elem.get(_XMLID) is not None:
-        theChord.id = elem.get(_XMLID)
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theChord.id = xmlId
 
     # articulations in the @artic attribute
-    if elem.get('artic') is not None:
-        theChord.articulations.extend(_makeArticList(elem.get('artic')))
+    articStr: t.Optional[str] = elem.get('artic')
+    if articStr is not None:
+        theChord.articulations.extend(_makeArticList(articStr))
 
     # ties in the @tie attribute
-    if elem.get('tie') is not None:
-        theChord.tie = _tieFromAttr(elem.get('tie'))
+    tieStr: t.Optional[str] = elem.get('tie')
+    if tieStr is not None:
+        theChord.tie = _tieFromAttr(tieStr)
 
     # grace note (only mark as grace note---don't worry about "time-stealing")
     if elem.get('grace') is not None:
         theChord.duration = duration.GraceDuration(theChord.duration.quarterLength)
 
     # beams indicated by a <beamSpan> held elsewhere
-    if elem.get('m21Beam') is not None:
+    m21BeamStr: t.Optional[str] = elem.get('m21Beam')
+    if m21BeamStr is not None:
         if duration.convertTypeToNumber(theChord.duration.type) > 4:
-            theChord.beams.fill(theChord.duration.type, elem.get('m21Beam'))
+            theChord.beams.fill(theChord.duration.type, m21BeamStr)
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
-        theChord = scaleToTuplet(theChord, elem)
+        obj = scaleToTuplet(theChord, elem)
+        if t.TYPE_CHECKING:
+            # because scaleToTuplet returns whatever type it was passed
+            assert isinstance(obj, chord.Chord)
+        theChord = obj
 
     return theChord
 
 
-def clefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def clefFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> clef.Clef:
     '''
     <clef> Indication of the exact location of a particular note on the staff and, therefore,
     the other notes as well.
@@ -2664,22 +2719,36 @@ def clefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
 
     **Contained Elements not Implemented:** none
     '''
-    if 'perc' == elem.get('shape'):
+    theClef: clef.Clef
+    shapeStr: t.Optional[str] = elem.get('shape')
+    lineStr: t.Optional[str] = elem.get('line')
+    if 'perc' == shapeStr:
         theClef = clef.PercussionClef()
-    elif 'TAB' == elem.get('shape'):
+    elif 'TAB' == shapeStr:
         theClef = clef.TabClef()
     else:
-        theClef = clef.clefFromString(elem.get('shape') + elem.get('line'),
+        if shapeStr is None:
+            # default to treble clef shape
+            shapeStr = 'G'
+        if lineStr is None:
+            # music21 has defaults for missing lineStr, but it has to be ''
+            lineStr = ''
+
+        theClef = clef.clefFromString(shapeStr + lineStr,
                                       octaveShift=_getOctaveShift(elem.get('dis'),
                                                                   elem.get('dis.place')))
 
-    if elem.get(_XMLID) is not None:
-        theClef.id = elem.get(_XMLID)
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theClef.id = xmlId
 
     return theClef
 
 
-def instrDefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def instrDefFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> instrument.Instrument:
     # TODO: robuster handling of <instrDef>, including <instrGrp> and if held in a <staffGrp>
     '''
     <instrDef> (instrument definition)---MIDI instrument declaration.
@@ -2707,18 +2776,33 @@ def instrDefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argume
 
     **Contained Elements not Implemented:** none
     '''
-    if elem.get('midi.instrnum') is not None:
-        return instrument.instrumentFromMidiProgram(int(elem.get('midi.instrnum')))
-    else:
+    instrNumStr: t.Optional[str] = elem.get('midi.instrnum')
+    if instrNumStr is not None:
         try:
-            return instrument.fromString(elem.get('midi.instrname'))
-        except (AttributeError, instrument.InstrumentException):
-            theInstr = instrument.Instrument()
-            theInstr.partName = elem.get('midi.instrname', '')
-            return theInstr
+            return instrument.instrumentFromMidiProgram(int(instrNumStr))
+        except (TypeError, instrument.InstrumentException):
+            pass
+
+    instrNameStr: t.Optional[str] = elem.get('midi.instrname', '')
+    if t.TYPE_CHECKING:
+        # default if missing is ''
+        assert instrNameStr is not None
+
+    try:
+        return instrument.fromString(instrNameStr)
+    except (AttributeError, instrument.InstrumentException):
+        pass
+
+    # last fallback: just use instrNameStr (might even be '') as a custom name
+    theInstr = instrument.Instrument()
+    theInstr.partName = instrNameStr
+    return theInstr
 
 
-def beamFromElement(elem, slurBundle=None):
+def beamFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None
+) -> t.Sequence[Music21Object]:
     '''
     <beam> A container for a series of explicitly beamed events that begins and ends entirely
            within a measure.
@@ -2736,14 +2820,14 @@ def beamFromElement(elem, slurBundle=None):
     a list of three objects, none of which is a :class:`Beam` or similar.
 
     >>> from xml.etree import ElementTree as ET
-    >>> from music21 import *
+    >>> from converter21.mei.base import beamFromElement
     >>> meiSnippet = """<beam xmlns="http://www.music-encoding.org/ns/mei">
     ...     <note pname='A' oct='7' dur='8'/>
     ...     <note pname='B' oct='7' dur='8'/>
     ...     <note pname='C' oct='6' dur='8'/>
     ... </beam>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> result = mei.base.beamFromElement(meiSnippet)
+    >>> result = beamFromElement(meiSnippet)
     >>> isinstance(result, list)
     True
     >>> len(result)
@@ -2801,7 +2885,7 @@ def beamFromElement(elem, slurBundle=None):
     #     need to bother with unit testing.
 
     # mapping from tag name to our converter function
-    tagToFunction = {
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
         f'{MEI_NS}clef': clefFromElement,
         f'{MEI_NS}chord': chordFromElement,
         f'{MEI_NS}note': noteFromElement,
@@ -2812,13 +2896,19 @@ def beamFromElement(elem, slurBundle=None):
         f'{MEI_NS}barLine': barLineFromElement,
     }
 
-    beamedStuff = _processEmbeddedElements(elem.findall('*'), tagToFunction, elem.tag, slurBundle)
+    beamedStuff: t.List[Music21Object] = _processEmbeddedElements(
+        elem.findall('*'), tagToFunction, elem.tag, spannerBundle
+    )
+
     beamedStuff = beamTogether(beamedStuff)
 
     return beamedStuff
 
 
-def barLineFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def barLineFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> t.Union[bar.Barline, bar.Repeat, t.Tuple[bar.Repeat, ...]]:
     '''
     <barLine> Vertical line drawn through one or more staves that divides musical notation into
     metrical units.
@@ -2870,7 +2960,10 @@ def barLineFromElement(elem, slurBundle=None):  # pylint: disable=unused-argumen
     return _barlineFromAttr(elem.get('rend', 'single'))
 
 
-def tupletFromElement(elem, slurBundle=None):
+def tupletFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None
+) -> t.Tuple[Music21Object, ...]:
     '''
     <tuplet> A group of notes with "irregular" (sometimes called "irrational") rhythmic values,
     for example, three notes in the time normally occupied by two or nine in the time of five.
@@ -2920,7 +3013,7 @@ def tupletFromElement(elem, slurBundle=None):
     - MEI.shared: clefGrp custos keySig pad
     '''
     # mapping from tag name to our converter function
-    tagToFunction = {
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
         f'{MEI_NS}tuplet': tupletFromElement,
         f'{MEI_NS}beam': beamFromElement,
         f'{MEI_NS}note': noteFromElement,
@@ -2932,15 +3025,19 @@ def tupletFromElement(elem, slurBundle=None):
     }
 
     # get the @num and @numbase attributes, without which we can't properly calculate the tuplet
-    if elem.get('num') is None or elem.get('numbase') is None:
+    numStr: t.Optional[str] = elem.get('num')
+    numbaseStr: t.Optional[str] = elem.get('numbase')
+    if numStr is None or numbaseStr is None:
         raise MeiAttributeError(_MISSING_TUPLET_DATA)
 
     # iterate all immediate children
-    tupletMembers = _processEmbeddedElements(elem.findall('*'), tagToFunction, elem.tag, slurBundle)
+    tupletMembers: t.List[Music21Object] = _processEmbeddedElements(
+        elem.findall('*'), tagToFunction, elem.tag, spannerBundle
+    )
 
     # "tuplet-ify" the duration of everything held within
-    newElem = Element('c', m21TupletNum=elem.get('num'), m21TupletNumbase=elem.get('numbase'))
-    tupletMembers = scaleToTuplet(tupletMembers, newElem)
+    newElem = Element('c', m21TupletNum=numStr, m21TupletNumbase=numbaseStr)
+    tupletMembers = t.cast(t.List[Music21Object], scaleToTuplet(tupletMembers, newElem))
 
     # Set the Tuplet.type property for the first and final note in a tuplet.
     # We have to find the first and last duration-having thing, not just the first and last objects
@@ -2952,6 +3049,9 @@ def tupletFromElement(elem, slurBundle=None):
             firstNote = i
         elif isinstance(eachObj, note.GeneralNote):
             lastNote = i
+
+    if firstNote is None:
+        raise MeiElementError(_TUPLET_WITH_NO_NOTES)
 
     tupletMembers[firstNote].duration.tuplets[0].type = 'start'
     if lastNote is None:
@@ -2966,7 +3066,11 @@ def tupletFromElement(elem, slurBundle=None):
     return tuple(tupletMembers)
 
 
-def layerFromElement(elem, overrideN=None, slurBundle=None):
+def layerFromElement(
+    elem: Element,
+    overrideN: t.Optional[int] = None,
+    spannerBundle: spanner.SpannerBundle = None
+) -> stream.Voice:
     '''
     <layer> An independent stream of events on a staff.
 
@@ -2983,7 +3087,7 @@ def layerFromElement(elem, overrideN=None, slurBundle=None):
 
     :param elem: The ``<layer>`` element to process.
     :type elem: :class:`~xml.etree.ElementTree.Element`
-    :param str overrideN: The value to be set as the ``id``
+    :param int overrideN: The value to be set as the ``id``
         attribute in the outputted :class:`Voice`.
     :returns: A :class:`Voice` with the objects found in the provided :class:`Element`.
     :rtype: :class:`music21.stream.Voice`
@@ -3029,7 +3133,7 @@ def layerFromElement(elem, overrideN=None, slurBundle=None):
     - MEI.usersymbols: anchoredText curve line symbol
     '''
     # mapping from tag name to our converter function
-    tagToFunction = {
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
         f'{MEI_NS}clef': clefFromElement,
         f'{MEI_NS}chord': chordFromElement,
         f'{MEI_NS}note': noteFromElement,
@@ -3043,29 +3147,46 @@ def layerFromElement(elem, overrideN=None, slurBundle=None):
     }
 
     # iterate all immediate children
-    theLayer = _processEmbeddedElements(elem.iterfind('*'), tagToFunction, elem.tag, slurBundle)
+    theLayer: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'), tagToFunction, elem.tag, spannerBundle
+    )
 
     # adjust the <layer>'s elements for possible tuplets
     theLayer = _guessTuplets(theLayer)
 
     # make the Voice
-    theVoice = stream.Voice()
+    theVoice: stream.Voice = stream.Voice()
     for each in theLayer:
         theVoice.coreAppend(each)
     theVoice.coreElementsChanged()
 
     # try to set the Voice's "id" attribute
-    if overrideN:
-        theVoice.id = overrideN
-    elif elem.get('n') is not None:
-        theVoice.id = elem.get('n')
-    else:
+
+    # New to converter21 version: overrideN is only to be used if @n is not present
+    # New to converter21 version: overrideN is an int, and voice.id should be set as an int
+    #   if at all possible.  This is how music21 likes it now.
+
+    nStr: t.Optional[str] = elem.get('n')
+    if nStr is None:
+        if overrideN is not None:
+            theVoice.id = overrideN
+            return theVoice
         raise MeiAttributeError(_MISSING_VOICE_ID)
+
+    # pylint: disable=bare-except
+    try:
+        theVoice.id = int(nStr)
+    except:
+        theVoice.id = nStr
+    # pylint: enable=bare-except
 
     return theVoice
 
 
-def staffFromElement(elem, slurBundle=None):
+def staffFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None
+) -> t.List[stream.Voice]:
     '''
     <staff> A group of equidistant horizontal lines on which notes are placed in order to
     represent pitch or a grouping element for individual 'strands' of notes, rests, etc. that may
@@ -3108,28 +3229,54 @@ def staffFromElement(elem, slurBundle=None):
     - MEI.usersymbols: anchoredText curve line symbol
     '''
     # mapping from tag name to our converter function
-    layerTagName = f'{MEI_NS}layer'
-    tagToFunction = {}
-    layers = []
+    layerTagName: str = f'{MEI_NS}layer'
+    tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
+    }
+
+    layers: t.List[stream.Voice] = []
 
     # track the @n values given to layerFromElement()
-    currentNValue = '1'
+    nextNValue: int = 1
+    nOverride: t.Optional[int] = None
 
     # iterate all immediate children
     for eachTag in elem.iterfind('*'):
         if layerTagName == eachTag.tag:
-            layers.append(layerFromElement(eachTag, currentNValue, slurBundle=slurBundle))
-            currentNValue = f'{int(currentNValue) + 1}'  # inefficient, but we need a string
+            n: t.Optional[int] = None
+            nStr: t.Optional[str] = eachTag.get('n')
+            if nStr is None:
+                # we need an override
+                nOverride = nextNValue
+                nextNValue += 1
+            else:
+                # we don't need an override
+                nOverride = None
+
+                # but if n is an integer, bump nextNValue as necessary
+                # so we don't conflict with it.
+                # pylint: disable=bare-except
+                try:
+                    n = int(nStr)
+                except:
+                    pass
+                # pylint: enable=bare-except
+                if n is not None:
+                    nextNValue = max(nextNValue, n + 1)
+
+            layers.append(layerFromElement(eachTag, nOverride, spannerBundle=spannerBundle))
         elif eachTag.tag in tagToFunction:
             # NB: this won't be tested until there's something in tagToFunction
-            layers.append(tagToFunction[eachTag.tag](eachTag, slurBundle))
+            layers.append(tagToFunction[eachTag.tag](eachTag, spannerBundle))
         elif eachTag.tag not in _IGNORE_UNPROCESSED:
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
 
     return layers
 
 
-def _correctMRestDurs(staves, targetLength):
+def _correctMRestDurs(
+    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
+    targetQL: OffsetQL
+):
     '''
     Helper function for measureFromElement(), not intended to be used elsewhere. It's a separate
     function only (1) to reduce duplication, and (2) to improve testability.
@@ -3140,23 +3287,30 @@ def _correctMRestDurs(staves, targetLength):
     The "staves" argument should be a dictionary where the values are Measure objects with at least
     one Voice object inside.
 
-    The "targetLength" argument should be the duration of the measure.
+    The "targetQL" argument should be the duration of the measure.
 
     Nothing is returned; the duration of affected objects is modified in-place.
     '''
     for eachMeasure in staves.values():
+        if not isinstance(eachMeasure, stream.Measure):
+            continue
+
         for eachVoice in eachMeasure:
-            if not isinstance(eachVoice, stream.Stream):
+            if not isinstance(eachVoice, stream.Voice):
                 continue
+
             for eachObject in eachVoice:
                 if hasattr(eachObject, 'm21wasMRest'):
-                    eachObject.quarterLength = targetLength
-                    eachVoice.duration = duration.Duration(targetLength)
-                    eachMeasure.duration = duration.Duration(targetLength)
+                    eachObject.quarterLength = targetQL
+                    eachVoice.duration = duration.Duration(targetQL)
+                    eachMeasure.duration = duration.Duration(targetQL)
                     del eachObject.m21wasMRest
 
 
-def _makeBarlines(elem, staves):
+def _makeBarlines(
+    elem: Element,
+    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]]
+) -> t.Dict[str, t.Union[stream.Measure, bar.Repeat]]:
     '''
     This is a helper function for :func:`measureFromElement`, made independent only to improve
     that function's ease of testing.
@@ -3171,18 +3325,20 @@ def _makeBarlines(elem, staves):
     :returns: The ``staves`` dictionary with properly-set barlines.
     :rtype: dict
     '''
-    if elem.get('left') is not None:
-        bars = _barlineFromAttr(elem.get('left'))
-        if hasattr(bars, '__len__'):
+    leftStr: t.Optional[str] = elem.get('left')
+    if leftStr is not None:
+        bars = _barlineFromAttr(leftStr)
+        if isinstance(bars, tuple):
             # this means @left was "rptboth"
             bars = bars[1]
         for eachMeasure in staves.values():
             if isinstance(eachMeasure, stream.Measure):
                 eachMeasure.leftBarline = deepcopy(bars)
 
-    if elem.get('right') is not None:
-        bars = _barlineFromAttr(elem.get('right'))
-        if hasattr(bars, '__len__'):
+    rightStr: t.Optional[str] = elem.get('right')
+    if rightStr is not None:
+        bars = _barlineFromAttr(rightStr)
+        if isinstance(bars, tuple):
             # this means @right was "rptboth"
             staves['next @left'] = bars[1]
             bars = bars[0]
@@ -3193,7 +3349,13 @@ def _makeBarlines(elem, staves):
     return staves
 
 
-def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter=None):
+def measureFromElement(
+    elem: Element,
+    backupNum: int,
+    expectedNs: t.Iterable[str],
+    spannerBundle: spanner.SpannerBundle = None,
+    activeMeter: t.Optional[meter.TimeSignature] = None
+) -> t.Dict[str, t.Union[stream.Measure, bar.Repeat]]:
     '''
     <measure> Unit of musical time consisting of a fixed number of note-values of a given type, as
     determined by the prevailing meter, and delimited in musical notation by two bar lines.
@@ -3212,10 +3374,10 @@ def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter
     :returns: A dictionary where keys are the @n attributes for <staff> tags found in this
         <measure>, and values are :class:`~music21.stream.Measure` objects that should be appended
         to the :class:`~music21.stream.Part` instance with the value's @n attributes.
-    :rtype: dict of :class:`~music21.stream.Measure`
+    :rtype: dict of :class:`~music21.stream.Measure`, with one exception.
 
     .. note:: When the right barline is set to ``'rptboth'`` in MEI, it requires adjusting the left
-        barline of the following <measure>. If this happens, the :class:`Repeat` object is assigned
+        barline of the following <measure>. If this happens, a :class:`Repeat` object is assigned
         to the ``'next @left'`` key in the returned dictionary.
 
     **Attributes/Elements Implemented:**
@@ -3262,31 +3424,38 @@ def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter
     - MEI.text: div
     - MEI.usersymbols: anchoredText curve line symbol
     '''
-    staves = {}
-    stavesWaiting = {}  # for staff-specific objects processed before the corresponding staff
+    # staves is mostly Measures, but can contain a single Repeat, as well
+    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]] = {}
+
+    # for staff-specific objects processed before the corresponding staff
+    # key1 is @n, key2 is 'meter', 'key', 'instrument', etc
+    stavesWaiting: t.Dict[str, t.Dict[str, Music21Object]] = {}
 
     # mapping from tag name to our converter function
-    staffTag = f'{MEI_NS}staff'
-    staffDefTag = f'{MEI_NS}staffDef'
+    staffTag: str = f'{MEI_NS}staff'
+    staffDefTag: str = f'{MEI_NS}staffDef'
 
     # track the bar's duration
-    maxBarDuration = None
+    maxBarDuration: OffsetQL = opFrac(0)
 
     # iterate all immediate children
     for eachElem in elem.iterfind('*'):
+        nStr: t.Optional[str] = eachElem.get('n')
         if staffTag == eachElem.tag:
-            staves[eachElem.get('n')] = stream.Measure(staffFromElement(eachElem,
-                                                                        slurBundle=slurBundle),
-                                                       number=int(elem.get('n', backupNum)))
-            thisBarDuration = staves[eachElem.get('n')].duration.quarterLength
-            if maxBarDuration is None or maxBarDuration < thisBarDuration:
-                maxBarDuration = thisBarDuration
+            if nStr is None:
+                raise MeiElementError(_STAFF_MUST_HAVE_N)
+
+            staves[nStr] = stream.Measure(
+                staffFromElement(eachElem, spannerBundle=spannerBundle),
+                number=elem.get('n', backupNum)  # number can take string or int, interchangeably
+            )
+            thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
+            maxBarDuration = max(maxBarDuration, thisBarDuration)
         elif staffDefTag == eachElem.tag:
-            whichN = eachElem.get('n')
-            if whichN is None:
+            if nStr is None:
                 environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n'))
             else:
-                stavesWaiting[whichN] = staffDefFromElement(eachElem, slurBundle)
+                stavesWaiting[nStr] = staffDefFromElement(eachElem, spannerBundle)
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
@@ -3297,7 +3466,10 @@ def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter
         for eachObj in eachDict.values():
             # We must insert() these objects because a <staffDef> signals its changes for the
             # *start* of the <measure> in which it appears.
-            staves[whichN].insert(0, eachObj)
+            staveN = staves[whichN]
+            if t.TYPE_CHECKING:
+                assert isinstance(staveN, stream.Measure)
+            staveN.insert(0, eachObj)
 
     # create rest-filled measures for expected parts that had no <staff> tag in this <measure>
     for eachN in expectedNs:
@@ -3306,7 +3478,7 @@ def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter
             restVoice.id = '1'
             # just in case (e.g., when all the other voices are <mRest>)
             restVoice[0].m21wasMRest = True
-            staves[eachN] = stream.Measure([restVoice], number=int(elem.get('n', backupNum)))
+            staves[eachN] = stream.Measure([restVoice], number=elem.get('n', backupNum))
 
     # First search for Rest objects created by an <mRest> element that didn't have @dur set. This
     # will only work in cases where not all of the parts are resting. However, it avoids a more
@@ -3328,16 +3500,17 @@ def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter
 
 def sectionScoreCore(
     elem: Element,
-    allPartNs: t.List[str],
-    slurBundle: spanner.SpannerBundle,
+    allPartNs: t.Iterable[str],
+    spannerBundle: spanner.SpannerBundle,
     *,
     activeMeter: t.Optional[meter.TimeSignature] = None,
-    nextMeasureLeft: t.Optional[bar.Barline] = None,
+    nextMeasureLeft: t.Optional[bar.Repeat] = None,
     backupMeasureNum: int = 0
 ) -> t.Tuple[
-        t.Dict[str, t.List[stream.Measure]],
+        t.Dict[str, t.List[Music21Object]],
         t.Optional[meter.TimeSignature],
-        t.Optional[bar.Barline], int]:
+        t.Optional[bar.Repeat],
+        int]:
     '''
     This function is the "core" of both :func:`sectionFromElement` and :func:`scoreFromElement`,
     since both elements are treated quite similarly (though not identically). It's a separate and
@@ -3354,10 +3527,10 @@ def sectionScoreCore(
     :param allPartNs: A list or tuple of the expected @n attributes for the <staff> tags in this
         <section>. This tells the function how many parts there are and what @n values they use.
     :type allPartNs: iterable of str
-    :param slurBundle: This :class:`SpannerBundle` holds the :class:`~music21.spanner.Slur` objects
-        created during pre-processing. The slurs are attached to their respective :class:`Note` and
-        :class:`Chord` objects as they are processed.
-    :type slurBundle: :class:`music21.spanner.SpannerBundle`
+    :param spannerBundle: This :class:`SpannerBundle` holds the :class:`~music21.spanner.Slur`
+        objects created during pre-processing. The slurs are attached to their respective
+        :class:`Note` and :class:`Chord` objects as they are processed.
+    :type spannerBundle: :class:`music21.spanner.SpannerBundle`
 
     **Optional Keyword Parameters**
 
@@ -3407,14 +3580,14 @@ def sectionScoreCore(
     # loop below to help determine the proper duration of a full-measure rest. It must persist
     # between <section> elements, so it's a parameter for this function.
 
-    scoreTag = f'{MEI_NS}score'
-    sectionTag = f'{MEI_NS}section'
-    measureTag = f'{MEI_NS}measure'
-    scoreDefTag = f'{MEI_NS}scoreDef'
-    staffDefTag = f'{MEI_NS}staffDef'
+    scoreTag: str = f'{MEI_NS}score'
+    sectionTag: str = f'{MEI_NS}section'
+    measureTag: str = f'{MEI_NS}measure'
+    scoreDefTag: str = f'{MEI_NS}scoreDef'
+    staffDefTag: str = f'{MEI_NS}staffDef'
 
     # hold the music21.stream.Part that we're building
-    parsed: t.Dict[str, t.List[stream.Measure]] = {n: [] for n in allPartNs}
+    parsed: t.Dict[str, t.List[Music21Object]] = {n: [] for n in allPartNs}
     # hold things that belong in the following "Thing" (either Measure or Section)
     inNextThing: t.Dict[str, t.List[Music21Object]] = {n: [] for n in allPartNs}
 
@@ -3424,27 +3597,33 @@ def sectionScoreCore(
             backupMeasureNum += 1
             # process all the stuff in the <measure>
             measureResult = measureFromElement(eachElem, backupMeasureNum, allPartNs,
-                                               slurBundle=slurBundle,
+                                               spannerBundle=spannerBundle,
                                                activeMeter=activeMeter)
             # process and append each part's stuff to the staff
             for eachN in allPartNs:
+                measureResultN = measureResult[eachN]
+                if t.TYPE_CHECKING:
+                    assert isinstance(measureResultN, stream.Measure)
                 # insert objects specified in the immediately-preceding <scoreDef>
                 for eachThing in inNextThing[eachN]:
-                    measureResult[eachN].insert(0, eachThing)
+                    measureResultN.insert(0, eachThing)
                 inNextThing[eachN] = []
                 # if we got a left-side barline from the previous measure, use it
                 if nextMeasureLeft is not None:
-                    measureResult[eachN].leftBarline = deepcopy(nextMeasureLeft)
+                    measureResultN.leftBarline = deepcopy(nextMeasureLeft)
                 # add this Measure to the Part
-                parsed[eachN].append(measureResult[eachN])
+                parsed[eachN].append(measureResultN)
             # if we got a barline for the next <measure>
             if 'next @left' in measureResult:
-                nextMeasureLeft = measureResult['next @left']
+                nextLeft = measureResult['next @left']
+                if t.TYPE_CHECKING:
+                    assert isinstance(nextLeft, bar.Repeat)
+                nextMeasureLeft = nextLeft
             else:
                 nextMeasureLeft = None
 
         elif scoreDefTag == eachElem.tag:
-            localResult = scoreDefFromElement(eachElem, slurBundle)
+            localResult = scoreDefFromElement(eachElem, spannerBundle)
             for allPartObject in localResult['all-part objects']:
                 if t.TYPE_CHECKING:
                     # because 'all-part objects' is a list of objects
@@ -3469,7 +3648,7 @@ def sectionScoreCore(
 
         elif staffDefTag == eachElem.tag:
             if eachElem.get('n') is not None:
-                for eachObj in staffDefFromElement(eachElem, slurBundle).values():
+                for eachObj in staffDefFromElement(eachElem, spannerBundle).values():
                     if isinstance(eachObj, meter.TimeSignature):
                         activeMeter = eachObj
                     nStr: t.Optional[str] = eachElem.get('n')
@@ -3489,7 +3668,7 @@ def sectionScoreCore(
                 activeMeter=activeMeter,
                 nextMeasureLeft=nextMeasureLeft,
                 backupMeasureNum=backupMeasureNum,
-                slurBundle=slurBundle)
+                spannerBundle=spannerBundle)
             for eachN, eachList in localParsed.items():
                 # NOTE: "eachList" is a list of objects that will become a music21 Part.
                 #
@@ -3510,9 +3689,9 @@ def sectionScoreCore(
                     # Put the Instrument right in front, then remove it from "inNextThing" so it
                     # doesn't show up twice.
                     if theInstr:
-                        eachList.insert(0, theInstr)
                         if t.TYPE_CHECKING:
                             assert theInstrI is not None
+                        eachList.insert(0, theInstr)
                         del inNextThing[eachN][theInstrI]
 
                     for eachObj in eachList:
@@ -3536,8 +3715,8 @@ def sectionScoreCore(
                         parsed[eachN].append(eachObj)
                 elif scoreTag == elem.tag:
                     # If this is a <score>, we can just append the result of each <section> to the
-                    # list that will become the Part.
-                    parsed[eachN].append(eachList)
+                    # list that will become the Part.  We use extend to append a list to a list.
+                    parsed[eachN].extend(eachList)
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
@@ -3548,7 +3727,18 @@ def sectionScoreCore(
     return parsed, activeMeter, nextMeasureLeft, backupMeasureNum
 
 
-def sectionFromElement(elem, allPartNs, activeMeter, nextMeasureLeft, backupMeasureNum, slurBundle):
+def sectionFromElement(
+    elem: Element,
+    allPartNs: t.Iterable[str],
+    activeMeter: t.Optional[meter.TimeSignature],
+    nextMeasureLeft: t.Optional[bar.Repeat],
+    backupMeasureNum: int,
+    spannerBundle: spanner.SpannerBundle
+) -> t.Tuple[
+        t.Dict[str, t.List[Music21Object]],
+        t.Optional[meter.TimeSignature],
+        t.Optional[bar.Repeat],
+        int]:
     '''
     <section> Segment of music data.
 
@@ -3590,13 +3780,16 @@ def sectionFromElement(elem, allPartNs, activeMeter, nextMeasureLeft, backupMeas
     environLocal.printDebug('*** processing a <section>')
     return sectionScoreCore(elem,
                             allPartNs,
-                            slurBundle,
+                            spannerBundle,
                             activeMeter=activeMeter,
                             nextMeasureLeft=nextMeasureLeft,
                             backupMeasureNum=backupMeasureNum)
 
 
-def scoreFromElement(elem, slurBundle):
+def scoreFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle
+) -> stream.Score:
     '''
     <score> Full score view of the musical content.
 
@@ -3604,10 +3797,10 @@ def scoreFromElement(elem, slurBundle):
 
     :param elem: The <score> element to process.
     :type elem: :class:`~xml.etree.ElementTree.Element`
-    :param slurBundle: This :class:`SpannerBundle` holds the :class:`~music21.spanner.Slur` objects
-        created during pre-processing. The slurs are attached to their respective :class:`Note` and
-        :class:`Chord` objects as they are processed.
-    :type slurBundle: :class:`music21.spanner.SpannerBundle`
+    :param spannerBundle: This :class:`SpannerBundle` holds the :class:`~music21.spanner.Slur`
+        objects created during pre-processing. The slurs are attached to their respective
+        :class:`Note` and :class:`Chord` objects as they are processed.
+    :type spannerBundle: :class:`music21.spanner.SpannerBundle`
     :returns: A completed :class:`~music21.stream.Score` object.
 
     **Attributes/Elements Implemented:**
@@ -3641,27 +3834,27 @@ def scoreFromElement(elem, slurBundle):
 
     # Get a tuple of all the @n attributes for the <staff> tags in this score. Each <staff> tag
     # corresponds to what will be a music21 Part.
-    allPartNs = allPartsPresent(elem)
+    allPartNs: t.Tuple[str, ...] = allPartsPresent(elem)
 
     # This is the actual processing.
-    parsed = sectionScoreCore(elem, allPartNs, slurBundle=slurBundle)[0]
+    parsed: t.Dict[str, t.List[Music21Object]] = (
+        sectionScoreCore(elem, allPartNs, spannerBundle=spannerBundle)[0]
+    )
 
     # Convert the dict to a Score
     # We must iterate here over "allPartNs," which preserves the part-order found in the MEI
     # document. Iterating the keys in "parsed" would not preserve the order.
     environLocal.printDebug('*** making the Score')
-    theScore = [stream.Part() for _ in range(len(allPartNs))]
+    thePartList: t.List[stream.Part] = [stream.Part() for _ in range(len(allPartNs))]
     for i, eachN in enumerate(allPartNs):
         # set "atSoundingPitch" so transposition works
-        theScore[i].atSoundingPitch = False
+        thePartList[i].atSoundingPitch = False
         for eachObj in parsed[eachN]:
-            theScore[i].append(eachObj)
-    theScore = stream.Score(theScore)
+            thePartList[i].append(eachObj)
+    theScore: stream.Score = stream.Score(thePartList)
 
     # put slurs in the Score
-    theScore.append(list(slurBundle))
-    # TODO: when all the Slur objects are at the end, they'll only be outputted properly if the
-    #       whole Score is outputted. show()-ing one Part or Measure won't display the slurs.
+    theScore.append(list(spannerBundle))
 
     return theScore
 

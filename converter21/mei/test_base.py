@@ -51,9 +51,9 @@ from music21 import spanner
 from music21 import stream
 from music21 import tie
 
-from music21.mei import base
-from music21.mei.base import _XMLID
-from music21.mei.base import MEI_NS
+from converter21.mei import base
+from converter21.mei.base import _XMLID
+from converter21.mei.base import MEI_NS
 
 # pylint: disable=pointless-string-statement
 
