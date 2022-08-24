@@ -631,7 +631,7 @@ def _makeArticList(attr: str) -> t.List[articulations.Articulation]:
     return articList
 
 
-def _getOctaveShift(dis: t.Union[t.Literal['8', '15', '22'], None], disPlace: str) -> int:
+def _getOctaveShift(dis: t.Optional[t.Literal['8', '15', '22']], disPlace: str) -> int:
     '''
     Use :func:`_getOctaveShift` to calculate the :attr:`octaveShift` attribute for a
     :class:`~music21.clef.Clef` subclass. Any of the arguments may be ``None``.
@@ -1572,7 +1572,7 @@ def _guessTuplets(theLayer: t.Iterable[Music21Object]) -> t.Iterable[Music21Obje
 def scoreDefFromElement(
     elem: Element,
     slurBundle: t.Optional[spanner.SpannerBundle] = None
-) -> t.Dict[str, t.List[Music21Object]]:
+) -> t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]:
     '''
     <scoreDef> Container for score meta-information.
 
@@ -1668,16 +1668,22 @@ def scoreDefFromElement(
     # make the dict
     allParts: str = 'all-part objects'
     wholeScore: str = 'whole-score objects'
-    post: t.Dict[str, t.List[Music21Object]] = {allParts: [], wholeScore: []}
+    post: t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]] = {
+        allParts: [],
+        wholeScore: []
+    }
 
     # 1.) process all-part attributes
     # --> time signature
+    postAllParts = post[allParts]
+    if t.TYPE_CHECKING:
+        assert isinstance(postAllParts, list)
     if elem.get('meter.count') is not None:
-        post[allParts].append(_timeSigFromAttrs(elem))
+        postAllParts.append(_timeSigFromAttrs(elem))
 
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-        post[allParts].append(_keySigFromAttrs(elem))
+        postAllParts.append(_keySigFromAttrs(elem))
 
     # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
     for eachGrp in elem.iterfind(f'{MEI_NS}staffGrp'):
@@ -1689,8 +1695,10 @@ def scoreDefFromElement(
 def staffGrpFromElement(
     elem: Element,
     slurBundle: t.Optional[spanner.SpannerBundle] = None,
-    staffDefDict: t.Optional[t.Dict[str, t.List[Music21Object]]] = None
-) -> t.Dict[str, t.List[Music21Object]]:
+    staffDefDict: t.Optional[
+        t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]
+    ] = None
+) -> t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]:
     '''
     <staffGrp> A group of bracketed or braced staves.
 
@@ -1751,7 +1759,10 @@ def staffGrpFromElement(
     return staffDefDict
 
 
-def staffDefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def staffDefFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None
+) -> t.Dict[str, Music21Object]:
     '''
     <staffDef> Container for staff meta-information.
 
@@ -1860,9 +1871,10 @@ def staffDefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argume
     tagToFunction = {f'{MEI_NS}clef': clefFromElement}
 
     # first make the Instrument
-    post = elem.find(f'{MEI_NS}instrDef')
-    if post is not None:
-        post = {'instrument': instrDefFromElement(post)}
+    instrDefElem = elem.find(f'{MEI_NS}instrDef')
+    post: t.Dict[str, Music21Object]
+    if instrDefElem is not None:
+        post = {'instrument': instrDefFromElement(instrDefElem)}
     else:
         try:
             post = {'instrument': instrument.fromString(elem.get('label', ''))}
@@ -1870,15 +1882,21 @@ def staffDefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argume
             post = {}
 
     if 'instrument' in post:
-        post['instrument'].partName = elem.get('label')
-        post['instrument'].partAbbreviation = elem.get('label.abbr')
-        post['instrument'].partId = elem.get('n')
+        inst = post['instrument']
+        if t.TYPE_CHECKING:
+            assert isinstance(inst, instrument.Instrument)
+        inst.partName = elem.get('label')
+        inst.partAbbreviation = elem.get('label.abbr')
+        inst.partId = elem.get('n')
 
     # --> transposition
     if elem.get('trans.semi') is not None:
         if 'instrument' not in post:
             post['instrument'] = instrument.Instrument()
-        post['instrument'].transposition = _transpositionFromAttrs(elem)
+        inst = post['instrument']
+        if t.TYPE_CHECKING:
+            assert isinstance(inst, instrument.Instrument)
+        inst.transposition = _transpositionFromAttrs(elem)
 
     # process other part-specific information
     # --> time signature
@@ -1891,14 +1909,20 @@ def staffDefFromElement(elem, slurBundle=None):  # pylint: disable=unused-argume
 
     # --> clef
     if elem.get('clef.shape') is not None:
-        el = Element(
-            'clef', {
-                'shape': elem.get('clef.shape'),
-                'line': elem.get('clef.line'),
-                'dis': elem.get('clef.dis'),
-                'dis.place': elem.get('clef.dis.place')
-            }
-        )
+        shape: t.Optional[str] = elem.get('clef.shape')
+        line: t.Optional[str] = elem.get('clef.line')
+        dis: t.Optional[str] = elem.get('clef.dis')
+        displace: t.Optional[str] = elem.get('clef.dis.place')
+        attribDict: t.Dict[str, str] = {}
+        if shape:
+            attribDict['shape'] = shape
+        if line:
+            attribDict['line'] = line
+        if dis:
+            attribDict['dis'] = dis
+        if displace:
+            attribDict['dis.place'] = displace
+        el = Element('clef', attribDict)
         post['clef'] = clefFromElement(el)
 
     embeddedItems = _processEmbeddedElements(elem.findall('*'), tagToFunction, elem.tag, slurBundle)
@@ -1937,7 +1961,10 @@ def dotFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
     return 1
 
 
-def articFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def articFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> t.List[articulations.Articulation]:
     '''
     <artic> An indication of how to play a note or chord.
 
@@ -1998,7 +2025,10 @@ def articFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
         return []
 
 
-def accidFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def accidFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> t.Optional[str]:
     '''
     <accid> Records a temporary alteration to the pitch of a note.
 
@@ -2057,7 +2087,10 @@ def accidFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
         return _accidentalFromAttr(elem.get('accid'))
 
 
-def sylFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def sylFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> note.Lyric:
     '''
     <syl> Individual lyric syllable.
 
@@ -2097,20 +2130,31 @@ def sylFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
     - MEI.ptrref: ptr ref
     - MEI.shared: address bibl date identifier lb name num rend repository stack title
     '''
-    wordPos = elem.get('wordpos')
-    wordPosDict = {'i': 'begin', 'm': 'middle', 't': 'end', None: None}
+    wordPosDict: t.Dict[t.Optional[str], t.Optional[t.Literal['begin', 'middle', 'end']]] = {
+        'i': 'begin',
+        'm': 'middle',
+        't': 'end',
+        None: None
+    }
+    conDict: t.Dict[t.Optional[str], str] = {
+        's': ' ',
+        'd': '-',
+        't': '~',
+        'u': '_',
+        None: '-'
+    }
 
-    conDict = {'s': ' ', 'd': '-', 't': '~', 'u': '_', None: '-'}
+    wordPos: t.Optional[str] = elem.get('wordpos')
+    syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict[wordPos]
+    con: str = conDict[elem.get('con')]
+
+    text: str = elem.text if elem.text is not None else ''
     if 'i' == wordPos:
-        text = elem.text + conDict[elem.get('con')]
+        text = text + con
     elif 'm' == wordPos:
-        text = conDict[elem.get('con')] + elem.text + conDict[elem.get('con')]
+        text = con + text + con
     elif 't' == wordPos:
-        text = conDict[elem.get('con')] + elem.text
-    else:
-        text = elem.text
-
-    syllabic = wordPosDict[wordPos]
+        text = con + text
 
     if syllabic:
         return note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
@@ -2118,7 +2162,11 @@ def sylFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
         return note.Lyric(text=text)
 
 
-def verseFromElement(elem, backupN=None, slurBundle=None):  # pylint: disable=unused-argument
+def verseFromElement(
+    elem: Element,
+    backupN: t.Optional[int] = None,
+    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> t.List[note.Lyric]:
     '''
     <verse> Lyric verse.
 
@@ -2155,16 +2203,19 @@ def verseFromElement(elem, backupN=None, slurBundle=None):  # pylint: disable=un
 
     - MEI.shared: dir dynam lb space tempo
     '''
-    syllables = [sylFromElement(s) for s in elem.findall(f'./{MEI_NS}syl')]
+    syllables: t.List[note.Lyric] = [sylFromElement(s) for s in elem.findall(f'./{MEI_NS}syl')]
     for eachSyl in syllables:
         try:
-            eachSyl.number = int(elem.get('n', backupN))
+            eachSyl.number = int(elem.get('n', backupN))  # type: ignore
         except (TypeError, ValueError):
             environLocal.warn(_BAD_VERSE_NUMBER.format(elem.get('n', backupN)))
     return syllables
 
 
-def noteFromElement(elem, slurBundle=None):
+def noteFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None
+) -> note.Note:
     # NOTE: this function should stay in sync with chordFromElement() where sensible
     '''
     <note> is a single pitched event.
@@ -2248,13 +2299,13 @@ def noteFromElement(elem, slurBundle=None):
                      f'{MEI_NS}syl': sylFromElement}
 
     # start with a Note with Pitch
-    theNote = _accidentalFromAttr(elem.get('accid'))
-    theNote = safePitch(elem.get('pname', ''), theNote, elem.get('oct', ''))
-    theNote = note.Note(theNote)
+    theAccid: t.Optional[str] = _accidentalFromAttr(elem.get('accid'))
+    thePitch: pitch.Pitch = safePitch(elem.get('pname', ''), theAccid, elem.get('oct', ''))
+    theNote: note.Note = note.Note(thePitch)
 
-    # set the Note's duration
-    theDuration = _qlDurationFromAttr(elem.get('dur'))
-    theDuration = makeDuration(theDuration, int(elem.get('dots', 0)))
+    # set the Note's duration (we will update this if we find any inner <dot> elements)
+    floatDur: float = _qlDurationFromAttr(elem.get('dur'))
+    theDuration: duration.Duration = makeDuration(floatDur, int(elem.get('dots', 0)))
     theNote.duration = theDuration
 
     # iterate all immediate children
@@ -2274,23 +2325,28 @@ def noteFromElement(elem, slurBundle=None):
 
     # adjust for @accid.ges if present
     if elem.get('accid.ges') is not None:
-        theNote.pitch.accidental = pitch.Accidental(_accidGesFromAttr(elem.get('accid.ges', '')))
+        accid: t.Optional[str] = _accidGesFromAttr(elem.get('accid.ges', ''))
+        if accid is not None:
+            theNote.pitch.accidental = pitch.Accidental(accid)
 
     # we can only process slurs if we got a SpannerBundle as the "slurBundle" argument
     if slurBundle is not None:
         addSlurs(elem, theNote, slurBundle)
 
     # id in the @xml:id attribute
-    if elem.get(_XMLID) is not None:
-        theNote.id = elem.get(_XMLID)
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theNote.id = xmlId
 
     # articulations in the @artic attribute
-    if elem.get('artic') is not None:
-        theNote.articulations.extend(_makeArticList(elem.get('artic')))
+    artic: t.Optional[str] = elem.get('artic')
+    if artic is not None:
+        theNote.articulations.extend(_makeArticList(artic))
 
     # ties in the @tie attribute
-    if elem.get('tie') is not None:
-        theNote.tie = _tieFromAttr(elem.get('tie'))
+    theTie: t.Optional[str] = elem.get('tie')
+    if theTie is not None:
+        theNote.tie = _tieFromAttr(theTie)
 
     # dots from inner <dot> elements
     if dotElements > 0:
@@ -2307,11 +2363,15 @@ def noteFromElement(elem, slurBundle=None):
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
-        theNote = scaleToTuplet(theNote, elem)
+        obj = scaleToTuplet(theNote, elem)
+        if t.TYPE_CHECKING:
+            # because scaleToTuplet always returns whatever objs it was passed (modified)
+            assert isinstance(obj, note.Note)
+        theNote = obj
 
     # lyrics indicated with <verse>
     if elem.find(f'./{MEI_NS}verse') is not None:
-        tempLyrics = []
+        tempLyrics: t.List[note.Lyric] = []
         for i, eachVerse in enumerate(elem.findall(f'./{MEI_NS}verse')):
             tempLyrics.extend(verseFromElement(eachVerse, backupN=i + 1))
         theNote.lyrics = tempLyrics
@@ -2319,7 +2379,10 @@ def noteFromElement(elem, slurBundle=None):
     return theNote
 
 
-def restFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
+def restFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> note.Rest:
     '''
     <rest/> is a non-sounding event found in the source being transcribed
 
@@ -2359,21 +2422,29 @@ def restFromElement(elem, slurBundle=None):  # pylint: disable=unused-argument
     '''
     # NOTE: keep this in sync with spaceFromElement()
 
-    theDuration = _qlDurationFromAttr(elem.get('dur'))
-    theDuration = makeDuration(theDuration, int(elem.get('dots', 0)))
+    floatDur: float = _qlDurationFromAttr(elem.get('dur'))
+    theDuration: duration.Duration = makeDuration(floatDur, int(elem.get('dots', 0)))
     theRest = note.Rest(duration=theDuration)
 
-    if elem.get(_XMLID) is not None:
-        theRest.id = elem.get(_XMLID)
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theRest.id = xmlId
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
-        theRest = scaleToTuplet(theRest, elem)
+        obj = scaleToTuplet(theRest, elem)
+        if t.TYPE_CHECKING:
+            # because scaleToTuplet returns whatever it was passed (modified)
+            assert isinstance(obj, note.Rest)
+        theRest = obj
 
     return theRest
 
 
-def mRestFromElement(elem, slurBundle=None):
+def mRestFromElement(
+    elem: Element,
+    slurBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> note.Rest:
     '''
     <mRest/> Complete measure rest in any meter.
 
@@ -2391,7 +2462,7 @@ def mRestFromElement(elem, slurBundle=None):
         return restFromElement(elem, slurBundle)
     else:
         theRest = restFromElement(elem, slurBundle)
-        theRest.m21wasMRest = True
+        theRest.m21wasMRest = True  # type: ignore
         return theRest
 
 
@@ -3255,8 +3326,18 @@ def measureFromElement(elem, backupNum, expectedNs, slurBundle=None, activeMeter
     return staves
 
 
-def sectionScoreCore(elem, allPartNs, slurBundle, *,
-                     activeMeter=None, nextMeasureLeft=None, backupMeasureNum=0):
+def sectionScoreCore(
+    elem: Element,
+    allPartNs: t.List[str],
+    slurBundle: spanner.SpannerBundle,
+    *,
+    activeMeter: t.Optional[meter.TimeSignature] = None,
+    nextMeasureLeft: t.Optional[bar.Barline] = None,
+    backupMeasureNum: int = 0
+) -> t.Tuple[
+        t.Dict[str, t.List[stream.Measure]],
+        t.Optional[meter.TimeSignature],
+        t.Optional[bar.Barline], int]:
     '''
     This function is the "core" of both :func:`sectionFromElement` and :func:`scoreFromElement`,
     since both elements are treated quite similarly (though not identically). It's a separate and
@@ -3333,9 +3414,9 @@ def sectionScoreCore(elem, allPartNs, slurBundle, *,
     staffDefTag = f'{MEI_NS}staffDef'
 
     # hold the music21.stream.Part that we're building
-    parsed = {n: [] for n in allPartNs}
+    parsed: t.Dict[str, t.List[stream.Measure]] = {n: [] for n in allPartNs}
     # hold things that belong in the following "Thing" (either Measure or Section)
-    inNextThing = {n: [] for n in allPartNs}
+    inNextThing: t.Dict[str, t.List[Music21Object]] = {n: [] for n in allPartNs}
 
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section>
@@ -3365,6 +3446,9 @@ def sectionScoreCore(elem, allPartNs, slurBundle, *,
         elif scoreDefTag == eachElem.tag:
             localResult = scoreDefFromElement(eachElem, slurBundle)
             for allPartObject in localResult['all-part objects']:
+                if t.TYPE_CHECKING:
+                    # because 'all-part objects' is a list of objects
+                    assert isinstance(allPartObject, Music21Object)
                 if isinstance(allPartObject, meter.TimeSignature):
                     activeMeter = allPartObject
                 for i, eachN in enumerate(allPartNs):
@@ -3376,7 +3460,11 @@ def sectionScoreCore(elem, allPartNs, slurBundle, *,
                     inNextThing[eachN].append(to_insert)
             for eachN in allPartNs:
                 if eachN in localResult:
-                    for eachObj in localResult[eachN].values():
+                    resultNDict = localResult[eachN]
+                    if t.TYPE_CHECKING:
+                        # because 'n' is a dict[str, Music21Object]
+                        assert isinstance(resultNDict, dict)
+                    for eachObj in resultNDict.values():
                         inNextThing[eachN].append(eachObj)
 
         elif staffDefTag == eachElem.tag:
@@ -3384,7 +3472,9 @@ def sectionScoreCore(elem, allPartNs, slurBundle, *,
                 for eachObj in staffDefFromElement(eachElem, slurBundle).values():
                     if isinstance(eachObj, meter.TimeSignature):
                         activeMeter = eachObj
-                    inNextThing[eachElem.get('n')].append(eachObj)
+                    nStr: t.Optional[str] = eachElem.get('n')
+                    if nStr:
+                        inNextThing[nStr].append(eachObj)
             else:
                 # At the moment, to process this here, we need an @n on the <staffDef>. A document
                 # may have a still-valid <staffDef> if the <staffDef> has an @xml:id with which
@@ -3421,6 +3511,8 @@ def sectionScoreCore(elem, allPartNs, slurBundle, *,
                     # doesn't show up twice.
                     if theInstr:
                         eachList.insert(0, theInstr)
+                        if t.TYPE_CHECKING:
+                            assert theInstrI is not None
                         del inNextThing[eachN][theInstrI]
 
                     for eachObj in eachList:
@@ -3439,6 +3531,8 @@ def sectionScoreCore(elem, allPartNs, slurBundle, *,
                     # must "flatten" everything so it doesn't cause a disaster when we try to make
                     # a Part out of it.
                     for eachObj in eachList:
+                        if t.TYPE_CHECKING:
+                            assert isinstance(eachObj, stream.Measure)
                         parsed[eachN].append(eachObj)
                 elif scoreTag == elem.tag:
                     # If this is a <score>, we can just append the result of each <section> to the
