@@ -1477,18 +1477,19 @@ def scaleToTuplet(
     :returns: ``objs`` with scaled durations.
     :rtype: (list of) :class:`~music21.base.Music21Object`
     '''
-    wasList: bool = True
-    if isinstance(objs, Music21Object):
+    if not isinstance(objs, list):
         objs = [objs]
         wasList = False
+    else:
+        wasList = True
 
     for obj in objs:
         if not isinstance(obj, (note.Note, note.Rest, chord.Chord)):
             # silently skip objects that don't have a duration
             continue
-        if isinstance(obj, note.Note) and isinstance(obj.duration, duration.GraceDuration):
-            # silently skip grace notes (they don't have a duration either)
-            continue
+#         if isinstance(obj, note.Note) and isinstance(obj.duration, duration.GraceDuration):
+#             # silently skip grace notes (they don't have a duration either)
+#             continue
 
         elif elem.get('m21TupletSearch') is not None:
             obj.m21TupletSearch = elem.get('m21TupletSearch')  # type: ignore
@@ -3718,8 +3719,8 @@ def sectionScoreCore(
                         parsed[eachN].append(eachObj)
                 elif scoreTag == elem.tag:
                     # If this is a <score>, we can just append the result of each <section> to the
-                    # list that will become the Part.  We use extend to append a list to a list.
-                    parsed[eachN].extend(eachList)
+                    # list that will become the Part.
+                    parsed[eachN].append(eachList)
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
