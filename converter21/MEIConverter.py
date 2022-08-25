@@ -19,7 +19,7 @@ from music21.converter.subConverters import SubConverter
 
 from converter21.mei import MeiToM21Converter
 
-class ConverterMEI(SubConverter):
+class MEIConverter(SubConverter):
     '''
     Converter for MEI. You must use an ".mei" file extension for MEI files because music21 will
     parse ".xml" files as MusicXML.

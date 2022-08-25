@@ -16,3 +16,4 @@ __all__ = [
 ]
 
 from .HumdrumConverter import HumdrumConverter
+from .MEIConverter import MEIConverter

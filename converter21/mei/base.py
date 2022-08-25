@@ -3436,7 +3436,7 @@ def measureFromElement(
     staffDefTag: str = f'{MEI_NS}staffDef'
 
     # track the bar's duration
-    maxBarDuration: OffsetQL = opFrac(0)
+    maxBarDuration: t.Optional[OffsetQL] = None
 
     # iterate all immediate children
     for eachElem in elem.iterfind('*'):
@@ -3450,7 +3450,10 @@ def measureFromElement(
                 number=elem.get('n', backupNum)  # number can take string or int, interchangeably
             )
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
-            maxBarDuration = max(maxBarDuration, thisBarDuration)
+            if maxBarDuration is None:
+                maxBarDuration = thisBarDuration
+            else:
+                maxBarDuration = max(maxBarDuration, thisBarDuration)
         elif staffDefTag == eachElem.tag:
             if nStr is None:
                 environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n'))
