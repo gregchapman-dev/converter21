@@ -281,6 +281,10 @@ class GridSlice:
         return self.sliceType == SliceType.VerseLabels
 
     @property
+    def isSectionNameSlice(self) -> bool:
+        return self.sliceType == SliceType.SectionNames
+
+    @property
     def isManipulatorSlice(self) -> bool:
         return self.sliceType == SliceType.Manipulators
 

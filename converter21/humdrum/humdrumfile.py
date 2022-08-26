@@ -1043,8 +1043,9 @@ class HumdrumFile(HumdrumFileContent):
         # section analysis (only used for repeat endings, the ABA stuff is uninteresting
         # notation-wise, and music21 has no way to store it in any case)
         currentSection: str = ''
-        if self._sectionLabels[startLineIdx] is not None:
-            currentSection = self._sectionLabels[startLineIdx].text
+        sectionLabel: t.Optional[HumdrumToken] = self._sectionLabels[startLineIdx]
+        if sectionLabel is not None:
+            currentSection = sectionLabel.text
             if currentSection.startswith('*>'):
                 currentSection = currentSection[2:]
 
@@ -1054,10 +1055,11 @@ class HumdrumFile(HumdrumFileContent):
         if currentSection and currentSection[-1].isdigit():
             withNumStr: str = ''
             noNumStr: str = ''
-            if self._sectionLabels[startLineIdx] is not None:
-                withNumStr = self._sectionLabels[startLineIdx].text
-            if self._numberlessLabels[startLineIdx] is not None:
-                noNumStr = self._numberlessLabels[startLineIdx].text
+            if sectionLabel is not None:
+                withNumStr = sectionLabel.text
+            numberlessLabel: t.Optional[HumdrumToken] = self._numberlessLabels[startLineIdx]
+            if numberlessLabel is not None:
+                noNumStr = numberlessLabel.text
 
             # Humdrum section names are technically free-form.  Repeat endings
             # are marked by a section name that is the current section name
@@ -1073,7 +1075,7 @@ class HumdrumFile(HumdrumFileContent):
                     ending = False
         elif currentSection != self._lastSection:
             newSection = True
-            if self._sectionLabels[startLineIdx] is not None:
+            if sectionLabel is not None:
                 self._lastSection = currentSection
             else:
                 self._lastSection = ''

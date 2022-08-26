@@ -206,16 +206,10 @@ class MeasureData:
                     self.events.append(event)
 
         # parse any RepeatBracket this measure is in.
-        for rb in self.spannerBundle:
-            if not isinstance(rb, m21.spanner.RepeatBracket):
-                # not a repeat bracket
-                continue
-
-            if self.m21Measure not in rb:
-                # not our repeat bracket
-                continue
-
+        for rb in self.m21Measure.getSpannerSites([m21.spanner.RepeatBracket]):
             # measure is in this RepeatBracket
+            if t.TYPE_CHECKING:
+                assert isinstance(rb, m21.spanner.RepeatBracket)
             self.inRepeatBracket = True
             if rb.overrideDisplay:
                 self.repeatBracketName = rb.overrideDisplay
