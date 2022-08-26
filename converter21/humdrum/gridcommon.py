@@ -71,6 +71,7 @@ class SliceType(IntEnum):
     LabelAbbrs = auto()        # Interpretation, RegularInterpretation, Spined
     Ottavas = auto()           # Interpretation, RegularInterpretation, Spined
     VerseLabels = auto()       # Interpretation, RegularInterpretation, Spined
+    SectionNames = auto()      # Interpretation, RegularInterpretation, Spined
     RegularInterpretation_ = auto()
     Exclusives = auto()        # Interpretation, Manipulator, Spined
     Terminators = auto()       # Interpretation, Manipulator, Spined

@@ -3,8 +3,8 @@ rm -r __pycache__
 rm -r converter21/__pycache__
 rm -r converter21/humdrum/__pycache__
 rm -r tests/__pycache__
-rm -r dist build
 rm -r converter21.egg-info
+rm -r dist build
 
 # Build dist and wheel:
 python3 -m build

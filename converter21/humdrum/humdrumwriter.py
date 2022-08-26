@@ -13,6 +13,7 @@
 import sys
 import copy
 from collections import OrderedDict
+from enum import IntEnum, auto
 import typing as t
 
 import music21 as m21
@@ -50,6 +51,12 @@ from converter21.humdrum import ToolTremolo
 # pylint: disable=protected-access
 funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no cover
 # pylint: enable=protected-access
+
+class RepeatBracketState(IntEnum):
+    NoEndings = 0
+    InBracket = auto()
+    FinishedBracket = auto()
+
 
 class HumdrumWriter:
     Debug: bool = False  # can be set to True for more debugging
@@ -1100,9 +1107,217 @@ class HumdrumWriter:
             status = status and self._insertMeasure(outgrid, m)
 
         self._moveBreaksToEndOfPreviousMeasure(outgrid)
+        self._insertRepeatBracketSlices(outgrid)
         self._insertPartNames(outgrid)
 
         return status
+
+    @staticmethod
+    def _fillAllVoicesInSlice(gridSlice: GridSlice, string: str) -> None:
+        durationZero: HumNum = opFrac(0)
+
+        for part in gridSlice.parts:
+            for staff in part.staves:
+                if staff is None:
+                    raise HumdrumInternalError(
+                        'staff is None in HumdrumWriter._fillAllVoicesInSlice'
+                    )
+
+                voiceCount: int = len(staff.voices)
+                if voiceCount == 0:
+                    staff.voices.append(GridVoice(string, durationZero))
+                    continue
+
+                for v, gv in enumerate(staff.voices):
+                    if gv is None:
+                        gv = GridVoice(string, durationZero)
+                        staff.voices[v] = gv
+                    elif gv.token is None:
+                        gv.token = HumdrumToken(string)
+                    else:
+                        raise HumdrumInternalError(
+                            'gv.token is not None in HumdrumWriter._fillAllVoicesInSlice'
+                        )
+
+    @staticmethod
+    def _insertSectionNameSlice(outgm: GridMeasure, string: str):
+        firstDataIdx: int = 0  # if we find no data, we'll just insert before idx 0
+        for i, gridSlice in enumerate(outgm.slices):
+            if gridSlice.isDataSlice:
+                firstDataIdx = i
+                break
+
+        firstDataSlice: GridSlice = outgm.slices[firstDataIdx]
+        sectionNameSlice: GridSlice = GridSlice(
+            outgm, firstDataSlice.timestamp, SliceType.SectionNames
+        )
+
+        sectionNameSlice.initializeBySlice(firstDataSlice)
+        HumdrumWriter._fillAllVoicesInSlice(sectionNameSlice, string)
+        outgm.slices.insert(firstDataIdx, sectionNameSlice)
+
+    @staticmethod
+    def _insertRepeatBracketSlices(outgrid: HumGrid) -> None:
+        if not outgrid.hasRepeatBrackets:
+            return
+
+        def incrementName(sectionName: str) -> str:
+            # 'A' ... 'Z', 'AA' ... 'ZZ', 'AAA' .. 'ZZZ', etc
+            if not sectionName or sectionName[0] not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                raise HumdrumInternalError('invalid section name generated')
+
+            oldFirstChar: str = sectionName[0]
+            for c in sectionName[1:]:
+                if c != oldFirstChar:
+                    raise HumdrumInternalError('invalid section name generated')
+
+            # wraparound case
+            if oldFirstChar == 'Z':
+                # 'Z' -> 'AA', 'ZZ' -> 'AAA', etc
+                return 'A' * (len(sectionName) + 1)
+
+            # regular case
+            newFirstChar: str = chr(ord(oldFirstChar) + 1)
+            return newFirstChar * len(sectionName)
+
+        def startBracket(
+            sectionName: str,
+            bracketName: str,
+            fallbackNumber: int,  # use then increment if bracketName is not str(int)
+            gm: GridMeasure,
+        ) -> int:
+            bracketNumber: int
+            try:
+                bracketNumber = int(bracketName)
+            except ValueError:
+                bracketNumber = fallbackNumber
+
+            HumdrumWriter._insertSectionNameSlice(gm, f'*>{sectionName}{bracketNumber}')
+            return bracketNumber + 1
+
+        def startSection(
+            sectionName: str,
+            gm: GridMeasure
+        ):
+            HumdrumWriter._insertSectionNameSlice(gm, f'*>{sectionName}')
+
+        # the suffix of a bracket's section name in a Humdrum file must be numeric
+        # if the bracket name is not numeric, just use 1, 2, 3 instead (it ain't
+        # right, but it's better than no bracket at all).
+        fallbackNumber: int = 1
+        currSectionName: str = 'A'
+        state: RepeatBracketState = RepeatBracketState.NoEndings
+
+        for m, gm in enumerate(outgrid.measures):
+            if m == 0:
+                # Since we know there are repeat brackets, we must start section A
+                # before anything, or *>A1 will not be recognized as an ending
+                # emit '*>A' (where A is currSectionName)
+                startSection(currSectionName, gm)
+
+            if state == RepeatBracketState.NoEndings and not gm.inRepeatBracket:
+                # this is almost always true: we're not currently within repeat
+                # brackets and this measure isn't in one either.  Get out quick
+                # to avoid the state machine gauntlet.
+                continue
+
+            # state machine
+            if state == RepeatBracketState.NoEndings:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # start the first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # start the first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a start/stop,
+                    # even though there was no start.
+                    # start the first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # illegal, but we will treat it like a start,
+                    # even though there was no start.
+                    # start the first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.InBracket
+#               else:  # not gm.inRepeatBracket
+#                   # This won't happen, we already handled it before the state machine code.
+#                   state = RepeatBracketState.NoEndings
+
+            elif state == RepeatBracketState.InBracket:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a stopsRepeatBracket
+                    # say it's finished
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # illegal, but we will fake a stop to make it legal.
+                    # InBracket + stopsRepeatBracket -> FinishedBracket
+                    # FinishedBracket + startsRepeatBracket does:
+                    # start a bracket, and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # say it's finished
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # say it's still not finished
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket:
+                    # illegal, but we will fake a stop to make it legal.
+                    # InBracket + stopsRepeatBracket -> FinishedBracket
+                    # FinishedBracket + not inRepeatBracket does:
+                    # start the next section, these endings are done
+                    currSectionName = incrementName(currSectionName)
+                    startSection(currSectionName, gm)
+                    state = RepeatBracketState.NoEndings
+
+            elif state == RepeatBracketState.FinishedBracket:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # start a non-first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # start a non-first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a start/stop,
+                    # even though there was no start.
+                    # start a non-first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # illegal, but we will treat it like a start,
+                    # even though there was no start.
+                    # start a non-first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket:
+                    # start the next section, these endings are done
+                    currSectionName = incrementName(currSectionName)
+                    startSection(currSectionName, gm)
+                    state = RepeatBracketState.NoEndings
 
     '''
     //////////////////////////////
@@ -1245,6 +1460,14 @@ class HumdrumWriter:
                 # barline fermatas, on the other hand, need to be checked in every staff
                 gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
                 gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
+
+                # repeat brackets
+                gm.inRepeatBracket = xmeasure.inRepeatBracket
+                gm.startsRepeatBracket = xmeasure.startsRepeatBracket
+                gm.stopsRepeatBracket = xmeasure.stopsRepeatBracket
+                gm.repeatBracketName = xmeasure.repeatBracketName
+                if gm.inRepeatBracket:
+                    outgrid.hasRepeatBrackets = True
 
         curTime: t.List[HumNum] = [opFrac(-1)] * len(measureDatas)
         measureDurs: t.List[t.Optional[HumNum]] = [None] * len(measureDatas)
