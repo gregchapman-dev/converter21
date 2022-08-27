@@ -4117,7 +4117,6 @@ class Test(unittest.TestCase):
         activeMeter = mock.MagicMock(name='activeMeter')
         # this must match Measure.duration.quarterLength
         activeMeter.barDuration = duration.Duration(4.0)
-        mockMeasure.duration = duration.Duration(4.0)
         # prepare the mock Measure object returned by mockMeasure
         mockMeasure.return_value = mock.MagicMock(name='Measure 1')
         # prepare mock of _makeBarlines() which returns "staves"

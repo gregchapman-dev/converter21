@@ -1035,11 +1035,12 @@ def _processEmbeddedElements(
     [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
     '''
     processed: t.List[Music21Object] = []
-    result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]]
 
     for eachElem in elements:
         if eachElem.tag in mapping:
-            result = mapping[eachElem.tag](eachElem, spannerBundle)
+            result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]] = (
+                mapping[eachElem.tag](eachElem, spannerBundle)
+            )
             if isinstance(result, (tuple, list)):
                 for eachObject in result:
                     processed.append(eachObject)
@@ -1072,12 +1073,11 @@ def _keySigFromAttrs(elem: Element) -> t.Union[key.Key, key.KeySignature]:
 
     Returns the key or key signature.
     '''
-    if elem.get('key.pname') is not None:
+    pname: t.Optional[str] = elem.get('key.pname')
+    if pname is not None:
         # @key.accid, @key.mode, @key.pname
-        mode: t.Optional[str] = elem.get('key.mode', '')
-        step: t.Optional[str] = elem.get('key.pname')
-        if step is None:  # pragma: no cover
-            raise MeiValidityError('Key missing step')
+        mode: str = elem.get('key.mode', '')
+        step: str = pname
         accidental: t.Optional[str] = _accidentalFromAttr(elem.get('key.accid'))
         tonic: str
         if accidental is None:
@@ -1490,6 +1490,7 @@ def scaleToTuplet(
 #         if isinstance(obj, note.Note) and isinstance(obj.duration, duration.GraceDuration):
 #             # silently skip grace notes (they don't have a duration either)
 #             continue
+# THIS CAUSED TEST FAILURE
 
         elif elem.get('m21TupletSearch') is not None:
             obj.m21TupletSearch = elem.get('m21TupletSearch')  # type: ignore
@@ -1771,7 +1772,7 @@ def staffGrpFromElement(
     for el in elem.findall('*'):
         # return all staff defs in this staff group
         nStr: t.Optional[str] = el.get('n')
-        if el.tag == staffDefTag and nStr:
+        if nStr and (el.tag == staffDefTag):
             staffDefDict[nStr] = staffDefFromElement(el, spannerBundle)
 
         # recurse if there are more groups, append to the working staffDefDict
@@ -2172,7 +2173,6 @@ def sylFromElement(
     }
 
     wordPos: t.Optional[str] = elem.get('wordpos')
-    syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict[wordPos]
     con: str = conDict[elem.get('con')]
 
     text: str = elem.text if elem.text is not None else ''
@@ -2182,6 +2182,8 @@ def sylFromElement(
         text = con + text + con
     elif 't' == wordPos:
         text = con + text
+
+    syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict[wordPos]
 
     if syllabic:
         return note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
@@ -2368,14 +2370,14 @@ def noteFromElement(
         theNote.id = xmlId
 
     # articulations in the @artic attribute
-    artic: t.Optional[str] = elem.get('artic')
-    if artic is not None:
-        theNote.articulations.extend(_makeArticList(artic))
+    articStr: t.Optional[str] = elem.get('artic')
+    if articStr is not None:
+        theNote.articulations.extend(_makeArticList(articStr))
 
     # ties in the @tie attribute
-    theTie: t.Optional[str] = elem.get('tie')
-    if theTie is not None:
-        theNote.tie = _tieFromAttr(theTie)
+    tieStr: t.Optional[str] = elem.get('tie')
+    if tieStr is not None:
+        theNote.tie = _tieFromAttr(tieStr)
 
     # dots from inner <dot> elements
     if dotElements > 0:
@@ -3088,7 +3090,7 @@ def layerFromElement(
 
     :param elem: The ``<layer>`` element to process.
     :type elem: :class:`~xml.etree.ElementTree.Element`
-    :param int overrideN: The value to be set as the ``id``
+    :param str overrideN: The value to be set as the ``id``
         attribute in the outputted :class:`Voice`.
     :returns: A :class:`Voice` with the objects found in the provided :class:`Element`.
     :rtype: :class:`music21.stream.Voice`
@@ -3163,23 +3165,13 @@ def layerFromElement(
 
     # try to set the Voice's "id" attribute
 
-    # New to converter21 version: overrideN is only to be used if @n is not present
-    # New to converter21 version: overrideN is an int, and voice.id should be set as an int
-    #   if at all possible.  This is how music21 likes it now.
-
     nStr: t.Optional[str] = elem.get('n')
-    if nStr is None:
-        if overrideN is not None:
-            theVoice.id = overrideN
-            return theVoice
-        raise MeiAttributeError(_MISSING_VOICE_ID)
-
-    # pylint: disable=bare-except
-    try:
-        theVoice.id = int(nStr)
-    except:
+    if overrideN:
+        theVoice.id = overrideN
+    elif nStr is not None:
         theVoice.id = nStr
-    # pylint: enable=bare-except
+    else:
+        raise MeiAttributeError(_MISSING_VOICE_ID)
 
     return theVoice
 
@@ -3237,34 +3229,13 @@ def staffFromElement(
     layers: t.List[stream.Voice] = []
 
     # track the @n values given to layerFromElement()
-    nextNValue: int = 1
-    nOverride: t.Optional[int] = None
+    currentNValue: str = '1'
 
     # iterate all immediate children
     for eachTag in elem.iterfind('*'):
         if layerTagName == eachTag.tag:
-            n: t.Optional[int] = None
-            nStr: t.Optional[str] = eachTag.get('n')
-            if nStr is None:
-                # we need an override
-                nOverride = nextNValue
-                nextNValue += 1
-            else:
-                # we don't need an override
-                nOverride = None
-
-                # but if n is an integer, bump nextNValue as necessary
-                # so we don't conflict with it.
-                # pylint: disable=bare-except
-                try:
-                    n = int(nStr)
-                except:
-                    pass
-                # pylint: enable=bare-except
-                if n is not None:
-                    nextNValue = max(nextNValue, n + 1)
-
-            layers.append(layerFromElement(eachTag, nOverride, spannerBundle=spannerBundle))
+            layers.append(layerFromElement(eachTag, currentNValue, spannerBundle=spannerBundle))
+            currentNValue = f'{int(currentNValue) + 1}'  # inefficient, but we need a string
         elif eachTag.tag in tagToFunction:
             # NB: this won't be tested until there's something in tagToFunction
             layers.append(tagToFunction[eachTag.tag](eachTag, spannerBundle))
@@ -3297,7 +3268,7 @@ def _correctMRestDurs(
             continue
 
         for eachVoice in eachMeasure:
-            if not isinstance(eachVoice, stream.Voice):
+            if not isinstance(eachVoice, stream.Stream):
                 continue
 
             for eachObject in eachVoice:
@@ -3352,7 +3323,7 @@ def _makeBarlines(
 
 def measureFromElement(
     elem: Element,
-    backupNum: int,
+    backupNum: str,
     expectedNs: t.Iterable[str],
     spannerBundle: spanner.SpannerBundle = None,
     activeMeter: t.Optional[meter.TimeSignature] = None
@@ -3365,7 +3336,7 @@ def measureFromElement(
 
     :param elem: The ``<measure>`` element to process.
     :type elem: :class:`~xml.etree.ElementTree.Element`
-    :param int backupNum: A fallback value for the resulting
+    :param str backupNum: A fallback value for the resulting
         :class:`~music21.stream.Measure` objects' number attribute.
     :param expectedNs: A list of the expected @n attributes for the <staff> tags in this <measure>.
         If an expected <staff> isn't in the <measure>, it will be created with a full-measure rest.
@@ -3448,13 +3419,11 @@ def measureFromElement(
 
             staves[nStr] = stream.Measure(
                 staffFromElement(eachElem, spannerBundle=spannerBundle),
-                number=elem.get('n', backupNum)  # number can take string or int, interchangeably
+                number=elem.get('n', backupNum)
             )
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
-            if maxBarDuration is None:
+            if maxBarDuration is None or maxBarDuration < thisBarDuration:
                 maxBarDuration = thisBarDuration
-            else:
-                maxBarDuration = max(maxBarDuration, thisBarDuration)
         elif staffDefTag == eachElem.tag:
             if nStr is None:
                 environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n'))
@@ -3482,7 +3451,7 @@ def measureFromElement(
             restVoice.id = '1'
             # just in case (e.g., when all the other voices are <mRest>)
             restVoice[0].m21wasMRest = True
-            staves[eachN] = stream.Measure([restVoice], number=elem.get('n', backupNum))
+            staves[eachN] = stream.Measure([restVoice], number=int(elem.get('n', backupNum)))
 
     # First search for Rest objects created by an <mRest> element that didn't have @dur set. This
     # will only work in cases where not all of the parts are resting. However, it avoids a more
@@ -3619,10 +3588,10 @@ def sectionScoreCore(
                 parsed[eachN].append(measureResultN)
             # if we got a barline for the next <measure>
             if 'next @left' in measureResult:
-                nextLeft = measureResult['next @left']
+                nl = measureResult['next @left']
                 if t.TYPE_CHECKING:
-                    assert isinstance(nextLeft, bar.Repeat)
-                nextMeasureLeft = nextLeft
+                    assert isinstance(nl, bar.Repeat)
+                nextMeasureLeft = nl
             else:
                 nextMeasureLeft = None
 
@@ -3651,13 +3620,12 @@ def sectionScoreCore(
                         inNextThing[eachN].append(eachObj)
 
         elif staffDefTag == eachElem.tag:
-            if eachElem.get('n') is not None:
+            nStr: t.Optional[str] = eachElem.get('n')
+            if nStr is not None:
                 for eachObj in staffDefFromElement(eachElem, spannerBundle).values():
                     if isinstance(eachObj, meter.TimeSignature):
                         activeMeter = eachObj
-                    nStr: t.Optional[str] = eachElem.get('n')
-                    if nStr:
-                        inNextThing[nStr].append(eachObj)
+                    inNextThing[nStr].append(eachObj)
             else:
                 # At the moment, to process this here, we need an @n on the <staffDef>. A document
                 # may have a still-valid <staffDef> if the <staffDef> has an @xml:id with which
