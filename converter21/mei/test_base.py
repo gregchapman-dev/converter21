@@ -2809,7 +2809,7 @@ class Test(unittest.TestCase):
         '''
         elem = ETree.Element('note', attrib={'m21SlurStart': None,
                                              'm21SlurEnd': None,
-                                             'slur': '1i 2t'})
+                                             'slur': 'i1 t2'})
         spannerBundle = mock.MagicMock('slur bundle')
         spannerBundle.append = mock.MagicMock('spannerBundle.append')
         mockSlur.return_value = mock.MagicMock('mock slur')
@@ -2834,7 +2834,7 @@ class Test(unittest.TestCase):
         '''
         elem = ETree.Element('note', attrib={'m21SlurStart': None,
                                              'm21SlurEnd': None,
-                                             'slur': '1i 2t'})
+                                             'slur': 'i1 t2'})
         spannerBundle = spanner.SpannerBundle()
         theSlur = spanner.Slur()
         theSlur.idLocal = '2'
@@ -4248,7 +4248,9 @@ class Test(unittest.TestCase):
 
         self.assertEqual(expected, actual)
         mockAllParts.assert_called_once_with(elem)
-        mockCore.assert_called_once_with(elem, mockAllParts.return_value, spannerBundle=spannerBundle)
+        mockCore.assert_called_once_with(
+            elem, mockAllParts.return_value, spannerBundle=spannerBundle
+        )
         mockScore.assert_called_once_with([mockPart1, mockPart2])
         self.assertEqual(2, mockPart1.append.call_count)
         self.assertEqual(2, mockPart2.append.call_count)
@@ -4276,8 +4278,8 @@ class Test(unittest.TestCase):
                 <measure>
                     <staff n="1">
                         <layer n="1">
-                            <note pname="G" oct="4" dur="2" slur="1i"/>
-                            <note pname="A" oct="4" dur="2" slur="1t"/>
+                            <note pname="G" oct="4" dur="2" slur="i1"/>
+                            <note pname="A" oct="4" dur="2" slur="t1"/>
                         </layer>
                     </staff>
                     <staff n="2">
@@ -4861,9 +4863,9 @@ class Test(unittest.TestCase):
         spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(elem,
-                                                                                       allPartNs,
-                                                                                       spannerBundle)
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
+            elem, allPartNs, spannerBundle
+        )
 
         expWarn = base._UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n')
         mockEnviron.warn.assert_called_once_with(expWarn)
@@ -4931,9 +4933,9 @@ class Test(unittest.TestCase):
         spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(elem,
-                                                                                       allPartNs,
-                                                                                       spannerBundle)
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
+            elem, allPartNs, spannerBundle
+        )
 
         # ensure simple returns are okay
         self.assertEqual('6/8', activeMeter.ratioString)

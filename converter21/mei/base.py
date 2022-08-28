@@ -184,7 +184,7 @@ from uuid import uuid4
 # music21
 from music21.base import Music21Object
 from music21.common.types import OffsetQL
-from music21.common.numberTools import opFrac
+# from music21.common.numberTools import opFrac
 from music21 import articulations
 from music21 import bar
 from music21 import chord
@@ -1227,7 +1227,7 @@ def addSlurs(
             return False
 
     def getSlurNumAndType(eachSlur: str) -> t.Tuple[str, str]:
-        # eachSlur is of the form 'i1', 't2', 'm1' etc
+        # eachSlur is of the form "[i|m|t][1-6]"
         slurNum: str = eachSlur[1:]
         slurType: str = eachSlur[:1]
         return slurNum, slurType
@@ -1243,6 +1243,8 @@ def addSlurs(
     if slurStr is not None:
         theseSlurs = slurStr.split(' ')
         for eachSlur in theseSlurs:
+            slurNum: str
+            slurType: str
             slurNum, slurType = getSlurNumAndType(eachSlur)
             if 'i' == slurType:
                 newSlur = spanner.Slur()
@@ -3071,7 +3073,7 @@ def tupletFromElement(
 
 def layerFromElement(
     elem: Element,
-    overrideN: t.Optional[int] = None,
+    overrideN: t.Optional[str] = None,
     spannerBundle: spanner.SpannerBundle = None
 ) -> stream.Voice:
     '''
@@ -3323,7 +3325,7 @@ def _makeBarlines(
 
 def measureFromElement(
     elem: Element,
-    backupNum: str,
+    backupNum: int,
     expectedNs: t.Iterable[str],
     spannerBundle: spanner.SpannerBundle = None,
     activeMeter: t.Optional[meter.TimeSignature] = None
@@ -3336,7 +3338,7 @@ def measureFromElement(
 
     :param elem: The ``<measure>`` element to process.
     :type elem: :class:`~xml.etree.ElementTree.Element`
-    :param str backupNum: A fallback value for the resulting
+    :param int backupNum: A fallback value for the resulting
         :class:`~music21.stream.Measure` objects' number attribute.
     :param expectedNs: A list of the expected @n attributes for the <staff> tags in this <measure>.
         If an expected <staff> isn't in the <measure>, it will be created with a full-measure rest.
@@ -3463,6 +3465,8 @@ def measureFromElement(
         _correctMRestDurs(staves, activeMeter.barDuration.quarterLength)
     else:
         # In this case, some or none of the staves have an <mRest> element without a @dur.
+        if t.TYPE_CHECKING:
+            assert maxBarDuration is not None
         _correctMRestDurs(staves, maxBarDuration)
 
     # assign left and right barlines
@@ -3480,7 +3484,7 @@ def sectionScoreCore(
     nextMeasureLeft: t.Optional[bar.Repeat] = None,
     backupMeasureNum: int = 0
 ) -> t.Tuple[
-        t.Dict[str, t.List[Music21Object]],
+        t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]],
         t.Optional[meter.TimeSignature],
         t.Optional[bar.Repeat],
         int]:
@@ -3560,9 +3564,13 @@ def sectionScoreCore(
     staffDefTag: str = f'{MEI_NS}staffDef'
 
     # hold the music21.stream.Part that we're building
-    parsed: t.Dict[str, t.List[Music21Object]] = {n: [] for n in allPartNs}
+    parsed: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
+        n: [] for n in allPartNs
+    }
     # hold things that belong in the following "Thing" (either Measure or Section)
-    inNextThing: t.Dict[str, t.List[Music21Object]] = {n: [] for n in allPartNs}
+    inNextThing: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
+        n: [] for n in allPartNs
+    }
 
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section>
@@ -3666,13 +3674,13 @@ def sectionScoreCore(
                         eachList.insert(0, theInstr)
                         del inNextThing[eachN][theInstrI]
 
-                    for eachObj in eachList:
-                        # NOTE: "eachObj" is one of the things that will be in the Part, which are
-                        #       probably but not necessarily Measures
-                        if isinstance(eachObj, stream.Stream):
-                            # NOTE: ... but now eachObj is virtually guaranteed to be a Measure
+                    for eachMeasure in eachList:
+                        # NOTE: "eachMeasure" is one of the things that will be in the Part,
+                        # which are probably but not necessarily Measures
+                        if isinstance(eachMeasure, stream.Stream):
+                            # NOTE: ... but now eachMeasure is virtually guaranteed to be a Measure
                             for eachInsertion in inNextThing[eachN]:
-                                eachObj.insert(0.0, eachInsertion)
+                                eachMeasure.insert(0.0, eachInsertion)
                             break
                     inNextThing[eachN] = []
                 # Then we can append the objects in this Part to the dict of all parsed objects, but
@@ -3681,14 +3689,17 @@ def sectionScoreCore(
                     # If this is a <section>, which would really be nested <section> elements, we
                     # must "flatten" everything so it doesn't cause a disaster when we try to make
                     # a Part out of it.
-                    for eachObj in eachList:
+                    for eachMeas in eachList:
                         if t.TYPE_CHECKING:
                             assert isinstance(eachObj, stream.Measure)
-                        parsed[eachN].append(eachObj)
+                        parsed[eachN].append(eachMeas)
                 elif scoreTag == elem.tag:
                     # If this is a <score>, we can just append the result of each <section> to the
                     # list that will become the Part.
-                    parsed[eachN].append(eachList)
+
+                    # we know eachList is not a list of lists, it's just a list or an object,
+                    # so disable mypy checking the type.
+                    parsed[eachN].append(eachList)  # type: ignore
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
@@ -3707,7 +3718,7 @@ def sectionFromElement(
     backupMeasureNum: int,
     spannerBundle: spanner.SpannerBundle
 ) -> t.Tuple[
-        t.Dict[str, t.List[Music21Object]],
+        t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]],
         t.Optional[meter.TimeSignature],
         t.Optional[bar.Repeat],
         int]:
@@ -3809,7 +3820,7 @@ def scoreFromElement(
     allPartNs: t.Tuple[str, ...] = allPartsPresent(elem)
 
     # This is the actual processing.
-    parsed: t.Dict[str, t.List[Music21Object]] = (
+    parsed: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = (
         sectionScoreCore(elem, allPartNs, spannerBundle=spannerBundle)[0]
     )
 
