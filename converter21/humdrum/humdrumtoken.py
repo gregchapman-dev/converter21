@@ -750,9 +750,7 @@ class HumdrumToken(HumHash):
                 if self.isKern:
                     self._duration = Convert.recipToDuration(self.text)
                     if self.isGrace:
-                        recipWithoutQsOrDots: str = (
-                            self.text.replace('q', '').replace('Q', '').replace('.', '')
-                        )
+                        recipWithoutQsOrDots: str = self.text.replace('q', '').replace('.', '')
                         self._graceVisualDuration = Convert.recipToDuration(recipWithoutQsOrDots)
                 elif self.isRecip:
                     self._duration = Convert.recipToDuration(self.text)
@@ -1300,8 +1298,8 @@ class HumdrumToken(HumHash):
             return False
         if not self.isData:
             return False
-        # return True if 'q' or 'qq' or 'Q' is in self.text
-        return 'q' in self.text or 'Q' in self.text
+        # return True if 'q' or 'qq' is in self.text
+        return 'q' in self.text
 
     '''
     //////////////////////////////

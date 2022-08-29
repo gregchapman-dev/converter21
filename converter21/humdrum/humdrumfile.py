@@ -5460,8 +5460,8 @@ class HumdrumFile(HumdrumFileContent):
             measureIndex: int,
             staffIndex: int
     ) -> m21.note.Rest:
-        if 'q' in token.text or 'Q' in token.text:
-            # It's an accacciatura ('q') or appoggiatura ('qq') or gruppetto ('Q')
+        if 'q' in token.text:
+            # It's an accacciatura ('q') or appoggiatura ('qq')
             rest = self._replaceRestWithGrace(rest, token.text)
 
         self._convertRhythm(rest, token)
@@ -6278,10 +6278,7 @@ class HumdrumFile(HumdrumFileContent):
                 assert isinstance(myGN.duration, m21.duration.GraceDuration)
             myGN.duration.slash = False
             myGN.duration.type = 'eighth'  # for now, recomputed later
-        elif 'q' in tstring or 'Q' in tstring:
-            # 'q' means non-appoggiatura grace note
-            # 'Q' means small note that doesn't actually fit in the meter (doesn't steal duration)
-            # We treat them both the same here, because Humdrum can't really handle extra duration.
+        elif 'q' in tstring:
             myGN = myGN.getGrace(appoggiatura=False)
             myGN.duration.type = 'eighth'  # for now, recomputed later
 
@@ -6362,8 +6359,7 @@ class HumdrumFile(HumdrumFileContent):
         # self._processOttava(note, token, staffIndex)
 
         # check for accacciatura ('q') and appoggiatura ('qq')
-        # and gruppetto ('Q')
-        if not isChord and ('q' in tstring or 'Q' in tstring):
+        if not isChord and 'q' in tstring:
             note = self._replaceNoteWithGrace(note, tstring)
 
         # Add the pitch information
@@ -7260,9 +7256,6 @@ class HumdrumFile(HumdrumFileContent):
         if 'q' in tstring:
             isGrace = True
             tstring = re.sub('q', '', tstring)
-        if 'Q' in tstring:
-            isGrace = True
-            tstring = re.sub('Q', '', tstring)
 
         vstring: str = token.getVisualDuration(subTokenIdx)
         vdur: t.Optional[HumNum] = None

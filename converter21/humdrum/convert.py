@@ -55,7 +55,7 @@ class Convert:
             return Convert._knownRecipDurationCache[recip]
 
         output: HumNum = opFrac(0)
-        if 'q' in recip or 'Q' in recip:
+        if 'q' in recip:
             # grace note, ignore printed rhythm
             Convert._knownRecipDurationCache[recip] = output
             return output  # 0
