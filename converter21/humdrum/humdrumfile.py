@@ -7337,6 +7337,10 @@ class HumdrumFile(HumdrumFileContent):
         dynamicOffsetInMeasure: HumNum = token.durationFromBarline
         dynamicOffsetInVoice: HumNum = opFrac(dynamicOffsetInMeasure - vOffsetInMeasure)
 
+        useHairpinV8: bool = False
+        testWedge = m21.dynamics.DynamicWedge()
+        if hasattr(testWedge, 'hasOffsetAndDuration'):
+            useHairpinV8 = True
 
         track: int = token.track
         lastTrack: int = track
@@ -7587,9 +7591,14 @@ class HumdrumFile(HumdrumFileContent):
                 insertedIntoVoice = True
 
             if hairpins:
-                if self._processHairpin(measureIndex, voice, dynamicOffsetInVoice,
-                                        hairpins, token, dynTok, staffIndex):
-                    insertedIntoVoice = True
+                if useHairpinV8:
+                    if self._processHairpin(measureIndex, voice, dynamicOffsetInVoice,
+                                            hairpins, token, dynTok, staffIndex):
+                        insertedIntoVoice = True
+                else:
+                    if self._processHairpinV7(measureIndex, voice, dynamicOffsetInVoice,
+                                                hairpins, token, dynTok, staffIndex):
+                        insertedIntoVoice = True
 
         # No more need for the following recursive call to _processDynamics:
         # // re-run this function on null tokens after the main note since
@@ -7602,6 +7611,159 @@ class HumdrumFile(HumdrumFileContent):
         return insertedIntoVoice
 
     def _processHairpin(self,
+                        _measureIndex: int,
+                        voice: m21.stream.Voice,
+                        dynamicOffsetInVoice: HumNumIn,
+                        hairpins: str,
+                        token: HumdrumToken,
+                        dynTok: HumdrumToken,
+                        staffIndex: int) -> bool:
+        insertedIntoVoice: bool = False
+
+        if '<' in hairpins:
+            startHairpin = '<'
+            stopHairpin = '['
+            doubleStopHairpin = '[['
+        elif '>' in hairpins:
+            startHairpin = '>'
+            stopHairpin = ']'
+            doubleStopHairpin = ']]'
+        else:
+            return insertedIntoVoice
+
+        startStopHairpin1 = startHairpin + stopHairpin
+        startStopHairpin2 = startHairpin + ' ' + stopHairpin
+
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
+        endAtEndOfEndToken: bool = False
+        endTok: t.Optional[HumdrumToken] = None
+        if startStopHairpin1 in hairpins or startStopHairpin2 in hairpins:
+            endTok = token
+            endAtEndOfEndToken = True
+        else:
+            endTok = self._getHairpinEnd(dynTok, stopHairpin)
+            if endTok is not None and doubleStopHairpin in endTok.text:
+                endAtEndOfEndToken = True
+
+        staffAdj = ss.dynamStaffAdj
+        above: bool = self._hasAboveParameter(dynTok, 'HP')
+        below: bool = False
+        center: bool = False
+#         showPlace: bool = above
+        if not above:
+            below = self._hasBelowParameter(dynTok, 'HP')
+#             showPlace = below
+        if not above and not below:
+            hasCenter, staffAdj = self._hasCenterParameter(dynTok, 'HP', staffAdj)
+            if hasCenter:
+                above = False
+                below = False
+                center = True
+#                 showPlace = center
+
+        if endTok is not None:
+            # Here is where we create the music21 object for the crescendo/decrescendo
+            m21Hairpin: m21.dynamics.DynamicWedge
+            if startHairpin == '<':
+                m21Hairpin = m21.dynamics.Crescendo()
+            else:
+                m21Hairpin = m21.dynamics.Diminuendo()
+            m21Hairpin.hasOffsetAndDuration = True
+
+            # LATER: staff adjustments for dynamics and forcing position
+            if above:
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'above'
+                else:
+                    m21Hairpin.style.absoluteY = 'above'
+            elif below:
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'below'
+                else:
+                    m21Hairpin.style.absoluteY = 'below'
+            elif center:
+                # center means below, and vertically centered between this staff and the one below
+                if t.TYPE_CHECKING:
+                    assert isinstance(m21Hairpin.style, m21.style.TextStyle)
+                m21Hairpin.style.alignVertical = 'middle'
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'below'
+                else:
+                    m21Hairpin.style.absoluteY = 'below'
+
+            startTime: HumNum = token.durationFromStart
+            endTime: HumNum = endTok.durationFromStart
+            if endAtEndOfEndToken:
+                if endTok.duration == -1:
+                    # null token, perhaps.  Use line duration instead.
+                    endTime += endTok.ownerLine.duration
+                else:
+                    endTime += endTok.duration
+            m21Hairpin.duration = m21.duration.Duration(opFrac(endTime - startTime))
+            voice.coreInsert(dynamicOffsetInVoice, m21Hairpin)
+            insertedIntoVoice = True
+        else:
+            # no endpoint so print as the word "cresc."/"decresc."
+            # (modified by _signifiers and layout)
+            content: str = ''
+            fontStyle: str = ''
+
+            # default
+            if startHairpin == '<':
+                content = 'cresc.'
+            else:
+                content = 'decresc.'
+
+            # override with RDF signifiers
+            if startHairpin == '<' and self._signifiers.crescText:
+                content = self._signifiers.crescText
+                fontStyle = self._signifiers.crescFontStyle
+            elif startHairpin == '>' and self._signifiers.decrescText:
+                content = self._signifiers.decrescText
+                fontStyle = self._signifiers.decrescFontStyle
+
+            pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 't', '', '')
+            if not pinText:
+                pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 'tx', '', '')
+            if pinText:
+                html.unescape(pinText)
+                if pinText:
+                    pinText = re.sub('%s', content, pinText)
+                    content = pinText
+
+            m21TextExp: m21.expressions.TextExpression = m21.expressions.TextExpression(content)
+            if t.TYPE_CHECKING:
+                assert isinstance(m21TextExp.style, m21.style.TextStyle)
+
+            if fontStyle:
+                m21TextExp.style.fontStyle = M21Convert.m21FontStyleFromFontStyle(fontStyle)
+
+            if above:
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'above'
+                else:
+                    m21TextExp.style.absoluteY = 'above'
+            elif below:
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'below'
+                else:
+                    m21TextExp.style.absoluteY = 'below'
+            elif center:
+                # center means below, and vertically centered between this staff and the one below
+                m21TextExp.style.alignVertical = 'middle'
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'below'
+                else:
+                    m21TextExp.style.absoluteY = 'below'
+
+
+            voice.coreInsert(opFrac(dynamicOffsetInVoice), m21TextExp)
+            insertedIntoVoice = True
+
+        return insertedIntoVoice
+
+    def _processHairpinV7(self,
                         _measureIndex: int,
                         voice: m21.stream.Voice,
                         dynamicOffsetInVoice: HumNumIn,
