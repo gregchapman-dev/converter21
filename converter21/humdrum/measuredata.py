@@ -303,9 +303,24 @@ class MeasureData:
                 startTime = opFrac(startTime + duration)
 
     def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> t.List[EventData]:
+        output: t.List[EventData] = []
+        if isinstance(event.m21Object, m21.dynamics.DynamicWedge):
+            # new case in music21 v8: the DynamicWedge may have a duration and be inserted at
+            # an offset in the stream (so we ignore any spanned notes, which are unnecessary,
+            # and there may not be any).
+            if (hasattr(event.m21Object, 'hasOffsetAndDuration')
+                    and event.m21Object.hasOffsetAndDuration):
+                stopEvent: EventData = EventData(
+                    event.m21Object, -1, event.voiceIndex,
+                    self,  # might need to place the stopEvent in a different measure
+                    offsetInScore=event.m21Object.offset + event.m21Object.quarterLength,
+                    duration=0)
+                output.append(event)
+                output.append(stopEvent)
+                return output
+
         if t.TYPE_CHECKING:
             assert isinstance(event.m21Object, m21.note.GeneralNote)
-        output: t.List[EventData] = []
         wedges: t.List[m21.dynamics.DynamicWedge] = (
             M21Utilities.getDynamicWedgesStartedOrStoppedWithGeneralNote(
                 event.m21Object,
@@ -313,6 +328,10 @@ class MeasureData:
         )
         wedge: m21.dynamics.DynamicWedge
         for wedge in wedges:
+            if hasattr(wedge, 'hasOffsetAndDuration') and wedge.hasOffsetAndDuration:
+                # already handled as its own stand-alone event
+                continue
+
             ownerScore = self.ownerStaff.ownerPart.ownerScore
             score: m21.stream.Score = ownerScore.m21Score
             startNote: m21.note.GeneralNote = wedge.getFirst()
