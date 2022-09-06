@@ -7623,28 +7623,32 @@ class HumdrumFile(HumdrumFileContent):
         if '<' in hairpins:
             startHairpin = '<'
             stopHairpin = '['
-            doubleStopHairpin = '[['
         elif '>' in hairpins:
             startHairpin = '>'
             stopHairpin = ']'
-            doubleStopHairpin = ']]'
         else:
             return insertedIntoVoice
 
         startStopHairpin1 = startHairpin + stopHairpin
         startStopHairpin2 = startHairpin + ' ' + stopHairpin
+        doubleStopHairpin1 = stopHairpin + stopHairpin
+        doubleStopHairpin2 = stopHairpin + ' ' + stopHairpin
 
         ss: StaffStateVariables = self._staffStates[staffIndex]
 
         endAtEndOfEndToken: bool = False
+        firstDurationFoundLeftOfEndTok: HumNum = opFrac(0)
         endTok: t.Optional[HumdrumToken] = None
         if startStopHairpin1 in hairpins or startStopHairpin2 in hairpins:
             endTok = token
             endAtEndOfEndToken = True
+            firstDurationFoundLeftOfEndTok = self._getLeftNoteDuration(endTok)
         else:
             endTok = self._getHairpinEnd(dynTok, stopHairpin)
-            if endTok is not None and doubleStopHairpin in endTok.text:
-                endAtEndOfEndToken = True
+            if endTok is not None:
+                if doubleStopHairpin1 in endTok.text or doubleStopHairpin2 in endTok.text:
+                    endAtEndOfEndToken = True
+                    firstDurationFoundLeftOfEndTok = self._getLeftNoteDuration(endTok)
 
         staffAdj = ss.dynamStaffAdj
         above: bool = self._hasAboveParameter(dynTok, 'HP')
@@ -7695,11 +7699,11 @@ class HumdrumFile(HumdrumFileContent):
             startTime: HumNum = token.durationFromStart
             endTime: HumNum = endTok.durationFromStart
             if endAtEndOfEndToken:
-                if endTok.duration == -1:
-                    # null token, perhaps.  Use line duration instead.
-                    endTime += endTok.ownerLine.duration
+                if firstDurationFoundLeftOfEndTok != 0:
+                    endTime += firstDurationFoundLeftOfEndTok
                 else:
-                    endTime += endTok.duration
+                    # all null tokens to left, perhaps.  Use line duration instead.
+                    endTime += endTok.ownerLine.duration
             m21Hairpin.duration = m21.duration.Duration(opFrac(endTime - startTime))
             voice.coreInsert(dynamicOffsetInVoice, m21Hairpin)
             insertedIntoVoice = True
@@ -8133,21 +8137,20 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::getLeftNoteDuration --
     '''
-#     def _getLeftNoteDuration(self, token: HumdrumToken) -> HumNum:
-#         output: HumNum = opFrac(0)
-#         leftNote: HumdrumToken = self._getLeftNoteToken(token)
-#         if leftNote:
-#             output = Convert.recipToDuration(leftNote.text)
-#         return output
+    def _getLeftNoteDuration(self, token: HumdrumToken) -> HumNum:
+        output: HumNum = opFrac(0)
+        leftNote: HumdrumToken = self._getLeftNoteToken(token)
+        if leftNote:
+            output = Convert.recipToDuration(leftNote.text)
+        return output
 
     @staticmethod
-    def _getLeftNoteToken(token: HumdrumToken, _isStart: bool) -> t.Optional[HumdrumToken]:
+    def _getLeftNoteToken(token: HumdrumToken) -> t.Optional[HumdrumToken]:
         # Look left for a non-null data token within the track's kern fields
         output: t.Optional[HumdrumToken] = None
-        current: t.Optional[HumdrumToken] = None
+        current: t.Optional[HumdrumToken] = token
         if token.isDataType('**dynam'):
             # we must first find the first kern token to the left before scanning
-            current = token
             while current and not current.isKern:
                 current = current.previousFieldToken
 
@@ -8240,7 +8243,7 @@ class HumdrumFile(HumdrumFileContent):
         # Then, look down (left and right within the track) until you've passed the
         # timestamp
         ts: HumNum = opFrac(timestamp)
-        output: t.Optional[HumdrumToken] = self._getLeftNoteToken(token, start)
+        output: t.Optional[HumdrumToken] = self._getLeftNoteToken(token)
         if output is not None and self._hasAppropriateTimestamp(output, ts, start):
             return output
 
@@ -8262,7 +8265,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             if not leftIsDone:
-                output = self._getLeftNoteToken(current, start)
+                output = self._getLeftNoteToken(current)
                 if output:
                     leftTimestamp = self._getAppropriateTimestamp(output, start)
                     if leftTimestamp == ts:
@@ -8297,7 +8300,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             if not leftIsDone:
-                output = self._getLeftNoteToken(current, start)
+                output = self._getLeftNoteToken(current)
                 if output:
                     leftTimestamp = self._getAppropriateTimestamp(output, start)
                     if leftTimestamp == ts:
