@@ -47,7 +47,8 @@ class MeasureData:
             measure: m21.stream.Measure,
             ownerStaff,      # StaffData
             measureIndex: int,
-            prevMeasData: t.Optional['MeasureData']
+            prevMeasData: t.Optional['MeasureData'],
+            extraEvents: t.List[EventData]
     ) -> None:
         from converter21.humdrum import StaffData
         self.m21Measure: m21.stream.Measure = measure
@@ -83,10 +84,11 @@ class MeasureData:
         self.repeatBracketName: str = ''
 
         self._measureNumberString: str = ''
-        self.events: t.List[EventData] = []
-        self.sortedEvents: t.List[SimultaneousEvents] = []  # list of startTime-binned events
+        self.events: t.List[EventData] = []                 # list of events for this measure
+        self.sortedEvents: t.List[SimultaneousEvents] = []  # list of startTime-binned events for this measure
+        self._leftOverEvents: t.List[EventData] = []        # list of events that are for subsequent measures
 
-        self._parseMeasure()  # generates _events and then sortedEvents (also barlines)
+        self._parseMeasure(extraEvents)  # generates _events and then sortedEvents (also barlines)
 
     @property
     def measureIndex(self) -> int:
@@ -139,12 +141,18 @@ class MeasureData:
     def timeSigDur(self) -> HumNum:
         return self._timeSigDur
 
+    def getLeftOverEvents(self) -> t.List[EventData]:
+        # returns (and clears out) any leftover events for subsequent measures
+        leftovers: t.List[EventData] = self._leftOverEvents
+        self._leftOverEvents = []
+        return leftovers
+
     '''
     //////////////////////////////
     //
     // MxmlMeasure::parseMeasure -- Reads music21 data for one staff's measure.
     '''
-    def _parseMeasure(self) -> None:
+    def _parseMeasure(self, extraEvents: t.List[EventData]) -> None:
         self._setStartTimeOfMeasure()
         self._duration = self.m21Measure.duration.quarterLength
 
@@ -244,6 +252,18 @@ class MeasureData:
             # (e.g. TextExpressions after the last note in the measure).
             self._parseEventsAtTopLevelOf(self.m21Measure)
 
+        # Add in any extra events that start in the time range of this measure, putting the ones
+        # that don't in self._leftOverEvents.
+        for event in extraEvents:
+            startTime: HumNum = self.startTime
+            endTime: HumNum = opFrac(self.startTime + self.duration)
+            if startTime <= event.startTime <= endTime:
+                # event belongs in this measure (i.e. ownerMeasure == self)
+                event.finishInitWithOwnerMeasure(self)
+                self.events.append(event)
+            else:
+                self._leftOverEvents.append(event)
+
         self._sortEvents()
 
     def _parseEventsIn(
@@ -304,20 +324,40 @@ class MeasureData:
 
     def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> t.List[EventData]:
         output: t.List[EventData] = []
+
+        ownerScore = self.ownerStaff.ownerPart.ownerScore
+        score: m21.stream.Score = ownerScore.m21Score
+
         if isinstance(event.m21Object, m21.dynamics.DynamicWedge):
             # new case in music21 v8: the DynamicWedge may have a duration and be inserted at
             # an offset in the stream (so we ignore any spanned notes, which are unnecessary,
             # and there may not be any).
             if (hasattr(event.m21Object, 'hasOffsetAndDuration')
                     and event.m21Object.hasOffsetAndDuration):
-                stopEvent: EventData = EventData(
-                    event.m21Object, -1, event.voiceIndex,
-                    self,  # might need to place the stopEvent in a different measure
-                    offsetInScore=event.m21Object.offset + event.m21Object.quarterLength,
-                    duration=0)
-                output.append(event)
-                output.append(stopEvent)
-                return output
+                # This is a DynamicWedge event that has already been put in the measure.
+                # We just need to create a stopEvent for it and put it in the correct measure:
+                # if wedge stop is within this measure, put the stopEvent in this measure
+                # else create the stopEvent with no measure and add to self._leftOverEvents
+                # (to be placed in a subsequent measure).
+                stopEventOffsetInScore: HumNum = opFrac(
+                    event.m21Object.getOffsetInHierarchy(score) + event.m21Object.quarterLength
+                )
+                if self.startTime <= stopEventOffsetInScore <= self.startTime + self.duration:
+                    stopEvent: EventData = EventData(
+                        event.m21Object, -1, event.voiceIndex,
+                        self,
+                        offsetInScore=stopEventOffsetInScore,
+                        duration=0)
+                    output.append(stopEvent)
+                    return output
+                else:
+                    stopEvent: EventData = EventData(
+                        event.m21Object, -1, event.voiceIndex,
+                        None,  # no measure at all (yet)
+                        offsetInScore=stopEventOffsetInScore,
+                        duration=0)
+                    self._leftOverEvents.append(stopEvent)
+                    return output
 
         if t.TYPE_CHECKING:
             assert isinstance(event.m21Object, m21.note.GeneralNote)
@@ -332,8 +372,6 @@ class MeasureData:
                 # already handled as its own stand-alone event
                 continue
 
-            ownerScore = self.ownerStaff.ownerPart.ownerScore
-            score: m21.stream.Score = ownerScore.m21Score
             startNote: m21.note.GeneralNote = wedge.getFirst()
             endNote: m21.note.GeneralNote = wedge.getLast()
             thisEventIsStart: bool = startNote is event.m21Object

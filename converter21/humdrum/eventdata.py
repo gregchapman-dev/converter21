@@ -41,10 +41,8 @@ class EventData:
     ) -> None:
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
-        self.ownerMeasure: MeasureData = ownerMeasure
-        self.spannerBundle: m21.spanner.SpannerBundle = (
-            self.ownerMeasure.spannerBundle  # from ownerScore, ultimately
-        )
+        self.ownerMeasure: t.Optional[MeasureData] = None
+        self.spannerBundle: t.Optional[m21.spanner.SpannerBundle] = None
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._voiceIndex: int = voiceIndex
@@ -58,10 +56,22 @@ class EventData:
         self._myTextsComputed: bool = False
         self._myDynamicsComputed: bool = False
 
-        self._parseEvent(element, offsetInScore, duration)
+        if offsetInScore is not None:
+            # finishInitWithOwnerMeasure will fix this initialization if offsetInScore is None
+            self._startTime = offsetInScore
+        if duration is not None:
+            # finishInitWithOwnerMeasure will fix this initialization if duration is None
+            self._duration = duration
 
+        if ownerMeasure is not None:
+            self.finishInitWithOwnerMeasure(ownerMeasure)
+
+    def finishInitWithOwnerMeasure(self, ownerMeasure):
+        self.ownerMeasure = ownerMeasure
+        self.spannerBundle = ownerMeasure.spannerBundle
+        self._parseEvent()
         ownerScore: ScoreData = ownerMeasure.ownerStaff.ownerPart.ownerScore
-        ownerScore.eventFromM21Object[id(element)] = self
+        ownerScore.eventFromM21Object[id(self._element)] = self
 
     def __str__(self) -> str:
         output: str = self.kernTokenString()
@@ -69,29 +79,20 @@ class EventData:
             return output
         return self.m21Object.classes[0]  # at least say what type of m21Object it was
 
-    def _parseEvent(
-            self,
-            element: m21.base.Music21Object,
-            offsetInScore: t.Optional[HumNumIn],
-            duration: t.Optional[HumNumIn]
-    ) -> None:
-        if offsetInScore is not None:
-            self._startTime = opFrac(offsetInScore)
-        else:
-            ownerScore = self.ownerMeasure.ownerStaff.ownerPart.ownerScore
-            self._startTime = opFrac(element.getOffsetInHierarchy(ownerScore.m21Score))
+    def _parseEvent(self) -> None:
+        if self._startTime == opFrac(-1):
+            score: m21.stream.Score = self.ownerMeasure.ownerStaff.ownerPart.ownerScore.m21Score
+            self._startTime = opFrac(self._element.getOffsetInHierarchy(score))
 
-        if duration is not None:
-            self._duration = opFrac(duration)
-        else:
-            self._duration = opFrac(element.duration.quarterLength)
+        if self._duration == opFrac(-1):
+            self._duration = opFrac(self._element.duration.quarterLength)
 
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
         # the mro() for the object.
         # So element.classes[0] is the name of the element's class.
         # e.g. 'Note' for m21.note.Note
-        self._name = element.classes[0]
+        self._name = self._element.classes[0]
 
     @property
     def isDynamicWedgeStartOrStop(self) -> bool:

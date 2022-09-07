@@ -50,9 +50,11 @@ class StaffData:
         self._verseCount: int = 0
         self.measures: t.List[MeasureData] = []
 
+        leftOverEvents: t.List[EventData] = []
         prevMeasData: t.Optional[MeasureData] = None
         for m, measure in enumerate(partStaff.getElementsByClass('Measure')):
-            measData: MeasureData = MeasureData(measure, self, m, prevMeasData)
+            measData: MeasureData = MeasureData(measure, self, m, prevMeasData, leftOverEvents)
+            leftOverEvents = measData.getLeftOverEvents()
             self.measures.append(measData)
             prevMeasData = measData
 
