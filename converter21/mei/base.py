@@ -1510,12 +1510,8 @@ def scaleToTuplet(
                     durationActual=obj.duration.type))
 
                 tupletType: t.Optional[str] = elem.get('m21TupletType')
-                if tupletType == 'start':
-                    obj.duration.tuplets[0].type = 'start'
-                elif tupletType == 'stop':
-                    obj.duration.tuplets[0].type = 'stop'
-                elif tupletType == 'startStop':
-                    obj.duration.tuplets[0].type = 'startStop'
+                if tupletType is not None:
+                    obj.duration.tuplets[0].type = tupletType  # type: ignore
                 elif elem.get('tuplet', '').startswith('i'):
                     obj.duration.tuplets[0].type = 'start'
                 elif elem.get('tuplet', '').startswith('t'):
@@ -3167,13 +3163,14 @@ def layerFromElement(
 
     # try to set the Voice's "id" attribute
 
-    nStr: t.Optional[str] = elem.get('n')
     if overrideN:
         theVoice.id = overrideN
-    elif nStr is not None:
-        theVoice.id = nStr
     else:
-        raise MeiAttributeError(_MISSING_VOICE_ID)
+        nStr: t.Optional[str] = elem.get('n')
+        if nStr is not None:
+            theVoice.id = nStr
+        else:
+            raise MeiAttributeError(_MISSING_VOICE_ID)
 
     return theVoice
 
@@ -3421,7 +3418,7 @@ def measureFromElement(
 
             staves[nStr] = stream.Measure(
                 staffFromElement(eachElem, spannerBundle=spannerBundle),
-                number=elem.get('n', backupNum)
+                number=int(elem.get('n', backupNum))
             )
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
