@@ -1479,11 +1479,10 @@ def scaleToTuplet(
     :returns: ``objs`` with scaled durations.
     :rtype: (list of) :class:`~music21.base.Music21Object`
     '''
+    wasList: bool = True
     if not isinstance(objs, list):
         objs = [objs]
         wasList = False
-    else:
-        wasList = True
 
     for obj in objs:
         if not isinstance(obj, (note.Note, note.Rest, chord.Chord)):
