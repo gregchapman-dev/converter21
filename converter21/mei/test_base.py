@@ -1791,10 +1791,6 @@ class Test(unittest.TestCase):
         (mostly-unit test; only mock out clef and the ElementTree.Element)
         '''
         elem = mock.MagicMock()
-#         expectedGetOrder = [mock.call('shape'), mock.call('shape'), mock.call('shape'),
-#                             mock.call('line'), mock.call('dis'), mock.call('dis.place')]
-#         expectedGetOrder.extend([mock.ANY for _ in range(1)])
-#         # additional calls to elem.get(), not part of this test
         elemGetReturns = ['theClefShape', 'theClefShape', 'theClefShape', '2', '8', 'above']
         elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
         mockClefFromString.return_value = mock.MagicMock(name='clefFromString()')
@@ -1805,7 +1801,6 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         # this test fails on Python 3.5.
         # mockClefFromString.assert_called_once_with_('theClefShape2', 1)
-#         self.assertSequenceEqual(expectedGetOrder, elem.get.call_args_list)
         self.assertEqual(0, mockTabClef.call_count)
         self.assertEqual(0, mockPercClef.call_count)
 
@@ -1817,9 +1812,6 @@ class Test(unittest.TestCase):
         clefFromElement(): same as testUnit1a() but with 'perc' "shape"
         '''
         elem = mock.MagicMock()
-#         expectedGetOrder = [mock.call('shape')]
-#         expectedGetOrder.extend([mock.ANY for _ in range(1)])
-#         # additional calls to elem.get(), not part of this test
         elemGetReturns = ['perc']
         elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
         mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
@@ -1829,7 +1821,6 @@ class Test(unittest.TestCase):
 
         self.assertEqual(expected, actual)
         self.assertEqual(0, mockClefFromString.call_count)
-#         self.assertSequenceEqual(expectedGetOrder, elem.get.call_args_list)
         self.assertEqual(0, mockTabClef.call_count)
         self.assertEqual(1, mockPercClef.call_count)
 
@@ -1841,9 +1832,6 @@ class Test(unittest.TestCase):
         clefFromElement(): same as testUnit1c() but with 'TAB' "shape"
         '''
         elem = mock.MagicMock()
-#         expectedGetOrder = [mock.call('shape'), mock.call('shape')]
-#         expectedGetOrder.extend([mock.ANY for _ in range(1)])
-#         # additional calls to elem.get(), not part of this test
         elemGetReturns = ['TAB', 'TAB']
         elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
         mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
@@ -1853,7 +1841,6 @@ class Test(unittest.TestCase):
 
         self.assertEqual(expected, actual)
         self.assertEqual(0, mockClefFromString.call_count)
-#         self.assertSequenceEqual(expectedGetOrder, elem.get.call_args_list)
         self.assertEqual(1, mockTabClef.call_count)
         self.assertEqual(0, mockPercClef.call_count)
 
@@ -1913,9 +1900,6 @@ class Test(unittest.TestCase):
         clefFromElement(): adds the "xml:id" attribute
         '''
         elem = mock.MagicMock()
-#         expectedGetOrder = [mock.call('shape'), mock.call(_XMLID), mock.call(_XMLID)]
-#         expectedGetOrder.extend([mock.ANY for _ in range(0)])
-#         # additional calls to elem.get(), not part of this test
         elemGetReturns = ['perc', 'theXMLID', 'theXMLID']
         elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
         mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
@@ -1925,7 +1909,6 @@ class Test(unittest.TestCase):
 
         self.assertEqual(expected, actual)
         self.assertEqual(0, mockClefFromString.call_count)
-#         self.assertSequenceEqual(expectedGetOrder, elem.get.call_args_list)
         self.assertEqual(0, mockTabClef.call_count)
         self.assertEqual(1, mockPercClef.call_count)
         self.assertEqual('theXMLID', actual.id)
@@ -1948,7 +1931,6 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock()
         elemGetReturns = [theNAttribute, theNAttribute]
         elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
-#         expectedGetOrder = [mock.call('n'), mock.call('n')]
         iterfindReturn = [mock.MagicMock(name='note1'),
                           mock.MagicMock(name='imaginary'),
                           mock.MagicMock(name='note2')]
@@ -1975,7 +1957,6 @@ class Test(unittest.TestCase):
                                  mockVoice.return_value.coreAppend.call_args_list)
         mockVoice.return_value.coreElementsChanged.assert_called_once_with()
         self.assertEqual(theNAttribute, actual.id)
-#         self.assertSequenceEqual(expectedGetOrder, elem.get.call_args_list)
 
     @mock.patch('converter21.mei.base.noteFromElement')
     @mock.patch('music21.stream.Voice')
