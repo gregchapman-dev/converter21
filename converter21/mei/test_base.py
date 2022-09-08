@@ -1049,7 +1049,7 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.safePitch')
     @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('music21.pitch.Accidental')
+    @mock.patch('converter21.mei.base.pitch.Accidental')
     def testUnit2(self, mockAccid, mockMakeDuration, mockSafePitch, mockProcEmbEl, mockNote):
         '''
         noteFromElement(): adds <artic>, <accid>, and <dot> elements held within
@@ -3654,7 +3654,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         mockFromString.assert_called_once_with(expFromStringArg)
 
-    @mock.patch('music21.instrument')
+    @mock.patch('converter21.mei.base.instrument')
     def testUnit3aInstrDef(self, mockInstr):
         '''instrDefFromElement(): when @midi.instrname is given, and it explodes (AttributeError)'''
         # For Py3 we have to replace the exception, since it's not okay to catch classes that don't
@@ -3674,7 +3674,7 @@ class Test(unittest.TestCase):
         mockInstr.fromString.assert_called_once_with(expFromStringArg)
         self.assertEqual(expFromStringArg, actual.partName)
 
-    @mock.patch('music21.instrument')
+    @mock.patch('converter21.mei.base.instrument')
     def testUnit3bInstrDef(self, mockInstr):
         '''instrDefFromElement(): when @midi.instrname is given,
         and it explodes (InstrumentException)'''
