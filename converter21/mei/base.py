@@ -254,14 +254,15 @@ _TEST_FAILS = 'MEI module had {} failures and {} errors; run music21/mei/base.py
 _INVALID_XML_DOC = 'MEI document is not valid XML.'
 _WRONG_ROOT_ELEMENT = 'Root element should be <mei> in the MEI namespace, not <{}>.'
 _UNKNOWN_TAG = 'Found unexpected tag while parsing MEI: <{}>.'
-_UNEXPECTED_ATTR_VALUE = 'Unexpected value for "{}" attribute: {}'
+_UNEXPECTED_ATTR_VALUE = 'Unexpected value for "{}" attribute: {}, ignoring.'
 _SEEMINGLY_NO_PARTS = 'There appear to be no <staffDef> tags in this score.'
 _STAFF_MUST_HAVE_N = 'Found a <staff> tag with no @n attribute'
 _MISSING_VOICE_ID = 'Found a <layer> without @n attribute and no override.'
 _CANNOT_FIND_XMLID = 'Could not find the @{} so we could not create the {}.'
 _MISSING_TUPLET_DATA = 'Both @num and @numbase attributes are required on <tuplet> tags.'
 _TUPLET_WITH_NO_NOTES = '<tuplet> must contain at least one note/chord/rest'
-_UNIMPLEMENTED_IMPORT = 'Importing {} without {} is not yet supported.'
+_UNIMPLEMENTED_IMPORT_WITHOUT = 'Importing {} without {} is not yet supported.'
+_UNIMPLEMENTED_IMPORT_WITH = 'Importing {} with {} is not yet supported.'
 _UNPROCESSED_SUBELEMENT = 'Found an unprocessed <{}> element in a <{}>.'
 _MISSED_DATE = 'Unable to decipher the composition date "{}"'
 _BAD_VERSE_NUMBER = 'Verse number must be an int (got "{}")'
@@ -297,9 +298,9 @@ class MeiToM21Converter:
             try:
                 self.documentRoot = fromstring(theDocument)
             except ParseError as parseErr:
-                environLocal.printDebug(
+                environLocal.warn(
                     '\n\nERROR: Parsing the MEI document with ElementTree failed.')
-                environLocal.printDebug(f'We got the following error:\n{parseErr}')
+                environLocal.warn(f'We got the following error:\n{parseErr}')
                 raise MeiValidityError(_INVALID_XML_DOC)
 
             if isinstance(self.documentRoot, ElementTree):
@@ -571,8 +572,9 @@ def _attrTranslator(
     try:
         return mapping[attr]
     except KeyError:
-        print(_UNEXPECTED_ATTR_VALUE.format(name, attr))
-        raise MeiValueError(_UNEXPECTED_ATTR_VALUE.format(name, attr))
+        # rather than raising an exception, simply warn
+        environLocal.warn(_UNEXPECTED_ATTR_VALUE.format(name, attr))
+        return None
 
 
 def _accidentalFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
@@ -783,7 +785,7 @@ def _ppSlurs(theConverter: MeiToM21Converter):
             c.m21Attr[removeOctothorpe(eachSlur.get('startid'))]['m21SlurStart'] = thisIdLocal
             c.m21Attr[removeOctothorpe(eachSlur.get('endid'))]['m21SlurEnd'] = thisIdLocal
         else:
-            environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<slur>', '@startid and @endid'))
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid and @endid'))
 
 
 def _ppTies(theConverter: MeiToM21Converter):
@@ -821,7 +823,7 @@ def _ppTies(theConverter: MeiToM21Converter):
             c.m21Attr[removeOctothorpe(eachTie.get('startid'))]['tie'] = 'i'
             c.m21Attr[removeOctothorpe(eachTie.get('endid'))]['tie'] = 't'
         else:
-            environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<tie>', '@startid and @endid'))
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<tie>', '@startid and @endid'))
 
 
 def _ppBeams(theConverter: MeiToM21Converter):
@@ -859,7 +861,7 @@ def _ppBeams(theConverter: MeiToM21Converter):
     for eachBeam in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'):
         if eachBeam.get('startid') is None or eachBeam.get('endid') is None:
-            environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<beamSpan>', '@startid and @endid'))
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<beamSpan>', '@startid and @endid'))
             continue
 
         c.m21Attr[removeOctothorpe(eachBeam.get('startid'))]['m21Beam'] = 'start'
@@ -914,7 +916,7 @@ def _ppTuplets(theConverter: MeiToM21Converter):
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tupletSpan'):
         if ((eachTuplet.get('startid') is None or eachTuplet.get('endid') is None)
                 and eachTuplet.get('plist') is None):
-            environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<tupletSpan>',
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<tupletSpan>',
                                                            '@startid and @endid or @plist'))
         elif eachTuplet.get('plist') is not None:
             # Ideally (for us) <tupletSpan> elements will have a @plist that enumerates the
@@ -1049,8 +1051,7 @@ def _processEmbeddedElements(
             else:
                 processed.append(result)
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
-            print(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
-            environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
+            environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
 
     return processed
 
@@ -3241,8 +3242,7 @@ def staffFromElement(
             # NB: this won't be tested until there's something in tagToFunction
             layers.append(tagToFunction[eachTag.tag](eachTag, spannerBundle))
         elif eachTag.tag not in _IGNORE_UNPROCESSED:
-            print(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
-            environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
+            environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
 
     return layers
 
@@ -3428,12 +3428,11 @@ def measureFromElement(
                 maxBarDuration = thisBarDuration
         elif staffDefTag == eachElem.tag:
             if nStr is None:
-                environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n'))
+                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
             else:
                 stavesWaiting[nStr] = staffDefFromElement(eachElem, spannerBundle)
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
-            print(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
-            environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
+            environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
     # Process objects from a <staffDef>...
     # We must process them now because, if we did it in the loop above, the respective <staff> may
@@ -3639,7 +3638,7 @@ def sectionScoreCore(
                 # At the moment, to process this here, we need an @n on the <staffDef>. A document
                 # may have a still-valid <staffDef> if the <staffDef> has an @xml:id with which
                 # <staff> elements may refer to it.
-                environLocal.warn(_UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n'))
+                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
 
         elif sectionTag == eachElem.tag:
             # NOTE: same as scoreFE() (except the name of "inNextThing")
@@ -3703,8 +3702,7 @@ def sectionScoreCore(
                     parsed[eachN].append(eachList)  # type: ignore
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
-            print(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
-            environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
+            environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
     # TODO: write the <section @label=""> part
     # TODO: check if there's anything left in "inNextThing"
