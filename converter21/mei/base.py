@@ -173,6 +173,7 @@ tool.
 * <sb>: a system break
 
 '''
+import sys
 import typing as t
 from xml.etree.ElementTree import Element, ParseError, fromstring, ElementTree
 
@@ -212,9 +213,9 @@ _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
-    f'{MEI_NS}sb',  # system break
-    f'{MEI_NS}lb',  # line break
-    f'{MEI_NS}pb',  # page break
+#     f'{MEI_NS}sb',  # system break
+#     f'{MEI_NS}lb',  # line break
+#     f'{MEI_NS}pb',  # page break
     f'{MEI_NS}slur',  # slurs; handled in convertFromString()
     f'{MEI_NS}tie',  # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
@@ -570,6 +571,7 @@ def _attrTranslator(
     try:
         return mapping[attr]
     except KeyError:
+        print(_UNEXPECTED_ATTR_VALUE.format(name, attr))
         raise MeiValueError(_UNEXPECTED_ATTR_VALUE.format(name, attr))
 
 
@@ -1047,6 +1049,7 @@ def _processEmbeddedElements(
             else:
                 processed.append(result)
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
+            print(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
 
     return processed
@@ -1103,8 +1106,8 @@ def _transpositionFromAttrs(elem: Element) -> interval.Interval:
     :returns: The interval of transposition from written to concert pitch.
     :rtype: :class:`music21.interval.Interval`
     '''
-    transDiat: int = int(elem.get('trans.diat', 0))
-    transSemi: int = int(elem.get('trans.semi', 0))
+    transDiat: int = int(float(elem.get('trans.diat', 0)))
+    transSemi: int = int(float(elem.get('trans.semi', 0)))
 
     # If the difference between transSemi and transDiat is greater than five per octave...
     if abs(transSemi - transDiat) > 5 * (abs(transSemi) // 12 + 1):
@@ -3238,6 +3241,7 @@ def staffFromElement(
             # NB: this won't be tested until there's something in tagToFunction
             layers.append(tagToFunction[eachTag.tag](eachTag, spannerBundle))
         elif eachTag.tag not in _IGNORE_UNPROCESSED:
+            print(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
 
     return layers
@@ -3428,6 +3432,7 @@ def measureFromElement(
             else:
                 stavesWaiting[nStr] = staffDefFromElement(eachElem, spannerBundle)
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
+            print(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
     # Process objects from a <staffDef>...
@@ -3698,6 +3703,7 @@ def sectionScoreCore(
                     parsed[eachN].append(eachList)  # type: ignore
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
+            print(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
             environLocal.printDebug(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
     # TODO: write the <section @label=""> part
