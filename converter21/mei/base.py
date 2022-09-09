@@ -488,9 +488,23 @@ _ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
 _DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
-    'long': 16.0, 'breve': 8.0, '1': 4.0, '2': 2.0, '4': 1.0, '8': 0.5, '16': 0.25,
-    '32': 0.125, '64': 0.0625, '128': 0.03125, '256': 0.015625, '512': 0.0078125,
-    '1024': 0.00390625, '2048': 0.001953125, None: 0.00390625}
+    'maxima': 32.0,               # maxima is not mei-CMN, but we'll allow it
+    'long': 16.0, 'longa': 16.0,  # longa is not mei-CMN, but we'll allow it
+    'breve': 8.0, 'brevis': 8.0,  # brevis is not mei-CMN, but we'll allow it
+    '1': 4.0, 'semibrevis': 4.0,  # semibrevis is not mei-CMN, but we'll allow it
+    '2': 2.0, 'minima': 2.0,      # minima is not mei-CMN, but we'll allow it
+    '4': 1.0, 'semiminima': 1.0,  # semiminima is not mei-CMN, but we'll allow it
+    '8': 0.5, 'fusa': 0.5,        # fusa is not mei-CMN, but we'll allow it
+    '16': 0.25, 'semifusa': 0.25, # semifusa is not mei-CMN, but we'll allow it
+    '32': 0.125,
+    '64': 0.0625,
+    '128': 0.03125,
+    '256': 0.015625,
+    '512': 0.0078125,
+    '1024': 0.00390625,
+    '2048': 0.001953125,
+    None: 0.00390625
+}
 
 # for _articulationFromAttr()
 # NOTE: 'marc-stacc' and 'ten-stacc' require multiple music21 events, so they are handled
