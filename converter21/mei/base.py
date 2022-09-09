@@ -173,7 +173,6 @@ tool.
 * <sb>: a system break
 
 '''
-import sys
 import typing as t
 from xml.etree.ElementTree import Element, ParseError, fromstring, ElementTree
 
@@ -266,7 +265,9 @@ _UNIMPLEMENTED_IMPORT_WITH = 'Importing {} with {} is not yet supported.'
 _UNPROCESSED_SUBELEMENT = 'Found an unprocessed <{}> element in a <{}>.'
 _MISSED_DATE = 'Unable to decipher the composition date "{}"'
 _BAD_VERSE_NUMBER = 'Verse number must be an int (got "{}")'
-
+_EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} in favor of {}'
+_EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
+_EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
 
 # Module-level Functions
 # -----------------------------------------------------------------------------
@@ -685,7 +686,7 @@ def _sharpsFromAttr(signature: t.Optional[str]) -> int:
     Use :func:`_sharpsFromAttr` to convert MEI's ``data.KEYSIGNATURE`` datatype to an integer
     representing the number of sharps, for use with music21's :class:`~music21.key.KeySignature`.
 
-    :param str signature: The @key.sig attribute.
+    :param str signature: The @key.sig attribute, or the @sig attribute
     :returns: The number of sharps.
     :rtype: int
 
@@ -875,7 +876,9 @@ def _ppBeams(theConverter: MeiToM21Converter):
     for eachBeam in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'):
         if eachBeam.get('startid') is None or eachBeam.get('endid') is None:
-            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<beamSpan>', '@startid and @endid'))
+            environLocal.warn(
+                _UNIMPLEMENTED_IMPORT_WITHOUT.format('<beamSpan>', '@startid and @endid')
+            )
             continue
 
         c.m21Attr[removeOctothorpe(eachBeam.get('startid'))]['m21Beam'] = 'start'
@@ -1070,7 +1073,7 @@ def _processEmbeddedElements(
     return processed
 
 
-def _timeSigFromAttrs(elem: Element) -> meter.TimeSignature:
+def _timeSigFromAttrs(elem: Element, prefix: str = '') -> meter.TimeSignature:
     '''
     From any tag with @meter.count and @meter.unit attributes, make a :class:`TimeSignature`.
 
@@ -1079,24 +1082,27 @@ def _timeSigFromAttrs(elem: Element) -> meter.TimeSignature:
     :returns: The corresponding time signature.
     :rtype: :class:`~music21.meter.TimeSignature`
     '''
-    return meter.TimeSignature(f"{elem.get('meter.count')!s}/{elem.get('meter.unit')!s}")
+    return meter.TimeSignature(f"{elem.get(prefix + 'count')!s}/{elem.get(prefix + 'unit')!s}")
 
 
-def _keySigFromAttrs(elem: Element) -> t.Union[key.Key, key.KeySignature]:
+def _keySigFromAttrs(elem: Element, prefix: str = '') -> t.Union[key.Key, key.KeySignature]:
     '''
-    From any tag with (at minimum) either @key.pname or @key.sig attributes, make a
+    From any tag with (at minimum) either @pname or @sig attributes, make a
     :class:`KeySignature` or :class:`Key`, as possible.
 
-    elem is an :class:`Element` with either the @key.pname or @key.sig attribute.
+    elem is an :class:`Element` with either the @pname or @sig attribute
+
+    Note that the prefix 'key.' can be passed in to parse @key.pname, @key.sig, etc
 
     Returns the key or key signature.
     '''
-    pname: t.Optional[str] = elem.get('key.pname')
+    # @@@ I think @sig should take priority --gregc
+    pname: t.Optional[str] = elem.get(prefix + 'pname')
     if pname is not None:
-        # @key.accid, @key.mode, @key.pname
-        mode: str = elem.get('key.mode', '')
+        # @accid/@key.accid, @mode/@key.mode, @pname/@key.pname
+        mode: str = elem.get(prefix + 'mode', '')
         step: str = pname
-        accidental: t.Optional[str] = _accidentalFromAttr(elem.get('key.accid'))
+        accidental: t.Optional[str] = _accidentalFromAttr(elem.get(prefix + 'accid'))
         tonic: str
         if accidental is None:
             tonic = step
@@ -1106,9 +1112,10 @@ def _keySigFromAttrs(elem: Element) -> t.Union[key.Key, key.KeySignature]:
     else:
         # @key.sig, @key.mode
         # If @key.mode is null, assume it is a 'major' key (default for ks.asKey)
-        ks: key.KeySignature = key.KeySignature(sharps=_sharpsFromAttr(elem.get('key.sig')))
+        ks: key.KeySignature = key.KeySignature(sharps=_sharpsFromAttr(elem.get(prefix + 'sig')))
         # noinspection PyTypeChecker
-        return ks.asKey(mode=elem.get('key.mode', 'major'))
+        # @@@ and this is particularly bad, better to just return ks if there is no mode
+        return ks.asKey(mode=elem.get(prefix + 'mode', 'major'))
 
 
 def _transpositionFromAttrs(elem: Element) -> interval.Interval:
@@ -1717,11 +1724,11 @@ def scoreDefFromElement(
 
     # --> time signature
     if elem.get('meter.count') is not None:
-        postAllParts.append(_timeSigFromAttrs(elem))
+        postAllParts.append(_timeSigFromAttrs(elem, prefix='meter.'))
 
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-        postAllParts.append(_keySigFromAttrs(elem))
+        postAllParts.append(_keySigFromAttrs(elem, prefix='key.'))
 
     # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
     for eachGrp in elem.iterfind(f'{MEI_NS}staffGrp'):
@@ -1907,7 +1914,9 @@ def staffDefFromElement(
     '''
     # mapping from tag name to our converter function
     tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
-        f'{MEI_NS}clef': clefFromElement
+        f'{MEI_NS}clef': clefFromElement,
+        f'{MEI_NS}keySig': keySigFromElement,
+        f'{MEI_NS}meterSig': timeSigFromElement,
     }
 
     # first make the Instrument
@@ -1941,11 +1950,11 @@ def staffDefFromElement(
     # process other part-specific information
     # --> time signature
     if elem.get('meter.count') is not None:
-        post['meter'] = _timeSigFromAttrs(elem)
+        post['meter'] = _timeSigFromAttrs(elem, prefix='meter.')
 
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-        post['key'] = _keySigFromAttrs(elem)
+        post['key'] = _keySigFromAttrs(elem, prefix='key.')
 
     # --> clef
     if elem.get('clef.shape') is not None:
@@ -1971,7 +1980,17 @@ def staffDefFromElement(
 
     for eachItem in embeddedItems:
         if isinstance(eachItem, clef.Clef):
+            if 'clef' in post:
+                environLocal.warn(_EXTRA_CLEF_IN_STAFFDEF.format(post['clef'], eachItem))
             post['clef'] = eachItem
+        if isinstance(eachItem, (key.Key, key.KeySignature)):
+            if 'key' in post:
+                environLocal.warn(_EXTRA_KEYSIG_IN_STAFFDEF.format(post['key'], eachItem))
+            post['key'] = eachItem
+        if isinstance(eachItem, meter.TimeSignature):
+            if 'meter' in post:
+                environLocal.warn(_EXTRA_METERSIG_IN_STAFFDEF.format(post['meter'], eachItem))
+            post['meter'] = eachItem
 
     return post
 
@@ -2761,6 +2780,32 @@ def clefFromElement(
         theClef.id = xmlId
 
     return theClef
+
+
+def keySigFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> t.Union[key.Key, key.KeySignature]:
+    theKey: t.Union[key.Key, key.KeySignature] = _keySigFromAttrs(elem)
+
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theKey.id = xmlId
+
+    return theKey
+
+
+def timeSigFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None  # pylint: disable=unused-argument
+) -> meter.TimeSignature:
+    theTimeSig: meter.TimeSignature = _timeSigFromAttrs(elem)
+
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        theKey.id = xmlId
+
+    return theTimeSig
 
 
 def instrDefFromElement(
