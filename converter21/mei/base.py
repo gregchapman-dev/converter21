@@ -212,14 +212,15 @@ _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
-    # f'{MEI_NS}sb',  # system break
-    # f'{MEI_NS}lb',  # line break
-    # f'{MEI_NS}pb',  # page break
-    f'{MEI_NS}slur',  # slurs; handled in convertFromString()
-    f'{MEI_NS}tie',  # ties; handled in convertFromString()
+    # f'{MEI_NS}sb',        # system break
+    # f'{MEI_NS}lb',        # line break
+    # f'{MEI_NS}pb',        # page break
+    f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
+    f'{MEI_NS}slur',        # slurs; handled in convertFromString()
+    f'{MEI_NS}tie',         # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
-    f'{MEI_NS}beamSpan',  # beams; handled in convertFromString()
-    f'{MEI_NS}instrDef',  # instrument; handled separately by staffDefFromElement()
+    f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
+    f'{MEI_NS}instrDef',    # instrument; handled separately by staffDefFromElement()
 )
 
 
@@ -1744,7 +1745,6 @@ def scoreDefFromElement(
         postAllParts.append(_timeSigFromAttrs(elem, prefix='meter.'))
     meterSigElem: t.Optional[Element] = elem.find(f'{MEI_NS}meterSig')
     if meterSigElem is not None:
-        environLocal.warn('got a <meterSig> in <scoreDef>')
         postAllParts.append(_timeSigFromAttrs(meterSigElem))
 
     # --> key signature
@@ -1752,7 +1752,6 @@ def scoreDefFromElement(
         postAllParts.append(_keySigFromAttrs(elem, prefix='key.'))
     keySigElem: t.Optional[Element] = elem.find(f'{MEI_NS}keySig')
     if keySigElem is not None:
-        environLocal.warn('got a <keySig> in <scoreDef>')
         postAllParts.append(_keySigFromAttrs(keySigElem))
 
     # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
