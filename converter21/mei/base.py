@@ -212,9 +212,9 @@ _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
-#     f'{MEI_NS}sb',  # system break
-#     f'{MEI_NS}lb',  # line break
-#     f'{MEI_NS}pb',  # page break
+    # f'{MEI_NS}sb',  # system break
+    # f'{MEI_NS}lb',  # line break
+    # f'{MEI_NS}pb',  # page break
     f'{MEI_NS}slur',  # slurs; handled in convertFromString()
     f'{MEI_NS}tie',  # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
@@ -489,14 +489,14 @@ _ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
 _DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
-    'maxima': 32.0,               # maxima is not mei-CMN, but we'll allow it
-    'long': 16.0, 'longa': 16.0,  # longa is not mei-CMN, but we'll allow it
-    'breve': 8.0, 'brevis': 8.0,  # brevis is not mei-CMN, but we'll allow it
-    '1': 4.0, 'semibrevis': 4.0,  # semibrevis is not mei-CMN, but we'll allow it
-    '2': 2.0, 'minima': 2.0,      # minima is not mei-CMN, but we'll allow it
-    '4': 1.0, 'semiminima': 1.0,  # semiminima is not mei-CMN, but we'll allow it
-    '8': 0.5, 'fusa': 0.5,        # fusa is not mei-CMN, but we'll allow it
-    '16': 0.25, 'semifusa': 0.25, # semifusa is not mei-CMN, but we'll allow it
+    'maxima': 32.0,                # maxima is not mei-CMN, but we'll allow it
+    'long': 16.0, 'longa': 16.0,   # longa is not mei-CMN, but we'll allow it
+    'breve': 8.0, 'brevis': 8.0,   # brevis is not mei-CMN, but we'll allow it
+    '1': 4.0, 'semibrevis': 4.0,   # semibrevis is not mei-CMN, but we'll allow it
+    '2': 2.0, 'minima': 2.0,       # minima is not mei-CMN, but we'll allow it
+    '4': 1.0, 'semiminima': 1.0,   # semiminima is not mei-CMN, but we'll allow it
+    '8': 0.5, 'fusa': 0.5,         # fusa is not mei-CMN, but we'll allow it
+    '16': 0.25, 'semifusa': 0.25,  # semifusa is not mei-CMN, but we'll allow it
     '32': 0.125,
     '64': 0.0625,
     '128': 0.03125,
@@ -1739,7 +1739,7 @@ def scoreDefFromElement(
     # --> time signature
     if elem.get('meter.count') is not None:
         postAllParts.append(_timeSigFromAttrs(elem, prefix='meter.'))
-    meterSigElem: Element = elem.find(f'{MEI_NS}meterSig')
+    meterSigElem: t.Optional[Element] = elem.find(f'{MEI_NS}meterSig')
     if meterSigElem is not None:
         environLocal.warn('got a <meterSig> in <scoreDef>')
         postAllParts.append(_timeSigFromAttrs(meterSigElem))
@@ -1747,7 +1747,7 @@ def scoreDefFromElement(
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
         postAllParts.append(_keySigFromAttrs(elem, prefix='key.'))
-    keySigElem: Element = elem.find(f'{MEI_NS}keySig')
+    keySigElem: t.Optional[Element] = elem.find(f'{MEI_NS}keySig')
     if keySigElem is not None:
         environLocal.warn('got a <keySig> in <scoreDef>')
         postAllParts.append(_keySigFromAttrs(keySigElem))
@@ -2825,7 +2825,7 @@ def timeSigFromElement(
 
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
-        theKey.id = xmlId
+        theTimeSig.id = xmlId
 
     return theTimeSig
 
