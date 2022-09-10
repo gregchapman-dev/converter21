@@ -3507,7 +3507,7 @@ def measureFromElement(
 
             staves[nStr] = stream.Measure(
                 staffFromElement(eachElem, spannerBundle=spannerBundle),
-                number=int(elem.get('n', backupNum))
+                number=elem.get('n', backupNum)
             )
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
@@ -3539,7 +3539,7 @@ def measureFromElement(
             restVoice.id = '1'
             # just in case (e.g., when all the other voices are <mRest>)
             restVoice[0].m21wasMRest = True
-            staves[eachN] = stream.Measure([restVoice], number=int(elem.get('n', backupNum)))
+            staves[eachN] = stream.Measure([restVoice], number=elem.get('n', backupNum))
 
     # First search for Rest objects created by an <mRest> element that didn't have @dur set. This
     # will only work in cases where not all of the parts are resting. However, it avoids a more
