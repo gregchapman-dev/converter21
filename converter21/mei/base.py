@@ -259,7 +259,6 @@ _STAFF_MUST_HAVE_N = 'Found a <staff> tag with no @n attribute'
 _MISSING_VOICE_ID = 'Found a <layer> without @n attribute and no override.'
 _CANNOT_FIND_XMLID = 'Could not find the @{} so we could not create the {}.'
 _MISSING_TUPLET_DATA = 'Both @num and @numbase attributes are required on <tuplet> tags.'
-_TUPLET_WITH_NO_NOTES = '<tuplet> must contain at least one note/chord/rest'
 _UNIMPLEMENTED_IMPORT_WITHOUT = 'Importing {} without {} is not yet supported.'
 _UNIMPLEMENTED_IMPORT_WITH = 'Importing {} with {} is not yet supported.'
 _UNPROCESSED_SUBELEMENT = 'Found an unprocessed <{}> element in a <{}>.'
@@ -1166,7 +1165,7 @@ def _transpositionFromAttrs(elem: Element) -> interval.Interval:
     #     diatonic third."
     if transDiat < 0:
         transDiat -= 1
-    elif transDiat > 0:
+    elif transDiat >= 0:
         transDiat += 1
 
     return interval.intervalFromGenericAndChromatic(interval.GenericInterval(transDiat),
@@ -1333,7 +1332,8 @@ def beamTogether(someThings: t.List[Music21Object]) -> t.List[Music21Object]:
                 thing.beams.fill(thing.duration.type, beamType)  # type: ignore
                 iLastBeamedNote = i
 
-    someThings[iLastBeamedNote].beams.setAll('stop')  # type: ignore
+    if iLastBeamedNote != -1:
+        someThings[iLastBeamedNote].beams.setAll('stop')  # type: ignore
 
     return someThings
 
@@ -2232,7 +2232,9 @@ def sylFromElement(
     }
 
     wordPos: t.Optional[str] = elem.get('wordpos')
-    con: str = conDict[elem.get('con')]
+
+    # default to '-' for unrecognized @con values (e.g. 'b' from lyric-007.mei)
+    con: str = conDict.get(elem.get('con'), '-')
 
     text: str = elem.text if elem.text is not None else ''
     if 'i' == wordPos:
@@ -2242,7 +2244,7 @@ def sylFromElement(
     elif 't' == wordPos:
         text = con + text
 
-    syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict[wordPos]
+    syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict.get(wordPos, None)
 
     if syllabic:
         return note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
@@ -2784,6 +2786,7 @@ def clefFromElement(
     theClef: clef.Clef
     shapeStr: t.Optional[str] = elem.get('shape')
     lineStr: t.Optional[str] = elem.get('line')
+    octaveShiftOverride: t.Optional[int] = None
     if 'perc' == shapeStr:
         theClef = clef.PercussionClef()
     elif 'TAB' == shapeStr:
@@ -2795,10 +2798,16 @@ def clefFromElement(
         if lineStr is None:
             # music21 has defaults for missing lineStr, but it has to be ''
             lineStr = ''
-
-        theClef = clef.clefFromString(shapeStr + lineStr,
-                                      octaveShift=_getOctaveShift(elem.get('dis'),
-                                                                  elem.get('dis.place')))
+        if shapeStr == 'GG':
+            shapeStr = 'G'
+            octaveShiftOverride = -1
+        if octaveShiftOverride is not None:
+            theClef = clef.clefFromString(shapeStr + lineStr, octaveShiftOverride)
+        else:
+            theClef = clef.clefFromString(
+                shapeStr + lineStr,
+                _getOctaveShift(elem.get('dis'), elem.get('dis.place'))
+            )
 
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
@@ -3139,7 +3148,8 @@ def tupletFromElement(
             lastNote = i
 
     if firstNote is None:
-        raise MeiElementError(_TUPLET_WITH_NO_NOTES)
+        # no members of tuplet (e.g. <tuplet/> containing only a <btrem/> which we don't parse yet
+        return tuple()
 
     tupletMembers[firstNote].duration.tuplets[0].type = 'start'
     if lastNote is None:
