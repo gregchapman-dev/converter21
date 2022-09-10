@@ -644,7 +644,10 @@ def _articulationFromAttr(attr: t.Optional[str]) -> t.Tuple[articulations.Articu
     elif 'ten-stacc' == attr:
         return (articulations.Tenuto(), articulations.Staccato())
     else:
-        return (_attrTranslator(attr, 'artic', _ARTIC_ATTR_DICT)(),)
+        articClass: t.Type = _attrTranslator(attr, 'artic', _ARTIC_ATTR_DICT)
+        if articClass is not None:
+            return (articClass(),)
+    return tuple()  # empty t.Tuple
 
 
 def _makeArticList(attr: str) -> t.List[articulations.Articulation]:
