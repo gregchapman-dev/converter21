@@ -1082,7 +1082,21 @@ def _timeSigFromAttrs(elem: Element, prefix: str = '') -> meter.TimeSignature:
     :returns: The corresponding time signature.
     :rtype: :class:`~music21.meter.TimeSignature`
     '''
-    return meter.TimeSignature(f"{elem.get(prefix + 'count')!s}/{elem.get(prefix + 'unit')!s}")
+    count: t.Optional[str] = elem.get(prefix + 'count')
+    unit: t.Optional[str] = elem.get(prefix + 'unit')
+    sym: t.Optional[str] = elem.get(prefix + 'sym')
+    if sym:
+        if (sym == 'cut'
+                and (count is None or count == '2')
+                and (unit is None or unit == '2')):
+            return meter.TimeSignature('cut')
+        if (sym == 'common'
+                and (count is None or count == '4')
+                and (unit is None or unit == '4')):
+            return meter.TimeSignature('common')
+    if count and unit:
+        return meter.TimeSignature(f'{count}/{unit}')
+    raise MeiElementError('Could not parse meterSig attributes')
 
 
 def _keySigFromAttrs(elem: Element, prefix: str = '') -> t.Union[key.Key, key.KeySignature]:
@@ -1700,11 +1714,11 @@ def scoreDefFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: meterSig meterSigGrp
+    - MEI.cmn: meterSigGrp
     - MEI.harmony: chordTable
     - MEI.linkalign: timeline
     - MEI.midi: instrGrp
-    - MEI.shared: keySig pgFoot pgFoot2 pgHead pgHead2
+    - MEI.shared: pgFoot pgFoot2 pgHead pgHead2
     - MEI.usersymbols: symbolTable
     '''
 
@@ -1725,10 +1739,18 @@ def scoreDefFromElement(
     # --> time signature
     if elem.get('meter.count') is not None:
         postAllParts.append(_timeSigFromAttrs(elem, prefix='meter.'))
+    meterSigElem: Element = elem.find(f'{MEI_NS}meterSig')
+    if meterSigElem is not None:
+        environLocal.warn('got a <meterSig> in <scoreDef>')
+        postAllParts.append(_timeSigFromAttrs(meterSigElem))
 
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
         postAllParts.append(_keySigFromAttrs(elem, prefix='key.'))
+    keySigElem: Element = elem.find(f'{MEI_NS}keySig')
+    if keySigElem is not None:
+        environLocal.warn('got a <keySig> in <scoreDef>')
+        postAllParts.append(_keySigFromAttrs(keySigElem))
 
     # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
     for eachGrp in elem.iterfind(f'{MEI_NS}staffGrp'):
@@ -1908,9 +1930,9 @@ def staffDefFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: meterSig meterSigGrp
+    - MEI.cmn: meterSigGrp
     - MEI.mensural: mensural support
-    - MEI.shared: clefGrp keySig label layerDef
+    - MEI.shared: clefGrp label layerDef
     '''
     # mapping from tag name to our converter function
     tagToFunction: t.Dict[str, t.Callable[[Element, t.Optional[spanner.SpannerBundle]], t.Any]] = {
@@ -3180,7 +3202,7 @@ def layerFromElement(
     **Contained Elements not Implemented:**
 
     - MEI.cmn: arpeg bTrem beamSpan beatRpt bend breath fTrem fermata gliss hairpin halfmRpt
-               harpPedal mRpt mRpt2 meterSig meterSigGrp multiRest multiRpt octave pedal
+               harpPedal mRpt mRpt2 meterSigGrp multiRest multiRpt octave pedal
                reh slur tie tuplet tupletSpan
     - MEI.cmnOrnaments: mordent trill turn
     - MEI.critapp: app
@@ -3190,7 +3212,7 @@ def layerFromElement(
     - MEI.mensural: ligature mensur proport
     - MEI.midi: midi
     - MEI.neumes: ineume syllable uneume
-    - MEI.shared: accid annot artic barLine clefGrp custos dir dot dynam keySig pad pb phrase sb
+    - MEI.shared: accid annot artic barLine clefGrp custos dir dot dynam pad pb phrase sb
                   scoreDef staffDef tempo
     - MEI.text: div
     - MEI.usersymbols: anchoredText curve line symbol
@@ -3207,6 +3229,8 @@ def layerFromElement(
         f'{MEI_NS}space': spaceFromElement,
         f'{MEI_NS}mSpace': mSpaceFromElement,
         f'{MEI_NS}barLine': barLineFromElement,
+        f'{MEI_NS}meterSig': timeSigFromElement,
+        f'{MEI_NS}keySig': keySigFromElement,
     }
 
     # iterate all immediate children
