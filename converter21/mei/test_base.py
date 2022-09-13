@@ -219,7 +219,7 @@ class Test(unittest.TestCase):
         '''_timeSigFromAttrs(): that it works (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'meter.count': '3', 'meter.unit': '8'})
         expectedRatioString = '3/8'
-        actual = base._timeSigFromAttrs(elem)
+        actual = base._timeSigFromAttrs(elem, prefix='meter.')
         self.assertEqual(expectedRatioString, actual.ratioString)
 
     def testKeySigFromAttrs1(self):
@@ -227,7 +227,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('{mei}staffDef', attrib={'key.pname': 'B', 'key.accid': 'f',
                                                       'key.mode': 'minor'})
         expectedTPNWC = 'b-'
-        actual = base._keySigFromAttrs(elem)
+        actual = base._keySigFromAttrs(elem, prefix='key.')
         self.assertIsInstance(actual, key.Key)
         self.assertEqual(expectedTPNWC, actual.tonicPitchNameWithCase)
 
@@ -236,7 +236,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('{mei}staffDef', attrib={'key.sig': '6s', 'key.mode': 'minor'})
         expectedSharps = 6
         expectedMode = 'minor'
-        actual = base._keySigFromAttrs(elem)
+        actual = base._keySigFromAttrs(elem, prefix='key.')
         self.assertIsInstance(actual, key.KeySignature)
         self.assertEqual(expectedSharps, actual.sharps)
         self.assertEqual(expectedMode, actual.mode)
@@ -636,16 +636,14 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
 
     def testAttrTranslator2(self):
-        '''_attrTranslator(): exception is raised properly when "attr" isn't found'''
+        '''_attrTranslator(): exception is NOT raised when "attr" isn't found'''
         attr = 'four'
         name = 'numbers'
         mapping = {'one': 1, 'two': 2, 'three': 3}
-        expected = 'Unexpected value for "numbers" attribute: four'
-        self.assertRaises(base.MeiValueError, base._attrTranslator, attr, name, mapping)
         try:
             base._attrTranslator(attr, name, mapping)
-        except base.MeiValueError as mvErr:
-            self.assertEqual(expected, mvErr.args[0])
+        except base.MeiValueError:
+            self.fail('MeiValueError incorrectly raised when attr isn\'t found')
 
     @mock.patch('converter21.mei.base._attrTranslator')
     def testAccidental(self, mockTrans):
@@ -1312,7 +1310,7 @@ class Test(unittest.TestCase):
         vfeReturns = [[mock.MagicMock(name='au'), mock.MagicMock(name='luong')],
                       [mock.MagicMock(name='sun')]]
 
-        def mockVerseFESideEffect(inner_elem, backupN):
+        def mockVerseFESideEffect(inner_elem, backupN, otherInfo=None):
             '''Check that it gets called with the right elements'''
             assert f'{MEI_NS}verse' == inner_elem.tag
             return vfeReturns.pop(0)
@@ -1324,8 +1322,8 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         self.assertEqual(expLyrics, actual.lyrics)
         self.assertEqual(2, mockVerseFE.call_count)
-        mockVerseFE.assert_any_call(mock.ANY, backupN=1)
-        mockVerseFE.assert_any_call(mock.ANY, backupN=2)
+        mockVerseFE.assert_any_call(mock.ANY, backupN=1, otherInfo=None)
+        mockVerseFE.assert_any_call(mock.ANY, backupN=2, otherInfo=None)
 
     def testIntegration6(self):
         '''
@@ -1446,7 +1444,7 @@ class Test(unittest.TestCase):
         actual = base.mRestFromElement(elem)
 
         self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem, None)
+        mockRestFromElement.assert_called_once_with(elem, None, otherInfo=None)
 
     @mock.patch('converter21.mei.base.restFromElement')
     def testUnit4TestRestFromElement(self, mockRestFromElement):
@@ -1459,7 +1457,7 @@ class Test(unittest.TestCase):
         actual = base.mRestFromElement(elem)
 
         self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem, None)
+        mockRestFromElement.assert_called_once_with(elem, None, otherInfo=None)
         self.assertTrue(actual.m21wasMRest)
 
     @mock.patch('converter21.mei.base.spaceFromElement')
@@ -1473,7 +1471,7 @@ class Test(unittest.TestCase):
         actual = base.mSpaceFromElement(elem)
 
         self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem, None)
+        mockSpace.assert_called_once_with(elem, None, otherInfo=None)
 
     @mock.patch('converter21.mei.base.spaceFromElement')
     def testUnit6TestRestFromElement(self, mockSpace):
@@ -1486,7 +1484,7 @@ class Test(unittest.TestCase):
         actual = base.mSpaceFromElement(elem)
 
         self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem, None)
+        mockSpace.assert_called_once_with(elem, None, otherInfo=None)
         self.assertTrue(actual.m21wasMRest)
 
     # -----------------------------------------------------------------------------
@@ -1939,8 +1937,8 @@ class Test(unittest.TestCase):
         iterfindReturn[2].tag = f'{base.MEI_NS}note'
         elem.iterfind = mock.MagicMock(return_value=iterfindReturn)
         # "MNFE" is "mockNoteFromElement"
-        expectedMNFEOrder = [mock.call(iterfindReturn[0], None),
-                             mock.call(iterfindReturn[2], None)]
+        expectedMNFEOrder = [mock.call(iterfindReturn[0], None, None),
+                             mock.call(iterfindReturn[2], None, None)]
         mockNFEreturns = ['mockNoteFromElement return 1', 'mockNoteFromElement return 2']
         mockNoteFromElement.side_effect = lambda *unused: mockNFEreturns.pop(0)
         mockTuplets.side_effect = lambda x: x
@@ -1974,8 +1972,8 @@ class Test(unittest.TestCase):
         iterfindReturn[2].tag = f'{base.MEI_NS}note'
         elem.iterfind = mock.MagicMock(return_value=iterfindReturn)
         # "MNFE" is "mockNoteFromElement"
-        expectedMNFEOrder = [mock.call(iterfindReturn[0], None),
-                             mock.call(iterfindReturn[2], None)]
+        expectedMNFEOrder = [mock.call(iterfindReturn[0], None, None),
+                             mock.call(iterfindReturn[2], None, None)]
         mockNFEreturns = ['mockNoteFromElement return 1', 'mockNoteFromElement return 2']
         mockNoteFromElement.side_effect = lambda *unused: mockNFEreturns.pop(0)
         mockTuplets.side_effect = lambda x: x
@@ -2115,11 +2113,13 @@ class Test(unittest.TestCase):
         findallReturn[2].tag = f'{base.MEI_NS}layer'
         elem.iterfind = mock.MagicMock(return_value=findallReturn)
         # "mockLFE" is "mockLayerFromElement"
-        expectedMLFEOrder = [mock.call(findallReturn[i], str(i + 1), spannerBundle=None)
-                             for i in range(len(findallReturn))]
+        expectedMLFEOrder = [
+            mock.call(findallReturn[i], str(i + 1), spannerBundle=None, otherInfo=None)
+            for i in range(len(findallReturn))
+        ]
         mockLFEReturns = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
         mockLayerFromElement.side_effect = (
-            lambda x, y, spannerBundle: mockLFEReturns.pop(0))
+            lambda x, y, spannerBundle, otherInfo: mockLFEReturns.pop(0))
         expected = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
 
         actual = base.staffFromElement(elem)
@@ -2215,16 +2215,16 @@ class Test(unittest.TestCase):
 
         # 3.) check
         self.assertDictEqual(expected, actual)
-        mockInstr.assert_called_once_with(theInstrDef)
-        mockTime.assert_called_once_with(elem)
-        mockKey.assert_called_once_with(elem)
+        mockInstr.assert_called_once_with(theInstrDef, otherInfo=None)
+        mockTime.assert_called_once_with(elem, prefix='meter.')
+        mockKey.assert_called_once_with(elem, prefix='key.')
         # mockClef is more difficult because it's given an Element
         mockTrans.assert_called_once_with(elem)
         # check that all attributes are set with their expected values
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY)  # confirm there was a single one-argument call
+        mockClef.assert_called_once_with(mock.ANY, otherInfo=None)
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -2330,15 +2330,15 @@ class Test(unittest.TestCase):
         # 3.) check
         self.assertDictEqual(expected, actual)
         self.assertEqual(0, mockInstr.call_count)  # D1
-        mockTime.assert_called_once_with(elem)
-        mockKey.assert_called_once_with(elem)
+        mockTime.assert_called_once_with(elem, prefix='meter.')
+        mockKey.assert_called_once_with(elem, prefix='key.')
         # mockClef is more difficult because it's given an Element
         mockTrans.assert_called_once_with(elem)
         # check that all attributes are set with their expected values
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY)  # confirm there was a single one-argument call
+        mockClef.assert_called_once_with(mock.ANY, otherInfo=None)
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -2413,15 +2413,15 @@ class Test(unittest.TestCase):
         # 3.) check
         self.assertDictEqual(expected, actual)
         self.assertEqual(0, mockInstr.call_count)  # D1
-        mockTime.assert_called_once_with(elem)
-        mockKey.assert_called_once_with(elem)
+        mockTime.assert_called_once_with(elem, prefix='meter.')
+        mockKey.assert_called_once_with(elem, prefix='key.')
         # mockClef is more difficult because it's given an Element
         mockTrans.assert_called_once_with(elem)
         # check that all attributes are set with their expected values
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY)  # confirm there was a single one-argument call
+        mockClef.assert_called_once_with(mock.ANY, otherInfo=None)
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -2504,7 +2504,7 @@ class Test(unittest.TestCase):
                                                                     for n in range(4)]
         for eachElem in innerElems:
             elem.append(eachElem)
-        mockStaffDefFE.side_effect = lambda x, unused_y: f"processed {x.get('n')}"
+        mockStaffDefFE.side_effect = lambda x, unused_y, unused_z: f"processed {x.get('n')}"
         expected = {str(n): f'processed {n}' for n in range(4)}
 
         actual = base.staffGrpFromElement(elem, None, {})
@@ -2512,7 +2512,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         self.assertEqual(len(innerElems), mockStaffDefFE.call_count)
         for eachElem in innerElems:
-            mockStaffDefFE.assert_any_call(eachElem, None)
+            mockStaffDefFE.assert_any_call(eachElem, None, None)
 
     def testStaffGrpInt1StaffFromElement(self):
         '''
@@ -2582,8 +2582,8 @@ class Test(unittest.TestCase):
 
         # 3.) check
         self.assertEqual(expected, actual)
-        mockTime.assert_called_once_with(elem)
-        mockKey.assert_called_once_with(elem)
+        mockTime.assert_called_once_with(elem, prefix='meter.')
+        mockKey.assert_called_once_with(elem, prefix='key.')
 
     def testIntegration1ScoreDefFromElement(self):
         '''
@@ -2630,9 +2630,9 @@ class Test(unittest.TestCase):
 
         # 3.) check
         self.assertEqual(expected, actual)
-        mockTime.assert_called_once_with(elem)
-        mockKey.assert_called_once_with(elem)
-        mockStaffGrpFE.assert_called_once_with(staffGrp, None)
+        mockTime.assert_called_once_with(elem, prefix='meter.')
+        mockKey.assert_called_once_with(elem, prefix='key.')
+        mockStaffGrpFE.assert_called_once_with(staffGrp, None, otherInfo=None)
 
     def testIntegration2ScoreDefFromElement(self):
         '''
@@ -2672,7 +2672,10 @@ class Test(unittest.TestCase):
         elements = [ETree.Element('note') for _ in range(2)]
         mapping = {'note': mockTranslator}
         expected = ['translator return', 'translator return']
-        expectedCalls = [mock.call(elements[0], None), mock.call(elements[1], None)]
+        expectedCalls = [
+            mock.call(elements[0], None, None),
+            mock.call(elements[1], None, None)
+        ]
 
         actual = base._processEmbeddedElements(elements, mapping)
 
@@ -2692,8 +2695,8 @@ class Test(unittest.TestCase):
         actual = base._processEmbeddedElements(elements, mapping)
 
         self.assertSequenceEqual(expected, actual)
-        mockTranslator.assert_called_once_with(elements[0], None)
-        mockBeamTranslator.assert_called_once_with(elements[1], None)
+        mockTranslator.assert_called_once_with(elements[0], None, None)
+        mockBeamTranslator.assert_called_once_with(elements[1], None, None)
 
     @mock.patch('converter21.mei.base.environLocal')
     def testUnit3EmbeddedElements(self, mockEnviron):
@@ -2710,8 +2713,8 @@ class Test(unittest.TestCase):
         actual = base._processEmbeddedElements(elements, mapping, callerName)
 
         self.assertSequenceEqual(expected, actual)
-        mockTranslator.assert_called_once_with(elements[0], None)
-        mockEnviron.printDebug.assert_called_once_with(expErr)
+        mockTranslator.assert_called_once_with(elements[0], None, None)
+        mockEnviron.warn.assert_called_once_with(expErr)
 
 
 # -----------------------------------------------------------------------------
@@ -3828,12 +3831,12 @@ class Test(unittest.TestCase):
         # ensure staffFromElement() was called properly
         self.assertEqual(len(innerStaffs), mockStaffFE.call_count)
         for eachStaff in innerStaffs:
-            mockStaffFE.assert_any_call(eachStaff, spannerBundle=spannerBundle)
+            mockStaffFE.assert_any_call(eachStaff, spannerBundle=spannerBundle, otherInfo=None)
         # ensure Measure.__init__() was called properly
         self.assertEqual(len(expected), mockMeasure.call_count)
         for i in range(len(innerStaffs)):
-            mockMeasure.assert_any_call(i, number=int(elem.get('n')))
-        mockMeasure.assert_any_call([mockVoice.return_value], number=int(elem.get('n')))
+            mockMeasure.assert_any_call(i, number=elem.get('n'))
+        mockMeasure.assert_any_call([mockVoice.return_value], number=elem.get('n'))
         # ensure the mocked Voice was set to "id" of 1
         self.assertEqual('1', mockVoice.return_value.id)
         # ensure the mocked _correctMRestDurs() was called properly
@@ -3953,7 +3956,7 @@ class Test(unittest.TestCase):
         # ensure staffFromElement() was called properly
         self.assertEqual(len(innerStaffs), mockStaffFE.call_count)
         for eachStaff in innerStaffs:
-            mockStaffFE.assert_any_call(eachStaff, spannerBundle=spannerBundle)
+            mockStaffFE.assert_any_call(eachStaff, spannerBundle=spannerBundle, otherInfo=None)
         # ensure Measure.__init__() was called properly
         self.assertEqual(len(expected), mockMeasure.call_count)
         for i in range(len(innerStaffs)):
@@ -4061,11 +4064,11 @@ class Test(unittest.TestCase):
 
         self.assertDictEqual(expected, actual)
         # ensure staffFromElement() was called properly
-        mockStaffFE.assert_called_once_with(staffElem, spannerBundle=spannerBundle)
+        mockStaffFE.assert_called_once_with(staffElem, spannerBundle=spannerBundle, otherInfo=None)
         # ensure staffDefFromElement() was called properly
-        mockStaffDefFE.assert_called_once_with(staffDefElem, spannerBundle)
+        mockStaffDefFE.assert_called_once_with(staffDefElem, spannerBundle, otherInfo=None)
         # ensure Measure.__init__() was called properly
-        mockMeasure.assert_called_once_with(mockStaffFE.return_value, number=42)
+        mockMeasure.assert_called_once_with(mockStaffFE.return_value, number='42')
         mockMeasure.return_value.insert.assert_called_once_with(
             0,
             mockStaffDefFE.return_value['clef'])
@@ -4113,13 +4116,13 @@ class Test(unittest.TestCase):
 
         self.assertDictEqual(expected, actual)
         # ensure staffFromElement() was called properly
-        mockStaffFE.assert_called_once_with(staffElem, spannerBundle=spannerBundle)
+        mockStaffFE.assert_called_once_with(staffElem, spannerBundle=spannerBundle, otherInfo=None)
         # ensure Measure.__init__() was called properly
-        mockMeasure.assert_called_once_with(mockStaffFE.return_value, number=42)
+        mockMeasure.assert_called_once_with(mockStaffFE.return_value, number='42')
         self.assertEqual(0, mockMeasure.return_value.insert.call_count)
         # ensure environLocal.warn() was called properly
         mockEnviron.warn.assert_called_once_with(
-            base._UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n'))
+            base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
 
     def testMeasureIntegration3(self):
         '''
@@ -4196,7 +4199,8 @@ class Test(unittest.TestCase):
                                          spannerBundle,
                                          activeMeter=activeMeter,
                                          nextMeasureLeft=nextMeasureLeft,
-                                         backupMeasureNum=backupMeasureNum)
+                                         backupMeasureNum=backupMeasureNum,
+                                         otherInfo=None)
 
     @mock.patch('converter21.mei.base.allPartsPresent')
     @mock.patch('converter21.mei.base.sectionScoreCore')
@@ -4230,7 +4234,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         mockAllParts.assert_called_once_with(elem)
         mockCore.assert_called_once_with(
-            elem, mockAllParts.return_value, spannerBundle=spannerBundle
+            elem, mockAllParts.return_value, spannerBundle=spannerBundle, otherInfo=None
         )
         mockScore.assert_called_once_with([mockPart1, mockPart2])
         self.assertEqual(2, mockPart1.append.call_count)
@@ -4378,13 +4382,14 @@ class Test(unittest.TestCase):
                                               activeMeter=scoreDefActiveMeter,
                                               nextMeasureLeft=None,
                                               backupMeasureNum=0,
-                                              spannerBundle=spannerBundle)
+                                              spannerBundle=spannerBundle,
+                                              otherInfo=None)
         self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
         # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle)
+        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
         self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle)
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
         self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
         # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Part
         self.assertEqual(3, expPart1[0].insert.call_count)
@@ -4524,7 +4529,8 @@ class Test(unittest.TestCase):
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY, 1, allPartNs,
                                               spannerBundle=spannerBundle,
-                                              activeMeter=scoreDefActiveMeter)
+                                              activeMeter=scoreDefActiveMeter,
+                                              otherInfo=None)
         # ensure sectionFromElement()
         mockSectionFE.assert_called_once_with(mock.ANY,
                                               allPartNs,
@@ -4533,13 +4539,14 @@ class Test(unittest.TestCase):
 
                                               # incremented automatically on finding a <measure>
                                               backupMeasureNum=1,
-                                              spannerBundle=spannerBundle)
+                                              spannerBundle=spannerBundle,
+                                              otherInfo=None)
         self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
         # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle)
+        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
         self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle)
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
         self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
         # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Measure,
         # and not into the mocked Part
@@ -4682,7 +4689,8 @@ class Test(unittest.TestCase):
                                               backupMeasureNum + 1,
                                               allPartNs,
                                               activeMeter=activeMeter,
-                                              spannerBundle=spannerBundle)
+                                              spannerBundle=spannerBundle,
+                                              otherInfo=None)
         # ensure sectionFromElement()
         self.assertEqual(0, mockSectionFE.call_count)
         # ensure scoreDefFromElement()
@@ -4798,29 +4806,30 @@ class Test(unittest.TestCase):
         expected = {'1': [expMeas1]}
         expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
         # prepare expected environLocal message
-        expPrintDebug = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus',
-                                                            f'{MEI_NS}section')
+        expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
+        expWarn2 = base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
         actual = base.sectionScoreCore(elem, allPartNs, spannerBundle)
 
         # ensure expected == actual
         self.assertEqual(expected, actual)
-        # ensure environLocal
-        mockEnviron.printDebug.assert_called_once_with(expPrintDebug)
 
-        expWarn = base._UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n')
-        mockEnviron.warn.assert_called_once_with(expWarn)
+        # ensure environLocal
+        mockEnviron.warn.assert_any_call(expWarn1)
+        mockEnviron.warn.assert_any_call(expWarn2)
+
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
                                               1,
                                               allPartNs,
                                               activeMeter=expActiveMeter,
-                                              spannerBundle=spannerBundle)
+                                              spannerBundle=spannerBundle,
+                                              otherInfo=None)
         # ensure sectionFromElement()
         self.assertEqual(0, mockSectionFE.call_count)
         # ensure scoreDefFromElement()
         self.assertEqual(0, mockScoreDFE.call_count)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle)
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
 
     @mock.patch('converter21.mei.base.environLocal')
     def testCoreIntegration4(self, mockEnviron):
@@ -4848,8 +4857,11 @@ class Test(unittest.TestCase):
             elem, allPartNs, spannerBundle
         )
 
-        expWarn = base._UNIMPLEMENTED_IMPORT.format('<staffDef>', '@n')
-        mockEnviron.warn.assert_called_once_with(expWarn)
+        expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
+        expWarn2 = base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
+
+        mockEnviron.warn.assert_any_call(expWarn1)
+        mockEnviron.warn.assert_any_call(expWarn2)
 
         # ensure simple returns are okay
         self.assertEqual('6/8', activeMeter.ratioString)
