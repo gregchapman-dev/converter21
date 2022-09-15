@@ -215,7 +215,7 @@ _IGNORE_UNPROCESSED = (
     # f'{MEI_NS}sb',        # system break
     # f'{MEI_NS}lb',        # line break
     # f'{MEI_NS}pb',        # page break
-    f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
+    # f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
@@ -3326,6 +3326,44 @@ def layerFromElement(
 
     return theVoice
 
+
+def apparatusLayerFromElement(
+    elem: Element,
+    spannerBundle: spanner.SpannerBundle = None,
+    otherInfo: t.Optional[t.Dict[str, str]] = None
+) -> t.List[Music21Object]:
+    # Find lemma <lem>.  If no lemma, use first reading <rdg>.
+    lemma: t.Optional[Element] = elem.find(f'{MEI_NS}lem')
+    if lemma is None:
+        lemma = elem.find(f'{MEI_NS}rdg')
+    if lemma is None:
+        return []
+
+    # mapping from tag name to our converter function
+    tagToFunction: t.Dict[str, t.Callable[
+        [Element, t.Optional[spanner.SpannerBundle], t.Optional[t.Dict[str, str]]],
+        t.Any]
+    ] = {
+        f'{MEI_NS}clef': clefFromElement,
+        f'{MEI_NS}chord': chordFromElement,
+        f'{MEI_NS}note': noteFromElement,
+        f'{MEI_NS}rest': restFromElement,
+        f'{MEI_NS}mRest': mRestFromElement,
+        f'{MEI_NS}beam': beamFromElement,
+        f'{MEI_NS}tuplet': tupletFromElement,
+        f'{MEI_NS}space': spaceFromElement,
+        f'{MEI_NS}mSpace': mSpaceFromElement,
+        f'{MEI_NS}barLine': barLineFromElement,
+        f'{MEI_NS}meterSig': timeSigFromElement,
+        f'{MEI_NS}keySig': keySigFromElement,
+    }
+
+    # iterate all immediate children
+    theLayer: t.List[Music21Object] = _processEmbeddedElements(
+        lemma.iterfind('*'), _layerTagToFunction, lemma.tag, spannerBundle, otherInfo
+    )
+
+    return theLayer
 
 def staffFromElement(
     elem: Element,
