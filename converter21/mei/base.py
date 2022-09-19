@@ -3591,12 +3591,19 @@ def _tstampToOffset(tstamp: str, activeMeter: t.Optional[meter.TimeSignature]) -
         return 0.0
 
     # resultFloat is expressed in beats, as expressed in the written time signature.
-    # We will need to convert to quarter notes.
+    # We will need to offset it (beats are 1-based, offsets are 0-based) and convert to quarter notes.
+
+    # make it 0-based
+    resultFloat -= 1.0
+
     activeMeterDenom: int = 4  # if no activeMeter, pretend it's <something> / 4
     if activeMeter is not None:
         activeMeterDenom = activeMeter.denominator
-    resultFloat /= float(activeMeterDenom)  # convert to whole notes
-    resultFloat *= 4.0  # convert to quarter notes
+
+    # convert to whole notes
+    resultFloat /= float(activeMeterDenom)
+    # convert to quarter notes
+    resultFloat *= 4.0
     return opFrac(resultFloat)
 
 
@@ -3615,18 +3622,80 @@ def dirFromElement(
         raise MeiElementError('missing @tstamp in <dir> element')
 
     offset = _tstampToOffset(tstamp, activeMeter)
-    text: str = elem.text if elem.text is not None else ''
+
+    fontStyle: t.Optional[str] = None
+    fontWeight: t.Optional[str] = None
+
+    text: str = ''
     for el in elem.iter():
-        # do whatever is appropriate given el.tag (<i> means italics for example)
-        if el.text:
+        # do whatever is appropriate given el.tag (<rend> for example)
+        if el.tag == f'{MEI_NS}rend':
+            # music21 doesn't currently support changing style in the middle of a TextExpression,
+            # so we just grab the first ones we see and save them off to use.
+            if fontStyle is None:
+                fontStyle = el.get('fontstyle')
+            if fontWeight is None:
+                fontWeight = el.get('fontweight')
+
+        if el.text and el.text[0] != '\n':
             text += el.text
+
         # stop doing that el.tag thing
-        if el.tail:
-            text += el.tail
+
+        # we are uninterested in elem.tail
+        if el is not elem:
+            # we are uninterested in el.tail if it's just due to a LF in the XML file
+            if el.tail and el.tail[0] != '\n':
+                text += el.tail
 
     te = expressions.TextExpression(text)
+    if fontStyle or fontWeight:
+        te.style.fontStyle, te.style.fontWeight = (
+            _m21FontStyleAndWeightFromMeiFontStyleAndWeight(fontStyle, fontWeight)
+        )
+    place: t.Optional[str] = elem.get('place')
+    if place:
+        if place == 'above':
+            te.placement = 'above'
+        elif place == 'below':
+            te.placement = 'below'
+        else:
+            environLocal.warn('invalid @place = "{place}" in <dir>')
     return offset, te
 
+def _m21FontStyleAndWeightFromMeiFontStyleAndWeight(
+    meiFontStyle: t.Optional[str],
+    meiFontWeight: t.Optional[str]
+) -> t.Tuple[t.Optional[str], t.Optional[str]]:
+    if meiFontStyle is None:
+        meiFontStyle = 'normal'
+    if meiFontWeight is None:
+        meiFontWeight = 'normal'
+
+    if meiFontStyle == 'oblique':
+        environLocal.warn('@fontstyle="oblique" not supported, treating as "italic"')
+        meiFontStyle = 'italic'
+    if meiFontStyle not in ('normal', 'italic'):
+        environLocal.warn('@fontstyle="{meiFontStyle}" not supported, treating as "normal"')
+        meiFontStyle == 'normal'
+    if meiFontWeight not in ('normal', 'bold'):
+        environLocal.warn('@fontweight="{meiFontWeight}" not supported, treating as "normal"')
+        meiFontWeight == 'normal'
+
+    if meiFontStyle == 'normal':
+        if meiFontWeight == 'normal':
+            return 'normal', 'normal'
+        if meiFontWeight == 'bold':
+            return 'bold', 'bold'
+
+    if meiFontStyle == 'italic':
+        if meiFontWeight == 'normal':
+            return 'italic', 'normal'
+        if meiFontWeight == 'bold':
+            return 'bolditalic', 'bold'
+
+    # should not ever get here...
+    return None, None
 
 def measureFromElement(
     elem: Element,
