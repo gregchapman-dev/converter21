@@ -200,8 +200,9 @@ from music21 import metadata
 from music21 import meter
 from music21 import note
 from music21 import pitch
-from music21 import stream
 from music21 import spanner
+from music21 import stream
+from music21 import style
 from music21 import tie
 
 environLocal = environment.Environment('converter21.mei.base')
@@ -1057,8 +1058,8 @@ def _processEmbeddedElements(
     >>> from music21 import note
     >>> from converter21.mei.base import _processEmbeddedElements
     >>> elements = [Element('note'), Element('rest'), Element('note')]
-    >>> mapping = {'note': lambda x, y, z: note.Note('D2')}
-    >>> _processEmbeddedElements(elements, mapping, 'doctest1')
+    >>> mapping = {'note': lambda w, x, y, z: note.Note('D2')}
+    >>> _processEmbeddedElements(elements, mapping, 'doctest1', None, None, {})
     [<music21.note.Note D>, <music21.note.Note D>]
 
     If debugging is enabled for the previous example, this warning would be displayed:
@@ -1068,9 +1069,9 @@ def _processEmbeddedElements(
     The "beam" element holds "note" elements. All elements appear in a single level of the list:
 
     >>> elements = [Element('note'), Element('beam'), Element('note')]
-    >>> mapping = {'note': lambda x, y, z: note.Note('D2'),
-    ...            'beam': lambda x, y, z: [note.Note('E2') for _ in range(2)]}
-    >>> _processEmbeddedElements(elements, mapping, 'doctest2')
+    >>> mapping = {'note': lambda w, x, y, z: note.Note('D2'),
+    ...            'beam': lambda w, x, y, z: [note.Note('E2') for _ in range(2)]}
+    >>> _processEmbeddedElements(elements, mapping, 'doctest2', None, None, {})
     [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
     '''
     processed: t.List[Music21Object] = []
@@ -1686,7 +1687,7 @@ def scoreDefFromElement(
     >>> from converter21.mei.base import scoreDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> scoreDef = ET.fromstring(meiDoc)
-    >>> result = scoreDefFromElement(scoreDef)
+    >>> result = scoreDefFromElement(scoreDef, None, {})
     >>> len(result)
     5
     >>> result['1']
@@ -1879,7 +1880,7 @@ def staffDefFromElement(
     >>> from converter21.mei.base import staffDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> staffDef = ET.fromstring(meiDoc)
-    >>> result = staffDefFromElement(staffDef)
+    >>> result = staffDefFromElement(staffDef, None, {})
     >>> len(result)
     1
     >>> result
@@ -1900,7 +1901,7 @@ def staffDefFromElement(
     >>> from converter21.mei.base import staffDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> staffDef = ET.fromstring(meiDoc)
-    >>> result = staffDefFromElement(staffDef)
+    >>> result = staffDefFromElement(staffDef, None, {})
     >>> len(result)
     3
     >>> result['instrument']
@@ -2099,14 +2100,14 @@ def articFromElement(
     >>> from converter21.mei.base import articFromElement
     >>> meiSnippet = """<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> articFromElement(meiSnippet)
+    >>> articFromElement(meiSnippet, None, None, {})
     [<music21.articulations.Accent>]
 
     A single <artic> element may indicate many :class:`Articulation` objects.
 
     >>> meiSnippet = """<artic artic="acc ten" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> articFromElement(meiSnippet)
+    >>> articFromElement(meiSnippet, None, None, {})
     [<music21.articulations.Accent>, <music21.articulations.Tenuto>]
 
     **Attributes Implemented:**
@@ -2164,11 +2165,11 @@ def accidFromElement(
     >>> from converter21.mei.base import accidFromElement
     >>> meiSnippet = """<accid accid="s" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> accidFromElement(meiSnippet)
+    >>> accidFromElement(meiSnippet, None, None, {})
     '#'
     >>> meiSnippet = """<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> accidFromElement(meiSnippet)
+    >>> accidFromElement(meiSnippet, None, None, {})
     '---'
 
     **Attributes/Elements Implemented:**
@@ -3006,7 +3007,7 @@ def beamFromElement(
     ...     <note pname='C' oct='6' dur='8'/>
     ... </beam>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
-    >>> result = beamFromElement(meiSnippet)
+    >>> result = beamFromElement(meiSnippet, None, None, {})
     >>> isinstance(result, list)
     True
     >>> len(result)
@@ -3591,7 +3592,8 @@ def _tstampToOffset(tstamp: str, activeMeter: t.Optional[meter.TimeSignature]) -
         return 0.0
 
     # resultFloat is expressed in beats, as expressed in the written time signature.
-    # We will need to offset it (beats are 1-based, offsets are 0-based) and convert to quarter notes.
+    # We will need to offset it (beats are 1-based, offsets are 0-based) and convert
+    # to quarter notes.
 
     # make it 0-based
     resultFloat -= 1.0
@@ -3650,6 +3652,8 @@ def dirFromElement(
 
     te = expressions.TextExpression(text)
     if fontStyle or fontWeight:
+        if t.TYPE_CHECKING:
+            assert isinstance(te.style, style.TextStyle)
         te.style.fontStyle, te.style.fontWeight = (
             _m21FontStyleAndWeightFromMeiFontStyleAndWeight(fontStyle, fontWeight)
         )
@@ -3660,7 +3664,7 @@ def dirFromElement(
         elif place == 'below':
             te.placement = 'below'
         else:
-            environLocal.warn('invalid @place = "{place}" in <dir>')
+            environLocal.warn(f'invalid @place = "{place}" in <dir>')
     return offset, te
 
 def _m21FontStyleAndWeightFromMeiFontStyleAndWeight(
@@ -3676,11 +3680,11 @@ def _m21FontStyleAndWeightFromMeiFontStyleAndWeight(
         environLocal.warn('@fontstyle="oblique" not supported, treating as "italic"')
         meiFontStyle = 'italic'
     if meiFontStyle not in ('normal', 'italic'):
-        environLocal.warn('@fontstyle="{meiFontStyle}" not supported, treating as "normal"')
-        meiFontStyle == 'normal'
+        environLocal.warn(f'@fontstyle="{meiFontStyle}" not supported, treating as "normal"')
+        meiFontStyle = 'normal'
     if meiFontWeight not in ('normal', 'bold'):
-        environLocal.warn('@fontweight="{meiFontWeight}" not supported, treating as "normal"')
-        meiFontWeight == 'normal'
+        environLocal.warn(f'@fontweight="{meiFontWeight}" not supported, treating as "normal"')
+        meiFontWeight = 'normal'
 
     if meiFontStyle == 'normal':
         if meiFontWeight == 'normal':

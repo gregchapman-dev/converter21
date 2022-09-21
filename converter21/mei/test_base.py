@@ -133,7 +133,7 @@ class Test(unittest.TestCase):
         mockSlurs.assert_called_once_with(testConv)
         mockConclude.assert_called_once_with(testConv)
         testConv.documentRoot.find.assert_called_once_with(expDocRootQuery)
-        mockScoreFE.assert_called_once_with(5, testConv.spannerBundle)
+        mockScoreFE.assert_called_once_with(5, None, testConv.spannerBundle, {})
         mockMeta.assert_called_once_with(testConv.documentRoot)
 
     # -----------------------------------------------------------------------------
@@ -308,7 +308,7 @@ class Test(unittest.TestCase):
         '''articFromElement(): very straight-forward test'''
         elem = ETree.Element('artic', attrib={'artic': 'yes'})
         mockMakeList.return_value = 5
-        actual = base.articFromElement(elem)
+        actual = base.articFromElement(elem, None, None, {})
         self.assertEqual(5, actual)
         mockMakeList.assert_called_once_with('yes')
 
@@ -317,7 +317,7 @@ class Test(unittest.TestCase):
         '''accidFromElement(): very straight-forward test'''
         elem = ETree.Element('accid', attrib={'accid': 'yes'})
         mockAccid.return_value = 5
-        actual = base.accidFromElement(elem)
+        actual = base.accidFromElement(elem, None, None, {})
         self.assertEqual(5, actual)
         mockAccid.assert_called_once_with('yes')
 
@@ -851,7 +851,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 'i', 'con': 's'})
         elem.text = 'Chri'
 
-        actual = base.sylFromElement(elem)
+        actual = base.sylFromElement(elem, None, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
@@ -864,7 +864,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 'm', 'con': 't'})
         elem.text = 'sto'
 
-        actual = base.sylFromElement(elem)
+        actual = base.sylFromElement(elem, None, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('middle', actual.syllabic)
@@ -877,7 +877,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 't', 'con': 'd'})
         elem.text = 'pher'
 
-        actual = base.sylFromElement(elem)
+        actual = base.sylFromElement(elem, None, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('end', actual.syllabic)
@@ -890,7 +890,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl')
         elem.text = 'shoe'
 
-        actual = base.sylFromElement(elem)
+        actual = base.sylFromElement(elem, None, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('single', actual.syllabic)
@@ -905,7 +905,7 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, backupN=5)
+        actual = base.verseFromElement(elem, None, None, {}, backupN=5)
 
         self.assertEqual(1, len(actual))
         self.assertIsInstance(actual[0], note.Lyric)
@@ -928,7 +928,7 @@ class Test(unittest.TestCase):
         syl.text = '-mith'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, backupN=5)
+        actual = base.verseFromElement(elem, None, None, {}, backupN=5)
 
         self.assertEqual(3, len(actual))
         for eachSyl in actual:
@@ -951,7 +951,7 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem)
+        actual = base.verseFromElement(elem, None, None, {})
 
         self.assertEqual(1, len(actual))
         self.assertIsInstance(actual[0], note.Lyric)
@@ -970,7 +970,7 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem)
+        actual = base.verseFromElement(elem, None, None, {})
 
         self.assertEqual(1, len(actual))
         self.assertIsInstance(actual[0], note.Lyric)
@@ -1007,7 +1007,7 @@ class Test(unittest.TestCase):
         mockProcEmbEl.return_value = []
         expected = mockNewNote
 
-        actual = base.noteFromElement(elem, None)
+        actual = base.noteFromElement(elem, None, None, {})
 
         self.assertEqual(expected, mockNewNote, actual)
         mockSafePitch.assert_called_once_with('D', '#', '2')
@@ -1026,7 +1026,7 @@ class Test(unittest.TestCase):
         '''
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 's', 'oct': '2', 'dur': '4',
                                              'dots': '1'})
-        actual = base.noteFromElement(elem)
+        actual = base.noteFromElement(elem, None, None, {})
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(1.5, actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
@@ -1038,7 +1038,7 @@ class Test(unittest.TestCase):
         (this has different arguments than testIntegration1a())
         '''
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 'n', 'oct': '2', 'dur': '4'})
-        actual = base.noteFromElement(elem)
+        actual = base.noteFromElement(elem, None, None, {})
         self.assertEqual('D2', actual.nameWithOctave)
         self.assertEqual(1.0, actual.quarterLength)
         self.assertEqual(0, actual.duration.dots)
@@ -1066,7 +1066,7 @@ class Test(unittest.TestCase):
         expected = mockNewNote
         expMockMakeDur = [mock.call(1.0, 0), mock.call(1.0, 1)]
 
-        actual = base.noteFromElement(elem, None)
+        actual = base.noteFromElement(elem, None, None, {})
 
         self.assertEqual(expected, mockNewNote, actual)
         mockSafePitch.assert_called_once_with('D', None, '2')
@@ -1091,7 +1091,7 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}artic', attrib={'artic': 'stacc'}))
         elem.append(ETree.Element(f'{MEI_NS}accid', attrib={'accid': 's'}))
 
-        actual = base.noteFromElement(elem)
+        actual = base.noteFromElement(elem, None, None, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(3.0, actual.quarterLength)
@@ -1126,7 +1126,7 @@ class Test(unittest.TestCase):
         mockTie.return_value = 'a tie!'
         expected = mockNewNote
 
-        actual = base.noteFromElement(elem, 'slur bundle')
+        actual = base.noteFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(expected, mockNewNote, actual)
         mockSafePitch.assert_called_once_with('D', '#', '2')
@@ -1148,7 +1148,7 @@ class Test(unittest.TestCase):
                                              'tie': 'i1'})
         spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, spannerBundle)
+        actual = base.noteFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(1.5, actual.quarterLength)
@@ -1187,7 +1187,7 @@ class Test(unittest.TestCase):
         mockAccid.return_value = 'the accidental'
         expected = mockTuplet.return_value
 
-        actual = base.noteFromElement(elem, 'slur bundle')
+        actual = base.noteFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(expected, actual)
         mockSafePitch.assert_called_once_with('D', None, '2')
@@ -1208,7 +1208,7 @@ class Test(unittest.TestCase):
                                              'accid.ges': 's', 'm21Beam': 'start'})
         spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, spannerBundle)
+        actual = base.noteFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(1.0, actual.quarterLength)
@@ -1242,7 +1242,7 @@ class Test(unittest.TestCase):
         mockGrace.return_value.type = '16th'
         expected = mockNewNote
 
-        actual = base.noteFromElement(elem, 'slur bundle')
+        actual = base.noteFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(expected, actual)
         mockSafePitch.assert_called_once_with('D', None, '2')
@@ -1265,7 +1265,7 @@ class Test(unittest.TestCase):
         elem.append(sylElem)
         spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, spannerBundle)
+        actual = base.noteFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual('D2', actual.nameWithOctave)
         self.assertEqual(0.0, actual.quarterLength)
@@ -1310,20 +1310,20 @@ class Test(unittest.TestCase):
         vfeReturns = [[mock.MagicMock(name='au'), mock.MagicMock(name='luong')],
                       [mock.MagicMock(name='sun')]]
 
-        def mockVerseFESideEffect(inner_elem, backupN, otherInfo=None):
+        def mockVerseFESideEffect(inner_elem, activeMeter, spannerBundle, otherInfo, backupN=None):
             '''Check that it gets called with the right elements'''
             assert f'{MEI_NS}verse' == inner_elem.tag
             return vfeReturns.pop(0)
         mockVerseFE.side_effect = mockVerseFESideEffect
         expLyrics = [vfeReturns[0][0], vfeReturns[0][1], vfeReturns[1][0]]
 
-        actual = base.noteFromElement(elem, 'slur bundle')
+        actual = base.noteFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(expected, actual)
         self.assertEqual(expLyrics, actual.lyrics)
         self.assertEqual(2, mockVerseFE.call_count)
-        mockVerseFE.assert_any_call(mock.ANY, backupN=1, otherInfo=None)
-        mockVerseFE.assert_any_call(mock.ANY, backupN=2, otherInfo=None)
+        mockVerseFE.assert_any_call(mock.ANY, None, 'slur bundle', {}, backupN=1)
+        mockVerseFE.assert_any_call(mock.ANY, None, 'slur bundle', {}, backupN=2)
 
     def testIntegration6(self):
         '''
@@ -1343,7 +1343,7 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(elem)
         spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, spannerBundle)
+        actual = base.noteFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual(3, len(actual.lyrics))
         self.assertEqual('au', actual.lyrics[0].text)
@@ -1375,7 +1375,7 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = 'tupletized'
         expected = mockTuplet.return_value
 
-        actual = base.restFromElement(elem)
+        actual = base.restFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         mockRest.assert_called_once_with(duration=mockMakeDur.return_value)
@@ -1393,7 +1393,7 @@ class Test(unittest.TestCase):
                                              'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                              'm21TupletType': 'start'})
 
-        actual = base.restFromElement(elem)
+        actual = base.restFromElement(elem, None, None, {})
 
         self.assertEqual(Fraction(6, 5), actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
@@ -1411,7 +1411,7 @@ class Test(unittest.TestCase):
                                              'm21TupletNumbase': '4',
                                              'm21TupletType': 'start',
                                              })
-        actual = base.spaceFromElement(elem)
+        actual = base.spaceFromElement(elem, None, None, {})
         self.assertIsInstance(actual, note.Rest)
         self.assertTrue(actual.style.hideObjectOnPrint)
         self.assertEqual('the id', actual.id)
@@ -1426,7 +1426,7 @@ class Test(unittest.TestCase):
                                               'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                               'm21TupletType': 'start'})
 
-        actual = base.spaceFromElement(elem)
+        actual = base.spaceFromElement(elem, None, None, {})
 
         self.assertEqual(Fraction(6, 5), actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
@@ -1441,10 +1441,10 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mRest', attrib={'dur': '2'})
         mockRestFromElement.return_value = 'the rest'
 
-        actual = base.mRestFromElement(elem)
+        actual = base.mRestFromElement(elem, None, None, {})
 
         self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem, None, otherInfo=None)
+        mockRestFromElement.assert_called_once_with(elem, None, None, {})
 
     @mock.patch('converter21.mei.base.restFromElement')
     def testUnit4TestRestFromElement(self, mockRestFromElement):
@@ -1454,10 +1454,10 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mRest')
         mockRestFromElement.return_value = mock.MagicMock()
 
-        actual = base.mRestFromElement(elem)
+        actual = base.mRestFromElement(elem, None, None, {})
 
         self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem, None, otherInfo=None)
+        mockRestFromElement.assert_called_once_with(elem, None, None, {})
         self.assertTrue(actual.m21wasMRest)
 
     @mock.patch('converter21.mei.base.spaceFromElement')
@@ -1468,10 +1468,10 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mSpace', attrib={'dur': '2'})
         mockSpace.return_value = 'the spacer'
 
-        actual = base.mSpaceFromElement(elem)
+        actual = base.mSpaceFromElement(elem, None, None, {})
 
         self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem, None, otherInfo=None)
+        mockSpace.assert_called_once_with(elem, None, None, {})
 
     @mock.patch('converter21.mei.base.spaceFromElement')
     def testUnit6TestRestFromElement(self, mockSpace):
@@ -1481,10 +1481,10 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mSpace')
         mockSpace.return_value = mock.MagicMock()
 
-        actual = base.mSpaceFromElement(elem)
+        actual = base.mSpaceFromElement(elem, None, None, {})
 
         self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem, None, otherInfo=None)
+        mockSpace.assert_called_once_with(elem, None, None, {})
         self.assertTrue(actual.m21wasMRest)
 
     # -----------------------------------------------------------------------------
@@ -1521,7 +1521,7 @@ class Test(unittest.TestCase):
         mockChord.return_value = mockNewChord
         mockProcEmbEl.return_value = []
 
-        actual = base.chordFromElement(elem, None)
+        actual = base.chordFromElement(elem, None, None, {})
 
         self.assertEqual(mockNewChord, actual)
         mockMakeDuration.assert_called_once_with(1.0, 1)
@@ -1544,7 +1544,7 @@ class Test(unittest.TestCase):
             elem.append(eachElement)
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        actual = base.chordFromElement(elem)
+        actual = base.chordFromElement(elem, None, None, {})
         self.assertEqual(expectedName, actual.fullName)
 
     @mock.patch('music21.chord.Chord')
@@ -1568,7 +1568,7 @@ class Test(unittest.TestCase):
         mockProcEmbEl.return_value = [articulations.Staccato()]
         expected = mockNewChord
 
-        actual = base.chordFromElement(elem, None)
+        actual = base.chordFromElement(elem, None, None, {})
 
         self.assertEqual(expected, mockNewChord, actual)
         mockMakeDuration.assert_called_once_with(1.0, 1)
@@ -1595,7 +1595,7 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}artic', artic='stacc'))
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        actual = base.chordFromElement(elem)
+        actual = base.chordFromElement(elem, None, None, {})
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
@@ -1626,7 +1626,7 @@ class Test(unittest.TestCase):
         mockArticList.return_value = ['staccato!']
         mockTie.return_value = 'a tie!'
 
-        actual = base.chordFromElement(elem, 'slur bundle')
+        actual = base.chordFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(mockNewChord, actual)
         mockMakeDuration.assert_called_once_with(1.0, 1)
@@ -1651,7 +1651,7 @@ class Test(unittest.TestCase):
             elem.append(eachElement)
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        actual = base.chordFromElement(elem)
+        actual = base.chordFromElement(elem, None, None, {})
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
@@ -1684,7 +1684,7 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = 'tupletified'
         expected = mockTuplet.return_value
 
-        actual = base.chordFromElement(elem, 'slur bundle')
+        actual = base.chordFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(expected, actual)
         mockMakeDuration.assert_called_once_with(1.0, 0)
@@ -1709,7 +1709,7 @@ class Test(unittest.TestCase):
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Quarter')
 
-        actual = base.chordFromElement(elem)
+        actual = base.chordFromElement(elem, None, None, {})
 
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual('5', actual.m21TupletNum)
@@ -1740,7 +1740,7 @@ class Test(unittest.TestCase):
         mockProcEmbEl.return_value = []
         expected = mockNewChord
 
-        actual = base.chordFromElement(elem, 'slur bundle')
+        actual = base.chordFromElement(elem, None, 'slur bundle', {})
 
         self.assertEqual(expected, actual)
         mockMakeDuration.assert_called_once_with(0.25, 0)
@@ -1762,7 +1762,7 @@ class Test(unittest.TestCase):
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} 16th')
 
-        actual = base.chordFromElement(elem)
+        actual = base.chordFromElement(elem, None, None, {})
 
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(0.0, actual.quarterLength)
@@ -1794,7 +1794,7 @@ class Test(unittest.TestCase):
         mockClefFromString.return_value = mock.MagicMock(name='clefFromString()')
         expected = mockClefFromString.return_value
 
-        actual = base.clefFromElement(elem)
+        actual = base.clefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         # this test fails on Python 3.5.
@@ -1815,7 +1815,7 @@ class Test(unittest.TestCase):
         mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
         expected = mockPercClef.return_value
 
-        actual = base.clefFromElement(elem)
+        actual = base.clefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         self.assertEqual(0, mockClefFromString.call_count)
@@ -1835,7 +1835,7 @@ class Test(unittest.TestCase):
         mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
         expected = mockTabClef.return_value
 
-        actual = base.clefFromElement(elem)
+        actual = base.clefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         self.assertEqual(0, mockClefFromString.call_count)
@@ -1854,7 +1854,7 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.Treble8vaClef
 
-        actual = base.clefFromElement(clefElem)
+        actual = base.clefFromElement(clefElem, None, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1870,7 +1870,7 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.PercussionClef
 
-        actual = base.clefFromElement(clefElem)
+        actual = base.clefFromElement(clefElem, None, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1886,7 +1886,7 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.TabClef
 
-        actual = base.clefFromElement(clefElem)
+        actual = base.clefFromElement(clefElem, None, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1903,7 +1903,7 @@ class Test(unittest.TestCase):
         mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
         expected = mockPercClef.return_value
 
-        actual = base.clefFromElement(elem)
+        actual = base.clefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         self.assertEqual(0, mockClefFromString.call_count)
@@ -1937,15 +1937,15 @@ class Test(unittest.TestCase):
         iterfindReturn[2].tag = f'{base.MEI_NS}note'
         elem.iterfind = mock.MagicMock(return_value=iterfindReturn)
         # "MNFE" is "mockNoteFromElement"
-        expectedMNFEOrder = [mock.call(iterfindReturn[0], None, None),
-                             mock.call(iterfindReturn[2], None, None)]
+        expectedMNFEOrder = [mock.call(iterfindReturn[0], None, None, {}),
+                             mock.call(iterfindReturn[2], None, None, {})]
         mockNFEreturns = ['mockNoteFromElement return 1', 'mockNoteFromElement return 2']
         mockNoteFromElement.side_effect = lambda *unused: mockNFEreturns.pop(0)
         mockTuplets.side_effect = lambda x: x
         mockVoice.return_value = mock.MagicMock(spec_set=stream.Stream(), name='Voice')
         expectedAppendCalls = [mock.call(mockNFEreturns[0]), mock.call(mockNFEreturns[1])]
 
-        actual = base.layerFromElement(elem)
+        actual = base.layerFromElement(elem, None, None, {})
 
         elem.iterfind.assert_called_once_with('*')
         self.assertEqual(mockVoice.return_value, actual)
@@ -1972,8 +1972,8 @@ class Test(unittest.TestCase):
         iterfindReturn[2].tag = f'{base.MEI_NS}note'
         elem.iterfind = mock.MagicMock(return_value=iterfindReturn)
         # "MNFE" is "mockNoteFromElement"
-        expectedMNFEOrder = [mock.call(iterfindReturn[0], None, None),
-                             mock.call(iterfindReturn[2], None, None)]
+        expectedMNFEOrder = [mock.call(iterfindReturn[0], None, None, {}),
+                             mock.call(iterfindReturn[2], None, None, {})]
         mockNFEreturns = ['mockNoteFromElement return 1', 'mockNoteFromElement return 2']
         mockNoteFromElement.side_effect = lambda *unused: mockNFEreturns.pop(0)
         mockTuplets.side_effect = lambda x: x
@@ -1981,7 +1981,7 @@ class Test(unittest.TestCase):
         expectedAppendCalls = [mock.call(mockNFEreturns[0]), mock.call(mockNFEreturns[1])]
         overrideN = 'my own @n'
 
-        actual = base.layerFromElement(elem, overrideN)
+        actual = base.layerFromElement(elem, None, None, {}, overrideN)
 
         elem.iterfind.assert_called_once_with('*')
         self.assertEqual(mockVoice.return_value, actual)
@@ -2021,10 +2021,10 @@ class Test(unittest.TestCase):
         mockNoteFromElement.side_effect = lambda *unused: mockNFEReturns.pop(0)
         mockVoice.return_value = mock.MagicMock(spec_set=stream.Stream(), name='Voice')
 
-        self.assertRaises(base.MeiAttributeError, base.layerFromElement, elem)
+        self.assertRaises(base.MeiAttributeError, base.layerFromElement, elem, None, None, {})
 
         try:
-            base.layerFromElement(elem)
+            base.layerFromElement(elem, None, None, {})
         except base.MeiAttributeError as maError:
             self.assertEqual(base._MISSING_VOICE_ID, maError.args[0])
 
@@ -2042,7 +2042,7 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        actual = base.layerFromElement(elem)
+        actual = base.layerFromElement(elem, None, None, {})
 
         self.assertEqual(2, len(actual))
         self.assertEqual('so voice ID', actual.id)
@@ -2064,7 +2064,7 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        actual = base.layerFromElement(elem, 'so voice ID')
+        actual = base.layerFromElement(elem, None, None, {}, overrideN='so voice ID')
 
         self.assertEqual(2, len(actual))
         self.assertEqual('so voice ID', actual.id)
@@ -2086,10 +2086,10 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        self.assertRaises(base.MeiAttributeError, base.layerFromElement, elem)
+        self.assertRaises(base.MeiAttributeError, base.layerFromElement, elem, None, None, {})
 
         try:
-            base.layerFromElement(elem)
+            base.layerFromElement(elem, None, None, {})
         except base.MeiAttributeError as maError:
             self.assertEqual(base._MISSING_VOICE_ID, maError.args[0])
 
@@ -2114,15 +2114,15 @@ class Test(unittest.TestCase):
         elem.iterfind = mock.MagicMock(return_value=findallReturn)
         # "mockLFE" is "mockLayerFromElement"
         expectedMLFEOrder = [
-            mock.call(findallReturn[i], str(i + 1), spannerBundle=None, otherInfo=None)
+            mock.call(findallReturn[i], None, None, {}, overrideN=str(i + 1))
             for i in range(len(findallReturn))
         ]
         mockLFEReturns = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
         mockLayerFromElement.side_effect = (
-            lambda x, y, spannerBundle, otherInfo: mockLFEReturns.pop(0))
+            lambda x, activeMeter, spannerBundle, otherInfo, overrideN: mockLFEReturns.pop(0))
         expected = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
 
-        actual = base.staffFromElement(elem)
+        actual = base.staffFromElement(elem, None, None, {})
 
         elem.iterfind.assert_called_once_with('*')
         self.assertEqual(expected, actual)
@@ -2147,7 +2147,7 @@ class Test(unittest.TestCase):
                       </staff>'''
         elem = ETree.fromstring(inputXML)
 
-        actual = base.staffFromElement(elem)
+        actual = base.staffFromElement(elem, None, None, {})
 
         self.assertEqual(3, len(actual))
         # common to each part
@@ -2211,11 +2211,11 @@ class Test(unittest.TestCase):
                          ('transposition', mockTrans.return_value)]
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
-        mockInstr.assert_called_once_with(theInstrDef, otherInfo=None)
+        mockInstr.assert_called_once_with(theInstrDef, None, None, {})
         mockTime.assert_called_once_with(elem, prefix='meter.')
         mockKey.assert_called_once_with(elem, prefix='key.')
         # mockClef is more difficult because it's given an Element
@@ -2224,7 +2224,7 @@ class Test(unittest.TestCase):
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY, otherInfo=None)
+        mockClef.assert_called_once_with(mock.ANY, None, None, {})
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -2248,7 +2248,7 @@ class Test(unittest.TestCase):
         elem.append(theInstrDef)
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Clarinet)
@@ -2277,7 +2277,7 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}clef', attrib={'shape': 'G', 'line': '2'}))
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Clarinet)
@@ -2325,7 +2325,7 @@ class Test(unittest.TestCase):
                          ('transposition', mockTrans.return_value)]
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
@@ -2338,7 +2338,7 @@ class Test(unittest.TestCase):
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY, otherInfo=None)
+        mockClef.assert_called_once_with(mock.ANY, None, None, {})
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -2358,7 +2358,7 @@ class Test(unittest.TestCase):
                                      'meter.count': '3', 'meter.unit': '8', 'label': 'clarinet'})
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Clarinet)
@@ -2408,7 +2408,7 @@ class Test(unittest.TestCase):
         expectedAttrs = [('transposition', mockTrans.return_value)]  # D3
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
@@ -2421,7 +2421,7 @@ class Test(unittest.TestCase):
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY, otherInfo=None)
+        mockClef.assert_called_once_with(mock.ANY, None, None, {})
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -2441,7 +2441,7 @@ class Test(unittest.TestCase):
                                      'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Instrument)
@@ -2474,7 +2474,7 @@ class Test(unittest.TestCase):
         expected = {'meter': mockTime.return_value}
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
@@ -2488,7 +2488,7 @@ class Test(unittest.TestCase):
                                                                   'meter.unit': '3'})
 
         # 2.) run
-        actual = base.staffDefFromElement(elem)
+        actual = base.staffDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['meter'], meter.TimeSignature)
@@ -2512,7 +2512,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         self.assertEqual(len(innerElems), mockStaffDefFE.call_count)
         for eachElem in innerElems:
-            mockStaffDefFE.assert_any_call(eachElem, None, None)
+            mockStaffDefFE.assert_any_call(eachElem, None, {})
 
     def testStaffGrpInt1StaffFromElement(self):
         '''
@@ -2530,7 +2530,7 @@ class Test(unittest.TestCase):
                     '3': {'key': key.Key('E-')},
                     '4': {'key': key.Key('A-')}}
 
-        actual = base.staffGrpFromElement(elem, None)
+        actual = base.staffGrpFromElement(elem, None, {})
 
         self.assertDictEqual(expected, actual)
 
@@ -2552,7 +2552,7 @@ class Test(unittest.TestCase):
                     '3': {'key': key.Key('E-')},
                     '4': {'key': key.Key('A-')}}
 
-        actual = base.staffGrpFromElement(elem, None)
+        actual = base.staffGrpFromElement(elem, None, {})
 
         self.assertDictEqual(expected, actual)
 
@@ -2578,7 +2578,7 @@ class Test(unittest.TestCase):
                     'whole-score objects': []}
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem)
+        actual = base.scoreDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertEqual(expected, actual)
@@ -2594,7 +2594,7 @@ class Test(unittest.TestCase):
                                                  'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem)
+        actual = base.scoreDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['all-part objects'][0], meter.TimeSignature)
@@ -2626,13 +2626,13 @@ class Test(unittest.TestCase):
                     '1': {'instrument': 'A clarinet'}}
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem)
+        actual = base.scoreDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertEqual(expected, actual)
         mockTime.assert_called_once_with(elem, prefix='meter.')
         mockKey.assert_called_once_with(elem, prefix='key.')
-        mockStaffGrpFE.assert_called_once_with(staffGrp, None, otherInfo=None)
+        mockStaffGrpFE.assert_called_once_with(staffGrp, None, {})
 
     def testIntegration2ScoreDefFromElement(self):
         '''
@@ -2648,7 +2648,7 @@ class Test(unittest.TestCase):
         elem.append(staffGrp)
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem)
+        actual = base.scoreDefFromElement(elem, None, {})
 
         # 3.) check
         self.assertIsInstance(actual['all-part objects'][0], meter.TimeSignature)
@@ -2673,11 +2673,11 @@ class Test(unittest.TestCase):
         mapping = {'note': mockTranslator}
         expected = ['translator return', 'translator return']
         expectedCalls = [
-            mock.call(elements[0], None, None),
-            mock.call(elements[1], None, None)
+            mock.call(elements[0], None, None, {}),
+            mock.call(elements[1], None, None, {})
         ]
 
-        actual = base._processEmbeddedElements(elements, mapping)
+        actual = base._processEmbeddedElements(elements, mapping, 'tag', None, None, {})
 
         self.assertSequenceEqual(expected, actual)
         self.assertSequenceEqual(expectedCalls, mockTranslator.call_args_list)
@@ -2692,11 +2692,11 @@ class Test(unittest.TestCase):
         mapping = {'note': mockTranslator, 'beam': mockBeamTranslator}
         expected = ['translator return', 'embedded 1', 'embedded 2']
 
-        actual = base._processEmbeddedElements(elements, mapping)
+        actual = base._processEmbeddedElements(elements, mapping, 'tag', None, None, {})
 
         self.assertSequenceEqual(expected, actual)
-        mockTranslator.assert_called_once_with(elements[0], None, None)
-        mockBeamTranslator.assert_called_once_with(elements[1], None, None)
+        mockTranslator.assert_called_once_with(elements[0], None, None, {})
+        mockBeamTranslator.assert_called_once_with(elements[1], None, None, {})
 
     @mock.patch('converter21.mei.base.environLocal')
     def testUnit3EmbeddedElements(self, mockEnviron):
@@ -2710,10 +2710,10 @@ class Test(unittest.TestCase):
         expected = ['translator return']
         expErr = base._UNPROCESSED_SUBELEMENT.format(elements[1].tag, callerName)
 
-        actual = base._processEmbeddedElements(elements, mapping, callerName)
+        actual = base._processEmbeddedElements(elements, mapping, callerName, None, None, {})
 
         self.assertSequenceEqual(expected, actual)
-        mockTranslator.assert_called_once_with(elements[0], None, None)
+        mockTranslator.assert_called_once_with(elements[0], None, None, {})
         mockEnviron.warn.assert_called_once_with(expErr)
 
 
@@ -3440,16 +3440,16 @@ class Test(unittest.TestCase):
         '''
         # missing @numbase
         elem = ETree.Element('tuplet', attrib={'num': '3'})
-        self.assertRaises(base.MeiAttributeError, base.tupletFromElement, elem)
+        self.assertRaises(base.MeiAttributeError, base.tupletFromElement, elem, None, None, {})
         try:
-            base.tupletFromElement(elem)
+            base.tupletFromElement(elem, None, None, {})
         except base.MeiAttributeError as err:
             self.assertEqual(base._MISSING_TUPLET_DATA, err.args[0])
         # missing @num
         elem = ETree.Element('tuplet', attrib={'numbase': '2'})
-        self.assertRaises(base.MeiAttributeError, base.tupletFromElement, elem)
+        self.assertRaises(base.MeiAttributeError, base.tupletFromElement, elem, None, None, {})
         try:
-            base.tupletFromElement(elem)
+            base.tupletFromElement(elem, None, None, {})
         except base.MeiAttributeError as err:
             self.assertEqual(base._MISSING_TUPLET_DATA, err.args[0])
 
@@ -3468,7 +3468,7 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = mockNotes
         mockBeam.side_effect = lambda x: x
 
-        actual = base.tupletFromElement(elem)
+        actual = base.tupletFromElement(elem, None, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
         mockBeam.assert_called_once_with(mockNotes)
@@ -3494,7 +3494,7 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = mockNotes
         mockBeam.side_effect = lambda x: x
 
-        actual = base.tupletFromElement(elem)
+        actual = base.tupletFromElement(elem, None, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
         mockBeam.assert_called_once_with(mockNotes)
@@ -3521,7 +3521,7 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = mockNotes
         mockBeam.side_effect = lambda x: x
 
-        actual = base.tupletFromElement(elem)
+        actual = base.tupletFromElement(elem, None, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
         mockBeam.assert_called_once_with(mockNotes)
@@ -3620,7 +3620,7 @@ class Test(unittest.TestCase):
         mockFromProg.return_value = 'Guess Which Instrument'
         expected = mockFromProg.return_value
 
-        actual = base.instrDefFromElement(elem)
+        actual = base.instrDefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         mockFromProg.assert_called_once_with(expFromProgArg)
@@ -3633,7 +3633,7 @@ class Test(unittest.TestCase):
         mockFromString.return_value = "That's right: tuba"
         expected = mockFromString.return_value
 
-        actual = base.instrDefFromElement(elem)
+        actual = base.instrDefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         mockFromString.assert_called_once_with(expFromStringArg)
@@ -3652,7 +3652,7 @@ class Test(unittest.TestCase):
         mockInstr.Instrument.return_value.partName = None
         expected = mockInstr.Instrument.return_value
 
-        actual = base.instrDefFromElement(elem)
+        actual = base.instrDefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         mockInstr.fromString.assert_called_once_with(expFromStringArg)
@@ -3673,7 +3673,7 @@ class Test(unittest.TestCase):
         mockInstr.Instrument.return_value.partName = None
         expected = mockInstr.Instrument.return_value
 
-        actual = base.instrDefFromElement(elem)
+        actual = base.instrDefFromElement(elem, None, None, {})
 
         self.assertEqual(expected, actual)
         mockInstr.fromString.assert_called_once_with(expFromStringArg)
@@ -3825,13 +3825,15 @@ class Test(unittest.TestCase):
         # ... finish preparing "expected"
         expected = {n: expected[i] for i, n in enumerate(expectedNs)}
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         self.assertDictEqual(expected, actual)
         # ensure staffFromElement() was called properly
         self.assertEqual(len(innerStaffs), mockStaffFE.call_count)
         for eachStaff in innerStaffs:
-            mockStaffFE.assert_any_call(eachStaff, spannerBundle=spannerBundle, otherInfo=None)
+            mockStaffFE.assert_any_call(eachStaff, activeMeter, spannerBundle, {})
         # ensure Measure.__init__() was called properly
         self.assertEqual(len(expected), mockMeasure.call_count)
         for i in range(len(innerStaffs)):
@@ -3873,7 +3875,9 @@ class Test(unittest.TestCase):
         spannerBundle = spanner.SpannerBundle()
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         # ensure the right number and @n of parts
         self.assertEqual(4, len(actual.keys()))
@@ -3950,13 +3954,15 @@ class Test(unittest.TestCase):
         # ... finish preparing "expected"
         expected = {n: expected[i] for i, n in enumerate(expectedNs)}
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         self.assertDictEqual(expected, actual)
         # ensure staffFromElement() was called properly
         self.assertEqual(len(innerStaffs), mockStaffFE.call_count)
         for eachStaff in innerStaffs:
-            mockStaffFE.assert_any_call(eachStaff, spannerBundle=spannerBundle, otherInfo=None)
+            mockStaffFE.assert_any_call(eachStaff, activeMeter, spannerBundle, {})
         # ensure Measure.__init__() was called properly
         self.assertEqual(len(expected), mockMeasure.call_count)
         for i in range(len(innerStaffs)):
@@ -3996,7 +4002,9 @@ class Test(unittest.TestCase):
         spannerBundle = spanner.SpannerBundle()
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         # ensure the right number and @n of parts (we expect one additional key, for the "rptboth")
         self.assertEqual(5, len(actual.keys()))
@@ -4060,13 +4068,15 @@ class Test(unittest.TestCase):
         # prepare the expected return value
         expected = {'1': mockMeasure.return_value}
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         self.assertDictEqual(expected, actual)
         # ensure staffFromElement() was called properly
-        mockStaffFE.assert_called_once_with(staffElem, spannerBundle=spannerBundle, otherInfo=None)
+        mockStaffFE.assert_called_once_with(staffElem, activeMeter, spannerBundle, {})
         # ensure staffDefFromElement() was called properly
-        mockStaffDefFE.assert_called_once_with(staffDefElem, spannerBundle, otherInfo=None)
+        mockStaffDefFE.assert_called_once_with(staffDefElem, spannerBundle, {})
         # ensure Measure.__init__() was called properly
         mockMeasure.assert_called_once_with(mockStaffFE.return_value, number='42')
         mockMeasure.return_value.insert.assert_called_once_with(
@@ -4112,11 +4122,13 @@ class Test(unittest.TestCase):
         # prepare the expected return value
         expected = {'1': mockMeasure.return_value}
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         self.assertDictEqual(expected, actual)
         # ensure staffFromElement() was called properly
-        mockStaffFE.assert_called_once_with(staffElem, spannerBundle=spannerBundle, otherInfo=None)
+        mockStaffFE.assert_called_once_with(staffElem, activeMeter, spannerBundle, {})
         # ensure Measure.__init__() was called properly
         mockMeasure.assert_called_once_with(mockStaffFE.return_value, number='42')
         self.assertEqual(0, mockMeasure.return_value.insert.call_count)
@@ -4152,7 +4164,9 @@ class Test(unittest.TestCase):
         spannerBundle = spanner.SpannerBundle()
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        actual = base.measureFromElement(elem, backupNum, expectedNs, spannerBundle, activeMeter)
+        actual = base.measureFromElement(
+            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        )
 
         # ensure the right number and @n of parts
         self.assertEqual(['1'], list(actual.keys()))
@@ -4190,17 +4204,17 @@ class Test(unittest.TestCase):
         spannerBundle = spanner.SpannerBundle()
         expected = mockCore.return_value
 
-        actual = base.sectionFromElement(elem, allPartNs, activeMeter,
-                                         nextMeasureLeft, backupMeasureNum, spannerBundle)
+        actual = base.sectionFromElement(elem, activeMeter, spannerBundle, {},
+                                         allPartNs, nextMeasureLeft, backupMeasureNum)
 
         self.assertEqual(expected, actual)
         mockCore.assert_called_once_with(elem,
-                                         allPartNs,
+                                         activeMeter,
                                          spannerBundle,
-                                         activeMeter=activeMeter,
-                                         nextMeasureLeft=nextMeasureLeft,
-                                         backupMeasureNum=backupMeasureNum,
-                                         otherInfo=None)
+                                         {},
+                                         allPartNs,
+                                         nextMeasureLeft,
+                                         backupMeasureNum)
 
     @mock.patch('converter21.mei.base.allPartsPresent')
     @mock.patch('converter21.mei.base.sectionScoreCore')
@@ -4229,12 +4243,12 @@ class Test(unittest.TestCase):
         spannerBundle = mock.MagicMock(spec_set=spanner.SpannerBundle)
         expected = [mockPart1, mockPart2, []]
 
-        actual = base.scoreFromElement(elem, spannerBundle)
+        actual = base.scoreFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual(expected, actual)
         mockAllParts.assert_called_once_with(elem)
         mockCore.assert_called_once_with(
-            elem, mockAllParts.return_value, spannerBundle=spannerBundle, otherInfo=None
+            elem, None, spannerBundle, {}, mockAllParts.return_value
         )
         mockScore.assert_called_once_with([mockPart1, mockPart2])
         self.assertEqual(2, mockPart1.append.call_count)
@@ -4278,7 +4292,7 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(elem)
         spannerBundle = spanner.SpannerBundle()
 
-        actual = base.scoreFromElement(elem, spannerBundle)
+        actual = base.scoreFromElement(elem, None, spannerBundle, {})
 
         # This is complicated... I'm sorry... but it's a rather detailed test of the whole system,
         # so I hope it's worth it!
@@ -4370,7 +4384,8 @@ class Test(unittest.TestCase):
         expected = {'1': [expPart1]}
         expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
 
-        actual = base.sectionScoreCore(elem, allPartNs, spannerBundle)
+        actual = base.sectionScoreCore(elem, None, spannerBundle, {},
+                                       allPartNs, None, 0)
 
         # ensure expected == actual
         self.assertEqual(expected, actual)
@@ -4378,18 +4393,18 @@ class Test(unittest.TestCase):
         self.assertEqual(0, mockMeasureFE.call_count)
         # ensure sectionFromElement()
         mockSectionFE.assert_called_once_with(mock.ANY,
+                                              scoreDefActiveMeter,
+                                              spannerBundle,
+                                              {},
                                               allPartNs,
-                                              activeMeter=scoreDefActiveMeter,
-                                              nextMeasureLeft=None,
-                                              backupMeasureNum=0,
-                                              spannerBundle=spannerBundle,
-                                              otherInfo=None)
+                                              None,
+                                              0)
         self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
         # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
+        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
         self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
         self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
         # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Part
         self.assertEqual(3, expPart1[0].insert.call_count)
@@ -4426,7 +4441,8 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, allPartNs, spannerBundle)
+            elem, None, spannerBundle, {}, allPartNs
+        )
 
         # ensure simple returns are okay
         self.assertEqual('8/8', activeMeter.ratioString)
@@ -4522,31 +4538,32 @@ class Test(unittest.TestCase):
         # would be list of Measure
         expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
 
-        actual = base.sectionScoreCore(elem, allPartNs, spannerBundle)
+        actual = base.sectionScoreCore(elem, None, spannerBundle, {},
+                                       allPartNs, None, 0)
 
         # ensure expected == actual
         self.assertEqual(expected, actual)
         # ensure measureFromElement()
-        mockMeasureFE.assert_called_once_with(mock.ANY, 1, allPartNs,
-                                              spannerBundle=spannerBundle,
-                                              activeMeter=scoreDefActiveMeter,
-                                              otherInfo=None)
+        mockMeasureFE.assert_called_once_with(mock.ANY,
+                                              scoreDefActiveMeter,
+                                              spannerBundle,
+                                              {},
+                                              1, allPartNs)
         # ensure sectionFromElement()
         mockSectionFE.assert_called_once_with(mock.ANY,
+                                              scoreDefActiveMeter,
+                                              spannerBundle,
+                                              {},
                                               allPartNs,
-                                              activeMeter=scoreDefActiveMeter,
-                                              nextMeasureLeft=None,
-
+                                              None,
                                               # incremented automatically on finding a <measure>
-                                              backupMeasureNum=1,
-                                              spannerBundle=spannerBundle,
-                                              otherInfo=None)
+                                              1)
         self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
         # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
+        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
         self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
         self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
         # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Measure,
         # and not into the mocked Part
@@ -4591,7 +4608,8 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, allPartNs, spannerBundle)
+            elem, None, spannerBundle, {}, allPartNs
+        )
 
         # ensure simple returns are okay
         self.assertEqual('8/8', activeMeter.ratioString)
@@ -4678,19 +4696,20 @@ class Test(unittest.TestCase):
         expected = {'1': [expMeas1]}
         expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
 
-        actual = base.sectionScoreCore(elem, allPartNs, spannerBundle, activeMeter=activeMeter,
-                                       nextMeasureLeft=nextMeasureLeft,
-                                       backupMeasureNum=backupMeasureNum)
+        actual = base.sectionScoreCore(elem, activeMeter, spannerBundle, {},
+                                       allPartNs,
+                                       nextMeasureLeft,
+                                       backupMeasureNum)
 
         # ensure expected == actual
         self.assertEqual(expected, actual)
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
+                                              activeMeter,
+                                              spannerBundle,
+                                              {},
                                               backupMeasureNum + 1,
-                                              allPartNs,
-                                              activeMeter=activeMeter,
-                                              spannerBundle=spannerBundle,
-                                              otherInfo=None)
+                                              allPartNs)
         # ensure sectionFromElement()
         self.assertEqual(0, mockSectionFE.call_count)
         # ensure scoreDefFromElement()
@@ -4728,9 +4747,10 @@ class Test(unittest.TestCase):
 
         parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
             elem,
-            allPartNs,
+            activeMeter,
             spannerBundle,
-            activeMeter=activeMeter,
+            {},
+            allPartNs,
             nextMeasureLeft=nextMeasureLeft,
             backupMeasureNum=backupMeasureNum)
 
@@ -4808,7 +4828,7 @@ class Test(unittest.TestCase):
         # prepare expected environLocal message
         expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
         expWarn2 = base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
-        actual = base.sectionScoreCore(elem, allPartNs, spannerBundle)
+        actual = base.sectionScoreCore(elem, None, spannerBundle, {}, allPartNs)
 
         # ensure expected == actual
         self.assertEqual(expected, actual)
@@ -4819,17 +4839,17 @@ class Test(unittest.TestCase):
 
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
+                                              expActiveMeter,
+                                              spannerBundle,
+                                              {},
                                               1,
-                                              allPartNs,
-                                              activeMeter=expActiveMeter,
-                                              spannerBundle=spannerBundle,
-                                              otherInfo=None)
+                                              allPartNs)
         # ensure sectionFromElement()
         self.assertEqual(0, mockSectionFE.call_count)
         # ensure scoreDefFromElement()
         self.assertEqual(0, mockScoreDFE.call_count)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, otherInfo=None)
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
 
     @mock.patch('converter21.mei.base.environLocal')
     def testCoreIntegration4(self, mockEnviron):
@@ -4854,7 +4874,7 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, allPartNs, spannerBundle
+            elem, None, spannerBundle, {}, allPartNs
         )
 
         expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
@@ -4927,7 +4947,7 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, allPartNs, spannerBundle
+            elem, None, spannerBundle, {}, allPartNs
         )
 
         # ensure simple returns are okay
@@ -4981,7 +5001,7 @@ class Test(unittest.TestCase):
         barLineFromElement(): <barLine rend="dbl"/>
         '''
         elem = ETree.Element('barLine', attrib={'rend': 'dbl'})
-        actual = base.barLineFromElement(elem)
+        actual = base.barLineFromElement(elem, None, None, {})
         self.assertIsInstance(actual, bar.Barline)
         self.assertEqual('double', actual.type)
 
@@ -4990,7 +5010,7 @@ class Test(unittest.TestCase):
         barLineFromElement(): <barLine/>
         '''
         elem = ETree.Element('barLine')
-        actual = base.barLineFromElement(elem)
+        actual = base.barLineFromElement(elem, None, None, {})
         self.assertIsInstance(actual, bar.Barline)
         self.assertEqual('regular', actual.type)
 
