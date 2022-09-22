@@ -29,8 +29,12 @@ def runTheTest(filePath: Path):
         print('score1 not well formed')
         return False
 
+    # render and open the resulting PDF in Preview.app
     score1.show('musicxml.pdf')
 
+    # write the musicxml file and open in bbedit
+    fp = score1.write('musicxml')
+    subprocess.run(['bbedit', str(fp)], check=False)
     return True
 
 # ------------------------------------------------------------------------------

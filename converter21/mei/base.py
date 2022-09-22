@@ -175,6 +175,7 @@ tool.
 '''
 import typing as t
 from xml.etree.ElementTree import Element, ParseError, fromstring, ElementTree
+import re
 
 from collections import defaultdict
 from copy import deepcopy
@@ -203,6 +204,7 @@ from music21 import pitch
 from music21 import spanner
 from music21 import stream
 from music21 import style
+from music21 import tempo
 from music21 import tie
 
 environLocal = environment.Environment('converter21.mei.base')
@@ -1414,9 +1416,9 @@ def metaSetTitle(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
         # in the title
         meta.title = f'{meta.title} ({subtitle})'
 
-    tempo = work.find(f'./{MEI_NS}tempo')
-    if tempo is not None:
-        meta.movementName = tempo.text
+    tempoEl = work.find(f'./{MEI_NS}tempo')
+    if tempoEl is not None:
+        meta.movementName = tempoEl.text
 
     return meta
 
@@ -3609,12 +3611,141 @@ def _tstampToOffset(tstamp: str, activeMeter: t.Optional[meter.TimeSignature]) -
     return opFrac(resultFloat)
 
 
-def dirFromElement(
+_NOTE_UNICODE_CHAR_TO_NOTE_NAME: t.Dict[str, str] = {
+    '\uE1D0': 'breve',    # noteDoubleWhole
+    '\uE1D1': 'breve',    # noteDoubleWholeSquare
+    '\uE1D2': 'whole',    # noteWhole
+    '\uE1D3': 'half',     # noteHalfUp
+    '\uE1D4': 'half',     # noteHalfDown
+    '\uE1D5': 'quarter',  # noteQuarterUp
+    '\uE1D6': 'quarter',  # noteQuarterDown
+    '\uE1D7': 'eighth',   # note8thUp
+    '\uE1D8': 'eighth',   # note8thDown
+    '\uE1D9': '16th',     # note16thUp
+    '\uE1DA': '16th',     # note16thDown
+    '\uE1DB': '32nd',     # ...
+    '\uE1DC': '32nd',
+    '\uE1DD': '64th',
+    '\uE1DE': '64th',
+    '\uE1DF': '128th',
+    '\uE1E0': '128th',
+    '\uE1E1': '256th',
+    '\uE1E2': '256th',
+    '\uE1E3': '512th',
+    '\uE1E4': '512th',    # ...
+    '\uE1E5': '1024th',   # note1024thUp
+    '\uE1E6': '1024th',   # note1024thDown
+}
+
+_METRONOME_MARK_PATTERN: str = r'^((.*?)\s+|\s*)([^=\s])\s*=\s*(\d+\.?\d*)'
+def _getBPMInfo(
+    text: str
+) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[int]]:
+    # takes strings like "Andante M.M. 𝅗𝅥 = 128" and returns
+    # 'Andante M.M.', '𝅗𝅥', and 128 (but only if the first match
+    # is actually a note symbol from the SMuFL range (0xE1D0 - 0xE1EF).
+    m = re.search(_METRONOME_MARK_PATTERN, text)
+    if m is None:
+        return None, None, None
+
+    tempoName: t.Optional[str] = m.group(2)
+    noteChar: t.Optional[str] = m.group(3)
+    notesPerMinute: t.Optional[str] = m.group(4)
+
+    if notesPerMinute is None or noteChar is None:
+        return None, None, None
+
+    if noteChar in _NOTE_UNICODE_CHAR_TO_NOTE_NAME.keys():
+        return tempoName, noteChar, int(float(notesPerMinute) + 0.5)
+
+    return None, None, None
+
+
+def tempoFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, str],
 ) -> t.Tuple[OffsetQL, Music21Object]:
+    offset: OffsetQL
+    tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
+
+    # first parse as a <dir> giving a TextExpression with style,
+    # then try to derive tempo info from that.
+    teWithStyle: expressions.TextExpression
+    offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+
+    # default tempo placement should be above
+    if teWithStyle.placement is None:
+        teWithStyle.placement = 'above'
+    # default tempo weight should be bold
+    if (not teWithStyle.hasStyleInformation
+            or (teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None)):
+        teWithStyle.style.fontStyle = 'bold'
+        teWithStyle.style.fontWeight = 'bold'
+
+    text: str = teWithStyle.content
+    tempoName: t.Optional[str] = None
+    noteChar: t.Optional[str] = None
+    notesPerMinute: t.Optional[int] = None
+    tempoName, noteChar, notesPerMinute = _getBPMInfo(text)
+    if noteChar is None or notesPerMinute is None:
+        # no 𝅗𝅥 = 128 in the text, last chance for bpm info is @midi.bpm
+        midiBPMStr: t.Optional[str] = elem.get('midi.bpm')
+        midiBPM: t.Optional[int] = None
+        if midiBPMStr:
+            try:
+                midiBPM = int(midiBPMStr)
+            except:  # pylint: disable=bare-except
+                pass
+
+        if midiBPM is not None:
+            # We have midi.bpm, which is defined to be quarter notes per minute,
+            # but no 𝅗𝅥 = 128 in the text.  So we make a full MetronomeMark, using
+            # the original text (teWithStyle).
+            # Note that we have to make a TempoText from teWithStyle first, since
+            # MetronomeMark won't take text=TextExpression.
+            tempoObj = tempo.TempoText()
+            tempoObj.setTextExpression(teWithStyle)
+            tempoObj = tempo.MetronomeMark(
+                text=tempoObj,
+                number=midiBPM,
+                referent='quarter'
+            )
+            return offset, tempoObj
+
+        # it's just tempo text (no bpm info), use the full original text (teWithStyle)
+        tempoObj = tempo.TempoText()
+        tempoObj.setTextExpression(teWithStyle)  # pick up all the style
+        return offset, tempoObj
+
+
+    # we have enough info for a full MetronomeMark; use the tempoName
+    # instead of full original text, because we pass the 𝅗𝅥 = 128 info
+    # separately as referent and number.
+    if tempoName is None:
+        tempoName = ''
+    teWithStyle.content = tempoName  # keep the style...
+    tempoObj = tempo.TempoText()
+    tempoObj.setTextExpression(teWithStyle)
+    tempoObj = tempo.MetronomeMark(
+        text=tempoObj,
+        number=notesPerMinute,
+        referent=_NOTE_UNICODE_CHAR_TO_NOTE_NAME[noteChar]
+    )
+
+    # work around bug in MetronomeMark.text setter where style is not linked when text is a TempoText
+    tempoObj.style = teWithStyle.style
+
+    return offset, tempoObj
+
+
+def dirFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str],
+) -> t.Tuple[OffsetQL, expressions.TextExpression]:
     offset: OffsetQL
     te: expressions.TextExpression
 
@@ -3627,6 +3758,7 @@ def dirFromElement(
 
     fontStyle: t.Optional[str] = None
     fontWeight: t.Optional[str] = None
+    fontFamily: t.Optional[str] = None
 
     text: str = ''
     for el in elem.iter():
@@ -3638,6 +3770,8 @@ def dirFromElement(
                 fontStyle = el.get('fontstyle')
             if fontWeight is None:
                 fontWeight = el.get('fontweight')
+            if fontFamily is None:
+                fontFamily = el.get('fontfam')
 
         if el.text and el.text[0] != '\n':
             text += el.text
@@ -3651,12 +3785,16 @@ def dirFromElement(
                 text += el.tail
 
     te = expressions.TextExpression(text)
+
+    if t.TYPE_CHECKING:
+        assert isinstance(te.style, style.TextStyle)
     if fontStyle or fontWeight:
-        if t.TYPE_CHECKING:
-            assert isinstance(te.style, style.TextStyle)
         te.style.fontStyle, te.style.fontWeight = (
             _m21FontStyleAndWeightFromMeiFontStyleAndWeight(fontStyle, fontWeight)
         )
+    if fontFamily:
+        te.style.fontFamily = fontFamily
+
     place: t.Optional[str] = elem.get('place')
     if place:
         if place == 'above':
@@ -3817,7 +3955,7 @@ def measureFromElement(
         #         f'{MEI_NS}phrase': phraseFromElement,
         #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
         #         f'{MEI_NS}reh': rehFromElement,
-        #        f'{MEI_NS}tempo': tempoFromElement,
+        f'{MEI_NS}tempo': tempoFromElement,
         #        f'{MEI_NS}trill': trillFromElement,
         #        f'{MEI_NS}turn': turnFromElement,
     }
