@@ -3666,7 +3666,7 @@ def tempoFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, str],
-) -> t.Tuple[OffsetQL, Music21Object]:
+) -> t.Tuple[OffsetQL, tempo.TempoIndication]:
     offset: OffsetQL
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
 
@@ -3678,11 +3678,12 @@ def tempoFromElement(
     # default tempo placement should be above
     if teWithStyle.placement is None:
         teWithStyle.placement = 'above'
-    # default tempo weight should be bold
-    if (not teWithStyle.hasStyleInformation
-            or (teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None)):
+
+    # default tempo text style should be bold
+    if not teWithStyle.hasStyleInformation:
         teWithStyle.style.fontStyle = 'bold'
-        teWithStyle.style.fontWeight = 'bold'
+    elif teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None:
+        teWithStyle.style.fontStyle = 'bold'
 
     text: str = teWithStyle.content
     tempoName: t.Optional[str] = None
@@ -3718,7 +3719,6 @@ def tempoFromElement(
         tempoObj = tempo.TempoText()
         tempoObj.setTextExpression(teWithStyle)  # pick up all the style
         return offset, tempoObj
-
 
     # we have enough info for a full MetronomeMark; use the tempoName
     # instead of full original text, because we pass the 𝅗𝅥 = 128 info
@@ -3789,8 +3789,8 @@ def dirFromElement(
     if t.TYPE_CHECKING:
         assert isinstance(te.style, style.TextStyle)
     if fontStyle or fontWeight:
-        te.style.fontStyle, te.style.fontWeight = (
-            _m21FontStyleAndWeightFromMeiFontStyleAndWeight(fontStyle, fontWeight)
+        te.style.fontStyle = (
+            _m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
         )
     if fontFamily:
         te.style.fontFamily = fontFamily
@@ -3805,10 +3805,10 @@ def dirFromElement(
             environLocal.warn(f'invalid @place = "{place}" in <dir>')
     return offset, te
 
-def _m21FontStyleAndWeightFromMeiFontStyleAndWeight(
+def _m21FontStyleFromMeiFontStyleAndWeight(
     meiFontStyle: t.Optional[str],
     meiFontWeight: t.Optional[str]
-) -> t.Tuple[t.Optional[str], t.Optional[str]]:
+) -> t.Optional[str]:
     if meiFontStyle is None:
         meiFontStyle = 'normal'
     if meiFontWeight is None:
@@ -3826,18 +3826,18 @@ def _m21FontStyleAndWeightFromMeiFontStyleAndWeight(
 
     if meiFontStyle == 'normal':
         if meiFontWeight == 'normal':
-            return 'normal', 'normal'
+            return 'normal'
         if meiFontWeight == 'bold':
-            return 'bold', 'bold'
+            return 'bold'
 
     if meiFontStyle == 'italic':
         if meiFontWeight == 'normal':
-            return 'italic', 'normal'
+            return 'italic'
         if meiFontWeight == 'bold':
-            return 'bolditalic', 'bold'
+            return 'bolditalic'
 
     # should not ever get here...
-    return None, None
+    return None
 
 def measureFromElement(
     elem: Element,
