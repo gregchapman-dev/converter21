@@ -30,10 +30,10 @@ def runTheTest(filePath: Path):
         return False
 
     # render and open the resulting PDF in Preview.app
-    score1.show('musicxml.pdf')
+    score1.show('musicxml.pdf', makeNotation=False)
 
     # write the musicxml file and open in bbedit
-    fp = score1.write('musicxml')
+    fp = score1.write('musicxml', makeNotation=False)
     subprocess.run(['bbedit', str(fp)], check=False)
     return True
 

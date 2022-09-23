@@ -2445,6 +2445,10 @@ def noteFromElement(
     theAccid: t.Optional[str] = _accidentalFromAttr(elem.get('accid'))
     thePitch: pitch.Pitch = safePitch(elem.get('pname', ''), theAccid, elem.get('oct', ''))
     theNote: note.Note = note.Note(thePitch)
+    if theAccid is not None:
+        theNote.pitch.accidental = pitch.Accidental(theAccid)
+        theNote.pitch.accidental.displayStatus = True
+
 
     # set the Note's duration (we will update this if we find any inner <dot> elements)
     durFloat: float = _qlDurationFromAttr(elem.get('dur'))
@@ -2465,14 +2469,15 @@ def noteFromElement(
             theNote.articulations.append(subElement)
         elif isinstance(subElement, str):
             theNote.pitch.accidental = pitch.Accidental(subElement)
+            theNote.pitch.accidental.displayStatus = True
         elif isinstance(subElement, note.Lyric):
             theNote.lyrics = [subElement]
 
-    # adjust for @accid.ges if present
-    if elem.get('accid.ges') is not None:
-        accid: t.Optional[str] = _accidGesFromAttr(elem.get('accid.ges', ''))
-        if accid is not None:
-            theNote.pitch.accidental = pitch.Accidental(accid)
+    # adjust for @accid.ges if present (NOPE --gregc)
+#     if elem.get('accid.ges') is not None:
+#         accid: t.Optional[str] = _accidGesFromAttr(elem.get('accid.ges', ''))
+#         if accid is not None:
+#             theNote.pitch.accidental = pitch.Accidental(accid)
 
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:
