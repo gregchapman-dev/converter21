@@ -1043,44 +1043,6 @@ class Test(unittest.TestCase):
         self.assertEqual(1.0, actual.quarterLength)
         self.assertEqual(0, actual.duration.dots)
 
-    @mock.patch('music21.note.Note')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.safePitch')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.pitch.Accidental')
-    def testUnit2(self, mockAccid, mockMakeDuration, mockSafePitch, mockProcEmbEl, mockNote):
-        '''
-        noteFromElement(): adds <artic>, <accid>, and <dot> elements held within
-
-        (mostly-unit test; mock out Note, _processEmbeddedElements(),
-        safePitch(), and makeDuration())
-        '''
-        elem = ETree.Element('note', attrib={'pname': 'D', 'oct': '2', 'dur': '4'})
-        # accid: s, dots: 1, artic: stacc
-        mockMakeDuration.return_value = 'makeDuration() return'
-        mockSafePitch.return_value = 'safePitch() return'
-        mockAccid.return_value = 'an accidental'
-        mockNewNote = mock.MagicMock()
-        mockNote.return_value = mockNewNote
-        mockProcEmbEl.return_value = [1, '#', articulations.Staccato()]
-        expected = mockNewNote
-        expMockMakeDur = [mock.call(1.0, 0), mock.call(1.0, 1)]
-
-        actual = base.noteFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, mockNewNote, actual)
-        mockSafePitch.assert_called_once_with('D', None, '2')
-        mockNewNote.pitch.accidental = mockAccid.return_value
-        self.assertEqual(1, mockNewNote.articulations.append.call_count)
-        self.assertIsInstance(mockNewNote.articulations.append.call_args_list[0][0][0],
-                              articulations.Staccato)
-        self.assertEqual(expMockMakeDur, mockMakeDuration.call_args_list)
-        mockNote.assert_called_once_with(mockSafePitch.return_value)
-        self.assertEqual(0, mockNewNote.id.call_count)
-        self.assertEqual(0, mockNewNote.articulations.extend.call_count)
-        self.assertEqual(0, mockNewNote.tie.call_count)
-        self.assertEqual(mockMakeDuration.return_value, mockNewNote.duration)
-
     def testIntegration2(self):
         '''
         noteFromElement(): adds <artic>, <accid>, and <dot> elements held within
@@ -1158,45 +1120,6 @@ class Test(unittest.TestCase):
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
         self.assertEqual(tie.Tie('start'), actual.tie)
 
-    @mock.patch('music21.note.Note')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.safePitch')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('music21.pitch.Accidental')
-    def testUnit4(self, mockAccid, mockTuplet, mockMakeDuration,
-                  mockSafePitch, mockProcEmbEl, mockNote):
-        '''
-        noteFromElement(): adds tuplet-related attributes; plus @m21Beam where the
-            duration doesn't require adjusting beams
-
-        (mostly-unit test)
-        '''
-        elem = ETree.Element('note', attrib={'pname': 'D', 'oct': '2', 'dur': '4',
-                                             'm21TupletNum': '5', 'm21TupletNumbase': '4',
-                                             'm21TupletSearch': 'start',
-                                             'accid.ges': 's', 'm21Beam': 'start'})
-        mockSafePitch.return_value = 'safePitch() return'
-        mockNewNote = mock.MagicMock()
-        mockNewNote.beams = mock.MagicMock()
-        mockMakeDuration.return_value = mock.MagicMock()
-        mockMakeDuration.return_value.type = 'quarter'
-        mockNote.return_value = mockNewNote
-        mockProcEmbEl.return_value = []
-        mockTuplet.return_value = 'made the tuplet'
-        mockAccid.return_value = 'the accidental'
-        expected = mockTuplet.return_value
-
-        actual = base.noteFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(expected, actual)
-        mockSafePitch.assert_called_once_with('D', None, '2')
-        mockMakeDuration.assert_called_once_with(1.0, 0)
-        mockNote.assert_called_once_with(mockSafePitch.return_value)
-        mockTuplet.assert_called_once_with(mockNewNote, elem)
-        mockAccid.assert_called_once_with('#')
-        self.assertEqual(0, mockNewNote.beams.fill.call_count)
-
     def testIntegration4(self):
         '''
         noteFromElement(): @m21TupletNum
@@ -1205,7 +1128,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('note', attrib={'pname': 'D', 'oct': '2', 'dur': '4',
                                              'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                              'm21TupletSearch': 'start',
-                                             'accid.ges': 's', 'm21Beam': 'start'})
+                                             'accid': 's', 'm21Beam': 'start'})
         spannerBundle = spanner.SpannerBundle()
 
         actual = base.noteFromElement(elem, None, spannerBundle, {})
