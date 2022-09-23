@@ -3660,7 +3660,7 @@ def _getBPMInfo(
     if notesPerMinute is None or noteChar is None:
         return None, None, None
 
-    if noteChar in _NOTE_UNICODE_CHAR_TO_NOTE_NAME.keys():
+    if noteChar in _NOTE_UNICODE_CHAR_TO_NOTE_NAME:
         return tempoName, noteChar, int(float(notesPerMinute) + 0.5)
 
     return None, None, None
@@ -3683,6 +3683,9 @@ def tempoFromElement(
     # default tempo placement should be above
     if teWithStyle.placement is None:
         teWithStyle.placement = 'above'
+
+    if t.TYPE_CHECKING:
+        assert isinstance(teWithStyle.style, style.TextStyle)
 
     # default tempo text style should be bold
     if not teWithStyle.hasStyleInformation:
@@ -3739,7 +3742,8 @@ def tempoFromElement(
         referent=_NOTE_UNICODE_CHAR_TO_NOTE_NAME[noteChar]
     )
 
-    # work around bug in MetronomeMark.text setter where style is not linked when text is a TempoText
+    # work around bug in MetronomeMark.text setter where style is not linked
+    # when text is a TempoText
     tempoObj.style = teWithStyle.style
 
     return offset, tempoObj
