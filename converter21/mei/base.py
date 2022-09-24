@@ -3388,31 +3388,15 @@ def layerFromElement(
     - MEI.text: div
     - MEI.usersymbols: anchoredText curve line symbol
     '''
-    # mapping from tag name to our converter function
-    tagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}mRest': mRestFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}mSpace': mSpaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-        f'{MEI_NS}meterSig': timeSigFromElement,
-        f'{MEI_NS}keySig': keySigFromElement,
-    }
 
     # iterate all immediate children
     theLayer: t.List[Music21Object] = _processEmbeddedElements(
-        elem.iterfind('*'), tagToFunction, elem.tag, activeMeter, spannerBundle, otherInfo
+        elem.iterfind('*'),
+        layerChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
     )
 
     # adjust the <layer>'s elements for possible tuplets
@@ -3438,7 +3422,7 @@ def layerFromElement(
     return theVoice
 
 
-def apparatusLayerFromElement(
+def apparatusLayerChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
@@ -3451,31 +3435,14 @@ def apparatusLayerFromElement(
     if lemma is None:
         return []
 
-    # mapping from tag name to our converter function
-    tagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}mRest': mRestFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}mSpace': mSpaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-        f'{MEI_NS}meterSig': timeSigFromElement,
-        f'{MEI_NS}keySig': keySigFromElement,
-    }
-
     # iterate all immediate children
     theLayer: t.List[Music21Object] = _processEmbeddedElements(
-        lemma.iterfind('*'), tagToFunction, lemma.tag, activeMeter, spannerBundle, otherInfo
+        lemma.iterfind('*'),
+        layerChildrenTagToFunction,
+        lemma.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
     )
 
     return theLayer
@@ -4492,6 +4459,29 @@ def scoreFromElement(
     theScore.append(list(spannerBundle))
 
     return theScore
+
+
+layerChildrenTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': apparatusLayerChildrenFromElement,
+    f'{MEI_NS}clef': clefFromElement,
+    f'{MEI_NS}chord': chordFromElement,
+    f'{MEI_NS}note': noteFromElement,
+    f'{MEI_NS}rest': restFromElement,
+    f'{MEI_NS}mRest': mRestFromElement,
+    f'{MEI_NS}beam': beamFromElement,
+    f'{MEI_NS}tuplet': tupletFromElement,
+    f'{MEI_NS}space': spaceFromElement,
+    f'{MEI_NS}mSpace': mSpaceFromElement,
+    f'{MEI_NS}barLine': barLineFromElement,
+    f'{MEI_NS}meterSig': timeSigFromElement,
+    f'{MEI_NS}keySig': keySigFromElement,
+}
 
 
 # -----------------------------------------------------------------------------
