@@ -1031,7 +1031,7 @@ def _processEmbeddedElements(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, str]
-) -> t.List[t.Any]:
+) -> t.List[Music21Object]:
     # noinspection PyShadowingNames
     '''
     From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each element
@@ -1084,7 +1084,7 @@ def _processEmbeddedElements(
 
     for eachElem in elements:
         if eachElem.tag in mapping:
-            result: t.Union[t.Any, t.Tuple[t.Any], t.List[t.Any]] = (
+            result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]] = (
                 mapping[eachElem.tag](eachElem, activeMeter, spannerBundle, otherInfo)
             )
             if isinstance(result, (tuple, list)):
