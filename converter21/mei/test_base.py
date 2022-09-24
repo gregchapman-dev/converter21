@@ -312,14 +312,11 @@ class Test(unittest.TestCase):
         self.assertEqual(5, actual)
         mockMakeList.assert_called_once_with('yes')
 
-    @mock.patch('converter21.mei.base._accidentalFromAttr')
-    def testAccidFromElement(self, mockAccid):
+    def testAccidFromElement(self):
         '''accidFromElement(): very straight-forward test'''
-        elem = ETree.Element('accid', attrib={'accid': 'yes'})
-        mockAccid.return_value = 5
+        elem = ETree.Element('accid', attrib={'accid': 's'})
         actual = base.accidFromElement(elem, None, None, {})
-        self.assertEqual(5, actual)
-        mockAccid.assert_called_once_with('yes')
+        self.assertEqual(pitch.Accidental('#'), actual)
 
 #     def testGetVoiceId1(self):
 #         '''getVoiceId(): usual case'''
@@ -987,37 +984,6 @@ class Test(unittest.TestCase):
     #       ... it means a test failure, because the str should have been a MagicMock but was
     #       replaced with a string by the unit under test.
 
-    @mock.patch('music21.note.Note')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.safePitch')
-    @mock.patch('converter21.mei.base.makeDuration')
-    def testUnit1(self, mockMakeDuration, mockSafePitch, mockProcEmbEl, mockNote):
-        '''
-        noteFromElement(): all the basic attributes (i.e., @pname, @accid, @oct, @dur, @dots)
-
-        (mostly-unit test; mock out Note, _processEmbeddedElements(),
-         safePitch(), and makeDuration())
-        '''
-        elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 's', 'oct': '2', 'dur': '4',
-                                             'dots': '1'})
-        mockMakeDuration.return_value = 'makeDuration() return'
-        mockSafePitch.return_value = 'safePitch() return'
-        mockNewNote = mock.MagicMock()
-        mockNote.return_value = mockNewNote
-        mockProcEmbEl.return_value = []
-        expected = mockNewNote
-
-        actual = base.noteFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, mockNewNote, actual)
-        mockSafePitch.assert_called_once_with('D', '#', '2')
-        mockMakeDuration.assert_called_once_with(1.0, 1)
-        mockNote.assert_called_once_with(mockSafePitch.return_value)
-        self.assertEqual(0, mockNewNote.id.call_count)
-        self.assertEqual(0, mockNewNote.articulations.extend.call_count)
-        self.assertEqual(0, mockNewNote.tie.call_count)
-        self.assertEqual(mockMakeDuration.return_value, mockNewNote.duration)
-
     def testIntegration1a(self):
         '''
         noteFromElement(): all the elements that go in Note.__init__()...
@@ -1061,51 +1027,12 @@ class Test(unittest.TestCase):
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
 
-    @mock.patch('music21.note.Note')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.safePitch')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base._makeArticList')
-    @mock.patch('converter21.mei.base._tieFromAttr')
-    @mock.patch('converter21.mei.base.addSlurs')
-    def testUnit3(self, mockSlur, mockTie, mockArticList, mockMakeDuration,
-                  mockSafePitch, mockProcEmbEl, mockNote):
-        '''
-        noteFromElement(): adds @xml:id, @artic, and @tie attributes, and the spannerBundle
-
-        (mostly-unit test; mock out Note, _processEmbeddedElements(),
-        safePitch(), and makeDuration())
-        '''
-        elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 's', 'oct': '2', 'dur': '4',
-                                             'dots': '1', 'artic': 'stacc', _XMLID: '123',
-                                             'tie': 'i1'})
-        mockMakeDuration.return_value = 'makeDuration() return'
-        mockSafePitch.return_value = 'safePitch() return'
-        mockNewNote = mock.MagicMock()
-        mockNote.return_value = mockNewNote
-        mockProcEmbEl.return_value = []
-        mockArticList.return_value = ['staccato!']
-        mockTie.return_value = 'a tie!'
-        expected = mockNewNote
-
-        actual = base.noteFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(expected, mockNewNote, actual)
-        mockSafePitch.assert_called_once_with('D', '#', '2')
-        mockMakeDuration.assert_called_once_with(1.0, 1)
-        mockNote.assert_called_once_with(mockSafePitch.return_value)
-        self.assertEqual('123', mockNewNote.id)
-        mockNewNote.articulations.extend.assert_called_once_with(['staccato!'])
-        self.assertEqual('a tie!', mockNewNote.tie)
-        self.assertEqual(mockMakeDuration.return_value, mockNewNote.duration)
-        mockSlur.assert_called_once_with(elem, mockNewNote, 'slur bundle')
-
     def testIntegration3(self):
         '''
         noteFromElement(): adds @xml:id, @artic, and @tie attributes, and the spannerBundle
         (corresponds to testUnit3() with no mocks)
         '''
-        elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 's', 'oct': '2', 'dur': '4',
+        elem = ETree.Element('note', attrib={'pname': 'D', 'accid.ges': 's', 'oct': '2', 'dur': '4',
                                              'dots': '1', _XMLID: 'asdf1234', 'artic': 'stacc',
                                              'tie': 'i1'})
         spannerBundle = spanner.SpannerBundle()
@@ -1113,6 +1040,7 @@ class Test(unittest.TestCase):
         actual = base.noteFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
+        self.assertEqual(False, actual.pitch.accidental.displayStatus)  # because @accid.ges
         self.assertEqual(1.5, actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
         self.assertEqual('asdf1234', actual.id)
@@ -1134,46 +1062,12 @@ class Test(unittest.TestCase):
         actual = base.noteFromElement(elem, None, spannerBundle, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
+        self.assertEqual(True, actual.pitch.accidental.displayStatus)  # because @accid
         self.assertEqual(1.0, actual.quarterLength)
         self.assertEqual('quarter', actual.duration.type)
         self.assertEqual('5', actual.m21TupletNum)
         self.assertEqual('4', actual.m21TupletNumbase)
         self.assertEqual('start', actual.m21TupletSearch)
-
-    @mock.patch('music21.note.Note')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.safePitch')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('music21.duration.GraceDuration')
-    def testUnit5(self, mockGrace, mockMakeDuration, mockSafePitch, mockProcEmbEl, mockNote):
-        '''
-        noteFromElement(): test @grace and @m21Beam where the duration requires adjusting beams,
-            and contained <syl>
-
-        (mostly-unit test)
-        '''
-        elem = ETree.Element('note', attrib={'pname': 'D', 'oct': '2', 'dur': '16',
-                                             'm21Beam': 'start', 'grace': 'acc'})
-        sylElem = ETree.Element(f'{MEI_NS}syl')
-        elem.append(sylElem)
-        mockSafePitch.return_value = 'safePitch() return'
-        mockNewNote = mock.MagicMock()
-        mockNewNote.beams = mock.MagicMock()
-        mockNote.return_value = mockNewNote
-        mockProcEmbEl.return_value = [mock.MagicMock(spec_set=note.Lyric)]
-        mockGrace.return_value = mock.MagicMock(spec_set=duration.Duration)
-        mockGrace.return_value.type = '16th'
-        expected = mockNewNote
-
-        actual = base.noteFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(expected, actual)
-        mockSafePitch.assert_called_once_with('D', None, '2')
-        mockMakeDuration.assert_called_once_with(0.25, 0)
-        mockNote.assert_called_once_with(mockSafePitch.return_value)
-        mockNewNote.beams.fill.assert_called_once_with('16th', 'start')
-        self.assertEqual(mockGrace.return_value, mockNewNote.duration)
-        self.assertEqual(mockProcEmbEl.return_value, mockNewNote.lyrics)
 
     def testIntegration5(self):
         '''

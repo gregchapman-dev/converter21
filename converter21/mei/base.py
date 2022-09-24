@@ -363,7 +363,7 @@ class MeiToM21Converter:
 # -----------------------------------------------------------------------------
 def safePitch(
     name: str,
-    accidental: t.Optional[str] = None,
+    accidental: t.Optional[t.Union[pitch.Accidental, str]] = None,
     octave: t.Union[str, int] = ''
 ) -> pitch.Pitch:
     '''
@@ -397,8 +397,7 @@ def safePitch(
         return pitch.Pitch(name, octave=int(octave))
     if accidental is not None:
         return pitch.Pitch(name, accidental=accidental)
-    else:
-        return pitch.Pitch(name)
+    return pitch.Pitch(name)
 
 
 def makeDuration(
@@ -488,14 +487,19 @@ def allPartsPresent(scoreElem: Element) -> t.Tuple[str, ...]:
 # None is for when @accid is omitted
 _ACCID_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
     's': '#', 'f': '-', 'ss': '##', 'x': '##', 'ff': '--', 'xs': '###',
-    'ts': '###', 'tf': '---', 'n': 'n', 'nf': '-', 'ns': '#', 'su': '#~',
-    'sd': '~', 'fu': '`', 'fd': '-`', 'nu': '~', 'nd': '`', None: None}
+    'ts': '###', 'tf': '---', 'n': 'n', 'nf': '-', 'ns': '#',
+    'su': '#~', 'sd': '~', 'fu': '`', 'fd': '-`', 'nu': '~', 'nd': '`',
+    '1qf': '`', '3qf': '-`', '1qs': '~', '3qs': '#~',
+    None: None
+}
 
 # for _accidGesFromAttr()
 # None is for when @accid is omitted
 _ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
-    's': '#', 'f': '-', 'ss': '##', 'ff': '--', 'n': 'n', 'su': '#~',
-    'sd': '~', 'fu': '`', 'fd': '-`', None: None}
+    's': '#', 'f': '-', 'ss': '##', 'ff': '--', 'n': 'n',
+    'su': '#~', 'sd': '~', 'fu': '`', 'fd': '-`',
+    None: None
+}
 
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
@@ -1027,7 +1031,7 @@ def _processEmbeddedElements(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, str]
-) -> t.List[Music21Object]:
+) -> t.List[t.Any]:
     # noinspection PyShadowingNames
     '''
     From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each element
@@ -1080,7 +1084,7 @@ def _processEmbeddedElements(
 
     for eachElem in elements:
         if eachElem.tag in mapping:
-            result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]] = (
+            result: t.Union[t.Any, t.Tuple[t.Any], t.List[t.Any]] = (
                 mapping[eachElem.tag](eachElem, activeMeter, spannerBundle, otherInfo)
             )
             if isinstance(result, (tuple, list)):
@@ -2150,29 +2154,26 @@ def accidFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, str]
-) -> t.Optional[str]:
+) -> t.Optional[pitch.Accidental]:
     '''
     <accid> Records a temporary alteration to the pitch of a note.
 
     In MEI 2013: pg.248 (262 in PDF) (MEI.shared module)
 
-    :returns: A string indicating the music21 representation of this accidental.
+    :returns: A music21 Accidental
 
     **Examples**
 
-    Unlike most of the ___FromElement() functions, this does not return any music21 object---just
-    a string. Accidentals up to triple-sharp and triple-flat are supported.
-
     >>> from xml.etree import ElementTree as ET
     >>> from converter21.mei.base import accidFromElement
-    >>> meiSnippet = """<accid accid="s" xmlns="http://www.music-encoding.org/ns/mei"/>"""
+    >>> meiSnippet = """<accid accid.ges="s" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
     >>> accidFromElement(meiSnippet, None, None, {})
-    '#'
+    <music21.pitch.Accidental sharp>
     >>> meiSnippet = """<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>"""
     >>> meiSnippet = ET.fromstring(meiSnippet)
     >>> accidFromElement(meiSnippet, None, None, {})
-    '---'
+    <music21.pitch.Accidental triple-flat>
 
     **Attributes/Elements Implemented:**
 
@@ -2203,10 +2204,47 @@ def accidFromElement(
 
     **Contained Elements not Implemented:** none
     '''
+    # 1. get @accid/@accid.ges string and displayStatus
+    accidStr: t.Optional[str] = None
+    displayStatus: t.Optional[bool] = None
     if elem.get('accid.ges') is not None:
-        return _accidGesFromAttr(elem.get('accid.ges', ''))
-    else:
-        return _accidentalFromAttr(elem.get('accid'))
+        accidStr = _accidGesFromAttr(elem.get('accid.ges'))
+        displayStatus = False
+    if elem.get('accid') is not None:
+        accidStr = _accidentalFromAttr(elem.get('accid'))
+        displayStatus = True
+
+    # 2. is it cautionary (display unconditionally in normal position)
+    #       or editorial (display unconditionally above the note)
+    displayLocation: t.Optional[str] = None
+    func: t.Optional[str] = elem.get('func')
+    if func is not None:
+        if func == 'edit':
+            displayStatus = True
+            displayLocation = 'above'
+        elif func == 'caution':
+            displayStatus = True
+            displayLocation = 'normal'
+
+    # 3. paren or bracket?
+    displayStyle: t.Optional[str] = None
+    enclose: t.Optional[str] = elem.get('enclose')
+    if enclose is not None:
+        if enclose == 'paren':
+            displayStatus = True
+            displayStyle = 'parentheses'
+        elif enclose == 'brack':
+            displayStatus = True
+            displayStyle = 'bracket'
+
+    if accidStr is None:
+        return None
+
+    accidental: pitch.Accidental = pitch.Accidental(accidStr)
+    accidental.displayStatus = displayStatus
+    accidental.displayLocation = displayLocation
+    accidental.displayStyle = displayStyle
+    return accidental
 
 
 def sylFromElement(
@@ -2441,19 +2479,19 @@ def noteFromElement(
         f'{MEI_NS}syl': sylFromElement
     }
 
-    # start with a Note with Pitch
-    theAccid: t.Optional[str] = _accidentalFromAttr(elem.get('accid'))
-    thePitch: pitch.Pitch = safePitch(elem.get('pname', ''), theAccid, elem.get('oct', ''))
-    theNote: note.Note = note.Note(thePitch)
-    if theAccid is not None:
-        theNote.pitch.accidental = pitch.Accidental(theAccid)
-        theNote.pitch.accidental.displayStatus = True
-
+    # make the note (no pitch yet, that has to wait until we have parsed the subelements)
+    theNote: note.Note = note.Note()
 
     # set the Note's duration (we will update this if we find any inner <dot> elements)
     durFloat: float = _qlDurationFromAttr(elem.get('dur'))
     theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
     theNote.duration = theDuration
+
+    # get any @accid/@accid.ges from this element.
+    # We'll overwrite with any subElements below.
+    theAccid: t.Optional[str] = _accidentalFromAttr(elem.get('accid'))
+    theAccidGes: t.Optional[str] = _accidGesFromAttr(elem.get('accid.ges'))
+    theAccidObj: t.Optional[pitch.Accidental] = None
 
     # iterate all immediate children
     dotElements = 0  # count the number of <dot> elements
@@ -2467,17 +2505,29 @@ def noteFromElement(
             dotElements += subElement
         elif isinstance(subElement, articulations.Articulation):
             theNote.articulations.append(subElement)
-        elif isinstance(subElement, str):
-            theNote.pitch.accidental = pitch.Accidental(subElement)
-            theNote.pitch.accidental.displayStatus = True
+        elif isinstance(subElement, pitch.Accidental):
+            theAccidObj = subElement
         elif isinstance(subElement, note.Lyric):
             theNote.lyrics = [subElement]
 
-    # adjust for @accid.ges if present (NOPE --gregc)
-#     if elem.get('accid.ges') is not None:
-#         accid: t.Optional[str] = _accidGesFromAttr(elem.get('accid.ges', ''))
-#         if accid is not None:
-#             theNote.pitch.accidental = pitch.Accidental(accid)
+    pnameStr: str = elem.get('pname', '')
+    octStr: str = elem.get('oct', '')
+    if theAccidObj is not None:
+        theNote.pitch = safePitch(pnameStr, theAccidObj, octStr)
+    elif theAccidGes is not None:
+        theNote.pitch = safePitch(pnameStr, theAccidGes, octStr)
+        if theNote.pitch.accidental is not None:
+            # since the accidental was due to theAccidGes,
+            # the accidental should NOT be displayed.
+            theNote.pitch.accidental.displayStatus = False
+    elif theAccid is not None:
+        theNote.pitch = safePitch(pnameStr, theAccid, octStr)
+        if theNote.pitch.accidental is not None:
+            # since the accidental was due to theAccid,
+            # the accidental should be displayed.
+            theNote.pitch.accidental.displayStatus = True
+    else:
+        theNote.pitch = safePitch(pnameStr, None, octStr)
 
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:
