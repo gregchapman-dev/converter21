@@ -2331,8 +2331,7 @@ def verseFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str],
-    backupN: t.Optional[int] = None
+    otherInfo: t.Dict[str, str]
 ) -> t.List[note.Lyric]:
     '''
     <verse> Lyric verse.
@@ -2370,16 +2369,18 @@ def verseFromElement(
 
     - MEI.shared: dir dynam lb space tempo
     '''
+    nStr: t.Optional[str] = elem.get('n')
     syllables: t.List[note.Lyric] = [
         sylFromElement(
             s, activeMeter, spannerBundle, otherInfo
         ) for s in elem.findall(f'./{MEI_NS}syl')
     ]
     for eachSyl in syllables:
-        try:
-            eachSyl.number = int(elem.get('n', backupN))  # type: ignore
-        except (TypeError, ValueError):
-            environLocal.warn(_BAD_VERSE_NUMBER.format(elem.get('n', backupN)))
+        if nStr is not None:
+            try:
+                eachSyl.number = int(nStr)  # type: ignore
+            except (TypeError, ValueError):
+                environLocal.warn(_BAD_VERSE_NUMBER.format(nStr))
     return syllables
 
 
@@ -2476,6 +2477,7 @@ def noteFromElement(
         f'{MEI_NS}dot': dotFromElement,
         f'{MEI_NS}artic': articFromElement,
         f'{MEI_NS}accid': accidFromElement,
+        f'{MEI_NS}verse': verseFromElement,
         f'{MEI_NS}syl': sylFromElement
     }
 
@@ -2508,7 +2510,9 @@ def noteFromElement(
         elif isinstance(subElement, pitch.Accidental):
             theAccidObj = subElement
         elif isinstance(subElement, note.Lyric):
-            theNote.lyrics = [subElement]
+            if theNote.lyrics is None:
+                theNote.lyrics = []
+            theNote.lyrics.append(subElement)
 
     pnameStr: str = elem.get('pname', '')
     octStr: str = elem.get('oct', '')
@@ -2568,15 +2572,6 @@ def noteFromElement(
             # because scaleToTuplet always returns whatever objs it was passed (modified)
             assert isinstance(obj, note.Note)
         theNote = obj
-
-    # lyrics indicated with <verse>
-    if elem.find(f'./{MEI_NS}verse') is not None:
-        tempLyrics: t.List[note.Lyric] = []
-        for i, eachVerse in enumerate(elem.findall(f'./{MEI_NS}verse')):
-            tempLyrics.extend(
-                verseFromElement(eachVerse, activeMeter, spannerBundle, otherInfo, backupN=i + 1)
-            )
-        theNote.lyrics = tempLyrics
 
     return theNote
 
@@ -3611,7 +3606,7 @@ def _tstampToOffset(tstamp: str, activeMeter: t.Optional[meter.TimeSignature]) -
         return 0.0
     try:
         resultFloat = float(tstamp)
-    except:  # pylint: disable=bare-except
+    except (TypeError, ValueError):
         # warn about malformed tstamp, assuming 0.0
         return 0.0
 
@@ -3722,7 +3717,7 @@ def tempoFromElement(
         if midiBPMStr:
             try:
                 midiBPM = int(midiBPMStr)
-            except:  # pylint: disable=bare-except
+            except (TypeError, ValueError):
                 pass
 
         if midiBPM is not None:
@@ -4017,7 +4012,7 @@ def measureFromElement(
                 raise MeiAttributeError(f'no @staff in staffItem "{eachElem.tag}"')
             try:
                 _: int = int(staffNStr)
-            except:  # pylint: disable=bare-except
+            except (TypeError, ValueError):
                 # whichStaff must be "1 2" or something crazy like that
                 environLocal.warn(_STAFFITEM_MUST_HAVE_SINGLE_STAFF.format(eachElem.tag, staffNStr))
                 continue
