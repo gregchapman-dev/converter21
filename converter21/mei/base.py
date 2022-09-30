@@ -2564,6 +2564,20 @@ def noteFromElement(
         f'{MEI_NS}syl': sylFromElement
     }
 
+    # Check if this note is in a cue-sized layer.
+    # NOTE: I don't have any examples of <layer cue="true">, so I
+    # haven't implemented that yet.  So otherInfo['cue'] won't be
+    # there yet.
+    cueBool = otherInfo.get('cue', False)
+    if t.TYPE_CHECKING:
+        assert isinstance(cueBool, bool)
+    cueSized: bool = cueBool
+
+    # check if this particular note is cue-sized all on its own
+    if not cueSized:
+        if elem.get('cue') == 'true':
+            cueSized = True
+
     # make the note (no pitch yet, that has to wait until we have parsed the subelements)
     theNote: note.Note = note.Note()
 
@@ -2634,6 +2648,11 @@ def noteFromElement(
     tieStr: t.Optional[str] = elem.get('tie')
     if tieStr is not None:
         theNote.tie = _tieFromAttr(tieStr)
+
+    if cueSized:
+        if t.TYPE_CHECKING:
+            assert isinstance(theNote.style, style.NoteStyle)
+        theNote.style.noteSize = 'cue'
 
     # dots from inner <dot> elements
     if dotElements > 0:
