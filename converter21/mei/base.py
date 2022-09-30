@@ -2264,8 +2264,10 @@ def accidFromElement(
 
     accidental: pitch.Accidental = pitch.Accidental(accidStr)
     accidental.displayStatus = displayStatus
-    accidental.displayLocation = displayLocation
-    accidental.displayStyle = displayStyle
+    if displayLocation:
+        accidental.displayLocation = displayLocation
+    if displayStyle:
+        accidental.displayStyle = displayStyle
     return accidental
 
 
@@ -2356,7 +2358,7 @@ def verseFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, str]
-) -> t.List[note.Lyric]:
+) -> note.Lyric:
     '''
     <verse> Lyric verse.
 
