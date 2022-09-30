@@ -4317,6 +4317,8 @@ def sectionScoreCore(
                         # because 'n' is a dict[str, Music21Object]
                         assert isinstance(resultNDict, dict)
                     for eachObj in resultNDict.values():
+                        if isinstance(eachObj, meter.TimeSignature):
+                            activeMeter = eachObj
                         inNextThing[eachN].append(eachObj)
 
         elif staffDefTag == eachElem.tag:
