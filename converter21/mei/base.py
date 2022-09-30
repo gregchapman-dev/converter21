@@ -2498,6 +2498,7 @@ def noteFromElement(
     - @artic and <artic>
     - @tie, (many of "[i|m|t]")
     - @slur, (many of "[i|m|t][1-6]")
+    - @cue="true" for cue-sized notes
     - @grace, from att.note.ges.cmn: partial implementation (notes marked as grace, but the
         duration is 0 because we ignore the question of which neighbouring note to borrow time from)
     - <syl> and <verse>
@@ -2563,20 +2564,6 @@ def noteFromElement(
         f'{MEI_NS}verse': verseFromElement,
         f'{MEI_NS}syl': sylFromElement
     }
-
-    # Check if this note is in a cue-sized layer.
-    # NOTE: I don't have any examples of <layer cue="true">, so I
-    # haven't implemented that yet.  So otherInfo['cue'] won't be
-    # there yet.
-    cueBool = otherInfo.get('cue', False)
-    if t.TYPE_CHECKING:
-        assert isinstance(cueBool, bool)
-    cueSized: bool = cueBool
-
-    # check if this particular note is cue-sized all on its own
-    if not cueSized:
-        if elem.get('cue') == 'true':
-            cueSized = True
 
     # make the note (no pitch yet, that has to wait until we have parsed the subelements)
     theNote: note.Note = note.Note()
@@ -2649,7 +2636,7 @@ def noteFromElement(
     if tieStr is not None:
         theNote.tie = _tieFromAttr(tieStr)
 
-    if cueSized:
+    if elem.get('cue') == 'true':
         if t.TYPE_CHECKING:
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
@@ -2694,6 +2681,7 @@ def restFromElement(
     - xml:id (or id), an XML id (submitted as the Music21Object "id")
     - dur, from att.duration.musical: (via _qlDurationFromAttr())
     - dots, from att.augmentdots: [0..4]
+    - @cue="true" for cue-sized rests
 
     **Attributes/Elements in Testing:** none
 
@@ -2730,6 +2718,11 @@ def restFromElement(
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
         theRest.id = xmlId
+
+    if elem.get('cue') == 'true':
+        if t.TYPE_CHECKING:
+            assert isinstance(theRest.style, style.NoteStyle)
+        theRest.style.noteSize = 'cue'
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
@@ -2854,6 +2847,7 @@ def chordFromElement(
     - @artic and <artic>
     - @tie, (many of "[i|m|t]")
     - @slur, (many of "[i|m|t][1-6]")
+    - @cue="true" for cue-sized chords
     - @grace, from att.note.ges.cmn: partial implementation (notes marked as grace, but the
         duration is 0 because we ignore the question of which neighbouring note to borrow time from)
 
@@ -2953,6 +2947,11 @@ def chordFromElement(
     tieStr: t.Optional[str] = elem.get('tie')
     if tieStr is not None:
         theChord.tie = _tieFromAttr(tieStr)
+
+    if elem.get('cue') == 'true':
+        if t.TYPE_CHECKING:
+            assert isinstance(theChord.style, style.NoteStyle)
+        theChord.style.noteSize = 'cue'
 
     # grace note (only mark as grace note---don't worry about "time-stealing")
     if elem.get('grace') is not None:
