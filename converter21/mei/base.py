@@ -2298,33 +2298,35 @@ def sylFromElement(
         't': 'end',
         None: None
     }
-    conDict: t.Dict[t.Optional[str], str] = {
-        's': ' ',
-        'd': '-',
-        't': '~',
-        'u': '_',
-        None: '-'
-    }
+
+    # music21 only supports hyphen continuations.
+    # conDict: t.Dict[t.Optional[str], str] = {
+    #     's': ' ',
+    #     'd': '-',
+    #     't': '~',
+    #     'u': '_',
+    #     None: '-'
+    # }
 
     wordPos: t.Optional[str] = elem.get('wordpos')
 
-    # default to '-' for unrecognized @con values (e.g. 'b' from lyric-007.mei)
-    con: str = conDict.get(elem.get('con'), '-')
+#     conAttr: t.Optional[str] = elem.get('con')
+#     con: t.Optional[str] = conDict.get(conAttr, '-')
 
     text: str = elem.text if elem.text is not None else ''
-    if 'i' == wordPos:
-        text = text + con
-    elif 'm' == wordPos:
-        text = con + text + con
-    elif 't' == wordPos:
-        text = con + text
+#     if 'i' == wordPos:
+#         text = text + con
+#     elif 'm' == wordPos:
+#         text = con + text + con
+#     elif 't' == wordPos:
+#         text = con + text
+
+    if wordPos is None:
+        # no wordPos? Last chance is to use trailing and leading hyphens (applyRaw=False)
+        return note.Lyric(text=text, applyRaw=False)
 
     syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict.get(wordPos, None)
-
-    if syllabic:
-        return note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
-    else:
-        return note.Lyric(text=text)
+    return note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
 
 
 def verseFromElement(
@@ -2369,20 +2371,77 @@ def verseFromElement(
 
     - MEI.shared: dir dynam lb space tempo
     '''
-    nStr: t.Optional[str] = elem.get('n')
-    syllables: t.List[note.Lyric] = [
-        sylFromElement(
-            s, activeMeter, spannerBundle, otherInfo
-        ) for s in elem.findall(f'./{MEI_NS}syl')
-    ]
-    for eachSyl in syllables:
-        if nStr is not None:
-            try:
-                eachSyl.number = int(nStr)  # type: ignore
-            except (TypeError, ValueError):
-                environLocal.warn(_BAD_VERSE_NUMBER.format(nStr))
-    return syllables
+    tagToFunction: t.Dict[str, t.Callable[
+        [Element,
+            t.Optional[meter.TimeSignature],
+            spanner.SpannerBundle,
+            t.Dict[str, str]],
+        t.Any]
+    ] = {
+        f'{MEI_NS}label': stringFromElement,
+        # music21 doesn't support verse label abbreviations
+        # f'{MEI_NS}labelAbbr': labelAbbrFromElement,
+        f'{MEI_NS}syl': sylFromElement
+    }
 
+    nStr: t.Optional[str] = elem.get('n')
+    label: t.Optional[str] = None
+    syllables: t.List[note.Lyric] = []
+
+    for subElement in _processEmbeddedElements(elem.findall('*'),
+                                               tagToFunction,
+                                               elem.tag,
+                                               activeMeter,
+                                               spannerBundle,
+                                               otherInfo):
+        if isinstance(subElement, str):
+            label = subElement
+        elif isinstance(subElement, note.Lyric):
+            syllables.append(subElement)
+
+    verse: note.Lyric
+    if len(syllables) == 1:
+        verse = syllables[0]
+    else:
+        verse = note.Lyric()
+
+    if nStr is not None:
+        try:
+            verse.number = int(nStr)
+        except (TypeError, ValueError):
+            environLocal.warn(_BAD_VERSE_NUMBER.format(nStr))
+    if label is not None:
+        verse.identifier = label
+
+    if len(syllables) == 1:
+        return verse
+
+    verse.components = []
+    for eachSyl in syllables:
+        verse.components.append(eachSyl)
+    return verse
+
+
+def stringFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, str]
+) -> str:
+    text: str = ''
+    for el in elem.iter():
+        # Here is where we would need to handle various editorial elements
+        # eg. el.tag being 'app' or 'choice', or ...
+
+        if el.text and el.text[0] != '\n':
+            text += el.text
+
+        # we are uninterested in elem.tail
+        if el is not elem:
+            # we are uninterested in el.tail if it's just due to a LF in the XML file
+            if el.tail and el.tail[0] != '\n':
+                text += el.tail
+    return text
 
 def noteFromElement(
     elem: Element,
@@ -2801,7 +2860,9 @@ def chordFromElement(
         t.Any]
     ] = {
         f'{MEI_NS}note': lambda *x: None,
-        f'{MEI_NS}artic': articFromElement
+        f'{MEI_NS}artic': articFromElement,
+        f'{MEI_NS}verse': verseFromElement,
+        f'{MEI_NS}syl': sylFromElement,
     }
 
     # start with a Chord with a bunch of Notes
@@ -2826,6 +2887,10 @@ def chordFromElement(
                                                otherInfo):
         if isinstance(subElement, articulations.Articulation):
             theChord.articulations.append(subElement)
+        elif isinstance(subElement, note.Lyric):
+            if theChord.lyrics is None:
+                theChord.lyrics = []
+            theChord.lyrics.append(subElement)
 
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:

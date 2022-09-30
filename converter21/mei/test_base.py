@@ -852,7 +852,7 @@ class Test(unittest.TestCase):
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
-        self.assertEqual('Chri ', actual.text)
+        self.assertEqual('Chri', actual.text)  # music21 doesn't keep continuations in the text
 
     def testSyl2(self):
         '''
@@ -865,7 +865,7 @@ class Test(unittest.TestCase):
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('middle', actual.syllabic)
-        self.assertEqual('~sto~', actual.text)
+        self.assertEqual('sto', actual.text)  # music21 doesn't keep continuations in the text
 
     def testSyl3(self):
         '''
@@ -878,7 +878,7 @@ class Test(unittest.TestCase):
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('end', actual.syllabic)
-        self.assertEqual('-pher', actual.text)
+        self.assertEqual('pher', actual.text)  # music21 doesn't keep continuations in the text
 
     def testSyl4(self):
         '''
@@ -902,13 +902,12 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, None, None, {}, backupN=5)
+        actual = base.verseFromElement(elem, None, None, {})
 
-        self.assertEqual(1, len(actual))
-        self.assertIsInstance(actual[0], note.Lyric)
-        self.assertEqual('begin', actual[0].syllabic)
-        self.assertEqual('Hin', actual[0].text)
-        self.assertEqual(42, actual[0].number)
+        self.assertIsInstance(actual, note.Lyric)
+        self.assertEqual('begin', actual.syllabic)
+        self.assertEqual('Hin', actual.text)
+        self.assertEqual(42, actual.number)
 
     def testVerse2(self):
         '''
@@ -925,18 +924,18 @@ class Test(unittest.TestCase):
         syl.text = '-mith'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, None, None, {}, backupN=5)
+        actual = base.verseFromElement(elem, None, None, {})
 
-        self.assertEqual(3, len(actual))
-        for eachSyl in actual:
+        self.assertEqual(3, len(actual.components))
+        for eachSyl in actual.components:
             self.assertIsInstance(eachSyl, note.Lyric)
-            self.assertEqual(5, eachSyl.number)
-        self.assertEqual('begin', actual[0].syllabic)
-        self.assertEqual('Hin', actual[0].text)
-        self.assertEqual('middle', actual[1].syllabic)
-        self.assertEqual('de', actual[1].text)
-        self.assertEqual('end', actual[2].syllabic)
-        self.assertEqual('mith', actual[2].text)
+            self.assertEqual(1, eachSyl.number)
+        self.assertEqual('begin', actual.components[0].syllabic)
+        self.assertEqual('Hin', actual.components[0].text)
+        self.assertEqual('middle', actual.components[1].syllabic)
+        self.assertEqual('de', actual.components[1].text)
+        self.assertEqual('end', actual.components[2].syllabic)
+        self.assertEqual('mith', actual.components[2].text)
 
     @mock.patch('converter21.mei.base.environLocal')
     def testVerse3(self, mockEnviron):
@@ -950,11 +949,10 @@ class Test(unittest.TestCase):
 
         actual = base.verseFromElement(elem, None, None, {})
 
-        self.assertEqual(1, len(actual))
-        self.assertIsInstance(actual[0], note.Lyric)
-        self.assertEqual('begin', actual[0].syllabic)
-        self.assertEqual('Hin', actual[0].text)
-        self.assertEqual(1, actual[0].number)
+        self.assertIsInstance(actual, note.Lyric)
+        self.assertEqual('begin', actual.syllabic)
+        self.assertEqual('Hin', actual.text)
+        self.assertEqual(1, actual.number)
         mockEnviron.warn.assert_called_once_with(base._BAD_VERSE_NUMBER.format('mistake'))
 
     @mock.patch('converter21.mei.base.environLocal')
@@ -969,12 +967,10 @@ class Test(unittest.TestCase):
 
         actual = base.verseFromElement(elem, None, None, {})
 
-        self.assertEqual(1, len(actual))
-        self.assertIsInstance(actual[0], note.Lyric)
-        self.assertEqual('begin', actual[0].syllabic)
-        self.assertEqual('Hin', actual[0].text)
-        self.assertEqual(1, actual[0].number)
-        mockEnviron.warn.assert_called_once_with(base._BAD_VERSE_NUMBER.format('None'))
+        self.assertIsInstance(actual, note.Lyric)
+        self.assertEqual('begin', actual.syllabic)
+        self.assertEqual('Hin', actual.text)
+        self.assertEqual(1, actual.number)
 
     # -----------------------------------------------------------------------------
     # class TestNoteFromElement(unittest.TestCase):
@@ -1094,65 +1090,17 @@ class Test(unittest.TestCase):
         self.assertEqual(1, len(actual.lyrics))
         self.assertEqual('words!', actual.lyrics[0].text)
 
-    @mock.patch('music21.note.Note')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.safePitch')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.verseFromElement')
-    def testUnit6(self, mockVerseFE, unused_mockMakeDuration,
-                  mockSafePitch, mockProcEmbEl, mockNote):
-        '''
-        noteFromElement(): test contained <verse>
-
-        (mostly-unit test)
-        '''
-        elem = '''<note pname="D" oct="2" dur="16" xmlns="http://www.music-encoding.org/ns/mei">
-            <verse>
-                <syl>au</syl>
-                <syl>luong</syl>
-            </verse>
-            <verse>
-                <syl>sun</syl>
-            </verse>
-        </note>
-        '''
-        elem = ETree.fromstring(elem)
-        mockSafePitch.return_value = 'safePitch() return'
-        mockNewNote = mock.MagicMock()
-        mockNewNote.beams = mock.MagicMock()
-        mockNote.return_value = mockNewNote
-        mockProcEmbEl.return_value = []
-        expected = mockNewNote
-        # verseFromElement() return values
-        vfeReturns = [[mock.MagicMock(name='au'), mock.MagicMock(name='luong')],
-                      [mock.MagicMock(name='sun')]]
-
-        def mockVerseFESideEffect(inner_elem, activeMeter, spannerBundle, otherInfo, backupN=None):
-            '''Check that it gets called with the right elements'''
-            assert f'{MEI_NS}verse' == inner_elem.tag
-            return vfeReturns.pop(0)
-        mockVerseFE.side_effect = mockVerseFESideEffect
-        expLyrics = [vfeReturns[0][0], vfeReturns[0][1], vfeReturns[1][0]]
-
-        actual = base.noteFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(expected, actual)
-        self.assertEqual(expLyrics, actual.lyrics)
-        self.assertEqual(2, mockVerseFE.call_count)
-        mockVerseFE.assert_any_call(mock.ANY, None, 'slur bundle', {}, backupN=1)
-        mockVerseFE.assert_any_call(mock.ANY, None, 'slur bundle', {}, backupN=2)
-
     def testIntegration6(self):
         '''
         noteFromElement(): test contained <verse>
         (corresponds to testUnit6() with no mocks)
         '''
         elem = '''<note pname="D" oct="2" dur="16" xmlns="http://www.music-encoding.org/ns/mei">
-            <verse>
+            <verse n="1">
                 <syl>au</syl>
                 <syl>luong</syl>
             </verse>
-            <verse>
+            <verse n="2">
                 <syl>sun</syl>
             </verse>
         </note>
@@ -1162,13 +1110,12 @@ class Test(unittest.TestCase):
 
         actual = base.noteFromElement(elem, None, spannerBundle, {})
 
-        self.assertEqual(3, len(actual.lyrics))
-        self.assertEqual('au', actual.lyrics[0].text)
-        self.assertEqual('luong', actual.lyrics[1].text)
-        self.assertEqual('sun', actual.lyrics[2].text)
+        self.assertEqual(2, len(actual.lyrics))
         self.assertEqual(1, actual.lyrics[0].number)
-        self.assertEqual(1, actual.lyrics[1].number)
-        self.assertEqual(2, actual.lyrics[2].number)
+        self.assertEqual(2, actual.lyrics[1].number)
+        self.assertEqual('au', actual.lyrics[0].components[0].text)
+        self.assertEqual('luong', actual.lyrics[0].components[1].text)
+        self.assertEqual('sun', actual.lyrics[1].text)
 
     # NOTE: consider adding to previous tests rather than making new ones
 
