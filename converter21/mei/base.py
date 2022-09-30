@@ -1107,20 +1107,33 @@ def _timeSigFromAttrs(elem: Element, prefix: str = '') -> meter.TimeSignature:
     :returns: The corresponding time signature.
     :rtype: :class:`~music21.meter.TimeSignature`
     '''
+    timeSig: meter.TimeSignature
     count: t.Optional[str] = elem.get(prefix + 'count')
     unit: t.Optional[str] = elem.get(prefix + 'unit')
     sym: t.Optional[str] = elem.get(prefix + 'sym')
+    form: t.Optional[str] = elem.get(prefix + 'form')
     if sym:
         if (sym == 'cut'
                 and (count is None or count == '2')
                 and (unit is None or unit == '2')):
-            return meter.TimeSignature('cut')
+            timeSig = meter.TimeSignature('cut')
+            if form == 'invis':
+                timeSig.style.hideObjectOnPrint = True
+            return timeSig
         if (sym == 'common'
                 and (count is None or count == '4')
                 and (unit is None or unit == '4')):
-            return meter.TimeSignature('common')
+            timeSig = meter.TimeSignature('common')
+            if form == 'invis':
+                timeSig.style.hideObjectOnPrint = True
+            return timeSig
+
     if count and unit:
-        return meter.TimeSignature(f'{count}/{unit}')
+        timeSig = meter.TimeSignature(f'{count}/{unit}')
+        if form == 'invis':
+            timeSig.style.hideObjectOnPrint = True
+        return timeSig
+
     raise MeiElementError('Could not parse timeSig attributes')
 
 
@@ -1135,8 +1148,10 @@ def _keySigFromAttrs(elem: Element, prefix: str = '') -> t.Union[key.Key, key.Ke
 
     Returns the key or key signature.
     '''
+    keySig: t.Union[key.Key, key.KeySignature]
     # @@@ I think @sig should take priority --gregc
     pname: t.Optional[str] = elem.get(prefix + 'pname')
+    form: t.Optional[str] = elem.get(prefix + 'form')
     if pname is not None:
         # @accid/@key.accid, @mode/@key.mode, @pname/@key.pname
         mode: str = elem.get(prefix + 'mode', '')
@@ -1147,14 +1162,21 @@ def _keySigFromAttrs(elem: Element, prefix: str = '') -> t.Union[key.Key, key.Ke
             tonic = step
         else:
             tonic = step + accidental
-        return key.Key(tonic=tonic, mode=mode)
+        keySig = key.Key(tonic=tonic, mode=mode)
+        if form == 'invis':
+            keySig.style.hideObjectOnPrint = True
+        return keySig
+
     else:
         # @key.sig, @key.mode
         # If @key.mode is null, assume it is a 'major' key (default for ks.asKey)
         ks: key.KeySignature = key.KeySignature(sharps=_sharpsFromAttr(elem.get(prefix + 'sig')))
         # noinspection PyTypeChecker
         # @@@ and this is particularly bad, better to just return ks if there is no mode
-        return ks.asKey(mode=elem.get(prefix + 'mode', 'major'))
+        keySig = ks.asKey(mode=elem.get(prefix + 'mode', 'major'))
+        if form == 'invis':
+            keySig.style.hideObjectOnPrint = True
+        return keySig
 
 
 def _transpositionFromAttrs(elem: Element) -> interval.Interval:
@@ -3719,7 +3741,7 @@ _NOTE_UNICODE_CHAR_TO_NOTE_NAME: t.Dict[str, str] = {
     '\uE1E6': '1024th',   # note1024thDown
 }
 
-_METRONOME_MARK_PATTERN: str = r'^((.*?)\s+|\s*)([^=\s])\s*=\s*(\d+\.?\d*)'
+_METRONOME_MARK_PATTERN: str = r'^((.*?)\s*)([^=\s])\s*=\s*(\d+\.?\d*)[\s]*$'
 def _getBPMInfo(
     text: str
 ) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[int]]:
