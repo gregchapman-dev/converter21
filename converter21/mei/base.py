@@ -1786,7 +1786,7 @@ def scoreDefFromElement(
     postAllParts: t.List[Music21Object] = pap
 
     # --> time signature
-    if elem.get('meter.count') is not None:
+    if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
         postAllParts.append(_timeSigFromAttrs(elem, prefix='meter.'))
     meterSigElem: t.Optional[Element] = elem.find(f'{MEI_NS}meterSig')
     if meterSigElem is not None:
@@ -2026,7 +2026,7 @@ def staffDefFromElement(
 
     # process other part-specific information
     # --> time signature
-    if elem.get('meter.count') is not None:
+    if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
         post['meter'] = _timeSigFromAttrs(elem, prefix='meter.')
 
     # --> key signature
