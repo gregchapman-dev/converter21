@@ -3521,6 +3521,24 @@ def appChoiceLayerChildrenFromElement(
 
     return theList
 
+def passThruEditorialLayerChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        layerChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
 
 def appChoiceNoteChildrenFromElement(
     elem: Element,
@@ -3545,6 +3563,25 @@ def appChoiceNoteChildrenFromElement(
     return theList
 
 
+def passThruEditorialNoteChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        noteChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
 def appChoiceChordChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -3560,6 +3597,25 @@ def appChoiceChordChildrenFromElement(
         chosen.iterfind('*'),
         chordChildrenTagToFunction,
         chosen.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def passThruEditorialChordChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        chordChildrenTagToFunction,
+        elem.tag,
         activeMeter,
         spannerBundle,
         otherInfo
@@ -3827,6 +3883,52 @@ def chooseSubElement(appOrChoice: Element) -> t.Optional[Element]:
     environLocal.warn('Internal error: chooseSubElement expects <app> or <choice>')
     return chosen  # None, if we get here
 
+
+_EDITORIAL_ELEMENTS: t.Tuple[str, ...] = (
+    f'{MEI_NS}abbr',
+    f'{MEI_NS}add',
+    f'{MEI_NS}app',
+    f'{MEI_NS}choice',
+    f'{MEI_NS}corr',
+    f'{MEI_NS}damage',
+    f'{MEI_NS}del',
+    f'{MEI_NS}expan',
+    f'{MEI_NS}orig',
+    f'{MEI_NS}ref',
+    f'{MEI_NS}reg',
+    f'{MEI_NS}restore',
+    f'{MEI_NS}sic',
+    f'{MEI_NS}subst',
+    f'{MEI_NS}supplied',
+    f'{MEI_NS}unclear',
+)
+
+_IGNORED_EDITORIALS: t.Tuple[str, ...] = (
+    f'{MEI_NS}abbr',
+    f'{MEI_NS}del',
+    f'{MEI_NS}ref',
+    f'{MEI_NS}restore',
+    f'{MEI_NS}subst',
+)
+
+_PASSTHRU_EDITORIALS: t.Tuple[str, ...] = (
+    f'{MEI_NS}add',
+    f'{MEI_NS}corr',
+    f'{MEI_NS}damage',
+    f'{MEI_NS}expan',
+    f'{MEI_NS}orig',
+    f'{MEI_NS}reg',
+    f'{MEI_NS}sic',
+    f'{MEI_NS}supplied',
+    f'{MEI_NS}unclear',
+)
+
+_CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
+    f'{MEI_NS}app',
+    f'{MEI_NS}choice',
+)
+
+
 def tempoFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -3932,7 +4034,7 @@ def dirFromElement(
 
     text: str = ''
     if elem.text:
-        if elem.text[0] != '\n':
+        if elem.text[0] != '\n' or not elem.text.isspace():
             text += elem.text
 
     for el in elem.iterfind('*'):
@@ -3946,21 +4048,32 @@ def dirFromElement(
                 fontWeight = el.get('fontweight')
             if fontFamily is None:
                 fontFamily = el.get('fontfam')
-        elif el.tag in (f'{MEI_NS}app', f'{MEI_NS}choice'):
+        elif el.tag in _CHOOSING_EDITORIALS:
             subEl: t.Optional[Element] = chooseSubElement(el)
             if subEl is None:
                 continue
             el = subEl
+        elif el.tag in _PASSTHRU_EDITORIALS:
+            # for now assume all we care about here is the text/tail of these subElements
+            for subEl in el.iterfind('*'):
+                if subEl.text:
+                    if subEl.text[0] != '\n' or not subEl.text.isspace():
+                        text += subEl.text
+                if subEl.tail:
+                    if subEl.tail[0] != '\n' or not subEl.tail.isspace():
+                        text += subEl.tail
 
+        # grab the text from el
         if el.text:
-            if el.text[0] != '\n':
+            if el.text[0] != '\n' or not el.text.isspace():
                 text += el.text
 
-        # stop doing that el.tag thing
+        # stop doing that el.tag thing (if you can)
 
-        # we are uninterested in el.tail if it's just due to a LF in the XML file
-        if el.tail and el.tail[0] != '\n':
-            text += el.tail
+        # grab the text between this el and the next el
+        if el.tail:
+            if el.tail[0] != '\n' or not el.tail.isspace():
+                text += el.tail
 
     te = expressions.TextExpression(text)
 
@@ -4624,6 +4737,15 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
 ] = {
     f'{MEI_NS}app': appChoiceLayerChildrenFromElement,
     f'{MEI_NS}choice': appChoiceLayerChildrenFromElement,
+    f'{MEI_NS}add': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}corr': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}damage': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}expan': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}orig': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}reg': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}sic': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}unclear': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}clef': clefFromElement,
     f'{MEI_NS}chord': chordFromElement,
     f'{MEI_NS}note': noteFromElement,
@@ -4647,6 +4769,15 @@ noteChildrenTagToFunction: t.Dict[str, t.Callable[
 ] = {
     f'{MEI_NS}app': appChoiceNoteChildrenFromElement,
     f'{MEI_NS}choice': appChoiceNoteChildrenFromElement,
+    f'{MEI_NS}add': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}corr': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}damage': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}expan': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}orig': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}reg': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}sic': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}supplied': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}unclear': passThruEditorialNoteChildrenFromElement,
     f'{MEI_NS}dot': dotFromElement,
     f'{MEI_NS}artic': articFromElement,
     f'{MEI_NS}accid': accidFromElement,
@@ -4663,6 +4794,15 @@ chordChildrenTagToFunction: t.Dict[str, t.Callable[
 ] = {
     f'{MEI_NS}app': appChoiceChordChildrenFromElement,
     f'{MEI_NS}choice': appChoiceChordChildrenFromElement,
+    f'{MEI_NS}add': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}corr': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}damage': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}expan': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}orig': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}reg': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}sic': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}supplied': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}unclear': passThruEditorialChordChildrenFromElement,
     f'{MEI_NS}note': noteFromElement,
     f'{MEI_NS}artic': articFromElement,
     f'{MEI_NS}verse': verseFromElement,
