@@ -2551,20 +2551,6 @@ def noteFromElement(
     - MEI.critapp: app
     - MEI.edittrans: (all)
     '''
-    tagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}dot': dotFromElement,
-        f'{MEI_NS}artic': articFromElement,
-        f'{MEI_NS}accid': accidFromElement,
-        f'{MEI_NS}verse': verseFromElement,
-        f'{MEI_NS}syl': sylFromElement
-    }
-
     # make the note (no pitch yet, that has to wait until we have parsed the subelements)
     theNote: note.Note = note.Note()
 
@@ -2582,7 +2568,7 @@ def noteFromElement(
     # iterate all immediate children
     dotElements = 0  # count the number of <dot> elements
     for subElement in _processEmbeddedElements(elem.findall('*'),
-                                               tagToFunction,
+                                               noteChildrenTagToFunction,
                                                elem.tag,
                                                activeMeter,
                                                spannerBundle,
@@ -3538,7 +3524,7 @@ def apparatusLayerChildrenFromElement(
         return []
 
     # iterate all immediate children
-    theLayer: t.List[Music21Object] = _processEmbeddedElements(
+    theList: t.List[Music21Object] = _processEmbeddedElements(
         lemma.iterfind('*'),
         layerChildrenTagToFunction,
         lemma.tag,
@@ -3547,7 +3533,34 @@ def apparatusLayerChildrenFromElement(
         otherInfo
     )
 
-    return theLayer
+    return theList
+
+
+def apparatusNoteChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    # Find lemma <lem>.  If no lemma, use first reading <rdg>.
+    lemma: t.Optional[Element] = elem.find(f'{MEI_NS}lem')
+    if lemma is None:
+        lemma = elem.find(f'{MEI_NS}rdg')
+    if lemma is None:
+        return []
+
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        lemma.iterfind('*'),
+        noteChildrenTagToFunction,
+        lemma.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
 
 def staffFromElement(
     elem: Element,
@@ -4587,6 +4600,20 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}keySig': keySigFromElement,
 }
 
+noteChildrenTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': apparatusNoteChildrenFromElement,
+    f'{MEI_NS}dot': dotFromElement,
+    f'{MEI_NS}artic': articFromElement,
+    f'{MEI_NS}accid': accidFromElement,
+    f'{MEI_NS}verse': verseFromElement,
+    f'{MEI_NS}syl': sylFromElement
+}
 
 # -----------------------------------------------------------------------------
 _DOC_ORDER = [
