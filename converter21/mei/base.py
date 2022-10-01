@@ -2875,45 +2875,34 @@ def chordFromElement(
 
     - MEI.edittrans: (all)
     '''
-    tagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}note': lambda *x: None,
-        f'{MEI_NS}artic': articFromElement,
-        f'{MEI_NS}verse': verseFromElement,
-        f'{MEI_NS}syl': sylFromElement,
-    }
-
-    # start with a Chord with a bunch of Notes
     theNoteList: t.List[note.Note] = []
-    for eachNote in elem.iterfind(f'{MEI_NS}note'):
-        theNoteList.append(
-            noteFromElement(eachNote, activeMeter, spannerBundle, otherInfo)
-        )
+    theArticList: t.List[articulations.Articulation] = []
+    theLyricList: t.List[note.Lyric] = []
+
+    # iterate all immediate children
+    for subElement in _processEmbeddedElements(elem.findall('*'),
+                                               chordChildrenTagToFunction,
+                                               elem.tag,
+                                               activeMeter,
+                                               spannerBundle,
+                                               otherInfo):
+        if isinstance(subElement, note.Note):
+            theNoteList.append(subElement)
+        if isinstance(subElement, articulations.Articulation):
+            theArticList.append(subElement)
+        elif isinstance(subElement, note.Lyric):
+            theLyricList.append(subElement)
+
     theChord: chord.Chord = chord.Chord(notes=theNoteList)
+    if theArticList:
+        theChord.articulations = theArticList
+    if theLyricList:
+        theChord.lyrics = theLyricList
 
     # set the Chord's duration
     durFloat: float = _qlDurationFromAttr(elem.get('dur'))
     theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
     theChord.duration = theDuration
-
-    # iterate all immediate children
-    for subElement in _processEmbeddedElements(elem.findall('*'),
-                                               tagToFunction,
-                                               elem.tag,
-                                               activeMeter,
-                                               spannerBundle,
-                                               otherInfo):
-        if isinstance(subElement, articulations.Articulation):
-            theChord.articulations.append(subElement)
-        elif isinstance(subElement, note.Lyric):
-            if theChord.lyrics is None:
-                theChord.lyrics = []
-            theChord.lyrics.append(subElement)
 
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:
@@ -3510,24 +3499,21 @@ def layerFromElement(
     return theVoice
 
 
-def apparatusLayerChildrenFromElement(
+def appChoiceLayerChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, str]
 ) -> t.List[Music21Object]:
-    # Find lemma <lem>.  If no lemma, use first reading <rdg>.
-    lemma: t.Optional[Element] = elem.find(f'{MEI_NS}lem')
-    if lemma is None:
-        lemma = elem.find(f'{MEI_NS}rdg')
-    if lemma is None:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
         return []
 
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
-        lemma.iterfind('*'),
+        chosen.iterfind('*'),
         layerChildrenTagToFunction,
-        lemma.tag,
+        chosen.tag,
         activeMeter,
         spannerBundle,
         otherInfo
@@ -3536,24 +3522,44 @@ def apparatusLayerChildrenFromElement(
     return theList
 
 
-def apparatusNoteChildrenFromElement(
+def appChoiceNoteChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, str]
 ) -> t.List[Music21Object]:
-    # Find lemma <lem>.  If no lemma, use first reading <rdg>.
-    lemma: t.Optional[Element] = elem.find(f'{MEI_NS}lem')
-    if lemma is None:
-        lemma = elem.find(f'{MEI_NS}rdg')
-    if lemma is None:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
         return []
 
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
-        lemma.iterfind('*'),
+        chosen.iterfind('*'),
         noteChildrenTagToFunction,
-        lemma.tag,
+        chosen.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def appChoiceChordChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
+        return []
+
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        chosen.iterfind('*'),
+        chordChildrenTagToFunction,
+        chosen.tag,
         activeMeter,
         spannerBundle,
         otherInfo
@@ -3798,6 +3804,29 @@ def _getBPMInfo(
     return None, None, None
 
 
+def chooseSubElement(appOrChoice: Element) -> t.Optional[Element]:
+    chosen: t.Optional[Element] = None
+    if appOrChoice.tag == f'{MEI_NS}app':
+        # choose 'lem' (lemma) if present, else first 'rdg' (reading)
+        chosen = appOrChoice.find(f'{MEI_NS}lem')
+        if chosen is None:
+            chosen = appOrChoice.find(f'{MEI_NS}rdg')
+        return chosen
+
+    if appOrChoice.tag == f'{MEI_NS}choice':
+        # choose 'corr' (correction) if present,
+        # else 'reg' (regularization) if present,
+        # else first sub-element.
+        chosen = appOrChoice.find(f'{MEI_NS}corr')
+        if chosen is None:
+            chosen = appOrChoice.find(f'{MEI_NS}reg')
+        if chosen is None:
+            chosen = appOrChoice.find('*')
+        return chosen
+
+    environLocal.warn('Internal error: chooseSubElement expects <app> or <choice>')
+    return chosen  # None, if we get here
+
 def tempoFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -3902,7 +3931,11 @@ def dirFromElement(
     fontFamily: t.Optional[str] = None
 
     text: str = ''
-    for el in elem.iter():
+    if elem.text:
+        if elem.text[0] != '\n':
+            text += elem.text
+
+    for el in elem.iterfind('*'):
         # do whatever is appropriate given el.tag (<rend> for example)
         if el.tag == f'{MEI_NS}rend':
             # music21 doesn't currently support changing style in the middle of a TextExpression,
@@ -3913,17 +3946,21 @@ def dirFromElement(
                 fontWeight = el.get('fontweight')
             if fontFamily is None:
                 fontFamily = el.get('fontfam')
+        elif el.tag in (f'{MEI_NS}app', f'{MEI_NS}choice'):
+            subEl: t.Optional[Element] = chooseSubElement(el)
+            if subEl is None:
+                continue
+            el = subEl
 
-        if el.text and el.text[0] != '\n':
-            text += el.text
+        if el.text:
+            if el.text[0] != '\n':
+                text += el.text
 
         # stop doing that el.tag thing
 
-        # we are uninterested in elem.tail
-        if el is not elem:
-            # we are uninterested in el.tail if it's just due to a LF in the XML file
-            if el.tail and el.tail[0] != '\n':
-                text += el.tail
+        # we are uninterested in el.tail if it's just due to a LF in the XML file
+        if el.tail and el.tail[0] != '\n':
+            text += el.tail
 
     te = expressions.TextExpression(text)
 
@@ -4585,7 +4622,8 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
         t.Dict[str, str]],
     t.Any]
 ] = {
-    f'{MEI_NS}app': apparatusLayerChildrenFromElement,
+    f'{MEI_NS}app': appChoiceLayerChildrenFromElement,
+    f'{MEI_NS}choice': appChoiceLayerChildrenFromElement,
     f'{MEI_NS}clef': clefFromElement,
     f'{MEI_NS}chord': chordFromElement,
     f'{MEI_NS}note': noteFromElement,
@@ -4607,12 +4645,28 @@ noteChildrenTagToFunction: t.Dict[str, t.Callable[
         t.Dict[str, str]],
     t.Any]
 ] = {
-    f'{MEI_NS}app': apparatusNoteChildrenFromElement,
+    f'{MEI_NS}app': appChoiceNoteChildrenFromElement,
+    f'{MEI_NS}choice': appChoiceNoteChildrenFromElement,
     f'{MEI_NS}dot': dotFromElement,
     f'{MEI_NS}artic': articFromElement,
     f'{MEI_NS}accid': accidFromElement,
     f'{MEI_NS}verse': verseFromElement,
     f'{MEI_NS}syl': sylFromElement
+}
+
+chordChildrenTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': appChoiceChordChildrenFromElement,
+    f'{MEI_NS}choice': appChoiceChordChildrenFromElement,
+    f'{MEI_NS}note': noteFromElement,
+    f'{MEI_NS}artic': articFromElement,
+    f'{MEI_NS}verse': verseFromElement,
+    f'{MEI_NS}syl': sylFromElement,
 }
 
 # -----------------------------------------------------------------------------

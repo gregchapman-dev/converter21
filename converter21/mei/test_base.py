@@ -1265,36 +1265,6 @@ class Test(unittest.TestCase):
         return ETree.Element(f'{MEI_NS}note', pname=pname, accid=accid,
                              oct=octArg, dur=dur, dots=dots)
 
-    @mock.patch('music21.chord.Chord')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.noteFromElement')
-    def testUnit1ChordFromElement(self, mockNoteFromE,
-                                  mockMakeDuration, mockProcEmbEl, mockChord):
-        '''
-        chordFromElement(): all the basic attributes (i.e., @pname, @accid, @oct, @dur, @dots)
-        '''
-        elem = ETree.Element('chord', attrib={'dur': '4', 'dots': '1'})
-        noteElements = [Test.makeNoteElemsChordFromElement(x, None, '4', '8', None)
-                        for x in ('c', 'e', 'g')]
-        for eachElement in noteElements:
-            elem.append(eachElement)
-        mockNoteFromE.return_value = 'a note'
-        mockMakeDuration.return_value = 'makeDuration() return'
-        mockNewChord = mock.MagicMock()
-        mockChord.return_value = mockNewChord
-        mockProcEmbEl.return_value = []
-
-        actual = base.chordFromElement(elem, None, None, {})
-
-        self.assertEqual(mockNewChord, actual)
-        mockMakeDuration.assert_called_once_with(1.0, 1)
-        mockChord.assert_called_once_with(notes=[mockNoteFromE.return_value for _ in range(3)])
-        self.assertEqual(0, mockNewChord.id.call_count)
-        self.assertEqual(0, mockNewChord.articulations.extend.call_count)
-        self.assertEqual(0, mockNewChord.tie.call_count)
-        self.assertEqual(mockMakeDuration.return_value, mockNewChord.duration)
-
     def testIntegration1ChordFromElement(self):
         '''
         chordFromElement(): all the basic attributes (i.e., @pname, @accid, @oct, @dur, @dots)
@@ -1310,40 +1280,6 @@ class Test(unittest.TestCase):
                         + 'G-natural in octave 4} Dotted Quarter')
         actual = base.chordFromElement(elem, None, None, {})
         self.assertEqual(expectedName, actual.fullName)
-
-    @mock.patch('music21.chord.Chord')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.noteFromElement')
-    def testUnit2ChordFromElement(self, mockNoteFromE, mockMakeDuration, mockProcEmbEl, mockChord):
-        '''
-        chordFromElement(): adds an <artic> element held within
-        '''
-        elem = ETree.Element('chord', attrib={'dur': '4', 'dots': '1'})
-        noteElements = [Test.makeNoteElemsChordFromElement(x, None, '4', '8', None)
-                        for x in ('c', 'e', 'g')]
-        for eachElement in noteElements:
-            elem.append(eachElement)
-        elem.append(ETree.Element(f'{MEI_NS}artic', artic='stacc'))
-        mockNoteFromE.return_value = 'a note'
-        mockMakeDuration.return_value = 'makeDuration() return'
-        mockNewChord = mock.MagicMock()
-        mockChord.return_value = mockNewChord
-        mockProcEmbEl.return_value = [articulations.Staccato()]
-        expected = mockNewChord
-
-        actual = base.chordFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, mockNewChord, actual)
-        mockMakeDuration.assert_called_once_with(1.0, 1)
-        mockChord.assert_called_once_with(notes=[mockNoteFromE.return_value for _ in range(3)])
-        self.assertEqual(1, mockNewChord.articulations.append.call_count)
-        self.assertIsInstance(mockNewChord.articulations.append.call_args_list[0][0][0],
-                              articulations.Staccato)
-        self.assertEqual(0, mockNewChord.id.call_count)
-        self.assertEqual(0, mockNewChord.articulations.extend.call_count)
-        self.assertEqual(0, mockNewChord.tie.call_count)
-        self.assertEqual(mockMakeDuration.return_value, mockNewChord.duration)
 
     def testIntegration2ChordFromElement(self):
         '''
@@ -1363,43 +1299,6 @@ class Test(unittest.TestCase):
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
-
-    @mock.patch('music21.chord.Chord')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.noteFromElement')
-    @mock.patch('converter21.mei.base._makeArticList')
-    @mock.patch('converter21.mei.base._tieFromAttr')
-    @mock.patch('converter21.mei.base.addSlurs')
-    def testUnit3ChordFromElement(self, mockSlur, mockTie, mockArticList, mockNoteFromE,
-                                  mockMakeDuration, mockProcEmbEl, mockChord):
-        '''
-        chordFromElement(): adds @xml:id, @artic, and @tie attributes, and the spannerBundle
-        '''
-        elem = ETree.Element('chord', attrib={'dur': '4', 'dots': '1', 'artic': 'stacc',
-                                              _XMLID: '123', 'tie': 'i1'})
-        noteElements = [Test.makeNoteElemsChordFromElement(x, None, '4', '8', None)
-                        for x in ('c', 'e', 'g')]
-        for eachElement in noteElements:
-            elem.append(eachElement)
-        mockNoteFromE.return_value = 'a note'
-        mockMakeDuration.return_value = 'makeDuration() return'
-        mockNewChord = mock.MagicMock()
-        mockChord.return_value = mockNewChord
-        mockProcEmbEl.return_value = []
-        mockArticList.return_value = ['staccato!']
-        mockTie.return_value = 'a tie!'
-
-        actual = base.chordFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(mockNewChord, actual)
-        mockMakeDuration.assert_called_once_with(1.0, 1)
-        mockChord.assert_called_once_with(notes=[mockNoteFromE.return_value for _ in range(3)])
-        self.assertEqual(mockMakeDuration.return_value, mockNewChord.duration)
-        mockNewChord.articulations.extend.assert_called_once_with(['staccato!'])
-        self.assertEqual('123', mockNewChord.id)
-        self.assertEqual('a tie!', mockNewChord.tie)
-        mockSlur.assert_called_once_with(elem, mockNewChord, 'slur bundle')
 
     def testIntegration3ChordFromElement(self):
         '''
@@ -1421,41 +1320,6 @@ class Test(unittest.TestCase):
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
         self.assertEqual('asdf1234', actual.id)
         self.assertEqual(tie.Tie('start'), actual.tie)
-
-    @mock.patch('music21.chord.Chord')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.noteFromElement')
-    @mock.patch('converter21.mei.base.scaleToTuplet')
-    def testUnit4ChordFromElement(self, mockTuplet, mockNoteFromE,
-                                  mockMakeDuration, mockProcEmbEl, mockChord):
-        '''
-        chordFromElement(): adds tuplet-related attributes
-        '''
-        elem = ETree.Element('chord', attrib={'dur': '4', 'm21TupletNum': '5',
-                                              'm21TupletNumbase': '4',
-                                              'm21TupletSearch': 'start', 'm21Beam': 'start'})
-        noteElements = [Test.makeNoteElemsChordFromElement(x, None, '4', '8', None)
-                        for x in ('c', 'e', 'g')]
-        for eachElement in noteElements:
-            elem.append(eachElement)
-        mockNoteFromE.return_value = 'a note'
-        mockMakeDuration.return_value = mock.MagicMock(spec_set=duration.Duration)
-        mockMakeDuration.return_value.type = 'quarter'
-        mockNewChord = mock.MagicMock()
-        mockChord.return_value = mockNewChord
-        mockProcEmbEl.return_value = []
-        mockTuplet.return_value = 'tupletified'
-        expected = mockTuplet.return_value
-
-        actual = base.chordFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(expected, actual)
-        mockMakeDuration.assert_called_once_with(1.0, 0)
-        mockChord.assert_called_once_with(notes=[mockNoteFromE.return_value for _ in range(3)])
-        self.assertEqual(mockMakeDuration.return_value, mockNewChord.duration)
-        mockTuplet.assert_called_once_with(mockNewChord, elem)
-        self.assertEqual(0, mockNewChord.beams.fill.call_count)
 
     def testIntegration4ChordFromElement(self):
         '''
@@ -1479,38 +1343,6 @@ class Test(unittest.TestCase):
         self.assertEqual('5', actual.m21TupletNum)
         self.assertEqual('4', actual.m21TupletNumbase)
         self.assertEqual('start', actual.m21TupletSearch)
-
-    @mock.patch('music21.chord.Chord')
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.noteFromElement')
-    @mock.patch('music21.duration.GraceDuration')
-    def testUnit5ChordFromElement(self, mockGrace, mockNoteFromE,
-                                  mockMakeDuration, mockProcEmbEl, mockChord):
-        '''
-        chordFromElement(): test @grace and @m21Beam when the duration does require
-        adjusting the beams
-        '''
-        elem = ETree.Element('chord', attrib={'dur': '16', 'm21Beam': 'start', 'grace': 'acc'})
-        noteElements = [Test.makeNoteElemsChordFromElement(x, None, '4', '8', None)
-                        for x in ('c', 'e', 'g')]
-        for eachElement in noteElements:
-            elem.append(eachElement)
-        mockNoteFromE.return_value = 'a note'
-        mockGrace.return_value = mock.MagicMock(spec_set=duration.Duration)
-        mockGrace.return_value.type = '16th'
-        mockNewChord = mock.MagicMock()
-        mockChord.return_value = mockNewChord
-        mockProcEmbEl.return_value = []
-        expected = mockNewChord
-
-        actual = base.chordFromElement(elem, None, 'slur bundle', {})
-
-        self.assertEqual(expected, actual)
-        mockMakeDuration.assert_called_once_with(0.25, 0)
-        mockChord.assert_called_once_with(notes=[mockNoteFromE.return_value for _ in range(3)])
-        self.assertEqual(mockGrace.return_value, mockNewChord.duration)
-        mockNewChord.beams.fill.assert_called_once_with('16th', 'start')
 
     def testIntegration5ChordFromElement(self):
         '''
