@@ -3198,26 +3198,13 @@ def beamFromElement(
     # NB: The doctest is a sufficient integration test. Since there is no logic, I don't think we
     #     need to bother with unit testing.
 
-    # mapping from tag name to our converter function
-    tagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-    }
-
     beamedStuff: t.List[Music21Object] = _processEmbeddedElements(
-        elem.findall('*'), tagToFunction, elem.tag, activeMeter, spannerBundle, otherInfo
+        elem.findall('*'),
+        beamChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
     )
 
     beamedStuff = beamTogether(beamedStuff)
@@ -3336,24 +3323,6 @@ def tupletFromElement(
     - MEI.mensural: ligature mensur proport
     - MEI.shared: clefGrp custos keySig pad
     '''
-    # mapping from tag name to our converter function
-    tagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-    }
-
     # get the @num and @numbase attributes, without which we can't properly calculate the tuplet
     numStr: t.Optional[str] = elem.get('num')
     numbaseStr: t.Optional[str] = elem.get('numbase')
@@ -3362,7 +3331,12 @@ def tupletFromElement(
 
     # iterate all immediate children
     tupletMembers: t.List[Music21Object] = _processEmbeddedElements(
-        elem.findall('*'), tagToFunction, elem.tag, activeMeter, spannerBundle, otherInfo
+        elem.findall('*'),
+        tupletChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
     )
 
     # "tuplet-ify" the duration of everything held within
@@ -3615,6 +3589,90 @@ def passThruEditorialChordChildrenFromElement(
     theList: t.List[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         chordChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def appChoiceBeamChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
+        return []
+
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        chosen.iterfind('*'),
+        beamChildrenTagToFunction,
+        chosen.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def passThruEditorialBeamChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        beamChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def appChoiceTupletChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
+        return []
+
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        chosen.iterfind('*'),
+        tupletChildrenTagToFunction,
+        chosen.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def passThruEditorialTupletChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str]
+) -> t.List[Music21Object]:
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        tupletChildrenTagToFunction,
         elem.tag,
         activeMeter,
         spannerBundle,
@@ -4808,6 +4866,63 @@ chordChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}verse': verseFromElement,
     f'{MEI_NS}syl': sylFromElement,
 }
+
+beamChildrenTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': appChoiceBeamChildrenFromElement,
+    f'{MEI_NS}choice': appChoiceBeamChildrenFromElement,
+    f'{MEI_NS}add': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}corr': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}damage': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}expan': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}orig': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}reg': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}sic': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}supplied': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}unclear': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}clef': clefFromElement,
+    f'{MEI_NS}chord': chordFromElement,
+    f'{MEI_NS}note': noteFromElement,
+    f'{MEI_NS}rest': restFromElement,
+    f'{MEI_NS}tuplet': tupletFromElement,
+    f'{MEI_NS}beam': beamFromElement,
+    f'{MEI_NS}space': spaceFromElement,
+    f'{MEI_NS}barLine': barLineFromElement,
+}
+
+tupletChildrenTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': appChoiceTupletChildrenFromElement,
+    f'{MEI_NS}choice': appChoiceTupletChildrenFromElement,
+    f'{MEI_NS}add': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}corr': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}damage': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}expan': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}orig': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}reg': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}sic': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}supplied': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}unclear': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}tuplet': tupletFromElement,
+    f'{MEI_NS}beam': beamFromElement,
+    f'{MEI_NS}note': noteFromElement,
+    f'{MEI_NS}rest': restFromElement,
+    f'{MEI_NS}chord': chordFromElement,
+    f'{MEI_NS}clef': clefFromElement,
+    f'{MEI_NS}space': spaceFromElement,
+    f'{MEI_NS}barLine': barLineFromElement,
+}
+
 
 # -----------------------------------------------------------------------------
 _DOC_ORDER = [
