@@ -2627,9 +2627,10 @@ def noteFromElement(
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
 
-    # dots from inner <dot> elements
+    # dots from inner <dot> elements are an alternate to @dots.
+    # If both are present use the <dot> elements.
     if dotElements > 0:
-        theNote.duration = makeDuration(_qlDurationFromAttr(elem.get('dur')), dotElements)
+        theNote.duration = makeDuration(durFloat, dotElements)
 
     # grace note (only mark as grace note---don't worry about "time-stealing")
     if elem.get('grace') is not None:
@@ -3965,9 +3966,8 @@ _IGNORED_EDITORIALS: t.Tuple[str, ...] = (
     f'{MEI_NS}abbr',
     f'{MEI_NS}del',
     f'{MEI_NS}ref',
-    f'{MEI_NS}restore',
-    f'{MEI_NS}subst',
-)
+    f'{MEI_NS}restore',  # I could support restore with a special FromElement API
+)                        # that reverses the meaning of del and add
 
 _PASSTHRU_EDITORIALS: t.Tuple[str, ...] = (
     f'{MEI_NS}add',
@@ -3977,6 +3977,7 @@ _PASSTHRU_EDITORIALS: t.Tuple[str, ...] = (
     f'{MEI_NS}orig',
     f'{MEI_NS}reg',
     f'{MEI_NS}sic',
+    f'{MEI_NS}subst',
     f'{MEI_NS}supplied',
     f'{MEI_NS}unclear',
 )
@@ -4802,6 +4803,7 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}orig': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}reg': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}sic': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}supplied': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}unclear': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}clef': clefFromElement,
@@ -4834,6 +4836,7 @@ noteChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}orig': passThruEditorialNoteChildrenFromElement,
     f'{MEI_NS}reg': passThruEditorialNoteChildrenFromElement,
     f'{MEI_NS}sic': passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}supplied': passThruEditorialNoteChildrenFromElement,
     f'{MEI_NS}unclear': passThruEditorialNoteChildrenFromElement,
     f'{MEI_NS}dot': dotFromElement,
@@ -4859,6 +4862,7 @@ chordChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}orig': passThruEditorialChordChildrenFromElement,
     f'{MEI_NS}reg': passThruEditorialChordChildrenFromElement,
     f'{MEI_NS}sic': passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}supplied': passThruEditorialChordChildrenFromElement,
     f'{MEI_NS}unclear': passThruEditorialChordChildrenFromElement,
     f'{MEI_NS}note': noteFromElement,
@@ -4883,6 +4887,7 @@ beamChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}orig': passThruEditorialBeamChildrenFromElement,
     f'{MEI_NS}reg': passThruEditorialBeamChildrenFromElement,
     f'{MEI_NS}sic': passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}supplied': passThruEditorialBeamChildrenFromElement,
     f'{MEI_NS}unclear': passThruEditorialBeamChildrenFromElement,
     f'{MEI_NS}clef': clefFromElement,
@@ -4911,6 +4916,7 @@ tupletChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}orig': passThruEditorialTupletChildrenFromElement,
     f'{MEI_NS}reg': passThruEditorialTupletChildrenFromElement,
     f'{MEI_NS}sic': passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
     f'{MEI_NS}supplied': passThruEditorialTupletChildrenFromElement,
     f'{MEI_NS}unclear': passThruEditorialTupletChildrenFromElement,
     f'{MEI_NS}tuplet': tupletFromElement,
