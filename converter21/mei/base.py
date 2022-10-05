@@ -176,6 +176,7 @@ tool.
 import typing as t
 from xml.etree.ElementTree import Element, ParseError, fromstring, ElementTree
 import re
+import html
 
 from collections import defaultdict
 from copy import deepcopy
@@ -264,7 +265,7 @@ _UNKNOWN_TAG = 'Found unexpected tag while parsing MEI: <{}>.'
 _UNEXPECTED_ATTR_VALUE = 'Unexpected value for "{}" attribute: {}, ignoring.'
 _SEEMINGLY_NO_PARTS = 'There appear to be no <staffDef> tags in this score.'
 _STAFF_MUST_HAVE_N = 'Found a <staff> tag with no @n attribute'
-_STAFFITEM_MUST_HAVE_SINGLE_STAFF = '"<{}>" with @staff="{}" is not yet supported.'
+_STAFFITEM_MUST_HAVE_VALID_STAFF = 'Staff item "{}" found with invalid @staff="{}".'
 _MISSING_VOICE_ID = 'Found a <layer> without @n attribute and no override.'
 _CANNOT_FIND_XMLID = 'Could not find the @{} so we could not create the {}.'
 _MISSING_TUPLET_DATA = 'Both @num and @numbase attributes are required on <tuplet> tags.'
@@ -571,6 +572,12 @@ _BAR_ATTR_DICT: t.Dict[t.Optional[str], str] = {
     'single': 'regular',
 }
 
+# for _stemDirectionFromAttr()
+_STEMDIR_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
+    'down': 'down',
+    'up': 'up'
+}
+
 
 # One-to-One Translator Functions
 # -----------------------------------------------------------------------------
@@ -726,6 +733,10 @@ def _sharpsFromAttr(signature: t.Optional[str]) -> int:
         return int(signature[0])
     else:
         return -1 * int(signature[0])
+
+def _stemDirectionFromAttr(stemDirStr: str) -> str:
+    return _attrTranslator(stemDirStr, 'stem.dir', _STEMDIR_ATTR_DICT)
+
 
 
 # "Preprocessing" and "Postprocessing" Functions for convertFromString()
@@ -1242,7 +1253,7 @@ def _barlineFromAttr(
                 assert isinstance(startingRpt, bar.Repeat)
             return endingRpt, startingRpt
         elif 'rptend' == attr:
-            return bar.Repeat('end', times=2)
+            return bar.Repeat('end')
         else:
             return bar.Repeat('start')
     else:
@@ -2628,6 +2639,13 @@ def noteFromElement(
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
 
+    stemDirStr: t.Optional[str] = elem.get('stem.dir')
+    if stemDirStr is not None and elem.get('staff') is None:
+        # We don't pay attention to stem direction if the note
+        # is supposed to be in another staff (which we don't yet
+        # support).
+        theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
+
     # dots from inner <dot> elements are an alternate to @dots.
     # If both are present use the <dot> elements.
     if dotElements > 0:
@@ -2929,6 +2947,13 @@ def chordFromElement(
         if t.TYPE_CHECKING:
             assert isinstance(theChord.style, style.NoteStyle)
         theChord.style.noteSize = 'cue'
+
+    stemDirStr: t.Optional[str] = elem.get('stem.dir')
+    if stemDirStr is not None and elem.get('staff') is None:
+        # We don't pay attention to stem direction if the chord
+        # is supposed to be in another staff (which we don't yet
+        # support).
+        theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
     # grace note (only mark as grace note---don't worry about "time-stealing")
     if elem.get('grace') is not None:
@@ -4166,6 +4191,8 @@ def dirFromElement(
             if el.tail[0] != '\n' or not el.tail.isspace():
                 text += el.tail
 
+    text = html.unescape(text)
+    text = text.strip()
     te = expressions.TextExpression(text)
 
     if t.TYPE_CHECKING:
@@ -4404,28 +4431,35 @@ def measureFromElement(
             m = re.match(r'^(\d+)(\s(\d+))?$', whichStaff)
             if m is None:
                 raise MeiAttributeError(
-                    _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachElem.tag, whichStaff)
+                    _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachObj.classes[0], whichStaff)
                 )
-            staffNs: t.Tuple[int] = (m.group(1),)
+            staffNs: t.Tuple[str, ...] = (m.group(1),)
             if m.group(3) is not None:
                 staffNs = (m.group(1), m.group(3))
             if len(staffNs) == 1:
-                staffNumStr = str(staffNs[0])
+                staffNumStr = staffNs[0]
             else:
-                if eachObj.hasStyleInformation and eachObj.style.alignVertical == 'middle':
-                    # if placement is between the two staves, put it in the first staff (it will go below it)
-                    staffNumStr = str(staffNs[0])
+                if (eachObj.hasStyleInformation
+                        and isinstance(eachObj.style, style.TextStyle)
+                        and eachObj.style.alignVertical == 'middle'):
+                    # if placement is between the two staves, put it in the first staff
+                    # (it will go below it)
+                    staffNumStr = staffNs[0]
                     # for now, clear out placement and style.alignVertical, since the humdrum
                     # parser doesn't do it.  The default placement in first staff is the same
                     # anyway.
-                    eachObj.placement = None
+                    if hasattr(eachObj, 'placement'):
+                        eachObj.placement = None  # type: ignore
                     eachObj.style.alignVertical = None
-                elif hasattr(eachObj, 'placement') and eachObj.placement == 'above':
-                    # if placement is above the two staves, put it in the first staff (it will go above it)
-                    staffNumStr = str(staffNs[0])
+                elif (hasattr(eachObj, 'placement')
+                        and eachObj.placement == 'above'):  # type: ignore
+                    # if placement is above the two staves, put it in the first staff
+                    # (it will go above it)
+                    staffNumStr = staffNs[0]
                 else:
-                    # placement is below the two staves, put it in the second staff (it will go below it)
-                    staffNumStr = str(staffNs[1])
+                    # placement is below the two staves, put it in the second staff
+                    # (it will go below it)
+                    staffNumStr = staffNs[1]
 
             staveN = staves[staffNumStr]
             if t.TYPE_CHECKING:

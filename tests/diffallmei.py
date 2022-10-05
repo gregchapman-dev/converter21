@@ -177,11 +177,11 @@ def runTheDiff(krnPath: Path, results) -> bool:
             return False
     except KeyboardInterrupt:
         sys.exit(0)
-    # except:
-    #     print('score1 creation crash')
-    #     print('score1 creation crash', file=results)
-    #     results.flush()
-    #     return False
+    except:
+        print('score1 creation crash')
+        print('score1 creation crash', file=results)
+        results.flush()
+        return False
 
     if not score1.elements:
         # empty score is valid result, but assume diff will be exact
@@ -210,11 +210,11 @@ def runTheDiff(krnPath: Path, results) -> bool:
         )
     except KeyboardInterrupt:
         sys.exit(0)
-    # except:
-    #     print('conversion to mei with verovio failed')
-    #     print('conversion to mei with verovio failed', file=results)
-    #     results.flush()
-    #     return False
+    except:
+        print('conversion to mei with verovio failed')
+        print('conversion to mei with verovio failed', file=results)
+        results.flush()
+        return False
 
     # import the mei file into music21
     try:
@@ -223,11 +223,11 @@ def runTheDiff(krnPath: Path, results) -> bool:
         score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
     except KeyboardInterrupt:
         sys.exit(0)
-    # except:
-    #     print('score2 creation crash')
-    #     print('score2 creation crash', file=results)
-    #     results.flush()
-    #     return False
+    except:
+        print('score2 creation crash')
+        print('score2 creation crash', file=results)
+        results.flush()
+        return False
 
     if not score2.elements:
         print('score2 was empty')
