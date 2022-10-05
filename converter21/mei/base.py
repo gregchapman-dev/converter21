@@ -191,6 +191,7 @@ from music21 import bar
 from music21 import chord
 from music21 import clef
 from music21 import duration
+from music21 import dynamics
 from music21 import environment
 from music21 import exceptions21
 from music21 import expressions
@@ -3988,6 +3989,33 @@ _CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
 )
 
 
+def dynamFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, str],
+) -> t.Tuple[OffsetQL, dynamics.Dynamic]:
+    offset: OffsetQL
+    dynamObj: dynamics.Dynamic
+
+    # first parse as a <dir> giving a TextExpression with style,
+    # then try to derive dynamic info from that.
+    teWithStyle: expressions.TextExpression
+    offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+
+    if t.TYPE_CHECKING:
+        assert isinstance(teWithStyle.style, style.TextStyle)
+
+    text: str = teWithStyle.content
+    dynamObj = dynamics.Dynamic(text)
+    if teWithStyle.hasStyleInformation:
+        dynamObj.style = teWithStyle.style
+    if teWithStyle.placement is not None:
+        dynamObj.placement = teWithStyle.placement
+
+    return offset, dynamObj
+
+
 def tempoFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -4291,7 +4319,7 @@ def measureFromElement(
         #         f'{MEI_NS}breath': breathFromElement,
         #         f'{MEI_NS}caesura': caesuraFromElement,
         f'{MEI_NS}dir': dirFromElement,
-        #        f'{MEI_NS}dynam': dynamFromElement,
+        f'{MEI_NS}dynam': dynamFromElement,
         #        f'{MEI_NS}fermata': fermataFromElement,
         #         f'{MEI_NS}fing': fingFromElement,
         #         f'{MEI_NS}gliss': glissFromElement,
