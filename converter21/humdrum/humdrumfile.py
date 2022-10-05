@@ -6379,6 +6379,14 @@ class HumdrumFile(HumdrumFileContent):
                 editorialStyle = optionalEdStyle
 
         if not mensit and not isUnpitched:
+            if note.pitch.accidental:
+                try:
+                    note.pitch.accidental.displayType = 'if-absolutely-necessary'
+                except m21.pitch.AccidentalException:
+                    # must be music21 v7, leave it be (and get some unnecessary
+                    # cautionary accidentals)
+                    pass
+
             if hasEditorial or hasCautionary:
                 if not note.pitch.accidental:
                     note.pitch.accidental = m21.pitch.Accidental('natural')
