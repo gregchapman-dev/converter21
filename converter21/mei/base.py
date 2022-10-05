@@ -3827,16 +3827,15 @@ def _makeBarlines(
             if isinstance(eachMeasure, stream.Measure):
                 eachMeasure.leftBarline = deepcopy(bars)
 
-    rightStr: t.Optional[str] = elem.get('right')
-    if rightStr is not None:
-        bars = _barlineFromAttr(rightStr)
-        if isinstance(bars, tuple):
-            # this means @right was "rptboth"
-            staves['next @left'] = bars[1]
-            bars = bars[0]
-        for eachMeasure in staves.values():
-            if isinstance(eachMeasure, stream.Measure):
-                eachMeasure.rightBarline = deepcopy(bars)
+    rightStr: t.Optional[str] = elem.get('right', 'single')
+    bars = _barlineFromAttr(rightStr)
+    if isinstance(bars, tuple):
+        # this means @right was "rptboth"
+        staves['next @left'] = bars[1]
+        bars = bars[0]
+    for eachMeasure in staves.values():
+        if isinstance(eachMeasure, stream.Measure):
+            eachMeasure.rightBarline = deepcopy(bars)
 
     return staves
 
@@ -4010,6 +4009,11 @@ def dynamFromElement(
     dynamObj = dynamics.Dynamic(text)
     if teWithStyle.hasStyleInformation:
         dynamObj.style = teWithStyle.style
+    else:
+        # Undo music21's default Dynamic absolute positioning
+        dynamObj.style.absoluteX = None
+        dynamObj.style.absoluteY = None
+
     if teWithStyle.placement is not None:
         dynamObj.placement = teWithStyle.placement
 
@@ -4179,6 +4183,9 @@ def dirFromElement(
             te.placement = 'above'
         elif place == 'below':
             te.placement = 'below'
+        elif place == 'between':
+            te.placement = 'below'
+            te.style.alignVertical = 'middle'
         else:
             environLocal.warn(f'invalid @place = "{place}" in <dir>')
     return offset, te
@@ -4367,12 +4374,6 @@ def measureFromElement(
             staffNStr: t.Optional[str] = eachElem.get('staff')
             if staffNStr is None:
                 raise MeiAttributeError(f'no @staff in staffItem "{eachElem.tag}"')
-            try:
-                _: int = int(staffNStr)
-            except (TypeError, ValueError):
-                # whichStaff must be "1 2" or something crazy like that
-                environLocal.warn(_STAFFITEM_MUST_HAVE_SINGLE_STAFF.format(eachElem.tag, staffNStr))
-                continue
 
             if staffNStr not in stavesWaitingFromStaffItem:
                 stavesWaitingFromStaffItem[staffNStr] = []
@@ -4399,7 +4400,34 @@ def measureFromElement(
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
         for eachOffset, eachObj in eachList:
-            staveN = staves[whichStaff]
+            # parse whichStaff, which might be '1', '2', '1 2', etc
+            m = re.match(r'^(\d+)(\s(\d+))?$', whichStaff)
+            if m is None:
+                raise MeiAttributeError(
+                    _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachElem.tag, whichStaff)
+                )
+            staffNs: t.Tuple[int] = (m.group(1),)
+            if m.group(3) is not None:
+                staffNs = (m.group(1), m.group(3))
+            if len(staffNs) == 1:
+                staffNumStr = str(staffNs[0])
+            else:
+                if eachObj.hasStyleInformation and eachObj.style.alignVertical == 'middle':
+                    # if placement is between the two staves, put it in the first staff (it will go below it)
+                    staffNumStr = str(staffNs[0])
+                    # for now, clear out placement and style.alignVertical, since the humdrum
+                    # parser doesn't do it.  The default placement in first staff is the same
+                    # anyway.
+                    eachObj.placement = None
+                    eachObj.style.alignVertical = None
+                elif hasattr(eachObj, 'placement') and eachObj.placement == 'above':
+                    # if placement is above the two staves, put it in the first staff (it will go above it)
+                    staffNumStr = str(staffNs[0])
+                else:
+                    # placement is below the two staves, put it in the second staff (it will go below it)
+                    staffNumStr = str(staffNs[1])
+
+            staveN = staves[staffNumStr]
             if t.TYPE_CHECKING:
                 assert isinstance(staveN, stream.Measure)
             staveN.insert(eachOffset, eachObj)
