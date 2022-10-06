@@ -1042,7 +1042,7 @@ def _processEmbeddedElements(
     callerTag: str,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     # noinspection PyShadowingNames
     '''
@@ -1689,7 +1689,7 @@ def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
 def scoreDefFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]:
     '''
     <scoreDef> Container for score meta-information.
@@ -1821,7 +1821,7 @@ def scoreDefFromElement(
 def staffGrpFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
     staffDefDict: t.Optional[
         t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]
     ] = None,
@@ -1889,7 +1889,7 @@ def staffGrpFromElement(
 def staffDefFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Dict[str, Music21Object]:
     '''
     <staffDef> Container for staff meta-information.
@@ -2088,7 +2088,7 @@ def dotFromElement(
     elem,  # pylint: disable=unused-argument
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, t.Any]  # pylint: disable=unused-argument
 ):
     '''
     Returns ``1`` no matter what is passed in.
@@ -2121,7 +2121,7 @@ def articFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[articulations.Articulation]:
     '''
     <artic> An indication of how to play a note or chord.
@@ -2187,7 +2187,7 @@ def accidFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Optional[pitch.Accidental]:
     '''
     <accid> Records a temporary alteration to the pitch of a note.
@@ -2287,7 +2287,7 @@ def sylFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Lyric:
     '''
     <syl> Individual lyric syllable.
@@ -2369,7 +2369,7 @@ def verseFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Lyric:
     '''
     <verse> Lyric verse.
@@ -2462,7 +2462,7 @@ def stringFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> str:
     text: str = ''
     for el in elem.iter():
@@ -2483,7 +2483,7 @@ def noteFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Note:
     # NOTE: this function should stay in sync with chordFromElement() where sensible
     '''
@@ -2566,6 +2566,18 @@ def noteFromElement(
     # make the note (no pitch yet, that has to wait until we have parsed the subelements)
     theNote: note.Note = note.Note()
 
+    ignoreStemDirections: bool = False
+    inDifferentStaff: bool = elem.get('staff') is not None
+    if inDifferentStaff:
+        otherInfo['cross-staff notes'] = True
+    if otherInfo.get('cross-staff notes', False) is True:
+        # either this note, or some other note in the measure is cross-staff,
+        # and verovio starts making up stem directions in that case to keep
+        # the two staves' stems from going in the same direction (in the one
+        # staff).  That's fine, but the this importer doesn't support cross-
+        # staff notes, so these stem directions don't make sense.
+        ignoreStemDirections = True
+
     # set the Note's duration (we will update this if we find any inner <dot> elements)
     durFloat: float = _qlDurationFromAttr(elem.get('dur'))
     theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
@@ -2639,12 +2651,13 @@ def noteFromElement(
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
 
-    stemDirStr: t.Optional[str] = elem.get('stem.dir')
-    if stemDirStr is not None and elem.get('staff') is None:
-        # We don't pay attention to stem direction if the note
-        # is supposed to be in another staff (which we don't yet
-        # support).
-        theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
+    if not ignoreStemDirections:
+        stemDirStr: t.Optional[str] = elem.get('stem.dir')
+        if stemDirStr is not None:
+            # We don't pay attention to stem direction if the note
+            # is supposed to be in another staff (which we don't yet
+            # support).
+            theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
     # dots from inner <dot> elements are an alternate to @dots.
     # If both are present use the <dot> elements.
@@ -2675,7 +2688,7 @@ def restFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Rest:
     '''
     <rest/> is a non-sounding event found in the source being transcribed
@@ -2745,7 +2758,7 @@ def mRestFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Rest:
     '''
     <mRest/> Complete measure rest in any meter.
@@ -2772,7 +2785,7 @@ def spaceFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Rest:
     '''
     <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that the
@@ -2808,7 +2821,7 @@ def mSpaceFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> note.Rest:
     '''
     <mSpace/> A measure containing only empty space in any meter.
@@ -2835,7 +2848,7 @@ def chordFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> chord.Chord:
     # NOTE: this function should stay in sync with noteFromElement() where sensible
     '''
@@ -2899,6 +2912,18 @@ def chordFromElement(
     theArticList: t.List[articulations.Articulation] = []
     theLyricList: t.List[note.Lyric] = []
 
+    ignoreStemDirections: bool = False
+    inDifferentStaff: bool = elem.get('staff') is not None
+    if inDifferentStaff:
+        otherInfo['cross-staff notes'] = True
+    if otherInfo.get('cross-staff notes', False) is True:
+        # either this note, or some other note in the measure is cross-staff,
+        # and verovio starts making up stem directions in that case to keep
+        # the two staves' stems from going in the same direction (in the one
+        # staff).  That's fine, but the this importer doesn't support cross-
+        # staff notes, so these stem directions don't make sense.
+        ignoreStemDirections = True
+
     # iterate all immediate children
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                chordChildrenTagToFunction,
@@ -2948,12 +2973,13 @@ def chordFromElement(
             assert isinstance(theChord.style, style.NoteStyle)
         theChord.style.noteSize = 'cue'
 
-    stemDirStr: t.Optional[str] = elem.get('stem.dir')
-    if stemDirStr is not None and elem.get('staff') is None:
-        # We don't pay attention to stem direction if the chord
-        # is supposed to be in another staff (which we don't yet
-        # support).
-        theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
+    if not ignoreStemDirections:
+        stemDirStr: t.Optional[str] = elem.get('stem.dir')
+        if stemDirStr is not None:
+            # We don't pay attention to stem direction if the chord
+            # is supposed to be in another staff (which we don't yet
+            # support).
+            theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
     # grace note (only mark as grace note---don't worry about "time-stealing")
     if elem.get('grace') is not None:
@@ -2980,7 +3006,7 @@ def clefFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> clef.Clef:
     '''
     <clef> Indication of the exact location of a particular note on the staff and, therefore,
@@ -3056,7 +3082,7 @@ def keySigFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Union[key.Key, key.KeySignature]:
     theKey: t.Union[key.Key, key.KeySignature] = _keySigFromAttrs(elem)
 
@@ -3071,7 +3097,7 @@ def timeSigFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> meter.TimeSignature:
     theTimeSig: meter.TimeSignature = _timeSigFromAttrs(elem)
 
@@ -3086,7 +3112,7 @@ def instrDefFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> instrument.Instrument:
     # TODO: robuster handling of <instrDef>, including <instrGrp> and if held in a <staffGrp>
     '''
@@ -3142,7 +3168,7 @@ def beamFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Sequence[Music21Object]:
     '''
     <beam> A container for a series of explicitly beamed events that begins and ends entirely
@@ -3243,7 +3269,7 @@ def barLineFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Union[bar.Barline, bar.Repeat, t.Tuple[bar.Repeat, ...]]:
     '''
     <barLine> Vertical line drawn through one or more staves that divides musical notation into
@@ -3300,7 +3326,7 @@ def tupletFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.Tuple[Music21Object, ...]:
     '''
     <tuplet> A group of notes with "irregular" (sometimes called "irrational") rhythmic values,
@@ -3402,7 +3428,7 @@ def layerFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
     overrideN: t.Optional[str] = None
 ) -> stream.Voice:
     '''
@@ -3504,7 +3530,7 @@ def appChoiceLayerChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
@@ -3526,7 +3552,7 @@ def passThruEditorialLayerChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
@@ -3545,7 +3571,7 @@ def appChoiceNoteChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
@@ -3568,7 +3594,7 @@ def passThruEditorialNoteChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
@@ -3587,7 +3613,7 @@ def appChoiceChordChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
@@ -3610,7 +3636,7 @@ def passThruEditorialChordChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
@@ -3629,7 +3655,7 @@ def appChoiceBeamChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
@@ -3652,7 +3678,7 @@ def passThruEditorialBeamChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
@@ -3671,7 +3697,7 @@ def appChoiceTupletChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
@@ -3694,7 +3720,7 @@ def passThruEditorialTupletChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[Music21Object]:
     # iterate all immediate children
     theList: t.List[Music21Object] = _processEmbeddedElements(
@@ -3713,7 +3739,7 @@ def staffFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[stream.Voice]:
     '''
     <staff> A group of equidistant horizontal lines on which notes are placed in order to
@@ -4017,7 +4043,7 @@ def dynamFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[OffsetQL, dynamics.Dynamic]:
     offset: OffsetQL
     dynamObj: dynamics.Dynamic
@@ -4049,7 +4075,7 @@ def tempoFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[OffsetQL, tempo.TempoIndication]:
     offset: OffsetQL
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
@@ -4132,7 +4158,7 @@ def dirFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[OffsetQL, expressions.TextExpression]:
     offset: OffsetQL
     te: expressions.TextExpression
@@ -4255,7 +4281,7 @@ def measureFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
     backupNum: int,
     expectedNs: t.Iterable[str]
 ) -> t.Dict[str, t.Union[stream.Measure, bar.Repeat]]:
@@ -4499,7 +4525,7 @@ def sectionScoreCore(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
     allPartNs: t.Iterable[str],
     nextMeasureLeft: t.Optional[bar.Repeat] = None,
     backupMeasureNum: int = 0,
@@ -4596,9 +4622,16 @@ def sectionScoreCore(
         # only process <measure> elements if this is a <section>
         if measureTag == eachElem.tag and sectionTag == elem.tag:
             backupMeasureNum += 1
+
+            # Make a new measureInfo to pass in for each measure.
+            # It will contain the current otherInfo contents, but
+            # any measure-specific info will be cleared here.
+            measureInfo: t.Dict[str, t.Any] = {}
+            measureInfo.update(otherInfo)
+
             # process all the stuff in the <measure>
             measureResult = measureFromElement(
-                eachElem, activeMeter, spannerBundle, otherInfo, backupMeasureNum, allPartNs
+                eachElem, activeMeter, spannerBundle, measureInfo, backupMeasureNum, allPartNs
             )
             # process and append each part's stuff to the staff
             for eachN in allPartNs:
@@ -4741,7 +4774,7 @@ def sectionFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str],
+    otherInfo: t.Dict[str, t.Any],
     allPartNs: t.Iterable[str],
     nextMeasureLeft: t.Optional[bar.Repeat],
     backupMeasureNum: int
@@ -4802,7 +4835,7 @@ def scoreFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, str]
+    otherInfo: t.Dict[str, t.Any]
 ) -> stream.Score:
     '''
     <score> Full score view of the musical content.

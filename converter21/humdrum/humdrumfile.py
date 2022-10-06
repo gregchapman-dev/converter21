@@ -3300,11 +3300,12 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             # do it (directly to the music21 note or chord)
-            # (too late to set stem.dir, the note/chord has already been created)
-            # token.setValue('auto', 'stem.dir', str(direction))
+            # set stem.dir on the token if the note/chord has not yet been created)
             obj: t.Optional[m21.Music21Object] = token.getValueM21Object('music21', 'generalNote')
             if not obj:
-                continue  # no durational object
+                # no durational object; set it on the token
+                token.setValue('auto', 'stem.dir', str(direction))
+                continue
 
             if not isinstance(obj, (m21.note.Note, m21.chord.Chord)):
                 continue  # it's not a note/chord, no stem direction needed
@@ -5316,13 +5317,11 @@ class HumdrumFile(HumdrumFileContent):
             chord.stemDirection = 'down'
 
         # Stem direction of the chord.  If both up and down, then show up.
-        # stem.dir is actually gone.  See _setBeamDirection, where we used to
-        # set it, but now we just set chord.stemDirection directly there instead.
-#         beamStemDir: int = layerTok.getValueInt('auto', 'stem.dir')
-#         if beamStemDir == 1:
-#             chord.stemDirection = 'up'
-#         elif beamStemDir == -1:
-#             chord.stemDirection = 'down'
+        beamStemDir: int = layerTok.getValueInt('auto', 'stem.dir')
+        if beamStemDir == 1:
+            chord.stemDirection = 'up'
+        elif beamStemDir == -1:
+            chord.stemDirection = 'down'
 
         # We do not need to adjustChordNoteDurations, since _convertNote carefully did not
         # set note durations at all (in a chord). --gregc
@@ -6481,7 +6480,7 @@ class HumdrumFile(HumdrumFileContent):
 #                 }
 #             }
 
-        self._setStemDirection(note, tstring)
+        self._setStemDirection(note, token, tstring)
 
         if not token.isMens:
             # yy means make invisible in **kern, but is used for accidental
@@ -6639,22 +6638,18 @@ class HumdrumFile(HumdrumFileContent):
                     pass
 
     @staticmethod
-    def _setStemDirection(note: m21.note.Note, tstring: str) -> None:
+    def _setStemDirection(note: m21.note.Note, token: HumdrumToken, tstring: str) -> None:
         # stem direction (if any)
         if '/' in tstring:
             note.stemDirection = 'up'
         elif '\\' in tstring:
             note.stemDirection = 'down'
 
-        # ('auto', 'stem.dir') is gone, due to the rework of beam and tuplet processing.
-        # In _setBeamDirection, where we figure out beam stems (and where we used to set
-        # 'stem.dir', we've already called _setStemDirection, so it's too late. We just
-        # override note.stemDirection explicitly there, instead.
-#         beamStemDir: int = token.getValueInt('auto', 'stem.dir')
-#         if beamStemDir == 1:
-#             note.stemDirection = 'up'
-#         elif beamStemDir == -1:
-#             note.stemDirection = 'down'
+        beamStemDir: int = token.getValueInt('auto', 'stem.dir')
+        if beamStemDir == 1:
+            note.stemDirection = 'up'
+        elif beamStemDir == -1:
+            note.stemDirection = 'down'
 
     '''
     //////////////////////////////
