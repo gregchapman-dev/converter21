@@ -11,7 +11,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import re
-import copy
 import typing as t
 from fractions import Fraction
 from pathlib import Path
@@ -975,20 +974,17 @@ class HumdrumFileContent(HumdrumFileStructure):
 
                 for k, subtok in enumerate(token.subtokens):
                     if len(token.subtokens) > 1:
-                        subtok = copy.copy(subtok)  # because we modify it
                         # it's a chord
                         # Rests in chords represent unsounding notes.
                         # Rests can have pitch, but this is treated as
                         # Diatonic pitch which does not involve accidentals,
                         # so convert to pitch-like so that accidentals are
                         # processed on these notes.
-                        for m in range(0, len(subtok)):
-                            if subtok[m] == 'r':
-                                subtok[m] = 'R'
+                        subtok = subtok.replace('r', 'R')
 
                     b40: int = Convert.kernToBase40(subtok)
                     diatonic: int = Convert.kernToBase7(subtok)
-                    octaveAdjust: int = token.getValueInt('auto', 'ottava')
+                    octaveAdjust: int = 0  # no ottavas yet...   token.getValueInt('auto', 'ottava')
                     diatonic -= octaveAdjust * 7
                     if diatonic < 0:
                         # Deal with extra-low notes later.
@@ -998,8 +994,15 @@ class HumdrumFileContent(HumdrumFileStructure):
                     accid: int = Convert.kernToAccidentalCount(subtok)
                     isHidden: bool = False
                     if 'yy' not in subtok:  # if note is hidden accidental hiding isn't necessary
-                        if ('ny' in subtok or '#y' in subtok or '-y' in subtok):
-                            isHidden = True
+                        # if ('ny' in subtok or '#y' in subtok or '-y' in subtok):
+                        #     isHidden = True
+                        # We can't support hiding of accidentals (because music21
+                        # doesn't really support beyond saying "this isn't necessary").
+                        # We need to edit out the 'y' so that the accidental will only be
+                        # visible if necessary, and further remove the 'n' as well
+                        # (since an 'n' implies forced visibility).
+                        if 'ny' in subtok:
+                            subtok = subtok.replace('ny', '')
 
                     loc: int
                     if '_' in subtok or ']' in subtok:
