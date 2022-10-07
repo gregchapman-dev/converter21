@@ -594,6 +594,16 @@ class M21Convert:
                     mode = M21Convert.humdrumModeToM21Mode.get(mode, None)
                 return m21.key.Key(keyName, mode)
 
+        # pre-process keysigs like '*k[bnenf#c#]'
+        if 'n' in keySig:
+            keySig = keySig.replace('an', '')
+            keySig = keySig.replace('bn', '')
+            keySig = keySig.replace('cn', '')
+            keySig = keySig.replace('dn', '')
+            keySig = keySig.replace('en', '')
+            keySig = keySig.replace('fn', '')
+            keySig = keySig.replace('gn', '')
+
         # standard key signature in standard order (if numSharps is negative, it's -numFlats)
         if keySig in M21Convert.humdrumStandardKeyStringsToNumSharps:
             return m21.key.KeySignature(M21Convert.humdrumStandardKeyStringsToNumSharps[keySig])
@@ -601,7 +611,7 @@ class M21Convert:
         # non-standard key
         alteredPitches: t.List[str] = [keySig[i:i + 2].upper() for i in range(0, len(keySig), 2)]
         for pitch in alteredPitches:
-            if pitch[0] not in 'ABCDEFG':
+            if pitch[0] not in 'abcdefg':
                 # invalid accidentals in '*k[accidentals]'.
                 # e.g. *k[X] as seen in rds-scores: R700_Cop-w2p64h38m3-10.krn
                 return None
