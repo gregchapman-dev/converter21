@@ -691,14 +691,6 @@ class HumdrumFile(HumdrumFileContent):
                         ss.m21Part.toWrittenPitch(inPlace=True)
                         break  # you only need to transpose the part once
 
-        # The score we have created has all the accidentals marked properly for display,
-        # using pitch.displayType.  We now call makeAccidentals() to do the standard
-        # accidental display decisions, which will read pitch.displayType (and key signatures,
-        # and previous accidentals in the bar, and...) and write pitch.displayStatus, which
-        # is the end result of all the decision-making.  Any subsequent write()/show() will
-        # simply obey pitch.displayStatus.
-        self._makeAccidentals()
-
         return self.m21Score
 
     def _prepareForSecondPass(self) -> None:
@@ -6367,6 +6359,7 @@ class HumdrumFile(HumdrumFileContent):
         # check for editorial or cautionary accidental
         hasCautionary: t.Optional[bool] = token.hasCautionaryAccidental(stindex)
 #        cautionaryOverride: str = '' # e.g. 'n#', where the note just has '#'
+        hasVisible: t.Optional[bool] = token.hasVisibleAccidental(stindex)
         hasEditorial: t.Optional[bool] = token.hasEditorialAccidental(stindex)
         editorialStyle: str = ''
         if hasCautionary:
@@ -6379,26 +6372,22 @@ class HumdrumFile(HumdrumFileContent):
 
         if not mensit and not isUnpitched:
             if note.pitch.accidental:
-                try:
-                    note.pitch.accidental.displayType = 'if-absolutely-necessary'
-                except m21.pitch.AccidentalException:
-                    # must be music21 v7, leave it be (and get some unnecessary
-                    # cautionary accidentals)
-                    pass
+                # by default we do not display accidentals (only cautionary/editorial/visible)
+                note.pitch.accidental.displayStatus = False
 
-            if hasEditorial or hasCautionary:
+            if hasEditorial or hasCautionary or hasVisible:
                 if not note.pitch.accidental:
                     note.pitch.accidental = m21.pitch.Accidental('natural')
 
                 if hasEditorial:
-                    note.pitch.accidental.displayType = 'even-tied'  # forces it to be displayed
+                    note.pitch.accidental.displayStatus = True
                     if editorialStyle.startswith('brac'):
                         note.pitch.accidental.displayStyle = 'bracket'
                     elif editorialStyle.startswith('paren'):
                         note.pitch.accidental.displayStyle = 'parentheses'
                     elif editorialStyle in ('a', 'above'):
                         note.pitch.accidental.displayLocation = 'above'
-                elif hasCautionary:  # cautionary is ignored if we have editorial.
+                elif hasCautionary or hasVisible:  # cautionary is ignored if we have editorial.
                     # music21 doesn't really know how to deal with non-standard accidentals
                     # here, but music21's MusicXML importer does, so we set them like it does,
                     # with allowNonStandardValue=True, and spell them like MusicXML does, as well.
@@ -6417,7 +6406,7 @@ class HumdrumFile(HumdrumFileContent):
                     # 'half-flat': '`',
                     # 'one-and-a-half-flat': '-`',
 
-                    note.pitch.accidental.displayType = 'even-tied'  # forces it to be displayed
+                    note.pitch.accidental.displayStatus = True
 
                     # We can't actually do this, since none of the exporters understand, so
                     # they fail to print the cautionary accidental entirely...

@@ -11,6 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import re
+import copy
 import typing as t
 from fractions import Fraction
 from pathlib import Path
@@ -856,6 +857,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         self.analyzeOttavas()
 
         # We will mark a "visible accidental" in four (Humdrum) situations:
+        #
         # 1. there is an 'n' specified with no "hidden" mark (a 'y' immediately
         #    following the 'n', or a 'yy' anywhere in the token)
         # 2. there is a single 'X' immediately following the '#', '-', or 'n'
@@ -863,17 +865,97 @@ class HumdrumFileContent(HumdrumFileStructure):
         #    the '#', '-', or 'n'.  We will also obey the edittype in the signifier.
         # 4. There is a linked layout param (('N', 'acc') and ('A', 'vis')) to specify
         #    display of a specific accidental (or combination, such as 'n#')
+        #
+        # We will also mark a visible accidental if it is necessary because the
+        # accidental is not already in the key signature.
 
-        # These are a part of what Verovio does.  I believe the rest of what Verovio does
-        # is clearly about rendering decisions based on key signature and previous accidentals
-        # in the measure, and thus belong in a renderer, not in a converter.
+        spineStartCount: int = len(self.spineStartList)
 
+        spineStartIdxFromTrackNum: t.List[int] = [-1] * (self.maxTrack + 1)
+        for i, startTok in enumerate(self.spineStartList):
+            if startTok is not None and startTok.track is not None:
+                spineStartIdxFromTrackNum[startTok.track] = i
+
+        # keysigs == key signature spellings of diatonic pitch classes.  This array
+        # is duplicated into dstates after each barline.
+        keysigs: t.List[t.List[int]] = []
+        for _ in range(0, spineStartCount):
+            keysigs.append([0] * 7)
+
+        # dstates == diatonic states for every pitch in a spine.
+        # sub-spines are considered as a single unit, although there are
+        # score conventions which would keep a separate voices on a staff
+        # with different accidental states (i.e., two parts superimposed
+        # on the same staff, but treated as if on separate staves).
+        # Eventually this algorithm should be adjusted for dealing with
+        # cross-staff notes, where the cross-staff notes should be following
+        # the accidentals of a different spine...
+        dstates: t.List[t.List[int]] = []
+        for _ in range(0, spineStartCount):
+            dstates.append([0] * 70)  # 10 octave limit may cause problems; fix later
+
+        # gdstates == grace note diatonic states for every pitch in a spine.
+        gdstates: t.List[t.List[int]] = []
+        for _ in range(0, spineStartCount):
+            gdstates.append([0] * 70)
+
+        # firstInBar == keep track of first beat in measure.
+        firstInBar: t.List[bool] = [False] * spineStartCount
+
+        lastTrack: int = -1
+        concurrentState: t.List[int] = [0] * 70
+
+        spineStartIdx: int
         for line in self._lines:
             if not line.hasSpines:
                 continue
 
+            if line.isInterpretation:
+                for token in line.tokens():
+                    if not token.isKern:
+                        continue
+
+                    if token.text.startswith('*k['):
+                        spineStartIdx = spineStartIdxFromTrackNum[token.track]
+                        self.fillKeySignature(keysigs[spineStartIdx], token.text)
+
+                        # resetting key states of current measure.  What to do if this
+                        # key signature is in the middle of a measure?
+                        self.resetDiatonicStatesWithKeySignature(
+                            dstates[spineStartIdx],
+                            keysigs[spineStartIdx]
+                        )
+                        self.resetDiatonicStatesWithKeySignature(
+                            gdstates[spineStartIdx],
+                            keysigs[spineStartIdx]
+                        )
+
+            elif line.isBarline:
+                for token in line.tokens():
+                    if not token.isKern:
+                        continue
+
+                    if token.isInvisible:
+                        continue
+
+                    firstInBar = [True] * spineStartCount
+                    spineStartIdx = spineStartIdxFromTrackNum[token.track]
+
+                    # reset the accidental states in dstates to match keysigs.
+                    self.resetDiatonicStatesWithKeySignature(
+                        dstates[spineStartIdx],
+                        keysigs[spineStartIdx]
+                    )
+                    self.resetDiatonicStatesWithKeySignature(
+                        gdstates[spineStartIdx],
+                        keysigs[spineStartIdx]
+                    )
+
             if not line.isData:
                 continue
+
+            concurrentState = [0] * 70
+            lastTrack = -1
 
             for token in line.tokens():
                 if not token.isKern:
@@ -885,17 +967,260 @@ class HumdrumFileContent(HumdrumFileStructure):
                 if token.isRest:
                     continue
 
+                if token.track != lastTrack:
+                    concurrentState = [0] * 70
+
+                lastTrack = token.track
+                spineStartIdx = spineStartIdxFromTrackNum[token.track]
+
                 for k, subtok in enumerate(token.subtokens):
+                    if len(token.subtokens) > 1:
+                        subtok = copy.copy(subtok)  # because we modify it
+                        # it's a chord
+                        # Rests in chords represent unsounding notes.
+                        # Rests can have pitch, but this is treated as
+                        # Diatonic pitch which does not involve accidentals,
+                        # so convert to pitch-like so that accidentals are
+                        # processed on these notes.
+                        for m in range(0, len(subtok)):
+                            if subtok[m] == 'r':
+                                subtok[m] = 'R'
+
+                    b40: int = Convert.kernToBase40(subtok)
+                    diatonic: int = Convert.kernToBase7(subtok)
+                    octaveAdjust: int = token.getValueInt('auto', 'ottava')
+                    diatonic -= octaveAdjust * 7
+                    if diatonic < 0:
+                        # Deal with extra-low notes later.
+                        continue
+
+                    isGrace: bool = token.isGrace
                     accid: int = Convert.kernToAccidentalCount(subtok)
                     isHidden: bool = False
                     if 'yy' not in subtok:  # if note is hidden accidental hiding isn't necessary
                         if ('ny' in subtok or '#y' in subtok or '-y' in subtok):
                             isHidden = True
 
-                    if accid == 0 and 'n' in subtok and not isHidden:
+                    loc: int
+                    if '_' in subtok or ']' in subtok:
+                        # tied notes do not need accidentals, so skip them
+                        if (accid != keysigs[spineStartIdx][diatonic % 7]
+                                and firstInBar[spineStartIdx]):
+                            # But first, prepare to force an accidental to be shown on
+                            # the note immediately following the end of a tied group
+                            # if the tied group crosses a barline.
+                            dstates[spineStartIdx][diatonic] = -1000 + accid
+                            gdstates[spineStartIdx][diatonic] = -1000 + accid
+
+                        if '#X' not in subtok and '-X' not in subtok and 'n' not in subtok:
+                            continue
+                        # else an accidental should be forced at end of tie (fall through)
+
+                    # check for accidentals on trills, mordents and turns.
+                    exprNote: int
+                    exprDiatonic: int
+                    exprAccid: int
+                    lowerInt: int
+                    lowerb40: int
+                    lowerDiatonic: int
+                    lowerAccid: int
+                    upperInt: int
+                    upperb40: int
+                    upperDiatonic: int
+                    upperAccid: int
+                    uacc: int
+                    bacc: int
+                    if 't' in subtok:
+                        # minor second trill
+                        exprNote = b40 + 5
+                        exprDiatonic = Convert.base40ToDiatonic(exprNote)
+                        exprAccid = Convert.base40ToAccidental(exprNote)
+                        if dstates[spineStartIdx][exprDiatonic] != exprAccid:
+                            token.setValue(
+                                'auto', str(k), 'trillAccidental', str(exprAccid))
+                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                    elif 'T' in subtok:
+                        # major second trill
+                        exprNote = b40 + 6
+                        exprDiatonic = Convert.base40ToDiatonic(exprNote)
+                        exprAccid = Convert.base40ToAccidental(exprNote)
+                        if dstates[spineStartIdx][exprDiatonic] != exprAccid:
+                            token.setValue(
+                                'auto', str(k), 'trillAccidental', str(exprAccid))
+                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                    elif 'M' in subtok:
+                        # major second upper mordent
+                        exprNote = b40 + 6
+                        exprDiatonic = Convert.base40ToDiatonic(exprNote)
+                        exprAccid = Convert.base40ToAccidental(exprNote)
+                        if dstates[spineStartIdx][exprDiatonic] != exprAccid:
+                            token.setValue(
+                                'auto', str(k), 'mordentUpperAccidental', str(exprAccid))
+                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                    elif 'm' in subtok:
+                        # minor second upper mordent
+                        exprNote = b40 + 5
+                        exprDiatonic = Convert.base40ToDiatonic(exprNote)
+                        exprAccid = Convert.base40ToAccidental(exprNote)
+                        if dstates[spineStartIdx][exprDiatonic] != exprAccid:
+                            token.setValue(
+                                'auto', str(k), 'mordentUpperAccidental', str(exprAccid))
+                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                    elif 'W' in subtok:
+                        # major second lower mordent
+                        exprNote = b40 - 6
+                        exprDiatonic = Convert.base40ToDiatonic(exprNote)
+                        exprAccid = Convert.base40ToAccidental(exprNote)
+                        if dstates[spineStartIdx][exprDiatonic] != exprAccid:
+                            token.setValue(
+                                'auto', str(k), 'mordentLowerAccidental', str(exprAccid))
+                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                    elif 'w' in subtok:
+                        # minor second lower mordent
+                        exprNote = b40 - 5
+                        exprDiatonic = Convert.base40ToDiatonic(exprNote)
+                        exprAccid = Convert.base40ToAccidental(exprNote)
+                        if dstates[spineStartIdx][exprDiatonic] != exprAccid:
+                            token.setValue(
+                                'auto', str(k), 'mordentLowerAccidental', str(exprAccid))
+                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                    elif '$' in subtok:
+                        # inverted turn
+                        loc = subtok.find('$')
+                        exprDiatonic = Convert.base40ToDiatonic(b40)
+                        lowerInt = 0
+                        upperInt = 0
+                        if loc < len(subtok) - 1:
+                            if subtok[loc + 1] == 's':
+                                lowerInt = -5
+                            elif subtok[loc + 1] == 'S':
+                                lowerInt = -6
+
+                        if loc < len(subtok) - 2:
+                            if subtok[loc + 2] == 's':
+                                upperInt = 5
+                            elif subtok[loc + 2] == 'S':
+                                upperInt = 6
+
+                        lowerDiatonic = exprDiatonic - 1
+                        # Maybe also need to check for forced accidental state...
+                        lowerAccid = dstates[spineStartIdx][lowerDiatonic]
+                        lowerb40 = Convert.base7ToBase40(lowerDiatonic) + lowerAccid
+                        upperDiatonic = exprDiatonic + 1
+                        # Maybe also need to check for forced accidental state...
+                        upperAccid = dstates[spineStartIdx][upperDiatonic]
+                        upperb40 = Convert.base7ToBase40(upperDiatonic) + upperAccid
+
+                        if lowerInt == 0:
+                            # need to calculate lower interval (but it will not appear
+                            # below the inverted turn, just calculating for performance
+                            # rendering.
+                            lowerInt = lowerb40 + b40
+                            lowerb40 = b40 + lowerInt
+
+                        if upperInt == 0:
+                            # need to calculate upper interval (but it will not appear
+                            # above the inverted turn, just calculating for performance
+                            # rendering.
+                            upperInt = upperb40 - b40
+                            upperb40 = b40 + upperInt
+
+                        uacc = Convert.base40ToAccidental(b40 + upperInt)
+                        bacc = Convert.base40ToAccidental(b40 + lowerInt)
+                        if uacc != upperAccid:
+                            token.setValue(
+                                'auto', str(k), 'turnUpperAccidental', str(uacc))
+                            dstates[spineStartIdx][upperDiatonic] = -1000 + uacc
+
+                        if bacc != lowerAccid:
+                            token.setValue(
+                                'auto', str(k), 'turnUpperAccidental', str(bacc))
+                            dstates[spineStartIdx][lowerDiatonic] = -1000 + bacc
+                    elif 'S' in subtok:
+                        # regular turn
+                        loc = subtok.find('S')
+                        exprDiatonic = Convert.base40ToDiatonic(b40)
+                        lowerInt = 0
+                        upperInt = 0
+                        if loc < len(subtok) - 1:
+                            if subtok[loc + 1] == 's':
+                                upperInt = 5
+                            elif subtok[loc + 1] == 'S':
+                                upperInt = 6
+
+                        if loc < len(subtok) - 2:
+                            if subtok[loc + 2] == 's':
+                                lowerInt = -5
+                            elif subtok[loc + 2] == 'S':
+                                lowerInt = -6
+
+                        lowerDiatonic = exprDiatonic - 1
+                        # Maybe also need to check for forced accidental state...
+                        lowerAccid = dstates[spineStartIdx][lowerDiatonic]
+                        lowerb40 = Convert.base7ToBase40(lowerDiatonic) + lowerAccid
+                        upperDiatonic = exprDiatonic + 1
+                        # Maybe also need to check for forced accidental state...
+                        upperAccid = dstates[spineStartIdx][upperDiatonic]
+                        upperb40 = Convert.base7ToBase40(upperDiatonic) + upperAccid
+
+                        if lowerInt == 0:
+                            # need to calculate lower interval (but it will not appear
+                            # below the inverted turn, just calculating for performance
+                            # rendering.
+                            lowerInt = lowerb40 + b40
+                            lowerb40 = b40 + lowerInt
+
+                        if upperInt == 0:
+                            # need to calculate upper interval (but it will not appear
+                            # above the inverted turn, just calculating for performance
+                            # rendering.
+                            upperInt = upperb40 - b40
+                            upperb40 = b40 + upperInt
+
+                        uacc = Convert.base40ToAccidental(b40 + upperInt)
+                        bacc = Convert.base40ToAccidental(b40 + lowerInt)
+                        if uacc != upperAccid:
+                            token.setValue(
+                                'auto', str(k), 'turnUpperAccidental', str(uacc))
+                            dstates[spineStartIdx][upperDiatonic] = -1000 + uacc
+
+                        if bacc != lowerAccid:
+                            token.setValue(
+                                'auto', str(k), 'turnUpperAccidental', str(bacc))
+                            dstates[spineStartIdx][lowerDiatonic] = -1000 + bacc
+
+                    if isGrace and accid != gdstates[spineStartIdx][diatonic]:
+                        # accidental is different from the previous state so should be
+                        # printed
+                        if not isHidden:
+                            token.setValue('auto', str(k), 'visualAccidental', 'true')
+                            if gdstates[spineStartIdx][diatonic] < -900:
+                                # this is an obligatory cautionary accidental
+                                token.setValue('auto', str(k), 'cautionaryAccidental', 'true')
+                        gdstates[spineStartIdx][diatonic] = accid
+                        # regular notes are note affected by grace notes accidental
+                        # changes, but should have an obligatory cautionary accidental,
+                        # displayed for clarification.
+                        dstates[spineStartIdx][diatonic] = -1000 + accid
+
+                    elif (not isGrace and (
+                            (concurrentState[diatonic]
+                                and concurrentState[diatonic] == accid)
+                            or accid != dstates[spineStartIdx][diatonic])):
+                        if not isHidden:
+                            token.setValue('auto', str(k), 'visualAccidental', 'true')
+                            concurrentState[diatonic] = accid
+                            if dstates[spineStartIdx][diatonic] < -900:
+                                # this is an obligatory cautionary accidental
+                                token.setValue('auto', str(k), 'cautionaryAccidental', 'true')
+                        dstates[spineStartIdx][diatonic] = accid
+                        gdstates[spineStartIdx][diatonic] = accid
+
+                    elif accid == 0 and 'n' in subtok and not isHidden:
                         # if humdrum data specifies 'n', we'll put in a cautionary accidental
                         token.setValue('auto', str(k), 'cautionaryAccidental', 'true')
                         token.setValue('auto', str(k), 'visualAccidental', 'true')
+
                     elif 'XX' not in subtok:
                         # The accidental is not necessary. See if there is a single "X"
                         # immediately after the accidental which means to force it to
@@ -944,20 +1269,51 @@ class HumdrumFileContent(HumdrumFileStructure):
                         token.setValue('auto', str(k), 'cautionaryAccidental', layoutAccidental)
                         token.setValue('auto', str(k), 'visualAccidental', layoutAccidental)
 
-                    # check for accidentals on trills, mordents, and turns
-#                     if 't' in subtok:
-#                     elif 'T' in subtok:
-#                     elif 'M' in subtok:
-#                     elif 'm' in subtok:
-#                     elif 'W' in subtok:
-#                     elif 'w' in subtok:
-#                     elif '$' in subtok:
-#                     elif 'S' in subtok:
+            firstInBar = [False] * spineStartCount
 
         # Indicate that the accidental analysis has been done:
         self.setValue('auto', 'accidentalAnalysis', 'true')
 
         return True
+
+    @staticmethod
+    def fillKeySignature(keysig: t.List[int], ks_tstring: str):
+        for i in range(0, len(keysig)):
+            keysig[i] = 0
+
+        if 'f#' in ks_tstring:
+            keysig[3] = 1
+        if 'c#' in ks_tstring:
+            keysig[0] = 1
+        if 'g#' in ks_tstring:
+            keysig[4] = 1
+        if 'd#' in ks_tstring:
+            keysig[1] = 1
+        if 'a#' in ks_tstring:
+            keysig[5] = 1
+        if 'e#' in ks_tstring:
+            keysig[2] = 1
+        if 'b#' in ks_tstring:
+            keysig[6] = 1
+        if 'b-' in ks_tstring:
+            keysig[6] = -1
+        if 'e-' in ks_tstring:
+            keysig[2] = -1
+        if 'a-' in ks_tstring:
+            keysig[5] = -1
+        if 'd-' in ks_tstring:
+            keysig[1] = -1
+        if 'g-' in ks_tstring:
+            keysig[4] = -1
+        if 'c-' in ks_tstring:
+            keysig[0] = -1
+        if 'f-' in ks_tstring:
+            keysig[3] = -1
+
+    @staticmethod
+    def resetDiatonicStatesWithKeySignature(states: t.List[int], keysig: t.List[int]):
+        for i in range(0, len(states)):
+            states[i] = keysig[i % 7]
 
     '''
     //////////////////////////////
@@ -965,8 +1321,6 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::analyzeOttavas --
 
         analyzeOttavas reads any 8va-type data, and makes a note of it in each affected token.
-        Q: octaveState assumes no nesting of ottavas, but activeOttava is all about
-        Q: handling nesting of ottavas. --gregc
     '''
     def analyzeOttavas(self) -> None:
         trackCount: int = self.maxTrack
@@ -1028,9 +1382,9 @@ class HumdrumFileContent(HumdrumFileStructure):
     //
     // HumdrumFileContent::analyzeTextRepetition -- Look for *ij and *Xij markers
     //     that indicate repetition marks.  values added to text:
-    //      	auto/ij=true: the syllable is in an ij region.
-    //      	auto/ij-begin=true: the syllable is the first in an ij region.
-    //      	auto/ij-end=true: the syllable is the last in an ij region.
+    //          auto/ij=true: the syllable is in an ij region.
+    //          auto/ij-begin=true: the syllable is the first in an ij region.
+    //          auto/ij-end=true: the syllable is the last in an ij region.
     //
     // Returns true if there are any *ij/*Xij markers in the data.
     '''
