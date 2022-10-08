@@ -583,18 +583,11 @@ class M21Convert:
     ) -> t.Optional[t.Union[m21.key.KeySignature, m21.key.Key]]:
         keySig = keySigToken.keySignature
 
-        # ignore keySigToken if we have keyToken. keyToken has a lot more info.
-        if keyToken is not None:
-            keyName: t.Optional[str]
-            mode: t.Optional[str]
-            keyName, mode = keyToken.keyDesignation
-            if keyName:
-                if mode is not None:
-                    # e.g. 'dor' -> 'dorian'
-                    mode = M21Convert.humdrumModeToM21Mode.get(mode, None)
-                return m21.key.Key(keyName, mode)
+        m21Key: t.Optional[m21.key.Key] = None
+        m21KeySig: t.Optional[m21.key.KeySignature] = None
 
         # pre-process keysigs like '*k[bnenf#c#]'
+        # (weird, but the chopin scores sometimes have these)
         if 'n' in keySig:
             keySig = keySig.replace('an', '')
             keySig = keySig.replace('bn', '')
@@ -606,19 +599,45 @@ class M21Convert:
 
         # standard key signature in standard order (if numSharps is negative, it's -numFlats)
         if keySig in M21Convert.humdrumStandardKeyStringsToNumSharps:
-            return m21.key.KeySignature(M21Convert.humdrumStandardKeyStringsToNumSharps[keySig])
+            m21KeySig = m21.key.KeySignature(M21Convert.humdrumStandardKeyStringsToNumSharps[keySig])
 
-        # non-standard key
-        alteredPitches: t.List[str] = [keySig[i:i + 2].upper() for i in range(0, len(keySig), 2)]
-        for pitch in alteredPitches:
-            if pitch[0] not in 'abcdefg':
-                # invalid accidentals in '*k[accidentals]'.
-                # e.g. *k[X] as seen in rds-scores: R700_Cop-w2p64h38m3-10.krn
-                return None
+        if m21KeySig is None:
+            # try non-standard key sig
+            badKeySig: bool = False
+            alteredPitches: t.List[str] = [keySig[i:i + 2].upper() for i in range(0, len(keySig), 2)]
+            for pitch in alteredPitches:
+                if pitch[0] not in 'abcdefg':
+                    # invalid accidentals in '*k[accidentals]'.
+                    # e.g. *k[X] as seen in rds-scores: R700_Cop-w2p64h38m3-10.krn
+                    badKeySig = True
+                    break
 
-        output = m21.key.KeySignature()
-        output.alteredPitches = alteredPitches
-        return output
+            if not badKeySig:
+                m21KeySig = m21.key.KeySignature()
+                m21KeySig.alteredPitches = alteredPitches
+                return m21KeySig  # there's no m21Key that will match a non-standard key sig
+
+
+        # m21KeySig is most reliable, but m21Key will have a lot more info if we can trust it.
+        # We will trust it if we have no m21KeySig (of course), or it has the same number of
+        # sharps/flats as m21KeySig.
+        if keyToken is not None:
+            keyName: t.Optional[str]
+            mode: t.Optional[str]
+            keyName, mode = keyToken.keyDesignation
+            if keyName:
+                if mode is not None:
+                    # e.g. 'dor' -> 'dorian'
+                    mode = M21Convert.humdrumModeToM21Mode.get(mode, None)
+                m21Key = m21.key.Key(keyName, mode)
+                if m21KeySig is not None and m21Key.sharps != m21KeySig.sharps:
+                    # nope, can't trust it
+                    m21Key = None
+
+        # return m21Key if we trust it, else return m21KeySig (always trusted)
+        if m21Key is not None:
+            return m21Key
+        return m21KeySig
 
     @staticmethod
     def m21Clef(clefToken: HumdrumToken) -> m21.clef.Clef:
