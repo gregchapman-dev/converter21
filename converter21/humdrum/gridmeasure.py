@@ -55,10 +55,10 @@ class GridMeasure:
         self._timestamp: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
-        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
-        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.leftBarlineStylePerStaff: t.List[MeasureStyle] = []
+        self.rightBarlineStylePerStaff: t.List[MeasureStyle] = []
         self.fermataStylePerStaff: t.List[FermataStyle] = []
-        self.measureStyle: MeasureStyle = MeasureStyle.Regular
+        self.measureStylePerStaff: t.List[MeasureStyle] = []
         self.measureNumberString: str = ''
 
         # only used on last measure in score
@@ -884,5 +884,25 @@ class GridMeasure:
 #             print(f'rightBarlineFermataStyle({staffIndex}): {output}')
 
 #         print(f'rightBarlineFermataStyle({staffIndex}): {output}')
+
+        return output
+
+    def measureStyle(self, staffIndex: int) -> MeasureStyle:
+        output: MeasureStyle = MeasureStyle.Regular
+
+        if 0 <= staffIndex < len(self.measureStylePerStaff):
+            output = self.measureStylePerStaff[staffIndex]
+
+        print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
+
+        return output
+
+    def rightBarlineStyle(self, staffIndex: int) -> MeasureStyle:
+        output: MeasureStyle = MeasureStyle.Regular
+
+        if 0 <= staffIndex < len(self.measureStylePerStaff):
+            output = self.rightBarlineStylePerStaff[staffIndex]
+
+        print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
 
         return output

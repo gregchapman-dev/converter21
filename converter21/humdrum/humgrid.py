@@ -1132,7 +1132,9 @@ class HumGrid:
     '''
     @staticmethod
     def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str:
-        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.measureStyle)
+        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(
+            measure.measureStyle(staffIndex)
+        )
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.fermataStyle(staffIndex)
         )
@@ -1140,7 +1142,9 @@ class HumGrid:
 
     @staticmethod
     def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str:
-        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.rightBarlineStyle)
+        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(
+            measure.rightBarlineStyle(staffIndex)
+        )
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.rightBarlineFermataStyle(staffIndex)
         )

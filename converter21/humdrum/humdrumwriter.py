@@ -1236,13 +1236,13 @@ class HumdrumWriter:
                 # self._checkForDummyRests(xmeasure) # handled in MeasureData
                 sevents.append(xmeasure.sortedEvents)
                 if p == 0 and s == 0:
-                    # only checking measure styles and number of first barline
-                    gm.leftBarlineStyle = xmeasure.leftBarlineStyle
-                    gm.rightBarlineStyle = xmeasure.rightBarlineStyle
-                    gm.measureStyle = xmeasure.measureStyle
+                    # only checking number of first barline
                     gm.measureNumberString = xmeasure.measureNumberString  # might be '124a'
 
-                # barline fermatas, on the other hand, need to be checked in every staff
+                # styles, on the other hand, need to be checked in every staff
+                gm.leftBarlineStylePerStaff.append(xmeasure.leftBarlineStyle)
+                gm.rightBarlineStylePerStaff.append(xmeasure.rightBarlineStyle)
+                gm.measureStylePerStaff.append(xmeasure.measureStyle)
                 gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
                 gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
 

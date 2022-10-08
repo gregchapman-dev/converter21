@@ -739,6 +739,25 @@ class HumdrumFile(HumdrumFileContent):
 
             lineIdx = endIdx
 
+        # loop over everything again, setting measure styles
+        # This is a second loop so we can see the next measure as well as this one.
+        lineIdx = self._staffStarts[0].lineIndex
+        while lineIdx < self.lineCount - 1:
+            measureKey = self._measureKey(lineIdx)
+            startIdx, endIdx = measureKey
+            if startIdx is None:
+                lineIdx = endIdx
+                continue
+
+            if self.ignoreLine[startIdx]:
+                # don't prepare this measure (!!ignore/!!Xignore toggles)
+                lineIdx = endIdx
+                continue
+
+            self._setSystemMeasureStyle(measureKey)
+
+            lineIdx = endIdx
+
     '''
     //////////////////////////////
     //
@@ -1079,8 +1098,6 @@ class HumdrumFile(HumdrumFileContent):
 
         # TODO: sections (A, B) and repeat endings (1, 2)
 
-        self._setSystemMeasureStyle(measureKey)
-
         return endLineIdx
 
     '''
@@ -1089,17 +1106,12 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::setSystemMeasureStyle -- Set the style of the left and/or
     //    right barline for the measure.
 
-        Sets the style of the right barline of this measure, and (maybe) tells
-        the next measure what to do with it's left barline (usually nothing).
+        Sets the style of the right barline of the measures in this system measure,
+        and (maybe) tells the next system measure's measures what to do with their
+        left barline (usually nothing).
     '''
     def _setSystemMeasureStyle(self, measureKey: t.Tuple[t.Optional[int], int]) -> None:
         _, endLineIdx = measureKey
-        endToken = self._lines[endLineIdx][0]
-        if endToken is None:
-            return
-
-        endBar = endToken.text
-
         measureIndex: int = self.measureIndexFromKey(measureKey)
         nextMeasureIndex: t.Optional[int] = None
         if measureIndex + 1 < len(self._allMeasuresPerStaff):
@@ -1109,31 +1121,44 @@ class HumdrumFile(HumdrumFileContent):
             self._allMeasuresPerStaff[measureIndex]
         )
 
-        if not endToken.isBarline:  # no barline at all, put a hidden one in
-            for measure in currentMeasurePerStaff:
-                measure.rightBarline = m21.bar.Barline('none')
-            return
+        lastStaffIndex: int = -1
+        for endToken in self._lines[endLineIdx].tokens():
+            if endToken is None:
+                # can this even happen?
+                continue
 
-        if endBar.startswith('=='):  # final barline (light-heavy)
-            for measure in currentMeasurePerStaff:
-                measure.rightBarline = m21.bar.Barline('final')
-            return
+            staffIndex: int = self._staffStartsIndexByTrack[endToken.track]
+            if staffIndex < 0:
+                # not a notational spine for a staff
+                continue
+            if staffIndex == lastStaffIndex:
+                # we already handled this staff/measure
+                continue
+            lastStaffIndex = staffIndex
 
-        endingBarline: m21.bar.Barline = M21Convert.m21BarlineFromHumdrumString(
-            endBar, side='right'
-        )
-        if endingBarline is not None:  # it'll be None for any start repeats, for example
-            for measure in currentMeasurePerStaff:
-                measure.rightBarline = endingBarline
+            if not endToken.isBarline:  # no barline at all, put a hidden one in
+                currentMeasurePerStaff[staffIndex].rightBarline = m21.bar.Barline('none')
+                continue
 
-        if nextMeasureIndex is not None:
-            if ('!:' in endBar or '|:' in endBar):  # start repeat
-                nextMeasurePerStaff: t.List[m21.stream.Measure] = (
-                    self._allMeasuresPerStaff[nextMeasureIndex]
-                )
-                for measure in nextMeasurePerStaff:
-                    measure.leftBarline = M21Convert.m21BarlineFromHumdrumString(
-                        endBar, side='left'
+            endBar: str = endToken.text
+
+            if endBar.startswith('=='):  # final barline (light-heavy)
+                currentMeasurePerStaff[staffIndex].rightBarline = m21.bar.Barline('final')
+                continue
+
+            endingBarline: m21.bar.Barline = M21Convert.m21BarlineFromHumdrumString(
+                endBar, side='right'
+            )
+            if endingBarline is not None:  # it'll be None for any start repeats, for example
+                currentMeasurePerStaff[staffIndex].rightBarline = endingBarline
+
+            if nextMeasureIndex is not None:
+                if ('!:' in endBar or '|:' in endBar):  # start repeat
+                    nextMeasurePerStaff: t.List[m21.stream.Measure] = (
+                        self._allMeasuresPerStaff[nextMeasureIndex]
+                    )
+                    nextMeasurePerStaff[staffIndex].leftBarline = (
+                        M21Convert.m21BarlineFromHumdrumString(endBar, side='left')
                     )
 
     '''
