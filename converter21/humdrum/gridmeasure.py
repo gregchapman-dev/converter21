@@ -893,7 +893,7 @@ class GridMeasure:
         if 0 <= staffIndex < len(self.measureStylePerStaff):
             output = self.measureStylePerStaff[staffIndex]
 
-        print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
+        # print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
 
         return output
 
@@ -903,6 +903,6 @@ class GridMeasure:
         if 0 <= staffIndex < len(self.measureStylePerStaff):
             output = self.rightBarlineStylePerStaff[staffIndex]
 
-        print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
+        # print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
 
         return output

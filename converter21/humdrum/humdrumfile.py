@@ -1127,6 +1127,10 @@ class HumdrumFile(HumdrumFileContent):
                 # can this even happen?
                 continue
 
+            if endToken.track is None:
+                # happens in some tests
+                continue
+
             staffIndex: int = self._staffStartsIndexByTrack[endToken.track]
             if staffIndex < 0:
                 # not a notational spine for a staff
