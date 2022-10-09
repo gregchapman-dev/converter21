@@ -21,6 +21,7 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 
 from converter21.humdrum import SliceType
+from converter21.humdrum import MeasureStyle
 from converter21.humdrum import GridVoice
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridPart
@@ -970,6 +971,15 @@ class HumGrid:
             if measure.duration == 0:
                 continue
 
+            hasBarline: bool = False
+            for mStyle in measure.measureStylePerStaff:
+                if mStyle != MeasureStyle.NoBarline:
+                    hasBarline = True
+                    break
+
+            if not hasBarline:
+                continue
+
             mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
             measure.slices.insert(0, mslice)  # barline is first slice in measure
 
@@ -1000,12 +1010,16 @@ class HumGrid:
                         voiceCount = 1
 
                     for _ in range(0, voiceCount):
-                        token = self.createBarToken(measure, staffIndex)
-                        gv: GridVoice = GridVoice(token, 0)
-                        staff.voices.append(gv)
+                        token: t.Optional[str] = self.createBarToken(measure, staffIndex)
+                        if token is None:
+                            # Humdrum can't have a mixture of barlines and "no barline", so
+                            # instead of "no barline", create an invisible barline.
+                            token = self.createInvisibleBarToken(measure, staffIndex)
+                        if token is not None:
+                            gv: GridVoice = GridVoice(token, 0)
+                            staff.voices.append(gv)
 
                     staffIndex += 1
-
 
     '''
     //////////////////////////////
@@ -1018,6 +1032,17 @@ class HumGrid:
         if not self.measures:
             return
 
+        measure: GridMeasure = self.measures[-1]
+
+        hasBarline: bool = False
+        for mStyle in measure.rightBarlineStylePerStaff:
+            if mStyle != MeasureStyle.NoBarline:
+                hasBarline = True
+                break
+
+        if not hasBarline:
+            return
+
         modelSlice: GridSlice = self.measures[-1].slices[-1]
         if modelSlice is None:
             return
@@ -1025,8 +1050,6 @@ class HumGrid:
         # probably not the correct timestamp, but probably not important
         # to get correct:
         timestamp: HumNum = modelSlice.timestamp
-
-        measure: GridMeasure = self.measures[-1]
 
         mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
         measure.slices.append(mslice)
@@ -1036,7 +1059,10 @@ class HumGrid:
             part = GridPart()
             mslice.parts.append(part)
             for _ in range(0, len(modelPart.staves)):
-                measureStyle: str = self.getLastBarlineStyle(measure, staffIndex)
+                measureStyle: t.Optional[str] = self.getLastBarlineStyle(measure, staffIndex)
+                if measureStyle is None:
+                    # we can't mix barlines with "no barline", so make an invisible barline
+                    measureStyle = '-'
                 staff = GridStaff()
                 part.staves.append(staff)
                 token: HumdrumToken = HumdrumToken('=' + measureStyle)
@@ -1049,9 +1075,12 @@ class HumGrid:
     //
     // HumGrid::createBarToken --
     '''
-    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> str:
-        token: str = ''
-        measureStyle: str = self.getMeasureStyle(measure, staffIndex)
+    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
+        measureStyle: t.Optional[str] = self.getMeasureStyle(measure, staffIndex)
+        if measureStyle is None:  # a.k.a. measureStyle == MeasureStyle.NoBarline
+            return None
+
+        token: str
         measureNumStr: str = measure.measureNumberString
 
         if measureNumStr:
@@ -1071,6 +1100,12 @@ class HumGrid:
             token += measureStyle
 
         return token
+
+    def createInvisibleBarToken(self, measure: GridMeasure, staffIndex: int) -> str:
+        measureNumStr: str = measure.measureNumberString
+        if measureNumStr:
+            return '=' + measureNumStr + '-'
+        return '=-'
 
 #     '''
 #     //////////////////////////////
@@ -1131,20 +1166,26 @@ class HumGrid:
     // HumGrid::getBarStyle --
     '''
     @staticmethod
-    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str:
-        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(
+    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
+        output: t.Optional[str] = Convert.measureStyleToHumdrumBarlineStyleStr(
             measure.measureStyle(staffIndex)
         )
+        if output is None:
+            return None
+
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.fermataStyle(staffIndex)
         )
         return output
 
     @staticmethod
-    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str:
-        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(
+    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
+        output: t.Optional[str] = Convert.measureStyleToHumdrumBarlineStyleStr(
             measure.rightBarlineStyle(staffIndex)
         )
+        if output is None:
+            return None
+
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.rightBarlineFermataStyle(staffIndex)
         )
@@ -1190,6 +1231,40 @@ class HumGrid:
                     if voice.token is None:
                         voice.token = token
 
+    def makeFakeBarlineSlice(
+        self,
+        measure: GridMeasure,
+        timestamp: HumNumIn,
+        voicesPerStaff: int = 1,
+        matchVoicesToSlice: t.Optional[GridSlice] = None
+    ) -> GridSlice:
+        fakeSlice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
+
+        staffIndex: int = 0
+        for p in range(0, self.partCount):
+            part = GridPart()
+            fakeSlice.parts.append(part)
+            for s in range(0, self.staffCount(p)):
+                staff = GridStaff()
+                part.staves.append(staff)
+
+                if matchVoicesToSlice is not None:
+                    thisVoiceCount = len(matchVoicesToSlice.parts[p].staves[s].voices)
+                else:
+                    thisVoiceCount = voicesPerStaff
+
+                if thisVoiceCount == 0:
+                    thisVoiceCount = 1
+
+                for _ in range(0, thisVoiceCount):
+                    token: str = self.createInvisibleBarToken(measure, staffIndex)
+                    gv: GridVoice = GridVoice(token, 0)
+                    staff.voices.append(gv)
+
+                staffIndex += 1
+
+        return fakeSlice
+
     '''
     //////////////////////////////
     //
@@ -1197,7 +1272,55 @@ class HumGrid:
         returns True if any manipulators were added
     '''
     def manipulatorCheck(self) -> bool:
+        # We may need to make a fake starting barline for the first measure, and/or a fake
+        # ending barline for the last measure. This is so that if we start without a barline
+        # (or end without a barline), we'll still split and merge appropriately before the
+        # first line of the first measure/after the last line of the last measure.
+        fakeFirstSlice: t.Optional[GridSlice] = None
+        fakeLastSlice: t.Optional[GridSlice] = None
+
+        # check if we need fakeFirstSlice
+        for measure in self.measures:
+            if not measure.slices:
+                continue
+
+            if not measure.slices[0].isMeasureSlice:
+                # we need a fake first slice
+                fakeFirstSlice = self.makeFakeBarlineSlice(
+                    measure, measure.slices[0].timestamp, voicesPerStaff=1
+                )
+
+            # all done, either way
+            break
+
+        # check if we need fakeLastSlice
+        for m in reversed(range(0, len(self.measures))):
+            measure = self.measures[m]
+            if not measure.slices:
+                continue
+
+            if not measure.slices[-1].isMeasureSlice:
+                # we need a fake last slice
+                fakeLastSlice = self.makeFakeBarlineSlice(
+                    measure, measure.slices[-1].timestamp, voicesPerStaff=1
+                )
+
+            # all done, either way
+            break
+
+        manipulator: t.Optional[GridSlice]
+        lastSpinedLine: t.Optional[GridSlice] = None
         output: bool = False
+
+        startNextMeasureAtSlice1: bool = False
+        if fakeFirstSlice is not None:
+            firstSpinedLine: t.Optional[GridSlice] = self.getNextSpinedLine(slicei=-1, measurei=0)
+            manipulator = self.manipulatorCheckTwoSlices(fakeFirstSlice, firstSpinedLine)
+            if manipulator is not None:
+                output = True
+                measure.slices.insert(0, manipulator)
+                startNextMeasureAtSlice1 = True
+
         for m, measure in enumerate(self.measures):
             if not measure.slices:
                 continue
@@ -1207,16 +1330,28 @@ class HumGrid:
             # and we have to do the iteration by hand to have that kind
             # of control.
             i: int = 0
-            while i < len(measure.slices):
-                slice1: GridSlice = measure.slices[i]
+            if startNextMeasureAtSlice1:
+                # step over the manipulator we inserted at the start
+                i = 1
+                startNextMeasureAtSlice1 = False
 
+            while True:
+                if i >= len(measure.slices):  # not in while; len(measure.slices) may have changed
+                    break
+
+                slice1: GridSlice = measure.slices[i]
                 if not slice1.hasSpines:
                     # Don't monitor manipulators on no-spined lines.
                     i += 1
                     continue
 
-                slice2: t.Optional[GridSlice] = self.getNextSpinedLine(i, m)
-                manipulator: t.Optional[GridSlice] = self.manipulatorCheckTwoSlices(slice1, slice2)
+                lastSpinedLine = slice1
+
+                slice2: t.Optional[GridSlice] = self.getNextSpinedLine(slicei=i, measurei=m)
+                if slice2 is not None:
+                    lastSpinedLine = slice2
+
+                manipulator = self.manipulatorCheckTwoSlices(slice1, slice2)
                 if manipulator is None:
                     i += 1
                     continue
@@ -1224,6 +1359,13 @@ class HumGrid:
                 output = True
                 measure.slices.insert(i + 1, manipulator)
                 i += 2  # skip over the new manipulator line (expand it later)
+
+            # one last check, if there's a fakeLastSlice
+            if fakeLastSlice is not None:
+                manipulator = self.manipulatorCheckTwoSlices(lastSpinedLine, fakeLastSlice)
+                if manipulator is not None:
+                    output = True
+                    measure.slices.append(manipulator)
 
         return output
 

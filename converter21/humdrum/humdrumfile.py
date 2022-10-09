@@ -1140,8 +1140,7 @@ class HumdrumFile(HumdrumFileContent):
                 continue
             lastStaffIndex = staffIndex
 
-            if not endToken.isBarline:  # no barline at all, put a hidden one in
-                currentMeasurePerStaff[staffIndex].rightBarline = m21.bar.Barline('none')
+            if not endToken.isBarline:  # no barline at all, move on to next measure
                 continue
 
             endBar: str = endToken.text

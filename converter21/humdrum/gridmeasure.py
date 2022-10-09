@@ -581,17 +581,14 @@ class GridMeasure:
                     doFirstBarlineNow = True
 
                 if doFirstBarlineNow and not didFirstBarline:
-                    if t.TYPE_CHECKING:
-                        # assumption: we'll see the first barline well before we run into
-                        # something that will make us do it.
-                        assert isinstance(firstBarlineSlice, GridSlice)
-                    firstBarlineSlice.transferTokens(outFile, recip)
+                    if firstBarlineSlice is not None:
+                        firstBarlineSlice.transferTokens(outFile, recip)
                     didFirstBarline = True
                     # and the slice that made us do the first barline now...
                     gridSlice.transferTokens(outFile, recip)
                     continue
 
-                if gridSlice.isMeasureSlice and firstBarlineSlice is None:
+                if not didFirstBarline and gridSlice.isMeasureSlice and firstBarlineSlice is None:
                     firstBarlineSlice = gridSlice
                 else:
                     gridSlice.transferTokens(outFile, recip)

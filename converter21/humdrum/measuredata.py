@@ -62,13 +62,13 @@ class MeasureData:
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
         # leftBarlineStyle describes the left barline of this measure
-        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.leftBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
         # rightBarlineStyle describes the right barline of this measure
-        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.rightBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
         # measureStyle is a combination of this measure's leftBarlineStyle and
         # the previous measure's rightBarlineStyle.  It's the style we use when
         # writing a barline ('=') token.
-        self.measureStyle: MeasureStyle = MeasureStyle.Regular
+        self.measureStyle: MeasureStyle = MeasureStyle.NoBarline
 
         self.leftBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
         self.rightBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata

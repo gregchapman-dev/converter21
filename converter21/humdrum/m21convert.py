@@ -599,12 +599,16 @@ class M21Convert:
 
         # standard key signature in standard order (if numSharps is negative, it's -numFlats)
         if keySig in M21Convert.humdrumStandardKeyStringsToNumSharps:
-            m21KeySig = m21.key.KeySignature(M21Convert.humdrumStandardKeyStringsToNumSharps[keySig])
+            m21KeySig = m21.key.KeySignature(
+                M21Convert.humdrumStandardKeyStringsToNumSharps[keySig]
+            )
 
         if m21KeySig is None:
             # try non-standard key sig
             badKeySig: bool = False
-            alteredPitches: t.List[str] = [keySig[i:i + 2].upper() for i in range(0, len(keySig), 2)]
+            alteredPitches: t.List[str] = [
+                keySig[i:i + 2].upper() for i in range(0, len(keySig), 2)
+            ]
             for pitch in alteredPitches:
                 if pitch[0] not in 'abcdefg':
                     # invalid accidentals in '*k[accidentals]'.
@@ -2300,15 +2304,17 @@ class M21Convert:
                         theLookup[(vStyle1, vStyle2)] = MeasureVisualStyle.Invisible
                         continue
 
-                    # Regular doesn't add anything
-                    if vStyle1 is MeasureVisualStyle.Regular:
+                    # Regular and NoBarline don't add anything
+                    if (vStyle1 is MeasureVisualStyle.Regular
+                            or vStyle1 is MeasureVisualStyle.NoBarline):
                         theLookup[(vStyle1, vStyle2)] = vStyle2
                         continue
-                    if vStyle2 is MeasureVisualStyle.Regular:
+                    if (vStyle2 is MeasureVisualStyle.Regular
+                            or vStyle2 is MeasureVisualStyle.NoBarline):
                         theLookup[(vStyle1, vStyle2)] = vStyle1
                         continue
 
-                    # Anything else (different styles, neither is Regular or Invisible, and
+                    # Anything else (different styles, neither is Regular or Invisible or NoBarline, and
                     # it's not one of the triple-style cases above), vStyle1 wins
                     theLookup[(vStyle1, vStyle2)] = vStyle1
 
@@ -2382,7 +2388,7 @@ class M21Convert:
         vStyle: MeasureVisualStyle = MeasureVisualStyle.Regular
         mType: MeasureType = MeasureType.NotRepeat
         if m21Barline is None:
-            return MeasureStyle.Regular
+            return MeasureStyle.NoBarline
 
         if isinstance(m21Barline, m21.bar.Repeat):
             if m21Barline.direction == 'start':

@@ -99,6 +99,7 @@ class MeasureVisualStyle(IntEnum):
     Short = auto()
     Tick = auto()
     Heavy = auto()
+    NoBarline = auto()
     # some special ones only used with RepeatBoth
     HeavyLightHeavy = auto()
     LightHeavyLight = auto()
@@ -124,6 +125,7 @@ class MeasureStyle(Enum):
     Invisible = (MeasureVisualStyle.Invisible, MeasureType.NotRepeat)
     Regular = (MeasureVisualStyle.Regular, MeasureType.NotRepeat)
     Heavy = (MeasureVisualStyle.Heavy, MeasureType.NotRepeat)
+    NoBarline = (MeasureVisualStyle.NoBarline, MeasureType.NotRepeat)
 
     RepeatBackwardRegular = (MeasureVisualStyle.Regular, MeasureType.RepeatBackward)
     RepeatBackwardHeavy = (MeasureVisualStyle.Heavy, MeasureType.RepeatBackward)
