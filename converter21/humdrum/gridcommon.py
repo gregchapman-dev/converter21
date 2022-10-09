@@ -91,6 +91,7 @@ class SliceType(IntEnum):
 class MeasureVisualStyle(IntEnum):
     # this enum is sorted so that we can use max() to pick between
     # previous right barline and current left barline visual style
+    NoBarline = auto()
     Regular = auto()
     Double = auto()
     HeavyHeavy = auto()
@@ -99,7 +100,6 @@ class MeasureVisualStyle(IntEnum):
     Short = auto()
     Tick = auto()
     Heavy = auto()
-    NoBarline = auto()
     # some special ones only used with RepeatBoth
     HeavyLightHeavy = auto()
     LightHeavyLight = auto()

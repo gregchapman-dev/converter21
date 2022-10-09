@@ -2314,8 +2314,9 @@ class M21Convert:
                         theLookup[(vStyle1, vStyle2)] = vStyle1
                         continue
 
-                    # Anything else (different styles, neither is Regular or Invisible or NoBarline, and
-                    # it's not one of the triple-style cases above), vStyle1 wins
+                    # Anything else (different styles, neither is Regular or Invisible
+                    # or NoBarline, and it's not one of the triple-style cases above),
+                    # vStyle1 wins
                     theLookup[(vStyle1, vStyle2)] = vStyle1
 
     @staticmethod

@@ -169,7 +169,7 @@ class MeasureData:
 
         # Grab the previous measure's right barline style (if there is one) and
         # combine it with our left barline style, giving our measureStyle.
-        prevRightMeasureStyle: MeasureStyle = MeasureStyle.Regular
+        prevRightMeasureStyle: MeasureStyle = MeasureStyle.NoBarline
         if self._prevMeasData is not None:
             prevRightMeasureStyle = self._prevMeasData.rightBarlineStyle
         self.measureStyle = M21Convert.combineTwoMeasureStyles(self.leftBarlineStyle,
