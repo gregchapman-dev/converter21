@@ -4223,6 +4223,11 @@ def dirFromElement(
 
     if t.TYPE_CHECKING:
         assert isinstance(te.style, style.TextStyle)
+
+    if elem.tag == f'{MEI_NS}dir':
+        # Match Verovio's default: <dir> with no fontStyle should be italic
+        if fontStyle is None:
+            fontStyle = 'italic'
     if fontStyle or fontWeight:
         te.style.fontStyle = (
             _m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
