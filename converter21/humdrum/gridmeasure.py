@@ -61,6 +61,11 @@ class GridMeasure:
         self.measureStylePerStaff: t.List[MeasureStyle] = []
         self.measureNumberString: str = ''
 
+        self.inRepeatBracket: bool = False
+        self.startsRepeatBracket: bool = False
+        self.stopsRepeatBracket: bool = False
+        self.repeatBracketName: str = ''
+
         # only used on last measure in score
         self.rightBarlineFermataStylePerStaff: t.List[FermataStyle] = []
 

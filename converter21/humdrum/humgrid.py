@@ -46,6 +46,8 @@ class HumGrid:
         self.measures: t.List[GridMeasure] = []
         self._allSlices: t.List[GridSlice] = []
 
+        self.hasRepeatBrackets: bool = False
+
         # indexed by part (max = 100 parts)
         self._verseCount: t.List[t.List[int]] = []
         for _ in range(0, 100):
@@ -1020,6 +1022,7 @@ class HumGrid:
                             staff.voices.append(gv)
 
                     staffIndex += 1
+
 
     '''
     //////////////////////////////

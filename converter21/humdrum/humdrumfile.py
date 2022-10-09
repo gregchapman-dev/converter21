@@ -506,9 +506,12 @@ class HumdrumFile(HumdrumFileContent):
         self._okeys: t.List[t.Tuple[int, HumdrumToken]] = []
 
 
-        # section labels and non-numbered labels (len = lineCount)
+        # section support (for repeat endings a.k.a. RepeatBracket spanners)
         self._sectionLabels: t.List[t.Optional[HumdrumToken]] = []
         self._numberlessLabels: t.List[t.Optional[HumdrumToken]] = []
+        self._lastSection: str = ''
+        self._endingNum: int = 0
+        self._currentEndingPerStaff: t.List[m21.spanner.RepeatBracket] = []
 
         # staff group names and abbreviations
         self._groupNames: t.Dict[int, str] = {}
@@ -1045,6 +1048,69 @@ class HumdrumFile(HumdrumFileContent):
         if measureNumber == -1:
             measureNumber = 0  # in music21, measureNumber = 0 means undefined
 
+        # section analysis (only used for repeat endings, the ABA stuff is uninteresting
+        # notation-wise, and music21 has no way to store it in any case)
+        currentSection: str = ''
+        sectionLabel: t.Optional[HumdrumToken] = self._sectionLabels[startLineIdx]
+        if sectionLabel is not None:
+            currentSection = sectionLabel.text
+            if currentSection.startswith('*>'):
+                currentSection = currentSection[2:]
+
+        endNum: int = 0
+        ending: bool = False
+        newSection: bool = False
+        if currentSection and currentSection[-1].isdigit():
+            withNumStr: str = ''
+            noNumStr: str = ''
+            if sectionLabel is not None:
+                withNumStr = sectionLabel.text
+            numberlessLabel: t.Optional[HumdrumToken] = self._numberlessLabels[startLineIdx]
+            if numberlessLabel is not None:
+                noNumStr = numberlessLabel.text
+
+            # Humdrum section names are technically free-form.  Repeat endings
+            # are marked by a section name that is the current section name
+            # with a number at the end. --gregc
+            if noNumStr and withNumStr and withNumStr[0:len(noNumStr)] == noNumStr:
+                ending = True
+            if ending:
+                m = re.search(r'(\d+)$', currentSection)
+                if m is not None:
+                    endNum = int(m.group(1))
+                else:
+                    # suffix is not a number, so not an ending
+                    ending = False
+        elif currentSection != self._lastSection:
+            newSection = True
+            if sectionLabel is not None:
+                self._lastSection = currentSection
+            else:
+                self._lastSection = ''
+
+        if ending and self._endingNum != endNum:
+            # create a new ending (one per staff)
+            # we'll add the measures to this spanner in the "per staff" loop
+            self._currentEndingPerStaff = []
+            for i in range(0, self.staffCount):
+                rb: m21.spanner.RepeatBracket = m21.spanner.RepeatBracket(number=endNum)
+                self._currentEndingPerStaff.append(rb)
+                self.m21Score.coreInsert(0, rb)
+            self.m21Score.coreElementsChanged()
+            self._endingNum = endNum
+        elif ending:
+            # inside a current ending (one per staff), which is already
+            # set up, just add to it below in the "per staff" loop
+            pass
+        elif newSection:
+            # a new section has started (which ends the current ending)
+            self._currentEndingPerStaff = []
+            self._endingNum = 0
+        else:
+            # outside of an ending
+            self._currentEndingPerStaff = []
+            self._endingNum = 0
+
         currentMeasurePerStaff: t.List[m21.stream.Measure] = []
         for i in range(0, self.staffCount):
             ss: StaffStateVariables = self._staffStates[i]
@@ -1055,6 +1121,10 @@ class HumdrumFile(HumdrumFileContent):
                 assert ss.m21Part is not None
             ss.m21Part.coreInsert(mOffset, measure)
             ss.m21Part.coreElementsChanged()
+
+            if ending:
+                # assume self._currentEndingPerStaff is fully populated
+                self._currentEndingPerStaff[i].addSpannedElements(measure)
 
             # start coreInserting into measure
             insertedIntoMeasure: bool = False
@@ -9378,6 +9448,8 @@ class HumdrumFile(HumdrumFileContent):
             if len(staffNums) > 0:
                 return staffNums[0]
 
+            tok = tok.nextToken0  # stay left if there's a split
+
         return 0
 
     '''
@@ -10578,9 +10650,8 @@ class HumdrumFile(HumdrumFileContent):
             secName = line[0]
             self._sectionLabels[i] = secName
 
-            # work backward until you hit a line of data, copying
-            # this sectionLabel onto those previous comment and
-            # interp lines --gregc
+            # work backward until you hit a line of data, copying this
+            # sectionLabel onto those previous comment and interp lines
             for j in reversed(range(0, i)):
                 if self._lines[j].isData:
                     break
@@ -10588,10 +10659,10 @@ class HumdrumFile(HumdrumFileContent):
 
             if not secName.text[-1].isdigit():
                 noNumName = secName
-                self._numberlessLabels[i] = noNumName  # BUGFIX:
-                # work backward until you hit a line of data, copying
-                # this numberlessLabel onto those previous comment and
-                # interp lines --gregc
+                self._numberlessLabels[i] = noNumName  # BUGFIX: was self._sectionLabels[i]
+
+                # work backward until you hit a line of data, copying this
+                # numberlessLabel onto those previous comment and interp lines
                 for j in reversed(range(0, i)):
                     if self._lines[j].isData:
                         break
