@@ -84,7 +84,7 @@ class HumdrumFileContent(HumdrumFileStructure):
 #         initializeIgnoreVector(infile); # interesting to move here
 
 #         extractNullInformation(m_nulls, infile); # might be interesting?
-#         Perhaps very MEI-specific.
+#         Perhaps very MEI-specific. (actually needed, but replaced by FakeRestToken stuff)
 
     '''
     //////////////////////////////

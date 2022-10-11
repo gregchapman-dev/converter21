@@ -1736,14 +1736,29 @@ class HumdrumFile(HumdrumFileContent):
         # cadenzas can have measure entirely made up of grace notes...
         # don't bail on measureDuration == 0!
 
-        # Note that using offsetInMeasure means we can bypass all C++ code's prespace stuff.
-        # MEI (and maybe others) might need it, but that's for the various exporters to
-        # deal with if necessary.  We have positioned this Voice correctly in the Measure.
+        # beams and tuplets
+        tgs: t.List[t.Optional[HumdrumBeamAndTuplet]] = (
+            ss.tgs[measureKey][layerIndex]  # computed by first pass
+        )
+        #        self._printGroupInfo(tgs)  # for debug only
+
         voice: m21.stream.Voice = m21.stream.Voice()
         voiceOffsetInMeasure: HumNum = layerData[0].durationFromBarline
         if layerData[0].isBarline:
             # durationFromBarline returns duration of previous bar in this case
             voiceOffsetInMeasure = opFrac(0)
+        if voiceOffsetInMeasure > 0:
+            # Start the voice at the beginning of the measure, by inserting
+            # a fake rest of appropriate duration at the beginning of the voice,
+            # and setting voiceOffsetInMeasure to 0.  We do this because there
+            # is a lot of software out there (including music21's musicxml writer)
+            # that doesn't handle voices that start in the middle of a measure
+            # very well.
+            layerData.insert(0, FakeRestToken(voiceOffsetInMeasure, 0))
+            tgs.insert(0, None)
+            voiceOffsetInMeasure = opFrac(0)
+
+        assert len(tgs) == len(layerData)
 
         measureIndex: int = self.measureIndexFromKey(measureKey)
         currentMeasurePerStaff: t.List[m21.stream.Measure] = (
@@ -1762,13 +1777,6 @@ class HumdrumFile(HumdrumFileContent):
 
         # Note: no special case for whole measure rests.
         # music21 can detect and deal with these without our help.
-
-        # beams and tuplets
-        tgs: t.List[t.Optional[HumdrumBeamAndTuplet]] = (
-            ss.tgs[measureKey][layerIndex]  # computed by first pass
-        )
-#        self._printGroupInfo(tgs)  # for debug only
-        assert len(tgs) == len(layerData)
 
         groupState: BeamAndTupletGroupState = BeamAndTupletGroupState()
 
