@@ -2500,10 +2500,6 @@ class M21Convert:
                 outputBarline.type = (
                     M21Convert._m21BarlineTypeFromHumdrumRepeatString(measureString, side)
                 )
-            else:
-                # 'left' is only passed in for repeat marks; normal barlines always go on
-                # the right.
-                raise HumdrumExportError(f'Left barline is not a repeat mark: {measureString}')
 
         if outputBarline is None:
             barlineType: str = M21Convert._m21BarlineTypeFromHumdrumString(measureString)

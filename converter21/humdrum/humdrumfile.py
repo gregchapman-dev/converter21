@@ -1225,6 +1225,21 @@ class HumdrumFile(HumdrumFileContent):
             if endingBarline is not None:  # it'll be None for any start repeats, for example
                 currentMeasurePerStaff[staffIndex].rightBarline = endingBarline
 
+            # special case very first measure (it may need a left barline)
+            if measureIndex == 0:
+                # the barline in measure 0 will be after the leading interpretations, so we
+                # search backward for it from endToken (staying left if there is more than
+                # one previous token).
+                startToken: t.Optional[HumdrumToken] = endToken.previousToken0
+                while startToken is not None and not startToken.isBarline:
+                    startToken = startToken.previousToken0
+                if startToken is not None:
+                    startBar: str = startToken.text
+                    currentMeasurePerStaff[staffIndex].leftBarline = (
+                        M21Convert.m21BarlineFromHumdrumString(startBar, side='left')
+                    )
+
+
             if nextMeasureIndex is not None:
                 if ('!:' in endBar or '|:' in endBar):  # start repeat
                     nextMeasurePerStaff: t.List[m21.stream.Measure] = (
