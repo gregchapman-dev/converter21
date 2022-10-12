@@ -3423,21 +3423,20 @@ class HumdrumFile(HumdrumFileContent):
             if not obj:
                 # no durational object; set it on the token
                 token.setValue('auto', 'stem.dir', str(direction))
-                continue
+            else:
+                if not isinstance(obj, (m21.note.Note, m21.chord.Chord)):
+                    continue  # it's not a note/chord, no stem direction needed
 
-            if not isinstance(obj, (m21.note.Note, m21.chord.Chord)):
-                continue  # it's not a note/chord, no stem direction needed
-
-            if upOrDown:
-                if isinstance(obj, m21.chord.Chord):
-                    obj.stemDirection = upOrDown
-                    # Hmmm... seems like setting stemDirection up or down on each
-                    # note might be a good idea, but iohumdrum.cpp doesn't do that. --gregc
-                    # Clear the stemDirection of all the notes in the chord, at least.
-                    for note in obj.notes:
-                        note.stemDirection = None  # means 'unspecified'
-                elif isinstance(obj, m21.note.Note):
-                    obj.stemDirection = upOrDown
+                if upOrDown:
+                    if isinstance(obj, m21.chord.Chord):
+                        obj.stemDirection = upOrDown
+                        # Hmmm... seems like setting stemDirection up or down on each
+                        # note might be a good idea, but iohumdrum.cpp doesn't do that. --gregc
+                        # Clear the stemDirection of all the notes in the chord, at least.
+                        for note in obj.notes:
+                            note.stemDirection = None  # means 'unspecified'
+                    elif isinstance(obj, m21.note.Note):
+                        obj.stemDirection = upOrDown
 
             if beamEnd == beamStart:
                 # last note of beam so exit
@@ -7812,6 +7811,14 @@ class HumdrumFile(HumdrumFileContent):
                 content = self._signifiers.decrescText
                 fontStyle = self._signifiers.decrescFontStyle
 
+            # This is a weird thing that I am doing only to avoid some diff warnings.
+            # Once I can remove my MEI parser's "default is italic" code (which I can
+            # do when Verovio stops writing "unspecified italics" when italics was
+            # actually specified; see https://github.com/rism-digital/verovio/issues/3074),
+            # then I can also remove this...
+            if not fontStyle:
+                fontStyle = 'italic'
+
             pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 't', '', '')
             if not pinText:
                 pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 'tx', '', '')
@@ -9027,7 +9034,10 @@ class HumdrumFile(HumdrumFileContent):
                     assert isinstance(token, HumdrumToken)
                 num: int = token.barlineNumber
                 if value and num > 1:
-                    # don't print initial OMD if a musical excerpt.
+                    # Don't print initial OMD if a musical excerpt.
+                    # Feels like data-loss, but it isn't.  The OMD
+                    # is still in the metadata, just not turned into
+                    # a metronome mark as well.
                     return
             if not line.isReference:
                 continue

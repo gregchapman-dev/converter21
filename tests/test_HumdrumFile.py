@@ -88,6 +88,7 @@ def ReadAllTestFilesInFolder(folder: str):
         # of room before the next note (music21 has overlapping notes, most likely)
         if krnPath.name in (
                 'test-manipulators.krn',
+                'test-spine-float.krn'
                             ):
             print('\tskipping export due to overlapping note durations (caused perhaps by *+)')
             continue
@@ -106,15 +107,6 @@ def ReadAllTestFilesInFolder(folder: str):
         # and then try to parse the exported humdrum file
 
         # These are cases where export produced an unparseable humdrum file.
-        # The exported test-spine-float.krn is unparseable because it has duration differences
-        # between spines (it gets really confused either during export or maybe during original
-        # import)
-
-        if krnPath.name in (
-                'test-spine-float.krn',
-                            ):
-            print('\tskipping parse of export due to *+ issues')
-            continue
 
         # this is a weird one...
         if 'rds-scores' in str(krnPath) and krnPath.name in (
