@@ -1754,8 +1754,13 @@ class HumdrumFile(HumdrumFileContent):
             # is a lot of software out there (including music21's musicxml writer)
             # that doesn't handle voices that start in the middle of a measure
             # very well.
-            layerData.insert(0, FakeRestToken(voiceOffsetInMeasure, 0))
-            tgs.insert(0, None)
+            fakeRests: t.List[FakeRestToken] = self.makeFakeRestTokens(
+                voiceOffsetInMeasure, 0
+            )
+
+            for rest in reversed(fakeRests):
+                layerData.insert(0, rest)
+                tgs.insert(0, None)
             voiceOffsetInMeasure = opFrac(0)
 
         assert len(tgs) == len(layerData)
