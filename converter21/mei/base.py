@@ -4173,6 +4173,7 @@ def dirFromElement(
     fontStyle: t.Optional[str] = None
     fontWeight: t.Optional[str] = None
     fontFamily: t.Optional[str] = None
+    justify: t.Optional[str] = None
 
     text: str = ''
     if elem.text:
@@ -4190,6 +4191,8 @@ def dirFromElement(
                 fontWeight = el.get('fontweight')
             if fontFamily is None:
                 fontFamily = el.get('fontfam')
+            if justify is None:
+                justify = el.get('halign')
         elif el.tag in _CHOOSING_EDITORIALS:
             subEl: t.Optional[Element] = chooseSubElement(el)
             if subEl is None:
@@ -4234,6 +4237,8 @@ def dirFromElement(
         )
     if fontFamily:
         te.style.fontFamily = fontFamily
+    if justify:
+        te.style.justify = justify
 
     place: t.Optional[str] = elem.get('place')
     if place:

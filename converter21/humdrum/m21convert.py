@@ -25,7 +25,7 @@ from music21.common import opFrac
 from converter21.humdrum import MeasureStyle, MeasureVisualStyle, MeasureType
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumdrumInternalError
-from converter21.humdrum import HumdrumExportError
+# from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import Convert

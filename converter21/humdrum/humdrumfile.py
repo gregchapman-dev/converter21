@@ -1225,21 +1225,6 @@ class HumdrumFile(HumdrumFileContent):
             if endingBarline is not None:  # it'll be None for any start repeats, for example
                 currentMeasurePerStaff[staffIndex].rightBarline = endingBarline
 
-            # special case very first measure (it may need a left barline)
-            if measureIndex == 0:
-                # the barline in measure 0 will be after the leading interpretations, so we
-                # search backward for it from endToken (staying left if there is more than
-                # one previous token).
-                startToken: t.Optional[HumdrumToken] = endToken.previousToken0
-                while startToken is not None and not startToken.isBarline:
-                    startToken = startToken.previousToken0
-                if startToken is not None:
-                    startBar: str = startToken.text
-                    currentMeasurePerStaff[staffIndex].leftBarline = (
-                        M21Convert.m21BarlineFromHumdrumString(startBar, side='left')
-                    )
-
-
             if nextMeasureIndex is not None:
                 if ('!:' in endBar or '|:' in endBar):  # start repeat
                     nextMeasurePerStaff: t.List[m21.stream.Measure] = (
@@ -7392,6 +7377,7 @@ class HumdrumFile(HumdrumFileContent):
         forceCenter: bool = False
         trackDiff: int = 0
         staffAdj: int = ss.dynamStaffAdj
+        needsRend: bool = False
 
         if ss.dynamPos > 0:
             forceAbove = True
@@ -7452,13 +7438,17 @@ class HumdrumFile(HumdrumFileContent):
             m21sf.style.absoluteX = None
             m21sf.style.absoluteY = None
 
-
+            needsRend = False
             dcolor = token.layoutParameter('DY', 'color')
             if dcolor:
                 m21sf.style.color = dcolor
-
+                needsRend = True
             if token.layoutParameter('DY', 'rj') == 'true':
                 m21sf.style.justify = 'right'
+                needsRend = True
+            if needsRend:
+                # dynamics are set to bold (like verovio, only if other style stuff set)
+                m21sf.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
             if above or forceAbove:
                 if hasattr(m21sf, 'placement'):
@@ -7601,10 +7591,16 @@ class HumdrumFile(HumdrumFileContent):
                 m21Dynamic.style.absoluteX = None
                 m21Dynamic.style.absoluteY = None
 
+                needsRend = False
                 if dcolor:
                     m21Dynamic.style.color = dcolor
+                    needsRend = True
                 if rightJustified:
                     m21Dynamic.style.justify = 'right'
+                    needsRend = True
+                if needsRend:
+                    # dynamics are set to bold (like verovio, only if other style stuff set)
+                    m21Dynamic.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
                 # verticalgroup: str = dyntok.layoutParameter('DY', 'vg')
                 # Q: is there a music21 equivalent to MEI's verticalgroup?

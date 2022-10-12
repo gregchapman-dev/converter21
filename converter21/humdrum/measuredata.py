@@ -172,6 +172,12 @@ class MeasureData:
         self.leftBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.leftBarline)
         self.rightBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.rightBarline)
 
+        # measure index 0 only: pretend there is a left barline (hidden) if there is none
+        # That first barline in Humdrum files is important for parse-ability.
+        if self.measureIndex == 0:
+            if self.leftBarlineStyle == MeasureStyle.NoBarline:
+                self.leftBarlineStyle = MeasureStyle.Invisible
+
         # Grab the previous measure's right barline style (if there is one) and
         # combine it with our left barline style, giving our measureStyle.
         prevRightMeasureStyle: MeasureStyle = MeasureStyle.NoBarline
