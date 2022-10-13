@@ -4044,14 +4044,16 @@ def dynamFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[OffsetQL, dynamics.Dynamic]:
+) -> t.Tuple[OffsetQL, t.Optional[dynamics.Dynamic]]:
     offset: OffsetQL
     dynamObj: dynamics.Dynamic
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive dynamic info from that.
-    teWithStyle: expressions.TextExpression
+    teWithStyle: t.Optional[expressions.TextExpression]
     offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    if teWithStyle is None:
+        return offset, None
 
     if t.TYPE_CHECKING:
         assert isinstance(teWithStyle.style, style.TextStyle)
@@ -4076,14 +4078,16 @@ def tempoFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[OffsetQL, tempo.TempoIndication]:
-    offset: OffsetQL
+) -> t.Tuple[OffsetQL, t.Optional[tempo.TempoIndication]]:
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive tempo info from that.
-    teWithStyle: expressions.TextExpression
+    offset: OffsetQL
+    teWithStyle: t.Optional[expressions.TextExpression]
     offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    if teWithStyle is None:
+        return offset, None
 
     # default tempo placement should be above
     if teWithStyle.placement is None:
@@ -4159,14 +4163,19 @@ def dirFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[OffsetQL, expressions.TextExpression]:
+) -> t.Tuple[OffsetQL, t.Optional[expressions.TextExpression]]:
     offset: OffsetQL
     te: expressions.TextExpression
+
+    typeAtt: t.Optional[str] = elem.get('type')
+    if typeAtt is not None and typeAtt == 'fingering':
+        return -1, None
 
     # @tstamp is required for now, someday we'll be able to derive offsets from @startid
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
-        raise MeiElementError('missing @tstamp in <dir> element')
+        environLocal.warn('missing @tstamp in <dir> element')
+        return -1, None
 
     offset = _tstampToOffset(tstamp, activeMeter)
 
@@ -4440,11 +4449,14 @@ def measureFromElement(
 
             if staffNStr not in stavesWaitingFromStaffItem:
                 stavesWaitingFromStaffItem[staffNStr] = []
-            stavesWaitingFromStaffItem[staffNStr].append(
+
+            resultTuple: t.Tuple[OffsetQL, t.Optional[Music21Object]] = (
                 staffItemTagToFunction[eachElem.tag](
                     eachElem, activeMeter, spannerBundle, otherInfo
                 )
             )
+            if resultTuple[1] is not None:
+                stavesWaitingFromStaffItem[staffNStr].append(resultTuple)  # type: ignore
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
