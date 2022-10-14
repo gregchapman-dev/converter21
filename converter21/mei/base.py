@@ -4451,7 +4451,8 @@ def measureFromElement(
         elif eachElem.tag in staffItemTagToFunction:
             staffNStr: t.Optional[str] = eachElem.get('staff')
             if staffNStr is None:
-                raise MeiAttributeError(f'no @staff in staffItem "{eachElem.tag}"')
+                # presume it is staff 1; I've seen <tempo> without @staff, for example.
+                staffNStr = '1'
 
             if staffNStr not in stavesWaitingFromStaffItem:
                 stavesWaitingFromStaffItem[staffNStr] = []
