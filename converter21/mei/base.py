@@ -2609,7 +2609,13 @@ def noteFromElement(
             theNote.lyrics.append(subElement)
 
     pnameStr: str = elem.get('pname', '')
-    octStr: str = elem.get('oct', '')
+
+    # Here we prefer @oct.ges.  This is only because we don't yet support
+    # <octave> elements, so it's best in that case to print the gestural
+    # octave rather than what would be printed under the ottava we left out.
+    octStr: str = elem.get('oct.ges', '')
+    if not octStr:
+        octStr = elem.get('oct', '')
     if theAccidObj is not None:
         theNote.pitch = safePitch(pnameStr, theAccidObj, octStr)
     elif theAccidGes is not None:
