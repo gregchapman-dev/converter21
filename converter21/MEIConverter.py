@@ -74,15 +74,20 @@ class MEIConverter(SubConverter):
 
         Returns the music21 objects corresponding to the MEI file.
         '''
-        # In Python 3 we try the two most likely encodings to work. (UTF-16 is outputted from
-        # "sibmei", the Sibelius-to-MEI exporter).
+        # In Python 3 we try the three most likely encodings to work. (UTF-16 is outputted from
+        # "sibmei", the Sibelius-to-MEI exporter).  And sometimes latin-1 characters can work
+        # their way in.
         dataStream: str
         try:
             with open(filePath, 'rt', encoding='utf-8') as f:
                 dataStream = f.read()
         except UnicodeDecodeError:
-            with open(filePath, 'rt', encoding='utf-16') as f:
-                dataStream = f.read()
+            try:
+                with open(filePath, 'rt', encoding='utf-16') as f:
+                    dataStream = f.read()
+            except UnicodeError:
+                with open(filePath, 'rt', encoding='latin-1') as f:
+                    dataStream = f.read()
 
         self.parseData(dataStream, number)
 
