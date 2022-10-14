@@ -965,8 +965,6 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::analyzeOttavas --
 
         analyzeOttavas reads any 8va-type data, and makes a note of it in each affected token.
-        Q: octaveState assumes no nesting of ottavas, but activeOttava is all about
-        Q: handling nesting of ottavas. --gregc
     '''
     def analyzeOttavas(self) -> None:
         trackCount: int = self.maxTrack
