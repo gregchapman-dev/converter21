@@ -189,6 +189,7 @@ from music21.common.types import OffsetQL
 from music21.common.numberTools import opFrac
 from music21 import articulations
 from music21 import bar
+from music21 import beam
 from music21 import chord
 from music21 import clef
 from music21 import duration
@@ -1391,6 +1392,29 @@ def beamTogether(someThings: t.List[Music21Object]) -> t.List[Music21Object]:
 
     if iLastBeamedNote != -1:
         someThings[iLastBeamedNote].beams.setAll('stop')  # type: ignore
+
+    # loop over them again, looking for 'continue' that should be 'stop' because
+    # there are fewer beams in the next note
+    for i, thing in enumerate(someThings):
+        if not hasattr(thing, 'beams'):
+            continue
+        if duration.convertTypeToNumber(thing.duration.type) <= 4:
+            continue
+
+        nextThing: t.Optional[Music21Object] = None
+        for j in range(i + 1, len(someThings)):
+            if (hasattr(someThings[j], 'beams')
+                    and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
+                nextThing = someThings[j]
+                break
+
+        if nextThing is None:
+            continue
+
+        for beamNum in range(len(nextThing.beams) + 1, len(thing.beams) + 1):  # type: ignore
+            b: beam.Beam = thing.beams.getByNumber(beamNum)  # type: ignore
+            if b.type == 'continue':
+                b.type = 'stop'
 
     return someThings
 
