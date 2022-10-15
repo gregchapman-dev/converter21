@@ -27,6 +27,7 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
     counts['measure'] = 0
     counts['voice'] = 0
     counts['note'] = 0
+    counts['gracenote'] = 0
     counts['beam'] = 0
     counts['lyric'] = 0
     counts['accidental'] = 0
@@ -54,6 +55,8 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'dotins',
                         'dotdel'):
             counts['note'] += 1
+        elif op[0] in ('graceedit', 'graceslashedit'):
+            counts['gracenote'] += 1
         elif op[0] in ('inslyric',
                         'dellyric',
                         'editlyric'):

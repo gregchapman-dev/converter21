@@ -2632,6 +2632,20 @@ def noteFromElement(
                 theNote.lyrics = []
             theNote.lyrics.append(subElement)
 
+    # dots from inner <dot> elements are an alternate to @dots.
+    # If both are present use the <dot> elements.  Shouldn't ever happen.
+    if dotElements > 0:
+        theNote.duration = makeDuration(durFloat, dotElements)
+
+#     # grace note
+#     if elem.get('grace') == 'acc':
+#         theNote = theNote.getGrace(appoggiatura=True)
+#         theNote.duration.slash = False
+#     elif elem.get('grace') == 'nonacc':
+#         theNote = theNote.getGrace(appoggiatura=False)
+    if elem.get('grace') is not None:
+        theNote.duration = duration.GraceDuration(theNote.duration.quarterLength)
+
     pnameStr: str = elem.get('pname', '')
 
     # Here we prefer @oct.ges.  This is only because we don't yet support
@@ -2688,15 +2702,6 @@ def noteFromElement(
             # is supposed to be in another staff (which we don't yet
             # support).
             theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
-
-    # dots from inner <dot> elements are an alternate to @dots.
-    # If both are present use the <dot> elements.
-    if dotElements > 0:
-        theNote.duration = makeDuration(durFloat, dotElements)
-
-    # grace note (only mark as grace note---don't worry about "time-stealing")
-    if elem.get('grace') is not None:
-        theNote.duration = duration.GraceDuration(theNote.duration.quarterLength)
 
     # beams indicated by a <beamSpan> held elsewhere
     if elem.get('m21Beam') is not None:
