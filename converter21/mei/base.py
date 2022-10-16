@@ -2638,13 +2638,12 @@ def noteFromElement(
         theNote.duration = makeDuration(durFloat, dotElements)
 
 #     # grace note
-#     if elem.get('grace') == 'acc':
-#         theNote = theNote.getGrace(appoggiatura=True)
-#         theNote.duration.slash = False
-#     elif elem.get('grace') == 'nonacc':
-#         theNote = theNote.getGrace(appoggiatura=False)
-    if elem.get('grace') is not None:
-        theNote.duration = duration.GraceDuration(theNote.duration.quarterLength)
+    if elem.get('grace') == 'acc':
+        theNote = theNote.getGrace(appoggiatura=True)
+        theNote.duration.slash = False
+    elif elem.get('grace') == 'unacc':
+        theNote = theNote.getGrace(appoggiatura=False)
+        theNote.duration.slash = True
 
     pnameStr: str = elem.get('pname', '')
 
