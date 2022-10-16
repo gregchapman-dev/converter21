@@ -39,6 +39,9 @@ class HumdrumFileContent(HumdrumFileStructure):
         # spinecolor = self._spineColor[track][subtrack]
         self._spineColor: t.List[t.List[str]] = []
 
+        self._staffStarts: t.List[HumdrumToken] = []     # len = staffCount
+        self._staffStartsIndexByTrack: t.List[int] = []  # len = staffCount + 1
+
     def readString(self, contents: str) -> bool:
         if not super().readString(contents):
             return self.isValid
@@ -68,8 +71,12 @@ class HumdrumFileContent(HumdrumFileStructure):
 #         checkForColorSpine(infile); # interesting to move here
         self.analyzeRScale()
 
-#         # iohumdrum calls this but it belongs in engraving, not in import
-#         self.analyzeCrossStaffStemDirections();
+        # If there are any cross-staff notes/chords, set their stems to be out of the way
+        # of any other notes in that other staff (i.e. stems down if the note moved into
+        # the staff above, and vice versa), and if there is only one layer in that
+        # other staff, move the stems of any notes that might overlap in the opposite
+        # direction (i.e. stems up if the cross-staff note has its stem down).
+        self.analyzeCrossStaffStemDirections()
 
 #         # iohumdrum calls this to deal with measure vs barline in MEI.
 #         self.analyzeBarlines();
@@ -85,6 +92,213 @@ class HumdrumFileContent(HumdrumFileStructure):
 
 #         extractNullInformation(m_nulls, infile); # might be interesting?
 #         Perhaps very MEI-specific. (actually needed, but replaced by FakeRestToken stuff)
+
+
+    def analyzeCrossStaffStemDirections(self) -> None:
+        above: str = self._signifiers.above
+        below: str = self._signifiers.below
+        if not above and not below:
+            # no cross-staff notes present in data
+            return
+
+        for staffStart in self._staffStarts:
+            self.analyzeStaffCrossStaffStemDirections(staffStart)
+
+    def analyzeStaffCrossStaffStemDirections(self, startToken: t.Optional[HumdrumToken]) -> None:
+        if startToken is None:
+            return
+        if not startToken.isKern:
+            return
+        above: str = self._signifiers.above
+        below: str = self._signifiers.below
+        if not above and not below:
+            # no cross-staff notes present in data
+            return
+
+        current: t.Optional[HumdrumToken] = startToken
+        while current is not None:
+            if current.isData:
+                self.checkCrossStaffStems(current, above, below)
+            current = current.nextToken0
+
+    def checkCrossStaffStems(self, token: HumdrumToken, above: str, below: str) -> None:
+        track: t.Optional[int] = token.track
+        current: t.Optional[HumdrumToken] = token
+        while current is not None:
+            if current.track != track:
+                break
+            self.checkDataForCrossStaffStems(current, above, below)
+            current = current.nextFieldToken
+
+    def checkDataForCrossStaffStems(self, token: HumdrumToken, above: str, below: str) -> None:
+        if token.isNull:
+            return
+        if token.isRest:
+            return
+        if '/' in token.text:
+            # has a stem-up marker, so do not try to adjust stems
+            return
+        if '\\' in token.text:
+            # has a stem-down marker, so do not try to adjust stems
+            return
+
+        hasAbove: bool = False
+        hasBelow: bool = False
+        notePattern: str = r'[A-Ga-g]+[#n-]*'
+        if above:
+            if re.search(notePattern + above, token.text):
+                # note/chord has staff-above signifier
+                hasAbove = True
+        if below:
+            if re.search(notePattern + below, token.text):
+                # note/chord has staff-below signifier
+                hasBelow = True
+
+        if not (hasAbove or hasBelow):
+            # no above/below signifier, so nothing to do
+            return
+        if hasAbove and hasBelow:
+            # strange complication of above and below, so ignore
+            return
+        if hasAbove:
+            self.prepareStaffAboveNoteStems(token)
+        elif hasBelow:
+            self.prepareStaffBelowNoteStems(token)
+
+    def prepareStaffAboveNoteStems(self, token: HumdrumToken) -> None:
+        token.setValue('auto', 'stem.dir', '-1')
+        track: t.Optional[int] = token.track
+        curr: t.Optional[HumdrumToken] = token.nextFieldToken
+        ttrack: t.Optional[int]
+
+        # Find the next higher **kern spine (if any)
+        while curr is not None:
+            ttrack = curr.track
+            if not curr.isKern:
+                curr = curr.nextFieldToken
+                continue
+            if ttrack == track:
+                curr = curr.nextFieldToken
+                continue
+            # is kern data and in a different spine
+            break
+
+        if curr is None:
+            # no higher staff of **kern data
+            return
+
+        if not curr.isKern:
+            # something strange happened
+            return
+
+        endTime: HumNum = opFrac(token.durationFromStart + token.duration)
+        curr2: t.Optional[HumdrumToken] = curr
+        while curr2 is not None:
+            if curr2.durationFromStart >= endTime:
+                # exceeded the duration of the cross-staff note, so stop looking
+                break
+
+            if not curr2.isData:
+                # ignore non-data tokens
+                curr2 = curr2.nextToken0
+                continue
+            if curr2.isNull:
+                curr2 = curr2.nextToken0
+                continue
+            if curr2.isRest:
+                # ignore rests
+                curr2 = curr2.nextToken0
+                continue
+            if not curr2.isNote:
+                curr2 = curr2.nextToken0
+                continue
+            if '/' in curr2.text or '\\' in curr2.text:
+                # the note/chord has a stem direction, so ignore it
+                curr2 = curr2.nextToken0
+                continue
+            if curr2.subTrack != 0:
+                # layer != 0 means there is more than one active layer at this point in the
+                # above staff.  If so, then do not assign any stem directions.
+                curr2 = curr2.nextToken0
+                continue
+
+            # set the stem to up for the current note/chord
+            curr2.setValue('auto', 'stem.dir', '1')
+            curr2 = curr2.nextToken0
+
+    def prepareStaffBelowNoteStems(self, token: HumdrumToken) -> None:
+        token.setValue('auto', 'stem.dir', '1')
+        track: t.Optional[int] = token.track
+        curr: t.Optional[HumdrumToken] = token.previousFieldToken
+        ttrack: t.Optional[int]
+
+        # Find the next lower **kern spine (if any):
+        while curr is not None:
+            ttrack = curr.track
+            if not curr.isKern:
+                curr = curr.previousFieldToken
+                continue
+            if ttrack == track:
+                curr = curr.previousFieldToken
+                continue
+            # is kern data and in a different spine
+            break
+
+        if curr is None:
+            return
+
+        if not curr.isKern:
+            # something strange happened
+            return
+
+        # Find the first subtrack of the identified spine
+        targetTrack: t.Optional[int] = curr.track
+        while curr is not None:
+            ptok: t.Optional[HumdrumToken] = curr.previousFieldToken
+            if ptok is None:
+                break
+            ttrack = ptok.track
+            if targetTrack != ttrack:
+                break
+            curr = ptok
+            # ptok = curr.previousToken  # this is wrong, and ignored, I think
+
+        # Should now be at the first subtrack of the target staff.
+
+        endTime: HumNum = opFrac(token.durationFromStart + token.duration)
+        curr2: t.Optional[HumdrumToken] = curr
+        while curr2 is not None:
+            if curr2.durationFromStart >= endTime:
+                # exceeded the duration of the cross-staff note, so stop looking
+                break
+
+            if not curr2.isData:
+                # ignore non-data tokens
+                curr2 = curr2.nextToken0
+                continue
+            if curr2.isNull:
+                curr2 = curr2.nextToken0
+                continue
+            if curr2.isRest:
+                # ignore rests
+                curr2 = curr2.nextToken0
+                continue
+            if not curr2.isNote:
+                curr2 = curr2.nextToken0
+                continue
+            if '/' in curr2.text or '\\' in curr2.text:
+                # the note/chord has a stem direction, so ignore it
+                curr2 = curr2.nextToken0
+                continue
+            if curr2.subTrack != 0:
+                # layer != 0 means there is more than one active layer at this point in the
+                # below staff.  If so, then do not assign any stem directions.
+                curr2 = curr2.nextToken0
+                continue
+
+            # set the step to down for the current note/chord
+            curr2.setValue('auto', 'stem.dir', '-1')
+            curr2 = curr2.nextToken0
 
     '''
     //////////////////////////////

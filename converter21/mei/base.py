@@ -2590,18 +2590,6 @@ def noteFromElement(
     # make the note (no pitch yet, that has to wait until we have parsed the subelements)
     theNote: note.Note = note.Note()
 
-    ignoreStemDirections: bool = False
-    inDifferentStaff: bool = elem.get('staff') is not None
-    if inDifferentStaff:
-        otherInfo['cross-staff notes'] = True
-    if otherInfo.get('cross-staff notes', False) is True:
-        # either this note, or some other note in the measure is cross-staff,
-        # and verovio starts making up stem directions in that case to keep
-        # the two staves' stems from going in the same direction (in the one
-        # staff).  That's fine, but the this importer doesn't support cross-
-        # staff notes, so these stem directions don't make sense.
-        ignoreStemDirections = True
-
     # set the Note's duration (we will update this if we find any inner <dot> elements)
     durFloat: float = _qlDurationFromAttr(elem.get('dur'))
     theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
@@ -2640,10 +2628,10 @@ def noteFromElement(
 #     # grace note
     if elem.get('grace') == 'acc':
         theNote = theNote.getGrace(appoggiatura=True)
-        theNote.duration.slash = False
+        theNote.duration.slash = False  # type: ignore
     elif elem.get('grace') == 'unacc':
         theNote = theNote.getGrace(appoggiatura=False)
-        theNote.duration.slash = True
+        theNote.duration.slash = True  # type: ignore
 
     pnameStr: str = elem.get('pname', '')
 
@@ -2694,13 +2682,12 @@ def noteFromElement(
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
 
-    if not ignoreStemDirections:
-        stemDirStr: t.Optional[str] = elem.get('stem.dir')
-        if stemDirStr is not None:
-            # We don't pay attention to stem direction if the note
-            # is supposed to be in another staff (which we don't yet
-            # support).
-            theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
+    stemDirStr: t.Optional[str] = elem.get('stem.dir')
+    if stemDirStr is not None:
+        # We don't pay attention to stem direction if the note
+        # is supposed to be in another staff (which we don't yet
+        # support).
+        theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
     # beams indicated by a <beamSpan> held elsewhere
     if elem.get('m21Beam') is not None:
@@ -2946,18 +2933,6 @@ def chordFromElement(
     theArticList: t.List[articulations.Articulation] = []
     theLyricList: t.List[note.Lyric] = []
 
-    ignoreStemDirections: bool = False
-    inDifferentStaff: bool = elem.get('staff') is not None
-    if inDifferentStaff:
-        otherInfo['cross-staff notes'] = True
-    if otherInfo.get('cross-staff notes', False) is True:
-        # either this note, or some other note in the measure is cross-staff,
-        # and verovio starts making up stem directions in that case to keep
-        # the two staves' stems from going in the same direction (in the one
-        # staff).  That's fine, but the this importer doesn't support cross-
-        # staff notes, so these stem directions don't make sense.
-        ignoreStemDirections = True
-
     # iterate all immediate children
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                chordChildrenTagToFunction,
@@ -3007,13 +2982,12 @@ def chordFromElement(
             assert isinstance(theChord.style, style.NoteStyle)
         theChord.style.noteSize = 'cue'
 
-    if not ignoreStemDirections:
-        stemDirStr: t.Optional[str] = elem.get('stem.dir')
-        if stemDirStr is not None:
-            # We don't pay attention to stem direction if the chord
-            # is supposed to be in another staff (which we don't yet
-            # support).
-            theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
+    stemDirStr: t.Optional[str] = elem.get('stem.dir')
+    if stemDirStr is not None:
+        # We don't pay attention to stem direction if the chord
+        # is supposed to be in another staff (which we don't yet
+        # support).
+        theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
     # grace note (only mark as grace note---don't worry about "time-stealing")
     if elem.get('grace') is not None:

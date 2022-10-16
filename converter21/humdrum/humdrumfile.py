@@ -477,9 +477,6 @@ class HumdrumFile(HumdrumFileContent):
         # and it will not be t.Optional at that point.
         # self.m21Score: t.Optional[m21.stream.Score] = None
 
-        self._staffStarts: t.List[HumdrumToken] = []     # len = staffCount
-        self._staffStartsIndexByTrack: t.List[int] = []  # len = staffCount + 1
-
         # all sorts of info about each staff, and some temporary state as well
         self._staffStates: t.List[StaffStateVariables] = []  # len = staffCount
 
@@ -620,8 +617,6 @@ class HumdrumFile(HumdrumFileContent):
             self.m21Score = m21.stream.Score()
             return self.m21Score
 
-        self.analyzeNotation()
-
         # You can comment out sections of a Humdrum file using the following global comments:
         # !!ignore
         # !!Xignore
@@ -636,6 +631,8 @@ class HumdrumFile(HumdrumFileContent):
             # No parts in file, give up.  Return an empty score.
             self.m21Score = m21.stream.Score()
             return self.m21Score
+
+        self.analyzeNotation()
 
         # init some lists of staff info
         self._initializeStaffStates()
