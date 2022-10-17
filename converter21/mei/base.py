@@ -2381,6 +2381,11 @@ def sylFromElement(
 #     elif 't' == wordPos:
 #         text = con + text
 
+    # undo the weird "Approximate centering of single-letter text on noteheads" thing
+    # that Verovio does:
+    if len(text) == 2 and text[0] == '\u00a0':
+        text = text[1]
+
     if wordPos is None:
         # no wordPos? Last chance is to use trailing and leading hyphens (applyRaw=False)
         return note.Lyric(text=text, applyRaw=False)
