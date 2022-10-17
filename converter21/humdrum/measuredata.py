@@ -237,7 +237,9 @@ class MeasureData:
             # treat the measure itself as voice 0
             self._parseEventsIn(self.m21Measure, 0)
         else:
-            # first parse the voices...
+            # first parse any leading non-stream/non-notes elements (clefs, keysigs, timesigs)
+            self._parseEventsAtTopLevelOf(self.m21Measure, firstBit=True)
+            # ...then parse the voices...
             for voiceIndex, voice in enumerate(self.m21Measure.voices):
                 emptyStartDuration: HumNum = voice.offset
                 emptyEndDuration: HumNum = opFrac(
@@ -245,10 +247,10 @@ class MeasureData:
                 )
                 self._parseEventsIn(voice, voiceIndex, emptyStartDuration, emptyEndDuration)
 
-            # ... then parse the non-streams last, so that the ending barline lands after
-            # any objects in the voices that are also at the last offset in the measure
+            # ... then parse the rest of the non-stream elements last, so that the ending barline
+            # lands after any objects in the voices that are also at the last offset in the measure
             # (e.g. TextExpressions after the last note in the measure).
-            self._parseEventsAtTopLevelOf(self.m21Measure)
+            self._parseEventsAtTopLevelOf(self.m21Measure, firstBit=False)
 
         self._sortEvents()
 
@@ -371,11 +373,37 @@ class MeasureData:
 
         return output
 
-    def _parseEventsAtTopLevelOf(self, m21Stream: m21.stream.Measure) -> None:
+    def _parseEventsAtTopLevelOf(
+        self,
+        m21Stream: m21.stream.Measure,
+        firstBit: t.Optional[bool]  # None -> all of it, True -> first bit only, False -> all but first bit
+    ) -> None:
+        skipping: bool = False
+        if firstBit is False:
+            skipping = True
+
         for elementIndex, element in enumerate(m21Stream):
             if 'Stream' in element.classes:
                 # skip substreams, just parse the top-level objects
+                if firstBit is True:
+                    # we hit a Voice, done with first bit
+                    return
+                elif firstBit is False:
+                    # we hit a Voice, done with skipping
+                    skipping = False
                 continue
+
+            if firstBit is True:
+                if isinstance(element, m21.note.GeneralNote) or isinstance(element, m21.stream.Stream):
+                    # done with first bit
+                    return
+            elif firstBit is False and skipping:
+                if not isinstance(element, m21.note.GeneralNote):
+                    # skip first bit
+                    continue
+                else:
+                    # found a note, done with skipping
+                    skipping = False
 
             event: EventData = EventData(element, elementIndex, -1, self)
             if event is not None:
