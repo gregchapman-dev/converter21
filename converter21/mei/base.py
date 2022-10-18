@@ -2963,6 +2963,14 @@ def chordFromElement(
     theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
     theChord.duration = theDuration
 
+    # grace note (only mark as grace note---don't worry about "time-stealing")
+    if elem.get('grace') == 'acc':
+        theChord = theChord.getGrace(appoggiatura=True)
+        theChord.duration.slash = False  # type: ignore
+    elif elem.get('grace') == 'unacc':
+        theChord = theChord.getGrace(appoggiatura=False)
+        theChord.duration.slash = True  # type: ignore
+
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:
         addSlurs(elem, theChord, spannerBundle)
@@ -2993,10 +3001,6 @@ def chordFromElement(
         # is supposed to be in another staff (which we don't yet
         # support).
         theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
-
-    # grace note (only mark as grace note---don't worry about "time-stealing")
-    if elem.get('grace') is not None:
-        theChord.duration = duration.GraceDuration(theChord.duration.quarterLength)
 
     # beams indicated by a <beamSpan> held elsewhere
     m21BeamStr: t.Optional[str] = elem.get('m21Beam')
@@ -3858,8 +3862,6 @@ def _correctMRestDurs(
             for eachObject in eachVoice:
                 if hasattr(eachObject, 'm21wasMRest'):
                     eachObject.quarterLength = targetQL
-                    eachVoice.duration = duration.Duration(targetQL)
-                    eachMeasure.duration = duration.Duration(targetQL)
                     del eachObject.m21wasMRest
 
 
