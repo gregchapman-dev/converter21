@@ -525,6 +525,32 @@ _DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
     None: 0.00390625
 }
 
+_DUR_TO_NUMBEAMS: t.Dict[str, int] = {
+    # not present implies zero beams
+    '8': 1, 'fusa': 1,       # fusa is not mei-CMN, but we'll allow it
+    '16': 2, 'semifusa': 2,  # semifusa is not mei-CMN, but we'll allow it
+    '32': 3,
+    '64': 4,
+    '128': 5,
+    '256': 6,
+    '512': 7,
+    '1024': 8,
+    '2048': 9  # not actually supported, but might happen
+}
+
+_STEMMOD_TO_NUMSLASHES: t.Dict[str, int] = {
+    # not present implies zero slashes
+    '1slash': 1,
+    '2slash': 2,
+    '3slash': 3,
+    '4slash': 4,
+    '5slash': 5,
+    '6slash': 6,
+    '7slash': 7,
+    '8slash': 8,
+    '9slash': 9  # not actually supported, but might happen
+}
+
 # for _articulationFromAttr()
 # NOTE: 'marc-stacc' and 'ten-stacc' require multiple music21 events, so they are handled
 #       separately in _articulationFromAttr().
@@ -2705,6 +2731,11 @@ def noteFromElement(
         # support).
         theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
+    stemModStr: t.Optional[str] = elem.get('stem.mod')
+    if stemModStr is not None:
+        # just add it as an attribute, to be read by callers if they like
+        theNote.mei_stem_mod = stemModStr  # type: ignore
+
     # beams indicated by a <beamSpan> held elsewhere
     if elem.get('m21Beam') is not None:
         if duration.convertTypeToNumber(theNote.duration.type) > 4:
@@ -3013,6 +3044,11 @@ def chordFromElement(
         # support).
         theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
+    stemModStr: t.Optional[str] = elem.get('stem.mod')
+    if stemModStr is not None:
+        # just add it as an attribute, to be read by callers if they like
+        theChord.mei_stem_mod = stemModStr  # type: ignore
+
     # beams indicated by a <beamSpan> held elsewhere
     m21BeamStr: t.Optional[str] = elem.get('m21Beam')
     if m21BeamStr is not None:
@@ -3270,7 +3306,7 @@ def beamFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: bTrem beatRpt fTrem halfmRpt meterSig meterSigGrp
+    - MEI.cmn: beatRpt fTrem halfmRpt meterSig meterSigGrp
     - MEI.critapp: app
     - MEI.edittrans: (all)
     - MEI.mensural: ligature mensur proport
@@ -3291,6 +3327,49 @@ def beamFromElement(
     beamedStuff = beamTogether(beamedStuff)
 
     return beamedStuff
+
+
+def bTremFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, t.Any]
+) -> t.List[Music21Object]:
+    '''
+    <bTrem> contains one <note> or <chord> (or editorial elements that resolve to a single
+    note or chord)
+    '''
+    bTremStuff: t.List[Music21Object] = _processEmbeddedElements(
+        elem.findall('*'),
+        bTremChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    if len(bTremStuff) != 1:
+        raise MeiElementError('<bTrem> without exactly one note or chord within')
+
+    noteOrChord: note.NotRest = bTremStuff[0]
+    tremolo: expressions.Tremolo = expressions.Tremolo()
+    unitdurStr: str = elem.get('unitdur', '')
+    numMarks: int = _DUR_TO_NUMBEAMS.get(unitdurStr, 0)
+    if numMarks == 0:
+        # check the note or chord itself to see if it has @stem.mod = '3slashes' or the like
+        if hasattr(noteOrChord, 'mei_stem_mod'):
+            numMarks = _STEMMOD_TO_NUMSLASHES.get(noteOrChord.mei_stem_mod, 0)  # type: ignore
+
+    if numMarks == 9:
+        numMarks = 8 # music21 doesn't support a 2048th note tremolo, pretend it's 1024th note
+
+    if numMarks == 6:
+        numMarks = 3
+    if numMarks > 0:
+        tremolo.numberOfMarks = numMarks  # actually figure it out from duration (not from attributes!)
+        noteOrChord.expressions.append(tremolo)
+
+    return noteOrChord
 
 
 def barLineFromElement(
@@ -3398,7 +3477,7 @@ def tupletFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: bTrem beatRpt fTrem halfmRpt meterSig meterSigGrp
+    - MEI.cmn: beatRpt fTrem halfmRpt meterSig meterSigGrp
     - MEI.critapp: app
     - MEI.edittrans: (all)
     - MEI.mensural: ligature mensur proport
@@ -3436,7 +3515,7 @@ def tupletFromElement(
             lastNote = i
 
     if firstNote is None:
-        # no members of tuplet (e.g. <tuplet/> containing only a <btrem/> which we don't parse yet
+        # no members of tuplet
         return tuple()
 
     tupletMembers[firstNote].duration.tuplets[0].type = 'start'
@@ -3504,7 +3583,7 @@ def layerFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: arpeg bTrem beamSpan beatRpt bend breath fTrem fermata gliss hairpin halfmRpt
+    - MEI.cmn: arpeg beamSpan beatRpt bend breath fTrem fermata gliss hairpin halfmRpt
                harpPedal mRpt mRpt2 meterSigGrp multiRest multiRpt octave pedal
                reh slur tie tuplet tupletSpan
     - MEI.cmnOrnaments: mordent trill turn
@@ -3754,6 +3833,48 @@ def passThruEditorialTupletChildrenFromElement(
     theList: t.List[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         tupletChildrenTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def appChoiceBTremChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
+) -> t.List[Music21Object]:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
+        return []
+
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        chosen.iterfind('*'),
+        bTremChildrenTagToFunction,
+        chosen.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def passThruEditorialBTremChildrenFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
+) -> t.List[Music21Object]:
+    # iterate all immediate children
+    theList: t.List[Music21Object] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        bTremChildrenTagToFunction,
         elem.tag,
         activeMeter,
         spannerBundle,
@@ -4985,6 +5106,7 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}mRest': mRestFromElement,
     f'{MEI_NS}beam': beamFromElement,
     f'{MEI_NS}tuplet': tupletFromElement,
+    f'{MEI_NS}bTrem': bTremFromElement,
     f'{MEI_NS}space': spaceFromElement,
     f'{MEI_NS}mSpace': mSpaceFromElement,
     f'{MEI_NS}barLine': barLineFromElement,
@@ -5068,6 +5190,7 @@ beamChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}rest': restFromElement,
     f'{MEI_NS}tuplet': tupletFromElement,
     f'{MEI_NS}beam': beamFromElement,
+    f'{MEI_NS}bTrem': bTremFromElement,
     f'{MEI_NS}space': spaceFromElement,
     f'{MEI_NS}barLine': barLineFromElement,
 }
@@ -5093,12 +5216,36 @@ tupletChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}unclear': passThruEditorialTupletChildrenFromElement,
     f'{MEI_NS}tuplet': tupletFromElement,
     f'{MEI_NS}beam': beamFromElement,
+    f'{MEI_NS}bTrem': bTremFromElement,
     f'{MEI_NS}note': noteFromElement,
     f'{MEI_NS}rest': restFromElement,
     f'{MEI_NS}chord': chordFromElement,
     f'{MEI_NS}clef': clefFromElement,
     f'{MEI_NS}space': spaceFromElement,
     f'{MEI_NS}barLine': barLineFromElement,
+}
+
+bTremChildrenTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': appChoiceBTremChildrenFromElement,
+    f'{MEI_NS}choice': appChoiceBTremChildrenFromElement,
+    f'{MEI_NS}add': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}corr': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}damage': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}expan': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}orig': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}reg': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}sic': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}unclear': passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}note': noteFromElement,
+    f'{MEI_NS}chord': chordFromElement,
 }
 
 

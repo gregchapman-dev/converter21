@@ -33,8 +33,8 @@ def runTheTest(filePath: Path):
     score1.show('musicxml.pdf', makeNotation=False)
 
     # write the musicxml file and open in bbedit
-    fp = score1.write('musicxml', makeNotation=False)
-    subprocess.run(['bbedit', str(fp)], check=False)
+#     fp = score1.write('musicxml', makeNotation=False)
+#     subprocess.run(['bbedit', str(fp)], check=False)
     return True
 
 # ------------------------------------------------------------------------------
