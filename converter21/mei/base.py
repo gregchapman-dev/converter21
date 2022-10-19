@@ -864,9 +864,20 @@ def _ppTies(theConverter: MeiToM21Converter):
 
     for eachTie in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
-        if eachTie.get('startid') is not None and eachTie.get('endid') is not None:
-            c.m21Attr[removeOctothorpe(eachTie.get('startid'))]['tie'] = 'i'
-            c.m21Attr[removeOctothorpe(eachTie.get('endid'))]['tie'] = 't'
+        startId: t.Optional[str] = removeOctothorpe(eachTie.get('startid'))
+        endId: t.Optional[str] = removeOctothorpe(eachTie.get('endid'))
+        if startId is not None and endId is not None:
+            if startId in c.m21Attr and c.m21Attr[startId].get('tie', '') == 't':
+                # the startid note is already a tie end, so now it's both end and start
+                c.m21Attr[startId]['tie'] = 'ti'
+            else:
+                c.m21Attr[startId]['tie'] = 'i'
+
+            if endId in c.m21Attr and c.m21Attr[endId].get('tie', '') == 'i':
+                # the endid note is already a tie start, so now it's both end and start
+                c.m21Attr[endId]['tie'] = 'it'
+            else:
+                c.m21Attr[endId]['tie'] = 't'
         else:
             environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<tie>', '@startid and @endid'))
 
