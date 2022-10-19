@@ -3363,8 +3363,6 @@ def bTremFromElement(
     if numMarks == 9:
         numMarks = 8 # music21 doesn't support a 2048th note tremolo, pretend it's 1024th note
 
-    if numMarks == 6:
-        numMarks = 3
     if numMarks > 0:
         tremolo.numberOfMarks = numMarks  # actually figure it out from duration (not from attributes!)
         noteOrChord.expressions.append(tremolo)
