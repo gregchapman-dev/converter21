@@ -1,0 +1,47 @@
+!!!COM:	Brumel, Antoine
+!!!CDT:	~1460-~1512
+!!!OPR:	Missa Et ecce terre motus
+!!!ONM:	1
+!!!OTL:	Kyrie
+!!!AGN:	Mass; Kyrie
+!!!SCT:	Bru1008a
+!!!SCA:	Bru1008a
+!!!voices:	12
+!!!voices-OPR:	12
+**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text	**kern	**text
+*staff12	*staff12	*staff11	*staff11	*staff10	*staff10	*staff9	*staff9	*staff8	*staff8	*staff7	*staff7	*staff6	*staff6	*staff5	*staff5	*staff4	*staff4	*staff3	*staff3	*staff2	*staff2	*staff1	*staff1
+*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*	*Ivox	*
+*I"Bassus3	*	*I"Bassus2	*	*I"Bassus1	*	*I"Tenor3	*	*I"Tenor2	*	*I"Tenor1	*	*I"Contratenor3	*	*I"Contratenor2	*	*I"Contratenor1	*	*I"Discantus3	*	*I"Discantus2	*	*I"Discantus1	*
+*I'B3	*	*I'B2	*	*I'B1	*	*I'T3	*	*I'T2	*	*I'T1	*	*I'Ct3	*	*I'Ct2	*	*I'Ct1	*	*I'D3	*	*I'D2	*	*I'D1	*
+*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]	*>[A,B,C]
+*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A	*>A
+*clefF4	*	*clefF4	*	*clefF4	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefG2	*	*clefG2	*	*clefG2	*
+*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*
+*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*	*M3/1	*
+*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*	*met(O)	*
+!!section: Kyrie I
+!!!OMD: Kyrie I
+=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-	=1-
+0.r	.	0.r	.	1.G	Ky-	0.r	.	0.r	.	0.r	.	0.r	.	1d	Ky-	1r	.	0.r	.	0.r	.	0.r	.
+.	.	.	.	.	.	.	.	.	.	.	.	.	.	2d	-ri-	1r	.	.	.	.	.	.	.
+.	.	.	.	2G	-ri-	.	.	.	.	.	.	.	.	1B	-e	.	.	.	.	.	.	.	.
+.	.	.	.	1G	-e	.	.	.	.	.	.	.	.	.	.	1d	Ky-	.	.	.	.	.	.
+.	.	.	.	.	.	.	.	.	.	.	.	.	.	2G	e-	.	.	.	.	.	.	.	.
+=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||	=27||
+*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B	*>B
+*clefF4	*	*clefF4	*	*clefF4	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefGv2	*	*clefG2	*	*clefG2	*	*clefG2	*
+*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*	*k[]	*
+*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*	*M2/1	*
+*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*	*met(C|)	*
+!!section: Christe
+!!!OMD: Christe
+0r	.	0r	.	[0C	Chri-	0G	Chri-	0r	.	0r	.	[0c	Chri-	0r	.	0e	Chri-	1r	.	1g	Chri-	[0cc	Chri-
+.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	1g	Chri-	2g	-ste	.	.
+.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	.	[2e	.	.	.
+==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==	==
+*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-	*-
+!!!ENC:	Philip Legge
+!!!END:	2014/06/20/
+!!!EED:	Jesse Rodin
+!!!EEV:	2014/08/16/
+!!!ONB:	Translated from MusicXML and edited on 2014/08/16/ by Craig Sapp
