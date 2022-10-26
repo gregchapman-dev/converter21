@@ -4761,17 +4761,18 @@ def measureFromElement(
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
         for eachOffset, eachObj in eachList:
             # parse whichStaff, which might be '1', '2', '1 2', etc
-            m = re.match(r'^(\d+)(\s(\d+))?$', whichStaff)
-            if m is None:
+            staffNs: t.List[str] = re.findall(r'[\d]+', whichStaff)
+            if not staffNs:
                 raise MeiAttributeError(
                     _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachObj.classes[0], whichStaff)
                 )
-            staffNs: t.Tuple[str, ...] = (m.group(1),)
-            if m.group(3) is not None:
-                staffNs = (m.group(1), m.group(3))
             if len(staffNs) == 1:
                 staffNumStr = staffNs[0]
-            else:
+                staveN = staves[staffNumStr]
+                if t.TYPE_CHECKING:
+                    assert isinstance(staveN, stream.Measure)
+                staveN.insert(eachOffset, eachObj)
+            elif len(staffNs) == 2:
                 if (eachObj.hasStyleInformation
                         and isinstance(eachObj.style, style.TextStyle)
                         and eachObj.style.alignVertical == 'middle'):
@@ -4786,18 +4787,34 @@ def measureFromElement(
                     eachObj.style.alignVertical = None
                 elif (hasattr(eachObj, 'placement')
                         and eachObj.placement == 'above'):  # type: ignore
-                    # if placement is above the two staves, put it in the first staff
+                    # if placement is above the staves, put it in the first staff
                     # (it will go above it)
                     staffNumStr = staffNs[0]
                 else:
-                    # placement is below the two staves, put it in the second staff
+                    # placement is below the staves, put it in the last/lowest staff
                     # (it will go below it)
                     staffNumStr = staffNs[1]
 
-            staveN = staves[staffNumStr]
-            if t.TYPE_CHECKING:
-                assert isinstance(staveN, stream.Measure)
-            staveN.insert(eachOffset, eachObj)
+                staveN = staves[staffNumStr]
+                if t.TYPE_CHECKING:
+                    assert isinstance(staveN, stream.Measure)
+                staveN.insert(eachOffset, eachObj)
+            else:
+                # more than 2 staves, we need to put eachObj in each listed staff (deepcopy them!)
+                # TODO: This will not work for spanners (e.g. a hairpin marked for staves 1, 2, 3, and 4)
+                # TODO: Assuming there are only placeholders in the spanner, we'd have to clone the
+                # TODO: placeholders (and the spanner), and put each set of placeholders (and the
+                # TODO: associated spanner) in the correct staff.
+                for i, staffNumStr in enumerate(staffNs):
+                    staveN = staves[staffNumStr]
+                    if t.TYPE_CHECKING:
+                        assert isinstance(staveN, stream.Measure)
+                    if i == 0:
+                        staveN.insert(eachOffset, eachObj)
+                        continue
+
+                    clonedObj: Music21Object = deepcopy(eachObj)
+                    staveN.insert(eachOffset, clonedObj)
 
     # create rest-filled measures for expected parts that had no <staff> tag in this <measure>
     for eachN in expectedNs:
