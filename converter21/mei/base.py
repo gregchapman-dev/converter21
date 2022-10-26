@@ -4843,12 +4843,12 @@ def sectionScoreCore(
         int]:
     '''
     This function is the "core" of both :func:`sectionFromElement` and :func:`scoreFromElement`,
-    since both elements are treated quite similarly (though not identically). It's a separate and
-    shared function to reduce code duplication and
-    increase ease of testing. It's a "public" function
-    to help spread the burden of API documentation complexity: while the parameters and return
-    values are described in this function, the compliance with the MEI Guidelines is described in
-    both :func:`sectionFromElement` and :func:`scoreFromElement`, as expected.
+    since both elements are treated quite similarly (though not identically). It is also used to
+    process 'ending' elements (which are a sort of section, I guess).  It's a separate and
+    shared function to reduce code duplication and increase ease of testing. It's a "public"
+    function to help spread the burden of API documentation complexity: while the parameters and
+    return values are described in this function, the compliance with the MEI Guidelines is
+    described in both :func:`sectionFromElement` and :func:`scoreFromElement`, as expected.
 
     **Required Parameters**
 
@@ -4912,6 +4912,7 @@ def sectionScoreCore(
 
     scoreTag: str = f'{MEI_NS}score'
     sectionTag: str = f'{MEI_NS}section'
+    endingTag: str = f'{MEI_NS}ending'
     measureTag: str = f'{MEI_NS}measure'
     scoreDefTag: str = f'{MEI_NS}scoreDef'
     staffDefTag: str = f'{MEI_NS}staffDef'
@@ -4926,8 +4927,8 @@ def sectionScoreCore(
     }
 
     for eachElem in elem.iterfind('*'):
-        # only process <measure> elements if this is a <section>
-        if measureTag == eachElem.tag and sectionTag == elem.tag:
+        # only process <measure> elements if this is a <section> or <ending>
+        if measureTag == eachElem.tag and (sectionTag == elem.tag or endingTag == elem.tag):
             backupMeasureNum += 1
 
             # Make a new measureInfo to pass in for each measure.
@@ -5006,7 +5007,7 @@ def sectionScoreCore(
                 # <staff> elements may refer to it.
                 environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
 
-        elif sectionTag == eachElem.tag:
+        elif sectionTag == eachElem.tag or endingTag == eachElem.tag:
             # NOTE: same as scoreFE() (except the name of "inNextThing")
             localParsed, activeMeter, nextMeasureLeft, backupMeasureNum = sectionFromElement(
                 eachElem,
@@ -5050,16 +5051,36 @@ def sectionScoreCore(
                                 eachMeasure.insert(0.0, eachInsertion)
                             break
                     inNextThing[eachN] = []
+
                 # Then we can append the objects in this Part to the dict of all parsed objects, but
                 # NOTE that this is different for <section> and <score>.
-                if sectionTag == elem.tag:
-                    # If this is a <section>, which would really be nested <section> elements, we
-                    # must "flatten" everything so it doesn't cause a disaster when we try to make
-                    # a Part out of it.
+                if sectionTag == elem.tag or endingTag == elem.tag:
+                    # First make a RepeatBracket if this is an <ending>.
+                    rb: t.Optional[spanner.RepeatBracket] = None
+                    if endingTag == eachElem.tag:
+                        # make the RepeatBracket for the ending
+                        nStr: t.Optional[str] = eachElem.get('n')
+                        n: t.Optional[int] = None
+                        try:
+                            n = int(nStr)
+                        except:
+                            pass
+                        rb = spanner.RepeatBracket(number=n)
+
+                    # This is a <section> or <ending>, which is nested in a <section>.
+                    # We must "flatten" everything so it doesn't cause a disaster when
+                    # we try to make a Part out of it.
                     for eachMeas in eachList:
-                        if t.TYPE_CHECKING:
-                            assert isinstance(eachObj, stream.Measure)
                         parsed[eachN].append(eachMeas)
+                        # If we have a RepeatBracket (i.e. we're in an <ending>), and
+                        # this is a Measure, put it in the RepeatBracket.
+                        if rb is not None and isinstance(eachMeas, stream.Measure):
+                            rb.addSpannedElements(eachMeas)
+
+                    # If we have a RepeatBracket, it should end up in the Part as well.
+                    if rb is not None:
+                        parsed[eachN].append(rb)
+
                 elif scoreTag == elem.tag:
                     # If this is a <score>, we can just append the result of each <section> to the
                     # list that will become the Part.
