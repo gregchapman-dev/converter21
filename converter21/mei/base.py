@@ -1094,12 +1094,13 @@ def _processEmbeddedElements(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+) -> t.List:
     # noinspection PyShadowingNames
     '''
     From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each element
-    to its music21 object. This function was designed for use with elements that may contain other
-    elements; the contained elements will be converted as appropriate.
+    to its music21 object (or a tuple containing its music21 object plus some other stuff). This
+    function was designed for use with elements that may contain other elements; the contained
+    elements will be converted as appropriate.
 
     If an element itself has embedded elements (i.e., its converter function in ``mapping`` returns
     a sequence), those elements will appear in the returned sequence in order---there are no
@@ -2754,7 +2755,7 @@ def noteFromElement(
     if stemLenStr is not None:
         try:
             stemLen = float(stemLenStr)
-        except:
+        except:  # pylint: disable=bare-except
             pass
         if stemLen is not None and stemLen == 0:
             theNote.stemDirection = 'noStem'
@@ -4405,7 +4406,7 @@ def tempoFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[OffsetQL, t.Optional[tempo.TempoIndication]]:
+) -> t.Tuple[str, OffsetQL, t.Optional[tempo.TempoIndication]]:
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
 
     # first parse as a <dir> giving a TextExpression with style,
@@ -4822,7 +4823,7 @@ def measureFromElement(
                 staveN.insert(eachOffset, eachObj)
             else:
                 # more than 2 staves, we need to put eachObj in each listed staff (deepcopy them!)
-                # TODO: This will not work for spanners (e.g. a hairpin marked for staves 1, 2, 3, and 4)
+                # TODO: This will not work for spanners (e.g. <hairpin @staff="1 2 3 4"/>)
                 # TODO: Assuming there are only placeholders in the spanner, we'd have to clone the
                 # TODO: placeholders (and the spanner), and put each set of placeholders (and the
                 # TODO: associated spanner) in the correct staff.
@@ -4966,7 +4967,7 @@ def sectionScoreCore(
 
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section> or <ending>
-        if measureTag == eachElem.tag and (sectionTag == elem.tag or endingTag == elem.tag):
+        if measureTag == eachElem.tag and elem.tag in (sectionTag, endingTag):
             backupMeasureNum += 1
 
             # Make a new measureInfo to pass in for each measure.
@@ -5045,7 +5046,7 @@ def sectionScoreCore(
                 # <staff> elements may refer to it.
                 environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
 
-        elif sectionTag == eachElem.tag or endingTag == eachElem.tag:
+        elif eachElem.tag in (sectionTag, endingTag):
             # NOTE: same as scoreFE() (except the name of "inNextThing")
             localParsed, activeMeter, nextMeasureLeft, backupMeasureNum = sectionFromElement(
                 eachElem,
@@ -5092,17 +5093,18 @@ def sectionScoreCore(
 
                 # Then we can append the objects in this Part to the dict of all parsed objects, but
                 # NOTE that this is different for <section> and <score>.
-                if sectionTag == elem.tag or endingTag == elem.tag:
+                if elem.tag in (sectionTag, endingTag):
                     # First make a RepeatBracket if this is an <ending>.
                     rb: t.Optional[spanner.RepeatBracket] = None
                     if endingTag == eachElem.tag:
                         # make the RepeatBracket for the ending
-                        nStr: t.Optional[str] = eachElem.get('n')
+                        bracketNStr: t.Optional[str] = eachElem.get('n')
                         n: t.Optional[int] = None
-                        try:
-                            n = int(nStr)
-                        except:
-                            pass
+                        if bracketNStr is not None:
+                            try:
+                                n = int(bracketNStr)
+                            except:  # pylint: disable=bare-except
+                                pass
                         rb = spanner.RepeatBracket(number=n)
 
                     # This is a <section> or <ending>, which is nested in a <section>.

@@ -2400,6 +2400,7 @@ class Test(unittest.TestCase):
             someThings[i].beams.__len__.return_value = 0
             someThings[i].beams.fill = mock.MagicMock()
             someThings[i].beams.setAll = mock.MagicMock()
+            someThings[i].beams.getByNumber = mock.MagicMock()
             someThings[i].duration.type = '16th'
         expectedTypes = ['start', 'continue', 'continue']
         # first call with "continue"; corrected later in function
@@ -2407,7 +2408,7 @@ class Test(unittest.TestCase):
         base.beamTogether(someThings)
 
         for i in range(len(someThings)):
-            someThings[i].beams.__len__.assert_called_once_with()
+            # someThings[i].beams.__len__.assert_called_once_with()
             someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
         someThings[2].beams.setAll.assert_called_once_with('stop')
 
@@ -2421,6 +2422,7 @@ class Test(unittest.TestCase):
             someThings[i].beams.__len__.return_value = 0
             someThings[i].beams.fill = mock.MagicMock()
             someThings[i].beams.setAll = mock.MagicMock()
+            someThings[i].beams.getByNumber = mock.MagicMock()
             someThings[i].duration.type = '16th'
         expectedTypes = ['start', None, None, 'continue']
         # first call with "continue"; corrected later in function
@@ -2432,7 +2434,7 @@ class Test(unittest.TestCase):
         base.beamTogether(someThings)
 
         for i in [0, 3]:
-            someThings[i].beams.__len__.assert_called_once_with()
+            # someThings[i].beams.__len__.assert_called_once_with()
             someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
         someThings[3].beams.setAll.assert_called_once_with('stop')
         for i in [1, 2]:
@@ -2450,6 +2452,7 @@ class Test(unittest.TestCase):
             someThings[i].beams.__len__.return_value = 0
             someThings[i].beams.fill = mock.MagicMock()
             someThings[i].beams.setAll = mock.MagicMock()
+            someThings[i].beams.getByNumber = mock.MagicMock()
             someThings[i].duration.type = '16th'
         expectedTypes = ['start', 'continue', None, 'continue']
         # first call with "continue"; corrected later in function
@@ -2457,7 +2460,7 @@ class Test(unittest.TestCase):
         base.beamTogether(someThings)
 
         for i in [0, 1, 3]:
-            someThings[i].beams.__len__.assert_called_once_with()
+            # someThings[i].beams.__len__.assert_called_once_with()
             someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
         someThings[3].beams.setAll.assert_called_once_with('stop')
 
@@ -3169,7 +3172,8 @@ class Test(unittest.TestCase):
 
     def testMakeBarline1(self):
         '''
-        _makeBarlines(): when @left and @right are None, nothing happens
+        _makeBarlines(): when @left and @right are None, you only get default
+        right Barline, no left Barline
         '''
         elem = ETree.Element('measure')
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
@@ -3178,7 +3182,7 @@ class Test(unittest.TestCase):
 
         for i in ('1', '2', '3'):
             self.assertIsNone(staves[i].leftBarline)
-            self.assertIsNone(staves[i].rightBarline)
+            self.assertEqual(staves[i].rightBarline.type, 'regular')
         self.assertEqual(4, staves['4'])
 
     def testMakeBarline2(self):
@@ -3653,19 +3657,23 @@ class Test(unittest.TestCase):
 
         # ensure the right number and @n of parts
         self.assertEqual(['1'], list(actual.keys()))
-        # ensure the Measure has its expected Voice, BassClef, and Instrument
+        # ensure the Measure has its expected Voice, BassClef, and right Barline
         self.assertEqual(backupNum, actual['1'].number)
-        self.assertEqual(2, len(actual['1']))
-        # the Voice, plus a Clef and Instrument from staffDefFE()
+        self.assertEqual(3, len(actual['1']))
+        # the Voice, and a Clef and Instrument from staffDefFE()
         foundVoice = False
         foundClef = False
+        foundBarline = False
         for item in actual['1']:
             if isinstance(item, stream.Voice):
                 foundVoice = True
             elif isinstance(item, clef.BassClef):
                 foundClef = True
+            elif isinstance(item, bar.Barline) and item is actual['1'].rightBarline:
+                foundBarline = True
         self.assertTrue(foundVoice)
         self.assertTrue(foundClef)
+        self.assertTrue(foundBarline)
 
 
 # -----------------------------------------------------------------------------
@@ -3787,9 +3795,9 @@ class Test(unittest.TestCase):
         self.assertFalse(actual.parts[1].atSoundingPitch)
         self.assertIsInstance(actual.parts[0][0], stream.Measure)
         self.assertIsInstance(actual.parts[1][0], stream.Measure)
-        self.assertEqual(3, len(actual.parts[0][0]))
-        # each Measure has a Clef, a TimeSignature, and a voice
-        self.assertEqual(3, len(actual.parts[1][0]))
+        self.assertEqual(4, len(actual.parts[0][0]))
+        # each Measure has a Clef, a TimeSignature, a Voice, and a right Barline
+        self.assertEqual(4, len(actual.parts[1][0]))
         # Inspect the Voice and the Note objects inside it
         self.assertIsInstance(actual.parts[0][0][2], stream.Voice)
         self.assertIsInstance(actual.parts[1][0][2], stream.Voice)
@@ -3938,7 +3946,7 @@ class Test(unittest.TestCase):
         meas = parsed['1'][0][0]
         self.assertIsInstance(meas, stream.Measure)
         self.assertEqual(1, meas.number)
-        self.assertEqual(3, len(meas))  # a Voice, a Clef, a TimeSignature
+        self.assertEqual(4, len(meas))  # a Voice, a Clef, a TimeSignature, and a right Barline
         # the order of these doesn't matter, but it may change, so this is easier to adjust
         clefIndex = 0
         timeSigIndex = 1
@@ -4111,7 +4119,7 @@ class Test(unittest.TestCase):
         voiceIndex = 2
         self.assertIsInstance(meas, stream.Measure)
         self.assertEqual(400, meas.number)
-        self.assertEqual(3, len(meas))  # a Voice, a Clef, a TimeSignature
+        self.assertEqual(4, len(meas))  # a Voice, a Clef, a TimeSignature, a right Barline
         self.assertIsInstance(meas[voiceIndex], stream.Voice)  # check out the Voice and its Note
         self.assertEqual(1, len(meas[voiceIndex]))
         self.assertIsInstance(meas[voiceIndex][0], note.Note)
@@ -4127,7 +4135,7 @@ class Test(unittest.TestCase):
         voiceIndex = 2
         self.assertIsInstance(meas, stream.Measure)
         self.assertEqual(92, meas.number)
-        self.assertEqual(1, len(meas))  # a Voice
+        self.assertEqual(2, len(meas))  # a Voice, a right Barline
         self.assertIsInstance(meas[0], stream.Voice)  # check out the Voice and its Note
         self.assertEqual(1, len(meas[0]))
         self.assertIsInstance(meas[0][0], note.Note)
@@ -4252,7 +4260,7 @@ class Test(unittest.TestCase):
         voiceIndex = 1
         self.assertIsInstance(meas, stream.Measure)
         self.assertEqual(901, meas.number)
-        self.assertEqual(2, len(meas))  # a Voice, a Repeat
+        self.assertEqual(3, len(meas))  # a Repeat, a Voice, a right Barline
         self.assertIsInstance(meas[voiceIndex], stream.Voice)  # check out the Voice and its Note
         self.assertEqual(1, len(meas[voiceIndex]))
         self.assertIsInstance(meas[voiceIndex][0], note.Note)
@@ -4453,7 +4461,7 @@ class Test(unittest.TestCase):
         voiceIndex = 3
         self.assertIsInstance(meas, stream.Measure)
         self.assertEqual(42, meas.number)
-        self.assertEqual(4, len(meas))  # a Voice, a Clef, a KeySignature, a TimeSignature
+        self.assertEqual(5, len(meas))  # Clef, KeySignature, TimeSignature, Voice, right Barline
         self.assertIsInstance(meas[voiceIndex], stream.Voice)  # check out the Voice and its Note
         self.assertEqual(1, len(meas[voiceIndex]))
         self.assertIsInstance(meas[voiceIndex][0], note.Note)
@@ -4468,7 +4476,7 @@ class Test(unittest.TestCase):
         meas = parsed['1'][1][0]
         self.assertIsInstance(meas, stream.Measure)
         self.assertEqual(402, meas.number)
-        self.assertEqual(1, len(meas))  # a Voice
+        self.assertEqual(2, len(meas))  # a Voice, a right Barline
         self.assertIsInstance(meas[0], stream.Voice)  # check out the Voice and its Note
         self.assertEqual(1, len(meas[0]))
         self.assertIsInstance(meas[0][0], note.Note)

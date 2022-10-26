@@ -7433,7 +7433,8 @@ class HumdrumFile(HumdrumFileContent):
                 if tremoloNoteGesturalDuration is not None:
                     obj.duration.linked = False  # leave the note looking like visual duration
                     obj.duration.quarterLength = tremoloNoteGesturalDuration
-                return tremoloNoteGesturalDuration
+                    return tremoloNoteGesturalDuration
+                return tremoloNoteVisualDuration
 
         tstring: str = token.text.lstrip(' ')
         if subTokenIdx >= 0:

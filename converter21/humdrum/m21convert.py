@@ -793,7 +793,7 @@ class M21Convert:
         vdurRecip: str = ''
         graceType: str = ''
         recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21GeneralNote.duration)
-        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21GeneralNote.duration)
+        graceType = M21Convert.kernGraceTypeFromM21Duration(m21GeneralNote.duration)
         if (graceType
                 and hasattr(m21GeneralNote, 'stemDirection')
                 and m21GeneralNote.stemDirection == 'noStem'):  # type: ignore

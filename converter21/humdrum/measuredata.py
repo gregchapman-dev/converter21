@@ -376,7 +376,7 @@ class MeasureData:
     def _parseEventsAtTopLevelOf(
         self,
         m21Stream: m21.stream.Measure,
-        firstBit: t.Optional[bool]  # None -> all of it, True -> first bit only, False -> all but first bit
+        firstBit: t.Optional[bool]  # None -> all of it, True -> first bit, False -> non-first-bit
     ) -> None:
         skipping: bool = False
         if firstBit is False:
@@ -394,7 +394,7 @@ class MeasureData:
                 continue
 
             if firstBit is True:
-                if isinstance(element, m21.note.GeneralNote) or isinstance(element, m21.stream.Stream):
+                if isinstance(element, (m21.note.GeneralNote, m21.stream.Stream)):
                     # done with first bit
                     return
             elif firstBit is False and skipping:
