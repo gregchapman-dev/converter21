@@ -3769,6 +3769,48 @@ def passThruEditorialLayerChildrenFromElement(
     return theList
 
 
+def appChoiceStaffItemsFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
+) -> t.List[t.Tuple[str, OffsetQL, Music21Object]]:
+    chosen: t.Optional[Element] = chooseSubElement(elem)
+    if chosen is None:
+        return []
+
+    # iterate all immediate children
+    theList: t.List[t.Tuple[str, OffsetQL, Music21Object]] = _processEmbeddedElements(
+        chosen.iterfind('*'),
+        staffItemsTagToFunction,
+        chosen.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
+def passThruEditorialStaffItemsFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
+) -> t.List[t.Tuple[str, OffsetQL, Music21Object]]:
+    # iterate all immediate children
+    theList: t.List[t.Tuple[str, OffsetQL, Music21Object]] = _processEmbeddedElements(
+        elem.iterfind('*'),
+        staffItemsTagToFunction,
+        elem.tag,
+        activeMeter,
+        spannerBundle,
+        otherInfo
+    )
+
+    return theList
+
+
 def appChoiceNoteChildrenFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -4328,16 +4370,17 @@ def dynamFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[OffsetQL, t.Optional[dynamics.Dynamic]]:
+) -> t.Tuple[str, OffsetQL, t.Optional[dynamics.Dynamic]]:
+    staffNStr: str
     offset: OffsetQL
     dynamObj: dynamics.Dynamic
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive dynamic info from that.
     teWithStyle: t.Optional[expressions.TextExpression]
-    offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    staffNStr, offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
     if teWithStyle is None:
-        return offset, None
+        return '', offset, None
 
     if t.TYPE_CHECKING:
         assert isinstance(teWithStyle.style, style.TextStyle)
@@ -4354,7 +4397,7 @@ def dynamFromElement(
     if teWithStyle.placement is not None:
         dynamObj.placement = teWithStyle.placement
 
-    return offset, dynamObj
+    return staffNStr, offset, dynamObj
 
 
 def tempoFromElement(
@@ -4367,11 +4410,12 @@ def tempoFromElement(
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive tempo info from that.
+    staffNStr: str
     offset: OffsetQL
     teWithStyle: t.Optional[expressions.TextExpression]
-    offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    staffNStr, offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
     if teWithStyle is None:
-        return offset, None
+        return '', offset, None
 
     # default tempo placement should be above
     if teWithStyle.placement is None:
@@ -4414,12 +4458,12 @@ def tempoFromElement(
                 number=midiBPM,
                 referent='quarter'
             )
-            return offset, tempoObj
+            return staffNStr, offset, tempoObj
 
         # it's just tempo text (no bpm info), use the full original text (teWithStyle)
         tempoObj = tempo.TempoText()
         tempoObj.setTextExpression(teWithStyle)  # pick up all the style
-        return offset, tempoObj
+        return staffNStr, offset, tempoObj
 
     # we have enough info for a full MetronomeMark; use the tempoName
     # instead of full original text, because we pass the 𝅗𝅥 = 128 info
@@ -4439,7 +4483,7 @@ def tempoFromElement(
     # when text is a TempoText
     tempoObj.style = teWithStyle.style
 
-    return offset, tempoObj
+    return staffNStr, offset, tempoObj
 
 
 def dirFromElement(
@@ -4447,21 +4491,28 @@ def dirFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[OffsetQL, t.Optional[expressions.TextExpression]]:
+) -> t.Tuple[str, OffsetQL, t.Optional[expressions.TextExpression]]:
+    # returns (staffNStr, offset, te)
+
+    # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
+    staffNStr = elem.get('staff', '1')
     offset: OffsetQL
     te: expressions.TextExpression
 
     typeAtt: t.Optional[str] = elem.get('type')
     if typeAtt is not None and typeAtt == 'fingering':
-        return -1, None
+        return '', -1, None
 
     # @tstamp is required for now, someday we'll be able to derive offsets from @startid
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp in <dir> element')
-        return -1, None
+        return '', -1, None
 
     offset = _tstampToOffset(tstamp, activeMeter)
+
+    # technically not always legal, but I've seen it in <dynam>, so support it here for everyone.
+    enclose: t.Optional[str] = elem.get('enclose')
 
     fontStyle: t.Optional[str] = None
     fontWeight: t.Optional[str] = None
@@ -4515,6 +4566,13 @@ def dirFromElement(
 
     text = html.unescape(text)
     text = text.strip()
+
+    if enclose is not None:
+        if enclose == 'paren':
+            text = '( ' + text + ' )'
+        elif enclose == 'brack':
+            text = '[ ' + text + ' ]'
+
     te = expressions.TextExpression(text)
 
     if t.TYPE_CHECKING:
@@ -4544,7 +4602,7 @@ def dirFromElement(
             te.style.alignVertical = 'middle'
         else:
             environLocal.warn(f'invalid @place = "{place}" in <dir>')
-    return offset, te
+    return staffNStr, offset, te
 
 def _m21FontStyleFromMeiFontStyleAndWeight(
     meiFontStyle: t.Optional[str],
@@ -4669,38 +4727,6 @@ def measureFromElement(
     # mapping from tag name to our converter function
     staffTag: str = f'{MEI_NS}staff'
     staffDefTag: str = f'{MEI_NS}staffDef'
-    staffItemTagToFunction: t.Dict[str, t.Callable[
-        [Element,
-            t.Optional[meter.TimeSignature],
-            spanner.SpannerBundle,
-            t.Dict[str, str]],
-        t.Any]
-    ] = {
-        #         f'{MEI_NS}anchoredText': anchoredTextFromElement,
-        #        f'{MEI_NS}arpeg': arpegFromElement,
-        #         f'{MEI_NS}bracketSpan': bracketSpanFromElement,
-        #         f'{MEI_NS}breath': breathFromElement,
-        #         f'{MEI_NS}caesura': caesuraFromElement,
-        f'{MEI_NS}dir': dirFromElement,
-        f'{MEI_NS}dynam': dynamFromElement,
-        #        f'{MEI_NS}fermata': fermataFromElement,
-        #         f'{MEI_NS}fing': fingFromElement,
-        #         f'{MEI_NS}gliss': glissFromElement,
-        #         f'{MEI_NS}hairpin': hairpinFromElement,
-        #         f'{MEI_NS}harm': harmFromElement,
-        #         f'{MEI_NS}lv': lvFromElement,
-        #        f'{MEI_NS}mNum': mNumFromElement,
-        #        f'{MEI_NS}mordent': mordentFromElement,
-        #         f'{MEI_NS}octave': octaveFromElement,
-        #         f'{MEI_NS}pedal': pedalFromElement,
-        #         f'{MEI_NS}phrase': phraseFromElement,
-        #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
-        #         f'{MEI_NS}reh': rehFromElement,
-        f'{MEI_NS}tempo': tempoFromElement,
-        #        f'{MEI_NS}trill': trillFromElement,
-        #        f'{MEI_NS}turn': turnFromElement,
-    }
-
 
     # track the bar's duration
     maxBarDuration: t.Optional[OffsetQL] = None
@@ -4726,22 +4752,17 @@ def measureFromElement(
                 stavesWaitingFromStaffDef[nStr] = staffDefFromElement(
                     eachElem, spannerBundle, otherInfo
                 )
-        elif eachElem.tag in staffItemTagToFunction:
-            staffNStr: t.Optional[str] = eachElem.get('staff')
-            if staffNStr is None:
-                # presume it is staff 1; I've seen <tempo> without @staff, for example.
-                staffNStr = '1'
-
-            if staffNStr not in stavesWaitingFromStaffItem:
-                stavesWaitingFromStaffItem[staffNStr] = []
-
-            resultTuple: t.Tuple[OffsetQL, t.Optional[Music21Object]] = (
-                staffItemTagToFunction[eachElem.tag](
-                    eachElem, activeMeter, spannerBundle, otherInfo
-                )
+        elif eachElem.tag in staffItemsTagToFunction:
+            staffNStr: str
+            offset: OffsetQL
+            m21Obj: t.Optional[Music21Object]
+            staffNStr, offset, m21Obj = staffItemsTagToFunction[eachElem.tag](
+                eachElem, activeMeter, spannerBundle, otherInfo
             )
-            if resultTuple[1] is not None:
-                stavesWaitingFromStaffItem[staffNStr].append(resultTuple)  # type: ignore
+            if m21Obj is not None:
+                if staffNStr not in stavesWaitingFromStaffItem:
+                    stavesWaitingFromStaffItem[staffNStr] = []
+                stavesWaitingFromStaffItem[staffNStr].append((offset, m21Obj))  # type: ignore
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
@@ -5288,6 +5309,50 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}barLine': barLineFromElement,
     f'{MEI_NS}meterSig': timeSigFromElement,
     f'{MEI_NS}keySig': keySigFromElement,
+}
+
+staffItemsTagToFunction: t.Dict[str, t.Callable[
+    [Element,
+        t.Optional[meter.TimeSignature],
+        spanner.SpannerBundle,
+        t.Dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': appChoiceStaffItemsFromElement,
+    f'{MEI_NS}choice': appChoiceStaffItemsFromElement,
+    f'{MEI_NS}add': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}corr': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}damage': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}expan': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}orig': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}reg': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}sic': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}subst': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}supplied': passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}unclear': passThruEditorialStaffItemsFromElement,
+    #         f'{MEI_NS}anchoredText': anchoredTextFromElement,
+    #        f'{MEI_NS}arpeg': arpegFromElement,
+    #         f'{MEI_NS}bracketSpan': bracketSpanFromElement,
+    #         f'{MEI_NS}breath': breathFromElement,
+    #         f'{MEI_NS}caesura': caesuraFromElement,
+    f'{MEI_NS}dir': dirFromElement,
+    f'{MEI_NS}dynam': dynamFromElement,
+    #        f'{MEI_NS}fermata': fermataFromElement,
+    #         f'{MEI_NS}fing': fingFromElement,
+    #         f'{MEI_NS}gliss': glissFromElement,
+    #         f'{MEI_NS}hairpin': hairpinFromElement,
+    #         f'{MEI_NS}harm': harmFromElement,
+    #         f'{MEI_NS}lv': lvFromElement,
+    #        f'{MEI_NS}mNum': mNumFromElement,
+    #        f'{MEI_NS}mordent': mordentFromElement,
+    #         f'{MEI_NS}octave': octaveFromElement,
+    #         f'{MEI_NS}pedal': pedalFromElement,
+    #         f'{MEI_NS}phrase': phraseFromElement,
+    #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
+    #         f'{MEI_NS}reh': rehFromElement,
+    f'{MEI_NS}tempo': tempoFromElement,
+    #        f'{MEI_NS}trill': trillFromElement,
+    #        f'{MEI_NS}turn': turnFromElement,
 }
 
 noteChildrenTagToFunction: t.Dict[str, t.Callable[
