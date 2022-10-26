@@ -785,6 +785,23 @@ class M21Convert:
         return output
 
     @staticmethod
+    def kernRecipAndGraceTypeFromGeneralNote(
+        m21GeneralNote: m21.note.GeneralNote
+    ) -> t.Tuple[str, str, str]:
+        # returns (recip, vdurRecip, graceType)
+        recip: str = ''
+        vdurRecip: str = ''
+        graceType: str = ''
+        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21GeneralNote.duration)
+        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21GeneralNote.duration)
+        if (graceType
+                and hasattr(m21GeneralNote, 'stemDirection')
+                and m21GeneralNote.stemDirection == 'noStem'):  # type: ignore
+            # grace notes with no stem are encoded in Humdrum as grace notes with no recip
+            recip = ''
+        return recip, vdurRecip, graceType
+
+    @staticmethod
     def kernTokenStringAndLayoutsFromM21Unpitched(
             m21Unpitched: m21.note.Unpitched,
             spannerBundle: m21.spanner.SpannerBundle,
@@ -793,8 +810,8 @@ class M21Convert:
         prefix: str = ''
         recip: str = ''
         vdurRecip: str = ''
-        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Unpitched.duration)
-        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Unpitched.duration)
+        graceType: str = ''
+        recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Unpitched)
         pitch: str = M21Convert.kernPitchFromM21Unpitched(m21Unpitched, owner)
         postfix: str = ''
         layouts: t.List[str] = []
@@ -833,8 +850,8 @@ class M21Convert:
         pitch: str = 'r'  # "pitch" of a rest is 'r'
         recip: str = ''
         vdurRecip: str = ''
-        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Rest.duration)
-        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Rest.duration)
+        graceType: str = ''
+        recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Rest)
         postfixAndLayouts: t.Tuple[str, t.List[str]] = (
             M21Convert.kernPostfixAndLayoutsFromM21Rest(
                 m21Rest,
@@ -901,8 +918,8 @@ class M21Convert:
                                              owner=None) -> t.Tuple[str, t.List[str]]:
         recip: str = ''
         vdurRecip: str = ''
-        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Note.duration)
-        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Note.duration)
+        graceType: str = ''
+        recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Note)
         pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
         prefix: str = ''
         postfix: str = ''
@@ -1134,8 +1151,8 @@ class M21Convert:
         pitchPerNote: t.List[str] = M21Convert.kernPitchesFromM21Chord(m21Chord, owner)
         recip: str = ''
         vdurRecip: str = ''
-        recip, vdurRecip = M21Convert.kernRecipFromM21Duration(m21Chord.duration)
-        graceType: str = M21Convert.kernGraceTypeFromM21Duration(m21Chord.duration)
+        graceType: str = ''
+        recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Chord)
         prefixPerNote: t.List[str] = []
         postfixPerNote: t.List[str] = []
         layoutsForChord: t.List[str] = []
