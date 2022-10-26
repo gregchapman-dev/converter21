@@ -2749,6 +2749,20 @@ def noteFromElement(
         # just add it as an attribute, to be read by callers if they like
         theNote.mei_stem_mod = stemModStr  # type: ignore
 
+    stemLenStr: t.Optional[str] = elem.get('stem.len')
+    stemLen: t.Optional[float] = None
+    if stemLenStr is not None:
+        try:
+            stemLen = float(stemLenStr)
+        except:
+            pass
+        if stemLen is not None and stemLen == 0:
+            theNote.stemDirection = 'noStem'
+
+    stemVisible: t.Optional[str] = elem.get('stem.visible')
+    if stemVisible is not None and stemVisible == 'false':
+        theNote.stemDirection = 'noStem'
+
     # beams indicated by a <beamSpan> held elsewhere
     if elem.get('m21Beam') is not None:
         if duration.convertTypeToNumber(theNote.duration.type) > 4:

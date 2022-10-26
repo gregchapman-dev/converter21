@@ -6717,35 +6717,16 @@ class HumdrumFile(HumdrumFileContent):
                     #         note.pitch.accidental.set('natural-sharp',
                     #           allowNonStandardValue=True)
 
+        self._setStemDirection(note, token, tstring)
+
         # we don't set the duration of notes in a chord.  The chord gets a duration
         # instead.
         if not isChord:
             # note tremolos are handled inside _convertRhythm
-            self._convertRhythm(note, token, subTokenIdx)
-
-        # LATER: Support *2\right for scores where half-notes' stems are on the right
-        # I don't think music21 can do it, so...
-
-        # Q: Figure out why a note with duration zero is being displayed by
-        # Q: C++ code as a stemless quarter note.
-        # Q: I'm just going to put it in the music21 stream as a zero-duration note,
-        # Q: and see what happens.
-#         if dur == 0:
-#             note.duration.quarterLength = 1
-#             note.stemDirection = 'nostem'
-#             # if you want a stemless grace note, then set the
-#             # stemlength to zero explicitly.
-        else:
-            pass  # TODO: note visual duration that is different from chord visual duration
-#             std::string chordvis = token->getVisualDurationChord();
-#             if (chordvis.empty()) {
-#                 std::string notevis = token->getVisualDuration(subtoken);
-#                 if (!notevis.empty()) {
-#                     convertRhythm(note, token, subtoken);
-#                 }
-#             }
-
-        self._setStemDirection(note, token, tstring)
+            dur: HumNum = self._convertRhythm(note, token, subTokenIdx)
+            if dur == 0:
+                note.duration.type = 'quarter'
+                note.stemDirection = 'noStem'
 
         if not token.isMens:
             # yy means make invisible in **kern, but is used for accidental
@@ -7425,7 +7406,7 @@ class HumdrumFile(HumdrumFileContent):
             obj: m21.Music21Object,
             token: HumdrumToken,
             subTokenIdx: int = -1
-    ) -> None:
+    ) -> HumNum:
         # if token.isMens:
         #     return self._convertMensuralRhythm(obj, token, subTokenIdx)
         isGrace: bool = False
@@ -7452,7 +7433,7 @@ class HumdrumFile(HumdrumFileContent):
                 if tremoloNoteGesturalDuration is not None:
                     obj.duration.linked = False  # leave the note looking like visual duration
                     obj.duration.quarterLength = tremoloNoteGesturalDuration
-                return
+                return tremoloNoteGesturalDuration
 
         tstring: str = token.text.lstrip(' ')
         if subTokenIdx >= 0:
@@ -7487,6 +7468,8 @@ class HumdrumFile(HumdrumFileContent):
                 obj.duration.type = m21.duration.quarterLengthToClosestType(dur)[0]
         else:
             obj.duration.quarterLength = dur
+
+        return dur
 
     '''
         _processOtherLayerToken
