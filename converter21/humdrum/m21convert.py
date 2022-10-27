@@ -2502,6 +2502,7 @@ class M21Convert:
         # should be interpreted for
         outputBarline: t.Optional[m21.bar.Barline] = None
         if side == 'right':
+            # handle various repeats
             if (':|' in measureString
                     or ':!' in measureString):
                 # right barline is an end repeat
@@ -2511,10 +2512,12 @@ class M21Convert:
                 )
             elif ('|:' in measureString
                     or '!:' in measureString):
-                # next measure's left barline is a start repeat; our right (which lands
-                # at the same spot) should just be regular
+                # right barline is NOT an end repeat, but next measure's left barline
+                # is a start repeat; our right barline (which lands at the same spot)
+                # should just be regular, to blend in silently
                 outputBarline = m21.bar.Barline('regular')
         elif side == 'left':
+            # handle various repeats
             if ('|:' in measureString
                     or '!:' in measureString):
                 # left barline is a start repeat
@@ -2524,8 +2527,9 @@ class M21Convert:
                 )
             elif (':|' in measureString
                     or ':!' in measureString):
-                # previous measure's right barline is an end repeat; our left (which lands
-                # at the same spot) should just be regular
+                # left barline is NOT a start repeat, but previous measure's right barline
+                # is an end repeat; our left barline (which lands at the same spot) should
+                # just be regular, to blend in silently
                 outputBarline = m21.bar.Barline('regular')
 
         if outputBarline is None:

@@ -1226,7 +1226,7 @@ class HumdrumFile(HumdrumFileContent):
             endingBarline: m21.bar.Barline = M21Convert.m21BarlineFromHumdrumString(
                 endBar, side='right'
             )
-            if endingBarline is not None:  # it'll be None for any start repeats, for example
+            if endingBarline is not None:
                 currentMeasurePerStaff[staffIndex].rightBarline = endingBarline
 
             if nextMeasureIndex is not None:
