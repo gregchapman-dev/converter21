@@ -2509,6 +2509,11 @@ class M21Convert:
                 outputBarline.type = (
                     M21Convert._m21BarlineTypeFromHumdrumRepeatString(measureString, side)
                 )
+            elif ('|:' in measureString
+                    or '!:' in measureString):
+                # next measure's left barline is a start repeat; our right (which lands
+                # at the same spot) should just be regular
+                outputBarline = m21.bar.Barline('regular')
         elif side == 'left':
             if ('|:' in measureString
                     or '!:' in measureString):
@@ -2517,6 +2522,11 @@ class M21Convert:
                 outputBarline.type = (
                     M21Convert._m21BarlineTypeFromHumdrumRepeatString(measureString, side)
                 )
+            elif (':|' in measureString
+                    or ':!' in measureString):
+                # previous measure's right barline is an end repeat; our left (which lands
+                # at the same spot) should just be regular
+                outputBarline = m21.bar.Barline('regular')
 
         if outputBarline is None:
             barlineType: str = M21Convert._m21BarlineTypeFromHumdrumString(measureString)
