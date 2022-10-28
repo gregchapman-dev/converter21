@@ -225,7 +225,6 @@ _IGNORE_UNPROCESSED = (
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
-    f'{MEI_NS}fermata',     # fermatas; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
     f'{MEI_NS}verse',       # lyrics; handled separately by noteFromElement()
@@ -1078,8 +1077,11 @@ def _ppFermatas(theConverter: MeiToM21Converter):
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
         startId: t.Optional[str] = removeOctothorpe(eachFermata.get('startid'))
         if startId is None:
-            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<fermata>', '@startid'))
+            # leave this alone, we'll handle it later in fermataFromElement
             continue
+
+        # mark as handled, so we WON'T handle it later in fermataFromElement
+        eachFermata.set('ignore_in_fermataFromElement', 'true')
 
         place: str = eachFermata.get('place', 'above')  # default @place is "above"
         c.m21Attr[startId]['fermata'] = place
@@ -1130,8 +1132,8 @@ def _ppConclude(theConverter: MeiToM21Converter):
             objAttrs: t.Dict = c.m21Attr[objXmlId]
             for eachAttr in objAttrs:
                 oldAttrValue: str = eachObject.get(eachAttr, '')
-                newAttrValue: str = oldAttrValue + objAttrs[eachAttr]
-                eachObject.set(eachAttr, newAttrValue)
+                newAttrValue: str = objAttrs[eachAttr]
+                eachObject.set(eachAttr, oldAttrValue + newAttrValue)
 
 
 # Helper Functions
@@ -4301,6 +4303,7 @@ def _makeBarlines(
         if isinstance(bars, tuple):
             # this means @left was "rptboth"
             bars = bars[1]
+
         for eachMeasure in staves.values():
             if isinstance(eachMeasure, stream.Measure):
                 eachMeasure.leftBarline = deepcopy(bars)
@@ -4311,11 +4314,73 @@ def _makeBarlines(
         # this means @right was "rptboth"
         staves['next @left'] = bars[1]
         bars = bars[0]
+
     for eachMeasure in staves.values():
         if isinstance(eachMeasure, stream.Measure):
             eachMeasure.rightBarline = deepcopy(bars)
 
     return staves
+
+
+def _addTimestampedFermatas(
+    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
+    tsFermatas: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Fermata]]
+):
+    clonedFermata: expressions.Fermata
+
+    for staffNs, offset, fermata in tsFermatas:
+        for i, staffN in enumerate(staffNs):
+            doneWithStaff: bool = False
+            eachMeasure: t.Union[stream.Measure, bar.Repeat] = staves[staffN]
+            if not isinstance(eachMeasure, stream.Measure):
+                continue
+
+            for eachMObj in eachMeasure:
+                if not isinstance(eachMObj, (stream.Stream, bar.Barline)):
+                    continue
+
+                if isinstance(eachMObj, bar.Barline):
+                    if i == 0:
+                        if eachMObj.pause is None:
+                            eachMObj.pause = fermata
+                        else:
+                            environLocal.warn(
+                                'Extra Barline fermata ignored; music21 can\'t have more than one'
+                            )
+                    else:
+                        if eachMObj.pause is None:
+                            clonedFermata = deepcopy(fermata)
+                            eachMObj.pause = clonedFermata
+                        else:
+                            environLocal.warn(
+                                'Extra Barline fermata ignored; music21 can\'t have more than one'
+                            )
+                    doneWithStaff = True
+                    break
+
+                eachVoice: stream.Stream = eachMObj
+
+                for eachObject in eachVoice:
+                    if not isinstance(eachObject, note.GeneralNote):
+                        continue
+                    if eachObject.offset == offset:
+                        if i == 0:
+                            eachObject.expressions.append(fermata)
+                        else:
+                            clonedFermata = deepcopy(fermata)
+                            eachObject.expressions.append(clonedFermata)
+
+                        doneWithStaff = True
+                        break
+
+                if doneWithStaff:
+                    break
+
+            if not doneWithStaff:
+                # we didn't find any place for the fermata in this staff
+                environLocal.warn(
+                    f'No obj at offset {offset} found in staff {staffN} for timestamped fermata.'
+                )
 
 
 def _tstampToOffset(tstamp: str, activeMeter: t.Optional[meter.TimeSignature]) -> OffsetQL:
@@ -4705,6 +4770,56 @@ def dirFromElement(
             environLocal.warn(f'invalid @place = "{place}" in <dir>')
     return staffNStr, offset, te
 
+
+def fermataFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any],
+) -> t.Tuple[str, OffsetQL, t.Optional[expressions.Fermata]]:
+    # returns (staffNStr, offset, fermata)
+
+    # if the fermata element has already been processed in _ppFermatas, ignore it here
+    if elem.get('ignore_in_fermataFromElement') == 'true':
+        return '', -1, None
+
+    # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
+    staffNStr = elem.get('staff', '1')
+    offset: OffsetQL
+    fermata: expressions.Fermata
+
+    # tstamp is required, since it doesn't have a @startid (if it had a @startid, we
+    # would have processed it in _ppFermatas, and ignored it here).
+    tstamp: t.Optional[str] = elem.get('tstamp')
+    if tstamp is None:
+        environLocal.warn('<fermata> element is missing @tstamp and @startid')
+        return '', -1, None
+
+    offset = _tstampToOffset(tstamp, activeMeter)
+
+    fermataPlace: str = elem.get('place', 'above')  # default @place is "above"
+    fermataForm: str = elem.get('form', '')
+    fermataShape: str = elem.get('shape', '')
+
+    fermata = expressions.Fermata()
+    if fermataPlace == 'above':
+        fermata.type = 'upright'
+    elif fermataPlace == 'below':
+        fermata.type = 'inverted'
+
+    if fermataForm == 'norm':
+        fermata.type = 'upright'
+    elif fermataForm == 'inv':
+        fermata.type = 'inverted'
+
+    if fermataShape == 'angular':
+        fermata.shape = 'angled'
+    elif fermataShape == 'square':
+        fermata.shape = 'square'
+
+    return staffNStr, offset, fermata
+
+
 def _m21FontStyleFromMeiFontStyleAndWeight(
     meiFontStyle: t.Optional[str],
     meiFontWeight: t.Optional[str]
@@ -4879,6 +4994,10 @@ def measureFromElement(
                 assert isinstance(staveN, stream.Measure)
             staveN.insert(0, eachObj)
 
+    # a list of (offset, fermata) pairs containing all the fermats that have
+    # @timestamp instead of @startid (the ones with @startid have already been processed)
+    tsFermatas: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Fermata]] = []
+
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
         for eachOffset, eachObj in eachList:
@@ -4888,6 +5007,11 @@ def measureFromElement(
                 raise MeiAttributeError(
                     _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachObj.classes[0], whichStaff)
                 )
+            if isinstance(eachObj, expressions.Fermata):
+                # save off to process later, skip for now
+                tsFermatas.append((staffNs, eachOffset, eachObj))
+                continue
+
             if len(staffNs) == 1:
                 staffNumStr = staffNs[0]
                 staveN = staves[staffNumStr]
@@ -4963,6 +5087,9 @@ def measureFromElement(
 
     # assign left and right barlines
     staves = _makeBarlines(elem, staves)
+
+    # take the timestamped fermatas and find notes/barlines to put them on
+    _addTimestampedFermatas(staves, tsFermatas)
 
     return staves
 
@@ -5439,7 +5566,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     #         f'{MEI_NS}caesura': caesuraFromElement,
     f'{MEI_NS}dir': dirFromElement,
     f'{MEI_NS}dynam': dynamFromElement,
-    #        f'{MEI_NS}fermata': fermataFromElement,
+    f'{MEI_NS}fermata': fermataFromElement,
     #         f'{MEI_NS}fing': fingFromElement,
     #         f'{MEI_NS}gliss': glissFromElement,
     #         f'{MEI_NS}hairpin': hairpinFromElement,
