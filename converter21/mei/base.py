@@ -2830,6 +2830,10 @@ def noteFromElement(
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
 
+    colorStr: t.Optional[str] = elem.get('color')
+    if colorStr is not None:
+        theNote.style.color = colorStr
+
     stemDirStr: t.Optional[str] = elem.get('stem.dir')
     if stemDirStr is not None:
         # We don't pay attention to stem direction if the note
@@ -2935,6 +2939,10 @@ def restFromElement(
         if t.TYPE_CHECKING:
             assert isinstance(theRest.style, style.NoteStyle)
         theRest.style.noteSize = 'cue'
+
+    colorStr: t.Optional[str] = elem.get('color')
+    if colorStr is not None:
+        theNote.style.color = colorStr
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
@@ -3166,6 +3174,10 @@ def chordFromElement(
         if t.TYPE_CHECKING:
             assert isinstance(theChord.style, style.NoteStyle)
         theChord.style.noteSize = 'cue'
+
+    colorStr: t.Optional[str] = elem.get('color')
+    if colorStr is not None:
+        theNote.style.color = colorStr
 
     stemDirStr: t.Optional[str] = elem.get('stem.dir')
     if stemDirStr is not None:
