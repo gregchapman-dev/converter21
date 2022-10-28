@@ -222,9 +222,10 @@ _IGNORE_UNPROCESSED = (
     # f'{MEI_NS}sb',        # system break
     # f'{MEI_NS}lb',        # line break
     # f'{MEI_NS}pb',        # page break
-    # f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
+    f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
+    f'{MEI_NS}fermata',     # fermatas; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
     f'{MEI_NS}verse',       # lyrics; handled separately by noteFromElement()
@@ -342,6 +343,7 @@ class MeiToM21Converter:
         _ppTies(self)
         _ppBeams(self)
         _ppTuplets(self)
+        _ppFermatas(self)
         _ppConclude(self)
 
         environLocal.printDebug('*** processing <score> elements')
@@ -1040,6 +1042,56 @@ def _ppTuplets(theConverter: MeiToM21Converter):
             c.m21Attr[endid]['m21TupletNumbase'] = eachTuplet.get('numbase')
 
 
+def _ppFermatas(theConverter: MeiToM21Converter):
+    '''
+    Pre-processing helper for :func:`convertFromString` that handles fermats specified in <fermata>
+    elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+    processed. This function reads from ``theConverter.documentRoot`` and writes into
+    ``theConverter.m21Attr``.
+
+    :param theConverter: The object responsible for storing data about this import.
+    :type theConverter: :class:`MeiToM21Converter`.
+
+    **This Preprocessor**
+
+    The fermata preprocessor works similarly to the tie preprocessor, adding @fermata
+    attributes. The @fermata attribute looks like it would if specified according to the
+    Guidelines (e.g. @fermata="above", where "above" comes from the <fermata> element's
+    @place attribute).  The other attributes from the <fermata> element (@form and @shape)
+    are also added, prefixed with 'fermata_' as follows: @fermata_form and @fermata_shape.
+
+    **Example of ``m21Attr``**
+
+    The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+    dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
+    dict holds attribute names and their values that should be added to the element with the
+    given @xml:id.
+
+    For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
+    element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
+    '''
+    environLocal.printDebug('*** pre-processing ties')
+    # for readability, we use a single-letter variable
+    c = theConverter
+
+    for eachFermata in c.documentRoot.iterfind(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
+        startId: t.Optional[str] = removeOctothorpe(eachFermata.get('startid'))
+        if startId is None:
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<fermata>', '@startid'))
+            continue
+
+        place: str = eachFermata.get('place', 'above')  # default @place is "above"
+        c.m21Attr[startId]['fermata'] = place
+
+        form: str = eachFermata.get('form', '')
+        shape: str = eachFermata.get('shape', '')
+        if form:
+            c.m21Attr[startId]['fermata_form'] = form
+        if shape:
+            c.m21Attr[startId]['fermata_shape'] = shape
+
+
 def _ppConclude(theConverter: MeiToM21Converter):
     '''
     Pre-processing helper for :func:`convertFromString` that adds attributes from ``m21Attr`` to the
@@ -1060,7 +1112,7 @@ def _ppConclude(theConverter: MeiToM21Converter):
     element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
 
     **This Preprocessor**
-    The slur preprocessor adds all attributes from the ``m21Attr`` to the appropriate element in
+    The conclude preprocessor adds all attributes from the ``m21Attr`` to the appropriate element in
     ``documentRoot``. In effect, it finds the element corresponding to each key in ``m21Attr``,
     then iterates the keys in its dict, *appending* the ``m21Attr``-specified value to any existing
     value.
@@ -1071,12 +1123,15 @@ def _ppConclude(theConverter: MeiToM21Converter):
 
     # conclude pre-processing by adding music21-specific attributes to their respective elements
     for eachObject in c.documentRoot.iterfind('*//*'):
+        objXmlId: t.Optional[str] = eachObject.get(_XMLID)
         # we have a defaultdict, so this "if" isn't strictly necessary; but without it, every single
         # element with an @xml:id creates a new, empty dict, which would consume a lot of memory
-        if eachObject.get(_XMLID) in c.m21Attr:
-            for eachAttr in c.m21Attr[eachObject.get(_XMLID)]:
-                eachObject.set(eachAttr, (eachObject.get(eachAttr, '')
-                                          + c.m21Attr[eachObject.get(_XMLID)][eachAttr]))
+        if objXmlId and objXmlId in c.m21Attr:
+            objAttrs: t.Dict = c.m21Attr[objXmlId]
+            for eachAttr in objAttrs:
+                oldAttrValue: str = eachObject.get(eachAttr, '')
+                newAttrValue: str = oldAttrValue + objAttrs[eachAttr]
+                eachObject.set(eachAttr, newAttrValue)
 
 
 # Helper Functions
@@ -2559,6 +2614,36 @@ def stringFromElement(
                 text += el.tail
     return text
 
+def fermataFromNoteChordOrRestElement(elem: Element) -> t.Optional[expressions.Fermata]:
+    fermataPlace: t.Optional[str] = elem.get('fermata')
+    if fermataPlace is None:
+        return None
+
+    fermata: expressions.Fermata = expressions.Fermata()
+    fermataShape: str = elem.get('fermata_shape', '')
+    fermataForm: str = elem.get('fermata_form', '')
+    # place = 'above' or 'below'
+    # form = 'norm' or 'inv'
+    # shape = 'angular', 'square', None -> the usual default shape
+    # Music21, however, does not support place, just fermata.type = 'inverted'
+    # and type = 'upright', which also imply 'below' and 'above', respectively.
+    if fermataPlace == 'above':
+        fermata.type = 'upright'
+    elif fermataPlace == 'below':
+        fermata.type = 'inverted'
+
+    if fermataForm == 'norm':
+        fermata.type = 'upright'
+    elif fermataForm == 'inv':
+        fermata.type = 'inverted'
+
+    if fermataShape == 'angular':
+        fermata.shape = 'angled'
+    elif fermataShape == 'square':
+        fermata.shape = 'square'
+
+    return fermata
+
 def noteFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -2728,6 +2813,11 @@ def noteFromElement(
     if articStr is not None:
         theNote.articulations.extend(_makeArticList(articStr))
 
+    # expressions from element attributes (perhaps fake attributes created during preprocessing)
+    fermata = fermataFromNoteChordOrRestElement(elem)
+    if fermata is not None:
+        theNote.expressions.append(fermata)
+
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
     if tieStr is not None:
@@ -2833,6 +2923,11 @@ def restFromElement(
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
         theRest.id = xmlId
+
+    # expressions from element attributes (perhaps fake attributes created during preprocessing)
+    fermata = fermataFromNoteChordOrRestElement(elem)
+    if fermata is not None:
+        theRest.expressions.append(fermata)
 
     if elem.get('cue') == 'true':
         if t.TYPE_CHECKING:
@@ -3054,6 +3149,11 @@ def chordFromElement(
     articStr: t.Optional[str] = elem.get('artic')
     if articStr is not None:
         theChord.articulations.extend(_makeArticList(articStr))
+
+    # expressions from element attributes (perhaps fake attributes created during preprocessing)
+    fermata = fermataFromNoteChordOrRestElement(elem)
+    if fermata is not None:
+        theChord.expressions.append(fermata)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
