@@ -1269,36 +1269,47 @@ def _keySigFromAttrs(elem: Element, prefix: str = '') -> t.Union[key.Key, key.Ke
 
     Returns the key or key signature.
     '''
-    keySig: t.Union[key.Key, key.KeySignature]
-    # @@@ I think @sig should take priority --gregc
+    theKeySig: t.Optional[t.Union[key.KeySignature, key.Key]] = None
+    theKey: t.Optional[key.Key] = None
+
     pname: t.Optional[str] = elem.get(prefix + 'pname')
+    mode: t.Optional[str] = elem.get(prefix + 'mode')
+    accid: t.Optional[str] = elem.get(prefix + 'accid')
+    sig: t.Optional[str] = elem.get(prefix + 'sig')
     form: t.Optional[str] = elem.get(prefix + 'form')
-    if pname is not None:
-        # @accid/@key.accid, @mode/@key.mode, @pname/@key.pname
-        mode: str = elem.get(prefix + 'mode', '')
-        step: str = pname
-        accidental: t.Optional[str] = _accidentalFromAttr(elem.get(prefix + 'accid'))
+    if pname is not None and mode is not None:
+        accidental: t.Optional[str] = _accidentalFromAttr(accid)
         tonic: str
         if accidental is None:
-            tonic = step
+            tonic = pname
         else:
-            tonic = step + accidental
-        keySig = key.Key(tonic=tonic, mode=mode)
-        if form == 'invis':
-            keySig.style.hideObjectOnPrint = True
-        return keySig
+            tonic = pname + accidental
+        theKey = key.Key(tonic=tonic, mode=mode)
 
+    if sig is not None:
+        theKeySig = key.KeySignature(sharps=_sharpsFromAttr(sig))
+        if mode:
+            theKeySig = theKeySig.asKey(mode=mode)
+
+    output: t.Union[key.KeySignature, key.Key]
+    if theKey is not None and theKeySig is not None:
+        if theKey.sharps != theKeySig.sharps:
+            # if they disagree, pick the one that was specified by number of sharps/flats
+            output = theKeySig
+        else:
+            # if they agree, pick the one with more info
+            output = theKey
+    elif theKey is not None:
+        output = theKey
+    elif theKeySig is not None:
+        output = theKeySig
     else:
-        # @key.sig, @key.mode
-        # If @key.mode is null, assume it is a 'major' key (default for ks.asKey)
-        ks: key.KeySignature = key.KeySignature(sharps=_sharpsFromAttr(elem.get(prefix + 'sig')))
-        # noinspection PyTypeChecker
-        # @@@ and this is particularly bad, better to just return ks if there is no mode
-        keySig = ks.asKey(mode=elem.get(prefix + 'mode', 'major'))
-        if form == 'invis':
-            keySig.style.hideObjectOnPrint = True
-        return keySig
+        # malformed elem: pretend there are no sharps or flats
+        output = key.KeySignature(sharps=0)
 
+    if form == 'invis':
+        output.style.hideObjectOnPrint = True
+    return output
 
 def _transpositionFromAttrs(elem: Element) -> interval.Interval:
     '''
@@ -2768,11 +2779,16 @@ def noteFromElement(
     if dotElements > 0:
         theNote.duration = makeDuration(durFloat, dotElements)
 
-#     # grace note
-    if elem.get('grace') == 'acc':
+    # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
+    graceStr: t.Optional[str] = elem.get('grace')
+    if graceStr == 'acc':
         theNote = theNote.getGrace(appoggiatura=True)
         theNote.duration.slash = False  # type: ignore
-    elif elem.get('grace') == 'unacc':
+    elif graceStr == 'unacc':
+        theNote = theNote.getGrace(appoggiatura=False)
+        theNote.duration.slash = True  # type: ignore
+    elif graceStr is not None:
+        # treat it like an unaccented grace note
         theNote = theNote.getGrace(appoggiatura=False)
         theNote.duration.slash = True  # type: ignore
 
@@ -2942,7 +2958,7 @@ def restFromElement(
 
     colorStr: t.Optional[str] = elem.get('color')
     if colorStr is not None:
-        theNote.style.color = colorStr
+        theRest.style.color = colorStr
 
     # tuplets
     if elem.get('m21TupletNum') is not None:
@@ -3138,11 +3154,16 @@ def chordFromElement(
     theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
     theChord.duration = theDuration
 
-    # grace note (only mark as grace note---don't worry about "time-stealing")
-    if elem.get('grace') == 'acc':
+    # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
+    graceStr: t.Optional[str] = elem.get('grace')
+    if graceStr == 'acc':
         theChord = theChord.getGrace(appoggiatura=True)
         theChord.duration.slash = False  # type: ignore
-    elif elem.get('grace') == 'unacc':
+    elif graceStr == 'unacc':
+        theChord = theChord.getGrace(appoggiatura=False)
+        theChord.duration.slash = True  # type: ignore
+    elif graceStr is not None:
+        # treat it like an unaccented grace note
         theChord = theChord.getGrace(appoggiatura=False)
         theChord.duration.slash = True  # type: ignore
 
@@ -3177,7 +3198,7 @@ def chordFromElement(
 
     colorStr: t.Optional[str] = elem.get('color')
     if colorStr is not None:
-        theNote.style.color = colorStr
+        theChord.style.color = colorStr
 
     stemDirStr: t.Optional[str] = elem.get('stem.dir')
     if stemDirStr is not None:
