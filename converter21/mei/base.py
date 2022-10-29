@@ -3366,7 +3366,7 @@ def clefFromElement(
     **Contained Elements not Implemented:** none
     '''
     theClef: clef.Clef
-    if elem.get('sameas') is None:
+    if elem.get('sameas') is not None:
         return None
 
     shapeStr: t.Optional[str] = elem.get('shape')
