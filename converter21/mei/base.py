@@ -1201,7 +1201,7 @@ def _processEmbeddedElements(
     >>> _processEmbeddedElements(elements, mapping, 'doctest2', None, None, {})
     [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
     '''
-    processed: t.List[Music21Object] = []
+    processed: t.List = []
 
     for eachElem in elements:
         if eachElem.tag in mapping:
@@ -1211,7 +1211,7 @@ def _processEmbeddedElements(
             if isinstance(result, (tuple, list)):
                 for eachObject in result:
                     processed.append(eachObject)
-            else:
+            elif result is not None:
                 processed.append(result)
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
@@ -1219,7 +1219,7 @@ def _processEmbeddedElements(
     return processed
 
 
-def _timeSigFromAttrs(elem: Element, prefix: str = '') -> meter.TimeSignature:
+def _timeSigFromAttrs(elem: Element, prefix: str = '') -> t.Optional[meter.TimeSignature]:
     '''
     From any tag with @meter.count and @meter.unit attributes, make a :class:`TimeSignature`.
 
@@ -1255,10 +1255,13 @@ def _timeSigFromAttrs(elem: Element, prefix: str = '') -> meter.TimeSignature:
             timeSig.style.hideObjectOnPrint = True
         return timeSig
 
-    raise MeiElementError('Could not parse timeSig attributes')
+    return None
 
 
-def _keySigFromAttrs(elem: Element, prefix: str = '') -> t.Union[key.Key, key.KeySignature]:
+def _keySigFromAttrs(
+    elem: Element,
+    prefix: str = ''
+) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
     '''
     From any tag with (at minimum) either @pname or @sig attributes, make a
     :class:`KeySignature` or :class:`Key`, as possible.
@@ -1480,15 +1483,13 @@ def addSlurs(
     return addedSlur
 
 
-def beamTogether(someThings: t.List[Music21Object]) -> t.List[Music21Object]:
+def beamTogether(someThings: t.List[Music21Object]):
     '''
     Beam some things together. The function beams every object that has a :attr:`beams` attribute,
     leaving the other objects unmodified.
 
     :param someThings: An iterable of things to beam together.
     :type someThings: iterable of :class:`~music21.base.Music21Object`
-    :returns: ``someThings`` with relevant objects beamed together.
-    :rtype: same as ``someThings``
     '''
     # Index of the most recent beamedNote/Chord in someThings. Not all Note/Chord objects will
     # necessarily be beamed (especially when this is called from tupletFromElement()), so we have
@@ -1535,7 +1536,50 @@ def beamTogether(someThings: t.List[Music21Object]) -> t.List[Music21Object]:
             if b.type == 'continue':
                 b.type = 'stop'
 
-    return someThings
+
+def applyBreaksecs(someThings: t.List[Music21Object]):
+    for i, thing in enumerate(someThings):
+        if not hasattr(thing, 'beams'):
+            continue
+        if duration.convertTypeToNumber(thing.duration.type) <= 4:
+            continue
+
+        breaksecNum: t.Optional[int] = None
+        if not hasattr(thing, 'mei_breaksec'):
+            continue
+
+        try:
+            breaksecNum = int(thing.mei_breaksec)  # type: ignore
+        except:  # pylint: disable=bare-except
+            pass
+        if breaksecNum is None:
+            continue
+
+        # delete the custom mei_breaksec attribute so that nested <tuplet>/<beam> elements
+        # won't process it twice.
+        del thing.mei_breaksec  # type: ignore
+
+        # stop the extra (not included in breaksecNum) beams in this thing
+        for beamNum in range(breaksecNum + 1, len(thing.beams) + 1):  # type: ignore
+            b: beam.Beam = thing.beams.getByNumber(beamNum)  # type: ignore
+            if b.type == 'continue':
+                b.type = 'stop'
+
+        nextThing: t.Optional[Music21Object] = None
+        for j in range(i + 1, len(someThings)):
+            if (hasattr(someThings[j], 'beams')
+                    and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
+                nextThing = someThings[j]
+                break
+
+        if nextThing is None:
+            continue
+
+        # start the extra (not included in breaksecNum) beams in the next thing
+        for beamNum in range(breaksecNum + 1, len(nextThing.beams) + 1):  # type: ignore
+            b: beam.Beam = nextThing.beams.getByNumber(beamNum)  # type: ignore
+            if b.type == 'continue':
+                b.type = 'start'
 
 
 def removeOctothorpe(xmlid: t.Optional[str]) -> t.Optional[str]:
@@ -1942,17 +1986,25 @@ def scoreDefFromElement(
 
     # --> time signature
     if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
-        postAllParts.append(_timeSigFromAttrs(elem, prefix='meter.'))
+        timesig = _timeSigFromAttrs(elem, prefix='meter.')
+        if timesig is not None:
+            postAllParts.append(timesig)
     meterSigElem: t.Optional[Element] = elem.find(f'{MEI_NS}meterSig')
     if meterSigElem is not None:
-        postAllParts.append(_timeSigFromAttrs(meterSigElem))
+        timesig = _timeSigFromAttrs(meterSigElem)
+        if timesig is not None:
+            postAllParts.append(timesig)
 
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-        postAllParts.append(_keySigFromAttrs(elem, prefix='key.'))
+        keysig = _keySigFromAttrs(elem, prefix='key.')
+        if keysig is not None:
+            postAllParts.append(keysig)
     keySigElem: t.Optional[Element] = elem.find(f'{MEI_NS}keySig')
     if keySigElem is not None:
-        postAllParts.append(_keySigFromAttrs(keySigElem))
+        keysig = _keySigFromAttrs(keySigElem)
+        if keysig is not None:
+            postAllParts.append(keysig)
 
     # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
     for eachGrp in elem.iterfind(f'{MEI_NS}staffGrp'):
@@ -2182,11 +2234,15 @@ def staffDefFromElement(
     # process other part-specific information
     # --> time signature
     if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
-        post['meter'] = _timeSigFromAttrs(elem, prefix='meter.')
+        timesig = _timeSigFromAttrs(elem, prefix='meter.')
+        if timesig is not None:
+            post['meter'] = timesig
 
     # --> key signature
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-        post['key'] = _keySigFromAttrs(elem, prefix='key.')
+        keysig = _keySigFromAttrs(elem, prefix='key.')
+        if keysig is not None:
+            post['key'] = keysig
 
     # --> clef
     if elem.get('clef.shape') is not None:
@@ -2204,7 +2260,9 @@ def staffDefFromElement(
         if displace:
             attribDict['dis.place'] = displace
         el = Element('clef', attribDict)
-        post['clef'] = clefFromElement(el, None, spannerBundle, otherInfo)
+        clefObj = clefFromElement(el, None, spannerBundle, otherInfo)
+        if clefObj is not None:
+            post['clef'] = clefObj
 
     embeddedItems = _processEmbeddedElements(
         elem.findall('*'), tagToFunction, elem.tag, None, spannerBundle, otherInfo
@@ -2232,7 +2290,7 @@ def dotFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, t.Any]  # pylint: disable=unused-argument
-):
+) -> int:
     '''
     Returns ``1`` no matter what is passed in.
 
@@ -2899,6 +2957,12 @@ def noteFromElement(
     if stemVisible is not None and stemVisible == 'false':
         theNote.stemDirection = 'noStem'
 
+    # breaksec="n" means that the beams that cross this note drop down to "n" beams
+    # between this note and the next note.  Mark this in theNote with a custom attribute.
+    breaksec: t.Optional[str] = elem.get('breaksec')
+    if breaksec is not None:
+        theNote.mei_breaksec = breaksec  # type: ignore
+
     # beams indicated by a <beamSpan> held elsewhere
     if elem.get('m21Beam') is not None:
         if duration.convertTypeToNumber(theNote.duration.type) > 4:
@@ -3235,6 +3299,12 @@ def chordFromElement(
         # just add it as an attribute, to be read by callers if they like
         theChord.mei_stem_mod = stemModStr  # type: ignore
 
+    # breaksec="n" means that the beams that cross this note drop down to "n" beams
+    # between this note and the next note.  Mark this in theNote with a custom attribute.
+    breaksec: t.Optional[str] = elem.get('breaksec')
+    if breaksec is not None:
+        theChord.mei_breaksec = breaksec  # type: ignore
+
     # beams indicated by a <beamSpan> held elsewhere
     m21BeamStr: t.Optional[str] = elem.get('m21Beam')
     if m21BeamStr is not None:
@@ -3257,7 +3327,7 @@ def clefFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, t.Any]
-) -> clef.Clef:
+) -> t.Optional[clef.Clef]:
     '''
     <clef> Indication of the exact location of a particular note on the staff and, therefore,
     the other notes as well.
@@ -3296,6 +3366,9 @@ def clefFromElement(
     **Contained Elements not Implemented:** none
     '''
     theClef: clef.Clef
+    if elem.get('sameas') is None:
+        return None
+
     shapeStr: t.Optional[str] = elem.get('shape')
     lineStr: t.Optional[str] = elem.get('line')
     octaveShiftOverride: t.Optional[int] = None
@@ -3333,8 +3406,10 @@ def keySigFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, t.Any]
-) -> t.Union[key.Key, key.KeySignature]:
-    theKey: t.Union[key.Key, key.KeySignature] = _keySigFromAttrs(elem)
+) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
+    theKey: t.Optional[t.Union[key.Key, key.KeySignature]] = _keySigFromAttrs(elem)
+    if theKey is None:
+        return None
 
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
@@ -3348,8 +3423,10 @@ def timeSigFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, t.Any]
-) -> meter.TimeSignature:
-    theTimeSig: meter.TimeSignature = _timeSigFromAttrs(elem)
+) -> t.Optional[meter.TimeSignature]:
+    theTimeSig: t.Optional[meter.TimeSignature] = _timeSigFromAttrs(elem)
+    if theTimeSig is None:
+        return None
 
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
@@ -3510,7 +3587,8 @@ def beamFromElement(
         otherInfo
     )
 
-    beamedStuff = beamTogether(beamedStuff)
+    beamTogether(beamedStuff)
+    applyBreaksecs(beamedStuff)
 
     return beamedStuff
 
@@ -3780,7 +3858,8 @@ def tupletFromElement(
         tupletMembers[lastNote].duration.tuplets[0].type = 'stop'
 
     # beam it all together
-    tupletMembers = beamTogether(tupletMembers)
+    beamTogether(tupletMembers)
+    applyBreaksecs(tupletMembers)
 
     return tuple(tupletMembers)
 
