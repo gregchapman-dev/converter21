@@ -2850,6 +2850,29 @@ def noteFromElement(
     if colorStr is not None:
         theNote.style.color = colorStr
 
+    headShape: t.Optional[str] = elem.get('head.shape')
+    if headShape is not None:
+        if headShape == '+':
+            theNote.notehead = 'cross'
+        elif headShape == 'diamond':
+            theNote.notehead = 'diamond'
+        elif headShape == 'isotriangle':
+            theNote.notehead = 'triangle'
+        elif headShape == 'rectangle':
+            theNote.notehead = 'rectangle'
+        elif headShape == 'slash':
+            theNote.notehead = 'slash'
+        elif headShape == 'square':
+            theNote.notehead = 'square'
+        elif headShape == 'x':
+            theNote.notehead = 'x'
+        else:
+            try:
+                theNote.notehead = headShape
+            except note.NotRestException:
+                # use default notehead if unrecognized (NotRestException)
+                pass
+
     stemDirStr: t.Optional[str] = elem.get('stem.dir')
     if stemDirStr is not None:
         # We don't pay attention to stem direction if the note
