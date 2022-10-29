@@ -1514,12 +1514,12 @@ class HumdrumFile(HumdrumFileContent):
 
                 output[staffIndex][layerIndex].append(token)
 
-#                 if layerIndex == 0 and token.isClef:
-#                     layerCount = self._getCurrentLayerCount(token)
-#                     # Duplicate clef in all layers (needed for cases when
-#                     # a secondary layer ends before the end of a measure.
-#                     for k in range(layerCount, len(output[staffIndex])):
-#                         output[staffIndex][k].append(token)
+                if layerIndex == 0 and token.isClef:
+                    layerCount = self._getCurrentLayerCount(token)
+                    # Duplicate clef in all layers (needed for cases when
+                    # a secondary layer ends before the end of a measure.
+                    for k in range(layerCount, len(output[staffIndex])):
+                        output[staffIndex][k].append(token)
 
         return output
 
