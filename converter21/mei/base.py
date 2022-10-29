@@ -2976,6 +2976,10 @@ def noteFromElement(
             assert isinstance(obj, note.Note)
         theNote = obj
 
+    # visibility
+    if elem.get('visible') == 'false':
+        theNote.style.hideObjectOnPrint = True
+
     return theNote
 
 
@@ -3054,6 +3058,10 @@ def restFromElement(
             # because scaleToTuplet returns whatever it was passed (modified)
             assert isinstance(obj, note.Rest)
         theRest = obj
+
+    # visibility
+    if elem.get('visible') == 'false':
+        theRest.style.hideObjectOnPrint = True
 
     return theRest
 
@@ -3318,6 +3326,10 @@ def chordFromElement(
             # because scaleToTuplet returns whatever type it was passed
             assert isinstance(obj, chord.Chord)
         theChord = obj
+
+    # visibility
+    if elem.get('visible') == 'false':
+        theChord.style.hideObjectOnPrint = True
 
     return theChord
 

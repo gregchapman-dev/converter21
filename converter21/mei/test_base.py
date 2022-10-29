@@ -2942,7 +2942,8 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.scaleToTuplet')
     @mock.patch('converter21.mei.base.beamTogether')
-    def testTuplets7(self, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
+    @mock.patch('converter21.mei.base.applyBreaksecs')
+    def testTuplets7(self, mockBreaksecs, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; no extraneous elements
         '''
@@ -2965,7 +2966,8 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.scaleToTuplet')
     @mock.patch('converter21.mei.base.beamTogether')
-    def testTuplets8(self, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
+    @mock.patch('converter21.mei.base.applyBreaksecs')
+    def testTuplets8(self, mockBreaksecs, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed
         '''
@@ -2991,7 +2993,8 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.scaleToTuplet')
     @mock.patch('converter21.mei.base.beamTogether')
-    def testTuplets9(self, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
+    @mock.patch('converter21.mei.base.applyBreaksecs')
+    def testTuplets9(self, mockBreaksecs, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed,
             prepended, and appended
