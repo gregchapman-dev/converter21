@@ -6102,13 +6102,12 @@ class HumdrumFile(HumdrumFileContent):
 
 #         staffAdj: int = self._getStaffAdjustment(token)
         fermata: m21.expressions.Fermata = m21.expressions.Fermata()
-        # yeah, 'inverted' seems backward to me, too, but Finale says this is right
-        fermata.type = 'inverted'
+        fermata.type = 'upright'
 
         fermata2: t.Optional[m21.expressions.Fermata] = None
         if ';;' in token.text:
             fermata2 = m21.expressions.Fermata()
-            fermata2.type = 'upright'
+            fermata2.type = 'inverted'
             fermata2.style.absoluteY = 'below'
 
         if fermata2 is not None:
@@ -6122,16 +6121,18 @@ class HumdrumFile(HumdrumFileContent):
 
         direction: int = self._getDirection(token, ';')
         if direction < 0:
-            fermata.type = 'upright'
+            fermata.type = 'inverted'
             fermata.style.absoluteY = 'below'
         elif direction > 0:
-            fermata.type = 'inverted'
+            fermata.type = 'upright'
             fermata.style.absoluteY = 'above'
         # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
         # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
 
         if isinstance(obj, m21.bar.Barline):
-            obj.pause = fermata
+            # music21 barlines can only have one fermata; stick with the first one
+            if obj.pause is None:
+                obj.pause = fermata
         else:
             obj.expressions.append(fermata)
 
