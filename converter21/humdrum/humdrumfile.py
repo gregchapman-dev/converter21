@@ -2458,7 +2458,7 @@ class HumdrumFile(HumdrumFileContent):
             nearbyUnhandledOMD: t.Optional[HumdrumLine] = self._getNearbyUnhandledOmdLine(token)
             if nearbyUnhandledOMD is not None:
                 firstTok: t.Optional[HumdrumToken] = nearbyUnhandledOMD[0]
-                if firstTok is not None:
+                if firstTok is not None and self._isTempoish(firstTok.text):
                     firstTok.setValue('auto', 'OMD handled', True)
                     tempoName = nearbyUnhandledOMD.referenceValue
 
@@ -9234,7 +9234,7 @@ class HumdrumFile(HumdrumFileContent):
             # check for nearby *MM marker after OMD
             midibpm = self._getMmTempoForward(omdToken)
 
-        if midibpm > 0 or self._isTempoish(value):
+        if self._isTempoish(value):
             omdToken.setValue('auto', 'OMD handled', True)
             # put the metronome mark in this measure of staff 0 (highest staff on the page)
             # Since OMD has no way of specifying placement or fontStyle, we set these
