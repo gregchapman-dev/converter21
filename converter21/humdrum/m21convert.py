@@ -1642,17 +1642,24 @@ class M21Convert:
             textExp.placement = tempo.placement
             tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
 
-        if tempo.number is not None and not tempo.numberImplicit:
-            # we have an explicit bpm, so we can generate mmTokenStr and bpm text
-            # For now, don't ever bother with *MM.  HumdrumBPMText is so much better.
-            # mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
-            if not tempoTextLayout:
-                tempoTextLayout = M21Convert.bpmTextLayoutParameterFromM21MetronomeMark(tempo)
+        if tempo.number is not None:
+            if tempo.numberImplicit:
+                # if there is a number, but it's implicit, go ahead and generate a *MM for it.
+                # Better than nothing, and converter21's Humdrum importer creates these from
+                # *MM, so...
+                # HumdrumWriter screws up tempo tokens somehow.  Disable this until we can fix.
+                pass  # mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
             else:
-                # we have explicit text in a layout already, just add the bpm info
-                # after a space delimiter
-                tempoTextLayout += ' '
-                tempoTextLayout += M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
+                # we have an explicit bpm, so we can generate mmTokenStr and bpm text
+                # For now, don't ever bother with *MM.  HumdrumBPMText is so much better.
+                # mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
+                if not tempoTextLayout:
+                    tempoTextLayout = M21Convert.bpmTextLayoutParameterFromM21MetronomeMark(tempo)
+                else:
+                    # we have explicit text in a layout already, just add the bpm info
+                    # after a space delimiter
+                    tempoTextLayout += ' '
+                    tempoTextLayout += M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
 
         return (mmTokenStr, tempoTextLayout)
 
