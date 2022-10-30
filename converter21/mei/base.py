@@ -4743,58 +4743,34 @@ def tempoFromElement(
     elif teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None:
         teWithStyle.style.fontStyle = 'bold'
 
-    text: str = teWithStyle.content
-    tempoName: t.Optional[str] = None
-    noteChar: t.Optional[str] = None
-    notesPerMinute: t.Optional[int] = None
-    tempoName, noteChar, notesPerMinute = _getBPMInfo(text)
-    if noteChar is None or notesPerMinute is None:
-        # no 𝅗𝅥 = 128 in the text, last chance for bpm info is @midi.bpm
-        midiBPMStr: t.Optional[str] = elem.get('midi.bpm')
-        midiBPM: t.Optional[int] = None
-        if midiBPMStr:
-            try:
-                midiBPM = int(midiBPMStr)
-            except (TypeError, ValueError):
-                pass
+    midiBPMStr: t.Optional[str] = elem.get('midi.bpm')
+    midiBPM: t.Optional[int] = None
+    if midiBPMStr:
+        try:
+            midiBPM = int(midiBPMStr)
+        except (TypeError, ValueError):
+            pass
 
-        if midiBPM is not None:
-            # We have midi.bpm, which is defined to be quarter notes per minute,
-            # but no 𝅗𝅥 = 128 in the text.  So we make a full MetronomeMark, using
-            # the original text (teWithStyle).
-            # Note that we have to make a TempoText from teWithStyle first, since
-            # MetronomeMark won't take text=TextExpression.
-            tempoObj = tempo.TempoText()
-            tempoObj.setTextExpression(teWithStyle)
-            tempoObj = tempo.MetronomeMark(
-                text=tempoObj,
-                number=midiBPM,
-                referent='quarter'
-            )
-            return staffNStr, offset, tempoObj
-
-        # it's just tempo text (no bpm info), use the full original text (teWithStyle)
-        tempoObj = tempo.TempoText()
-        tempoObj.setTextExpression(teWithStyle)  # pick up all the style
-        return staffNStr, offset, tempoObj
-
-    # we have enough info for a full MetronomeMark; use the tempoName
-    # instead of full original text, because we pass the 𝅗𝅥 = 128 info
-    # separately as referent and number.
-    if tempoName is None:
-        tempoName = ''
-    teWithStyle.content = tempoName  # keep the style...
+    # Note that we have to make a TempoText from teWithStyle first, since
+    # MetronomeMark won't take text=TextExpression.
     tempoObj = tempo.TempoText()
     tempoObj.setTextExpression(teWithStyle)
+
     tempoObj = tempo.MetronomeMark(
         text=tempoObj,
-        number=notesPerMinute,
-        referent=_NOTE_UNICODE_CHAR_TO_NOTE_NAME[noteChar]
+        number=midiBPM,
+        referent=None  # implies quarter note
     )
+
+    # Avoid adding any extra "𝅗𝅥 = 128" text to the display of this metronome mark
+    tempoObj.numberImplicit = True
 
     # work around bug in MetronomeMark.text setter where style is not linked
     # when text is a TempoText
     tempoObj.style = teWithStyle.style
+
+    # transfer placement to the metronome mark
+    tempoObj.placement = teWithStyle.placement
 
     return staffNStr, offset, tempoObj
 
