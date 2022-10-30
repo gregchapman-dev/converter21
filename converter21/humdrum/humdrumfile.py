@@ -2648,7 +2648,7 @@ class HumdrumFile(HumdrumFileContent):
         'grave',
         'largo',
         'lento',
-        'adagio'
+        'adagio',
         'slow',
         'langsam',
         'larghetto',
