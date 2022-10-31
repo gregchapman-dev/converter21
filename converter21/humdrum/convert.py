@@ -22,6 +22,7 @@ from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumInternalError
+from converter21.smufl import constants
 
 class Convert:
 
@@ -494,7 +495,7 @@ class Convert:
 
     @staticmethod
     def getMetronomeMarkInfo(
-            text: str
+        text: str
     ) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[str], t.Optional[str]]:
         # takes strings like
         # "Andante M.M. [quarter] = 88.1"  # PATTERNS[0]
@@ -518,6 +519,126 @@ class Convert:
                 return True
 
         return False
+
+
+    @staticmethod
+    def getTempoText(text: str) -> str:
+        output: str = ''
+
+        pattern: str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)'
+        m = re.search(pattern, text)
+        if m is None:
+            return None, None, None
+
+        first: str = m.group(1)
+        second: str = m.group(2)
+        third: str = m.group(3)
+
+        second = Convert.humdrumTempoNoteNameToSmuflText(second)
+
+        if first:
+            if first[-1] == '(':
+                # Add very thin spacer after opening parenthesis
+                # to separate parenthesis and notehead:
+                first += chr(0x200A)
+
+        output += first
+
+        # Add the musical symbols (notes and dots), adding a space between them
+        dotChar: str = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+        counter: int = 0
+        for i, char in enumerate(second):
+            if i > 0:
+                # Add a space element between music symbols.
+                if name == dotChar:
+                    # use a "thin space" before dot
+                    output += chr(0x2009)
+                else:
+                    # use a "non-breaking space" otherwise
+                    output += chr(0x00A0)
+
+            output += char
+
+        output += chr(0x200A) + '=' + chr(0x200A) + third
+
+        return output
+
+    def humdrumTempoNoteNameToSmuflText(text: str) -> str:
+        output: str = ''
+        if not text:
+            return output
+
+        newtext: str
+        if text[0] == '[' and text[-1] == ']':
+            newtext = text[1:-1]
+        else:
+            newtext = text
+
+        # Remove styling qualifiers
+        finaltext: str = re.sub('[|@].*', '', text)
+
+        # https://www.smufl.org/version/1.2/range/metronomeMarks
+
+        # Count the number of augmentation dots on the note, and then remove them:
+        dots: int = 0
+        if re.search('-dot$', finaltext):
+            dots = 1
+            if re.search('-dot-dot$', finaltext):
+                dots = 2
+                if re.search('-dot-dot-dot$', finaltext):
+                    dots = 3
+                # Only allowing three augmentation dots.
+        re.sub('(-dot)+', '', finaltext)
+
+        # Check for "." used as an augmentation dot (typically used with numbers):
+        m = re.search(r'(\.+)$', finaltext)
+        if m:
+            dotstring: str = m.group(1)
+            dots += len(dotstring)
+            re.sub(r'\.+$', '', finaltext)
+
+        isNote: bool = False
+        if finaltext in ('quarter', '4'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteQuarterUp', '')
+            isNote = True
+        elif finaltext in ('half', '2'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteHalfUp', '')
+            isNote = True
+        elif finaltext in ('whole', '1'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
+            isNote = True
+        elif finaltext in ('breve', 'double-whole', '0'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteSquareBreve', '')
+            isNote = True
+        elif finaltext in ('eighth', '8', '8th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
+            isNote = True
+        elif finaltext in ('sixteenth', '16', '16th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote16thUp', '')
+            isNote = True
+        elif finaltext in ('32', '32nd'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote32ndUp', '')
+            isNote = True
+        elif finaltext in ('64', '64th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote64thUp', '')
+            isNote = True
+        elif finaltext in ('128', '128th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote128thUp', '')
+            isNote = True
+        elif finaltext in ('256', '256th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote256thUp', '')
+            isNote = True
+        elif finaltext in ('512', '512th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
+            isNote = True
+        elif finaltext in ('1024', '1024th'):
+            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
+            isNote = True
+
+        if dots > 0:
+            output += constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '') * dots
+
+        return output
 
     '''
         *** Math ***

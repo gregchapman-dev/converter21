@@ -4840,6 +4840,8 @@ def dirFromElement(
                 if subEl.tail:
                     if subEl.tail[0] != '\n' or not subEl.tail.isspace():
                         text += subEl.tail
+        elif el.tag == f'{MEI_NS}symbol':
+            
 
         # grab the text from el
         if el.text:

@@ -9109,6 +9109,11 @@ class HumdrumFile(HumdrumFileContent):
             mmNumber = None
 
         if mmNumber is not None or mmText is not None or mmReferent is not None:
+            if bpmText:
+                # We parsed the BPM out of a lovely well-formed string, so use the whole string.
+                # But replace the [quarter-dot] (or whatever) with the appropriate SMUFL string.
+                mmText = Convert.getTempoText(text)
+
             metronomeMark = self._myMetronomeMarkInit(
                 number=mmNumber, text=mmText, referent=mmReferent
             )
