@@ -2643,7 +2643,7 @@ class HumdrumFile(HumdrumFileContent):
         return False
 
     commonTempoWords: t.List[str] = [
-        'larghissimo',
+        'larghiss',  # larghissimo, etc
         'largamente',
         'grave',
         'largo',
@@ -2651,24 +2651,26 @@ class HumdrumFile(HumdrumFileContent):
         'adagio',
         'slow',
         'langsam',
-        'larghetto',
-        'adagietto',
+        'larghett',  # larghetto, etc
+        'adagiett',  # adagietto, etc
+        'adagiss',  # adagissimo, etc
         'andante',
-        'andantino',
-        'maestoso',
+        'andantin',  # andantino, etc
+        'maestos',  # maestoso, etc
         'moderato',
         'moderate',
-        'allegretto',
+        'allegrett',  # allegretto, etc
         'animato',
         'allegro',
         'fast',
         'schnell',
-        'allegrissimo',
+        'allegriss',  # allegrissimo, etc
         'vite',
         'vivace',
-        'vivacissimo',
+        'vivaciss',  # vivacissimo, vivacissimamente, etc
         'presto',
-        'prestissimo',
+        'prestiss',  # prestissimo, etc
+        'tempo',  # 'tempo primo', 'tempo di minuetto', etc
     ]
 
     @staticmethod
