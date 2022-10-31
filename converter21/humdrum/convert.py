@@ -559,7 +559,7 @@ class Convert:
 
             output += char
 
-        output += chr(0x200A) + '=' + chr(0x200A) + third
+        output += chr(0x00A0) + '=' + chr(0x00A0) + third
 
         return output
 

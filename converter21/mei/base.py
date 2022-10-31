@@ -210,6 +210,8 @@ from music21 import style
 from music21 import tempo
 from music21 import tie
 
+from converter21.smufl import constants
+
 environLocal = environment.Environment('converter21.mei.base')
 
 
@@ -4775,6 +4777,20 @@ def tempoFromElement(
     return staffNStr, offset, tempoObj
 
 
+def _glyphNameToUnicodeChar(name: str) -> str:
+    # name is things like 'noteQuarterUp', which can be looked up
+    return constants._SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
+
+
+def _glyphNumToUnicodeChar(num: str) -> str:
+    # num can be '#xNNNN' or 'U+NNNN'
+    pattern: str = r'^(#x|U\+)([A-F0-9]+)$'
+    m = re.match(pattern, num)
+    if m is None:
+        return ''
+    return chr(int(m.group(2), 16))
+
+
 def dirFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -4841,7 +4857,18 @@ def dirFromElement(
                     if subEl.tail[0] != '\n' or not subEl.tail.isspace():
                         text += subEl.tail
         elif el.tag == f'{MEI_NS}symbol':
-            
+            # This is a glyph in the SMUFL font (@glyph.auth="smufl"), with a
+            # particular name (@glyph.name="metNoteQuarterUp").  Sometimes
+            # instead of @glyph.name, there is @glyph.num, which is just the
+            # utf16 code as 'U+NNNN' or '#xNNNN'.
+            glyphAuth: str = el.get('glyph.auth', '')
+            if not glyphAuth or glyphAuth == 'smufl':
+                glyphName: str = el.get('glyph.name', '')
+                glyphNum: str = el.get('glyph.num', '')
+                if glyphNum:
+                    text += _glyphNumToUnicodeChar(glyphNum)
+                elif glyphName:
+                    text += _glyphNameToUnicodeChar(glyphName)
 
         # grab the text from el
         if el.text:
