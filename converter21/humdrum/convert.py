@@ -550,7 +550,7 @@ class Convert:
         for i, char in enumerate(second):
             if i > 0:
                 # Add a space element between music symbols.
-                if name == dotChar:
+                if char == dotChar:
                     # use a "thin space" before dot
                     output += chr(0x2009)
                 else:
@@ -588,14 +588,14 @@ class Convert:
                 if re.search('-dot-dot-dot$', finaltext):
                     dots = 3
                 # Only allowing three augmentation dots.
-        re.sub('(-dot)+', '', finaltext)
+        finaltext = re.sub('(-dot)+', '', finaltext)
 
         # Check for "." used as an augmentation dot (typically used with numbers):
         m = re.search(r'(\.+)$', finaltext)
         if m:
             dotstring: str = m.group(1)
             dots += len(dotstring)
-            re.sub(r'\.+$', '', finaltext)
+            finaltext = re.sub(r'\.+$', '', finaltext)
 
         isNote: bool = False
         if finaltext in ('quarter', '4'):
