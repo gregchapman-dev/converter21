@@ -2642,36 +2642,36 @@ class HumdrumFile(HumdrumFileContent):
 
         return False
 
-    commonTempoWords: t.List[str] = [
-        'larghiss',  # larghissimo, etc
-        'largamente',
-        'grave',
-        'largo',
-        'lento',
-        'adagio',
-        'slow',
-        'langsam',
-        'larghett',  # larghetto, etc
-        'adagiett',  # adagietto, etc
-        'adagiss',  # adagissimo, etc
-        'andante',
-        'andantin',  # andantino, etc
-        'maestos',  # maestoso, etc
-        'moderato',
-        'moderate',
-        'allegrett',  # allegretto, etc
-        'animato',
-        'allegro',
-        'fast',
-        'schnell',
-        'allegriss',  # allegrissimo, etc
-        'vite',
-        'vivace',
-        'vivaciss',  # vivacissimo, vivacissimamente, etc
-        'presto',
-        'prestiss',  # prestissimo, etc
-        'tempo',  # 'tempo primo', 'tempo di minuetto', etc
-    ]
+#     commonTempoWords: t.List[str] = [
+#         'larghiss',  # larghissimo, etc
+#         'largamente',
+#         'grave',
+#         'largo',
+#         'lento',
+#         'adagio',
+#         'slow',
+#         'langsam',
+#         'larghett',  # larghetto, etc
+#         'adagiett',  # adagietto, etc
+#         'adagiss',  # adagissimo, etc
+#         'andante',
+#         'andantin',  # andantino, etc
+#         'maestos',  # maestoso, etc
+#         'moderato',
+#         'moderate',
+#         'allegrett',  # allegretto, etc
+#         'animato',
+#         'allegro',
+#         'fast',
+#         'schnell',
+#         'allegriss',  # allegrissimo, etc
+#         'vite',
+#         'vivace',
+#         'vivaciss',  # vivacissimo, vivacissimamente, etc
+#         'presto',
+#         'prestiss',  # prestissimo, etc
+#         'tempo',  # 'tempo primo', 'tempo di minuetto', etc
+#     ]
 
     @staticmethod
     def _isTempoish(text: str) -> bool:
@@ -2681,22 +2681,22 @@ class HumdrumFile(HumdrumFileContent):
         if Convert.hasMetronomeMarkInfo(text):
             return True
 
-        # A modified version of m21.TempoText.isCommonTempoText (which thinks
-        # that 'g' is common tempo text because it is found in 'allegro').
-
-        def stripText(txt: str) -> str:
-            txt = txt.strip()
-            txt = txt.replace(' ', '')
-            txt = txt.replace('.', '')
-            txt = txt.lower()
-            return txt
-
-        cmptxt: str = stripText(text)
-        for candidate in HumdrumFile.commonTempoWords:
-            candidate = stripText(candidate)
-            # if cmptxt == common tempo word, or cmptxt contains common tempo word
-            if candidate in cmptxt:
-                return True
+#         # A modified version of m21.TempoText.isCommonTempoText (which thinks
+#         # that 'g' is common tempo text because it is found in 'allegro').
+#
+#         def stripText(txt: str) -> str:
+#             txt = txt.strip()
+#             txt = txt.replace(' ', '')
+#             txt = txt.replace('.', '')
+#             txt = txt.lower()
+#             return txt
+#
+#         cmptxt: str = stripText(text)
+#         for candidate in HumdrumFile.commonTempoWords:
+#             candidate = stripText(candidate)
+#             # if cmptxt == common tempo word, or cmptxt contains common tempo word
+#             if candidate in cmptxt:
+#                 return True
 
         return False
     '''
