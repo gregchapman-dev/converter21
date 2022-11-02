@@ -142,9 +142,10 @@ class HumdrumWriter:
         self._currentTempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]] = []
 
         # whether or not we should avoid output of the first MetronomeMark (as !LO:TX) that
-        # matches the initial movementName.
+        # matches the OMD (movementName) that was chosen to represent the temop in the initial
+        # Humdrum header.
         self._waitingToMaybeSkipFirstTempoText: bool = True
-        self._firstMovementName: t.Optional[str] = None
+        self._tempoMovementName: t.Optional[str] = None
 
     def _chosenSignifierForRDFDefinition(self,
             rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
@@ -278,11 +279,16 @@ class HumdrumWriter:
 
         self.spannerBundle = self._m21Score.spannerBundle
 
-        # set up _firstMovementName for use when emitting the first measure (to
+        # set up _tempoMovementName for use when emitting the first measure (to
         # maybe skip producing '!LO:TX' from a MetronomeMark that is described
-        # perfectly already by the first movementName/!!!OMD.
+        # perfectly already by the tempo movementName/!!!OMD.
         if self._m21Score.metadata:
-            self._firstMovementName = self._m21Score.metadata.movementName
+            if M21Utilities.m21SupportsDublinCoreMetadata():
+                movementNames: t.List[str] = self._m21Score.metadata['movementName']
+                if movementNames:
+                    self._tempoMovementName = str(movementNames[-1])
+            else:
+                self._tempoMovementName = self._m21Score.metadata.movementName
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -1694,8 +1700,8 @@ class HumdrumWriter:
                     # We will still output the *MM as appropriate.
                     if self._waitingToMaybeSkipFirstTempoText:
                         self._waitingToMaybeSkipFirstTempoText = False
-                        if self._firstMovementName:
-                            if self._firstMovementName in m21Obj.text:
+                        if self._tempoMovementName:
+                            if self._tempoMovementName in m21Obj.text:
                                 m21Obj.humdrumNoTempoTextJustMM = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):

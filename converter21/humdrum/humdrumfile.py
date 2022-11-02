@@ -872,14 +872,11 @@ class HumdrumFile(HumdrumFileContent):
 
     def _prepareMetadata(self) -> None:
         # We take every instance of each key, but... I make an exception for OMD,
-        # because it is also used as a tempo change at start of any measure, so you
-        # really want the first OMD for the "movement name".  I give you beethoven
-        # piano sonata21-3.krn as an example.  First OMD is 'Rondo: Allegretto
-        # moderato', and last OMD (in a measure in the middle of the movement) is
-        # 'Prestissimo'.  The movement name is 'Rondo: Allegretto'. --gregc
-        # Clarification: the first OMD only becomes the movement name if it is
-        # seen before any data lines (i.e. notes/rests).  If the first OMD is
-        # seen after some notes, it's just a tempo change.
+        # because it is also used as a tempo change at start of any measure, so
+        # you only want the OMDs before the first note for the "movement name".
+        # I give you beethoven piano sonata21-3.krn as an example.  First OMD is
+        # 'Rondo: Allegretto moderato', and last OMD (in a measure in the middle
+        # of the movement) is 'Prestissimo'.  The movement name is 'Rondo: Allegretto'. --gregc
         firstDataLineIdx: int = self.lineCount  # one off the end
         for line in self._lines:
             if line.isData:
@@ -904,20 +901,20 @@ class HumdrumFile(HumdrumFileContent):
 
             if value:
                 value = html.unescape(value)
-            if key == 'OMD':
-                # only take the first OMD for the movement name
-                if not alreadySawOMD:
-                    alreadySawOMD = True
-                    if bibLine.lineIndex < firstDataLineIdx:
-                        # strip off any [quarter = 128] suffix, and any 'M.M.' or 'M. M.' or etc.
-                        tempoName, _mmStr, _noteName, _bpmText = (
-                            Convert.getMetronomeMarkInfo(value)
-                        )
+            if key.startswith('OMD'):
+                # only take OMDs before the firstDataLineIdx as movementName in metadata,
+                # because after the first data line, they're not movementNames, just
+                # tempo changes.
+                if bibLine.lineIndex < firstDataLineIdx:
+                    # strip off any [quarter = 128] suffix, and any 'M.M.' or 'M. M.' or etc.
+                    tempoName, _mmStr, _noteName, _bpmText = (
+                        Convert.getMetronomeMarkInfo(value)
+                    )
+                    if tempoName:
+                        tempoName.strip()
                         if tempoName:
-                            tempoName.strip()
-                            if tempoName:
-                                value = tempoName
-                        self._biblio.append((key, value))
+                            value = tempoName
+                    self._biblio.append((key, value))
             else:
                 self._biblio.append((key, value))
 
@@ -9219,7 +9216,7 @@ class HumdrumFile(HumdrumFileContent):
             if not line.isReference:
                 continue
             key = line.referenceKey
-            if key == 'OMD':
+            if key.startswith('OMD'):
                 index = i
                 value = line.referenceValue
                 # break # Don't break: search for the last OMD in a non-data region
