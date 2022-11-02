@@ -538,9 +538,9 @@ class Convert:
 
         if first:
             if first[-1] == '(':
-                # Add very thin spacer after opening parenthesis
+                # Add _very_ thin spacer (HAIR SPACE) after opening parenthesis
                 # to separate parenthesis and notehead:
-                first += chr(0x2009)
+                first += chr(0x200A)
 
         output += first
 
@@ -551,7 +551,7 @@ class Convert:
             if i > 0:
                 # Add a space element between music symbols.
                 if char == dotChar:
-                    # use a "thin space" before dot
+                    # use a THIN SPACE before dot
                     output += chr(0x2009)
                 else:
                     # use a "non-breaking space" otherwise
