@@ -9250,27 +9250,26 @@ class HumdrumFile(HumdrumFileContent):
             # check for nearby *MM marker after OMD
             midibpm = self._getMmTempoForward(omdToken)
 
-        if self._isTempoish(value):
-            omdToken.setValue('auto', 'OMD handled', True)
-            # put the metronome mark in this measure of staff 0 (highest staff on the page)
-            # Since OMD has no way of specifying placement or fontStyle, we set these
-            # to the usual: 'above' and 'bold'
-            staffIndex: int = 0
-            tempo: t.Optional[m21.tempo.MetronomeMark] = self._createMetronomeMark(value, midibpm)
-            if tempo is not None:
-                if t.TYPE_CHECKING:
-                    assert isinstance(tempo.style, m21.style.TextStyle)
-                tempo.style.fontStyle = 'bold'
-                if hasattr(tempo, 'placement'):
-                    tempo.placement = 'above'
-                else:
-                    tempo.style.absoluteY = 'above'
+        omdToken.setValue('auto', 'OMD handled', True)
+        # put the metronome mark in this measure of staff 0 (highest staff on the page)
+        # Since OMD has no way of specifying placement or fontStyle, we set these
+        # to the usual: 'above' and 'bold'
+        staffIndex: int = 0
+        tempo: t.Optional[m21.tempo.MetronomeMark] = self._createMetronomeMark(value, midibpm)
+        if tempo is not None:
+            if t.TYPE_CHECKING:
+                assert isinstance(tempo.style, m21.style.TextStyle)
+            tempo.style.fontStyle = 'bold'
+            if hasattr(tempo, 'placement'):
+                tempo.placement = 'above'
+            else:
+                tempo.style.absoluteY = 'above'
 
-                currentMeasurePerStaff: t.List[m21.stream.Measure] = (
-                    self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
-                )
-                currentMeasurePerStaff[staffIndex].coreInsert(0, tempo)
-                currentMeasurePerStaff[staffIndex].coreElementsChanged()
+            currentMeasurePerStaff: t.List[m21.stream.Measure] = (
+                self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
+            )
+            currentMeasurePerStaff[staffIndex].coreInsert(0, tempo)
+            currentMeasurePerStaff[staffIndex].coreElementsChanged()
 
     '''
     //////////////////////////////

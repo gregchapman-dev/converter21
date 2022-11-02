@@ -141,6 +141,11 @@ class HumdrumWriter:
         # First element of tempo tuple is part index (tempo is at the part level)
         self._currentTempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]] = []
 
+        # whether or not we should avoid output of the first MetronomeMark (as !LO:TX) that
+        # matches the initial movementName.
+        self._waitingToMaybeSkipFirstTempoText: bool = True
+        self._firstMovementName: t.Optional[str] = None
+
     def _chosenSignifierForRDFDefinition(self,
             rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
             favoriteSignifier: str) -> str:
@@ -272,6 +277,12 @@ class HumdrumWriter:
         del self._m21Object  # everything after this uses self._m21Score
 
         self.spannerBundle = self._m21Score.spannerBundle
+
+        # set up _firstMovementName for use when emitting the first measure (to
+        # maybe skip producing '!LO:TX' from a MetronomeMark that is described
+        # perfectly already by the first movementName/!!!OMD.
+        if self._m21Score.metadata:
+            self._firstMovementName = self._m21Score.metadata.movementName
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -1677,6 +1688,15 @@ class HumdrumWriter:
                     # appendNonZeroEvents() -> addEvent()
                     self._currentTexts.append((pindex, sindex, vindex, m21Obj))
                 elif isinstance(m21Obj, m21.tempo.MetronomeMark):
+                    # if we haven't done this yet, check if mm text matches the first movement
+                    # name (OMD) and if so, make a note to skip the tempo text output (!LO:TX) as
+                    # redundant with first OMD.
+                    # We will still output the *MM as appropriate.
+                    if self._waitingToMaybeSkipFirstTempoText:
+                        self._waitingToMaybeSkipFirstTempoText = False
+                        if self._firstMovementName:
+                            if self._firstMovementName in m21Obj.text:
+                                m21Obj.humdrumNoTempoTextJustMM = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
@@ -2442,6 +2462,10 @@ class HumdrumWriter:
     '''
     def _addTempo(self, outSlice: GridSlice, outgm: GridMeasure, partIndex: int,
                   tempoIndication: m21.tempo.TempoIndication) -> None:
+        skipTempoText: bool = False
+        if hasattr(tempoIndication, 'humdrumNoTempoTextJustMM'):
+            skipTempoText = tempoIndication.humdrumNoTempoTextJustMM  # type: ignore
+
         mmTokenStr: str = ''       # e.g. '*MM128'
         tempoTextLayout: str = ''  # e.g. '!LO:TX:a:t=[eighth]=82','!LO:TX:t=Andantino [eighth]=82'
         mmTokenStr, tempoTextLayout = (
@@ -2454,7 +2478,7 @@ class HumdrumWriter:
                                 partIndex, staffIndex, voiceIndex,
                                 self.staffCounts)
 
-        if tempoTextLayout:
+        if tempoTextLayout and not skipTempoText:
             outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, tempoTextLayout)
 
     '''
