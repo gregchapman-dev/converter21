@@ -50,7 +50,7 @@ class GridSlice:
             ownerMeasure,
             timestamp: HumNumIn,
             sliceType: SliceType,
-            partCount: int = 0,
+            staffCounts: t.Optional[t.List[int]] = None,
             fromSlice: t.Optional['GridSlice'] = None
     ) -> None:
         from converter21.humdrum import GridMeasure
@@ -63,17 +63,26 @@ class GridSlice:
         self._ownerGrid: HumGrid = self._measure.ownerGrid  # measure's enclosing grid
 
         self.parts: t.List[GridPart] = []
+        if fromSlice is None and staffCounts is None:
+            return
+
         if fromSlice is None:
-            # GridSlice::GridSlice -- Constructor.  If partcount is positive, then
-            #    allocate the desired number of parts (still have to allocate staves
-            #    in part before using).
-            for _ in range(0, partCount):
+            if t.TYPE_CHECKING:
+                # because fromSlice is None, and if staffCounts was also None
+                # we would have returned before now.
+                assert staffCounts is not None
+
+            # GridSlice::GridSlice -- Constructor.
+            #    Allocate the requested (staffCounts) number of parts and staves per part
+            #    (with one voice per staff preallocated)
+            for p in range(0, len(staffCounts)):
                 part: GridPart = GridPart()
-                staff: GridStaff = GridStaff()
-                voice: GridVoice = GridVoice()
                 self.parts.append(part)
-                part.staves.append(staff)
-                staff.voices.append(voice)
+                for _ in range(0, staffCounts[p]):
+                    staff: GridStaff = GridStaff()
+                    part.staves.append(staff)
+                    voice: GridVoice = GridVoice()
+                    staff.voices.append(voice)
         else:
             # This constructor allocates the matching part and staff count of the
             # input fromSlice parameter.  There will be no GridVoices allocated inside

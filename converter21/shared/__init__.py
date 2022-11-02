@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------------------
-# Purpose:       converter21 is a music21-based music notation file format converter CLI app,
-#                along with new subconverter plug-ins for Humdrum and MEI.
+# Purpose:       shared is a module of converter21 containing shared items for
+#                use by the new subconverter plug-ins for Humdrum and MEI.
 #
 # Authors:       Greg Chapman <gregc@mac.com>
 #                Humdrum code derived/translated from humlib (authored by
@@ -9,13 +9,9 @@
 # Copyright:     (c) 2021-2022 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-
 __all__ = [
-    'humdrum',
-    'mei',
-    'HumdrumConverter',
-    'MEIConverter',
+    'SharedConstants',
 ]
 
-from .HumdrumConverter import HumdrumConverter
-from .MEIConverter import MEIConverter
+from .sharedconstants import SharedConstants
+

@@ -16,6 +16,7 @@ import sys
 import typing as t
 
 import music21 as m21
+from music21.common.misc import flattenList
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import EventData
@@ -77,6 +78,11 @@ class ScoreData:
             permutations.add(containedParts)
         joinableGroups = deduplicatedGroups
 
+        # But forbid overlapping, spaghetti staffGroups
+        joinable_components_list = flattenList(deduplicatedGroups)
+        if len(set(joinable_components_list)) != len(joinable_components_list):
+            joinableGroups = []
+
         partsWithMoreThanOneStaff: t.List[t.List[m21.stream.Part]] = []
         groupedParts: t.List[m21.stream.PartStaff] = []
         for jg in joinableGroups:
@@ -109,6 +115,12 @@ class ScoreData:
     @property
     def partCount(self) -> int:
         return len(self.parts)
+
+    def getStaffCounts(self) -> t.List[int]:
+        output: t.List[int] = []
+        for part in self.parts:
+            output.append(part.staffCount)
+        return output
 
     def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
         return self.ownerWriter.reportEditorialAccidentalToOwner(editorialStyle)

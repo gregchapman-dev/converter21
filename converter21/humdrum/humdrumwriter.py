@@ -102,7 +102,7 @@ class HumdrumWriter:
         self._m21Score: t.Optional[m21.stream.Score] = None
         self.spannerBundle: t.Optional[m21.spanner.SpannerBundle] = None
         self._scoreData: t.Optional[ScoreData] = None
-        self._maxStaff: int = 0
+        self.staffCounts: t.List[int] = []  # indexed by partIndex
 
         # default options (these can be set to non-default values by clients,
         # as long as they do it before they call write())
@@ -279,8 +279,7 @@ class HumdrumWriter:
         # 3. write HumdrumFile to fp
 
         # Tool_musicxml2hum::convert loops over the parts, doing prepareVoiceMapping
-        # on each one, then calls reindexVoices.  m_maxstaff is computed as well.
-        self._maxStaff = len(self._m21Score.parts)
+        # on each one, then calls reindexVoices.
 
         status: bool = True
         outgrid: HumGrid = HumGrid()
@@ -931,7 +930,7 @@ class HumdrumWriter:
             self._getGlobalStaffNumbersForM21Parts(self._scoreData)
         )
         staffGroups: t.List[m21.layout.StaffGroup] = (
-            list(self.spannerBundle.getByClass('StaffGroup'))
+            list(self.spannerBundle.getByClass(m21.layout.StaffGroup))
         )
         staffGroupTrees: t.List[M21StaffGroupTree] = (
             self._getStaffGroupTrees(staffGroups, staffNumbersByM21Part)
@@ -1100,6 +1099,8 @@ class HumdrumWriter:
                 )
 
         self._scoreData = ScoreData(score, self)
+
+        self.staffCounts = self._scoreData.getStaffCounts()
 
         # Now insert each measure into the HumGrid across those parts/staves
         status: bool = True
@@ -1404,7 +1405,7 @@ class HumdrumWriter:
                 maxStaff = outgrid.staffCount(p)
                 s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
                 v = 0  # voice 0
-                gm.addLabelAbbrToken(abbr, 0, p, s, v, self._scoreData.partCount)
+                gm.addLabelAbbrToken(abbr, 0, p, s, v, self.staffCounts)
 
         if hasName:
             for p, partData in enumerate(self._scoreData.parts):
@@ -1424,7 +1425,7 @@ class HumdrumWriter:
                 maxStaff = outgrid.staffCount(p)
                 s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
                 v = 0  # voice 0
-                gm.addLabelToken(iname, 0, p, s, v, self._scoreData.partCount)
+                gm.addLabelToken(iname, 0, p, s, v, self.staffCounts)
 
     '''
     //////////////////////////////
@@ -1772,9 +1773,8 @@ class HumdrumWriter:
 
         slices: t.List[GridSlice] = []
         for _ in range(0, maxGraceNoteCount):
-            slices.append(GridSlice(outgm, nowTime, SliceType.GraceNotes))
+            slices.append(GridSlice(outgm, nowTime, SliceType.GraceNotes, self.staffCounts))
             outgm.slices.append(slices[-1])
-            slices[-1].initializePartStaves(self._scoreData)
 
         for staffList in notes:  # notes is a list of staffLists, one staffList per part
             for voiceList in staffList:
@@ -1797,9 +1797,8 @@ class HumdrumWriter:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Clefs)
+        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Clefs, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         if len(clefs) != len(gridSlice.parts):
             raise HumdrumExportError(
@@ -1823,9 +1822,8 @@ class HumdrumWriter:
     ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Stria)
+        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Stria, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         if len(staffLines) != len(gridSlice.parts):
             raise HumdrumExportError(
@@ -1848,9 +1846,8 @@ class HumdrumWriter:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.TimeSigs)
+        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.TimeSigs, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         for partTimeSigs, part in zip(timeSigs, gridSlice.parts):
             if partTimeSigs:
@@ -1860,9 +1857,8 @@ class HumdrumWriter:
             return
 
         # Add meter sigs related to time signatures (e.g. common time, cut time)
-        gridSlice = GridSlice(outgm, nowTime, SliceType.MeterSigs)
+        gridSlice = GridSlice(outgm, nowTime, SliceType.MeterSigs, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         # now add meter sigs associated with time signatures
         # The m21 timesig object contains this (optional) info as well
@@ -1918,9 +1914,8 @@ class HumdrumWriter:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs)
+        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         for partKeySigs, part in zip(keySigs, gridSlice.parts):
             if partKeySigs:
@@ -1930,9 +1925,8 @@ class HumdrumWriter:
         if not hasKeyDesignation:
             return
 
-        gridSlice = GridSlice(outgm, nowTime, SliceType.KeyDesignations)
+        gridSlice = GridSlice(outgm, nowTime, SliceType.KeyDesignations, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         for partKeySigs, part in zip(keySigs, gridSlice.parts):
             if partKeySigs:
@@ -1992,9 +1986,8 @@ class HumdrumWriter:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
-        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs)
+        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.KeySigs, self.staffCounts)
         outgm.slices.append(gridSlice)
-        gridSlice.initializePartStaves(self._scoreData)
 
         for partTransposingInstruments, part in zip(transposingInstruments, gridSlice.parts):
             if partTransposingInstruments:
@@ -2126,7 +2119,7 @@ class HumdrumWriter:
         if t.TYPE_CHECKING:
             assert isinstance(self._scoreData, ScoreData)
 
-        outSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Notes)
+        outSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Notes, self.staffCounts)
 
         if len(outgm.slices) == 0:
             outgm.slices.append(outSlice)
@@ -2142,7 +2135,6 @@ class HumdrumWriter:
                     if walkSlice.timestamp <= nowTime:
                         outgm.slices.insert(i, outSlice)
                         break
-        outSlice.initializePartStaves(self._scoreData)
 
         for ne in nowEvents:
             events: t.List[EventData] = ne.nonZeroDur
@@ -2460,7 +2452,7 @@ class HumdrumWriter:
         if mmTokenStr:
             outgm.addTempoToken(mmTokenStr, outSlice.timestamp,
                                 partIndex, staffIndex, voiceIndex,
-                                self._maxStaff)
+                                self.staffCounts)
 
         if tempoTextLayout:
             outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, tempoTextLayout)

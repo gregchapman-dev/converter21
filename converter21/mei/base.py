@@ -210,7 +210,7 @@ from music21 import style
 from music21 import tempo
 from music21 import tie
 
-from converter21.smufl import constants
+from converter21.shared import SharedConstants
 
 environLocal = environment.Environment('converter21.mei.base')
 
@@ -4779,7 +4779,7 @@ def tempoFromElement(
 
 def _glyphNameToUnicodeChar(name: str) -> str:
     # name is things like 'noteQuarterUp', which can be looked up
-    return constants._SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
+    return SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
 
 
 def _glyphNumToUnicodeChar(num: str) -> str:

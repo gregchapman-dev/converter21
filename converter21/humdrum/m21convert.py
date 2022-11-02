@@ -1634,8 +1634,7 @@ class M21Convert:
             return ('', '')
 
         # if the MetronomeMark has non-implicit text, we construct some layout text (with style).
-        # if the MetronomeMark has non-implicit bpm info, we construct a *MM, and if we also had
-        # constructed layout text, we append some humdrum-type bpm text to our layout text.
+        # if the MetronomeMark has bpm info (implicit or not), we construct a *MM.
         textExp = tempo.getTextExpression()  # only returns explicit text
         if textExp is not None:
             # We have some text (like 'Andante') to display (and some textStyle)
@@ -1643,52 +1642,35 @@ class M21Convert:
             tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
 
         if tempo.number is not None:
-            if tempo.numberImplicit:
-                # if there is a number, but it's implicit, go ahead and generate a *MM for it.
-                # Better than nothing, and converter21's Humdrum importer creates these from
-                # *MM, so...
-                # HumdrumWriter screws up tempo tokens somehow.  Disable this until we can fix.
-                pass  # mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
-            else:
-                # we have an explicit bpm, so we can generate mmTokenStr and bpm text
-                # For now, don't ever bother with *MM.  HumdrumBPMText is so much better.
-                # mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
-                if not tempoTextLayout:
-                    tempoTextLayout = M21Convert.bpmTextLayoutParameterFromM21MetronomeMark(tempo)
-                else:
-                    # we have explicit text in a layout already, just add the bpm info
-                    # after a space delimiter
-                    tempoTextLayout += ' '
-                    tempoTextLayout += M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
+            # even if the number is implicit, go ahead and generate a *MM for it.
+            mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
 
         return (mmTokenStr, tempoTextLayout)
 
-    @staticmethod
-    def bpmTextLayoutParameterFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:
-        if tempo is None:
-            return ''
+    # @staticmethod
+    # def bpmTextLayoutParameterFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:
+    #     if tempo is None:
+    #         return ''
+    #
+    #     # '[eighth]=82', for example
+    #     contentString: str = M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
+    #     placement: t.Optional[str] = tempo.placement
+    #
+    #     if tempo.hasStyleInformation:
+    #         if t.TYPE_CHECKING:
+    #             assert isinstance(tempo.style, m21.style.TextStyle)
+    #         return M21Convert.textLayoutParameterFromM21Pieces(
+    #             contentString, placement, tempo.style
+    #         )
+    #     return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
 
-        # '[eighth]=82', for example
-        contentString: str = M21Convert.getHumdrumBPMTextFromM21MetronomeMark(tempo)
-        placement: t.Optional[str] = tempo.placement
-
-        if tempo.hasStyleInformation:
-            if t.TYPE_CHECKING:
-                assert isinstance(tempo.style, m21.style.TextStyle)
-            return M21Convert.textLayoutParameterFromM21Pieces(
-                contentString, placement, tempo.style
-            )
-        return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
-
-
-
-    @staticmethod
-    def getHumdrumBPMTextFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:
-        output: str = '['
-        output += M21Convert.getHumdrumTempoNoteNameFromM21Duration(tempo.referent)
-        output += ']='
-        output += M21Convert._floatOrIntString(tempo.number)
-        return output
+    # @staticmethod
+    # def getHumdrumBPMTextFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:
+    #     output: str = '['
+    #     output += M21Convert.getHumdrumTempoNoteNameFromM21Duration(tempo.referent)
+    #     output += ']='
+    #     output += M21Convert._floatOrIntString(tempo.number)
+    #     return output
 
     @staticmethod
     def getHumdrumTempoNoteNameFromM21Duration(referent: m21.duration.Duration) -> str:
@@ -1696,8 +1678,7 @@ class M21Convert:
         # so no type->name mapping is required.  (See m21.duration.typeToDuration's dict keys.)
         noteName: str = referent.type
         if referent.dots > 0:
-            # we only place one dot here (following the C++ code)
-            noteName += '-dot'
+            noteName += '-dot' * referent.dots
         return noteName
 
     @staticmethod
@@ -1714,14 +1695,26 @@ class M21Convert:
         if noteName[-1] == ']':
             noteName = noteName[:-1]
 
-        # remove styling qualifiers
-        noteName = noteName.split('|', 1)[0]  # splits at first '|' only, or not at all
+        # remove styling qualifiers (everything after '|' or '@')
+        noteName = re.sub('[|@].*', '', noteName)
 
-        # generating rhythmic note with optional "-dot" after it. (Only one '-dot' is noticed.)
+        # generating rhythmic note with (up to three) optional "-dot"s after it.
         dots: int = 0
         if re.search('-dot$', noteName):
             dots = 1
-            noteName = noteName[0:-4]
+            if re.search('-dot-dot$', noteName):
+                dots = 2
+                if re.search('-dot-dot-dot$', noteName):
+                    dots = 3
+                # Only allowing three augmentation dots.
+        noteName = re.sub('(-dot)+', '', noteName)
+
+        # Check for "." used as an augmentation dot (typically used with numbers):
+        m = re.search(r'(\.+)$', noteName)
+        if m:
+            dotstring: str = m.group(1)
+            dots += len(dotstring)
+            noteName = re.sub(r'\.+$', '', noteName)
 
         if noteName in ('quarter', '4'):
             return m21.duration.Duration(type='quarter', dots=dots)
@@ -1749,15 +1742,13 @@ class M21Convert:
             return m21.duration.Duration(type='1024th', dots=dots)
 
         # the following are not supported by the C++ code, but seem reasonable,
-        # given music21's support
-        if noteName in ('2048', '2048th'):
-            return m21.duration.Duration(type='2048th', dots=dots)
+        # given music21's, MusicXML's, and MEI's support.  2048th notes and
+        # duplex-maxima are also supported by music21, but we omit them here
+        # because they are neither supported in MusicXML nor MEI (nor even SMUFL).
         if noteName in ('longa', '00'):
             return m21.duration.Duration(type='longa', dots=dots)
         if noteName in ('maxima', '000'):
             return m21.duration.Duration(type='maxima', dots=dots)
-        if noteName in ('duplex-maxima', '0000'):
-            return m21.duration.Duration(type='duplex-maxima', dots=dots)
 
         return None
 

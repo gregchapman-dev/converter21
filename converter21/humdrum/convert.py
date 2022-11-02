@@ -18,11 +18,11 @@ from fractions import Fraction
 
 from music21.common import opFrac
 
+from converter21.shared import SharedConstants
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumdrumInternalError
-from converter21.smufl import constants
 
 class Convert:
 
@@ -528,7 +528,7 @@ class Convert:
         pattern: str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)'
         m = re.search(pattern, text)
         if m is None:
-            return None, None, None
+            return ''
 
         first: str = m.group(1)
         second: str = m.group(2)
@@ -545,7 +545,7 @@ class Convert:
         output += first
 
         # Add the musical symbols (notes and dots), adding a space between them
-        dotChar: str = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+        dotChar: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
         counter: int = 0
         for i, char in enumerate(second):
             if i > 0:
@@ -563,19 +563,20 @@ class Convert:
 
         return output
 
+    @staticmethod
     def humdrumTempoNoteNameToSmuflText(text: str) -> str:
         output: str = ''
         if not text:
             return output
 
-        newtext: str
+        finaltext: str
         if text[0] == '[' and text[-1] == ']':
-            newtext = text[1:-1]
+            finaltext = text[1:-1]
         else:
-            newtext = text
+            finaltext = text
 
         # Remove styling qualifiers
-        finaltext: str = re.sub('[|@].*', '', text)
+        finaltext = re.sub('[|@].*', '', finaltext)
 
         # https://www.smufl.org/version/1.2/range/metronomeMarks
 
@@ -597,46 +598,42 @@ class Convert:
             dots += len(dotstring)
             finaltext = re.sub(r'\.+$', '', finaltext)
 
-        isNote: bool = False
         if finaltext in ('quarter', '4'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteQuarterUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteQuarterUp', '')
         elif finaltext in ('half', '2'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteHalfUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteHalfUp', '')
         elif finaltext in ('whole', '1'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
         elif finaltext in ('breve', 'double-whole', '0'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteSquareBreve', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteSquareBreve', '')
         elif finaltext in ('eighth', '8', '8th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
         elif finaltext in ('sixteenth', '16', '16th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote16thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote16thUp', '')
         elif finaltext in ('32', '32nd'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote32ndUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote32ndUp', '')
         elif finaltext in ('64', '64th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote64thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote64thUp', '')
         elif finaltext in ('128', '128th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote128thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote128thUp', '')
         elif finaltext in ('256', '256th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote256thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote256thUp', '')
         elif finaltext in ('512', '512th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
         elif finaltext in ('1024', '1024th'):
-            output = constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
-            isNote = True
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
+        # the following are not supported by the C++ code, but seem reasonable,
+        # given music21's support.
+        elif finaltext in ('longa', '00'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('mensuralWhiteLonga', '')
+        elif finaltext in ('maxima', '000'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('mensuralWhiteMaxima', '')
 
         if dots > 0:
-            output += constants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '') * dots
+            output += (
+                SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+                * dots
+            )
 
         return output
 

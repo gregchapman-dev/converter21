@@ -8991,8 +8991,8 @@ class HumdrumFile(HumdrumFileContent):
                                      number=number,
                                      referent=referent,
                                      parentheses=parentheses)
-        if text is not None:
-            mm.numberImplicit = True  # even though it might be explicit, we don't want it shown
+
+        mm.numberImplicit = True  # even though it might be explicit, we don't want it shown
 
         if mm.hasStyleInformation:
             # undo music21's weird TempoText style defaults
