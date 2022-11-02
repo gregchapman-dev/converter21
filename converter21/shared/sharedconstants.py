@@ -555,3 +555,19 @@ class SharedConstants:
         'articSoftAccentAbove': chr(0xED40),
         'articSoftAccentBelow': chr(0xED41),
     }
+
+    _SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME: t.Dict[str, str] = {
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWhole']: 'double-whole',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWholeSquare']: 'breve',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteWhole']: 'whole',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteHalfUp']: 'half',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteQuarterUp']: 'quarter',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote8thUp']: '8th',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote16thUp']: '16th',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote32ndUp']: '32nd',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote64thUp']: '64th',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote128thUp']: '128th',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote256thUp']: '256th',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote512thUp']: '512th',
+        _SMUFL_NAME_TO_UNICODE_CHAR['metNote1024thUp']: '1024th'
+    }

@@ -540,7 +540,7 @@ class Convert:
             if first[-1] == '(':
                 # Add very thin spacer after opening parenthesis
                 # to separate parenthesis and notehead:
-                first += chr(0x200A)
+                first += chr(0x2009)
 
         output += first
 
@@ -605,7 +605,7 @@ class Convert:
         elif finaltext in ('whole', '1'):
             output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
         elif finaltext in ('breve', 'double-whole', '0'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteSquareBreve', '')
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteDoubleWhole', '')
         elif finaltext in ('eighth', '8', '8th'):
             output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
         elif finaltext in ('sixteenth', '16', '16th'):
@@ -622,12 +622,6 @@ class Convert:
             output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
         elif finaltext in ('1024', '1024th'):
             output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
-        # the following are not supported by the C++ code, but seem reasonable,
-        # given music21's support.
-        elif finaltext in ('longa', '00'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('mensuralWhiteLonga', '')
-        elif finaltext in ('maxima', '000'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('mensuralWhiteMaxima', '')
 
         if dots > 0:
             output += (

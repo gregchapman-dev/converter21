@@ -2552,10 +2552,19 @@ class HumdrumFile(HumdrumFileContent):
 
         line: int = current.lineIndex
         while current and line > startLineIdx:
+            if current.isManipulator:
+                # skip over it and keep looking
+                current = current.previousToken0
+                if current is not None:
+                    line = current.lineIndex
+                continue
+
             if not current.isLocalComment:
                 break
+
             if current.text.startswith('!LO:TX:'):
                 texts.append(current.text)
+
             current = current.previousToken0
             if current is not None:
                 line = current.lineIndex

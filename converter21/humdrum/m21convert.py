@@ -22,6 +22,7 @@ from fractions import Fraction
 import music21 as m21
 from music21.common import opFrac
 
+from converter21.shared import SharedConstants
 from converter21.humdrum import MeasureStyle, MeasureVisualStyle, MeasureType
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumdrumInternalError
@@ -1486,7 +1487,8 @@ class M21Convert:
         styleString: str = ''
         justString: str = ''
         colorString: str = ''
-        contentString: str = M21Convert._cleanSpacesAndColons(content)
+        contentString: str = M21Convert.translateSMUFLNotesToNoteNames(content)
+        contentString = M21Convert._cleanSpacesAndColons(contentString)
 
         # We are perfectly happy to deal with empty contentString.  The result will be:
         # '!LO:TX:i:t=' or something like that.
@@ -1597,6 +1599,63 @@ class M21Convert:
         # We do this last after we've already saved the non-breaking spaces from stripping.
         output = output.strip()
         return output
+
+    @staticmethod
+    def translateSMUFLNotesToNoteNames(text: str) -> str:
+        # translates SMUFL note strings to Humdrum note names (and drops thin spaces)
+        # e.g. ' ' -> [half-dot]
+
+        # We get pretty aggressive here about making the resulting tempo text parseable
+        # (removing thin spaces, translating nbsp to space, etc), so we really don't
+        # want to do that if there are no SMUFL notes in the text.
+        # Check first, and if no SMUFL note found, return the text untouched.
+        smuflNoteFound: bool = False
+        for char in text:
+            if char in SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
+                smuflNoteFound = True
+                break
+        if not smuflNoteFound:
+            return text
+
+        output: str = ''
+        numCharsToSkip: int = 0
+        for i, char in enumerate(text):
+            if numCharsToSkip > 0:
+                numCharsToSkip -= 1
+                continue
+
+            if char in SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
+                output += (
+                    '['
+                    + SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME[char]
+                )
+                j = i + 1
+                while text[j] in (
+                    SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot'],
+                    chr(0x2009)  # thin space, inserted around notes sometimes
+                ):
+                    if text[j] == chr(0x2009):
+                        pass  # just skip the thin space
+                    else:
+                        output += '-dot'
+                    j += 1
+                output += ']'
+                numCharsToSkip = j - (i + 1)
+                continue
+
+            if char == chr(0x2009):  # thin space, inserted around notes sometimes
+                continue  # just skip the thin space
+
+            if char == chr(0x00A0):
+                # convert nbsp to regular space (Humdrum doesn't want nbsp's in tempo text)
+                output += ' '
+                continue
+
+            # all other chars
+            output += char
+
+        return output
+
 
     @staticmethod
     def _floatOrIntString(num: t.Union[float, int]) -> str:
@@ -1740,15 +1799,6 @@ class M21Convert:
             return m21.duration.Duration(type='512th', dots=dots)
         if noteName in ('1024', '1024th'):
             return m21.duration.Duration(type='1024th', dots=dots)
-
-        # the following are not supported by the C++ code, but seem reasonable,
-        # given music21's, MusicXML's, and MEI's support.  2048th notes and
-        # duplex-maxima are also supported by music21, but we omit them here
-        # because they are neither supported in MusicXML nor MEI (nor even SMUFL).
-        if noteName in ('longa', '00'):
-            return m21.duration.Duration(type='longa', dots=dots)
-        if noteName in ('maxima', '000'):
-            return m21.duration.Duration(type='maxima', dots=dots)
 
         return None
 
