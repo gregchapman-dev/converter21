@@ -141,9 +141,9 @@ class HumdrumWriter:
         # First element of tempo tuple is part index (tempo is at the part level)
         self._currentTempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]] = []
 
-        # whether or not we should avoid output of the first MetronomeMark (as !LO:TX) that
-        # matches the OMD (movementName) that was chosen to represent the temop in the initial
-        # Humdrum header.
+        # whether or not we should avoid output of the first MetronomeMark (as !LO:TX or !!!OMD)
+        # that matches the OMD (movementName) that was chosen to represent the temop in the
+        # initial Humdrum header.
         self._waitingToMaybeSkipFirstTempoText: bool = True
         self._tempoMovementName: t.Optional[str] = None
 
@@ -1702,7 +1702,7 @@ class HumdrumWriter:
                         self._waitingToMaybeSkipFirstTempoText = False
                         if self._tempoMovementName:
                             if self._tempoMovementName in m21Obj.text:
-                                m21Obj.humdrumNoTempoTextJustMM = True  # type: ignore
+                                m21Obj.humdrumNoTempoOMDJustMM = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
@@ -2468,14 +2468,14 @@ class HumdrumWriter:
     '''
     def _addTempo(self, outSlice: GridSlice, outgm: GridMeasure, partIndex: int,
                   tempoIndication: m21.tempo.TempoIndication) -> None:
-        skipTempoText: bool = False
-        if hasattr(tempoIndication, 'humdrumNoTempoTextJustMM'):
-            skipTempoText = tempoIndication.humdrumNoTempoTextJustMM  # type: ignore
+        skipTempoOMD: bool = False
+        if hasattr(tempoIndication, 'humdrumNoTempoOMDJustMM'):
+            skipTempoOMD = tempoIndication.humdrumNoTempoOMDJustMM  # type: ignore
 
-        mmTokenStr: str = ''       # e.g. '*MM128'
-        tempoTextLayout: str = ''  # e.g. '!LO:TX:a:t=[eighth]=82','!LO:TX:t=Andantino [eighth]=82'
-        mmTokenStr, tempoTextLayout = (
-            M21Convert.getMMTokenAndTempoTextLayoutFromM21TempoIndication(tempoIndication)
+        mmTokenStr: str = ''  # e.g. '*MM128'
+        tempoOMD: str = ''  # e.g. '!!!OMD: [eighth]=82','!!!OMD: Andantino [eighth]=82'
+        mmTokenStr, tempoOMD = (
+            M21Convert.getMMTokenAndOMDFromM21TempoIndication(tempoIndication)
         )
         staffIndex: int = 0
         voiceIndex: int = 0
@@ -2484,8 +2484,8 @@ class HumdrumWriter:
                                 partIndex, staffIndex, voiceIndex,
                                 self.staffCounts)
 
-        if tempoTextLayout and not skipTempoText:
-            outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, tempoTextLayout)
+        if tempoOMD and not skipTempoOMD:
+            outgm.addGlobalReference(tempoOMD, outSlice.timestamp)
 
     '''
     //////////////////////////////

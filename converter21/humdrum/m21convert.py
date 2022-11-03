@@ -1664,13 +1664,13 @@ class M21Convert:
             return str(intNum)
         return str(num)
 
-    # getMMTokenAndTempoTextLayoutFromM21TempoIndication returns (mmTokenStr, tempoTextLayout).
+    # getMMTokenAndOMDFromM21TempoIndication returns (mmTokenStr, tempoTextLayout).
     @staticmethod
-    def getMMTokenAndTempoTextLayoutFromM21TempoIndication(
+    def getMMTokenAndOMDFromM21TempoIndication(
             tempo: m21.tempo.TempoIndication
     ) -> t.Tuple[str, str]:
         mmTokenStr: str = ''
-        tempoTextLayout: str = ''
+        tempoOMD: str = ''
 
         textExp: t.Optional[m21.expressions.TextExpression] = None
 
@@ -1679,8 +1679,8 @@ class M21Convert:
             textExp = tempo.getTextExpression()  # only returns explicit text
             if textExp is None:
                 return ('', '')
-            tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
-            return ('', tempoTextLayout)
+            tempoOMD = '!!!OMD: ' + textExp.content
+            return ('', tempoOMD)
 
         # a MetricModulation describes a change from one MetronomeMark to another
         # (it carries extra info for analysis purposes).  We just get the new
@@ -1696,15 +1696,14 @@ class M21Convert:
         # if the MetronomeMark has bpm info (implicit or not), we construct a *MM.
         textExp = tempo.getTextExpression()  # only returns explicit text
         if textExp is not None:
-            # We have some text (like 'Andante') to display (and some textStyle)
-            textExp.placement = tempo.placement
-            tempoTextLayout = M21Convert.textLayoutParameterFromM21TextExpression(textExp)
+            # We have some text (like 'Andante') to display
+            tempoOMD = '!!!OMD: ' + textExp.content
 
         if tempo.number is not None:
             # even if the number is implicit, go ahead and generate a *MM for it.
             mmTokenStr = '*MM' + M21Convert._floatOrIntString(tempo.getQuarterBPM())
 
-        return (mmTokenStr, tempoTextLayout)
+        return (mmTokenStr, tempoOMD)
 
     # @staticmethod
     # def bpmTextLayoutParameterFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:

@@ -531,8 +531,50 @@ class GridMeasure:
                 self.slices.insert(idx, gs)
                 return gs
 
-        # I think we should put it at the beginning in this case --gregc
         return None
+
+    def addGlobalReference(self, tok: str, timestamp: HumNumIn) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
+        gs: GridSlice
+
+        if not self.slices or self.slices[-1].timestamp < ts:
+            # add a new GridSlice to an empty list or at end of list if timestamp
+            # is after last entry in list.
+            gs = GridSlice(self, ts, SliceType.ReferenceRecords, [1])
+            gs.addToken(tok, 0, 0, 0)
+            self.slices.append(gs)
+            return gs
+
+        # search for existing data line (of any type) with the same timestamp
+        for idx, gridSlice in enumerate(self.slices):
+            if gridSlice.timestamp == ts:
+                # found the correct timestamp on a slice, so add the global reference
+                # before the slice.  But don't add if the slice we found is a
+                # global reference with the same text.
+                if gridSlice.isReferenceRecord:
+                    if len(gridSlice.parts[0].staves[0].voices) > 0:
+                        voice0: t.Optional[GridVoice] = gridSlice.parts[0].staves[0].voices[0]
+                        if (voice0 is not None
+                                and voice0.token is not None
+                                and tok == voice0.token.text):
+                            # do not insert duplicate reference records
+                            gs = gridSlice
+                            return gs
+
+                gs = GridSlice(self, ts, SliceType.ReferenceRecords, [1])
+                gs.addToken(tok, 0, 0, 0)
+                self.slices.insert(idx, gs)
+                return gs
+
+            if gridSlice.timestamp > ts:
+                # insert before this slice
+                gs = GridSlice(self, ts, SliceType.ReferenceRecords, [1])
+                gs.addToken(tok, 0, 0, 0)
+                self.slices.insert(idx, gs)
+                return gs
+
+        return None
+
 
     '''
     //////////////////////////////
