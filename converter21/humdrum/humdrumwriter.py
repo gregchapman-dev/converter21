@@ -706,8 +706,9 @@ class HumdrumWriter:
             if t.TYPE_CHECKING:
                 # because 'movementName' has a humdrum key
                 assert hdKeyWithoutIndex is not None
-            idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-            hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            idx = 0
+#             idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+#             hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
             refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
                 idx, uniqueName, value
             )

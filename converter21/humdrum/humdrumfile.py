@@ -900,7 +900,7 @@ class HumdrumFile(HumdrumFileContent):
 
             if value:
                 value = html.unescape(value)
-            if key.startswith('OMD'):
+            if key == 'OMD':
                 # only take OMDs before the firstDataLineIdx as movementName in metadata,
                 # because after the first data line, they're not movementNames, just
                 # tempo changes.
@@ -9215,7 +9215,7 @@ class HumdrumFile(HumdrumFileContent):
             if not line.isReference:
                 continue
             key = line.referenceKey
-            if key.startswith('OMD'):
+            if key == 'OMD':
                 index = i
                 value = line.referenceValue
                 # break # Don't break: search for the last OMD in a non-data region

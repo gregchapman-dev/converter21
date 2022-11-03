@@ -1989,23 +1989,11 @@ def scoreDefFromElement(
         wholeScore: []
     }
 
-    # 0.) process top-part attributes
-    ptp = post[topPart]
-    if t.TYPE_CHECKING:
-        assert isinstance(ptp, list)
-    postTopPart: t.List[Music21Object] = ptp
-
+    # 0.) process top-part attributes (none actually get posted yet, but...)
     bpmStr: str = elem.get('midi.bpm', '')
     if bpmStr:
-        bpm: int = 0
-        try:
-            bpm = int(float(bpmStr) + 0.5)
-        except:  # pylint: disable=bare-except
-            pass
-        if bpm > 0:
-            mm = tempo.MetronomeMark(number=bpm)
-            mm.numberImplicit = True  # don't show in rendered score
-            postTopPart.append(mm)
+        # stick it in other info, for the very first MetronomeMark to use (if necessary)
+        otherInfo['pending scoredef@midi.bpm'] = bpmStr
 
     # 1.) process all-part attributes
     pap = post[allParts]
@@ -4772,11 +4760,15 @@ def tempoFromElement(
     elif teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None:
         teWithStyle.style.fontStyle = 'bold'
 
-    midiBPMStr: t.Optional[str] = elem.get('midi.bpm')
+    pendingMidiBPMStr: str = otherInfo.pop('pending scoredef@midi.bpm', '')
+    midiBPMStr: str = elem.get('midi.bpm', '')
+    if not midiBPMStr:
+        # only use the pending one if it's useful.  We pop it out of otherInfo either way.
+        midiBPMStr = pendingMidiBPMStr
     midiBPM: t.Optional[int] = None
     if midiBPMStr:
         try:
-            midiBPM = int(midiBPMStr)
+            midiBPM = int(float(midiBPMStr))
         except (TypeError, ValueError):
             pass
 
