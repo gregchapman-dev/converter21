@@ -873,7 +873,7 @@ class HumdrumFile(HumdrumFileContent):
     def _prepareMetadata(self) -> None:
         # We take every instance of each key, but... I make an exception for OMD,
         # because it is also used as a tempo change at start of any measure, so
-        # you only want the OMDs before the first note for the "movement name".
+        # you only want the OMDs before the first note for the "movement names".
         # I give you beethoven piano sonata21-3.krn as an example.  First OMD is
         # 'Rondo: Allegretto moderato', and last OMD (in a measure in the middle
         # of the movement) is 'Prestissimo'.  The movement name is 'Rondo: Allegretto'. --gregc
@@ -883,7 +883,6 @@ class HumdrumFile(HumdrumFileContent):
                 firstDataLineIdx = line.lineIndex
                 break
 
-        alreadySawOMD: bool = False
         for bibLine in self.referenceRecords():
             if bibLine.text.startswith('!!!!'):
                 # skip the universal records for now, we don't handle multi-score Humdrum files

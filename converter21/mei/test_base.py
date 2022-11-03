@@ -180,9 +180,9 @@ class Test(unittest.TestCase):
         staffDefs[0].get = mock.MagicMock(return_value='1')
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
-        expected = ['1']
+        expected = (('1',), '1')
         actual = base.allPartsPresent(elem)
-        self.assertSequenceEqual(expected, actual)
+        self.assertEqual(expected, actual)
 
     def testAllPartsPresent2(self):
         '''allPartsPresent(): four <staffDef>s'''
@@ -191,9 +191,9 @@ class Test(unittest.TestCase):
             staffDefs[i].get = mock.MagicMock(return_value=str(i + 1))
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
-        expected = list('1234')
+        expected = (('1', '2', '3', '4'), '1')
         actual = base.allPartsPresent(elem)
-        self.assertSequenceEqual(expected, actual)
+        self.assertEqual(expected, actual)
 
     def testAllPartsPresent3(self):
         '''allPartsPresent(): four unique <staffDef>s, several repeats'''
@@ -202,9 +202,9 @@ class Test(unittest.TestCase):
             staffDefs[i].get = mock.MagicMock(return_value=str((i % 4) + 1))
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
-        expected = list('1234')
+        expected = (('1', '2', '3', '4'), '1')
         actual = base.allPartsPresent(elem)
-        self.assertSequenceEqual(expected, actual)
+        self.assertEqual(expected, actual)
 
     def testAllPartsPresent4(self):
         '''allPartsPresent(): error: no <staffDef>s'''
@@ -2057,7 +2057,8 @@ class Test(unittest.TestCase):
                                                  'meter.count': '3', 'meter.unit': '8'})
         mockTime.return_value = 'mockTime return'
         mockKey.return_value = 'mockKey return'
-        expected = {'all-part objects': [mockTime.return_value, mockKey.return_value],
+        expected = {'top-part objects': [],
+                    'all-part objects': [mockTime.return_value, mockKey.return_value],
                     'whole-score objects': []}
 
         # 2.) run
@@ -2104,7 +2105,8 @@ class Test(unittest.TestCase):
         mockTime.return_value = 'mockTime return'
         mockKey.return_value = 'mockKey return'
         mockStaffGrpFE.return_value = {'1': {'instrument': 'A clarinet'}}
-        expected = {'all-part objects': [mockTime.return_value, mockKey.return_value],
+        expected = {'top-part objects': [],
+                    'all-part objects': [mockTime.return_value, mockKey.return_value],
                     'whole-score objects': [],
                     '1': {'instrument': 'A clarinet'}}
 
@@ -3723,7 +3725,7 @@ class Test(unittest.TestCase):
         Mocks on allPartsPresent(), sectionScoreCore(), stream.Part(), and stream.Score().
         '''
         elem = ETree.Element('score')
-        mockAllParts.return_value = ['1', '2']
+        mockAllParts.return_value = (('1', '2'), 1)
         mockCore.return_value = ({'1': ['1-1', '1-2'], '2': ['2-1', '2-2']},
                                  'three', 'other', 'things')
         mockScore.side_effect = lambda x: [x[0], x[1]]
@@ -3742,7 +3744,9 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         mockAllParts.assert_called_once_with(elem)
         mockCore.assert_called_once_with(
-            elem, None, spannerBundle, {}, mockAllParts.return_value
+            elem, None, spannerBundle,
+            {'topPartN': int(mockAllParts.return_value[1])},
+            mockAllParts.return_value[0]
         )
         mockScore.assert_called_once_with([mockPart1, mockPart2])
         self.assertEqual(2, mockPart1.append.call_count)
@@ -3870,7 +3874,8 @@ class Test(unittest.TestCase):
                                       expActiveMeter, expNMLeft, expMeasureNum)
         # setup scoreDefFromElement()
         scoreDefActiveMeter = mock.MagicMock(spec_set=meter.TimeSignature)
-        mockScoreDFE.return_value = {'all-part objects': [scoreDefActiveMeter],
+        mockScoreDFE.return_value = {'top-part objects': [],
+                                     'all-part objects': [scoreDefActiveMeter],
                                      '1': {'whatever': '8/8'}}
         # setup staffDefFromElement()
         mockStaffDFE.return_value = {'whatever': 'treble clef'}
@@ -4023,7 +4028,8 @@ class Test(unittest.TestCase):
                                       expActiveMeter, expNMLeft, expMeasureNum)
         # setup scoreDefFromElement()
         scoreDefActiveMeter = mock.MagicMock(spec_set=meter.TimeSignature)
-        mockScoreDFE.return_value = {'all-part objects': [scoreDefActiveMeter],
+        mockScoreDFE.return_value = {'top-part objects': [],
+                                     'all-part objects': [scoreDefActiveMeter],
                                      '1': {'whatever': '8/8'}}
         # setup staffDefFromElement()
         mockStaffDFE.return_value = {'whatever': 'treble clef'}

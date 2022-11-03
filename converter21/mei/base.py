@@ -439,14 +439,15 @@ def makeDuration(
     return returnDuration
 
 
-def allPartsPresent(scoreElem: Element) -> t.Tuple[str, ...]:
+def allPartsPresent(scoreElem: Element) -> t.Tuple[t.Tuple[str, ...], str]:
     # noinspection PyShadowingNames
     '''
     Find the @n values for all <staffDef> elements in a <score> element. This assumes that every
     MEI <staff> corresponds to a music21 :class:`~music21.stream.Part`.
 
-    scoreElem is the <score> `Element` in which to find the part names.
-    Returns all the unique @n values associated with a part in the <score>.
+    scoreElem is the <score> `Element` in which to find the staff names.
+    Returns a tuple containing all the unique @n values associated with a staff in the <score>.
+    Returns also, the specific unique @n value associated with the top staff of the score.
 
     **Example**
 
@@ -468,7 +469,7 @@ def allPartsPresent(scoreElem: Element) -> t.Tuple[str, ...]:
     >>> from converter21.mei.base import allPartsPresent
     >>> meiDoc = ETree.fromstring(meiDoc)
     >>> allPartsPresent(meiDoc)
-    ('1', '2')
+    (('1', '2'), '1')
 
     Even though there are three <staffDef> elements in the document, there are only two unique @n
     attributes. The second appearance of <staffDef> with @n="2" signals a change of clef on that
@@ -477,14 +478,20 @@ def allPartsPresent(scoreElem: Element) -> t.Tuple[str, ...]:
     # xpathQuery = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}staffDef'
     xpathQuery: str = f'.//{MEI_NS}staffDef'
     partNs: t.List[str] = []  # hold the @n attribute for all the parts
+    topPart: str = ''
 
     for staffDef in scoreElem.findall(xpathQuery):
         nStr: t.Optional[str] = staffDef.get('n')
         if nStr and nStr not in partNs:
             partNs.append(nStr)
+            if not topPart:
+                # This first 'n' we see is special, it's the 'n' of the top staff
+                topPart = nStr
+
     if not partNs:
         raise MeiValidityError(_SEEMINGLY_NO_PARTS)
-    return tuple(partNs)
+
+    return tuple(partNs), topPart
 
 
 # Constants for One-to-One Translation
@@ -1973,12 +1980,32 @@ def scoreDefFromElement(
     '''
 
     # make the dict
+    topPart: str = 'top-part objects'
     allParts: str = 'all-part objects'
     wholeScore: str = 'whole-score objects'
     post: t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]] = {
+        topPart: [],
         allParts: [],
         wholeScore: []
     }
+
+    # 0.) process top-part attributes
+    ptp = post[topPart]
+    if t.TYPE_CHECKING:
+        assert isinstance(ptp, list)
+    postTopPart: t.List[Music21Object] = ptp
+
+    bpmStr: str = elem.get('midi.bpm', '')
+    if bpmStr:
+        bpm: int = 0
+        try:
+            bpm = int(float(bpmStr) + 0.5)
+        except:  # pylint: disable=bare-except
+            pass
+        if bpm > 0:
+            mm = tempo.MetronomeMark(number=bpm)
+            mm.numberImplicit = True  # don't show in rendered score
+            postTopPart.append(mm)
 
     # 1.) process all-part attributes
     pap = post[allParts]
@@ -5251,7 +5278,7 @@ def sectionScoreCore(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-    allPartNs: t.Iterable[str],
+    allPartNs: t.Tuple[str, ...],
     nextMeasureLeft: t.Optional[bar.Repeat] = None,
     backupMeasureNum: int = 0,
 ) -> t.Tuple[
@@ -5272,9 +5299,9 @@ def sectionScoreCore(
 
     :param elem: The <section> or <score> element to process.
     :type elem: :class:`xml.etree.ElementTree.Element`
-    :param allPartNs: A list or tuple of the expected @n attributes for the <staff> tags in this
+    :param allPartNs: A tuple of the expected @n attributes for the <staff> tags in this
         <section>. This tells the function how many parts there are and what @n values they use.
-    :type allPartNs: iterable of str
+    :type allPartNs: tuple of str
     :param spannerBundle: This :class:`SpannerBundle` holds the :class:`~music21.spanner.Slur`
         objects created during pre-processing. The slurs are attached to their respective
         :class:`Note` and :class:`Chord` objects as they are processed.
@@ -5344,6 +5371,10 @@ def sectionScoreCore(
         n: [] for n in allPartNs
     }
 
+    topPartN: str = otherInfo.get('topPartN', '')
+    if topPartN == '' and allPartNs:
+        topPartN = allPartNs[0]
+
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section> or <ending>
         if measureTag == eachElem.tag and elem.tag in (sectionTag, endingTag):
@@ -5386,6 +5417,12 @@ def sectionScoreCore(
             localResult = scoreDefFromElement(
                 eachElem, spannerBundle, otherInfo
             )
+            for topPartObject in localResult['top-part objects']:
+                if t.TYPE_CHECKING:
+                    # because 'top-part objects' is a list of objects
+                    assert isinstance(topPartObject, Music21Object)
+                inNextThing[topPartN].append(topPartObject)
+
             for allPartObject in localResult['all-part objects']:
                 if t.TYPE_CHECKING:
                     # because 'all-part objects' is a list of objects
@@ -5522,7 +5559,7 @@ def sectionFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-    allPartNs: t.Iterable[str],
+    allPartNs: t.Tuple[str, ...],
     nextMeasureLeft: t.Optional[bar.Repeat],
     backupMeasureNum: int
 ) -> t.Tuple[
@@ -5628,7 +5665,10 @@ def scoreFromElement(
 
     # Get a tuple of all the @n attributes for the <staff> tags in this score. Each <staff> tag
     # corresponds to what will be a music21 Part.
-    allPartNs: t.Tuple[str, ...] = allPartsPresent(elem)
+    allPartNs: t.Tuple[str, ...]
+    topPartN: str
+    allPartNs, topPartN = allPartsPresent(elem)
+    otherInfo['topPartN'] = topPartN
 
     # This is the actual processing.
     parsed: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = (

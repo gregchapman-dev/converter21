@@ -533,7 +533,7 @@ class GridMeasure:
 
         return None
 
-    def addGlobalReference(self, tok: str, timestamp: HumNumIn) -> GridSlice:
+    def addGlobalReference(self, tok: str, timestamp: HumNumIn) -> t.Optional[GridSlice]:
         ts: HumNum = opFrac(timestamp)
         gs: GridSlice
 
