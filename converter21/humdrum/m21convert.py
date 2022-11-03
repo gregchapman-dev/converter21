@@ -1632,9 +1632,10 @@ class M21Convert:
                 j = i + 1
                 while text[j] in (
                     SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot'],
-                    chr(0x2009)  # thin space, inserted around notes sometimes
+                    chr(0x2009),  # thin space, inserted around notes sometimes
+                    chr(0x200A),  # thin space, inserted sometimes as well
                 ):
-                    if text[j] == chr(0x2009):
+                    if text[j] in (chr(0x2009), chr(0x200A)):
                         pass  # just skip the thin space
                     else:
                         output += '-dot'
@@ -1643,7 +1644,7 @@ class M21Convert:
                 numCharsToSkip = j - (i + 1)
                 continue
 
-            if char == chr(0x2009):  # thin space, inserted around notes sometimes
+            if char in (chr(0x2009), chr(0x200A)):  # thin space, inserted sometimes
                 continue  # just skip the thin space
 
             if char == chr(0x00A0):

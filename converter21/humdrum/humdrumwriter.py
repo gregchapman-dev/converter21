@@ -147,6 +147,10 @@ class HumdrumWriter:
         self._waitingToMaybeSkipFirstTempoText: bool = True
         self._tempoMovementName: t.Optional[str] = None
 
+        # The initial OMD token that was not emitted inline, but instead will be used
+        # to put the metadata.movementName back the way it was (if appropriate).
+        self.initialOMDToken: t.Optional[str] = None
+
     def _chosenSignifierForRDFDefinition(self,
             rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
             favoriteSignifier: str) -> str:
@@ -595,6 +599,22 @@ class HumdrumWriter:
         mdCopyrightItems: t.List[
             t.Tuple[str, m21.metadata.ValueType]
         ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
+
+        # extra step: see if mdMovementNameItems[-1] matches self.initialOMDToken,
+        # and if so, put any '[half-dot] = 63'-style suffix back on the
+        # movementName before we emit it as the initial OMD.
+        if mdMovementNameItems:
+            if self.initialOMDToken is not None:
+                # initialOMDToken is a str of the form '!!!OMD: blah'
+                initialOMDValue: str = self.initialOMDToken[8:]
+                # mdMovementNameItems[-1][1] is a Text value
+                lastMovementNameStr: str = str(mdMovementNameItems[-1][1])
+                if initialOMDValue.startswith(lastMovementNameStr):
+                    mname = mdMovementNameItems[-1][1]
+                    if t.TYPE_CHECKING:
+                        assert isinstance(mname, m21.metadata.Text)
+                    initialOMDValue = M21Convert.translateSMUFLNotesToNoteNames(initialOMDValue)
+                    mname._data = initialOMDValue  # pylint: disable=protected-access
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
         atLine: int = 0
@@ -1703,7 +1723,7 @@ class HumdrumWriter:
                         self._waitingToMaybeSkipFirstTempoText = False
                         if self._tempoMovementName:
                             if self._tempoMovementName in m21Obj.text:
-                                m21Obj.humdrumNoTempoOMDJustMM = True  # type: ignore
+                                m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
@@ -2469,15 +2489,17 @@ class HumdrumWriter:
     '''
     def _addTempo(self, outSlice: GridSlice, outgm: GridMeasure, partIndex: int,
                   tempoIndication: m21.tempo.TempoIndication) -> None:
-        skipTempoOMD: bool = False
-        if hasattr(tempoIndication, 'humdrumNoTempoOMDJustMM'):
-            skipTempoOMD = tempoIndication.humdrumNoTempoOMDJustMM  # type: ignore
+        wasInitialOMD: bool = False
+        if hasattr(tempoIndication, 'humdrumTempoIsFromInitialOMD'):
+            wasInitialOMD = tempoIndication.humdrumTempoIsFromInitialOMD  # type: ignore
+            delattr(tempoIndication, 'humdrumTempoIsFromInitialOMD')
 
         mmTokenStr: str = ''  # e.g. '*MM128'
         tempoOMD: str = ''  # e.g. '!!!OMD: [eighth]=82','!!!OMD: Andantino [eighth]=82'
         mmTokenStr, tempoOMD = (
             M21Convert.getMMTokenAndOMDFromM21TempoIndication(tempoIndication)
         )
+
         staffIndex: int = 0
         voiceIndex: int = 0
         if mmTokenStr:
@@ -2485,8 +2507,16 @@ class HumdrumWriter:
                                 partIndex, staffIndex, voiceIndex,
                                 self.staffCounts)
 
-        if tempoOMD and not skipTempoOMD:
-            outgm.addGlobalReference(tempoOMD, outSlice.timestamp)
+        if tempoOMD:
+            if wasInitialOMD:
+                # Stash tempoOMD off because it might have extra '[half-dot]=63'-style
+                # text in it that was stripped from the movementName in the metadata
+                # (no-one wants that in a title), and we should restore it when writing
+                # the initial OMD to the output Humdrum file.
+                self.initialOMDToken = tempoOMD
+            else:
+                # emit it now instead (it's a tempo change partway through the score)
+                outgm.addGlobalReference(tempoOMD, outSlice.timestamp)
 
     '''
     //////////////////////////////
