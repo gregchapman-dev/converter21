@@ -529,9 +529,16 @@ class M21Convert:
                 placement: str = articPlacement[humdrumArticString]
                 if placement:
                     m21Artic.placement = placement
-                if articIsGestural[humdrumArticString]:
-                    m21Artic.style.hideObjectOnPrint = True
-                artics.append(m21Artic)
+
+                # Rather than making gestural articulations invisible, just leave them out.
+                # This sucks a bit, but matches verovio.  I'll fix this when they do.
+                if not articIsGestural[humdrumArticString]:
+                    artics.append(m21Artic)
+
+                # Here's how it should be done
+                # if articIsGestural[humdrumArticString]:
+                #     m21Artic.style.hideObjectOnPrint = True
+                # artics.append(m21Artic)
 
         return artics
 
