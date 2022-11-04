@@ -1303,7 +1303,7 @@ def _keySigFromAttrs(
         if mode:
             theKeySig = theKeySig.asKey(mode=mode)
 
-    output: t.Union[key.KeySignature, key.Key]
+    output: t.Optional[t.Union[key.KeySignature, key.Key]]
     if theKey is not None and theKeySig is not None:
         if theKey.sharps != theKeySig.sharps:
             # if they disagree, pick the one that was specified by number of sharps/flats
@@ -1316,10 +1316,10 @@ def _keySigFromAttrs(
     elif theKeySig is not None:
         output = theKeySig
     else:
-        # malformed elem: pretend there are no sharps or flats
-        output = key.KeySignature(sharps=0)
+        # malformed elem: return None
+        output = None
 
-    if form == 'invis':
+    if output is not None and form == 'invis':
         output.style.hideObjectOnPrint = True
     return output
 
@@ -5362,6 +5362,9 @@ def sectionScoreCore(
     inNextThing: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
         n: [] for n in allPartNs
     }
+    pendingInNextThing = otherInfo.get('pending inNextThing', None)
+    if pendingInNextThing is not None:
+        inNextThing.update(pendingInNextThing)
 
     topPartN: str = otherInfo.get('topPartN', '')
     if topPartN == '' and allPartNs:
@@ -5541,7 +5544,10 @@ def sectionScoreCore(
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
     # TODO: write the <section @label=""> part
-    # TODO: check if there's anything left in "inNextThing"
+
+    # if there's anything left in "inNextThing", stash it off for the _next_ measure or section
+    if inNextThing:
+        otherInfo['pending inNextThing'] = inNextThing
 
     return parsed, activeMeter, nextMeasureLeft, backupMeasureNum
 

@@ -3894,16 +3894,18 @@ class Test(unittest.TestCase):
         mockSectionFE.assert_called_once_with(mock.ANY,
                                               scoreDefActiveMeter,
                                               spannerBundle,
-                                              {},
+                                              {'pending inNextThing': {'1': []}},
                                               allPartNs,
                                               None,
                                               0)
         self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
         # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
+        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle,
+            {'pending inNextThing': {'1': []}})
         self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle,
+            {'pending inNextThing': {'1': []}})
         self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
         # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Part
         self.assertEqual(3, expPart1[0].insert.call_count)
@@ -4053,17 +4055,19 @@ class Test(unittest.TestCase):
         mockSectionFE.assert_called_once_with(mock.ANY,
                                               scoreDefActiveMeter,
                                               spannerBundle,
-                                              {},
+                                              {'pending inNextThing': {'1': []}},
                                               allPartNs,
                                               None,
                                               # incremented automatically on finding a <measure>
                                               1)
         self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
         # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
+        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle,
+            {'pending inNextThing': {'1': []}})
         self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle,
+            {'pending inNextThing': {'1': []}})
         self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
         # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Measure,
         # and not into the mocked Part
@@ -4349,7 +4353,8 @@ class Test(unittest.TestCase):
         # ensure scoreDefFromElement()
         self.assertEqual(0, mockScoreDFE.call_count)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle, {})
+        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle,
+            {'pending inNextThing': {'1': []}})
 
     @mock.patch('converter21.mei.base.environLocal')
     def testCoreIntegration4(self, mockEnviron):
