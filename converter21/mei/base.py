@@ -5444,7 +5444,7 @@ def sectionScoreCore(
     inNextThing: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
         n: [] for n in allPartNs
     }
-    pendingInNextThing = otherInfo.get('pending inNextThing', None)
+    pendingInNextThing = otherInfo.pop('pending inNextThing', None)
     if pendingInNextThing is not None:
         inNextThing.update(pendingInNextThing)
 
@@ -5628,8 +5628,7 @@ def sectionScoreCore(
     # TODO: write the <section @label=""> part
 
     # if there's anything left in "inNextThing", stash it off for the _next_ measure or section
-    if inNextThing:
-        otherInfo['pending inNextThing'] = inNextThing
+    otherInfo['pending inNextThing'] = inNextThing
 
     return parsed, activeMeter, nextMeasureLeft, backupMeasureNum
 
