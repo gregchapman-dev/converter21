@@ -1241,27 +1241,29 @@ def _timeSigFromAttrs(elem: Element, prefix: str = '') -> t.Optional[meter.TimeS
     count: t.Optional[str] = elem.get(prefix + 'count')
     unit: t.Optional[str] = elem.get(prefix + 'unit')
     sym: t.Optional[str] = elem.get(prefix + 'sym')
-    form: t.Optional[str] = elem.get(prefix + 'form')
+    # We ignore form="invis" because this usually happens in the presence of
+    # <mensur>, which we (and music21) do not support, so we really need this guy.
+    # form: t.Optional[str] = elem.get(prefix + 'form')
     if sym:
         if (sym == 'cut'
                 and (count is None or count == '2')
                 and (unit is None or unit == '2')):
             timeSig = meter.TimeSignature('cut')
-            if form == 'invis':
-                timeSig.style.hideObjectOnPrint = True
+            # if form == 'invis':
+            #     timeSig.style.hideObjectOnPrint = True
             return timeSig
         if (sym == 'common'
                 and (count is None or count == '4')
                 and (unit is None or unit == '4')):
             timeSig = meter.TimeSignature('common')
-            if form == 'invis':
-                timeSig.style.hideObjectOnPrint = True
+            # if form == 'invis':
+            #     timeSig.style.hideObjectOnPrint = True
             return timeSig
 
     if count and unit:
         timeSig = meter.TimeSignature(f'{count}/{unit}')
-        if form == 'invis':
-            timeSig.style.hideObjectOnPrint = True
+        # if form == 'invis':
+        #     timeSig.style.hideObjectOnPrint = True
         return timeSig
 
     return None

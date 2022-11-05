@@ -547,6 +547,23 @@ class M21Convert:
             token: HumdrumToken,
             tuplet: m21.duration.Tuplet
     ) -> m21.duration.Duration:
+        vdurStr: str = token.getVisualDuration()
+        vdur: t.Optional[HumNum] = None
+        vdurNoDots: t.Optional[HumNum] = None
+        vdurNumDots: t.Optional[int] = None
+        vdurType: t.Optional[str] = None
+        if vdurStr:
+            vdur = opFrac(Convert.recipToDuration(vdurStr) / tuplet.tupletMultiplier())
+            if t.TYPE_CHECKING:
+                assert vdur is not None
+            vdurNoDots, vdurNumDots = Convert.computeDurationNoDotsAndNumDots(vdur)
+            if vdurNumDots is None:
+                print(f'Cannot figure out vDurNoDots + vDurNumDots from {vdurStr} (on '
+                      + f'line number {token.lineNumber}), tuplet={tuplet}, ignoring'
+                      'visual duration', file=sys.stderr)
+            else:
+                vdurType = m21.duration.convertQuarterLengthToType(vdurNoDots)
+
         dur: HumNum = opFrac(token.duration / tuplet.tupletMultiplier())
         durNoDots: HumNum
         numDots: t.Optional[int]
@@ -555,14 +572,21 @@ class M21Convert:
             print(f'Cannot figure out durNoDots + numDots from {token.text} (on '
                     + f'line number {token.lineNumber}), tuplet={tuplet}, about to '
                     + 'crash in convertQuarterLengthToType()...', file=sys.stderr)
-        durType: str = m21.duration.convertQuarterLengthToType(durNoDots)
-        # print('m21DurationWithTuplet: type = "{}", dots={}'.format(durType, numDots),
-        #           file=sys.stderr)
-        component: m21.duration.DurationTuple = (
-            m21.duration.durationTupleFromTypeDots(durType, numDots)
-        )
+
+        component: m21.duration.DurationTuple
+        if vdurType:
+            component = m21.duration.durationTupleFromTypeDots(vdurType, vdurNumDots)
+        else:
+            durType: str = m21.duration.convertQuarterLengthToType(durNoDots)
+            component = m21.duration.durationTupleFromTypeDots(durType, numDots)
+
         output = m21.duration.Duration(components=(component,))
         output.tuplets = (tuplet,)
+
+        if vdurType:
+            output.linked = False
+            output.quarterLength = opFrac(token.duration)
+
         return output
 
     @staticmethod
@@ -1308,8 +1332,18 @@ class M21Convert:
             # the correct number of flags/beams.
             dur = m21.duration.convertTypeToQuarterLength(m21Duration.type)
             dots = ''
+        elif m21Duration.linked is False and m21Duration.tuplets and len(m21Duration.tuplets) == 1:
+            # There's a real (gestural) duration and a visual duration AND they are tuplet-y.
+            # Real duration is quarterLength, visual duration is a bit more complex
+            # (assuming only 1 component)
+            dur = m21Duration.quarterLength
+            vdur = m21.duration.convertTypeToQuarterLength(m21Duration.type)
+            vdur *= m21Duration.tuplets[0].tupletMultiplier()
+            vdur = opFrac(vdur)
+            dots = '.' * m21Duration.dots
+            inTuplet = True
         elif m21Duration.linked is False:
-            # There's a real duration and a visual duration
+            # There's a real (gestural) duration and a visual duration
             # Real duration is quarterLength, visual duration is components[0].quarterLength
             # (assuming only 1 component)
             dur = m21Duration.quarterLength
