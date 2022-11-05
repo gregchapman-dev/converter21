@@ -4563,7 +4563,7 @@ class Test(unittest.TestCase):
         converter.unregisterSubconverter(converter.subConverters.ConverterMEI)
         converter.registerSubconverter(MEIConverter)
         fp = common.getSourceFilePath() / 'mei' / 'test' / 'test_file.mei'
-        s = converter.parse(fp)
+        s = converter.parse(fp, forceSource=True)
 
         seen_ids = set()
         for el in s.recurse():
