@@ -2392,79 +2392,79 @@ class Test(unittest.TestCase):
 # class TestBeams(unittest.TestCase):
     '''Tests for beams in all their guises.'''
 
-    def testBeamTogether1(self):
-        '''
-        beamTogether(): with three mock objects, that their "beams" attributes are set properly
-        '''
-        someThings = [mock.MagicMock() for _ in range(3)]
-        for i in range(len(someThings)):
-            someThings[i].beams = mock.MagicMock(f'thing {i} beams')
-            someThings[i].beams.__len__.return_value = 0
-            someThings[i].beams.fill = mock.MagicMock()
-            someThings[i].beams.setAll = mock.MagicMock()
-            someThings[i].beams.getByNumber = mock.MagicMock()
-            someThings[i].duration.type = '16th'
-        expectedTypes = ['start', 'continue', 'continue']
-        # first call with "continue"; corrected later in function
-
-        base.beamTogether(someThings)
-
-        for i in range(len(someThings)):
-            # someThings[i].beams.__len__.assert_called_once_with()
-            someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
-        someThings[2].beams.setAll.assert_called_once_with('stop')
-
-    def testBeamTogether2(self):
-        '''
-        beamTogether(): with four mock objects, the middle two of which already have "beams" set
-        '''
-        someThings = [mock.MagicMock() for _ in range(4)]
-        for i in range(len(someThings)):
-            someThings[i].beams = mock.MagicMock(f'thing {i} beams')
-            someThings[i].beams.__len__.return_value = 0
-            someThings[i].beams.fill = mock.MagicMock()
-            someThings[i].beams.setAll = mock.MagicMock()
-            someThings[i].beams.getByNumber = mock.MagicMock()
-            someThings[i].duration.type = '16th'
-        expectedTypes = ['start', None, None, 'continue']
-        # first call with "continue"; corrected later in function
-
-        # modifications for test 2
-        someThings[1].beams.__len__.return_value = 2
-        someThings[2].beams.__len__.return_value = 2
-
-        base.beamTogether(someThings)
-
-        for i in [0, 3]:
-            # someThings[i].beams.__len__.assert_called_once_with()
-            someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
-        someThings[3].beams.setAll.assert_called_once_with('stop')
-        for i in [1, 2]:
-            self.assertEqual(0, someThings[i].beams.fill.call_count)
-            self.assertEqual(0, someThings[i].beams.setAll.call_count)
-
-    def testBeamTogether3(self):
-        '''
-        beamTogether(): with four mock objects, one of which doesn't have a "beams" attribute
-        '''
-        someThings = [mock.MagicMock() for _ in range(4)]
-        someThings[2] = 5  # this will cause failure if the function tries to set "beams"
-        for i in [0, 1, 3]:
-            someThings[i].beams = mock.MagicMock(f'thing {i} beams')
-            someThings[i].beams.__len__.return_value = 0
-            someThings[i].beams.fill = mock.MagicMock()
-            someThings[i].beams.setAll = mock.MagicMock()
-            someThings[i].beams.getByNumber = mock.MagicMock()
-            someThings[i].duration.type = '16th'
-        expectedTypes = ['start', 'continue', None, 'continue']
-        # first call with "continue"; corrected later in function
-
-        base.beamTogether(someThings)
-
-        for i in [0, 1, 3]:
-            # someThings[i].beams.__len__.assert_called_once_with()
-            someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
-        someThings[3].beams.setAll.assert_called_once_with('stop')
+    # def testBeamTogether1(self):
+    #     '''
+    #     beamTogether(): with three mock objects, that their "beams" attributes are set properly
+    #     '''
+    #     someThings = [mock.MagicMock() for _ in range(3)]
+    #     for i in range(len(someThings)):
+    #         someThings[i].beams = mock.MagicMock(f'thing {i} beams')
+    #         someThings[i].beams.__len__.return_value = 0
+    #         someThings[i].beams.fill = mock.MagicMock()
+    #         someThings[i].beams.setAll = mock.MagicMock()
+    #         someThings[i].beams.getByNumber = mock.MagicMock()
+    #         someThings[i].duration.type = '16th'
+    #     expectedTypes = ['start', 'continue', 'continue']
+    #     # first call with "continue"; corrected later in function
+    #
+    #     base.beamTogether(someThings)
+    #
+    #     for i in range(len(someThings)):
+    #         # someThings[i].beams.__len__.assert_called_once_with()
+    #         someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
+    #     someThings[2].beams.setAll.assert_called_once_with('stop')
+    #
+    # def testBeamTogether2(self):
+    #     '''
+    #     beamTogether(): with four mock objects, the middle two of which already have "beams" set
+    #     '''
+    #     someThings = [mock.MagicMock() for _ in range(4)]
+    #     for i in range(len(someThings)):
+    #         someThings[i].beams = mock.MagicMock(f'thing {i} beams')
+    #         someThings[i].beams.__len__.return_value = 0
+    #         someThings[i].beams.fill = mock.MagicMock()
+    #         someThings[i].beams.setAll = mock.MagicMock()
+    #         someThings[i].beams.getByNumber = mock.MagicMock()
+    #         someThings[i].duration.type = '16th'
+    #     expectedTypes = ['start', None, None, 'continue']
+    #     # first call with "continue"; corrected later in function
+    #
+    #     # modifications for test 2
+    #     someThings[1].beams.__len__.return_value = 2
+    #     someThings[2].beams.__len__.return_value = 2
+    #
+    #     base.beamTogether(someThings)
+    #
+    #     for i in [0, 3]:
+    #         # someThings[i].beams.__len__.assert_called_once_with()
+    #         someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
+    #     someThings[3].beams.setAll.assert_called_once_with('stop')
+    #     for i in [1, 2]:
+    #         self.assertEqual(0, someThings[i].beams.fill.call_count)
+    #         self.assertEqual(0, someThings[i].beams.setAll.call_count)
+    #
+    # def testBeamTogether3(self):
+    #     '''
+    #     beamTogether(): with four mock objects, one of which doesn't have a "beams" attribute
+    #     '''
+    #     someThings = [mock.MagicMock() for _ in range(4)]
+    #     someThings[2] = 5  # this will cause failure if the function tries to set "beams"
+    #     for i in [0, 1, 3]:
+    #         someThings[i].beams = mock.MagicMock(f'thing {i} beams')
+    #         someThings[i].beams.__len__.return_value = 0
+    #         someThings[i].beams.fill = mock.MagicMock()
+    #         someThings[i].beams.setAll = mock.MagicMock()
+    #         someThings[i].beams.getByNumber = mock.MagicMock()
+    #         someThings[i].duration.type = '16th'
+    #     expectedTypes = ['start', 'continue', None, 'continue']
+    #     # first call with "continue"; corrected later in function
+    #
+    #     base.beamTogether(someThings)
+    #
+    #     for i in [0, 1, 3]:
+    #         # someThings[i].beams.__len__.assert_called_once_with()
+    #         someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
+    #     someThings[3].beams.setAll.assert_called_once_with('stop')
 
 
 # -----------------------------------------------------------------------------
@@ -2943,9 +2943,8 @@ class Test(unittest.TestCase):
 
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('converter21.mei.base.beamTogether')
     @mock.patch('converter21.mei.base.applyBreaksecs')
-    def testTuplets7(self, mockBreaksecs, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
+    def testTuplets7(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; no extraneous elements
         '''
@@ -2955,21 +2954,18 @@ class Test(unittest.TestCase):
             obj.duration.tuplets = [mock.MagicMock(spec=duration.Tuplet())]
             obj.duration.tuplets[0].type = 'default'
         mockTuplet.return_value = mockNotes
-        mockBeam.side_effect = lambda x: x
 
         actual = base.tupletFromElement(elem, None, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
-        mockBeam.assert_called_once_with(mockNotes)
         self.assertEqual('start', mockNotes[0].duration.tuplets[0].type)
         self.assertEqual('default', mockNotes[1].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[2].duration.tuplets[0].type)
 
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('converter21.mei.base.beamTogether')
     @mock.patch('converter21.mei.base.applyBreaksecs')
-    def testTuplets8(self, mockBreaksecs, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
+    def testTuplets8(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed
         '''
@@ -2982,21 +2978,18 @@ class Test(unittest.TestCase):
         for i in (1, 2, 4):
             mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
         mockTuplet.return_value = mockNotes
-        mockBeam.side_effect = lambda x: x
 
         actual = base.tupletFromElement(elem, None, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
-        mockBeam.assert_called_once_with(mockNotes)
         self.assertEqual('start', mockNotes[0].duration.tuplets[0].type)
         self.assertEqual('default', mockNotes[3].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[5].duration.tuplets[0].type)
 
     @mock.patch('converter21.mei.base._processEmbeddedElements')
     @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('converter21.mei.base.beamTogether')
     @mock.patch('converter21.mei.base.applyBreaksecs')
-    def testTuplets9(self, mockBreaksecs, mockBeam, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
+    def testTuplets9(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed,
             prepended, and appended
@@ -3010,12 +3003,10 @@ class Test(unittest.TestCase):
         for i in (0, 2, 3, 5, 7):
             mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
         mockTuplet.return_value = mockNotes
-        mockBeam.side_effect = lambda x: x
 
         actual = base.tupletFromElement(elem, None, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
-        mockBeam.assert_called_once_with(mockNotes)
         self.assertEqual('start', mockNotes[1].duration.tuplets[0].type)
         self.assertEqual('default', mockNotes[4].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[6].duration.tuplets[0].type)
