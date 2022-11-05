@@ -2966,6 +2966,11 @@ class HumdrumFile(HumdrumFileContent):
             noteDurationNoDots = token.graceVisualDuration
         else:
             noteDurationNoDots = token.durationNoDots  # unless we're in a tuplet
+            # override with visual duration if present
+            durVis: str = token.getVisualDuration()
+            if durVis:
+                noteDurationNoDots = Convert.recipToDurationNoDots(durVis)
+
             if len(noteOrChord.duration.tuplets) > 1:
                 # LATER: support nested tuplets (music21 needs to support this first)
                 return 0

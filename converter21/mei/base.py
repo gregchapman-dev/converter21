@@ -516,7 +516,7 @@ _ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
-_DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
+_DUR_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[float]] = {
     'maxima': 32.0,                # maxima is not mei-CMN, but we'll allow it
     'long': 16.0, 'longa': 16.0,   # longa is not mei-CMN, but we'll allow it
     'breve': 8.0, 'brevis': 8.0,   # brevis is not mei-CMN, but we'll allow it
@@ -532,7 +532,7 @@ _DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
     '512': 0.0078125,
     '1024': 0.00390625,
     '2048': 0.001953125,
-    None: 0.00390625
+    None: None
 }
 
 _DUR_TO_NUMBEAMS: t.Dict[str, int] = {
@@ -687,7 +687,7 @@ def _accidGesFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
     return _attrTranslator(attr, 'accid.ges', _ACCID_GES_ATTR_DICT)
 
 
-def _qlDurationFromAttr(attr: t.Optional[str]) -> float:
+def _qlDurationFromAttr(attr: t.Optional[str]) -> t.Optional[float]:
     '''
     Use :func:`_attrTranslator` to convert an MEI "dur" attribute to a music21 quarterLength.
 
@@ -1500,32 +1500,48 @@ def beamTogether(someThings: t.List[Music21Object]):
     :param someThings: An iterable of things to beam together.
     :type someThings: iterable of :class:`~music21.base.Music21Object`
     '''
+
+    # First see if this is a beamed grace note group, or a beamed non-grace note group.
+    # Each will skip over the other type of note.
+    isGraceBeam: bool = False
+    for thing in someThings:
+        if not hasattr(thing, 'beams'):
+            continue
+
+        isGraceBeam = thing.duration.isGrace
+        break
+
     # Index of the most recent beamedNote/Chord in someThings. Not all Note/Chord objects will
-    # necessarily be beamed (especially when this is called from tupletFromElement()), so we have
-    # to make that distinction.
+    # necessarily be beamed, so we have to make that distinction.
     iLastBeamedNote = -1
 
     for i, thing in enumerate(someThings):
-        if hasattr(thing, 'beams'):
-            if iLastBeamedNote == -1:
-                beamType = 'start'
-            else:
-                beamType = 'continue'
+        if not hasattr(thing, 'beams'):
+            continue
+        if thing.duration.isGrace != isGraceBeam:
+            continue
 
-            # checking for len(thing.beams) avoids clobbering beams that were set with a nested
-            # <beam> element, like a grace note
-            if (duration.convertTypeToNumber(thing.duration.type) > 4
-                    and not thing.beams):  # type: ignore
-                thing.beams.fill(thing.duration.type, beamType)  # type: ignore
-                iLastBeamedNote = i
+        if iLastBeamedNote == -1:
+            beamType = 'start'
+        else:
+            beamType = 'continue'
+
+        # checking for len(thing.beams) avoids clobbering beams that were set with a nested
+        # <beam> element, like a grace note
+        if (duration.convertTypeToNumber(thing.duration.type) > 4
+                and not thing.beams):  # type: ignore
+            thing.beams.fill(thing.duration.type, beamType)  # type: ignore
+            iLastBeamedNote = i
 
     if iLastBeamedNote != -1:
         someThings[iLastBeamedNote].beams.setAll('stop')  # type: ignore
 
-    # loop over them again, looking for 'continue' that should be 'stop' because
-    # there are fewer beams in the next note
+    # loop over them again, looking for 'continue' that should be 'stop' (and 'start'
+    # that should be 'partial'/'right') because there are fewer beams in the next note.
     for i, thing in enumerate(someThings):
         if not hasattr(thing, 'beams'):
+            continue
+        if thing.duration.isGrace != isGraceBeam:
             continue
         if duration.convertTypeToNumber(thing.duration.type) <= 4:
             continue
@@ -1533,6 +1549,7 @@ def beamTogether(someThings: t.List[Music21Object]):
         nextThing: t.Optional[Music21Object] = None
         for j in range(i + 1, len(someThings)):
             if (hasattr(someThings[j], 'beams')
+                    and someThings[j].duration.isGrace == isGraceBeam
                     and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
                 nextThing = someThings[j]
                 break
@@ -1544,11 +1561,53 @@ def beamTogether(someThings: t.List[Music21Object]):
             b: beam.Beam = thing.beams.getByNumber(beamNum)  # type: ignore
             if b.type == 'continue':
                 b.type = 'stop'
+            elif b.type == 'start':
+                b.type = 'partial'
+                b.direction = 'right'
+
+    # loop over them again, looking for 'stop' that should be 'partial'/'left' because
+    # there are fewer beams in the previous note
+    for i, thing in enumerate(someThings):
+        if not hasattr(thing, 'beams'):
+            continue
+        if thing.duration.isGrace != isGraceBeam:
+            continue
+        if duration.convertTypeToNumber(thing.duration.type) <= 4:
+            continue
+
+        prevThing: t.Optional[Music21Object] = None
+        for j in reversed(range(0, i)):  # i - 1 .. 0
+            if (hasattr(someThings[j], 'beams')
+                    and someThings[j].duration.isGrace == isGraceBeam
+                    and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
+                prevThing = someThings[j]
+                break
+
+        if prevThing is None:
+            continue
+
+        for beamNum in range(len(prevThing.beams) + 1, len(thing.beams) + 1):  # type: ignore
+            b: beam.Beam = thing.beams.getByNumber(beamNum)  # type: ignore
+            if b.type == 'stop':
+                b.type = 'partial'
+                b.direction = 'left'
 
 
 def applyBreaksecs(someThings: t.List[Music21Object]):
+    # First see if this is a beamed grace note group, or a beamed non-grace note group.
+    # Each will skip over the other type of note.
+    isGraceBeam: bool = False
+    for thing in someThings:
+        if not hasattr(thing, 'beams'):
+            continue
+
+        isGraceBeam = thing.duration.isGrace
+        break
+
     for i, thing in enumerate(someThings):
         if not hasattr(thing, 'beams'):
+            continue
+        if thing.duration.isGrace != isGraceBeam:
             continue
         if duration.convertTypeToNumber(thing.duration.type) <= 4:
             continue
@@ -1564,7 +1623,7 @@ def applyBreaksecs(someThings: t.List[Music21Object]):
         if breaksecNum is None:
             continue
 
-        # delete the custom mei_breaksec attribute so that nested <tuplet>/<beam> elements
+        # delete the custom mei_breaksec attribute so that nested <beam> elements
         # won't process it twice.
         del thing.mei_breaksec  # type: ignore
 
@@ -1577,6 +1636,7 @@ def applyBreaksecs(someThings: t.List[Music21Object]):
         nextThing: t.Optional[Music21Object] = None
         for j in range(i + 1, len(someThings)):
             if (hasattr(someThings[j], 'beams')
+                    and someThings[j].duration.isGrace == isGraceBeam
                     and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
                 nextThing = someThings[j]
                 break
@@ -2303,7 +2363,7 @@ def staffDefFromElement(
 
 
 def dotFromElement(
-    elem,  # pylint: disable=unused-argument
+    elem: Element,  # pylint: disable=unused-argument
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
     otherInfo: t.Dict[str, t.Any]  # pylint: disable=unused-argument
@@ -2732,6 +2792,36 @@ def fermataFromNoteChordOrRestElement(elem: Element) -> t.Optional[expressions.F
 
     return fermata
 
+
+def durationFromAttributes(
+    elem: Element,
+    optionalDots: t.Optional[int] = None
+) -> t.Optional[duration.Duration]:
+    durFloat: t.Optional[float] = _qlDurationFromAttr(elem.get('dur'))
+    if durFloat is None:
+        return None
+
+    durGesFloat: t.Optional[float] = None
+    if elem.get('dur.ges'):
+        durGesFloat = _qlDurationFromAttr(elem.get('dur.ges'))
+
+    numDots: int
+    if optionalDots is not None:
+        numDots = optionalDots
+    else:
+        numDots = int(elem.get('dots', 0))
+
+    theDuration: t.Optional[duration.Duration] = None
+    if durGesFloat is not None:
+        theDuration = makeDuration(durGesFloat, numDots)
+        theDuration.linked = False
+        theDuration.type = duration.convertQuarterLengthToType(durFloat)
+        return theDuration
+
+    theDuration = makeDuration(durFloat, numDots)
+    return theDuration
+
+
 def noteFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -2820,9 +2910,9 @@ def noteFromElement(
     theNote: note.Note = note.Note()
 
     # set the Note's duration (we will update this if we find any inner <dot> elements)
-    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
-    theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
-    theNote.duration = theDuration
+    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
+    if theDuration is not None:
+        theNote.duration = theDuration
 
     # get any @accid/@accid.ges from this element.
     # We'll overwrite with any subElements below.
@@ -2851,8 +2941,10 @@ def noteFromElement(
 
     # dots from inner <dot> elements are an alternate to @dots.
     # If both are present use the <dot> elements.  Shouldn't ever happen.
-    if dotElements > 0:
-        theNote.duration = makeDuration(durFloat, dotElements)
+    if theDuration is not None and dotElements > 0:
+        theDuration = durationFromAttributes(elem, dotElements)
+        if theDuration is not None:
+            theNote.duration = theDuration
 
     # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
     graceStr: t.Optional[str] = elem.get('grace')
@@ -3046,9 +3138,9 @@ def restFromElement(
     '''
     # NOTE: keep this in sync with spaceFromElement()
 
-    floatDur: float = _qlDurationFromAttr(elem.get('dur'))
-    theDuration: duration.Duration = makeDuration(floatDur, int(elem.get('dots', 0)))
-    theRest = note.Rest(duration=theDuration)
+    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
+    if theDuration is not None:
+        theRest = note.Rest(duration=theDuration)
 
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
@@ -3126,8 +3218,7 @@ def spaceFromElement(
     '''
     # NOTE: keep this in sync with restFromElement()
 
-    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
-    theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
+    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
     theSpace: note.Rest = note.Rest(duration=theDuration)
     theSpace.style.hideObjectOnPrint = True
 
@@ -3262,9 +3353,9 @@ def chordFromElement(
         theChord.lyrics = theLyricList
 
     # set the Chord's duration
-    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
-    theDuration: duration.Duration = makeDuration(durFloat, int(elem.get('dots', 0)))
-    theChord.duration = theDuration
+    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
+    if theDuration is not None:
+        theChord.duration = theDuration
 
     # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
     graceStr: t.Optional[str] = elem.get('grace')
@@ -3885,10 +3976,6 @@ def tupletFromElement(
         tupletMembers[firstNote].duration.tuplets[0].type = 'stop'
     else:
         tupletMembers[lastNote].duration.tuplets[0].type = 'stop'
-
-    # beam it all together
-    beamTogether(tupletMembers)
-    applyBreaksecs(tupletMembers)
 
     return tuple(tupletMembers)
 
