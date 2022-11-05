@@ -1339,8 +1339,9 @@ class M21Convert:
             dur = m21Duration.quarterLength
             vdur = m21.duration.convertTypeToQuarterLength(m21Duration.type)
             vdur *= m21Duration.tuplets[0].tupletMultiplier()
+            if m21Duration.dots > 0:
+                vdur *= (1.5 * float(m21Duration.dots))
             vdur = opFrac(vdur)
-            dots = '.' * m21Duration.dots
             inTuplet = True
         elif m21Duration.linked is False:
             # There's a real (gestural) duration and a visual duration
@@ -1432,7 +1433,12 @@ class M21Convert:
                         out = out.replace('1%16' + someDots, '0000' + someDots)
 
         if vdur:
-            m21VDur: m21.duration.Duration = m21.duration.Duration(vdur)
+            m21VDur: m21.duration.Duration
+            if inTuplet:
+                m21VDur = m21.duration.Duration(vdur / m21Duration.tuplets[0].tupletMultiplier())
+                m21VDur.appendTuplet(m21Duration.tuplets[0])
+            else:
+                m21VDur = m21.duration.Duration(vdur)
             vdurRecip: str = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
             return out, vdurRecip
         return out, ''
