@@ -516,7 +516,7 @@ _ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
-_DUR_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[float]] = {
+_DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
     'maxima': 32.0,                # maxima is not mei-CMN, but we'll allow it
     'long': 16.0, 'longa': 16.0,   # longa is not mei-CMN, but we'll allow it
     'breve': 8.0, 'brevis': 8.0,   # brevis is not mei-CMN, but we'll allow it
@@ -532,7 +532,7 @@ _DUR_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[float]] = {
     '512': 0.0078125,
     '1024': 0.00390625,
     '2048': 0.001953125,
-    None: None
+    None: 0.00390625
 }
 
 _DUR_TO_NUMBEAMS: t.Dict[str, int] = {
@@ -687,7 +687,7 @@ def _accidGesFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
     return _attrTranslator(attr, 'accid.ges', _ACCID_GES_ATTR_DICT)
 
 
-def _qlDurationFromAttr(attr: t.Optional[str]) -> t.Optional[float]:
+def _qlDurationFromAttr(attr: t.Optional[str]) -> float:
     '''
     Use :func:`_attrTranslator` to convert an MEI "dur" attribute to a music21 quarterLength.
 
@@ -2796,11 +2796,8 @@ def fermataFromNoteChordOrRestElement(elem: Element) -> t.Optional[expressions.F
 def durationFromAttributes(
     elem: Element,
     optionalDots: t.Optional[int] = None
-) -> t.Optional[duration.Duration]:
-    durFloat: t.Optional[float] = _qlDurationFromAttr(elem.get('dur'))
-    if durFloat is None:
-        return None
-
+) -> duration.Duration:
+    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
     durGesFloat: t.Optional[float] = None
     if elem.get('dur.ges'):
         durGesFloat = _qlDurationFromAttr(elem.get('dur.ges'))
@@ -2910,9 +2907,8 @@ def noteFromElement(
     theNote: note.Note = note.Note()
 
     # set the Note's duration (we will update this if we find any inner <dot> elements)
-    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
-    if theDuration is not None:
-        theNote.duration = theDuration
+    theDuration: duration.Duration = durationFromAttributes(elem)
+    theNote.duration = theDuration
 
     # get any @accid/@accid.ges from this element.
     # We'll overwrite with any subElements below.
@@ -2941,10 +2937,9 @@ def noteFromElement(
 
     # dots from inner <dot> elements are an alternate to @dots.
     # If both are present use the <dot> elements.  Shouldn't ever happen.
-    if theDuration is not None and dotElements > 0:
+    if dotElements > 0:
         theDuration = durationFromAttributes(elem, dotElements)
-        if theDuration is not None:
-            theNote.duration = theDuration
+        theNote.duration = theDuration
 
     # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
     graceStr: t.Optional[str] = elem.get('grace')
@@ -3138,9 +3133,8 @@ def restFromElement(
     '''
     # NOTE: keep this in sync with spaceFromElement()
 
-    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
-    if theDuration is not None:
-        theRest = note.Rest(duration=theDuration)
+    theDuration: duration.Duration = durationFromAttributes(elem)
+    theRest = note.Rest(duration=theDuration)
 
     xmlId: t.Optional[str] = elem.get(_XMLID)
     if xmlId is not None:
@@ -3218,7 +3212,7 @@ def spaceFromElement(
     '''
     # NOTE: keep this in sync with restFromElement()
 
-    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
+    theDuration: duration.Duration = durationFromAttributes(elem)
     theSpace: note.Rest = note.Rest(duration=theDuration)
     theSpace.style.hideObjectOnPrint = True
 
@@ -3353,9 +3347,8 @@ def chordFromElement(
         theChord.lyrics = theLyricList
 
     # set the Chord's duration
-    theDuration: t.Optional[duration.Duration] = durationFromAttributes(elem)
-    if theDuration is not None:
-        theChord.duration = theDuration
+    theDuration: duration.Duration = durationFromAttributes(elem)
+    theChord.duration = theDuration
 
     # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
     graceStr: t.Optional[str] = elem.get('grace')
