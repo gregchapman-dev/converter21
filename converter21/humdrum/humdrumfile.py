@@ -900,6 +900,7 @@ class HumdrumFile(HumdrumFileContent):
 
             if value:
                 value = html.unescape(value)
+                value = value.replace(r'\n', '\n')
             if key == 'OMD':
                 # only take OMDs before the firstDataLineIdx as movementName in metadata,
                 # because after the first data line, they're not movementNames, just
@@ -2460,6 +2461,7 @@ class HumdrumFile(HumdrumFileContent):
 
         if tempoName:
             tempoName = html.unescape(tempoName)
+            tempoName = tempoName.replace(r'\n', '\n')
             tempoName = tempoName.strip()
 
         mmText: t.Optional[str] = tempoName
@@ -7070,6 +7072,7 @@ class HumdrumFile(HumdrumFileContent):
                 # we're all split apart, so we can translate any &nbsp; et al
                 for idx, c in enumerate(contents):
                     contents[idx] = html.unescape(c)
+                    contents[idx] = contents[idx].replace(r'\n', '\n')
 
                 # add elements for sub-syllables due to elisions:
                 if len(contents) > 1:
@@ -7996,6 +7999,7 @@ class HumdrumFile(HumdrumFileContent):
                 html.unescape(pinText)
                 if pinText:
                     pinText = re.sub('%s', content, pinText)
+                    pinText = pinText.replace(r'\n', '\n')
                     content = pinText
 
             m21TextExp: m21.expressions.TextExpression = m21.expressions.TextExpression(content)
@@ -8448,6 +8452,7 @@ class HumdrumFile(HumdrumFileContent):
             return insertedIntoVoice
 
         text = html.unescape(text)
+        text = text.replace(r'\n', '\n')
         if not text:
             return insertedIntoVoice
 
@@ -8698,6 +8703,7 @@ class HumdrumFile(HumdrumFileContent):
                 text = 'S'
 
         text = html.unescape(text)
+        text = text.replace(r'\n', '\n')
         text = text.strip()
 
         maxStaff: int = len(self._staffStarts) - 1
@@ -8831,6 +8837,7 @@ class HumdrumFile(HumdrumFileContent):
         ] = None
 
         text = html.unescape(text)
+        text = text.replace(r'\n', '\n')
 
         if self._isTempoish(text):
             tempo = self._createMetronomeMark(text, token)
@@ -9069,6 +9076,7 @@ class HumdrumFile(HumdrumFileContent):
         mmReferent: t.Optional[m21.duration.Duration]
 
         text = html.unescape(text)
+        text = text.replace(r'\n', '\n')
 
         tempoName, mmStr, noteName, bpmText = Convert.getMetronomeMarkInfo(text)
         if mmStr is None:
@@ -9233,6 +9241,7 @@ class HumdrumFile(HumdrumFileContent):
         value = html.unescape(value)
         if not value:
             return
+        value = value.replace(r'\n', '\n')
 
         omdToken: t.Optional[HumdrumToken] = self._lines[index][0]
         if t.TYPE_CHECKING:

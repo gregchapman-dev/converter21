@@ -4892,6 +4892,75 @@ def _glyphNumToUnicodeChar(num: str) -> str:
     return chr(int(m.group(2), 16))
 
 
+def textFromElem(elem: Element) -> t.Tuple[str, t.Dict[str, str]]:
+    styleDict: t.Dict[str, str] = {}
+    text: str = ''
+    if elem.text:
+        if elem.text[0] != '\n' or not elem.text.isspace():
+            text += elem.text
+
+    for el in elem.iterfind('*'):
+        # do whatever is appropriate given el.tag (<rend> for example)
+        if el.tag == f'{MEI_NS}rend':
+            # music21 doesn't currently support changing style in the middle of a TextExpression,
+            # so we just grab the first ones we see and save them off to use.
+            fontStyle: str = el.get('fontstyle', '')
+            fontWeight: str = el.get('fontweight', '')
+            fontFamily: str = el.get('fontfam', '')
+            justify: str = el.get('halign', '')
+            if fontStyle:
+                styleDict['fontStyle'] = fontStyle
+            if fontWeight:
+                styleDict['fontWeight'] = fontWeight
+            if fontFamily:
+                styleDict['fontFamily'] = fontFamily
+            if justify:
+                styleDict['justify'] = justify
+
+        elif el.tag in _CHOOSING_EDITORIALS:
+            subEl: t.Optional[Element] = chooseSubElement(el)
+            if subEl is None:
+                continue
+            el = subEl
+        elif el.tag in _PASSTHRU_EDITORIALS:
+            # for now assume all we care about here is the text/tail of these subElements
+            for subEl in el.iterfind('*'):
+                if subEl.text:
+                    if subEl.text[0] != '\n' or not subEl.text.isspace():
+                        text += subEl.text
+                if subEl.tail:
+                    if subEl.tail[0] != '\n' or not subEl.tail.isspace():
+                        text += subEl.tail
+        elif el.tag == f'{MEI_NS}lb':
+            text += '\n'
+        elif el.tag == f'{MEI_NS}symbol':
+            # This is a glyph in the SMUFL font (@glyph.auth="smufl"), with a
+            # particular name (@glyph.name="metNoteQuarterUp").  Sometimes
+            # instead of @glyph.name, there is @glyph.num, which is just the
+            # utf16 code as 'U+NNNN' or '#xNNNN'.
+            glyphAuth: str = el.get('glyph.auth', '')
+            if not glyphAuth or glyphAuth == 'smufl':
+                glyphName: str = el.get('glyph.name', '')
+                glyphNum: str = el.get('glyph.num', '')
+                if glyphNum:
+                    text += _glyphNumToUnicodeChar(glyphNum)
+                elif glyphName:
+                    text += _glyphNameToUnicodeChar(glyphName)
+
+        # grab the text from el
+        elText: str
+        elStyleDict: t.Dict[str, str]
+        elText, elStyleDict = textFromElem(el)
+        text += elText
+        styleDict.update(elStyleDict)
+
+        # grab the text between this el and the next el
+        if el.tail:
+            if el.tail[0] != '\n' or not el.tail.isspace():
+                text += el.tail
+
+    return text, styleDict
+
 def dirFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -4924,67 +4993,17 @@ def dirFromElement(
     fontWeight: t.Optional[str] = None
     fontFamily: t.Optional[str] = None
     justify: t.Optional[str] = None
+    text: str
+    styleDict: t.Dict[str, str]
 
-    text: str = ''
-    if elem.text:
-        if elem.text[0] != '\n' or not elem.text.isspace():
-            text += elem.text
-
-    for el in elem.iterfind('*'):
-        # do whatever is appropriate given el.tag (<rend> for example)
-        if el.tag == f'{MEI_NS}rend':
-            # music21 doesn't currently support changing style in the middle of a TextExpression,
-            # so we just grab the first ones we see and save them off to use.
-            if fontStyle is None:
-                fontStyle = el.get('fontstyle')
-            if fontWeight is None:
-                fontWeight = el.get('fontweight')
-            if fontFamily is None:
-                fontFamily = el.get('fontfam')
-            if justify is None:
-                justify = el.get('halign')
-        elif el.tag in _CHOOSING_EDITORIALS:
-            subEl: t.Optional[Element] = chooseSubElement(el)
-            if subEl is None:
-                continue
-            el = subEl
-        elif el.tag in _PASSTHRU_EDITORIALS:
-            # for now assume all we care about here is the text/tail of these subElements
-            for subEl in el.iterfind('*'):
-                if subEl.text:
-                    if subEl.text[0] != '\n' or not subEl.text.isspace():
-                        text += subEl.text
-                if subEl.tail:
-                    if subEl.tail[0] != '\n' or not subEl.tail.isspace():
-                        text += subEl.tail
-        elif el.tag == f'{MEI_NS}symbol':
-            # This is a glyph in the SMUFL font (@glyph.auth="smufl"), with a
-            # particular name (@glyph.name="metNoteQuarterUp").  Sometimes
-            # instead of @glyph.name, there is @glyph.num, which is just the
-            # utf16 code as 'U+NNNN' or '#xNNNN'.
-            glyphAuth: str = el.get('glyph.auth', '')
-            if not glyphAuth or glyphAuth == 'smufl':
-                glyphName: str = el.get('glyph.name', '')
-                glyphNum: str = el.get('glyph.num', '')
-                if glyphNum:
-                    text += _glyphNumToUnicodeChar(glyphNum)
-                elif glyphName:
-                    text += _glyphNameToUnicodeChar(glyphName)
-
-        # grab the text from el
-        if el.text:
-            if el.text[0] != '\n' or not el.text.isspace():
-                text += el.text
-
-        # stop doing that el.tag thing (if you can)
-
-        # grab the text between this el and the next el
-        if el.tail:
-            if el.tail[0] != '\n' or not el.tail.isspace():
-                text += el.tail
-
+    text, styleDict = textFromElem(elem)
     text = html.unescape(text)
     text = text.strip()
+
+    fontStyle = styleDict.get('fontStyle', None)
+    fontWeight = styleDict.get('fontWeight', None)
+    fontFamily = styleDict.get('fontFamily', None)
+    justify = styleDict.get('justify', None)
 
     if enclose is not None:
         if enclose == 'paren':
@@ -5001,13 +5020,13 @@ def dirFromElement(
         # Match Verovio's default: <dir> with no fontStyle should be italic
         if fontStyle is None:
             fontStyle = 'italic'
-    if fontStyle or fontWeight:
+    if fontStyle is not None or fontWeight is not None:
         te.style.fontStyle = (
             _m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
         )
-    if fontFamily:
+    if fontFamily is not None:
         te.style.fontFamily = fontFamily
-    if justify:
+    if justify is not None:
         te.style.justify = justify
 
     place: t.Optional[str] = elem.get('place')
