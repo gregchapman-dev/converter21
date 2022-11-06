@@ -4966,7 +4966,11 @@ class HumdrumFile(HumdrumFileContent):
         # first measure starts at the exclusive interpretation so that clefs
         # and time signatures and such are included.  If the first element
         # in the layer is an exclusive interpretation, then search for any
-        # starting barline that should be checked for a repeat start:
+        # starting barline that should be checked for a repeat start.
+        # While we're here, also check for any directions associated with
+        # that initial barline of the very first measure.  In other measures,
+        # that text would be in the previous measure, but there is no previous
+        # measure here.
         if layerData[0].isExclusiveInterpretation:
             for layerTok in layerData:
                 if layerTok.isFakeRest:
@@ -4982,6 +4986,16 @@ class HumdrumFile(HumdrumFileContent):
 
                 if not layerTok.isBarline:
                     continue
+
+                insertedIntoVoice = (
+                    insertedIntoVoice
+                    or self._processDirections(
+                        measureIndex,
+                        voice,
+                        voiceOffsetInMeasure,
+                        layerTok,
+                        staffIndex)
+                )
 
                 if '|:' in layerTok.text or '!:' in layerTok.text:
                     if currentMeasurePerStaff[staffIndex]:
@@ -5008,12 +5022,14 @@ class HumdrumFile(HumdrumFileContent):
             if t.TYPE_CHECKING:
                 # because FakeRestToken.isBarline is always False
                 assert isinstance(lastTok, HumdrumToken)
-            insertedIntoVoice = self._processDirections(
-                measureIndex,
-                voice,
-                voiceOffsetInMeasure,
-                lastTok,
-                staffIndex
+            insertedIntoVoice = (
+                insertedIntoVoice
+                or self._processDirections(
+                    measureIndex,
+                    voice,
+                    voiceOffsetInMeasure,
+                    lastTok,
+                    staffIndex)
             )
 
         return insertedIntoVoice
