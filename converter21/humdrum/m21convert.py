@@ -1366,7 +1366,7 @@ class M21Convert:
         dur = opFrac(dur / 4)  # convert to whole-note units
         durFraction: Fraction = Fraction(dur)
 
-        if dots is None:
+        if dots is None and not inTuplet:
             # compute number of dots from dur (and shrink dur to match)
             # if it's 1 we don't need any dots
             if durFraction.numerator != 1:
