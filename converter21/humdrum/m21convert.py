@@ -15,6 +15,7 @@
 
 import sys
 import re
+import html
 import math
 import typing as t
 from fractions import Fraction
@@ -1611,6 +1612,7 @@ class M21Convert:
                 textExpression.style
             )
         return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
+
     '''
     //////////////////////////////
     //
@@ -1622,7 +1624,7 @@ class M21Convert:
     '''
     @staticmethod
     def _cleanSpacesAndColons(inStr: str) -> str:
-        newLinesAndTabs: str = '\t\n\r\v\f'
+        otherNewLinesAndTabs: str = '\t\r\v\f'
         output: str = ''
         for ch in inStr:
             if ch == '\u00A0':
@@ -1635,8 +1637,12 @@ class M21Convert:
                 output += '&colon;'
                 continue
 
-            if ch in newLinesAndTabs:
-                # convert all newLinesAndTabs chars to a space
+            if ch == '\n':
+                output += r'\n'
+                continue
+
+            if ch in otherNewLinesAndTabs:
+                # convert all otherNewLinesAndTabs chars to a space
                 output += ' '
                 continue
 
@@ -3046,6 +3052,10 @@ class M21Convert:
         else:
             # it's already a str, we hope, but if not, we convert here
             valueStr = str(value)
+
+        # html escape-ify the string, and convert any actual linefeeds to r'\n'
+        valueStr = html.escape(valueStr)
+        valueStr = valueStr.replace('\n', r'\n')
 
         if t.TYPE_CHECKING:
             assert hdKey is not None
