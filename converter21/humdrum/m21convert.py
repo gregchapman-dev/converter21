@@ -2493,7 +2493,7 @@ class M21Convert:
 
     measureVisualStyleFromM21BarlineType: t.Dict[str, MeasureVisualStyle] = {
         'regular': MeasureVisualStyle.Regular,
-        'dotted': MeasureVisualStyle.Regular,  # no dotted in humdrum
+        'dotted': MeasureVisualStyle.Dotted,
         'dashed': MeasureVisualStyle.Regular,  # no dashed in humdrum
         'heavy': MeasureVisualStyle.Heavy,
         'double': MeasureVisualStyle.Double,   # a.k.a. light-light
@@ -2540,7 +2540,9 @@ class M21Convert:
         '`': 'tick',
         '-': 'none',
         '|': 'regular',      # barlines are 'regular' by default (e.g. '=3' is 'regular')
-        '!': 'heavy'
+        '!': 'heavy',
+        '.': 'dotted',
+        ':': 'dashed'
     }
 
     @staticmethod
