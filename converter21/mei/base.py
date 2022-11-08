@@ -1078,7 +1078,7 @@ def _ppFermatas(theConverter: MeiToM21Converter):
     For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
     element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
     '''
-    environLocal.printDebug('*** pre-processing ties')
+    environLocal.printDebug('*** pre-processing fermatas')
     # for readability, we use a single-letter variable
     c = theConverter
 
@@ -4123,19 +4123,20 @@ def appChoiceStaffItemsFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[t.Tuple[str, OffsetQL, Music21Object]]:
+) -> t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[t.Tuple[str, OffsetQL, Music21Object]] = _processEmbeddedElements(
-        chosen.iterfind('*'),
-        staffItemsTagToFunction,
-        chosen.tag,
-        activeMeter,
-        spannerBundle,
-        otherInfo
+    theList: t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]] = (
+        _processEmbeddedElements(
+            chosen.iterfind('*'),
+            staffItemsTagToFunction,
+            chosen.tag,
+            activeMeter,
+            spannerBundle,
+            otherInfo)
     )
 
     return theList
@@ -4146,15 +4147,16 @@ def passThruEditorialStaffItemsFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[t.Tuple[str, OffsetQL, Music21Object]]:
+) -> t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]]:
     # iterate all immediate children
-    theList: t.List[t.Tuple[str, OffsetQL, Music21Object]] = _processEmbeddedElements(
-        elem.iterfind('*'),
-        staffItemsTagToFunction,
-        elem.tag,
-        activeMeter,
-        spannerBundle,
-        otherInfo
+    theList: t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]] = (
+        _processEmbeddedElements(
+            elem.iterfind('*'),
+            staffItemsTagToFunction,
+            elem.tag,
+            activeMeter,
+            spannerBundle,
+            otherInfo)
     )
 
     return theList
@@ -4629,33 +4631,102 @@ def _addTimestampedFermatas(
                 )
 
 
-def _tstampToOffset(tstamp: str, activeMeter: t.Optional[meter.TimeSignature]) -> OffsetQL:
-    resultFloat: float
+def _tstampToOffset(
+    tstamp: str,
+    activeMeter: t.Optional[meter.TimeSignature]
+) -> OffsetQL:
+    beat: float
     if tstamp is None:
         # warn about missing tstamp, assuming 0.0
         return 0.0
     try:
-        resultFloat = float(tstamp)
+        beat = float(tstamp)
     except (TypeError, ValueError):
         # warn about malformed tstamp, assuming 0.0
         return 0.0
 
-    # resultFloat is expressed in beats, as expressed in the written time signature.
+    return _beatToOffset(beat, activeMeter)
+
+
+def _beatToOffset(beat: float, activeMeter: t.Optional[meter.TimeSignature]) -> OffsetQL:
+    # beat is expressed in beats, as expressed in the written time signature.
     # We will need to offset it (beats are 1-based, offsets are 0-based) and convert
-    # to quarter notes.
+    # it to quarter notes (OffsetQL)
 
     # make it 0-based
-    resultFloat -= 1.0
+    beat -= 1.0
 
     activeMeterDenom: int = 4  # if no activeMeter, pretend it's <something> / 4
     if activeMeter is not None:
         activeMeterDenom = activeMeter.denominator
 
     # convert to whole notes
-    resultFloat /= float(activeMeterDenom)
+    beat /= float(activeMeterDenom)
+
     # convert to quarter notes
-    resultFloat *= 4.0
-    return opFrac(resultFloat)
+    beat *= 4.0
+
+    return opFrac(beat)
+
+def _tstamp2ToMeasSkipAndOffset(
+    tstamp2: str,
+    activeMeter: t.Optional[meter.TimeSignature]
+) -> t.Tuple[int, OffsetQL]:
+    measSkip: int
+    beat: float
+    offset: OffsetQL
+
+    tstamp2Patt: str = r'(([0-9]+)m\s*\+\s*)?([0-9]+(\.?[0-9]*)?)'
+    m = re.match(tstamp2Patt, tstamp2)
+    if m is None:
+        # warn about malformed tstamp2, assuming '0m+0.000'
+        return 0, 0.
+
+    try:
+        if not m.group(1):
+            # no 'Nm+' at all
+            measSkip = 0
+        else:
+            measSkip = int(m.group(2))
+        if not m.group(4):
+            # no '.5000', m.group(3) is an integer
+            beat = float(int(m.group(3)))
+        else:
+            beat = float(m.group(3))
+    except:  # pylint: disable=bare-except
+        # warn about malformed tstamp2, assuming '0m+0.000'
+        return 0, 0.
+
+    offset = _beatToOffset(beat, activeMeter)
+    return measSkip, offset
+
+
+def _tstampsToOffsetAndDuration(
+    tstamp: str,
+    tstamp2: str,
+    activeMeter: t.Optional[meter.TimeSignature]
+) -> t.Tuple[OffsetQL, OffsetQL]:
+    offset: OffsetQL = _tstampToOffset(tstamp, activeMeter)
+    dur: OffsetQL
+    measSkip: int
+    offset2: OffsetQL
+    measSkip, offset2 = _tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
+
+    # now translate offset, measSkip, and offset2 to offset and duration
+    if measSkip == 0:
+        return offset, offset2
+
+    measureDur: OffsetQL = opFrac(4)  # assume 4/4 time if no activeMeter
+    if activeMeter is not None:
+        measureDur = opFrac(Fraction(activeMeter.numerator, activeMeter.denominator))
+        # That was in whole notes, convert to quarterNotes
+        measureDur = opFrac(measureDur * 4)
+
+    dur = opFrac(measureDur * measSkip)
+    dur -= offset   # the duration of the first measure skipped is short by offset
+    dur += offset2  # add offset2
+    dur = opFrac(dur)
+    return offset, dur
 
 
 _NOTE_UNICODE_CHAR_TO_NOTE_NAME: t.Dict[str, str] = {
@@ -4777,22 +4848,51 @@ _CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
 )
 
 
+def hairpinFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any],
+) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[dynamics.DynamicWedge]]:
+    # If no @staff, presume it is staff 1
+    staffNStr = elem.get('staff', '1')
+    offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
+    dw: dynamics.DynamicWedge
+
+    # @tstamp/@tstamp2 only for the moment.
+    tstamp: t.Optional[str] = elem.get('tstamp')
+    if tstamp is None:
+        environLocal.warn('missing @tstamp in <hairpin> element')
+        return '', (-1., None), None
+    tstamp2: t.Optional[str] = elem.get('tstamp2')
+    if tstamp2 is None:
+        environLocal.warn('missing @tstamp2 in <hairpin> element')
+        return '', (-1., None), None
+
+    offsetAndDur = _tstampsToOffsetAndDuration(tstamp, tstamp2, activeMeter)
+
+    dw = dynamics.DynamicWedge()  # we'll fill in the start and end objects later
+    return staffNStr, offsetAndDur, dw
+
+
 def dynamFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, OffsetQL, t.Optional[dynamics.Dynamic]]:
+) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[dynamics.Dynamic]]:
     staffNStr: str
-    offset: OffsetQL
+    offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
     dynamObj: dynamics.Dynamic
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive dynamic info from that.
     teWithStyle: t.Optional[expressions.TextExpression]
-    staffNStr, offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    staffNStr, offsetAndDur, teWithStyle = (
+        dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    )
     if teWithStyle is None:
-        return '', offset, None
+        return '', (-1., None), None
 
     if t.TYPE_CHECKING:
         assert isinstance(teWithStyle.style, style.TextStyle)
@@ -4809,7 +4909,7 @@ def dynamFromElement(
     if teWithStyle.placement is not None:
         dynamObj.placement = teWithStyle.placement
 
-    return staffNStr, offset, dynamObj
+    return staffNStr, offsetAndDur, dynamObj
 
 
 def tempoFromElement(
@@ -4817,17 +4917,19 @@ def tempoFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, OffsetQL, t.Optional[tempo.TempoIndication]]:
+) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[tempo.TempoIndication]]:
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive tempo info from that.
     staffNStr: str
-    offset: OffsetQL
+    offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
     teWithStyle: t.Optional[expressions.TextExpression]
-    staffNStr, offset, teWithStyle = dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    staffNStr, offsetAndDur, teWithStyle = (
+        dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    )
     if teWithStyle is None:
-        return '', offset, None
+        return '', (-1., None), None
 
     # default tempo placement should be above
     if teWithStyle.placement is None:
@@ -4875,7 +4977,7 @@ def tempoFromElement(
     # transfer placement to the metronome mark
     tempoObj.placement = teWithStyle.placement
 
-    return staffNStr, offset, tempoObj
+    return staffNStr, offsetAndDur, tempoObj
 
 
 def _glyphNameToUnicodeChar(name: str) -> str:
@@ -4966,7 +5068,7 @@ def dirFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, OffsetQL, t.Optional[expressions.TextExpression]]:
+) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[expressions.TextExpression]]:
     # returns (staffNStr, offset, te)
 
     # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
@@ -4976,13 +5078,13 @@ def dirFromElement(
 
     typeAtt: t.Optional[str] = elem.get('type')
     if typeAtt is not None and typeAtt == 'fingering':
-        return '', -1, None
+        return '', (-1., None), None
 
     # @tstamp is required for now, someday we'll be able to derive offsets from @startid
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp in <dir> element')
-        return '', -1, None
+        return '', (-1., None), None
 
     offset = _tstampToOffset(tstamp, activeMeter)
 
@@ -5040,7 +5142,7 @@ def dirFromElement(
             te.style.alignVertical = 'middle'
         else:
             environLocal.warn(f'invalid @place = "{place}" in <dir>')
-    return staffNStr, offset, te
+    return staffNStr, (offset, None), te
 
 
 def fermataFromElement(
@@ -5048,12 +5150,12 @@ def fermataFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, OffsetQL, t.Optional[expressions.Fermata]]:
+) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[expressions.Fermata]]:
     # returns (staffNStr, offset, fermata)
 
     # if the fermata element has already been processed in _ppFermatas, ignore it here
     if elem.get('ignore_in_fermataFromElement') == 'true':
-        return '', -1, None
+        return '', (-1., None), None
 
     # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
     staffNStr = elem.get('staff', '1')
@@ -5065,7 +5167,7 @@ def fermataFromElement(
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('<fermata> element is missing @tstamp and @startid')
-        return '', -1, None
+        return '', (-1., None), None
 
     offset = _tstampToOffset(tstamp, activeMeter)
 
@@ -5089,7 +5191,7 @@ def fermataFromElement(
     elif fermataShape == 'square':
         fermata.shape = 'square'
 
-    return staffNStr, offset, fermata
+    return staffNStr, (offset, None), fermata
 
 
 def _m21FontStyleFromMeiFontStyleAndWeight(
@@ -5209,8 +5311,16 @@ def measureFromElement(
     # key1 is @n, key2 is 'meter', 'key', 'instrument', etc
     stavesWaitingFromStaffDef: t.Dict[str, t.Dict[str, Music21Object]] = {}
     # for staffItem objects processed before the corresponding staff
-    # key is @staff, value is tuple(offset, object)
-    stavesWaitingFromStaffItem: t.Dict[str, t.List[t.Tuple[OffsetQL, Music21Object]]] = {}
+    # key is @staff, value is a list of tuple(offsetAndDur, object)
+    stavesWaitingFromStaffItem: t.Dict[
+        str,
+        t.List[
+            t.Tuple[
+                t.Tuple[OffsetQL, t.Optional[OffsetQL]],  # offsetAndDur
+                Music21Object
+            ]
+        ]
+    ] = {}
 
     # mapping from tag name to our converter function
     staffTag: str = f'{MEI_NS}staff'
@@ -5242,15 +5352,15 @@ def measureFromElement(
                 )
         elif eachElem.tag in staffItemsTagToFunction:
             staffNStr: str
-            offset: OffsetQL
+            offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
             m21Obj: t.Optional[Music21Object]
-            staffNStr, offset, m21Obj = staffItemsTagToFunction[eachElem.tag](
+            staffNStr, offsetAndDur, m21Obj = staffItemsTagToFunction[eachElem.tag](
                 eachElem, activeMeter, spannerBundle, otherInfo
             )
             if m21Obj is not None:
                 if staffNStr not in stavesWaitingFromStaffItem:
                     stavesWaitingFromStaffItem[staffNStr] = []
-                stavesWaitingFromStaffItem[staffNStr].append((offset, m21Obj))  # type: ignore
+                stavesWaitingFromStaffItem[staffNStr].append((offsetAndDur, m21Obj))  # type: ignore
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
@@ -5272,7 +5382,7 @@ def measureFromElement(
 
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
-        for eachOffset, eachObj in eachList:
+        for (eachOffset, eachDur), eachObj in eachList:
             # parse whichStaff, which might be '1', '2', '1 2', etc
             staffNs: t.List[str] = re.findall(r'[\d]+', whichStaff)
             if not staffNs:
@@ -5282,6 +5392,13 @@ def measureFromElement(
             if isinstance(eachObj, expressions.Fermata):
                 # save off to process later, skip for now
                 tsFermatas.append((staffNs, eachOffset, eachObj))
+                continue
+
+            if eachDur is not None:
+                # the staffItem has an "external" duration (i.e. it's a spanner, because
+                # otherwise eachObj.duration would already be set).
+                # Here is where we would figure out which GeneralNotes to put in
+                # the spanner to give it the appropriate duration.
                 continue
 
             if len(staffNs) == 1:
@@ -5859,7 +5976,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}fermata': fermataFromElement,
     #         f'{MEI_NS}fing': fingFromElement,
     #         f'{MEI_NS}gliss': glissFromElement,
-    #         f'{MEI_NS}hairpin': hairpinFromElement,
+    f'{MEI_NS}hairpin': hairpinFromElement,
     #         f'{MEI_NS}harm': harmFromElement,
     #         f'{MEI_NS}lv': lvFromElement,
     #        f'{MEI_NS}mNum': mNumFromElement,
