@@ -256,6 +256,10 @@ class MeiElementError(exceptions21.Music21Exception):
     '''When an element itself is invalid.'''
     pass
 
+class MeiInternalError(exceptions21.Music21Exception):
+    '''When an internal assumption is broken.'''
+    pass
+
 
 # Text Strings for Error Conditions
 # -----------------------------------------------------------------------------
@@ -4123,13 +4127,25 @@ def appChoiceStaffItemsFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]]:
+) -> t.List[
+    t.Tuple[
+        str,
+        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        Music21Object
+    ]
+]:
     chosen: t.Optional[Element] = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]] = (
+    theList: t.List[
+        t.Tuple[
+            str,
+            t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+            Music21Object
+        ]
+    ] = (
         _processEmbeddedElements(
             chosen.iterfind('*'),
             staffItemsTagToFunction,
@@ -4147,9 +4163,21 @@ def passThruEditorialStaffItemsFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]]:
+) -> t.List[
+    t.Tuple[
+        str,
+        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        Music21Object
+    ]
+]:
     # iterate all immediate children
-    theList: t.List[t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], Music21Object]] = (
+    theList: t.List[
+        t.Tuple[
+            str,
+            t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+            Music21Object
+        ]
+    ] = (
         _processEmbeddedElements(
             elem.iterfind('*'),
             staffItemsTagToFunction,
@@ -4636,9 +4664,6 @@ def _tstampToOffset(
     activeMeter: t.Optional[meter.TimeSignature]
 ) -> OffsetQL:
     beat: float
-    if tstamp is None:
-        # warn about missing tstamp, assuming 0.0
-        return 0.0
     try:
         beat = float(tstamp)
     except (TypeError, ValueError):
@@ -4701,32 +4726,17 @@ def _tstamp2ToMeasSkipAndOffset(
     return measSkip, offset
 
 
-def _tstampsToOffsetAndDuration(
+def _tstampsToOffset1AndMeasSkipAndOffset2(
     tstamp: str,
     tstamp2: str,
     activeMeter: t.Optional[meter.TimeSignature]
-) -> t.Tuple[OffsetQL, OffsetQL]:
+) -> t.Tuple[OffsetQL, int, OffsetQL]:
     offset: OffsetQL = _tstampToOffset(tstamp, activeMeter)
-    dur: OffsetQL
     measSkip: int
     offset2: OffsetQL
     measSkip, offset2 = _tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
 
-    # now translate offset, measSkip, and offset2 to offset and duration
-    if measSkip == 0:
-        return offset, offset2
-
-    measureDur: OffsetQL = opFrac(4)  # assume 4/4 time if no activeMeter
-    if activeMeter is not None:
-        measureDur = opFrac(Fraction(activeMeter.numerator, activeMeter.denominator))
-        # That was in whole notes, convert to quarterNotes
-        measureDur = opFrac(measureDur * 4)
-
-    dur = opFrac(measureDur * measSkip)
-    dur -= offset   # the duration of the first measure skipped is short by offset
-    dur += offset2  # add offset2
-    dur = opFrac(dur)
-    return offset, dur
+    return offset, measSkip, offset2
 
 
 _NOTE_UNICODE_CHAR_TO_NOTE_NAME: t.Dict[str, str] = {
@@ -4853,26 +4863,50 @@ def hairpinFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[dynamics.DynamicWedge]]:
+) -> t.Tuple[
+        str,
+        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        t.Optional[dynamics.DynamicWedge]
+]:
     # If no @staff, presume it is staff 1
     staffNStr = elem.get('staff', '1')
-    offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
+    offsets: t.Tuple[OffsetQL, int, OffsetQL]
     dw: dynamics.DynamicWedge
 
     # @tstamp/@tstamp2 only for the moment.
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp in <hairpin> element')
-        return '', (-1., None), None
+        return '', (-1., None, None), None
     tstamp2: t.Optional[str] = elem.get('tstamp2')
     if tstamp2 is None:
         environLocal.warn('missing @tstamp2 in <hairpin> element')
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
-    offsetAndDur = _tstampsToOffsetAndDuration(tstamp, tstamp2, activeMeter)
+    offsets = _tstampsToOffset1AndMeasSkipAndOffset2(tstamp, tstamp2, activeMeter)
 
-    dw = dynamics.DynamicWedge()  # we'll fill in the start and end objects later
-    return staffNStr, offsetAndDur, dw
+    form: str = elem.get('form', '')
+    if form == 'cres':
+        dw = dynamics.Crescendo()
+    elif form == 'dim':
+        dw = dynamics.Diminuendo()
+    else:
+        environLocal.warn(f'invalid @form = "{form}" in <hairpin>')
+        return '', (-1., None, None), None
+
+    place: t.Optional[str] = elem.get('place')
+    if place:
+        if place == 'above':
+            dw.placement = 'above'
+        elif place == 'below':
+            dw.placement = 'below'
+        elif place == 'between':
+            dw.placement = 'below'
+            dw.style.alignVertical = 'middle'
+        else:
+            environLocal.warn(f'invalid @place = "{place}" in <hairpin>')
+
+    return staffNStr, offsets, dw
 
 
 def dynamFromElement(
@@ -4880,19 +4914,23 @@ def dynamFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[dynamics.Dynamic]]:
+) -> t.Tuple[
+    str,
+    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Optional[dynamics.Dynamic]
+]:
     staffNStr: str
-    offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
+    offsets: t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]]
     dynamObj: dynamics.Dynamic
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive dynamic info from that.
     teWithStyle: t.Optional[expressions.TextExpression]
-    staffNStr, offsetAndDur, teWithStyle = (
+    staffNStr, offsets, teWithStyle = (
         dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
     if teWithStyle is None:
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
     if t.TYPE_CHECKING:
         assert isinstance(teWithStyle.style, style.TextStyle)
@@ -4909,7 +4947,7 @@ def dynamFromElement(
     if teWithStyle.placement is not None:
         dynamObj.placement = teWithStyle.placement
 
-    return staffNStr, offsetAndDur, dynamObj
+    return staffNStr, offsets, dynamObj
 
 
 def tempoFromElement(
@@ -4917,19 +4955,23 @@ def tempoFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[tempo.TempoIndication]]:
+) -> t.Tuple[
+    str,
+    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Optional[tempo.TempoIndication]
+]:
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive tempo info from that.
     staffNStr: str
-    offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
+    offsets: t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]]
     teWithStyle: t.Optional[expressions.TextExpression]
-    staffNStr, offsetAndDur, teWithStyle = (
+    staffNStr, offsets, teWithStyle = (
         dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
     if teWithStyle is None:
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
     # default tempo placement should be above
     if teWithStyle.placement is None:
@@ -4977,7 +5019,7 @@ def tempoFromElement(
     # transfer placement to the metronome mark
     tempoObj.placement = teWithStyle.placement
 
-    return staffNStr, offsetAndDur, tempoObj
+    return staffNStr, offsets, tempoObj
 
 
 def _glyphNameToUnicodeChar(name: str) -> str:
@@ -5068,8 +5110,12 @@ def dirFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[expressions.TextExpression]]:
-    # returns (staffNStr, offset, te)
+) -> t.Tuple[
+    str,
+    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Optional[expressions.TextExpression]
+]:
+    # returns (staffNStr, (offset, None, None), te)
 
     # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
     staffNStr = elem.get('staff', '1')
@@ -5078,13 +5124,13 @@ def dirFromElement(
 
     typeAtt: t.Optional[str] = elem.get('type')
     if typeAtt is not None and typeAtt == 'fingering':
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
     # @tstamp is required for now, someday we'll be able to derive offsets from @startid
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp in <dir> element')
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
     offset = _tstampToOffset(tstamp, activeMeter)
 
@@ -5142,7 +5188,7 @@ def dirFromElement(
             te.style.alignVertical = 'middle'
         else:
             environLocal.warn(f'invalid @place = "{place}" in <dir>')
-    return staffNStr, (offset, None), te
+    return staffNStr, (offset, None, None), te
 
 
 def fermataFromElement(
@@ -5150,12 +5196,16 @@ def fermataFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[str, t.Tuple[OffsetQL, t.Optional[OffsetQL]], t.Optional[expressions.Fermata]]:
-    # returns (staffNStr, offset, fermata)
+) -> t.Tuple[
+    str,
+    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Optional[expressions.Fermata]
+]:
+    # returns (staffNStr, (offset, None, None), fermata)
 
     # if the fermata element has already been processed in _ppFermatas, ignore it here
     if elem.get('ignore_in_fermataFromElement') == 'true':
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
     # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
     staffNStr = elem.get('staff', '1')
@@ -5167,7 +5217,7 @@ def fermataFromElement(
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('<fermata> element is missing @tstamp and @startid')
-        return '', (-1., None), None
+        return '', (-1., None, None), None
 
     offset = _tstampToOffset(tstamp, activeMeter)
 
@@ -5191,7 +5241,7 @@ def fermataFromElement(
     elif fermataShape == 'square':
         fermata.shape = 'square'
 
-    return staffNStr, (offset, None), fermata
+    return staffNStr, (offset, None, None), fermata
 
 
 def _m21FontStyleFromMeiFontStyleAndWeight(
@@ -5311,16 +5361,60 @@ def measureFromElement(
     # key1 is @n, key2 is 'meter', 'key', 'instrument', etc
     stavesWaitingFromStaffDef: t.Dict[str, t.Dict[str, Music21Object]] = {}
     # for staffItem objects processed before the corresponding staff
-    # key is @staff, value is a list of tuple(offsetAndDur, object)
+    # key is @staff, value is a list of tuple(offsets, object)
     stavesWaitingFromStaffItem: t.Dict[
         str,
         t.List[
             t.Tuple[
-                t.Tuple[OffsetQL, t.Optional[OffsetQL]],  # offsetAndDur
+                t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],  # offsets
                 Music21Object
             ]
         ]
     ] = {}
+
+    pendingSpannerEnds: t.Optional[
+        t.List[
+            t.Tuple[str, Music21Object, int, OffsetQL]
+        ]
+    ] = otherInfo.pop('pendingSpannerEnds', None)
+
+    newPendingSpannerEnds: t.Optional[
+        t.List[
+            t.Tuple[str, Music21Object, int, OffsetQL]
+        ]
+    ] = None
+
+    if pendingSpannerEnds:
+        for pendingSpannerEnd in pendingSpannerEnds:
+            staffNStr: str = pendingSpannerEnd[0]
+            spannerObj = pendingSpannerEnd[1]
+            measSkip: int = pendingSpannerEnd[2]
+            offset: OffsetQL = pendingSpannerEnd[3]
+            if t.TYPE_CHECKING:
+                assert isinstance(spannerObj, spanner.Spanner)
+
+            measSkip -= 1
+            if measSkip < 0:
+                raise MeiInternalError('pendingSpannerEnd skipped too many measures')
+
+            if measSkip == 0:
+                # do the spannerEnd, it's in this Measure
+                endObj = note.GeneralNote(duration=duration.Duration(0.))
+                spannerObj.addSpannedElements(endObj)
+                if staffNStr not in stavesWaitingFromStaffItem:
+                    stavesWaitingFromStaffItem[staffNStr] = []
+                stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                    ((offset, None, None), endObj)
+                )
+            else:
+                # spannerEnd is still pending (albeit with decremented measSkip)
+                if newPendingSpannerEnds is None:
+                    newPendingSpannerEnds = []
+                newPendingSpannerEnds.append(
+                    (staffNStr, spannerObj, measSkip, offset)
+                )
+        if newPendingSpannerEnds:
+            otherInfo['pendingSpannerEnds'] = newPendingSpannerEnds
 
     # mapping from tag name to our converter function
     staffTag: str = f'{MEI_NS}staff'
@@ -5351,16 +5445,45 @@ def measureFromElement(
                     eachElem, spannerBundle, otherInfo
                 )
         elif eachElem.tag in staffItemsTagToFunction:
-            staffNStr: str
-            offsetAndDur: t.Tuple[OffsetQL, t.Optional[OffsetQL]]
+            offsets: t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]]
             m21Obj: t.Optional[Music21Object]
-            staffNStr, offsetAndDur, m21Obj = staffItemsTagToFunction[eachElem.tag](
+            staffNStr, offsets, m21Obj = staffItemsTagToFunction[eachElem.tag](
                 eachElem, activeMeter, spannerBundle, otherInfo
             )
             if m21Obj is not None:
                 if staffNStr not in stavesWaitingFromStaffItem:
                     stavesWaitingFromStaffItem[staffNStr] = []
-                stavesWaitingFromStaffItem[staffNStr].append((offsetAndDur, m21Obj))  # type: ignore
+                offset1: OffsetQL = offsets[0]
+                measSkip2: t.Optional[int] = offsets[1]
+                offset2: t.Optional[OffsetQL] = offsets[2]
+
+                if measSkip2 is not None and offset2 is not None:
+                    # it's a start/end type spanner, put it in spannerBundle
+                    spannerObj = m21Obj
+                    if t.TYPE_CHECKING:
+                        assert isinstance(spannerObj, spanner.Spanner)
+                    spannerBundle.append(spannerObj)
+                    startObj = note.GeneralNote(duration=duration.Duration(0.))
+                    spannerObj.addSpannedElements(startObj)
+                    stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                        ((offset1, None, None), startObj)
+                    )
+                    if measSkip2 == 0:
+                        # do the endObj as well, it's in this same Measure
+                        endObj = note.GeneralNote(duration=duration.Duration(0.))
+                        spannerObj.addSpannedElements(endObj)
+                        stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                            ((offset2, None, None), endObj)
+                        )
+                    else:
+                        # endObj has to wait for a subsequent measure
+                        if otherInfo.get('pendingSpannerEnds', None) is None:
+                            otherInfo['pendingSpannerEnds'] = []
+                        otherInfo['pendingSpannerEnds'].append(
+                            (staffNStr, spannerObj, measSkip2, offset2)
+                        )
+                else:
+                    stavesWaitingFromStaffItem[staffNStr].append((offsets, m21Obj))  # type: ignore
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
@@ -5382,7 +5505,7 @@ def measureFromElement(
 
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
-        for (eachOffset, eachDur), eachObj in eachList:
+        for (eachOffset, eachMeasSkip2, eachOffset2), eachObj in eachList:
             # parse whichStaff, which might be '1', '2', '1 2', etc
             staffNs: t.List[str] = re.findall(r'[\d]+', whichStaff)
             if not staffNs:
@@ -5394,52 +5517,57 @@ def measureFromElement(
                 tsFermatas.append((staffNs, eachOffset, eachObj))
                 continue
 
-            if eachDur is not None:
-                # the staffItem has an "external" duration (i.e. it's a spanner, because
-                # otherwise eachObj.duration would already be set).
-                # Here is where we would figure out which GeneralNotes to put in
-                # the spanner to give it the appropriate duration.
-                continue
+            if eachMeasSkip2 is not None or eachOffset2 is not None:
+                # This should never happen, because we will have already split such a thing
+                # into two objects with a simple offset and put the two of them in a spanner.
+                raise MeiInternalError('StaffItem spanner seen unexpectedly')
+
+            spanners: t.List[spanner.Spanner] = eachObj.getSpannerSites()
+            isSpannedObject: bool = bool(spanners)
+            betweenTwoStaves: bool = False
+            if len(staffNs) == 2:
+                if (eachObj.hasStyleInformation
+                        and hasattr(eachObj.style, 'alignVertical')
+                        and eachObj.style.alignVertical == 'middle'):
+                    print('hi')
+                    betweenTwoStaves = True
+                else:
+                    if (spanners
+                            and spanners[0].hasStyleInformation
+                            and hasattr(spanners[0].style, 'alignVertical')
+                            and spanners[0].style.alignVertical == 'middle'):
+                        print('hey')
+                        betweenTwoStaves = True
 
             if len(staffNs) == 1:
+                if isSpannedObject:
+                    print('spanner in one staff start/stop')
                 staffNumStr = staffNs[0]
                 staveN = staves[staffNumStr]
                 if t.TYPE_CHECKING:
                     assert isinstance(staveN, stream.Measure)
                 staveN.insert(eachOffset, eachObj)
-            elif len(staffNs) == 2:
-                if (eachObj.hasStyleInformation
-                        and isinstance(eachObj.style, style.TextStyle)
-                        and eachObj.style.alignVertical == 'middle'):
-                    # if placement is between the two staves, put it in the first staff
-                    # (it will go below it)
-                    staffNumStr = staffNs[0]
-                    # for now, clear out placement and style.alignVertical, since the humdrum
-                    # parser doesn't do it.  The default placement in first staff is the same
-                    # anyway.
-                    if hasattr(eachObj, 'placement'):
-                        eachObj.placement = None  # type: ignore
-                    eachObj.style.alignVertical = None
-                elif (hasattr(eachObj, 'placement')
-                        and eachObj.placement == 'above'):  # type: ignore
-                    # if placement is above the staves, put it in the first staff
-                    # (it will go above it)
-                    staffNumStr = staffNs[0]
-                else:
-                    # placement is below the staves, put it in the last/lowest staff
-                    # (it will go below it)
-                    staffNumStr = staffNs[1]
 
+            elif betweenTwoStaves:
+                if isSpannedObject:
+                    print('spanner between two staves start/stop')
+                # Put it in the first staff (it will go below it)
+                staffNumStr = staffNs[0]
                 staveN = staves[staffNumStr]
                 if t.TYPE_CHECKING:
                     assert isinstance(staveN, stream.Measure)
                 staveN.insert(eachOffset, eachObj)
+
+            elif isSpannedObject:
+                # last chance for spanned objects, put in top staff (we can't duplicate them)
+                staffNumStr = staffNs[0]
+                staveN = staves[staffNumStr]
+                if t.TYPE_CHECKING:
+                    assert isinstance(staveN, stream.Measure)
+                staveN.insert(eachOffset, eachObj)
+
             else:
-                # more than 2 staves, we need to put eachObj in each listed staff (deepcopy them!)
-                # TODO: This will not work for spanners (e.g. <hairpin @staff="1 2 3 4"/>)
-                # TODO: Assuming there are only placeholders in the spanner, we'd have to clone the
-                # TODO: placeholders (and the spanner), and put each set of placeholders (and the
-                # TODO: associated spanner) in the correct staff.
+                # we need to put eachObj in each listed staff (deepcopy them!)
                 for i, staffNumStr in enumerate(staffNs):
                     staveN = staves[staffNumStr]
                     if t.TYPE_CHECKING:
@@ -5603,6 +5731,18 @@ def sectionScoreCore(
             measureResult = measureFromElement(
                 eachElem, activeMeter, spannerBundle, measureInfo, backupMeasureNum, allPartNs
             )
+
+            # we toss measureInfo to clear the measure-specific stuff, BUT we don't want
+            # to clear info['pendingSpannerEnds'] because they need to keep getting passed
+            # around until all spanners have ended. So we put it (update it) in otherInfo here.
+            pendingSpannerEnds = measureInfo.get('pendingSpannerEnds', None)
+            if pendingSpannerEnds:
+                otherInfo['pendingSpannerEnds'] = pendingSpannerEnds
+            else:
+                if otherInfo.get('pendingSpannerEnds', None) is not None:
+                    print('hi')
+                otherInfo.pop('pendingSpannerEnds', None)
+
             # process and append each part's stuff to the staff
             for eachN in allPartNs:
                 measureResultN = measureResult[eachN]
