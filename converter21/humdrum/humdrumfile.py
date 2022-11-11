@@ -7559,7 +7559,6 @@ class HumdrumFile(HumdrumFileContent):
         dynamicOffsetInMeasure: HumNum = token.durationFromBarline
         dynamicOffsetInVoice: HumNum = opFrac(dynamicOffsetInMeasure - vOffsetInMeasure)
 
-
         track: int = token.track
         lastTrack: int = track
         ttrack: int = -1
@@ -7570,54 +7569,94 @@ class HumdrumFile(HumdrumFileContent):
         forceCenter: bool = False
         trackDiff: int = 0
         staffAdj: int = ss.dynamStaffAdj
-        needsRend: bool = False
+        force: bool = False
 
         if ss.dynamPos > 0:
+            force = True
             forceAbove = True
         elif ss.dynamPos < 0:
+            force = True
             forceBelow = True
         elif ss.dynamPos == 0 and ss.dynamPosDefined:
             forceCenter = True
-#         elif ss.hasLyrics:
-#             above = True # Q: is this something we shouldn't do (rendering decisions)?
+        elif ss.hasLyrics:
+            forceAbove = True
 
-        above: bool
-        below: bool
-        center: bool
-        dcolor: str
+        justification: int = 0
+        if token.layoutParameter('DY', 'rj') == 'true':
+            justification = 1
+        if token.layoutParameter('DY', 'cj') == 'true':
+            justification = 2
+
+        dcolor: str = token.layoutParameter('DY', 'color')
+
+        needsRend: bool = bool(justification) or bool(dcolor)
+
+        above: bool = False
+        below: bool = False
+        center: bool = False
+#         showpos: bool = False
+
         # Handle 'z' in (**kern) token for subito forte (sf), or 'zz' for sforzando (sfz)
         # 'zy' or 'zzy' means it is hidden.
         if 'z' in token.text and 'zy' not in token.text:
-            above = False
-            below = False
-            center = False
-
-            # default placement is above for subtrack 1, below for subtrack 2,
-            #   and nothing for others
-            # subtrack: int = token.subTrack
-            # if subtrack == 1:
-            #     above = True
-            #     below = False
-            #     center = False
-            # elif subtrack == 2:
-            #     above = False
-            #     below = True
-            #     center = False
+            loc: int = token.text.index('z')
+            subtrack: int = token.subTrack
+            if subtrack == 1:
+                above = True
+                below = False
+                center = False
+            elif subtrack == 2:
+                above = False
+                below = True
+                center = False
 
             # Now figure out if placement was specified
-            if self._hasAboveParameter(token, 'DY'):
+            hasAbove: bool
+            hasBelow: bool
+            hasCenter: bool
+            hasAbove, staffAdj = self._hasAboveParameterStaffAdj(token, 'DY', staffAdj)
+            if hasAbove:
                 above = True
                 below = False
                 center = False
             if not above:
-                below = self._hasBelowParameter(token, 'DY')
+                hasBelow, staffAdj = self._hasBelowParameterStaffAdj(token, 'DY', staffAdj)
+                if hasBelow:
+                    above = False
+                    below = True
+                    center = False
+                    if staffAdj:
+                        staffAdj -= 1
+                    elif force and forceBelow:
+                        staffAdj = -ss.dynamStaffAdj
             if not above and not below:
-                hasCenter, staffAdj = self._hasCenterParameter(token, 'DY', staffAdj)
+                hasCenter, staffAdj = self._hasCenterParameterStaffAdj(token, 'DY', staffAdj)
                 if hasCenter:
                     above = False
                     below = False
                     center = True
 
+            # This code block should probably be deleted.
+            if (self._signifiers.below
+                    and loc < len(token.text) - 1
+                    and token.text[loc + 1] == self._signifiers.below):
+                above = False
+                below = True
+            if (self._signifiers.above
+                    and loc < len(token.text) - 1
+                    and token.text[loc + 1] == self._signifiers.above):
+                above = True
+                below = False
+
+#             int newstaff = m_currentstaff + staffadj;
+#             if (newstaff < 1) {
+#                 newstaff = 1;
+#             }
+#             if (newstaff > (int)ss.size()) {
+#                 newstaff = (int)ss.size();
+#             }
+#             setStaff(dynam, newstaff);
 
             # Here is where we create the music21 object for the sf/sfz
             dynstr: str = 'sf'
@@ -7631,14 +7670,14 @@ class HumdrumFile(HumdrumFileContent):
             m21sf.style.absoluteX = None
             m21sf.style.absoluteY = None
 
-            needsRend = False
-            dcolor = token.layoutParameter('DY', 'color')
             if dcolor:
                 m21sf.style.color = dcolor
-                needsRend = True
-            if token.layoutParameter('DY', 'rj') == 'true':
+
+            if justification == 1:
                 m21sf.style.justify = 'right'
-                needsRend = True
+            elif justification == 2:
+                m21sf.style.justify = 'center'
+
             if needsRend:
                 # dynamics are set to bold (like verovio, only if other style stuff set)
                 m21sf.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
@@ -7667,6 +7706,7 @@ class HumdrumFile(HumdrumFileContent):
         # now look for any **dynam tokens to the right
         active: bool = True
         for i in range(startField, line.tokenCount):
+            staffAdj = ss.dynamStaffAdj
             dynTok: t.Optional[HumdrumToken] = line[i]
             if t.TYPE_CHECKING:
                 # dynTok is not None because i is in range
@@ -7674,7 +7714,6 @@ class HumdrumFile(HumdrumFileContent):
 
             exInterp: str = dynTok.dataType.text
             if exInterp != '**kern' and 'kern' in exInterp:
-                # will this ever be true? --gregc
                 active = False
             if dynTok.isKern:
                 active = True
@@ -7730,20 +7769,20 @@ class HumdrumFile(HumdrumFileContent):
                 dynamic = letters
 
             if dynamic:
+                staffAdj = ss.dynamStaffAdj
+
                 dynText: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 't', '', '')
-                if not dynText:
-                    dynText = self._getLayoutParameterWithDefaults(dynTok, 'DY', 'tx', '', '')
                 if dynText:
                     dynText = re.sub('%s', dynamic, dynText)
                     dynamic = dynText
 
-                above = self._hasAboveParameter(dynTok, 'DY')
+                above = False
                 below = False
-                center = False
+                above, staffAdj = self._hasAboveParameterStaffAdj(dynTok, 'DY', staffAdj)
                 if not above:
-                    below = self._hasBelowParameter(dynTok, 'DY')
+                    below, staffAdj = self._hasBelowParameterStaffAdj(dynTok, 'DY', staffAdj)
                 if not above and not below:
-                    hasCenter, staffAdj = self._hasCenterParameter(token, 'DY', staffAdj)
+                    hasCenter, staffAdj = self._hasCenterParameterStaffAdj(token, 'DY', staffAdj)
                     if hasCenter:
                         above = False
                         below = False
@@ -7755,25 +7794,55 @@ class HumdrumFile(HumdrumFileContent):
                 # std::string postfix = " bbb";
                 # See https://github.com/music-encoding/music-encoding/issues/540
 
-                rightJustified: bool = False
+                justification = 0
+                dcolor = ''
+                needsRend = False
                 if dynTok.layoutParameter('DY', 'rj') == 'true':
-                    rightJustified = True
+                    justification = 1
+                elif dynTok.layoutParameter('DY', 'cj') == 'true':
+                    justification = 2
 
                 # editorial: bool = False
                 editStr: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 'ed', 'true', '')
+                gotOne: bool = False
                 if editStr:
-                    # editorial = True
                     if 'brack' in editStr:
+                        gotOne = True
                         dynamic = '[ ' + dynamic + ' ]'
                     elif 'paren' in editStr:
+                        gotOne = True
                         dynamic = '( ' + dynamic + ' )'
                     elif 'curly' in editStr:
+                        gotOne = True
                         dynamic = '{ ' + dynamic + ' }'
                     elif 'angle' in editStr:
+                        gotOne = True
+                        dynamic = '< ' + dynamic + ' >'
+
+                if not gotOne:
+                    parenP: str = self._getLayoutParameterWithDefaults(
+                        dynTok, 'DY', 'paren', 'true', ''
+                    )
+                    brackP: str = self._getLayoutParameterWithDefaults(
+                        dynTok, 'DY', 'brack', 'true', ''
+                    )
+                    curlyP: str = self._getLayoutParameterWithDefaults(
+                        dynTok, 'DY', 'curly', 'true', ''
+                    )
+                    angleP: str = self._getLayoutParameterWithDefaults(
+                        dynTok, 'DY', 'angle', 'true', ''
+                    )
+                    if parenP:
+                        dynamic = '( ' + dynamic + ' )'
+                    elif brackP:
+                        dynamic = '[ ' + dynamic + ' ]'
+                    elif curlyP:
+                        dynamic = '{ ' + dynamic + ' }'
+                    elif angleP:
                         dynamic = '< ' + dynamic + ' >'
 
                 dcolor = dynTok.layoutParameter('DY', 'color')
-                # needsRend: bool = justification or dcolor
+                needsRend = bool(justification) or bool(dcolor)
 
                 # Here is where we create the music21 object for the dynamic
                 m21Dynamic: m21.dynamics.Dynamic = m21.dynamics.Dynamic(dynamic)
@@ -7784,16 +7853,24 @@ class HumdrumFile(HumdrumFileContent):
                 m21Dynamic.style.absoluteX = None
                 m21Dynamic.style.absoluteY = None
 
-                needsRend = False
                 if dcolor:
                     m21Dynamic.style.color = dcolor
-                    needsRend = True
-                if rightJustified:
+                if justification == 1:
                     m21Dynamic.style.justify = 'right'
-                    needsRend = True
+                elif justification == 2:
+                    m21Dynamic.style.justify = 'center'
+
                 if needsRend:
                     # dynamics are set to bold (like verovio, only if other style stuff set)
                     m21Dynamic.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
+
+#                 int newstaff = m_currentstaff - staffadj;
+#                 if (newstaff < 1) {
+#                     newstaff = 1;
+#                 }
+#                 if (newstaff > (int)ss.size()) {
+#                     newstaff = (int)ss.size();
+#                 }
 
                 # verticalgroup: str = dyntok.layoutParameter('DY', 'vg')
                 # Q: is there a music21 equivalent to MEI's verticalgroup?
@@ -7847,9 +7924,11 @@ class HumdrumFile(HumdrumFileContent):
         if '<' in hairpins:
             startHairpin = '<'
             stopHairpin = '['
+            stopAtEndHairpin = '[['
         elif '>' in hairpins:
             startHairpin = '>'
             stopHairpin = ']'
+            stopAtEndHairpin = ']]'
         else:
             return insertedIntoVoice
 
@@ -7857,30 +7936,41 @@ class HumdrumFile(HumdrumFileContent):
         startStopHairpin2 = startHairpin + ' ' + stopHairpin
 
         ss: StaffStateVariables = self._staffStates[staffIndex]
+        forceAbove: bool = False
+        forceBelow: bool = False
+        forceCenter: bool = False
+        if ss.dynamPos > 0:
+            forceAbove = True
+        elif ss.dynamPos < 0:
+            forceBelow = True
+        elif ss.dynamPos == 0 and ss.dynamPosDefined:
+            forceCenter = True
+        elif ss.hasLyrics:
+            forceAbove = True
 
         endAtEndOfEndToken: bool = False
         endTok: t.Optional[HumdrumToken] = None
+        leftNoteDuration: HumNum = 0.
         if startStopHairpin1 in hairpins or startStopHairpin2 in hairpins:
+            leftNoteDuration = self._getLeftNoteDuration(token)
             endTok = token
             endAtEndOfEndToken = True
         else:
             endTok = self._getHairpinEnd(dynTok, stopHairpin)
 
         staffAdj = ss.dynamStaffAdj
-        above: bool = self._hasAboveParameter(dynTok, 'HP')
+        above: bool = False
         below: bool = False
         center: bool = False
-#         showPlace: bool = above
+        above, staffAdj = self._hasAboveParameterStaffAdj(dynTok, 'HP', staffAdj)
         if not above:
-            below = self._hasBelowParameter(dynTok, 'HP')
-#             showPlace = below
+            below, staffAdj = self._hasBelowParameterStaffAdj(dynTok, 'HP', staffAdj)
         if not above and not below:
-            hasCenter, staffAdj = self._hasCenterParameter(dynTok, 'HP', staffAdj)
+            hasCenter, staffAdj = self._hasCenterParameterStaffAdj(dynTok, 'HP', staffAdj)
             if hasCenter:
                 above = False
                 below = False
                 center = True
-#                 showPlace = center
 
         if endTok:
             # Here is where we create the music21 object for the crescendo/decrescendo
@@ -7891,17 +7981,15 @@ class HumdrumFile(HumdrumFileContent):
                 m21Hairpin = m21.dynamics.Diminuendo()
 
             # LATER: staff adjustments for dynamics and forcing position
-            if above:
-                if hasattr(m21Hairpin, 'placement'):
-                    m21Hairpin.placement = 'above'
-                else:
-                    m21Hairpin.style.absoluteY = 'above'
-            elif below:
-                if hasattr(m21Hairpin, 'placement'):
-                    m21Hairpin.placement = 'below'
-                else:
-                    m21Hairpin.style.absoluteY = 'below'
-            elif center:
+#             int newstaff = m_currentstaff - staffadj;
+#             if (newstaff < 1) {
+#                 newstaff = 1;
+#             }
+#             if (newstaff > (int)ss.size()) {
+#                 newstaff = (int)ss.size();
+#             }
+
+            if (center or forceCenter) and not above and not below:
                 # center means below, and vertically centered between this staff and the one below
                 if t.TYPE_CHECKING:
                     assert isinstance(m21Hairpin.style, m21.style.TextStyle)
@@ -7910,12 +7998,33 @@ class HumdrumFile(HumdrumFileContent):
                     m21Hairpin.placement = 'below'
                 else:
                     m21Hairpin.style.absoluteY = 'below'
+            else:
+                if above or forceAbove:
+                    if hasattr(m21Hairpin, 'placement'):
+                        m21Hairpin.placement = 'above'
+                    else:
+                        m21Hairpin.style.absoluteY = 'above'
+                elif below or forceBelow:
+                    if hasattr(m21Hairpin, 'placement'):
+                        m21Hairpin.placement = 'below'
+                    else:
+                        m21Hairpin.style.absoluteY = 'below'
+
+            color = self._getLoColor(dynTok, 'HP')
+            if color:
+                m21Hairpin.style.color = color
 
             # Now I need to put the start and end "notes" into the Crescendo spanner.
             # This is instead of all the timestamp stuff C++ code does.
             startTime: HumNum = token.durationFromStart
-            endTime: HumNum = endTok.durationFromStart
-            if endAtEndOfEndToken:
+            endTime: HumNum
+            if leftNoteDuration > 0:
+                endTime = endTok.durationFromStart + leftNoteDuration
+            else:
+                endTime = endTok.durationFromStart
+
+            if (leftNoteDuration == 0
+                    and (endAtEndOfEndToken or stopAtEndHairpin in endTok.text)):
                 if endTok.duration == -1:
                     # null token, perhaps.  Use line duration instead.
                     endTime += endTok.ownerLine.duration
@@ -8000,17 +8109,15 @@ class HumdrumFile(HumdrumFileContent):
                 content = self._signifiers.decrescText
                 fontStyle = self._signifiers.decrescFontStyle
 
-            # This is a weird thing that I am doing only to avoid some diff warnings.
-            # Once I can remove my MEI parser's "default is italic" code (which I can
-            # do when Verovio stops writing "unspecified italics" when italics was
-            # actually specified; see https://github.com/rism-digital/verovio/issues/3074),
-            # then I can also remove this...
-            if not fontStyle:
-                fontStyle = 'italic'
+#             # This is a weird thing that I am doing only to avoid some diff warnings.
+#             # Once I can remove my MEI parser's "default is italic" code (which I can
+#             # do when Verovio stops writing "unspecified italics" when italics was
+#             # actually specified; see https://github.com/rism-digital/verovio/issues/3074),
+#             # then I can also remove this...
+#             if not fontStyle:
+#                 fontStyle = 'italic'
 
             pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 't', '', '')
-            if not pinText:
-                pinText = self._getLayoutParameterWithDefaults(dynTok, 'HP', 'tx', '', '')
             if pinText:
                 html.unescape(pinText)
                 if pinText:
@@ -8025,24 +8132,24 @@ class HumdrumFile(HumdrumFileContent):
             if fontStyle:
                 m21TextExp.style.fontStyle = M21Convert.m21FontStyleFromFontStyle(fontStyle)
 
-            if above:
-                if hasattr(m21TextExp, 'placement'):
-                    m21TextExp.placement = 'above'
-                else:
-                    m21TextExp.style.absoluteY = 'above'
-            elif below:
-                if hasattr(m21TextExp, 'placement'):
-                    m21TextExp.placement = 'below'
-                else:
-                    m21TextExp.style.absoluteY = 'below'
-            elif center:
+            if (center or forceCenter) and not above and not below:
                 # center means below, and vertically centered between this staff and the one below
                 m21TextExp.style.alignVertical = 'middle'
                 if hasattr(m21TextExp, 'placement'):
                     m21TextExp.placement = 'below'
                 else:
                     m21TextExp.style.absoluteY = 'below'
-
+            else:
+                if above or forceAbove:
+                    if hasattr(m21TextExp, 'placement'):
+                        m21TextExp.placement = 'above'
+                    else:
+                        m21TextExp.style.absoluteY = 'above'
+                elif below or forceBelow:
+                    if hasattr(m21TextExp, 'placement'):
+                        m21TextExp.placement = 'below'
+                    else:
+                        m21TextExp.style.absoluteY = 'below'
 
             voice.coreInsert(opFrac(dynamicOffsetInVoice), m21TextExp)
             insertedIntoVoice = True
@@ -8213,12 +8320,21 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::getLeftNoteDuration --
     '''
-#     def _getLeftNoteDuration(self, token: HumdrumToken) -> HumNum:
-#         output: HumNum = opFrac(0)
-#         leftNote: HumdrumToken = self._getLeftNoteToken(token)
-#         if leftNote:
-#             output = Convert.recipToDuration(leftNote.text)
-#         return output
+    def _getLeftNoteDuration(self, token: HumdrumToken) -> HumNum:
+        output: HumNum = opFrac(0)
+        current: t.Optional[HumdrumToken] = token
+        while current is not None:
+            if not current.isKern:
+                current = current.previousFieldToken
+                continue
+            if current.isNull:
+                current = current.previousFieldToken
+                continue
+
+            output = Convert.recipToDuration(current.text)
+            break
+
+        return output
 
     @staticmethod
     def _getLeftNoteToken(token: HumdrumToken, _isStart: bool) -> t.Optional[HumdrumToken]:
@@ -8463,8 +8579,6 @@ class HumdrumFile(HumdrumFileContent):
 
         text: t.Optional[str] = token.getValueString('LO', 'TX', 't')
         if not text:
-            text = token.getValueString('LO', 'TX', 'tx')
-        if not text:
             return insertedIntoVoice
 
         text = html.unescape(text)
@@ -8641,8 +8755,7 @@ class HumdrumFile(HumdrumFileContent):
                 bparam = True
             elif key == 'c':
                 cparam = True
-            elif key in ('t', 'tx'):
-                # I've seen 'tx=' instead of 't=' in mazurka30-4.krn as well as others --gregc
+            elif key == 't':
                 text = value
                 if not text:
                     # nothing to display
@@ -8655,17 +8768,13 @@ class HumdrumFile(HumdrumFileContent):
                 italic = True
             elif key == 'B':
                 bold = True
-            elif key == 'Bi':
-                italic = True
-                bold = True
-            elif key == 'iB':
-                italic = True
-                bold = True
-            elif key == 'ib':
+            elif key in ('Bi', 'bi', 'iB', 'ib'):
                 italic = True
                 bold = True
             elif key == 'rj':
                 justification = 1
+            elif key == 'cj':
+                justification = 2
             elif key == 'color':
                 color = value
             elif key == 'v':
@@ -10434,7 +10543,7 @@ class HumdrumFile(HumdrumFileContent):
     '''
     //////////////////////////////
     //
-    // HumdrumInput::fillPartInfo --
+    // HumdrumInput::fillStaffInfo --
     '''
     def _createPart(self, partStartTok: HumdrumToken, staffNum: int, partCount: int) -> None:
         # staffNum is 1-based, but _staffStates is 0-based
@@ -10452,8 +10561,8 @@ class HumdrumFile(HumdrumFileContent):
         group: int = self._getGroupNumberLabel(partStartTok)
 
         clefTok: t.Optional[HumdrumToken] = None
-#         partTok: t.Optional[HumdrumToken] = None
-#         staffTok: t.Optional[HumdrumToken] = None
+        partTok: t.Optional[HumdrumToken] = None
+        staffTok: t.Optional[HumdrumToken] = None
         staffScaleTok: t.Optional[HumdrumToken] = None
         striaTok: t.Optional[HumdrumToken] = None
         keySigTok: t.Optional[HumdrumToken] = None
@@ -10493,10 +10602,10 @@ class HumdrumFile(HumdrumFileContent):
             elif token.isOriginalClef:
                 if token.originalClef[0].isdigit():
                     self._oclefs.append((staffNum, token))
-#             elif token.isPart:
-#                 partTok = token
-#             elif token.isStaffInterpretation:
-#                 staffTok = token
+            elif token.isPart:
+                partTok = token
+            elif token.isStaffInterpretation:
+                staffTok = token
             elif token.isStria:
                 # num lines per staff (usually 5)
                 striaTok = token
@@ -10631,42 +10740,43 @@ class HumdrumFile(HumdrumFileContent):
             if self._omets and staffNum == self._omets[-1][0]:
                 meterSigTok = self._omets[-1][1]
 
-        # if staffTok:
-        #     # search for a **dynam before the next **kern spine, and set the
-        #     # dynamics position to centered if there is a slash in the *staff1/2 string.
-        #     # In the future also check *part# to see if there are two staves for a part
-        #     # with no **dynam for the lower staff (infer to be a grand staff).
-        #     dynamSpine: HumdrumToken = self.associatedDynamSpine(staffTok)
-        #     if dynamSpine \
-        #             and dynamSpine.isStaffInterpretation \
-        #             and '/' in dynamSpine.text:
-        #         # the dynamics should be placed between
-        #         # staves: the current one and the one below it.
-        #         ss.dynamPos = 0
-        #         ss.dynamStaffAdj = 0
-        #         ss.dynamPosDefined = True
+        dynamSpine: t.Optional[HumdrumToken]
+        if staffTok:
+            # search for a **dynam before the next **kern spine, and set the
+            # dynamics position to centered if there is a slash in the *staff1/2 string.
+            # In the future also check *part# to see if there are two staves for a part
+            # with no **dynam for the lower staff (infer to be a grand staff).
+            dynamSpine = self.associatedDynamSpine(staffTok)
+            if (dynamSpine is not None
+                    and dynamSpine.isStaffInterpretation
+                    and '/' in dynamSpine.text):
+                # the dynamics should be placed between
+                # staves: the current one and the one below it.
+                ss.dynamPos = 0
+                ss.dynamStaffAdj = 0
+                ss.dynamPosDefined = True
 
-        # if partTok:
-        #     pPartNum: int = 0   # from *part token
-        #     dPartNum: int = 0   # from *part token in associated dynam spine
-        #     lPartNum: int = 0   # from *part token in next left staff spine
-        #     dynamSpine: HumdrumToken = self.associatedDynamSpine(partTok)
-        #     if dynamSpine:
-        #         dPartNum = dynamSpine.partNum
-        #
-        #     if dPartNum > 0:
-        #         pPartNum = partTok.partNum
-        #
-        #     if pPartNum > 0:
-        #         nextLeftStaffTok = self.previousStaffToken(partTok)
-        #         if nextLeftStaffTok:
-        #             lPartNum = nextLeftStaffTok.partNum
-        #
-        #     if lPartNum > 0:
-        #         if lPartNum == pPartNum and dPartNum == pPartNum:
-        #             ss.dynamPos = 0
-        #             ss.dynamStaffAdj = 0
-        #             ss.dynamPosDefined = True
+        if partTok:
+            pPartNum: int = 0   # from *part token
+            dPartNum: int = 0   # from *part token in associated dynam spine
+            lPartNum: int = 0   # from *part token in next left staff spine
+            dynamSpine = self.associatedDynamSpine(partTok)
+            if dynamSpine is not None:
+                dPartNum = dynamSpine.partNum
+
+            if dPartNum > 0:
+                pPartNum = partTok.partNum
+
+            if pPartNum > 0:
+                nextLeftStaffTok = self.previousStaffToken(partTok)
+                if nextLeftStaffTok:
+                    lPartNum = nextLeftStaffTok.partNum
+
+            if lPartNum > 0:
+                if lPartNum == pPartNum and dPartNum == pPartNum:
+                    ss.dynamPos = 0
+                    ss.dynamStaffAdj = 0
+                    ss.dynamPosDefined = True
 
         if staffScaleTok:
             ss.staffScaleFactor = staffScaleTok.scale
@@ -11113,6 +11223,30 @@ class HumdrumFile(HumdrumFileContent):
                     self._staffStates[staffIndex].figuredBassState = +1
                     self._staffStates[staffIndex].isStaffWithFiguredBass = True
 
+
+    @staticmethod
+    def _getLoColor(token: HumdrumToken, ns2: str) -> str:
+        lcount: int = token.linkedParameterSetCount
+        if lcount == 0:
+            return ''
+
+        for p in range(0, lcount):
+            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != ns2:
+                continue
+
+            for q in range(0, hps.count):
+                paramKey: str = hps.getParameterName(q)
+                paramVal: str = hps.getParameterValue(q)
+                if paramKey == 'color':
+                    return paramVal
+
+        return ''
+
     '''
     //////////////////////////////
     //
@@ -11142,6 +11276,46 @@ class HumdrumFile(HumdrumFileContent):
                     return True
 
         return False
+
+    @staticmethod
+    def _hasAboveParameterStaffAdj(
+        token: HumdrumToken,
+        ns2: str,
+        staffAdj: int
+    ) -> t.Tuple[bool, int]:
+        lcount: int = token.linkedParameterSetCount
+        if lcount == 0:
+            return (False, staffAdj)
+
+        for p in range(0, lcount):
+            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != ns2:
+                continue
+
+            for q in range(0, hps.count):
+                paramKey: str = hps.getParameterName(q)
+                paramVal: str = hps.getParameterValue(q)
+                if paramKey == 'a':
+                    if paramVal == 'true':
+                        # above the attached staff
+                        staffAdj = 0
+                    elif paramVal:
+                        if paramVal[0].isdigit():
+                            try:
+                                staffAdj = int(paramVal)
+                            except:  # pylint: disable=bare-except
+                                return (True, staffAdj)
+                            if staffAdj:
+                                staffAdj = -(staffAdj - 1)
+                    return (True, staffAdj)
+                if paramKey == 'Z':
+                    return (True, staffAdj)
+
+        return (False, staffAdj)
 
     '''
     //////////////////////////////
@@ -11173,6 +11347,46 @@ class HumdrumFile(HumdrumFileContent):
 
         return False
 
+    @staticmethod
+    def _hasBelowParameterStaffAdj(
+        token: HumdrumToken,
+        ns2: str,
+        staffAdj: int
+    ) -> t.Tuple[bool, int]:
+        lcount: int = token.linkedParameterSetCount
+        if lcount == 0:
+            return (False, staffAdj)
+
+        for p in range(0, lcount):
+            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != ns2:
+                continue
+
+            for q in range(0, hps.count):
+                paramKey: str = hps.getParameterName(q)
+                paramVal: str = hps.getParameterValue(q)
+                if paramKey == 'b':
+                    if paramVal == 'true':
+                        # below the attached staff
+                        staffAdj = 0
+                    elif paramVal:
+                        if paramVal[0].isdigit():
+                            try:
+                                staffAdj = int(paramVal)
+                            except:  # pylint: disable=bare-except
+                                return (True, staffAdj)
+                            if staffAdj:
+                                staffAdj = -(staffAdj - 1)
+                    return (True, staffAdj)
+                if paramKey == 'Y':
+                    return (True, staffAdj)
+
+        return (False, staffAdj)
+
     '''
     //////////////////////////////
     //
@@ -11180,7 +11394,11 @@ class HumdrumFile(HumdrumFileContent):
     // with optional staff adjustment.
     '''
     @staticmethod
-    def _hasCenterParameter(token: HumdrumToken, ns2: str, staffAdj: int) -> t.Tuple[bool, int]:
+    def _hasCenterParameterStaffAdj(
+        token: HumdrumToken,
+        ns2: str,
+        staffAdj: int
+    ) -> t.Tuple[bool, int]:
         # returns (hasCenter, newStaffAdj))
         lcount: int = token.linkedParameterSetCount
         if lcount == 0:
@@ -11203,9 +11421,13 @@ class HumdrumFile(HumdrumFileContent):
                         # below the attached staff
                         staffAdj = 0
                     elif paramVal:
-                        staffAdj = int(paramVal)
-                        if staffAdj:
-                            staffAdj = -(staffAdj - 1)
+                        if paramVal[0].isdigit():
+                            try:
+                                staffAdj = int(paramVal)
+                            except:  # pylint: disable=bare-except
+                                return (True, staffAdj)
+                            if staffAdj:
+                                staffAdj = -(staffAdj - 1)
                     return (True, staffAdj)
                 if paramKey == 'Y':
                     return (True, staffAdj)
