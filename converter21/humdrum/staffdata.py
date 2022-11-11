@@ -46,7 +46,6 @@ class StaffData:
         self._transposeWrittenToSounding(partStaff)
 
         self._staffIndex: int = staffIndex
-        self._hasDynamics: bool = False
         self._verseCount: int = 0
         self.measures: t.List[MeasureData] = []
 
@@ -80,10 +79,6 @@ class StaffData:
         return self._staffIndex
 
     @property
-    def hasDynamics(self) -> bool:
-        return self._hasDynamics
-
-    @property
     def verseCount(self) -> int:
         return self._verseCount
 
@@ -109,5 +104,5 @@ class StaffData:
             self._verseCount = verseCount
 
     def receiveDynamic(self) -> None:
-        # don't propagate up to PartData, we do per-staff dynamics
-        self._hasDynamics = True
+        # just pass it on up to the PartData, dynamics are per part
+        self.ownerPart.receiveDynamic()

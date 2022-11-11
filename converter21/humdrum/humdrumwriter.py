@@ -137,7 +137,7 @@ class HumdrumWriter:
         # First elements of text tuple are part index, staff index, voice index
         self._currentTexts: t.List[t.Tuple[int, int, int, m21.expressions.TextExpression]] = []
         # First elements of dynamic tuple are part index, staff index (dynamics are at staff level)
-        self._currentDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]] = []
+        self._currentDynamics: t.List[t.Tuple[int, m21.dynamics.Dynamic]] = []
         # First element of tempo tuple is part index (tempo is at the part level)
         self._currentTempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]] = []
 
@@ -315,11 +315,9 @@ class HumdrumWriter:
 #         outgrid.removeRedundantClefChanges() # don't do this; not our business
 #         outgrid.removeSibeliusIncipit()
 
-        # transfer verse counts and dynamics boolean from staves to HumGrid:
+        # transfer verse counts from staves to HumGrid:
         for p, partData in enumerate(self._scoreData.parts):
             for s, staffData in enumerate(partData.staves):
-                if staffData.hasDynamics:
-                    outgrid.setDynamicsPresent(p, s)
                 verseCount: int = staffData.verseCount
                 outgrid.setVerseCount(p, s, verseCount)
 
@@ -327,6 +325,11 @@ class HumdrumWriter:
         # for p, partData in enumerate(self._scoreData.parts):
         #     harmonyCount: int = partData.harmonyCount
         #     outgrid.setHarmonyCount(p, harmonyCount)
+
+        # transfer dynamics boolean for part to HumGrid
+        for p, partData in enumerate(self._scoreData.parts):
+            if partData.hasDynamics:
+                outgrid.setDynamicsPresent(p)
 
         # transfer figured bass boolean for part to HumGrid
 #       for (int p=0; p<(int)partdata.size(); p++) {
@@ -1726,7 +1729,7 @@ class HumdrumWriter:
                                 m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
-                    self._currentDynamics.append((pindex, sindex, m21Obj))
+                    self._currentDynamics.append((pindex, m21Obj))
                     zeroDurEvent.reportDynamicToOwner()
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
@@ -2309,42 +2312,42 @@ class HumdrumWriter:
             outSlice: GridSlice,
             outgm: GridMeasure,
             event: EventData,
-            extraDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]]
+            extraDynamics: t.List[t.Tuple[int, m21.dynamics.Dynamic]]
     ) -> None:
-        dynamics: t.List[t.Tuple[int, int, str]] = []
+        dynamics: t.List[t.Tuple[int, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
         eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
 
         if eventIsDynamicWedge:
-            dynamics.append((event.partIndex, event.staffIndex, event.getDynamicWedgeString()))
+            dynamics.append((event.partIndex, event.getDynamicWedgeString()))
 
-        for partIndex, staffIndex, dynamic in extraDynamics:
+        for partIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
-            dynamics.append((partIndex, staffIndex, dstring))
+            dynamics.append((partIndex, dstring))
 
         if not dynamics:
             # we shouldn't have been called
             return
 
-        dynTokens: t.Dict[t.Tuple[int, int], HumdrumToken] = {}
-        moreThanOneDynamic: t.Dict[t.Tuple[int, int], bool] = {}
-        currentDynamicIndex: t.Dict[t.Tuple[int, int], int] = {}
+        dynTokens: t.Dict[int, HumdrumToken] = {}
+        moreThanOneDynamic: t.Dict[int, bool] = {}
+        currentDynamicIndex: t.Dict[int, int] = {}
 
-        for partIndex, staffIndex, dstring in dynamics:
+        for partIndex, dstring in dynamics:
             if not dstring:
                 continue
 
-            if dynTokens.get((partIndex, staffIndex), None) is None:
-                dynTokens[(partIndex, staffIndex)] = HumdrumToken(dstring)
-                moreThanOneDynamic[(partIndex, staffIndex)] = False
+            if dynTokens.get(partIndex, None) is None:
+                dynTokens[partIndex] = HumdrumToken(dstring)
+                moreThanOneDynamic[partIndex] = False
             else:
-                dynTokens[(partIndex, staffIndex)].text += ' ' + dstring
-                moreThanOneDynamic[(partIndex, staffIndex)] = True
-                currentDynamicIndex[(partIndex, staffIndex)] = 1  # ':n=' is 1-based
+                dynTokens[partIndex].text += ' ' + dstring
+                moreThanOneDynamic[partIndex] = True
+                currentDynamicIndex[partIndex] = 1  # ':n=' is 1-based
 
         # dynTokens key is t.Tuple[int, int], value is token
-        for (partIndex, staffIndex), token in dynTokens.items():
+        for partIndex, token in dynTokens.items():
             if outSlice is None:
                 # we better make one, timestamped at end of measure, type Notes (even though it
                 # will only have '.' in the **kern spines, and a 'p' (or whatever) in the
@@ -2353,14 +2356,14 @@ class HumdrumWriter:
                 outSlice.initializeBySlice(outgm.slices[-1])
 
             existingDynamicsToken: t.Optional[HumdrumToken] = (
-                outSlice.parts[partIndex].staves[staffIndex].dynamics
+                outSlice.parts[partIndex].dynamics
             )
             if existingDynamicsToken is None:
-                outSlice.parts[partIndex].staves[staffIndex].dynamics = token
+                outSlice.parts[partIndex].dynamics = token
             else:
                 existingDynamicsToken.text += ' ' + token.text
-                moreThanOneDynamic[(partIndex, staffIndex)] = True
-                currentDynamicIndex[(partIndex, staffIndex)] = 1  # ':n=' is 1-based
+                moreThanOneDynamic[partIndex] = True
+                currentDynamicIndex[partIndex] = 1  # ':n=' is 1-based
 
         # add any necessary layout params
         dparam: t.Optional[str]
@@ -2374,24 +2377,24 @@ class HumdrumWriter:
             dparam = M21Convert.getDynamicWedgeStartParameters(event.m21Object)
             if dparam:
                 fullParam = '!LO:HP'
-                if moreThanOneDynamic[(partIndex, staffIndex)]:
-                    fullParam += ':n=' + str(currentDynamicIndex[(partIndex, staffIndex)])
-                    currentDynamicIndex[(partIndex, staffIndex)] += 1
+                if moreThanOneDynamic[partIndex]:
+                    fullParam += ':n=' + str(currentDynamicIndex[partIndex])
+                    currentDynamicIndex[partIndex] += 1
                 fullParam += dparam
-                outgm.addDynamicsLayoutParameters(outSlice, partIndex, staffIndex, fullParam)
+                outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
 
         # next the Dynamic objects ('pp', etc) in extraDynamics
-        for partIndex, staffIndex, dynamic in extraDynamics:
+        for partIndex, dynamic in extraDynamics:
             dparam = M21Convert.getDynamicParameters(dynamic)
             if dparam:
                 fullParam = '!LO:DY'
 
-                if moreThanOneDynamic[(partIndex, staffIndex)]:
-                    fullParam += ':n=' + str(currentDynamicIndex[(partIndex, staffIndex)])
-                    currentDynamicIndex[(partIndex, staffIndex)] += 1
+                if moreThanOneDynamic[partIndex]:
+                    fullParam += ':n=' + str(currentDynamicIndex[partIndex])
+                    currentDynamicIndex[partIndex] += 1
 
                 fullParam += dparam
-                outgm.addDynamicsLayoutParameters(outSlice, partIndex, staffIndex, fullParam)
+                outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
 
     '''
     //////////////////////////////

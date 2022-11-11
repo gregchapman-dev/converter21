@@ -29,7 +29,7 @@ from converter21.humdrum import SliceType
 from converter21.humdrum import GridVoice
 # from converter21.humdrum import GridSide
 from converter21.humdrum import GridStaff
-# from converter21.humdrum import GridPart
+from converter21.humdrum import GridPart
 from converter21.humdrum import GridSlice
 
 # you can't import this here, because the recursive import causes very weird issues.
@@ -834,7 +834,7 @@ class GridMeasure:
     // GridMeasure::addDynamicsLayoutParameters --
     '''
     def addDynamicsLayoutParameters(self, associatedSlice: GridSlice,
-                                    partIndex: int, staffIndex: int,
+                                    partIndex: int,
                                     locomment: str) -> None:
         if len(self.slices) == 0:
             # something strange happened: expecting at least one item in measure.
@@ -861,9 +861,9 @@ class GridMeasure:
         prevIdx: int = associatedSliceIdx - 1
         prevSlice: GridSlice = self.slices[prevIdx]
         if prevSlice.isLocalLayoutSlice:
-            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
-            if prevStaff.dynamics is None:
-                prevStaff.dynamics = HumdrumToken(locomment)
+            prevPart: GridPart = prevSlice.parts[partIndex]
+            if prevPart.dynamics is None:
+                prevPart.dynamics = HumdrumToken(locomment)
                 return
 
         # if we get here, we couldn't use the previous slice, so we need to insert
@@ -880,8 +880,8 @@ class GridMeasure:
             newSlice.initializeBySlice(self.slices[-1])
             self.slices.append(newSlice)
 
-        newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
-        newStaff.dynamics = HumdrumToken(locomment)
+        newPart: GridPart = newSlice.parts[partIndex]
+        newPart.dynamics = HumdrumToken(locomment)
 
     '''
     //////////////////////////////

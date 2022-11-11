@@ -58,22 +58,6 @@ class GridStaff():
 
         return output
 
-    # side property pass-thrus
-    @property
-    def dynamicsCount(self) -> int:
-        if self.sides.dynamics is None:
-            return 0
-        return 1
-
-    @property
-    def dynamics(self) -> t.Optional[HumdrumToken]:
-        return self.sides.dynamics
-
-    @dynamics.setter
-    def dynamics(self, newDynamics: t.Optional[HumdrumToken]) -> None:
-        self.sides.dynamics = newDynamics
-
-
     '''
     //////////////////////////////
     //

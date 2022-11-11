@@ -57,11 +57,7 @@ class HumGrid:
         self._figuredBass: t.List[bool] = [False] * 100
         self._harmony: t.List[bool] = [False] * 100
         self._partNames: t.List[str] = []  # grows as necessary
-
-        # indexed by part,staff (max == 100 parts, max = 4 staves per part)
-        self._dynamics: t.List[t.List[bool]] = []
-        for _ in range(0, 100):
-            self._dynamics.append([False] * 4)
+        self._dynamics: t.List[bool] = [False] * 100
 
         # options:
         self._pickup: bool = False
@@ -196,10 +192,9 @@ class HumGrid:
     //
     // HumGrid::hasDynamics -- Return true if there are any dynamics for the part/staff.
     '''
-    def hasDynamics(self, partIndex: int, staffIndex: int) -> bool:
+    def hasDynamics(self, partIndex: int) -> bool:
         if 0 <= partIndex < len(self._dynamics):
-            if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                return self._dynamics[partIndex][staffIndex]
+            return self._dynamics[partIndex]
         return False
 
     '''
@@ -207,10 +202,9 @@ class HumGrid:
     //
     // HumGrid::getDynamicsCount --
     '''
-    def dynamicsCount(self, partIndex: int, staffIndex) -> int:
+    def dynamicsCount(self, partIndex: int) -> int:
         if 0 <= partIndex < len(self._dynamics):
-            if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                return int(self._dynamics[partIndex][staffIndex])  # cast bool to int (0 or 1)
+            return int(self._dynamics[partIndex])  # cast bool to int (0 or 1)
         return 0
 
 
@@ -245,10 +239,9 @@ class HumGrid:
     // HumGrid::setDynamicsPresent -- Indicate that part needs a **dynam spine.
         Actually, indicate that part,staff needs a **dynam spine.  Dynamics are on the staff.
     '''
-    def setDynamicsPresent(self, partIndex: int, staffIndex: int) -> None:
+    def setDynamicsPresent(self, partIndex: int) -> None:
         if 0 <= partIndex < len(self._dynamics):
-            if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                self._dynamics[partIndex][staffIndex] = True
+            self._dynamics[partIndex] = True
 
     '''
     //////////////////////////////
@@ -2025,6 +2018,8 @@ class HumGrid:
     def insertSideNullInterpretations(self, line: HumdrumLine, p: int, s: int) -> None:
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken('*'))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('*'))
             for _ in range(0, self.harmonyCount(p)):
@@ -2032,8 +2027,6 @@ class HumGrid:
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):  # xmlIdCount is always 0 or 1, but...
-                line.appendToken(HumdrumToken('*'))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken('*'))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken('*'))
@@ -2066,12 +2059,14 @@ class HumGrid:
 
         for p in reversed(range(0, len(gridSlice.parts))):
             part = gridSlice.parts[p]
+            staffNums: t.List[int] = []
             for s in reversed(range(0, len(part.staves))):
+                staffNums.append(staffCount)
                 text: str = '*staff' + str(staffCount)
                 line.appendToken(HumdrumToken(text))
-                self.insertSideStaffInfo(line, p, s, staffCount)  # insert staff sides
+                self.insertSideStaffInfo(line, p, s, [staffCount])  # insert staff sides
                 staffCount -= 1
-            self.insertSideStaffInfo(line, p, -1, -1)  # insert part sides
+            self.insertSideStaffInfo(line, p, -1, staffNums)  # insert part sides
         outFile.insertLine(0, line)  # insert at line 0
 
     '''
@@ -2079,21 +2074,33 @@ class HumGrid:
     //
     // HumGrid::insertSideStaffInfo --
     '''
-    def insertSideStaffInfo(self, line: HumdrumLine, p: int, s: int, staffNum: int) -> None:
-        if staffNum < 0:
-            # part side info (no staff markers)
+    def insertSideStaffInfo(
+        self,
+        line: HumdrumLine,
+        p: int,
+        s: int,
+        staffNums: t.List[int]  # >1 element if s is negative (i.e. part sides)
+    ) -> None:
+        text: str
+        if len(staffNums) > 1:
+            # part side info (no staff markers, except dynamics, which might have *staff1/2)
+            if self.hasDynamics(p):
+                text = '*staff'
+                for i, staffNum in enumerate(reversed(staffNums)):
+                    if i > 0:
+                        text += '/'
+                    text += str(staffNum)
+                line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('*'))
             for _ in range(0, self.harmonyCount(p)):
                 line.appendToken(HumdrumToken('*'))
         else:
             # staff side info (staff markers)
-            text: str = '*'
-            if staffNum > 0:
-                text = '*staff' + str(staffNum)
+            text = '*'
+            if staffNums[0] > 0:
+                text = '*staff' + str(staffNums[0])
             for _ in range(0, self.xmlIdCount(p)):
-                line.appendToken(HumdrumToken(text))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken(text))
@@ -2137,6 +2144,8 @@ class HumGrid:
         text: str = '*part' + str(p + 1)
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.harmonyCount(p)):
@@ -2144,8 +2153,6 @@ class HumGrid:
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):
-                line.appendToken(HumdrumToken(text))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken(text))
@@ -2185,6 +2192,8 @@ class HumGrid:
     def insertExInterpSides(self, line: HumdrumLine, p: int, s: int) -> None:
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken('**dynam'))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('**fb'))
             for _ in range(0, self.harmonyCount(p)):
@@ -2193,8 +2202,6 @@ class HumGrid:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):
                 line.appendToken(HumdrumToken('**xmlid'))
-            if self.hasDynamics(p, s):
-                line.appendToken(HumdrumToken('**dynam'))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken('**text'))
 
@@ -2234,6 +2241,8 @@ class HumGrid:
         text: str = '*-'
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.harmonyCount(p)):
@@ -2241,8 +2250,6 @@ class HumGrid:
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):
-                line.appendToken(HumdrumToken(text))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken(text))
