@@ -4902,7 +4902,7 @@ def hairpinFromElement(
             dw.placement = 'below'
         elif place == 'between':
             dw.placement = 'below'
-            dw.style.alignVertical = 'middle'
+            dw.style.alignVertical = 'middle'  # type: ignore
         else:
             environLocal.warn(f'invalid @place = "{place}" in <hairpin>')
 
@@ -5360,6 +5360,7 @@ def measureFromElement(
     # for staff-specific objects processed before the corresponding staff
     # key1 is @n, key2 is 'meter', 'key', 'instrument', etc
     stavesWaitingFromStaffDef: t.Dict[str, t.Dict[str, Music21Object]] = {}
+
     # for staffItem objects processed before the corresponding staff
     # key is @staff, value is a list of tuple(offsets, object)
     stavesWaitingFromStaffItem: t.Dict[
@@ -5372,18 +5373,24 @@ def measureFromElement(
         ]
     ] = {}
 
+    # spanner end GeneralNotes we are waiting to insert in the correct measure
     pendingSpannerEnds: t.Optional[
         t.List[
-            t.Tuple[str, Music21Object, int, OffsetQL]
+            t.Tuple[str, spanner.Spanner, int, OffsetQL]
         ]
     ] = otherInfo.pop('pendingSpannerEnds', None)
 
+    # spanner end GeneralNotes we are STILL waiting to insert after processing this measure
     newPendingSpannerEnds: t.Optional[
         t.List[
-            t.Tuple[str, Music21Object, int, OffsetQL]
+            t.Tuple[str, spanner.Spanner, int, OffsetQL]
         ]
     ] = None
 
+    spannerObj: spanner.Spanner
+
+    # Check if we can insert any of the pendingSpannerEnds in this measure.
+    # For any we can't, put them in newPendingSpannerEnds so we can try again next measure.
     if pendingSpannerEnds:
         for pendingSpannerEnd in pendingSpannerEnds:
             staffNStr: str = pendingSpannerEnd[0]
@@ -5395,7 +5402,8 @@ def measureFromElement(
 
             measSkip -= 1
             if measSkip < 0:
-                raise MeiInternalError('pendingSpannerEnd skipped too many measures')
+                environLocal.warn('pendingSpannerEnd skipped too many measures')
+                measSkip = 0
 
             if measSkip == 0:
                 # do the spannerEnd, it's in this Measure
@@ -5459,9 +5467,9 @@ def measureFromElement(
 
                 if measSkip2 is not None and offset2 is not None:
                     # it's a start/end type spanner, put it in spannerBundle
-                    spannerObj = m21Obj
                     if t.TYPE_CHECKING:
-                        assert isinstance(spannerObj, spanner.Spanner)
+                        assert isinstance(m21Obj, spanner.Spanner)
+                    spannerObj = m21Obj
                     spannerBundle.append(spannerObj)
                     startObj = note.GeneralNote(duration=duration.Duration(0.))
                     spannerObj.addSpannedElements(startObj)
@@ -5528,20 +5536,18 @@ def measureFromElement(
             if len(staffNs) == 2:
                 if (eachObj.hasStyleInformation
                         and hasattr(eachObj.style, 'alignVertical')
-                        and eachObj.style.alignVertical == 'middle'):
-                    print('hi')
+                        and eachObj.style.alignVertical == 'middle'):  # type: ignore
                     betweenTwoStaves = True
                 else:
+                    # TODO: what if it's also in a slur? We should look for any spanners
+                    # TODO: with alignVertical, or something.
                     if (spanners
                             and spanners[0].hasStyleInformation
                             and hasattr(spanners[0].style, 'alignVertical')
-                            and spanners[0].style.alignVertical == 'middle'):
-                        print('hey')
+                            and spanners[0].style.alignVertical == 'middle'):  # type: ignore
                         betweenTwoStaves = True
 
             if len(staffNs) == 1:
-                if isSpannedObject:
-                    print('spanner in one staff start/stop')
                 staffNumStr = staffNs[0]
                 staveN = staves[staffNumStr]
                 if t.TYPE_CHECKING:
@@ -5549,8 +5555,6 @@ def measureFromElement(
                 staveN.insert(eachOffset, eachObj)
 
             elif betweenTwoStaves:
-                if isSpannedObject:
-                    print('spanner between two staves start/stop')
                 # Put it in the first staff (it will go below it)
                 staffNumStr = staffNs[0]
                 staveN = staves[staffNumStr]
@@ -5739,8 +5743,6 @@ def sectionScoreCore(
             if pendingSpannerEnds:
                 otherInfo['pendingSpannerEnds'] = pendingSpannerEnds
             else:
-                if otherInfo.get('pendingSpannerEnds', None) is not None:
-                    print('hi')
                 otherInfo.pop('pendingSpannerEnds', None)
 
             # process and append each part's stuff to the staff
