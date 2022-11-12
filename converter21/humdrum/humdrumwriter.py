@@ -343,6 +343,8 @@ class HumdrumWriter:
         if self.addRecipSpine or self._forceRecipSpine:
             outgrid.enableRecipSpine()
 
+        # print(f'outgrid={outgrid}', file=sys.stderr)
+
         outfile: HumdrumFile = HumdrumFile()
         outgrid.transferTokens(outfile)
 
@@ -1734,10 +1736,17 @@ class HumdrumWriter:
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
                 elif isinstance(m21Obj, m21.note.GeneralNote):
-                    if foundNonGrace:
-                        self._addEventToList(graceAfter, zeroDurEvent)
+                    if isinstance(m21Obj.duration,
+                            (m21.duration.GraceDuration, m21.duration.AppoggiaturaDuration)):
+                        if foundNonGrace:
+                            self._addEventToList(graceAfter, zeroDurEvent)
+                        else:
+                            self._addEventToList(graceBefore, zeroDurEvent)
                     else:
-                        self._addEventToList(graceBefore, zeroDurEvent)
+                        # this is a zero-duration GeneralNote, but not a gracenote.
+                        # Just ignore it; it's only here to be in a Spanner (like
+                        # DynamicWedge), and we've already handled that.
+                        pass
                 elif isinstance(m21Obj, (m21.layout.PageLayout, m21.layout.SystemLayout)):
                     self._processPrintElement(outgm, m21Obj, nowTime)
 
