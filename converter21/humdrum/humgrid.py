@@ -2082,7 +2082,7 @@ class HumGrid:
         staffNums: t.List[int]  # >1 element if s is negative (i.e. part sides)
     ) -> None:
         text: str
-        if len(staffNums) > 1:
+        if s < 0:
             # part side info (no staff markers, except dynamics, which might have *staff1/2)
             if self.hasDynamics(p):
                 text = '*staff'
