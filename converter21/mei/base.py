@@ -4549,8 +4549,17 @@ def _correctMRestDurs(
             if not isinstance(eachVoice, stream.Stream):
                 continue
 
+            correctionOffset: OffsetQL = 0.
             for eachObject in eachVoice:
+                if correctionOffset != 0:
+                    # anything after an mRest needs its offset corrected
+                    newOffset = opFrac(eachObject.offset + correctionOffset)
+                    eachVoice.setElementOffset(eachObject, newOffset)
+
                 if hasattr(eachObject, 'm21wasMRest'):
+                    correctionOffset = (
+                        opFrac(correctionOffset + (targetQL - eachObject.quarterLength))
+                    )
                     eachObject.quarterLength = targetQL
                     del eachObject.m21wasMRest
 
