@@ -136,8 +136,10 @@ class HumdrumWriter:
         # temporary data (to be emitted with next durational object)
         # First elements of text tuple are part index, staff index, voice index
         self._currentTexts: t.List[t.Tuple[int, int, int, m21.expressions.TextExpression]] = []
-        # First elements of dynamic tuple are part index, staff index (dynamics are at staff level)
-        self._currentDynamics: t.List[t.Tuple[int, m21.dynamics.Dynamic]] = []
+        # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
+        # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
+        # we also need a mechanism for specifying which staff it came from.
+        self._currentDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]] = []
         # First element of tempo tuple is part index (tempo is at the part level)
         self._currentTempos: t.List[t.Tuple[int, m21.tempo.TempoIndication]] = []
 
@@ -1731,7 +1733,7 @@ class HumdrumWriter:
                                 m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
-                    self._currentDynamics.append((pindex, m21Obj))
+                    self._currentDynamics.append((pindex, sindex, m21Obj))
                     zeroDurEvent.reportDynamicToOwner()
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
@@ -2321,29 +2323,30 @@ class HumdrumWriter:
             outSlice: GridSlice,
             outgm: GridMeasure,
             event: EventData,
-            extraDynamics: t.List[t.Tuple[int, m21.dynamics.Dynamic]]
+            extraDynamics: t.List[t.Tuple[int, int, m21.dynamics.Dynamic]]
     ) -> None:
-        dynamics: t.List[t.Tuple[int, str]] = []
+        dynamics: t.List[t.Tuple[int, int, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
         eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
 
         if eventIsDynamicWedge:
-            dynamics.append((event.partIndex, event.getDynamicWedgeString()))
+            dynamics.append((event.partIndex, event.staffIndex, event.getDynamicWedgeString()))
 
-        for partIndex, dynamic in extraDynamics:
+        for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
-            dynamics.append((partIndex, dstring))
+            dynamics.append((partIndex, staffIndex, dstring))
 
         if not dynamics:
             # we shouldn't have been called
             return
 
+        # The following dictionaries are keyed by partIndex (no staffIndex here)
         dynTokens: t.Dict[int, HumdrumToken] = {}
         moreThanOneDynamic: t.Dict[int, bool] = {}
         currentDynamicIndex: t.Dict[int, int] = {}
 
-        for partIndex, dstring in dynamics:
+        for partIndex, staffIndex, dstring in dynamics:
             if not dstring:
                 continue
 
@@ -2383,7 +2386,7 @@ class HumdrumWriter:
             if t.TYPE_CHECKING:
                 assert isinstance(event.m21Object, m21.dynamics.DynamicWedge)
 
-            dparam = M21Convert.getDynamicWedgeStartParameters(event.m21Object)
+            dparam = M21Convert.getDynamicWedgeStartParameters(event.m21Object, event.staffIndex)
             if dparam:
                 fullParam = '!LO:HP'
                 if moreThanOneDynamic[partIndex]:
@@ -2393,8 +2396,8 @@ class HumdrumWriter:
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
 
         # next the Dynamic objects ('pp', etc) in extraDynamics
-        for partIndex, dynamic in extraDynamics:
-            dparam = M21Convert.getDynamicParameters(dynamic)
+        for partIndex, staffIndex, dynamic in extraDynamics:
+            dparam = M21Convert.getDynamicParameters(dynamic, staffIndex)
             if dparam:
                 fullParam = '!LO:DY'
 

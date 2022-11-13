@@ -1946,21 +1946,29 @@ class M21Convert:
     // Tool_musicxml2hum::getDynamicsParameters --
     '''
     @staticmethod
-    def getDynamicParameters(dynamic: m21.dynamics.Dynamic) -> str:
+    def getDynamicParameters(dynamic: m21.dynamics.Dynamic, staffIndex: int) -> str:
         textStyle: t.Optional[m21.style.TextStyle] = None
         if dynamic.hasStyleInformation:
             assert isinstance(dynamic.style, m21.style.TextStyle)
             textStyle = dynamic.style
 
+        staffStr: str = ''
+        if staffIndex > 0:
+            staffStr = '=' + str(staffIndex + 1)
+
         output: str = ''
         if dynamic.placement == 'above':
-            output += ':a'
+            output += ':a' + staffStr
 
-        if dynamic.placement == 'below':
+        if dynamic.placement == 'below' or dynamic.placement is None:
             if textStyle is not None and textStyle.alignVertical == 'middle':
-                output += ':c'
+                if staffIndex == 0:
+                    # already in top staff, humdrum default is centered below, so leave it out
+                    pass
+                else:
+                    output += ':c' + staffStr
             else:
-                output += ':b'
+                output += ':b' + staffStr
 
         # right justification
         if textStyle is not None and textStyle.justify == 'right':
@@ -1996,18 +2004,31 @@ class M21Convert:
         return output
 
     @staticmethod
-    def getDynamicWedgeStartParameters(dynamic: m21.dynamics.DynamicWedge) -> str:
+    def getDynamicWedgeStartParameters(dynamic: m21.dynamics.DynamicWedge, staffIndex: int) -> str:
         if not isinstance(dynamic, m21.dynamics.DynamicWedge):
             return ''
 
+        staffStr: str = ''
+        if staffIndex > 0:
+            staffStr = '=' + str(staffIndex + 1)
+
         # Dynamic.placement showed up in music21 v7
         if dynamic.placement == 'above':
-            return ':a'
+            return ':a' + staffStr
 
         if dynamic.placement == 'below':
-            # Don't check alignVertical, it isn't there (only in TextStyle).
-            # music21 never sets to None, always 'below', and humdrum default is below
-            return ''
+            # dynamicWedge.style doesn't generally have alignVertical
+            # (it's not a TextStyle), but...
+            # some importers set it anyway, so if it's there, obey it.
+            if (dynamic.hasStyleInformation
+                    and hasattr(dynamic.style, 'alignVertical')
+                    and dynamic.style.alignVertical == 'middle'):  # type: ignore
+                if staffIndex == 0:
+                    # already in top staff, humdrum default is centered below, so leave it out
+                    return ''
+                else:
+                    return ':c' + staffStr
+            return ':b' + staffStr
 
         return ''
 
