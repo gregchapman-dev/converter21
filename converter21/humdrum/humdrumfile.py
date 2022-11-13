@@ -7630,11 +7630,6 @@ class HumdrumFile(HumdrumFileContent):
                 above = False
                 below = True
                 center = False
-            elif staffIndex == 1:
-                # no subtracks, but in lower staff, put 'sf' or 'sfz' below
-                above = False
-                below = True
-                center = False
 
             # Now figure out if placement was specified
             hasAbove: bool
