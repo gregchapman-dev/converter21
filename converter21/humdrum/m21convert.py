@@ -1969,7 +1969,7 @@ class M21Convert:
         if dynamic.placement == 'above':
             output += ':a' + staffStr
 
-        if dynamic.placement == 'below' or dynamic.placement is None:
+        if dynamic.placement == 'below':
             if textStyle is not None and textStyle.alignVertical == 'middle':
                 if staffIndex == 0:
                     # already in top staff, humdrum default is centered below, so leave it out
