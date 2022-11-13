@@ -279,8 +279,21 @@ class MeasureData:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
 
-        for elementIndex, element in enumerate(m21Stream.recurse()
-                                                    .getElementsNotOfClass(m21.stream.Stream)):
+        elementList: t.List[m21.base.Music21Object] = list(
+            m21Stream.recurse().getElementsNotOfClass(m21.stream.Stream)
+        )
+        for elementIndex, element in enumerate(elementList):
+            if (isinstance(element, m21.dynamics.Dynamic) and element.value in ('sf', 'sfz')):
+                # 'sf' and 'sfz' should be exported as 'z' or 'zz' on an associated note/chord
+                # if possible, so look forward and backward for same-offset notes/chords to
+                # do that with.
+                noteOrChord: t.Optional[m21.note.NotRest] = (
+                    self._findAssociatedNoteOrChord(elementIndex, elementList)
+                )
+                if noteOrChord:
+                    noteOrChord.humdrum_sf_or_sfz = element  # type: ignore
+                    continue
+
             event = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
                 self.events.append(event)
@@ -309,6 +322,55 @@ class MeasureData:
                 if event is not None:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
+
+    @staticmethod
+    def _findAssociatedNoteOrChord(
+        elementIndex: int,
+        elementList: t.List[m21.base.Music21Object]
+    ) -> t.Optional[m21.note.NotRest]:
+        # We're looking for a nearby note or chord with the same offset
+        # (and not a grace note/chord).
+        output: t.Optional[m21.note.NotRest] = None
+
+        wantedOffset = elementList[elementIndex].offset
+        proposed: m21.base.Music21Object
+
+        # first look backward (but only until offset is different)
+        index: int = elementIndex - 1
+        while index in range(0, len(elementList)):
+            proposed = elementList[index]
+            if proposed.offset != wantedOffset:
+                break
+            if not isinstance(proposed, m21.note.NotRest):
+                index -= 1
+                continue
+            if isinstance(proposed.duration,
+                    (m21.duration.GraceDuration, m21.duration.AppoggiaturaDuration)):
+                index -= 1
+                continue
+            output = proposed
+            break
+
+        if output is not None:
+            return output
+
+        # didn't find it backward, try forward
+        index = elementIndex + 1
+        while index in range(0, len(elementList)):
+            proposed = elementList[index]
+            if proposed.offset != wantedOffset:
+                break
+            if not isinstance(proposed, m21.note.NotRest):
+                index += 1
+                continue
+            if isinstance(proposed.duration,
+                    (m21.duration.GraceDuration, m21.duration.AppoggiaturaDuration)):
+                index += 1
+                continue
+            output = proposed
+            break
+
+        return output
 
     def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> t.List[EventData]:
         if t.TYPE_CHECKING:

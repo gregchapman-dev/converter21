@@ -1035,6 +1035,7 @@ class M21Convert:
         beamStr: str = ''
         cueSizeChar: str = ''
         noteColorChar: str = ''
+        sfOrSfzStr: str = ''
 
         if isStandaloneNote:
             # if this note is in a chord, we will get this info from the chord itself,
@@ -1056,6 +1057,7 @@ class M21Convert:
                 owner
             )
             stemStr = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21GeneralNote)
+            sfOrSfzStr = M21Convert._getSfOrSfzFromM21GeneralNote(m21GeneralNote)
 
         # isFirstNoteInChord is currently unused, but I suspect we'll need it at some point.
         # Make pylint happy (I can't just rename it with a '_' because callers use the param name.)
@@ -1073,12 +1075,16 @@ class M21Convert:
             noteColorChar = owner.reportNoteColorToOwner(noteColor)
 
         postfix = (
-            expressionStr + articStr + cueSizeChar + noteColorChar
+            sfOrSfzStr + expressionStr + articStr + cueSizeChar + noteColorChar
             + stemStr + beamStr + invisibleStr
         )
 
         noteLayouts: t.List[str] = M21Convert._getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote)
         layouts += noteLayouts
+
+        if isStandaloneNote:
+            dynLayouts: t.List[str] = M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21GeneralNote)
+            layouts += dynLayouts
 
         # prefix/postfix possibility: ties
         tieStart, tieStop, tieLayouts = (
@@ -1236,7 +1242,7 @@ class M21Convert:
     ) -> t.Tuple[t.List[str], t.List[str], t.List[str]]:
         prefixPerNote: t.List[str] = []    # one per note
         postfixPerNote: t.List[str] = []   # one per note
-        layoutsForNotes: t.List[str] = []  # 0 or more per note
+        layoutsForChord: t.List[str] = []  # 0 or more per note, maybe 1 for the whole chord
 
         # Here we get the chord signifiers, which might be applied to each note in the token,
         # or just the first, or just the last.
@@ -1260,6 +1266,9 @@ class M21Convert:
             m21Chord,
             spannerBundle
         )
+        sfOrSfz: str = M21Convert._getSfOrSfzFromM21GeneralNote(m21Chord)
+        dynLayouts: t.List[str] = M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21Chord)
+        layoutsForChord += dynLayouts
 
         # Here we get each note's signifiers
         for noteIdx, m21Note in enumerate(m21Chord):
@@ -1279,16 +1288,16 @@ class M21Convert:
             # Add the chord signifiers as appropriate
             if noteIdx == 0:
                 # first note gets the slur starts
-                #   (plus expressions, articulations, stem directions)
+                #   (plus 'z' or 'zz', expressions, articulations, stem directions)
                 prefix = slurStarts + prefix
-                postfix = postfix + exprStr + articStr + stemStr
+                postfix = postfix + sfOrSfz + exprStr + articStr + stemStr
             elif noteIdx == len(m21Chord) - 1:
                 # last note gets the beams, and the slur stops
-                #   (plus expressions, articulations, stem directions)
-                postfix = postfix + exprStr + articStr + stemStr + beamStr + slurStops
+                #   (plus 'z' or 'zz', expressions, articulations, stem directions)
+                postfix = postfix + sfOrSfz + exprStr + articStr + stemStr + beamStr + slurStops
             else:
-                # the other notes in the chord just get expressions, articulations, stem directions
-                postfix = postfix + exprStr + articStr + stemStr
+                # the other notes in the chord just get 'z', 'zz', expressions, articulations, stem directions
+                postfix = postfix + sfOrSfz + exprStr + articStr + stemStr
 
 
             # put them in prefixPerNote, postFixPerNote, and layoutsForNotes
@@ -1297,9 +1306,9 @@ class M21Convert:
             for layout in layouts:
                 # we have to add ':n=3' to each layout, where '3' is one-based (i.e. noteIdx+1)
                 numberedLayout: str = M21Convert._addNoteNumberToLayout(layout, noteIdx + 1)
-                layoutsForNotes.append(numberedLayout)
+                layoutsForChord.append(numberedLayout)
 
-        return (prefixPerNote, postfixPerNote, layoutsForNotes)
+        return (prefixPerNote, postfixPerNote, layoutsForChord)
 
     @staticmethod
     def _addNoteNumberToLayout(layout: str, noteNum: int) -> str:
@@ -2324,6 +2333,43 @@ class M21Convert:
             return '/'
 
         return ''
+
+    @staticmethod
+    def _getSfOrSfzFromM21GeneralNote(
+        m21GeneralNote: m21.note.GeneralNote
+    ) -> str:
+        if not hasattr(m21GeneralNote, 'humdrum_sf_or_sfz'):
+            return ''
+
+        dynam = m21GeneralNote.humdrum_sf_or_sfz  # type: ignore
+        if t.TYPE_CHECKING:
+            assert isinstance(dynam, m21.dynamics.Dynamic)
+
+        if dynam.value == 'sf':
+            return 'z'
+        if dynam.value == 'sfz':
+            return 'zz'
+
+        return ''
+
+    @staticmethod
+    def _getDynamicsLayoutsFromM21GeneralNote(
+        m21GeneralNote: m21.note.GeneralNote
+    ) -> t.List[str]:
+        if not hasattr(m21GeneralNote, 'humdrum_sf_or_sfz'):
+            return []
+
+        dynam = m21GeneralNote.humdrum_sf_or_sfz  # type: ignore
+        if t.TYPE_CHECKING:
+            assert isinstance(dynam, m21.dynamics.Dynamic)
+
+        dparam: str = M21Convert.getDynamicParameters(dynam, -1)
+        if ':c' in dparam:
+            # get rid of it
+            dparam = dparam.replace(':c', '')
+        if dparam:
+            return ['!LO:DY' + dparam]
+        return []
 
     @staticmethod
     def _getTieStartStopAndLayoutsFromM21GeneralNote(
