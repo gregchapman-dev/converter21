@@ -283,10 +283,13 @@ class MeasureData:
             m21Stream.recurse().getElementsNotOfClass(m21.stream.Stream)
         )
         for elementIndex, element in enumerate(elementList):
-            if (isinstance(element, m21.dynamics.Dynamic) and element.value in ('sf', 'sfz')):
+            if (isinstance(element, m21.dynamics.Dynamic)
+                    and M21Convert.getDynamicString(element) in ('sf', 'sfz')
+                    and not M21Convert.isCentered(element)):
                 # 'sf' and 'sfz' should be exported as 'z' or 'zz' on an associated note/chord
                 # if possible, so look forward and backward for same-offset notes/chords to
-                # do that with.
+                # do that with.  Note that we don't do this if the dynamic is centered between
+                # two staves, since that is not really associated with a particular note.
                 noteOrChord: t.Optional[m21.note.NotRest] = (
                     self._findAssociatedNoteOrChord(elementIndex, elementList)
                 )

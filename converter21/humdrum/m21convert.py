@@ -1956,6 +1956,9 @@ class M21Convert:
     '''
     @staticmethod
     def getDynamicParameters(dynamic: m21.dynamics.Dynamic, staffIndex: int) -> str:
+        output: str = ''
+        dynString: str = M21Convert.getDynamicString(dynamic)
+
         textStyle: t.Optional[m21.style.TextStyle] = None
         if dynamic.hasStyleInformation:
             assert isinstance(dynamic.style, m21.style.TextStyle)
@@ -1965,7 +1968,6 @@ class M21Convert:
         if staffIndex > 0:
             staffStr = '=' + str(staffIndex + 1)
 
-        output: str = ''
         if dynamic.placement == 'above':
             output += ':a' + staffStr
 
@@ -1983,7 +1985,52 @@ class M21Convert:
         if textStyle is not None and textStyle.justify == 'right':
             output += ':rj'
 
-        if M21Convert.getDynamicString(dynamic) != dynamic.value:
+        if dynString != dynamic.value:
+            # check first for surrounding brackets, parens, curlies or angles.
+            for patt in M21Convert.dynamicPatterns:
+                for name, start, end in M21Convert.dynamicBrackets:
+                    matchPatt: str = '^' + start + patt + end + '$'
+                    m = re.match(matchPatt, dynamic.value)
+                    if m:
+                        output += ':ed=' + name
+                        return output
+
+            # t='%s sempre legato' (if dynamic.value is 'ff sempre legato', for example)
+            # be careful not to match 'mp' in 'ff sempre legato'!
+            for patt in M21Convert.dynamicPatterns:
+                for startDelim in ('^', r'\s'):
+                    for endDelim in (r'\s', '$'):
+                        m = re.search(startDelim + patt + endDelim, dynamic.value)
+                        if m:
+                            dynstr: str = m.group(0)
+                            substitution: str = '%s'
+                            if startDelim == r'\s':
+                                substitution = dynstr[0] + substitution
+                            if endDelim == r'\s':
+                                substitution = substitution + dynstr[-1]
+                            fmt: str = re.sub(dynstr, substitution, dynamic.value, count=1)
+                            output += ':t=' + fmt
+                            return output
+
+        return output
+
+    @staticmethod
+    def getDynamicOnNoteParameters(dynamic: m21.dynamics.Dynamic) -> str:
+        output: str = ''
+        dynString: str = M21Convert.getDynamicString(dynamic)
+
+        textStyle: t.Optional[m21.style.TextStyle] = None
+        if dynamic.hasStyleInformation:
+            assert isinstance(dynamic.style, m21.style.TextStyle)
+            textStyle = dynamic.style
+
+        staffStr: str = ''
+
+        # right justification
+        if textStyle is not None and textStyle.justify == 'right':
+            output += ':rj'
+
+        if dynString != dynamic.value:
             # check first for surrounding brackets, parens, curlies or angles.
             for patt in M21Convert.dynamicPatterns:
                 for name, start, end in M21Convert.dynamicBrackets:
@@ -2335,6 +2382,25 @@ class M21Convert:
         return ''
 
     @staticmethod
+    def isCentered(m21Obj: m21.base.Music21Object) -> bool:
+        if not m21Obj.hasStyleInformation:
+            return False
+
+        placement: str = ''
+        if hasattr(m21Obj, 'placement'):
+            placement = m21Obj.placement  # type: ignore
+        elif hasattr(m21Obj.style, 'placement'):
+            placement = m21Obj.style.placement  # type: ignore
+
+        if placement != 'below':
+            return False
+
+        if not hasattr(m21Obj.style, 'alignVertical'):
+            return False
+
+        return m21Obj.style.alignVertical == 'middle'  # type: ignore
+
+    @staticmethod
     def _getSfOrSfzFromM21GeneralNote(
         m21GeneralNote: m21.note.GeneralNote
     ) -> str:
@@ -2345,10 +2411,18 @@ class M21Convert:
         if t.TYPE_CHECKING:
             assert isinstance(dynam, m21.dynamics.Dynamic)
 
-        if dynam.value == 'sf':
-            return 'z'
-        if dynam.value == 'sfz':
-            return 'zz'
+        dynString: str = M21Convert.getDynamicString(dynam)
+
+        suffix: str = ''
+        if dynam.placement == 'above':
+            suffix = '>'
+        elif dynam.placement == 'below':
+            suffix = '<'
+
+        if dynString == 'sf':
+            return 'z' + suffix
+        if dynString == 'sfz':
+            return 'zz' + suffix
 
         return ''
 
@@ -2363,10 +2437,7 @@ class M21Convert:
         if t.TYPE_CHECKING:
             assert isinstance(dynam, m21.dynamics.Dynamic)
 
-        dparam: str = M21Convert.getDynamicParameters(dynam, -1)
-        if ':c' in dparam:
-            # get rid of it
-            dparam = dparam.replace(':c', '')
+        dparam: str = M21Convert.getDynamicOnNoteParameters(dynam)
         if dparam:
             return ['!LO:DY' + dparam]
         return []
