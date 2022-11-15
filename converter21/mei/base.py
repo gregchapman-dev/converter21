@@ -4760,9 +4760,8 @@ def _addTimestampedExpressions(
                 if not isinstance(eachMObj, (stream.Stream, bar.Barline)):
                     continue
 
-                if (isinstance(expression, expressions.Fermata)
-                        and isinstance(eachMObj, bar.Barline)):
-                    if eachMObj.offset == offset:
+                if isinstance(eachMObj, bar.Barline):
+                    if isinstance(expression, expressions.Fermata):
                         if i == 0:
                             if eachMObj.pause is None:
                                 eachMObj.pause = expression
@@ -4781,23 +4780,23 @@ def _addTimestampedExpressions(
                         doneWithStaff = True
                         break
 
-                eachVoice: stream.Stream = eachMObj
+                if isinstance(eachMObj, stream.Stream):
+                    eachVoice: stream.Stream = eachMObj
+                    for eachObject in eachVoice:
+                        if not isinstance(eachObject, note.GeneralNote):
+                            continue
+                        if eachObject.offset == offset:
+                            if i == 0:
+                                eachObject.expressions.append(expression)
+                            else:
+                                clonedExpression = deepcopy(expression)
+                                eachObject.expressions.append(clonedExpression)
 
-                for eachObject in eachVoice:
-                    if not isinstance(eachObject, note.GeneralNote):
-                        continue
-                    if eachObject.offset == offset:
-                        if i == 0:
-                            eachObject.expressions.append(expression)
-                        else:
-                            clonedExpression = deepcopy(expression)
-                            eachObject.expressions.append(clonedExpression)
+                            doneWithStaff = True
+                            break
 
-                        doneWithStaff = True
+                    if doneWithStaff:
                         break
-
-                if doneWithStaff:
-                    break
 
             if not doneWithStaff:
                 # we didn't find any place for the expression in this staff
