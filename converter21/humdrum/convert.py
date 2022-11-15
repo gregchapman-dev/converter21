@@ -1494,6 +1494,8 @@ class Convert:
         MeasureStyle.Final: '=',                    # first '=' of '==' is already there
         MeasureStyle.Short: "'",
         MeasureStyle.Tick: '`',
+        MeasureStyle.Dotted: '.',
+        MeasureStyle.Dashed: ':',
         MeasureStyle.Invisible: '-',
         MeasureStyle.Regular: '',
         MeasureStyle.Heavy: '!',
