@@ -401,19 +401,38 @@ class MeasureData:
                 wedgeStartTime = startNote.getOffsetInHierarchy(score)
                 wedgeDuration = opFrac(wedgeEndTime - wedgeStartTime)
 
+            wedgeStartEvent: EventData
+            wedgeEndEvent: EventData
+
             if thisEventIsStart and thisEventIsEnd:
+                # We could make a combined event here, to try to get '>]', but
+                # '>]' is evil because it requires the next token to the left
+                # to be of the appropriate duration, and we have no (simple)
+                # control over that.  So we always split up the start and end
+                # so we only count on the start time of the appropriate token.
+
                 # print(f'wedgeStartStopEvent: {event}', file=sys.stderr)
-                # one note for the wedge? let's make one event, so it can become '>]' or whatever
-                wedgeStartStopEvent: EventData = EventData(wedge, -1, event.voiceIndex, self,
-                                                           offsetInScore=wedgeStartTime,
-                                                           duration=wedgeDuration)
-                output.append(wedgeStartStopEvent)
+                wedgeStartEvent = EventData(
+                    wedge, -1, event.voiceIndex, self,
+                    offsetInScore=wedgeStartTime,
+                    duration=wedgeDuration
+                )
+                output.append(wedgeStartEvent)
+
+                wedgeEndEvent = EventData(
+                    wedge, -1, event.voiceIndex, self,
+                    offsetInScore=wedgeEndTime,
+                    duration=0
+                )
+                output.append(wedgeEndEvent)
             elif thisEventIsStart:
                 # add the start event, with duration
                 # print(f'wedgeStartEvent: {event}', file=sys.stderr)
-                wedgeStartEvent: EventData = EventData(wedge, -1, event.voiceIndex, self,
-                                                       offsetInScore=wedgeStartTime,
-                                                       duration=wedgeDuration)
+                wedgeStartEvent = EventData(
+                    wedge, -1, event.voiceIndex, self,
+                    offsetInScore=wedgeStartTime,
+                    duration=wedgeDuration
+                )
                 output.append(wedgeStartEvent)
             elif thisEventIsEnd:
                 # add the end event (duration == 0)
@@ -431,9 +450,11 @@ class MeasureData:
                 else:
                     endVoiceIndex = matchingStartEvent.voiceIndex
                     endSelf = matchingStartEvent.ownerMeasure
-                wedgeEndEvent: EventData = EventData(wedge, -1, endVoiceIndex, endSelf,
-                                                     offsetInScore=wedgeEndTime,
-                                                     duration=0)
+                wedgeEndEvent = EventData(
+                    wedge, -1, endVoiceIndex, endSelf,
+                    offsetInScore=wedgeEndTime,
+                    duration=0
+                )
                 output.append(wedgeEndEvent)
 
         return output

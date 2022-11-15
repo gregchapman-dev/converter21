@@ -101,8 +101,6 @@ class EventData:
     def isDynamicWedgeStop(self) -> bool:
         if not isinstance(self.m21Object, m21.dynamics.DynamicWedge):
             return False
-        if len(self.m21Object) == 1:
-            return True  # one element? this is both a start and a stop
         if self.duration == 0:
             return True  # starts always have non-zero duration
         return False

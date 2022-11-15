@@ -1112,12 +1112,12 @@ _ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: t.Dict[t.Tuple[str, str], str] = {
     # default arrow is 'false'
     ('', ''): 'normal',
     ('', 'up'): 'normal',
-    ('', 'down'): 'normal',               # should actually be drawn normal, performed down, but...
+    ('', 'down'): 'down',                 # down arrow is implied
     ('', 'nonarp'): 'non-arpeggio',       # arrow is ignored
     # same again, because default arrow is 'false'
     ('false', ''): 'normal',
     ('false', 'up'): 'normal',
-    ('false', 'down'): 'normal',          # should actually be drawn normal, performed down, but...
+    ('false', 'down'): 'down',            # down arrow is implied
     ('false', 'nonarp'): 'non-arpeggio',  # arrow is ignored
     # arrow is true, so order matters
     ('true', ''): 'up',                   # default arrow direction is up
@@ -5021,7 +5021,7 @@ def arpegFromElement(
     staffNStr: str = elem.get('staff', '1')
     tstamp: t.Optional[str] = elem.get('tstamp')
     if tstamp is None:
-        environLocal.warn('missing @tstamp/@startid/@plist in <hairpin> element')
+        environLocal.warn('missing @tstamp/@startid/@plist in <arpeg> element')
         return '', (-1., None, None), None
 
     offset: OffsetQL = _tstampToOffset(tstamp, activeMeter)
