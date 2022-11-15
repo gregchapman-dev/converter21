@@ -1083,7 +1083,9 @@ class M21Convert:
         layouts += noteLayouts
 
         if isStandaloneNote:
-            dynLayouts: t.List[str] = M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21GeneralNote)
+            dynLayouts: t.List[str] = (
+                M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21GeneralNote)
+            )
             layouts += dynLayouts
 
         # prefix/postfix possibility: ties
@@ -1296,7 +1298,8 @@ class M21Convert:
                 #   (plus 'z' or 'zz', expressions, articulations, stem directions)
                 postfix = postfix + sfOrSfz + exprStr + articStr + stemStr + beamStr + slurStops
             else:
-                # the other notes in the chord just get 'z', 'zz', expressions, articulations, stem directions
+                # the other notes in the chord just get 'z', 'zz', expressions, articulations,
+                # stem directions
                 postfix = postfix + sfOrSfz + exprStr + articStr + stemStr
 
 
@@ -2023,8 +2026,6 @@ class M21Convert:
         if dynamic.hasStyleInformation:
             assert isinstance(dynamic.style, m21.style.TextStyle)
             textStyle = dynamic.style
-
-        staffStr: str = ''
 
         # right justification
         if textStyle is not None and textStyle.justify == 'right':

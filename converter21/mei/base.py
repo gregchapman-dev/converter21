@@ -349,6 +349,7 @@ class MeiToM21Converter:
         _ppBeams(self)
         _ppTuplets(self)
         _ppFermatas(self)
+        _ppArpeggios(self)
         _ppConclude(self)
 
         environLocal.printDebug('*** processing <score> elements')
@@ -1107,6 +1108,108 @@ def _ppFermatas(theConverter: MeiToM21Converter):
             c.m21Attr[startId]['fermata_shape'] = shape
 
 
+_ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: t.Dict[t.Tuple[str, str], str] = {
+    # default arrow is 'false'
+    ('', ''): 'normal',
+    ('', 'up'): 'normal',
+    ('', 'down'): 'normal',               # should actually be drawn normal, performed down, but...
+    ('', 'nonarp'): 'non-arpeggio',       # arrow is ignored
+    # same again, because default arrow is 'false'
+    ('false', ''): 'normal',
+    ('false', 'up'): 'normal',
+    ('false', 'down'): 'normal',          # should actually be drawn normal, performed down, but...
+    ('false', 'nonarp'): 'non-arpeggio',  # arrow is ignored
+    # arrow is true, so order matters
+    ('true', ''): 'up',                   # default arrow direction is up
+    ('true', 'up'): 'up',
+    ('true', 'down'): 'down',
+    ('true', 'nonarp'): 'non-arpeggio',   # arrow is ignored
+}
+
+
+def _ppArpeggios(theConverter: MeiToM21Converter):
+    '''
+    Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in <arpeg>
+    elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+    processed. This function reads from ``theConverter.documentRoot`` and writes into
+    ``theConverter.m21Attr``.
+
+    :param theConverter: The object responsible for storing data about this import.
+    :type theConverter: :class:`MeiToM21Converter`.
+
+    **This Preprocessor**
+
+    The arpeggio preprocessor works similarly to the tie preprocessor, adding @arpeg
+    attributes. The @fermata attribute looks like it would if specified according to the
+    Guidelines (e.g. @fermata="above", where "above" comes from the <fermata> element's
+    @place attribute).  The other attributes from the <fermata> element (@form and @shape)
+    are also added, prefixed with 'fermata_' as follows: @fermata_form and @fermata_shape.
+
+    **Example of ``m21Attr``**
+
+    The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+    dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
+    dict holds attribute names and their values that should be added to the element with the
+    given @xml:id.
+
+    For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
+    element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
+    '''
+    environLocal.printDebug('*** pre-processing arpeggios')
+    # for readability, we use a single-letter variable
+    c = theConverter
+
+    for eachArpeg in c.documentRoot.iterfind(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}arpeg'):
+        plistStr: t.Optional[str] = eachArpeg.get('plist')
+        plist: t.List[str] = []
+        if plistStr:
+            # if there's a plist, split it into a list
+            plist = plistStr.split(' ')
+
+        # If there's a startid, put it at the front of the list (but don't duplicate it
+        # if it's already there).
+        startId: t.Optional[str] = eachArpeg.get('startid')
+        if startId:
+            if startId in plist:
+                plist.remove(startId)
+            plist.insert(0, startId)
+
+        # Now if we have a plist, it contains all the ids that should
+        # be arpeggiated together.  But we only need an ArpeggioMarkSpanner if there
+        # is more than one id in the plist.  An ArpeggioMark is fine for just one.
+        # No plist and no startId?  Leave it for arpegFromElement.
+        if plist:
+            arrow: str = eachArpeg.get('arrow', '')
+            order: str = eachArpeg.get('order', '')
+            arpeggioType: str = _ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE.get(
+                (arrow, order),
+                'normal'
+            )
+
+            if len(plist) > 1:
+                # make an ArpeggioMarkSpanner (put it in self.spannerBundle)
+                arpeggio = expressions.ArpeggioMarkSpanner(arpeggioType=arpeggioType)
+                if t.TYPE_CHECKING:
+                    # work around Spanner.idLocal being incorrectly type-hinted as None
+                    assert isinstance(arpeggio.idLocal, str)
+                thisIdLocal = str(uuid4())
+                arpeggio.idLocal = thisIdLocal
+                c.spannerBundle.append(arpeggio)
+
+                # iterate things in the @plist attribute,  and reference the
+                # ArpeggioMarkSpanner from each of the notes/chords in the plist
+                for eachXmlid in plist:
+                    eachXmlid = removeOctothorpe(eachXmlid)  # type: ignore
+                    c.m21Attr[eachXmlid]['m21ArpeggioMarkSpanner'] = thisIdLocal
+            else:
+                eachXmlid = removeOctothorpe(plist[0])  # type: ignore
+                c.m21Attr[eachXmlid]['m21ArpeggioMarkType'] = arpeggioType
+
+            # mark the element as handled, so we WON'T handle it later in arpegFromElement
+            eachArpeg.set('ignore_in_arpegFromElement', 'true')
+
+
 def _ppConclude(theConverter: MeiToM21Converter):
     '''
     Pre-processing helper for :func:`convertFromString` that adds attributes from ``m21Attr`` to the
@@ -1414,6 +1517,20 @@ def _tieFromAttr(attr: str) -> tie.Tie:
         return tie.Tie('stop')
 
 
+def safeAddToSpannerByIdLocal(
+    theObj: Music21Object,
+    theId: str,
+    spannerBundle: spanner.SpannerBundle
+):
+    '''Avoid crashing when getByIdLocal() doesn't find the spanner'''
+    try:
+        spannerBundle.getByIdLocal(theId)[0].addSpannedElements(theObj)
+        return True
+    except IndexError:
+        # when getByIdLocal() couldn't find the Slur
+        return False
+
+
 def addSlurs(
     elem: Element,
     obj: note.NotRest,
@@ -1453,15 +1570,6 @@ def addSlurs(
     '''
     addedSlur: bool = False
 
-    def wrapGetByIdLocal(theId: str):
-        '''Avoid crashing when getByIdLocal() doesn't find the slur'''
-        try:
-            spannerBundle.getByIdLocal(theId)[0].addSpannedElements(obj)
-            return True
-        except IndexError:
-            # when getByIdLocal() couldn't find the Slur
-            return False
-
     def getSlurNumAndType(eachSlur: str) -> t.Tuple[str, str]:
         # eachSlur is of the form "[i|m|t][1-6]"
         slurNum: str = eachSlur[1:]
@@ -1471,9 +1579,9 @@ def addSlurs(
     startStr: t.Optional[str] = elem.get('m21SlurStart')
     endStr: t.Optional[str] = elem.get('m21SlurEnd')
     if startStr is not None:
-        addedSlur = wrapGetByIdLocal(startStr)
+        addedSlur = safeAddToSpannerByIdLocal(obj, startStr, spannerBundle)
     if endStr is not None:
-        addedSlur = wrapGetByIdLocal(endStr)
+        addedSlur = safeAddToSpannerByIdLocal(obj, endStr, spannerBundle)
 
     slurStr: t.Optional[str] = elem.get('slur')
     if slurStr is not None:
@@ -1492,10 +1600,34 @@ def addSlurs(
                 newSlur.addSpannedElements(obj)
                 addedSlur = True
             elif 't' == slurType:
-                addedSlur = wrapGetByIdLocal(slurNum)
+                addedSlur = safeAddToSpannerByIdLocal(obj, slurNum, spannerBundle)
             # 'm' is currently ignored; we may need it for cross-staff slurs
 
     return addedSlur
+
+
+def addArpeggio(
+    elem: Element,
+    obj: note.NotRest,
+    spannerBundle: spanner.SpannerBundle
+) -> bool:
+    addedArpeggio: bool = False
+
+    # if appropriate, add this note/chord to an ArpeggioMarkSpanner
+    arpId: str = elem.get('m21ArpeggioMarkSpanner', '')
+    if arpId:
+        addedArpeggio = safeAddToSpannerByIdLocal(obj, arpId, spannerBundle)
+
+    # check to see if this note/chord is arpeggiated all by itself,
+    # and if so, make the ArpeggioMark and append it to the note/chord's
+    # expressions.
+    arpeggioType: str = elem.get('m21ArpeggioMarkType', '')
+    if arpeggioType:
+        arpeggio = expressions.ArpeggioMark(arpeggioType=arpeggioType)
+        obj.expressions.append(arpeggio)
+        addedArpeggio = True
+
+    return addedArpeggio
 
 
 def beamTogether(someThings: t.List[Music21Object]):
@@ -3000,9 +3132,11 @@ def noteFromElement(
         theNote.articulations.extend(_makeArticList(articStr))
 
     # expressions from element attributes (perhaps fake attributes created during preprocessing)
-    fermata = fermataFromNoteChordOrRestElement(elem)
+    fermata: t.Optional[expressions.Fermata] = fermataFromNoteChordOrRestElement(elem)
     if fermata is not None:
         theNote.expressions.append(fermata)
+
+    addArpeggio(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -3387,6 +3521,8 @@ def chordFromElement(
     fermata = fermataFromNoteChordOrRestElement(elem)
     if fermata is not None:
         theChord.expressions.append(fermata)
+
+    addArpeggio(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -4607,13 +4743,13 @@ def _makeBarlines(
     return staves
 
 
-def _addTimestampedFermatas(
+def _addTimestampedExpressions(
     staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
-    tsFermatas: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Fermata]]
+    tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]]
 ):
-    clonedFermata: expressions.Fermata
+    clonedExpression: expressions.Expression
 
-    for staffNs, offset, fermata in tsFermatas:
+    for staffNs, offset, expression in tsExpressions:
         for i, staffN in enumerate(staffNs):
             doneWithStaff: bool = False
             eachMeasure: t.Union[stream.Measure, bar.Repeat] = staves[staffN]
@@ -4624,24 +4760,26 @@ def _addTimestampedFermatas(
                 if not isinstance(eachMObj, (stream.Stream, bar.Barline)):
                     continue
 
-                if isinstance(eachMObj, bar.Barline):
-                    if i == 0:
-                        if eachMObj.pause is None:
-                            eachMObj.pause = fermata
+                if (isinstance(expression, expressions.Fermata)
+                        and isinstance(eachMObj, bar.Barline)):
+                    if eachMObj.offset == offset:
+                        if i == 0:
+                            if eachMObj.pause is None:
+                                eachMObj.pause = expression
+                            else:
+                                environLocal.warn(
+                                    'Extra Barline fermata ignored; music21 only allows one'
+                                )
                         else:
-                            environLocal.warn(
-                                'Extra Barline fermata ignored; music21 can\'t have more than one'
-                            )
-                    else:
-                        if eachMObj.pause is None:
-                            clonedFermata = deepcopy(fermata)
-                            eachMObj.pause = clonedFermata
-                        else:
-                            environLocal.warn(
-                                'Extra Barline fermata ignored; music21 can\'t have more than one'
-                            )
-                    doneWithStaff = True
-                    break
+                            if eachMObj.pause is None:
+                                clonedExpression = deepcopy(expression)
+                                eachMObj.pause = clonedExpression
+                            else:
+                                environLocal.warn(
+                                    'Extra Barline fermata ignored; music21 only allows one'
+                                )
+                        doneWithStaff = True
+                        break
 
                 eachVoice: stream.Stream = eachMObj
 
@@ -4650,10 +4788,10 @@ def _addTimestampedFermatas(
                         continue
                     if eachObject.offset == offset:
                         if i == 0:
-                            eachObject.expressions.append(fermata)
+                            eachObject.expressions.append(expression)
                         else:
-                            clonedFermata = deepcopy(fermata)
-                            eachObject.expressions.append(clonedFermata)
+                            clonedExpression = deepcopy(expression)
+                            eachObject.expressions.append(clonedExpression)
 
                         doneWithStaff = True
                         break
@@ -4662,9 +4800,10 @@ def _addTimestampedFermatas(
                     break
 
             if not doneWithStaff:
-                # we didn't find any place for the fermata in this staff
+                # we didn't find any place for the expression in this staff
                 environLocal.warn(
-                    f'No obj at offset {offset} found in staff {staffN} for timestamped fermata.'
+                    f'No obj at offset {offset} found in staff {staffN}'
+                    f'for timestamped {expression.classes[0]}.'
                 )
 
 
@@ -4865,6 +5004,38 @@ _CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
     f'{MEI_NS}app',
     f'{MEI_NS}choice',
 )
+
+
+def arpegFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any],
+) -> t.Tuple[
+        str,
+        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        t.Optional[expressions.ArpeggioMark]
+]:
+    if elem.get('ignore_in_arpegFromElement') == 'true':
+        return '', (-1., None, None), None
+
+    staffNStr: str = elem.get('staff', '1')
+    tstamp: t.Optional[str] = elem.get('tstamp')
+    if tstamp is None:
+        environLocal.warn('missing @tstamp/@startid/@plist in <hairpin> element')
+        return '', (-1., None, None), None
+
+    offset: OffsetQL = _tstampToOffset(tstamp, activeMeter)
+
+    arrow: str = elem.get('arrow', '')
+    order: str = elem.get('order', '')
+    arpeggioType: str = _ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE.get(
+        (arrow, order),
+        'normal'
+    )
+
+    arp = expressions.ArpeggioMark(arpeggioType=arpeggioType)
+    return staffNStr, (offset, None, None), arp
 
 
 def hairpinFromElement(
@@ -5516,9 +5687,10 @@ def measureFromElement(
                 assert isinstance(staveN, stream.Measure)
             staveN.insert(0, eachObj)
 
-    # a list of (offset, fermata) pairs containing all the fermats that have
-    # @timestamp instead of @startid (the ones with @startid have already been processed)
-    tsFermatas: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Fermata]] = []
+    # a list of (offset, fermata) pairs containing all the expressions (e.g. fermatas,
+    # arpeggios) that have @timestamp instead of @startid/@plist (the ones with
+    # @startid/@plist have already been processed).
+    tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]] = []
 
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
@@ -5529,9 +5701,9 @@ def measureFromElement(
                 raise MeiAttributeError(
                     _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachObj.classes[0], whichStaff)
                 )
-            if isinstance(eachObj, expressions.Fermata):
+            if isinstance(eachObj, (expressions.Fermata, expressions.ArpeggioMark)):
                 # save off to process later, skip for now
-                tsFermatas.append((staffNs, eachOffset, eachObj))
+                tsExpressions.append((staffNs, eachOffset, eachObj))
                 continue
 
             if eachMeasSkip2 is not None or eachOffset2 is not None:
@@ -5619,7 +5791,7 @@ def measureFromElement(
     staves = _makeBarlines(elem, staves)
 
     # take the timestamped fermatas and find notes/barlines to put them on
-    _addTimestampedFermatas(staves, tsFermatas)
+    _addTimestampedExpressions(staves, tsExpressions)
 
     return staves
 
@@ -6118,7 +6290,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}supplied': passThruEditorialStaffItemsFromElement,
     f'{MEI_NS}unclear': passThruEditorialStaffItemsFromElement,
     #         f'{MEI_NS}anchoredText': anchoredTextFromElement,
-    #        f'{MEI_NS}arpeg': arpegFromElement,
+    f'{MEI_NS}arpeg': arpegFromElement,
     #         f'{MEI_NS}bracketSpan': bracketSpanFromElement,
     #         f'{MEI_NS}breath': breathFromElement,
     #         f'{MEI_NS}caesura': caesuraFromElement,
