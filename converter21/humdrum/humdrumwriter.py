@@ -1729,7 +1729,7 @@ class HumdrumWriter:
                     if self._waitingToMaybeSkipFirstTempoText:
                         self._waitingToMaybeSkipFirstTempoText = False
                         if self._tempoMovementName:
-                            if self._tempoMovementName in m21Obj.text:
+                            if m21Obj.text is not None and self._tempoMovementName in m21Obj.text:
                                 m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):

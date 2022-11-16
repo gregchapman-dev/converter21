@@ -3824,7 +3824,7 @@ def beamFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: beatRpt fTrem halfmRpt meterSig meterSigGrp
+    - MEI.cmn: beatRpt halfmRpt meterSig meterSigGrp
     - MEI.critapp: app
     - MEI.edittrans: (all)
     - MEI.mensural: ligature mensur proport
@@ -4064,7 +4064,7 @@ def tupletFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: beatRpt fTrem halfmRpt meterSig meterSigGrp
+    - MEI.cmn: beatRpt halfmRpt meterSig meterSigGrp
     - MEI.critapp: app
     - MEI.edittrans: (all)
     - MEI.mensural: ligature mensur proport
@@ -4167,7 +4167,7 @@ def layerFromElement(
 
     **Contained Elements not Implemented:**
 
-    - MEI.cmn: arpeg beamSpan beatRpt bend breath fTrem fermata gliss hairpin halfmRpt
+    - MEI.cmn: arpeg beamSpan beatRpt bend breath fermata gliss hairpin halfmRpt
                harpPedal mRpt mRpt2 meterSigGrp multiRest multiRpt octave pedal
                reh slur tie tuplet tupletSpan
     - MEI.cmnOrnaments: mordent trill turn
@@ -4688,7 +4688,8 @@ def _correctMRestDurs(
             correctionOffset: OffsetQL = 0.
             for eachObject in eachVoice:
                 if correctionOffset != 0:
-                    # anything after an mRest needs its offset corrected
+                    # Anything after an mRest needs its offset corrected.
+                    # What could that be, you ask?  How about a clef change?
                     newOffset = opFrac(eachObject.offset + correctionOffset)
                     eachVoice.setElementOffset(eachObject, newOffset)
 
@@ -5686,9 +5687,9 @@ def measureFromElement(
                 assert isinstance(staveN, stream.Measure)
             staveN.insert(0, eachObj)
 
-    # a list of (offset, fermata) pairs containing all the expressions (e.g. fermatas,
-    # arpeggios) that have @timestamp instead of @startid/@plist (the ones with
-    # @startid/@plist have already been processed).
+    # a list of (offset, expression) pairs containing all the expressions (e.g.
+    # fermatas, arpeggios) that have @timestamp instead of @startid/@plist (the
+    # ones with @startid/@plist have already been processed).
     tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]] = []
 
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
