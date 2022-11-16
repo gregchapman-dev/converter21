@@ -786,33 +786,33 @@ class HumdrumFile(HumdrumFileContent):
             elif line.text == '!!Xignore':
                 state = False
 
-    def _makeAccidentals(self) -> None:
-        # call on each part, or it doesn't work right.
-        for part in self.m21Score.parts:
-            # I'm not too happy with one feature here:
-            # Example, key of F (one flat).  If there is a B-natural in one measure, the first
-            # B-flat in the _next_ measure will have a printed flat accidental (cautionary).
-            # To stop that happening, I would have to iterate over all the measures in each
-            # part myself, always passing pitchPastMeasure=None.  The code is below, commented
-            # out, because it has other side effects that I like even worse.
-            part.makeAccidentals(inPlace=True)
-            # measureStream = part.getElementsByClass('Measure')
-            # ksLast = None
-            # for m in measureStream:
-            #     if m.keySignature is not None:
-            #         ksLast = m.keySignature
-            #     m.makeAccidentals(
-            #         pitchPastMeasure=None,
-            #         useKeySignature=ksLast,
-            #         alteredPitches=None,
-            #         searchKeySignatureByContext=False,
-            #         cautionaryPitchClass=True,
-            #         cautionaryAll=False,
-            #         inPlace=True,
-            #         overrideStatus=False,
-            #         cautionaryNotImmediateRepeat=True,
-            #         tiePitchSet=None
-            #         )
+    # def _makeAccidentals(self) -> None:
+    #     # call on each part, or it doesn't work right.
+    #     for part in self.m21Score.parts:
+    #         # I'm not too happy with one feature here:
+    #         # Example, key of F (one flat).  If there is a B-natural in one measure, the first
+    #         # B-flat in the _next_ measure will have a printed flat accidental (cautionary).
+    #         # To stop that happening, I would have to iterate over all the measures in each
+    #         # part myself, always passing pitchPastMeasure=None.  The code is below, commented
+    #         # out, because it has other side effects that I like even worse.
+    #         part.makeAccidentals(inPlace=True)
+    #         # measureStream = part.getElementsByClass('Measure')
+    #         # ksLast = None
+    #         # for m in measureStream:
+    #         #     if m.keySignature is not None:
+    #         #         ksLast = m.keySignature
+    #         #     m.makeAccidentals(
+    #         #         pitchPastMeasure=None,
+    #         #         useKeySignature=ksLast,
+    #         #         alteredPitches=None,
+    #         #         searchKeySignatureByContext=False,
+    #         #         cautionaryPitchClass=True,
+    #         #         cautionaryAll=False,
+    #         #         inPlace=True,
+    #         #         overrideStatus=False,
+    #         #         cautionaryNotImmediateRepeat=True,
+    #         #         tiePitchSet=None
+    #         #         )
 
     '''
     //////////////////////////////
@@ -5995,6 +5995,14 @@ class HumdrumFile(HumdrumFileContent):
         if 's' in lowerText or '$' in lowerText:
             self._addTurn(gnote, token)
 
+    @staticmethod
+    def _splitIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
+        patt: str = r'([ABCDEF])([-#]*)([\d]+)'
+        m = re.match(patt, m21PitchName)
+        if m:
+            return m.group(1), m.group(2), m.group(3)
+        return m21PitchName, '', ''
+
     '''
     //////////////////////////////
     //
@@ -6025,18 +6033,95 @@ class HumdrumFile(HumdrumFileContent):
         if subTokenIdx == 0 and ' ' not in token.text:
             subTokenIdx = -1
 
-        # music21 has a HalfStepTrill and a WholeStepTrill, which map to 't' and 'T', respectively,
-        # so there is no need to do the trill accidental analysis in HumdrumFileContent, or
-        # reference the results here.  Just make the right kind of trill.  I'm not sure what to do
-        # with the possibility of trill accidentals specified in layout parameters.  I'll probably
-        # need to use them to compute the "steppage" (trill.size: Interval) of the trill, and then
-        # set that size Interval directly on a Trill.
-        # TODO: handle trill accidental specified in !LO:TR:acc=## (or none, --, etc)
+        # music21 has a HalfStepTrill and a WholeStepTrill, which map to 't' and 'T',
+        # respectively, but that is actually handled by accidental analysis in HumdrumFileContent,
+        # and then here we adjust that based on any '!LO:TR:acc=' accidental.  We take that
+        # analysis, and figure out what the interval is, and create the right type of trill.
+
+        # default step for 't' is +1, 'T' is +2
+        stepsUp: int = +1
+        if 'T' in token.text:
+            stepsUp = +2
+
+        stepsUpFromAnalysis: int = stepsUp
+        tokindex: int = max(subTokenIdx, 0)
+        trillPitchName: t.Optional[str] = (
+            token.getValueString('auto', str(tokindex), 'trillNoteM21Pitch')
+        )
+        trillOtherPitchName: t.Optional[str] = (
+            token.getValueString('auto', str(tokindex), 'trillOtherNoteM21Pitch')
+        )
+
+        if t.TYPE_CHECKING:
+            assert trillPitchName is not None
+            assert trillOtherPitchName is not None
+
+        trillPitch = m21.pitch.Pitch(trillPitchName)
+        trillOtherPitch = m21.pitch.Pitch(trillOtherPitchName)
+        interval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
+            trillPitch, trillOtherPitch
+        )
+        stepsUpFromAnalysis = int(interval.semitones)
+        if stepsUpFromAnalysis != stepsUp:
+            print(f'stepsUpFromAnalysis ({stepsUpFromAnalysis}) != stepsUp ({stepsUp})')
+            stepsUp = stepsUpFromAnalysis
+
+        # replace the trill accidental if different in layout parameters, such as:
+        #    !LO:TR:acc=##
+        # for a double sharp, or
+        #    !LO:TR:acc=none
+        # for no accidental
+        lcount: int = token.linkedParameterSetCount
+        value: str = ''
+        for p in range(0, lcount):
+            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
+            if hps is None:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != 'TR':
+                continue
+            for q in range(0, hps.count):
+                key: str = hps.getParameterName(q)
+                if key == 'acc':
+                    value = hps.getParameterValue(q)
+                    break
+            if value:
+                break
+
+        trillNewOtherPitchName: t.Optional[str] = trillOtherPitchName
+        name: str
+        _accidStr: str
+        octaveStr: str
+        name, _accidStr, octaveStr = self._splitIntoNameAccidOctave(trillOtherPitchName)
+        if value:
+            if value == 'none':
+                pass  # 'none' doesn't change pitch, just says "don't print it"
+            elif value == 'n':
+                trillNewOtherPitchName = name + octaveStr
+            else:
+                trillNewOtherPitchName = name + value + octaveStr
+        trillNewOtherPitch = m21.pitch.Pitch(trillNewOtherPitchName)
+        newInterval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
+            trillPitch, trillNewOtherPitch
+        )
+        stepsUpFromLayoutParams: int = int(newInterval.semitones)
+        if stepsUpFromLayoutParams != stepsUpFromAnalysis:
+            print(f'stepsUpFromLayoutParams ({stepsUpFromLayoutParams})'
+                f'!= stepsUpFromAnalysis ({stepsUpFromAnalysis})')
+            stepsUp = stepsUpFromLayoutParams
+
         trill: m21.expressions.Trill
-        if 't' in token.text:
+        if stepsUp == +1:
             trill = m21.expressions.HalfStepTrill()
-        else:
+        elif stepsUp == +2:
             trill = m21.expressions.WholeStepTrill()
+        else:
+            print(f'**** non-standard trill stepsUp = {stepsUp}', file=sys.stderr)
+            trill = m21.expressions.Trill()
+            trill.size = m21.interval.ChromaticInterval(stepsUp)
+            # trill._setAccidentalFromKeySig = False
+
 
         startNote.expressions.append(trill)
 

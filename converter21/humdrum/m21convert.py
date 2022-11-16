@@ -344,6 +344,25 @@ class M21Convert:
     }
 
     @staticmethod
+    def base40ToM21PitchName(b40: int) -> str:
+        octave: int = b40 // 40
+        diatonic: int = Convert.base40ToDiatonic(b40) % 7
+        accidCount: int = Convert.base40ToAccidental(b40)
+        accidStr: str = ''
+        if accidCount < 0:
+            accidStr = '-' * (-accidCount)
+        elif accidCount > 0:
+            accidStr = '#' * accidCount
+
+        name = M21Convert.diatonicToM21PitchName[diatonic] + accidStr + str(octave)
+        return name
+
+    @staticmethod
+    def base40ToM21Pitch(b40: int) -> m21.pitch.Pitch:
+        name = M21Convert.base40ToM21PitchName(b40)
+        return m21.pitch.Pitch(name)
+
+    @staticmethod
     def m21PitchName(subTokenStr: str) -> str:
         # e.g. returns 'A#' for A sharp (ignores octave)
         diatonic: int = Convert.kernToDiatonicPC(subTokenStr)  # PC == pitch class; ignores octave

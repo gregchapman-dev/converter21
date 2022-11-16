@@ -20,6 +20,7 @@ from music21.common import opFrac
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum
 from converter21.humdrum import Convert
+from converter21.humdrum import M21Convert
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumFileStructure
 from converter21.humdrum import TokenPair
@@ -1247,24 +1248,38 @@ class HumdrumFileContent(HumdrumFileStructure):
                     upperAccid: int
                     uacc: int
                     bacc: int
+                    mainPitch: str
+                    otherPitch: str
                     if 't' in subtok:
                         # minor second trill
                         exprNote = b40 + 5
                         exprDiatonic = Convert.base40ToDiatonic(exprNote)
                         exprAccid = Convert.base40ToAccidental(exprNote)
+                        mainPitch = M21Convert.base40ToM21PitchName(b40)
+                        otherPitch = M21Convert.base40ToM21PitchName(exprNote)
+                        token.setValue('auto', str(k), 'trillNoteM21Pitch', mainPitch)
+                        token.setValue('auto', str(k), 'trillOtherNoteM21Pitch', otherPitch)
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
                                 'auto', str(k), 'trillAccidental', str(exprAccid))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                     elif 'T' in subtok:
                         # major second trill
                         exprNote = b40 + 6
                         exprDiatonic = Convert.base40ToDiatonic(exprNote)
                         exprAccid = Convert.base40ToAccidental(exprNote)
+                        mainPitch = M21Convert.base40ToM21PitchName(b40)
+                        otherPitch = M21Convert.base40ToM21PitchName(exprNote)
+                        token.setValue('auto', str(k), 'trillNoteM21Pitch', mainPitch)
+                        token.setValue('auto', str(k), 'trillOtherNoteM21Pitch', otherPitch)
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
                                 'auto', str(k), 'trillAccidental', str(exprAccid))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                     elif 'M' in subtok:
                         # major second upper mordent
                         exprNote = b40 + 6
@@ -1273,7 +1288,9 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
                                 'auto', str(k), 'mordentUpperAccidental', str(exprAccid))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                     elif 'm' in subtok:
                         # minor second upper mordent
                         exprNote = b40 + 5
@@ -1282,7 +1299,9 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
                                 'auto', str(k), 'mordentUpperAccidental', str(exprAccid))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                     elif 'W' in subtok:
                         # major second lower mordent
                         exprNote = b40 - 6
@@ -1291,7 +1310,9 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
                                 'auto', str(k), 'mordentLowerAccidental', str(exprAccid))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                     elif 'w' in subtok:
                         # minor second lower mordent
                         exprNote = b40 - 5
@@ -1300,7 +1321,9 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
                                 'auto', str(k), 'mordentLowerAccidental', str(exprAccid))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                     elif '$' in subtok:
                         # inverted turn
                         loc = subtok.find('$')
@@ -1347,12 +1370,16 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if uacc != upperAccid:
                             token.setValue(
                                 'auto', str(k), 'turnUpperAccidental', str(uacc))
-                            dstates[spineStartIdx][upperDiatonic] = -1000 + uacc
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + uacc
 
                         if bacc != lowerAccid:
                             token.setValue(
                                 'auto', str(k), 'turnUpperAccidental', str(bacc))
-                            dstates[spineStartIdx][lowerDiatonic] = -1000 + bacc
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + bacc
                     elif 'S' in subtok:
                         # regular turn
                         loc = subtok.find('S')
@@ -1399,12 +1426,16 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if uacc != upperAccid:
                             token.setValue(
                                 'auto', str(k), 'turnUpperAccidental', str(uacc))
-                            dstates[spineStartIdx][upperDiatonic] = -1000 + uacc
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + uacc
 
                         if bacc != lowerAccid:
                             token.setValue(
                                 'auto', str(k), 'turnUpperAccidental', str(bacc))
-                            dstates[spineStartIdx][lowerDiatonic] = -1000 + bacc
+                            # if we ever get ornament accidentals displaying, put this next
+                            # line back in.
+                            # dstates[spineStartIdx][exprDiatonic] = -1000 + bacc
 
                     if isGrace and accid != gdstates[spineStartIdx][diatonic]:
                         # accidental is different from the previous state so should be
