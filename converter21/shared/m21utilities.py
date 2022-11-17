@@ -13,6 +13,7 @@
 #    All methods are static.  M21Utilities is just a namespace for these conversion functions and
 #    look-up tables.
 
+import re
 import typing as t
 
 import music21 as m21
@@ -273,6 +274,13 @@ class M21Utilities:
 
         return splits
 
+    @staticmethod
+    def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
+        patt: str = r'([ABCDEF])([-#]*)([\d]+)'
+        m = re.match(patt, m21PitchName)
+        if m:
+            return m.group(1), m.group(2), m.group(3)
+        return m21PitchName, '', ''
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:

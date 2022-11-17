@@ -34,8 +34,8 @@ from converter21.humdrum import HumHash
 from converter21.humdrum import HumParamSet
 from converter21.humdrum import Convert
 from converter21.humdrum import M21Convert
-from converter21.humdrum import M21Utilities
-from converter21.humdrum import M21StaffGroupDescriptionTree
+from converter21.shared import M21StaffGroupDescriptionTree
+from converter21.shared import M21Utilities
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -5995,14 +5995,6 @@ class HumdrumFile(HumdrumFileContent):
         if 's' in lowerText or '$' in lowerText:
             self._addTurn(gnote, token)
 
-    @staticmethod
-    def _splitIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
-        patt: str = r'([ABCDEF])([-#]*)([\d]+)'
-        m = re.match(patt, m21PitchName)
-        if m:
-            return m.group(1), m.group(2), m.group(3)
-        return m21PitchName, '', ''
-
     '''
     //////////////////////////////
     //
@@ -6093,7 +6085,9 @@ class HumdrumFile(HumdrumFileContent):
         name: str
         _accidStr: str
         octaveStr: str
-        name, _accidStr, octaveStr = self._splitIntoNameAccidOctave(trillOtherPitchName)
+        name, _accidStr, octaveStr = (
+            M21Utilities.splitM21PitchNameIntoNameAccidOctave(trillOtherPitchName)
+        )
         if value:
             if value == 'none':
                 pass  # 'none' doesn't change pitch, just says "don't print it"

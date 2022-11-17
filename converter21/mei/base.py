@@ -211,6 +211,7 @@ from music21 import tempo
 from music21 import tie
 
 from converter21.shared import SharedConstants
+from converter21.shared import M21Utilities
 
 environLocal = environment.Environment('converter21.mei.base')
 
@@ -1722,6 +1723,90 @@ def addArpeggio(
     return addedArpeggio
 
 
+def addTrill(
+    elem: Element,
+    obj: note.NotRest,
+    spannerBundle: spanner.SpannerBundle
+) -> bool:
+    addedTrill: bool = False
+
+    # if appropriate, add this note/chord to an ArpeggioMarkSpanner
+    trillExtId: str = elem.get('m21TrillExtension', '')
+    if trillExtId:
+        addedTrill = safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
+
+    # check to see if this note/chord needs a trill by itself,
+    # and if so, make the Trill and append it to the note/chord's
+    # expressions.
+    trill: expressions.Trill
+    place: str = elem.get('m21Trill', '')
+    if not place:
+        return addedTrill
+
+    accidUpper: str = elem.get('m21TrillAccidUpper', '')
+    accidLower: str = elem.get('m21TrillAccidLower', '')
+
+    # by default this goes up a note in the scale of the current key
+    trill = expressions.Trill()
+    if not accidUpper and not accidLower:
+        pass  # we want just a Trill()
+    elif accidUpper:
+        trill.mei_trill_accidupper = accidUpper  # type: ignore
+        trill = t.cast(expressions.Trill, updateExpression(trill, obj))
+    elif accidLower:
+        trill.mei_accid_lower = accidLower  # type: ignore
+        trill = t.cast(expressions.Trill, updateExpression(trill, obj))
+
+    if place and place != 'place_unspecified':
+        trill.placement = place
+
+    obj.expressions.append(trill)
+    addedTrill = True
+
+    return addedTrill
+
+def updateExpression(
+    expr: expressions.Expression,
+    obj: note.GeneralNote
+) -> expressions.Expression:
+    if isinstance(expr, expressions.Trill) and isinstance(obj, note.NotRest):
+        mainPitch: pitch.Pitch
+        minorSecond: interval.DiatonicInterval
+        trill: expressions.Trill
+
+        if hasattr(expr, 'mei_trill_accidupper'):
+            accidUpper: str = expr.mei_trill_accidupper  # type: ignore
+            mainPitch = obj.pitches[-1]  # top-most pitch if it's a chord
+            minorSecond = interval.DiatonicInterval('minor', 2)
+            halfStepUpPitch: pitch.Pitch = minorSecond.transposePitch(mainPitch)
+            _, halfStepUpAccid, _ = (
+                M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepUpPitch.nameWithOctave)
+            )
+            if halfStepUpAccid == _ACCID_GES_ATTR_DICT.get(accidUpper, ''):
+                trill = expressions.HalfStepTrill()
+            else:
+                trill = expressions.WholeStepTrill()
+            trill.placement = expr.placement
+            return trill
+
+        if hasattr(expr, 'mei_trill_accidlower'):
+            accidLower: str = expr.mei_trill_accidupper  # type: ignore
+            mainPitch = obj.pitches[-1]  # top-most pitch if it's a chord
+            minorSecond = interval.DiatonicInterval('minor', 2)
+            minorSecond = minorSecond.reverse()
+            halfStepDownPitch: pitch.Pitch = minorSecond.transposePitch(mainPitch)
+            _, halfStepDownAccid, _ = (
+                M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepDownPitch.nameWithOctave)
+            )
+            if halfStepDownAccid == _ACCID_GES_ATTR_DICT.get(accidLower, ''):
+                trill = expressions.HalfStepTrill()
+            else:
+                trill = expressions.WholeStepTrill()
+            trill.placement = expr.placement
+            return trill
+
+    return expr
+
 def beamTogether(someThings: t.List[Music21Object]):
     '''
     Beam some things together. The function beams every object that has a :attr:`beams` attribute,
@@ -3229,6 +3314,7 @@ def noteFromElement(
         theNote.expressions.append(fermata)
 
     addArpeggio(elem, theNote, spannerBundle)
+    addTrill(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -3615,6 +3701,7 @@ def chordFromElement(
         theChord.expressions.append(fermata)
 
     addArpeggio(elem, theChord, spannerBundle)
+    addTrill(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -4880,9 +4967,11 @@ def _addTimestampedExpressions(
                             continue
                         if eachObject.offset == offset:
                             if i == 0:
+                                expression = updateExpression(expression, eachObject)
                                 eachObject.expressions.append(expression)
                             else:
                                 clonedExpression = deepcopy(expression)
+                                clonedExpression = updateExpression(clonedExpression, eachObject)
                                 eachObject.expressions.append(clonedExpression)
 
                             doneWithStaff = True

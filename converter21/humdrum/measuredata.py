@@ -22,8 +22,8 @@ from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import EventData
 from converter21.humdrum import Convert
-from converter21.humdrum import M21Utilities
 from converter21.humdrum import M21Convert
+from converter21.shared import M21Utilities
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.

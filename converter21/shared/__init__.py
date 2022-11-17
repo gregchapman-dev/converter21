@@ -14,4 +14,6 @@ __all__ = [
 ]
 
 from .sharedconstants import SharedConstants
-
+from .m21utilities import M21Utilities
+from .m21utilities import M21StaffGroupTree
+from .m21utilities import M21StaffGroupDescriptionTree

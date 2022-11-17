@@ -18,7 +18,7 @@ from music21.common import opFrac
 
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
-from converter21.humdrum import M21Utilities
+from converter21.shared import M21Utilities
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.

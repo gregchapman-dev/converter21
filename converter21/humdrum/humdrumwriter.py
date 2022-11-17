@@ -22,8 +22,6 @@ from music21.common import opFrac
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
-from converter21.humdrum import M21Utilities
-from converter21.humdrum import M21StaffGroupTree
 
 from converter21.humdrum import EventData
 from converter21.humdrum import MeasureData, SimultaneousEvents
@@ -42,6 +40,9 @@ from converter21.humdrum import HumGrid
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import ToolTremolo
+
+from converter21.shared import M21Utilities
+from converter21.shared import M21StaffGroupTree
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.

@@ -18,7 +18,7 @@ import typing as t
 import music21 as m21
 
 from converter21.humdrum import MeasureData
-from converter21.humdrum import M21Utilities
+from converter21.shared import M21Utilities
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.

@@ -23,10 +23,7 @@ from .humhash import HumHash
 from .humparamset import HumParamSet
 from .humdrumtoken import HumdrumToken
 from .humdrumtoken import FakeRestToken
-from .m21utilities import M21Utilities
 from .m21convert import M21Convert
-from .m21utilities import M21StaffGroupTree
-from .m21utilities import M21StaffGroupDescriptionTree
 from .humdrumline import HumdrumLine
 from .humsignifiers import HumSignifiers, HumSignifier
 from .humdrumfilebase import HumdrumFileBase, TokenPair

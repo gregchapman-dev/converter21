@@ -31,7 +31,7 @@ from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import Convert
-from converter21.humdrum import M21Utilities
+from converter21.shared import M21Utilities
 
 
 class M21Convert:
