@@ -350,6 +350,7 @@ class MeiToM21Converter:
         _ppTuplets(self)
         _ppFermatas(self)
         _ppArpeggios(self)
+        _ppTrills(self)
         _ppConclude(self)
 
         environLocal.printDebug('*** processing <score> elements')
@@ -1029,7 +1030,7 @@ def _ppTuplets(theConverter: MeiToM21Converter):
         if ((eachTuplet.get('startid') is None or eachTuplet.get('endid') is None)
                 and eachTuplet.get('plist') is None):
             environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<tupletSpan>',
-                                                           '@startid and @endid or @plist'))
+                                                           '@startid and @endid, or @plist'))
         elif eachTuplet.get('plist') is not None:
             # Ideally (for us) <tupletSpan> elements will have a @plist that enumerates the
             # @xml:id of every affected element. In this case, tupletSpanFromElement() can use the
@@ -1125,6 +1126,88 @@ _ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: t.Dict[t.Tuple[str, str], str] = {
     ('true', 'down'): 'down',
     ('true', 'nonarp'): 'non-arpeggio',   # arrow is ignored
 }
+
+
+def _ppTrills(theConverter: MeiToM21Converter):
+    '''
+    Pre-processing helper for :func:`convertFromString` that handles trills specified in <trill>
+    elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+    processed. This function reads from ``theConverter.documentRoot`` and writes into
+    ``theConverter.m21Attr``.
+
+    :param theConverter: The object responsible for storing data about this import.
+    :type theConverter: :class:`MeiToM21Converter`.
+
+    **This Preprocessor**
+
+    The trill preprocessor works similarly to the tie preprocessor, adding @m21Trill,
+    @m21TrillExtStart and @m21TrillExtEnd attributes to any referenced notes/chords.
+
+    **Example of ``m21Attr``**
+
+    The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+    dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
+    dict holds attribute names and their values that should be added to the element with the
+    given @xml:id.
+
+    For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
+    element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
+    '''
+    environLocal.printDebug('*** pre-processing trills')
+    # for readability, we use a single-letter variable
+    c = theConverter
+
+    for eachTrill in c.documentRoot.iterfind(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}trill'):
+        startId: str = removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
+        endId: str = removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
+        tstamp2: str = eachTrill.get('tstamp2', '')
+        hasExtension: bool = bool(endId) or bool(tstamp2)
+        place: str = eachTrill.get('place', 'place_unspecified')
+
+        if startId:
+            # The trill info gets stashed on the note/chord referenced by startId
+            accidUpper: str = eachTrill.get('accidupper', '')
+            accidLower: str = eachTrill.get('accidlower', '')
+
+            c.m21Attr[startId]['m21Trill'] = place
+            if accidUpper:
+                c.m21Attr[startId]['m21TrillAccidUpper'] = accidUpper
+            if accidLower:
+                c.m21Attr[startId]['m21TrillAccidLower'] = accidLower
+
+            eachTrill.set('ignore_trill_in_trillFromElement', 'true')
+
+        if not hasExtension:
+            # save some figuring out in trillFromElement, we already know there is
+            # no trill extension
+            eachTrill.set('ignore_trill_extension_in_trillFromElement', 'true')
+            continue
+
+        # Making the extension is tricky.  If we have startId and endId, we can finish it here.
+        # If we are missing either, we'll have to take notes and finish it in trillFromElement.
+        trillExt = expressions.TrillExtension()
+        if place and place != 'place_unspecified':
+            trillExt.placement = place
+
+        if t.TYPE_CHECKING:
+            # work around Spanner.idLocal being incorrectly type-hinted as None
+            assert isinstance(trillExt.idLocal, str)
+        thisIdLocal = str(uuid4())
+        trillExt.idLocal = thisIdLocal
+        c.spannerBundle.append(trillExt)
+
+        if startId:
+            c.m21Attr[startId]['m21TrillExtension'] = thisIdLocal
+        if endId:
+            c.m21Attr[endId]['m21TrillExtension'] = thisIdLocal
+
+        if startId and endId:
+            # we're finished (well, once we've processed both of those note/chord elements)
+            eachTrill.set('ignore_trill_extension_in_trillFromElement', 'true')
+        else:
+            # we have to finish in trillFromElement, tell him about our TrillExtension
+            eachTrill.set('m21TrillExtension', thisIdLocal)
 
 
 def _ppArpeggios(theConverter: MeiToM21Converter):
@@ -1516,6 +1599,15 @@ def _tieFromAttr(attr: str) -> tie.Tie:
     else:
         return tie.Tie('stop')
 
+
+def safeGetSpannerByIdLocal(
+    theId: str,
+    spannerBundle: spanner.SpannerBundle
+) -> t.Optional[spanner.Spanner]:
+    try:
+        return spannerBundle.getByIdLocal(theId)[0]
+    except IndexError:
+        return None
 
 def safeAddToSpannerByIdLocal(
     theObj: Music21Object,
@@ -4266,7 +4358,7 @@ def appChoiceStaffItemsFromElement(
 ) -> t.List[
     t.Tuple[
         str,
-        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
         Music21Object
     ]
 ]:
@@ -4278,7 +4370,7 @@ def appChoiceStaffItemsFromElement(
     theList: t.List[
         t.Tuple[
             str,
-            t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
             Music21Object
         ]
     ] = (
@@ -4302,7 +4394,7 @@ def passThruEditorialStaffItemsFromElement(
 ) -> t.List[
     t.Tuple[
         str,
-        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
         Music21Object
     ]
 ]:
@@ -4310,7 +4402,7 @@ def passThruEditorialStaffItemsFromElement(
     theList: t.List[
         t.Tuple[
             str,
-            t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
             Music21Object
         ]
     ] = (
@@ -5013,7 +5105,7 @@ def arpegFromElement(
     otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[
         str,
-        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
         t.Optional[expressions.ArpeggioMark]
 ]:
     if elem.get('ignore_in_arpegFromElement') == 'true':
@@ -5038,6 +5130,98 @@ def arpegFromElement(
     return staffNStr, (offset, None, None), arp
 
 
+def trillFromElement(
+        elem: Element,
+        activeMeter: t.Optional[meter.TimeSignature],
+        spannerBundle: spanner.SpannerBundle,
+        otherInfo: t.Dict[str, t.Any],
+) -> t.Tuple[
+        str,
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+        t.Optional[t.Union[expressions.Trill, expressions.TrillExtension]]
+]:
+    output: t.List[
+        t.Tuple[
+            str,
+            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+            t.Optional[t.Union[expressions.Trill, expressions.TrillExtension]]
+        ]
+    ] = []
+
+    # If no @staff, presume it is staff 1
+    staffNStr = elem.get('staff', '1')
+
+    startId: str = elem.get('startid', '')
+    tstamp: str = elem.get('tstamp', '')
+    place: str = elem.get('m21Trill', '')
+    offset: t.Optional[OffsetQL] = None
+
+    if elem.get('ignore_trill_in_trillFromElement') != 'true':
+        # this happens if we need a trill, but are missing @startid
+        if not tstamp:
+            environLocal.warn('missing @tstamp/@startid in <trill> element')
+            return '', (-1., None, None), None
+
+        accidupper: str = elem.get('accidupper', '')
+        accidlower: str = elem.get('accidlower', '')
+
+        # Make a placeholder Trill, we'll interpret later (once we've found
+        # the note/chord) to figure out WholeStepTrill vs HalfStepTrill.
+        trill = expressions.Trill()
+        if place and place != 'place_unspecified':
+            trill.placement = place
+        if accidupper:
+            trill.mei_trill_accidupper = accidupper  # type: ignore
+        if accidlower:
+            trill.mei_trill_accidlower = accidlower  # type: ignore
+
+        offset = _tstampToOffset(tstamp, activeMeter)
+        output.append((staffNStr, (offset, None, None), trill))
+
+    if elem.get('ignore_trill_extension_in_trillFromElement') != 'true':
+        # this happens if we need a trill extension, but are missing @startid, @endid, or both
+        trillExtLocalId = elem.get('m21TrillExtension', '')
+        if not trillExtLocalId:
+            environLocal.warn('no TrillExtension created in trill preprocessing')
+            return '', (-1., None, None), None
+        trillExt: t.Optional[spanner.Spanner] = (
+            safeGetSpannerByIdLocal(trillExtLocalId, spannerBundle)
+        )
+        if trillExt is None:
+            environLocal.warn('no TrillExtension found from trill preprocessing')
+            return '', (-1., None, None), None
+
+        if t.TYPE_CHECKING:
+            assert isinstance(trillExt, expressions.TrillExtension)
+
+        endId: str = elem.get('endid', '')
+        tstamp2: str = elem.get('tstamp2', '')
+        if not tstamp2 and not endId:
+            environLocal.warn('missing @tstamp2/@endid in <trill> element')
+            return '', (-1., None, None), None
+        if not tstamp and not startId:
+            environLocal.warn('missing @tstamp/@startid in <trill> element')
+            return '', (-1., None, None), None
+        if not startId:
+            trillExt.mei_needs_start_note = True  # type: ignore
+        if not endId:
+            trillExt.mei_needs_end_note = True  # type: ignore
+
+        measSkip: t.Optional[int] = None
+        offset2: t.Optional[OffsetQL] = None
+        if tstamp:
+            offset = _tstampToOffset(tstamp, activeMeter)
+        if tstamp2:
+            measSkip, offset2 = _tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
+        output.append((staffNStr, (offset, measSkip, offset2), trillExt))
+
+    if not output:
+        return '', (-1., None, None), None
+    if len(output) == 1:
+        return output[0]
+    return output  # type: ignore
+
+
 def hairpinFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -5045,7 +5229,7 @@ def hairpinFromElement(
     otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[
         str,
-        t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
         t.Optional[dynamics.DynamicWedge]
 ]:
     # If no @staff, presume it is staff 1
@@ -5086,6 +5270,9 @@ def hairpinFromElement(
         else:
             environLocal.warn(f'invalid @place = "{place}" in <hairpin>')
 
+    dw.mei_needs_start_note = True  # type: ignore
+    dw.mei_needs_end_note = True  # type: ignore
+    spannerBundle.append(dw)
     return staffNStr, offsets, dw
 
 
@@ -5096,11 +5283,11 @@ def dynamFromElement(
     otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[
     str,
-    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
     t.Optional[dynamics.Dynamic]
 ]:
     staffNStr: str
-    offsets: t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]]
+    offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
     dynamObj: dynamics.Dynamic
 
     # first parse as a <dir> giving a TextExpression with style,
@@ -5137,7 +5324,7 @@ def tempoFromElement(
     otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[
     str,
-    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
     t.Optional[tempo.TempoIndication]
 ]:
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
@@ -5145,7 +5332,7 @@ def tempoFromElement(
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive tempo info from that.
     staffNStr: str
-    offsets: t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]]
+    offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
     teWithStyle: t.Optional[expressions.TextExpression]
     staffNStr, offsets, teWithStyle = (
         dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
@@ -5292,7 +5479,7 @@ def dirFromElement(
     otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[
     str,
-    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
     t.Optional[expressions.TextExpression]
 ]:
     # returns (staffNStr, (offset, None, None), te)
@@ -5378,7 +5565,7 @@ def fermataFromElement(
     otherInfo: t.Dict[str, t.Any],
 ) -> t.Tuple[
     str,
-    t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],
+    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
     t.Optional[expressions.Fermata]
 ]:
     # returns (staffNStr, (offset, None, None), fermata)
@@ -5547,7 +5734,7 @@ def measureFromElement(
         str,
         t.List[
             t.Tuple[
-                t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]],  # offsets
+                t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],  # offsets
                 Music21Object
             ]
         ]
@@ -5633,45 +5820,78 @@ def measureFromElement(
                     eachElem, spannerBundle, otherInfo
                 )
         elif eachElem.tag in staffItemsTagToFunction:
-            offsets: t.Tuple[OffsetQL, t.Optional[int], t.Optional[OffsetQL]]
+            offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
             m21Obj: t.Optional[Music21Object]
-            staffNStr, offsets, m21Obj = staffItemsTagToFunction[eachElem.tag](
+            triple: t.Tuple[
+                str,
+                t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+                Music21Object
+            ]
+            triple = staffItemsTagToFunction[eachElem.tag](
                 eachElem, activeMeter, spannerBundle, otherInfo
             )
-            if m21Obj is not None:
-                if staffNStr not in stavesWaitingFromStaffItem:
-                    stavesWaitingFromStaffItem[staffNStr] = []
-                offset1: OffsetQL = offsets[0]
-                measSkip2: t.Optional[int] = offsets[1]
-                offset2: t.Optional[OffsetQL] = offsets[2]
 
-                if measSkip2 is not None and offset2 is not None:
-                    # it's a start/end type spanner, put it in spannerBundle
-                    if t.TYPE_CHECKING:
-                        assert isinstance(m21Obj, spanner.Spanner)
-                    spannerObj = m21Obj
-                    spannerBundle.append(spannerObj)
-                    startObj = note.GeneralNote(duration=duration.Duration(0.))
-                    spannerObj.addSpannedElements(startObj)
-                    stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
-                        ((offset1, None, None), startObj)
-                    )
-                    if measSkip2 == 0:
-                        # do the endObj as well, it's in this same Measure
-                        endObj = note.GeneralNote(duration=duration.Duration(0.))
-                        spannerObj.addSpannedElements(endObj)
-                        stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
-                            ((offset2, None, None), endObj)
-                        )
+            # sometimes staffItemsTagToFunction actually returns a list of
+            # (staffNStr, offsets, m21Obj) triples
+            triples: t.List[
+                t.Tuple[
+                    str,
+                    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+                    Music21Object
+                ]
+            ]
+            if isinstance(triple, list):
+                triples = triple
+            else:
+                triples = [triple]
+
+            for staffNStr, offsets, m21Obj in triples:
+                if m21Obj is not None:
+                    if staffNStr not in stavesWaitingFromStaffItem:
+                        stavesWaitingFromStaffItem[staffNStr] = []
+                    offset1: t.Optional[OffsetQL] = offsets[0]
+                    measSkip2: t.Optional[int] = offsets[1]
+                    offset2: t.Optional[OffsetQL] = offsets[2]
+
+                    if isinstance(m21Obj, spanner.Spanner):
+                        spannerObj = m21Obj
+                        # If it needs start or end notes make them now.
+                        needsStartNote: bool = False
+                        needsEndNote: bool = False
+                        if hasattr(m21Obj, 'mei_needs_start_note'):
+                            needsStartNote = spannerObj.mei_needs_start_note  # type: ignore
+                            del spannerObj.mei_needs_start_note  # type: ignore
+                        if hasattr(m21Obj, 'mei_needs_end_note'):
+                            needsEndNote = spannerObj.mei_needs_end_note  # type: ignore
+                            del spannerObj.mei_needs_end_note  # type: ignore
+
+                        if needsStartNote:
+                            startNote = note.GeneralNote(duration=duration.Duration(0.))
+                            spannerObj.addSpannedElements(startNote)
+                            stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                                ((offset1, None, None), startNote)
+                            )
+
+                        if needsEndNote:
+                            if measSkip2 == 0:
+                                # do the endObj as well, it's in this same Measure
+                                endNote = note.GeneralNote(duration=duration.Duration(0.))
+                                spannerObj.addSpannedElements(endNote)
+                                stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                                    ((offset2, None, None), endNote)
+                                )
+                            else:
+                                # endNote has to wait for a subsequent measure
+                                if otherInfo.get('pendingSpannerEnds', None) is None:
+                                    otherInfo['pendingSpannerEnds'] = []
+                                otherInfo['pendingSpannerEnds'].append(
+                                    (staffNStr, spannerObj, measSkip2, offset2)
+                                )
                     else:
-                        # endObj has to wait for a subsequent measure
-                        if otherInfo.get('pendingSpannerEnds', None) is None:
-                            otherInfo['pendingSpannerEnds'] = []
-                        otherInfo['pendingSpannerEnds'].append(
-                            (staffNStr, spannerObj, measSkip2, offset2)
-                        )
-                else:
-                    stavesWaitingFromStaffItem[staffNStr].append((offsets, m21Obj))  # type: ignore
+                        # not a spanner
+                        stavesWaitingFromStaffItem[staffNStr].append(
+                            (offsets, m21Obj)
+                        )  # type: ignore
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
@@ -5701,7 +5921,11 @@ def measureFromElement(
                 raise MeiAttributeError(
                     _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachObj.classes[0], whichStaff)
                 )
-            if isinstance(eachObj, (expressions.Fermata, expressions.ArpeggioMark)):
+            if (eachOffset is not None
+                    and isinstance(eachObj, (
+                        expressions.Fermata,
+                        expressions.ArpeggioMark,
+                        expressions.Trill))):
                 # save off to process later, skip for now
                 tsExpressions.append((staffNs, eachOffset, eachObj))
                 continue
@@ -6310,7 +6534,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
     #         f'{MEI_NS}reh': rehFromElement,
     f'{MEI_NS}tempo': tempoFromElement,
-    #        f'{MEI_NS}trill': trillFromElement,
+    f'{MEI_NS}trill': trillFromElement,
     #        f'{MEI_NS}turn': turnFromElement,
 }
 
