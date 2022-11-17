@@ -1199,9 +1199,9 @@ def _ppTrills(theConverter: MeiToM21Converter):
         c.spannerBundle.append(trillExt)
 
         if startId:
-            c.m21Attr[startId]['m21TrillExtension'] = thisIdLocal
+            c.m21Attr[startId]['m21TrillExtensionStart'] = thisIdLocal
         if endId:
-            c.m21Attr[endId]['m21TrillExtension'] = thisIdLocal
+            c.m21Attr[endId]['m21TrillExtensionEnd'] = thisIdLocal
 
         if startId and endId:
             # we're finished (well, once we've processed both of those note/chord elements)
@@ -1730,10 +1730,13 @@ def addTrill(
 ) -> bool:
     addedTrill: bool = False
 
-    # if appropriate, add this note/chord to an ArpeggioMarkSpanner
-    trillExtId: str = elem.get('m21TrillExtension', '')
+    # if appropriate, add this note/chord to a trillExtension
+    trillExtId: str = elem.get('m21TrillExtensionStart', '')
     if trillExtId:
         addedTrill = safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
+    trillExtId = elem.get('m21TrillExtensionEnd', '')
+    if trillExtId:
+        addedTrill = addedTrill or safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
 
     # check to see if this note/chord needs a trill by itself,
     # and if so, make the Trill and append it to the note/chord's
