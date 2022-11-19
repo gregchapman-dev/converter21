@@ -1408,7 +1408,7 @@ def _processEmbeddedElements(
             result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]] = (
                 mapping[eachElem.tag](eachElem, activeMeter, spannerBundle, otherInfo)
             )
-            if isinstance(result, (tuple, list)):
+            if isinstance(result, list):
                 for eachObject in result:
                     processed.append(eachObject)
             elif result is not None:
@@ -4203,7 +4203,7 @@ def tupletFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.Tuple[Music21Object, ...]:
+) -> t.List[Music21Object]:
     '''
     <tuplet> A group of notes with "irregular" (sometimes called "irrational") rhythmic values,
     for example, three notes in the time normally occupied by two or nine in the time of five.
@@ -4285,7 +4285,7 @@ def tupletFromElement(
 
     if firstNote is None:
         # no members of tuplet
-        return tuple()
+        return []
 
     tupletMembers[firstNote].duration.tuplets[0].type = 'start'
     if lastNote is None:
@@ -4294,7 +4294,7 @@ def tupletFromElement(
     else:
         tupletMembers[lastNote].duration.tuplets[0].type = 'stop'
 
-    return tuple(tupletMembers)
+    return tupletMembers
 
 
 def layerFromElement(
@@ -5227,10 +5227,12 @@ def trillFromElement(
         activeMeter: t.Optional[meter.TimeSignature],
         spannerBundle: spanner.SpannerBundle,
         otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+) -> t.List[
+    t.Tuple[
         str,
         t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
         t.Optional[t.Union[expressions.Trill, expressions.TrillExtension]]
+    ]
 ]:
     output: t.List[
         t.Tuple[
@@ -5252,7 +5254,7 @@ def trillFromElement(
         # this happens if we need a trill, but are missing @startid
         if not tstamp:
             environLocal.warn('missing @tstamp/@startid in <trill> element')
-            return '', (-1., None, None), None
+            return [('', (-1., None, None), None)]
 
         accidupper: str = elem.get('accidupper', '')
         accidlower: str = elem.get('accidlower', '')
@@ -5275,13 +5277,13 @@ def trillFromElement(
         trillExtLocalId = elem.get('m21TrillExtension', '')
         if not trillExtLocalId:
             environLocal.warn('no TrillExtension created in trill preprocessing')
-            return '', (-1., None, None), None
+            return [('', (-1., None, None), None)]
         trillExt: t.Optional[spanner.Spanner] = (
             safeGetSpannerByIdLocal(trillExtLocalId, spannerBundle)
         )
         if trillExt is None:
             environLocal.warn('no TrillExtension found from trill preprocessing')
-            return '', (-1., None, None), None
+            return [('', (-1., None, None), None)]
 
         if t.TYPE_CHECKING:
             assert isinstance(trillExt, expressions.TrillExtension)
@@ -5290,10 +5292,10 @@ def trillFromElement(
         tstamp2: str = elem.get('tstamp2', '')
         if not tstamp2 and not endId:
             environLocal.warn('missing @tstamp2/@endid in <trill> element')
-            return '', (-1., None, None), None
+            return [('', (-1., None, None), None)]
         if not tstamp and not startId:
             environLocal.warn('missing @tstamp/@startid in <trill> element')
-            return '', (-1., None, None), None
+            return [('', (-1., None, None), None)]
         if not startId:
             trillExt.mei_needs_start_note = True  # type: ignore
         if not endId:
@@ -5308,10 +5310,8 @@ def trillFromElement(
         output.append((staffNStr, (offset, measSkip, offset2), trillExt))
 
     if not output:
-        return '', (-1., None, None), None
-    if len(output) == 1:
-        return output[0]
-    return output  # type: ignore
+        return [('', (-1., None, None), None)]
+    return output
 
 
 def hairpinFromElement(
@@ -5875,7 +5875,7 @@ def measureFromElement(
                 spannerObj.addSpannedElements(endObj)
                 if staffNStr not in stavesWaitingFromStaffItem:
                     stavesWaitingFromStaffItem[staffNStr] = []
-                stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                stavesWaitingFromStaffItem[staffNStr].append(
                     ((offset, None, None), endObj)
                 )
             else:
@@ -5968,7 +5968,7 @@ def measureFromElement(
                             else:
                                 startObj = note.GeneralNote(duration=duration.Duration(0.))
                             spannerObj.addSpannedElements(startObj)
-                            stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                            stavesWaitingFromStaffItem[staffNStr].append(
                                 ((offset1, None, None), startObj)
                             )
 
@@ -5980,7 +5980,7 @@ def measureFromElement(
                                 else:
                                     endObj = note.GeneralNote(duration=duration.Duration(0.))
                                 spannerObj.addSpannedElements(endObj)
-                                stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
+                                stavesWaitingFromStaffItem[staffNStr].append(
                                     ((offset2, None, None), endObj)
                                 )
                             else:
@@ -5994,7 +5994,7 @@ def measureFromElement(
                         # not a spanner
                         stavesWaitingFromStaffItem[staffNStr].append(
                             (offsets, m21Obj)
-                        )  # type: ignore
+                        )
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
