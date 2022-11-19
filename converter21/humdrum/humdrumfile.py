@@ -6044,66 +6044,63 @@ class HumdrumFile(HumdrumFileContent):
             token.getValueString('auto', str(tokindex), 'trillOtherNoteM21Pitch')
         )
 
-        if t.TYPE_CHECKING:
-            assert trillPitchName is not None
-            assert trillOtherPitchName is not None
+        if trillPitchName is not None and trillOtherPitchName is not None:
+            trillPitch = m21.pitch.Pitch(trillPitchName)
+            trillOtherPitch = m21.pitch.Pitch(trillOtherPitchName)
+            interval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
+                trillPitch, trillOtherPitch
+            )
+            stepsUpFromAnalysis = int(interval.semitones)
+            if stepsUpFromAnalysis != stepsUp:
+                print(f'stepsUpFromAnalysis ({stepsUpFromAnalysis}) != stepsUp ({stepsUp})')
+                stepsUp = stepsUpFromAnalysis
 
-        trillPitch = m21.pitch.Pitch(trillPitchName)
-        trillOtherPitch = m21.pitch.Pitch(trillOtherPitchName)
-        interval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
-            trillPitch, trillOtherPitch
-        )
-        stepsUpFromAnalysis = int(interval.semitones)
-        if stepsUpFromAnalysis != stepsUp:
-            print(f'stepsUpFromAnalysis ({stepsUpFromAnalysis}) != stepsUp ({stepsUp})')
-            stepsUp = stepsUpFromAnalysis
-
-        # replace the trill accidental if different in layout parameters, such as:
-        #    !LO:TR:acc=##
-        # for a double sharp, or
-        #    !LO:TR:acc=none
-        # for no accidental
-        lcount: int = token.linkedParameterSetCount
-        value: str = ''
-        for p in range(0, lcount):
-            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
-            if hps is None:
-                continue
-            if hps.namespace1 != 'LO':
-                continue
-            if hps.namespace2 != 'TR':
-                continue
-            for q in range(0, hps.count):
-                key: str = hps.getParameterName(q)
-                if key == 'acc':
-                    value = hps.getParameterValue(q)
+            # replace the trill accidental if different in layout parameters, such as:
+            #    !LO:TR:acc=##
+            # for a double sharp, or
+            #    !LO:TR:acc=none
+            # for no accidental
+            lcount: int = token.linkedParameterSetCount
+            value: str = ''
+            for p in range(0, lcount):
+                hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
+                if hps is None:
+                    continue
+                if hps.namespace1 != 'LO':
+                    continue
+                if hps.namespace2 != 'TR':
+                    continue
+                for q in range(0, hps.count):
+                    key: str = hps.getParameterName(q)
+                    if key == 'acc':
+                        value = hps.getParameterValue(q)
+                        break
+                if value:
                     break
-            if value:
-                break
 
-        trillNewOtherPitchName: t.Optional[str] = trillOtherPitchName
-        name: str
-        _accidStr: str
-        octaveStr: str
-        name, _accidStr, octaveStr = (
-            M21Utilities.splitM21PitchNameIntoNameAccidOctave(trillOtherPitchName)
-        )
-        if value:
-            if value == 'none':
-                pass  # 'none' doesn't change pitch, just says "don't print it"
-            elif value == 'n':
-                trillNewOtherPitchName = name + octaveStr
-            else:
-                trillNewOtherPitchName = name + value + octaveStr
-        trillNewOtherPitch = m21.pitch.Pitch(trillNewOtherPitchName)
-        newInterval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
-            trillPitch, trillNewOtherPitch
-        )
-        stepsUpFromLayoutParams: int = int(newInterval.semitones)
-        if stepsUpFromLayoutParams != stepsUpFromAnalysis:
-            print(f'stepsUpFromLayoutParams ({stepsUpFromLayoutParams})'
-                f'!= stepsUpFromAnalysis ({stepsUpFromAnalysis})')
-            stepsUp = stepsUpFromLayoutParams
+            trillNewOtherPitchName: t.Optional[str] = trillOtherPitchName
+            name: str
+            _accidStr: str
+            octaveStr: str
+            name, _accidStr, octaveStr = (
+                M21Utilities.splitM21PitchNameIntoNameAccidOctave(trillOtherPitchName)
+            )
+            if value:
+                if value == 'none':
+                    pass  # 'none' doesn't change pitch, just says "don't print it"
+                elif value == 'n':
+                    trillNewOtherPitchName = name + octaveStr
+                else:
+                    trillNewOtherPitchName = name + value + octaveStr
+            trillNewOtherPitch = m21.pitch.Pitch(trillNewOtherPitchName)
+            newInterval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
+                trillPitch, trillNewOtherPitch
+            )
+            stepsUpFromLayoutParams: int = int(newInterval.semitones)
+            if stepsUpFromLayoutParams != stepsUpFromAnalysis:
+                print(f'stepsUpFromLayoutParams ({stepsUpFromLayoutParams})'
+                    f'!= stepsUpFromAnalysis ({stepsUpFromAnalysis})')
+                stepsUp = stepsUpFromLayoutParams
 
         trill: m21.expressions.Trill
         if stepsUp == +1:
@@ -6115,7 +6112,6 @@ class HumdrumFile(HumdrumFileContent):
             trill = m21.expressions.Trill()
             trill.size = m21.interval.ChromaticInterval(stepsUp)
             # trill._setAccidentalFromKeySig = False
-
 
         startNote.expressions.append(trill)
 

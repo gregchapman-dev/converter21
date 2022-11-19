@@ -276,7 +276,7 @@ class M21Utilities:
 
     @staticmethod
     def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
-        patt: str = r'([ABCDEF])([-#]*)([\d]+)'
+        patt: str = r'([ABCDEFG])([-#]*)([\d]+)'
         m = re.match(patt, m21PitchName)
         if m:
             return m.group(1), m.group(2), m.group(3)
