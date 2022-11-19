@@ -5847,6 +5847,8 @@ def measureFromElement(
     ] = None
 
     spannerObj: spanner.Spanner
+    startObj: Music21Object
+    endObj: Music21Object
 
     # Check if we can insert any of the pendingSpannerEnds in this measure.
     # For any we can't, put them in newPendingSpannerEnds so we can try again next measure.
@@ -5866,7 +5868,10 @@ def measureFromElement(
 
             if measSkip == 0:
                 # do the spannerEnd, it's in this Measure
-                endObj = note.GeneralNote(duration=duration.Duration(0.))
+                if M21Utilities.m21SupportsSpannerAnchor():
+                    endObj = spanner.SpannerAnchor()
+                else:
+                    endObj = note.GeneralNote(duration=duration.Duration(0.))
                 spannerObj.addSpannedElements(endObj)
                 if staffNStr not in stavesWaitingFromStaffItem:
                     stavesWaitingFromStaffItem[staffNStr] = []
@@ -5958,19 +5963,25 @@ def measureFromElement(
                             del spannerObj.mei_needs_end_note  # type: ignore
 
                         if needsStartNote:
-                            startNote = note.GeneralNote(duration=duration.Duration(0.))
-                            spannerObj.addSpannedElements(startNote)
+                            if M21Utilities.m21SupportsSpannerAnchor():
+                                startObj = spanner.SpannerAnchor()
+                            else:
+                                startObj = note.GeneralNote(duration=duration.Duration(0.))
+                            spannerObj.addSpannedElements(startObj)
                             stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
-                                ((offset1, None, None), startNote)
+                                ((offset1, None, None), startObj)
                             )
 
                         if needsEndNote:
                             if measSkip2 == 0:
                                 # do the endObj as well, it's in this same Measure
-                                endNote = note.GeneralNote(duration=duration.Duration(0.))
-                                spannerObj.addSpannedElements(endNote)
+                                if M21Utilities.m21SupportsSpannerAnchor():
+                                    endObj = spanner.SpannerAnchor()
+                                else:
+                                    endObj = note.GeneralNote(duration=duration.Duration(0.))
+                                spannerObj.addSpannedElements(endObj)
                                 stavesWaitingFromStaffItem[staffNStr].append(  # type: ignore
-                                    ((offset2, None, None), endNote)
+                                    ((offset2, None, None), endObj)
                                 )
                             else:
                                 # endNote has to wait for a subsequent measure
@@ -6367,7 +6378,7 @@ def sectionScoreCore(
                     if endingTag == eachElem.tag:
                         # make the RepeatBracket for the ending
                         bracketNStr: t.Optional[str] = eachElem.get('n')
-                        n: t.Optional[int] = None
+                        n: int = 0
                         if bracketNStr is not None:
                             try:
                                 n = int(bracketNStr)

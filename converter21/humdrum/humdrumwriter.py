@@ -482,7 +482,7 @@ class HumdrumWriter:
     def _emitContributorNameList(
             outfile: HumdrumFile,
             c: m21.metadata.Contributor,
-            skipName: m21.metadata.Text = None
+            skipName: t.Optional[m21.metadata.Text] = None
     ) -> None:
 
         # Only used by old code (pre-DublinCore).
@@ -1752,6 +1752,10 @@ class HumdrumWriter:
                         pass
                 elif isinstance(m21Obj, (m21.layout.PageLayout, m21.layout.SystemLayout)):
                     self._processPrintElement(outgm, m21Obj, nowTime)
+                # elif isinstance(m21Obj, m21.spanner.SpannerAnchor):
+                #     # Just ignore it; it's only here to be in a Spanner (like DynamicWedge),
+                #     # and we've already handled that.
+                #    pass
 
         self._addGraceLines(outgm, graceBefore, nowTime)
 

@@ -361,6 +361,21 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsArpeggioMarks = False
         return False
 
+    _cachedM21SupportsSpannerAnchor: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsSpannerAnchor() -> bool:
+        if M21Utilities._cachedM21SupportsSpannerAnchor is not None:
+            return M21Utilities._cachedM21SupportsSpannerAnchor
+
+        if hasattr(m21.spanner, 'SpannerAnchor'):
+            M21Utilities._cachedM21SupportsSpannerAnchor = True
+            return True
+
+        M21Utilities._cachedM21SupportsSpannerAnchor = False
+        return False
+
+
+
 
 class M21StaffGroupTree:
     def __init__(
