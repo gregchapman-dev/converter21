@@ -8157,7 +8157,10 @@ class HumdrumFile(HumdrumFileContent):
                 startNote = self._getGeneralNoteOrPlaceHolder(startNoteToken)
             else:
                 # couldn't find a startNote, so make a fake one and insert it in the measure
-                startNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
+                if M21Utilities.m21SupportsSpannerAnchor():
+                    startNote = m21.spanner.SpannerAnchor()
+                else:
+                    startNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
                 measure.insert(
                     opFrac(voiceOffsetInMeasure + dynamicOffsetInVoice),
                     startNote
@@ -8168,7 +8171,10 @@ class HumdrumFile(HumdrumFileContent):
                 endNote = self._getGeneralNoteOrPlaceHolder(endNoteToken)
             else:
                 # couldn't find an endNote, so make a fake one and insert it in a measure
-                endNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
+                if M21Utilities.m21SupportsSpannerAnchor():
+                    endNote = m21.spanner.SpannerAnchor()
+                else:
+                    endNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
                 # compute measures to skip and offset2 (in that final measure)
                 offset2: HumNum
                 if leftNoteDuration > 0:
