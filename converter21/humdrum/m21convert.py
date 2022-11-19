@@ -385,6 +385,7 @@ class M21Convert:
 
         return M21Convert.diatonicToM21PitchName[diatonic] + accidStr
 
+    # pylint: disable=no-member
     if hasattr(m21.common.types, 'StepName'):
         @staticmethod
         def m21StepNameV8(subTokenStr: str) -> t.Optional[m21.common.types.StepName]:
@@ -395,6 +396,7 @@ class M21Convert:
                 return None
 
             return M21Convert.diatonicToM21StepName[diatonic]
+    # pylint: enable=no-member
 
     # We can remove the following (and unconditionalize and rename m21StepNameV8)
     # once we no longer need to support music21 v7

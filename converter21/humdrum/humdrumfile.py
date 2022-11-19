@@ -2163,7 +2163,7 @@ class HumdrumFile(HumdrumFileContent):
                          voiceOffsetInMeasure: HumNumIn,
                          token: HumdrumToken) -> bool:
         # TODO: pedal marks
-        pass  # returns None from _handlePedalMark, which will evaluate to False appropriately
+        return False
 
     def _handleCustos(self,
                       measureIndex: int,
@@ -2171,7 +2171,7 @@ class HumdrumFile(HumdrumFileContent):
                       voiceOffsetInMeasure: HumNumIn,
                       token: HumdrumToken) -> bool:
         # TODO: *custos
-        pass  # returns None from _handleCustos, which will evaluate to False appropriately
+        return False
 
     def _handleRepInterp(self,
                          measureIndex: int,
@@ -2179,14 +2179,14 @@ class HumdrumFile(HumdrumFileContent):
                          voiceOffsetInMeasure: HumNumIn,
                          token: HumdrumToken) -> bool:
         # TODO: *rep (repetition element)
-        pass  # returns None from _handleRepInterp, which will evaluate to False appropriately
+        return False
 
     def _handleColorInterp(self, measureIndex: int, token: HumdrumToken) -> None:
         # TODO: *color (spine color)
         # if '*color:' not in token.text:
         #     return
         # self.setSpineColorFromColorInterpToken(token)
-        pass  # _handleColorInterp needs implementation
+        return  # _handleColorInterp needs implementation
 
     @staticmethod
     def _handleClefChange(_measureIndex: int,
@@ -2917,7 +2917,7 @@ class HumdrumFile(HumdrumFileContent):
     def _makeTuplet(numberNotesActual: int,
                     numberNotesNormal: int,
                     durationNormal: t.Optional[m21.duration.DurationTuple],
-                    numScale: int = None) -> m21.duration.Tuplet:
+                    numScale: t.Optional[int] = None) -> m21.duration.Tuplet:
 
         numActual: int = numberNotesActual
         numNormal: int = numberNotesNormal
@@ -7609,8 +7609,7 @@ class HumdrumFile(HumdrumFileContent):
                                 voiceOffsetInMeasure: HumNumIn,
                                 layerTok: HumdrumToken,
                                 staffIndex: int) -> bool:
-        # returns None from _processOtherLayerToken, which will evaluate to False appropriately
-        pass
+        return False
 
     '''
         _processSuppressedLayerToken

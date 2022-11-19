@@ -1691,8 +1691,8 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     '''
     def getTrackSequence(
             self,
-            track: int = None,
-            startToken: HumdrumToken = None,
+            track: t.Optional[int] = None,
+            startToken: t.Optional[HumdrumToken] = None,
             options: int = 0
     ) -> t.List[t.List[HumdrumToken]]:
         output: t.List[t.List[HumdrumToken]] = []
