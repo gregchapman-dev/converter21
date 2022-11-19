@@ -2730,7 +2730,7 @@ class Test(unittest.TestCase):
                                         attrib={'num': theNum, 'numbase': theNumbase})]
         mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
         expWarning = ('Importing <tupletSpan> without @startid and '
-                      + '@endid or @plist is not yet supported.')
+                      + '@endid, or @plist is not yet supported.')
 
         base._ppTuplets(mockConverter)
 
