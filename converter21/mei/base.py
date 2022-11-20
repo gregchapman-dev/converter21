@@ -5869,7 +5869,9 @@ def measureFromElement(
             if measSkip == 0:
                 # do the spannerEnd, it's in this Measure
                 if M21Utilities.m21SupportsSpannerAnchor():
-                    endObj = spanner.SpannerAnchor()
+                    # pylint: disable=no-member
+                    endObj = spanner.SpannerAnchor()  # type: ignore
+                    # pylint: enable=no-member
                 else:
                     endObj = note.GeneralNote(duration=duration.Duration(0.))
                 spannerObj.addSpannedElements(endObj)
@@ -5964,7 +5966,9 @@ def measureFromElement(
 
                         if needsStartNote:
                             if M21Utilities.m21SupportsSpannerAnchor():
-                                startObj = spanner.SpannerAnchor()
+                                # pylint: disable=no-member
+                                startObj = spanner.SpannerAnchor()  # type: ignore
+                                # pylint: enable=no-member
                             else:
                                 startObj = note.GeneralNote(duration=duration.Duration(0.))
                             spannerObj.addSpannedElements(startObj)
@@ -5976,7 +5980,9 @@ def measureFromElement(
                             if measSkip2 == 0:
                                 # do the endObj as well, it's in this same Measure
                                 if M21Utilities.m21SupportsSpannerAnchor():
-                                    endObj = spanner.SpannerAnchor()
+                                    # pylint: disable=no-member
+                                    endObj = spanner.SpannerAnchor()  # type: ignore
+                                    # pylint: enable=no-member
                                 else:
                                     endObj = note.GeneralNote(duration=duration.Duration(0.))
                                 spannerObj.addSpannedElements(endObj)

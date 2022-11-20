@@ -8154,7 +8154,9 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 # couldn't find a startNote, so make a fake one and insert it in the measure
                 if M21Utilities.m21SupportsSpannerAnchor():
-                    startNote = m21.spanner.SpannerAnchor()
+                    # pylint: disable=no-member
+                    startNote = m21.spanner.SpannerAnchor()  # type: ignore
+                    # pylint: enable=no-member
                 else:
                     startNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
                 measure.insert(
@@ -8168,7 +8170,9 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 # couldn't find an endNote, so make a fake one and insert it in a measure
                 if M21Utilities.m21SupportsSpannerAnchor():
-                    endNote = m21.spanner.SpannerAnchor()
+                    # pylint: disable=no-member
+                    endNote = m21.spanner.SpannerAnchor()  # type: ignore
+                    # pylint: enable=no-member
                 else:
                     endNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
                 # compute measures to skip and offset2 (in that final measure)
