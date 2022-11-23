@@ -1,0 +1,48 @@
+!!!COM: Beethoven, Ludwig van
+!!!CDT: 1770-1827
+!!!OTL: Piano Sonata no. 7 in D major
+!!!OPS: 10
+!!!ONM: 3
+!!!OMV: 2
+!!!OMD: Largo e mesto
+**kern	**kern	**dynam
+*staff2	*staff1	*staff1/2
+*Ipiano	*Ipiano	*Ipiano
+*clefG2	*clefG2	*clefG2
+*k[b-]	*k[b-]	*k[b-]
+*d:	*d:	*d:
+*M6/8	*M6/8	*M6/8
+*MM40	*MM40	*MM40
+=63	=63	=63
+*^	*^	*
+*	*	*8va	*	*
+4.f# 4.a	(8.cnL	(<8.ee- 8.eee-L	4.ff# 4.aa	ffp
+.	16dL)	16dd) 16dddL	.	.
+.	16e-'>	16ccn'< 16cccn'<	.	.
+.	16A'>JJ	16ee-'< 16eee-'<JJ	.	.
+4.g# 4.bn	(8.dL	(<8.ffn 8.fffnL	4.gg# 4.bbn	ffp
+.	16enL)	16een) 16eeenL	.	.
+.	16fn'>	16dd'< 16ddd'<	.	.
+.	16d'>JJ	16ff'< 16fff'<JJ	.	.
+!!LO:LB:g=z
+=64	=64	=64	=64	=64
+8cc#	8e' 8gn' 8b-X'	8ccc#	8ee 8ggn 8bb-X	.
+*	*	*X8va	*	*
+8r	8r	8r	8r	.
+(<8f'< 8a'<L	4.ryy	4.ryy	8dd' 8ff' 8aa' (8ddd'L	p
+8G'<) 8d'< 8e'< 8g'<J	.	.	8b-' 8dd' 8ee' 8bb-'J)	.
+4r	.	.	4r	.
+*v	*v	*	*	*
+*	*v	*v	*
+==	==	==
+*-	*-	*-
+!!!RDF**kern: > = above
+!!!RDF**kern: < = below
+!!!RDF**kern: i = editorial accidental
+!!!LOR: Durand 1915, plates 9327/9328, Paul Dukas, ed.
+!!!URL-vhv: https://verovio.humdrum.org/?file=beethoven/sonatas/sonata07-2.krn
+!!!URL-pdf: https://github.com/craigsapp/beethoven-piano-sonatas/blob/master/reference-edition/sonata07-2.pdf
+!!!ENC: Craig Stuart Sapp
+!!!END: 2008/10/29
+!!!EED: Craig Stuart Sapp
+!!!EEV: 2021/01/11

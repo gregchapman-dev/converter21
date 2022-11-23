@@ -450,12 +450,12 @@ class StaffStateVariables:
         self.suppressTupletNumber: bool = False
         self.suppressTupletBracket: bool = False
 
-#         # ottava stuff (each current ottava is not None if we're currently
-#         # accumulating notes into that ottava).
-#         self.currentOttava1Up: t.Optional[m21.spanner.Ottava] = None
-#         self.currentOttava1Down: t.Optional[m21.spanner.Ottava] = None
-#         self.currentOttava2Up: t.Optional[m21.spanner.Ottava] = None
-#         self.currentOttava2Down: t.Optional[m21.spanner.Ottava] = None
+        # ottava stuff (each current ottava is not None if we're currently
+        # accumulating notes into that ottava).
+        self.currentOttava1Up: t.Optional[m21.spanner.Ottava] = None
+        self.currentOttava1Down: t.Optional[m21.spanner.Ottava] = None
+        self.currentOttava2Up: t.Optional[m21.spanner.Ottava] = None
+        self.currentOttava2Down: t.Optional[m21.spanner.Ottava] = None
 
         '''
             Next we have temporary (processing) state about this staff (current measure, etc)
@@ -1749,8 +1749,8 @@ class HumdrumFile(HumdrumFileContent):
 
         ss: StaffStateVariables = self._staffStates[staffIndex]
 
-#         # check for ottava start at or before start of first measure
-#         self._prepareInitialOttavas(layerData[0], staffIndex)
+        # check for ottava start at or before start of first measure
+        self._prepareInitialOttavas(layerData[0], staffIndex)
 
         # cadenzas can have measure entirely made up of grace notes...
         # don't bail on measureDuration == 0!
@@ -1974,7 +1974,7 @@ class HumdrumFile(HumdrumFileContent):
                 insertedIntoVoice = True
 
         # TODO: ottava marks
-#         self._handleOttavaMark(measureIndex, layerTok, staffIndex)
+        self._handleOttavaMark(measureIndex, layerTok, staffIndex)
         # self._handleLigature(layerTok) # just for **mens
         # self._handleColoration(layerTok) # just for **mens
         self._handleTempoChange(measureIndex, layerTok, staffIndex)
@@ -1995,167 +1995,167 @@ class HumdrumFile(HumdrumFileContent):
 
         return insertedIntoVoice
 
-#     def _prepareInitialOttavas(
-#         self,
-#         token: t.Union[HumdrumToken, FakeRestToken],
-#         staffIndex: int
-#     ):
-#         if token is None:
-#             return
-#
-#         if token.isFakeRest:
-#             return
-#
-#         if t.TYPE_CHECKING:
-#             assert isinstance(token, HumdrumToken)
-#
-#         if token.durationFromStart > 0:
-#             # not "initial"
-#             return
-#
-#         if token.subTrack > 1:
-#             # only check for initial ottavas in the first layer
-#             return
-#
-#         tok: t.Optional[HumdrumToken] = token.previousToken0
-#         while tok is not None:
-#             if not tok.isInterpretation:
-#                 tok = tok.previousToken0
-#                 continue
-#
-#             if tok.text in ('*8va', '*8ba', '*15ma', '*15ba'):
-#                 self._handleOttavaMark(0, tok, staffIndex)
-#                 break
-#
-#             tok = tok.previousToken0
-#
-#     def _handleOttavaMark(
-#         self,
-#         measureIndex: int,
-#         token: t.Union[HumdrumToken, FakeRestToken],
-#         staffIndex: int
-#     ):
-#         ss: StaffStateVariables
-#         measure: m21.stream.Measure
-#
-#         if token.isFakeRest:
-#             return
-#         if t.TYPE_CHECKING:
-#             assert isinstance(token, HumdrumToken)
-#
-#         if token.text == '*8va':
-#             # turn on "up one octave" ottava
-#             ss = self._staffStates[staffIndex]
-#             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-#             # create it
-#             ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
-#             # put it in the measure
-#             measure.insert(0, ss.currentOttava1Up)
-#             return
-#
-#         if token.text == '*8ba':
-#             # turn on "down one octave" ottava
-#             ss = self._staffStates[staffIndex]
-#             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-#             # create it
-#             ss.currentOttava1Down = m21.spanner.Ottava(type='8ba', transposing=False)
-#             # put it in the measure
-#             measure.insert(0, ss.currentOttava1Down)
-#             return
-#
-#         if token.text == '*15ma':
-#             # turn on "up two octaves" ottava
-#             ss = self._staffStates[staffIndex]
-#             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-#             # create it
-#             ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
-#             # put it in the measure
-#             measure.insert(0, ss.currentOttava2Up)
-#             return
-#
-#         if token.text == '*15ba':
-#             # turn on "down two octaves" ottava
-#             ss = self._staffStates[staffIndex]
-#             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-#             # create it
-#             ss.currentOttava2Down = m21.spanner.Ottava(type='15ba', transposing=False)
-#             # put it in the measure
-#             measure.insert(0, ss.currentOttava2Down)
-#             return
-#
-#         if token.text == '*X8va':
-#             # turn off "up one octave" ottava
-#             ss = self._staffStates[staffIndex]
-#             # find and add all the other notes in this staff that come before this ottava end
-#             self._endOttava(token, ss.currentOttava1Up)
-#             ss.currentOttava1Up = None
-#             return
-#
-#         if token.text == '*X8ba':
-#             # turn off "down one octave" ottava
-#             ss = self._staffStates[staffIndex]
-#             self._endOttava(token, ss.currentOttava1Down)
-#             ss.currentOttava1Down = None
-#             return
-#
-#         if token.text == '*X15ma':
-#             # turn off "up two octaves" ottava
-#             ss = self._staffStates[staffIndex]
-#             self._endOttava(token, ss.currentOttava2Up)
-#             ss.currentOttava2Up = None
-#             return
-#
-#         if token.text == '*X15ba':
-#             # turn off "down two octaves" ottava
-#             ss = self._staffStates[staffIndex]
-#             self._endOttava(token, ss.currentOttava2Down)
-#             ss.currentOttava2Down = None
-#             return
-#
-#     def _endOttava(self, token: HumdrumToken, ottava: t.Optional[m21.spanner.Ottava]):
-#         # Search backward for the first previous data line, then add the
-#         # notes/chords from all the tokens (in our staff/track) on that line.
-#         if ottava is None:
-#             return
-#
-#         tok: t.Optional[HumdrumToken] = token.previousToken0
-#         while tok is not None and not tok.isData:
-#             tok = tok.previousToken0
-#
-#         if tok is None:
-#             # couldn't find a previous data line
-#             return
-#
-#         ourTrack: t.Optional[int] = tok.track
-#         ttrack: t.Optional[int] = ourTrack
-#         noteTokens: t.List[HumdrumToken] = []
-#
-#         while ttrack == ourTrack:
-#             xtok: HumdrumToken = tok
-#             if xtok.isNull:
-#                 xtok = xtok.nullResolution
-#             if xtok is None:
-#                 tok = tok.nextFieldToken
-#                 if tok is None:
-#                     break
-#                 ttrack = tok.track
-#                 continue
-#
-#             # skip rests (notes and chords only)
-#             if not xtok.isRest:
-#                 noteTokens.append(xtok)
-#                 tok = tok.nextFieldToken
-#                 if tok is None:
-#                     break
-#                 ttrack = tok.track
-#
-#         for noteTok in noteTokens:
-#             # the actual note or chord may not have been created yet, but
-#             # _getGeneralNoteOrPlaceHolder will make it work like it has.
-#             # If it gives us a placeholder, the actual note will automatically
-#             # take its place in the ottava later.
-#             gNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(noteTok)
-#             ottava.addSpannedElements(gNote)
+    def _prepareInitialOttavas(
+        self,
+        token: t.Union[HumdrumToken, FakeRestToken],
+        staffIndex: int
+    ):
+        if token is None:
+            return
+
+        if token.isFakeRest:
+            return
+
+        if t.TYPE_CHECKING:
+            assert isinstance(token, HumdrumToken)
+
+        if token.durationFromStart > 0:
+            # not "initial"
+            return
+
+        if token.subTrack > 1:
+            # only check for initial ottavas in the first layer
+            return
+
+        tok: t.Optional[HumdrumToken] = token.previousToken0
+        while tok is not None:
+            if not tok.isInterpretation:
+                tok = tok.previousToken0
+                continue
+
+            if tok.text in ('*8va', '*8ba', '*15ma', '*15ba'):
+                self._handleOttavaMark(0, tok, staffIndex)
+                break
+
+            tok = tok.previousToken0
+
+    def _handleOttavaMark(
+        self,
+        measureIndex: int,
+        token: t.Union[HumdrumToken, FakeRestToken],
+        staffIndex: int
+    ):
+        ss: StaffStateVariables
+        measure: m21.stream.Measure
+
+        if token.isFakeRest:
+            return
+        if t.TYPE_CHECKING:
+            assert isinstance(token, HumdrumToken)
+
+        if token.text == '*8va':
+            # turn on "up one octave" ottava
+            ss = self._staffStates[staffIndex]
+            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
+            # create it
+            ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
+            # put it in the measure
+            measure.insert(0, ss.currentOttava1Up)
+            return
+
+        if token.text == '*8ba':
+            # turn on "down one octave" ottava
+            ss = self._staffStates[staffIndex]
+            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
+            # create it
+            ss.currentOttava1Down = m21.spanner.Ottava(type='8ba', transposing=False)
+            # put it in the measure
+            measure.insert(0, ss.currentOttava1Down)
+            return
+
+        if token.text == '*15ma':
+            # turn on "up two octaves" ottava
+            ss = self._staffStates[staffIndex]
+            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
+            # create it
+            ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
+            # put it in the measure
+            measure.insert(0, ss.currentOttava2Up)
+            return
+
+        if token.text == '*15ba':
+            # turn on "down two octaves" ottava
+            ss = self._staffStates[staffIndex]
+            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
+            # create it
+            ss.currentOttava2Down = m21.spanner.Ottava(type='15ba', transposing=False)
+            # put it in the measure
+            measure.insert(0, ss.currentOttava2Down)
+            return
+
+        if token.text == '*X8va':
+            # turn off "up one octave" ottava
+            ss = self._staffStates[staffIndex]
+            # find and add all the other notes in this staff that come before this ottava end
+            self._endOttava(token, ss.currentOttava1Up)
+            ss.currentOttava1Up = None
+            return
+
+        if token.text == '*X8ba':
+            # turn off "down one octave" ottava
+            ss = self._staffStates[staffIndex]
+            self._endOttava(token, ss.currentOttava1Down)
+            ss.currentOttava1Down = None
+            return
+
+        if token.text == '*X15ma':
+            # turn off "up two octaves" ottava
+            ss = self._staffStates[staffIndex]
+            self._endOttava(token, ss.currentOttava2Up)
+            ss.currentOttava2Up = None
+            return
+
+        if token.text == '*X15ba':
+            # turn off "down two octaves" ottava
+            ss = self._staffStates[staffIndex]
+            self._endOttava(token, ss.currentOttava2Down)
+            ss.currentOttava2Down = None
+            return
+
+    def _endOttava(self, token: HumdrumToken, ottava: t.Optional[m21.spanner.Ottava]):
+        # Search backward for the first previous data line, then add the
+        # notes/chords from all the tokens (in our staff/track) on that line.
+        if ottava is None:
+            return
+
+        tok: t.Optional[HumdrumToken] = token.previousToken0
+        while tok is not None and not tok.isData:
+            tok = tok.previousToken0
+
+        if tok is None:
+            # couldn't find a previous data line
+            return
+
+        ourTrack: t.Optional[int] = tok.track
+        ttrack: t.Optional[int] = ourTrack
+        noteTokens: t.List[HumdrumToken] = []
+
+        while ttrack == ourTrack:
+            xtok: HumdrumToken = tok
+            if xtok.isNull:
+                xtok = xtok.nullResolution
+            if xtok is None:
+                tok = tok.nextFieldToken
+                if tok is None:
+                    break
+                ttrack = tok.track
+                continue
+
+            # skip rests (notes and chords only)
+            if not xtok.isRest:
+                noteTokens.append(xtok)
+                tok = tok.nextFieldToken
+                if tok is None:
+                    break
+                ttrack = tok.track
+
+        for noteTok in noteTokens:
+            # the actual note or chord may not have been created yet, but
+            # _getGeneralNoteOrPlaceHolder will make it work like it has.
+            # If it gives us a placeholder, the actual note will automatically
+            # take its place in the ottava later.
+            gNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(noteTok)
+            ottava.addSpannedElements(gNote)
 
     def _handlePedalMark(self,
                          measureIndex: int,
@@ -5645,7 +5645,7 @@ class HumdrumFile(HumdrumFileContent):
 
         layerTok.setValue('music21', 'measureIndex', measureIndex)
 
-#         self._processOttava(chord, staffIndex)
+        self._processOttava(chord, staffIndex)
 
         self._convertVerses(chord, layerTok)
         return chord
@@ -6672,8 +6672,8 @@ class HumdrumFile(HumdrumFileContent):
         # (e.g. use note.style.color = 'red')
         self._colorNote(note, token, tstring)
 
-#         if not isChord:
-#             self._processOttava(note, staffIndex)
+        if not isChord:
+            self._processOttava(note, staffIndex)
 
         # check for accacciatura ('q') and appoggiatura ('qq')
         if not isChord and 'q' in tstring:
@@ -6893,16 +6893,16 @@ class HumdrumFile(HumdrumFileContent):
 
         return note
 
-#     def _processOttava(self, noteOrChord: m21.note.NotRest, staffIndex: int):
-#         ss: StaffStateVariables = self._staffStates[staffIndex]
-#         if ss.currentOttava1Up is not None:
-#             ss.currentOttava1Up.addSpannedElements(noteOrChord)
-#         if ss.currentOttava1Down is not None:
-#             ss.currentOttava1Down.addSpannedElements(noteOrChord)
-#         if ss.currentOttava2Up is not None:
-#             ss.currentOttava2Up.addSpannedElements(noteOrChord)
-#         if ss.currentOttava2Down is not None:
-#             ss.currentOttava2Down.addSpannedElements(noteOrChord)
+    def _processOttava(self, noteOrChord: m21.note.NotRest, staffIndex: int):
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+        if ss.currentOttava1Up is not None:
+            ss.currentOttava1Up.addSpannedElements(noteOrChord)
+        if ss.currentOttava1Down is not None:
+            ss.currentOttava1Down.addSpannedElements(noteOrChord)
+        if ss.currentOttava2Up is not None:
+            ss.currentOttava2Up.addSpannedElements(noteOrChord)
+        if ss.currentOttava2Down is not None:
+            ss.currentOttava2Down.addSpannedElements(noteOrChord)
 
     '''
     //////////////////////////////
