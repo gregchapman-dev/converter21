@@ -227,6 +227,7 @@ _IGNORE_UNPROCESSED = (
     # f'{MEI_NS}pb',        # page break
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
+    f'{MEI_NS}octave',      # octaves; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
@@ -351,6 +352,7 @@ class MeiToM21Converter:
         _ppTuplets(self)
         _ppFermatas(self)
         _ppArpeggios(self)
+        _ppOctaves(self)
         _ppTrills(self)
         _ppConclude(self)
 
@@ -1211,6 +1213,78 @@ def _ppTrills(theConverter: MeiToM21Converter):
             eachTrill.set('m21TrillExtension', thisIdLocal)
 
 
+_M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: t.Dict[t.Tuple[str, str], str] = {
+    ('8', 'above'): '8va',
+    ('8', 'below'): '8vb',
+    ('15', 'above'): '15ma',
+    ('15', 'below'): '15mb',
+    ('22', 'above'): '22da',
+    ('22', 'below'): '22db',
+}
+
+def _ppOctaves(theConverter: MeiToM21Converter):
+    '''
+    Pre-processing helper for :func:`convertFromString` that handles ottavas specified in <octave>
+    elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+    processed. This function reads from ``theConverter.documentRoot`` and writes into
+    ``theConverter.m21Attr``.
+
+    :param theConverter: The object responsible for storing data about this import.
+    :type theConverter: :class:`MeiToM21Converter`.
+
+    **This Preprocessor**
+
+    The octave preprocessor works similarly to the tie preprocessor, adding @m21OttavaStart and
+    @m21OttavaEnd attributes to any referenced notes/chords.
+
+    **Example of ``m21Attr``**
+
+    The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+    dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
+    dict holds attribute names and their values that should be added to the element with the
+    given @xml:id.
+
+    For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
+    element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
+    '''
+    environLocal.printDebug('*** pre-processing octaves')
+    # for readability, we use a single-letter variable
+    c = theConverter
+
+    for eachOctave in c.documentRoot.iterfind(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}octave'):
+        startId: str = removeOctothorpe(eachOctave.get('startid', ''))  # type: ignore
+        endId: str = removeOctothorpe(eachOctave.get('endid', ''))  # type: ignore
+        amount: str = eachOctave.get('dis', '')
+        direction: str = eachOctave.get('dis.place', '')
+        if not amount or not direction:
+            environLocal.warn('<octave> without @dis and/or @dis.place: ignoring')
+            continue
+        if (amount, direction) not in _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE:
+            environLocal.warn(
+                f'octave@dis ({amount}) or octave@dis.place ({direction}) invalid: ignoring'
+            )
+            continue
+
+        if not startId or not endId:
+            environLocal.warn(
+                _UNIMPLEMENTED_IMPORT_WITHOUT.format('<octave>', '@startid and @endid')
+            )
+            continue
+
+        ottavaType: str = _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE[(amount, direction)]
+        ottava = spanner.Ottava(type=ottavaType)
+        ottava.transposing = True  # we will use @oct (not @oct.ges) in octave-shifted notes/chords
+        if t.TYPE_CHECKING:
+            # work around Spanner.idLocal being incorrectly type-hinted as None
+            assert isinstance(ottava.idLocal, str)
+        thisIdLocal: str = str(uuid4())
+        ottava.idLocal = thisIdLocal
+        c.spannerBundle.append(ottava)
+        c.m21Attr[startId]['m21OttavaStart'] = thisIdLocal
+        c.m21Attr[endId]['m21OttavaEnd'] = thisIdLocal
+
+
 def _ppArpeggios(theConverter: MeiToM21Converter):
     '''
     Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in <arpeg>
@@ -1699,17 +1773,28 @@ def addSlurs(
     return addedSlur
 
 
+def addOttavas(
+    elem: Element,
+    obj: note.NotRest,
+    spannerBundle: spanner.SpannerBundle
+):
+    ottavaId: str = elem.get('m21OttavaStart', '')
+    if ottavaId:
+        safeAddToSpannerByIdLocal(obj, ottavaId, spannerBundle)
+    ottavaId = elem.get('m21OttavaEnd', '')
+    if ottavaId:
+        safeAddToSpannerByIdLocal(obj, ottavaId, spannerBundle)
+
+
 def addArpeggio(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-) -> bool:
-    addedArpeggio: bool = False
-
+):
     # if appropriate, add this note/chord to an ArpeggioMarkSpanner
     arpId: str = elem.get('m21ArpeggioMarkSpanner', '')
     if arpId:
-        addedArpeggio = safeAddToSpannerByIdLocal(obj, arpId, spannerBundle)
+        safeAddToSpannerByIdLocal(obj, arpId, spannerBundle)
 
     # check to see if this note/chord is arpeggiated all by itself,
     # and if so, make the ArpeggioMark and append it to the note/chord's
@@ -1718,25 +1803,20 @@ def addArpeggio(
     if arpeggioType:
         arpeggio = expressions.ArpeggioMark(arpeggioType=arpeggioType)
         obj.expressions.append(arpeggio)
-        addedArpeggio = True
-
-    return addedArpeggio
 
 
 def addTrill(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-) -> bool:
-    addedTrill: bool = False
-
+):
     # if appropriate, add this note/chord to a trillExtension
     trillExtId: str = elem.get('m21TrillExtensionStart', '')
     if trillExtId:
-        addedTrill = safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
+        safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
     trillExtId = elem.get('m21TrillExtensionEnd', '')
     if trillExtId:
-        addedTrill = addedTrill or safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
+        safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
 
     # check to see if this note/chord needs a trill by itself,
     # and if so, make the Trill and append it to the note/chord's
@@ -1744,7 +1824,7 @@ def addTrill(
     trill: expressions.Trill
     place: str = elem.get('m21Trill', '')
     if not place:
-        return addedTrill
+        return
 
     accidUpper: str = elem.get('m21TrillAccidUpper', '')
     accidLower: str = elem.get('m21TrillAccidLower', '')
@@ -1764,9 +1844,7 @@ def addTrill(
         trill.placement = place
 
     obj.expressions.append(trill)
-    addedTrill = True
 
-    return addedTrill
 
 def updateExpression(
     expr: expressions.Expression,
@@ -3274,12 +3352,9 @@ def noteFromElement(
 
     pnameStr: str = elem.get('pname', '')
 
-    # Here we prefer @oct.ges.  This is only because we don't yet support
-    # <octave> elements, so it's best in that case to print the gestural
-    # octave rather than what would be printed under the ottava we left out.
-    octStr: str = elem.get('oct.ges', '')
+    octStr: str = elem.get('oct', '')
     if not octStr:
-        octStr = elem.get('oct', '')
+        octStr = elem.get('oct.ges', '')
     if theAccidObj is not None:
         theNote.pitch = safePitch(pnameStr, theAccidObj, octStr)
     elif theAccidGes is not None:
@@ -3318,6 +3393,7 @@ def noteFromElement(
 
     addArpeggio(elem, theNote, spannerBundle)
     addTrill(elem, theNote, spannerBundle)
+    addOttavas(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -3705,6 +3781,7 @@ def chordFromElement(
 
     addArpeggio(elem, theChord, spannerBundle)
     addTrill(elem, theChord, spannerBundle)
+    addOttavas(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -6637,7 +6714,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     #         f'{MEI_NS}lv': lvFromElement,
     #        f'{MEI_NS}mNum': mNumFromElement,
     #        f'{MEI_NS}mordent': mordentFromElement,
-    #         f'{MEI_NS}octave': octaveFromElement,
+    # f'{MEI_NS}octave': octaveFromElement,  # all handled in _ppOctaves, note/chordFromElement
     #         f'{MEI_NS}pedal': pedalFromElement,
     #         f'{MEI_NS}phrase': phraseFromElement,
     #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
