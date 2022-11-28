@@ -374,6 +374,19 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsSpannerAnchor = False
         return False
 
+    _cachedM21SupportsSpannerFill: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsSpannerFill() -> bool:
+        if M21Utilities._cachedM21SupportsSpannerFill is not None:
+            return M21Utilities._cachedM21SupportsSpannerFill
+
+        if hasattr(m21.spanner.Spanner, 'fillIntermediateSpannedElements'):
+            M21Utilities._cachedM21SupportsSpannerFill = True
+            return True
+
+        M21Utilities._cachedM21SupportsSpannerFill = False
+        return False
+
 
 
 

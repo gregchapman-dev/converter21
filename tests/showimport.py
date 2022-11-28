@@ -6,7 +6,7 @@ import subprocess
 
 from music21.base import VERSION_STR
 from music21 import converter
-from converter21 import MEIConverter
+from converter21 import MEIConverter, HumdrumConverter
 
 
 def runTheTest(filePath: Path):
@@ -33,8 +33,8 @@ def runTheTest(filePath: Path):
     score1.show('musicxml.pdf', makeNotation=False)
 
     # write the musicxml file and open in bbedit
-#     fp = score1.write('musicxml', makeNotation=False)
-#     subprocess.run(['bbedit', str(fp)], check=False)
+    fp = score1.write('musicxml', makeNotation=False)
+    subprocess.run(['bbedit', str(fp)], check=False)
     return True
 
 # ------------------------------------------------------------------------------
@@ -44,6 +44,8 @@ def runTheTest(filePath: Path):
 '''
 converter.unregisterSubconverter(converter.subConverters.ConverterMEI)
 converter.registerSubconverter(MEIConverter)
+converter.unregisterSubconverter(converter.subConverters.ConverterHumdrum)
+converter.registerSubconverter(HumdrumConverter)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file')

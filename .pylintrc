@@ -348,7 +348,7 @@ max-statements=100
 max-parents=7
 
 # Maximum number of nested blocks for function / method body
-max-nested-blocks=8
+max-nested-blocks=10
 
 # Maximum number of attributes for a class (see R0902).
 max-attributes=20

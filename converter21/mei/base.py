@@ -227,7 +227,6 @@ _IGNORE_UNPROCESSED = (
     # f'{MEI_NS}pb',        # page break
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
-    f'{MEI_NS}octave',      # octaves; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
@@ -1266,12 +1265,6 @@ def _ppOctaves(theConverter: MeiToM21Converter):
             )
             continue
 
-        if not startId or not endId:
-            environLocal.warn(
-                _UNIMPLEMENTED_IMPORT_WITHOUT.format('<octave>', '@startid and @endid')
-            )
-            continue
-
         ottavaType: str = _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE[(amount, direction)]
         ottava = spanner.Ottava(type=ottavaType)
         ottava.transposing = True  # we will use @oct (not @oct.ges) in octave-shifted notes/chords
@@ -1281,8 +1274,14 @@ def _ppOctaves(theConverter: MeiToM21Converter):
         thisIdLocal: str = str(uuid4())
         ottava.idLocal = thisIdLocal
         c.spannerBundle.append(ottava)
-        c.m21Attr[startId]['m21OttavaStart'] = thisIdLocal
-        c.m21Attr[endId]['m21OttavaEnd'] = thisIdLocal
+        if startId:
+            c.m21Attr[startId]['m21OttavaStart'] = thisIdLocal
+        if endId:
+            c.m21Attr[endId]['m21OttavaEnd'] = thisIdLocal
+        eachOctave.set('m21Ottava', thisIdLocal)
+        staffNStr: str = eachOctave.get('staff', '')
+        if staffNStr:
+            ottava.mei_staff = staffNStr  # type: ignore
 
 
 def _ppArpeggios(theConverter: MeiToM21Converter):
@@ -1298,10 +1297,7 @@ def _ppArpeggios(theConverter: MeiToM21Converter):
     **This Preprocessor**
 
     The arpeggio preprocessor works similarly to the tie preprocessor, adding @arpeg
-    attributes. The @fermata attribute looks like it would if specified according to the
-    Guidelines (e.g. @fermata="above", where "above" comes from the <fermata> element's
-    @place attribute).  The other attributes from the <fermata> element (@form and @shape)
-    are also added, prefixed with 'fermata_' as follows: @fermata_form and @fermata_shape.
+    attributes.
 
     **Example of ``m21Attr``**
 
@@ -1688,7 +1684,7 @@ def safeAddToSpannerByIdLocal(
     theObj: Music21Object,
     theId: str,
     spannerBundle: spanner.SpannerBundle
-):
+) -> bool:
     '''Avoid crashing when getByIdLocal() doesn't find the spanner'''
     try:
         spannerBundle.getByIdLocal(theId)[0].addSpannedElements(theObj)
@@ -1777,24 +1773,39 @@ def addOttavas(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-):
+) -> t.List[spanner.Spanner]:
+    completedOttavas: t.List[spanner.Spanner] = []
+
     ottavaId: str = elem.get('m21OttavaStart', '')
     if ottavaId:
         safeAddToSpannerByIdLocal(obj, ottavaId, spannerBundle)
+
     ottavaId = elem.get('m21OttavaEnd', '')
     if ottavaId:
-        safeAddToSpannerByIdLocal(obj, ottavaId, spannerBundle)
+        ottava: t.Optional[spanner.Spanner] = safeGetSpannerByIdLocal(ottavaId, spannerBundle)
+        if ottava:
+            ottava.addSpannedElements(obj)
+            completedOttavas.append(ottava)
+
+    return completedOttavas
 
 
 def addArpeggio(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-):
+) -> t.List[spanner.Spanner]:
+    completedArpeggioMarkSpanners: t.List[spanner.Spanner] = []
+
     # if appropriate, add this note/chord to an ArpeggioMarkSpanner
     arpId: str = elem.get('m21ArpeggioMarkSpanner', '')
     if arpId:
-        safeAddToSpannerByIdLocal(obj, arpId, spannerBundle)
+        arpSpanner: t.Optional[spanner.Spanner] = (
+            safeGetSpannerByIdLocal(arpId, spannerBundle)
+        )
+        if arpSpanner:
+            arpSpanner.addSpannedElements(obj)
+            completedArpeggioMarkSpanners.append(arpSpanner)
 
     # check to see if this note/chord is arpeggiated all by itself,
     # and if so, make the ArpeggioMark and append it to the note/chord's
@@ -1804,19 +1815,27 @@ def addArpeggio(
         arpeggio = expressions.ArpeggioMark(arpeggioType=arpeggioType)
         obj.expressions.append(arpeggio)
 
+    return completedArpeggioMarkSpanners
+
 
 def addTrill(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-):
+) -> t.List[spanner.Spanner]:
+    completedTrillExtensions: t.List[spanner.Spanner] = []
     # if appropriate, add this note/chord to a trillExtension
     trillExtId: str = elem.get('m21TrillExtensionStart', '')
     if trillExtId:
         safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
     trillExtId = elem.get('m21TrillExtensionEnd', '')
     if trillExtId:
-        safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
+        trillExt: t.Optional[spanner.Spanner] = (
+            safeGetSpannerByIdLocal(trillExtId, spannerBundle)
+        )
+        if trillExt:
+            trillExt.addSpannedElements(obj)
+            completedTrillExtensions.append(trillExt)
 
     # check to see if this note/chord needs a trill by itself,
     # and if so, make the Trill and append it to the note/chord's
@@ -1824,7 +1843,7 @@ def addTrill(
     trill: expressions.Trill
     place: str = elem.get('m21Trill', '')
     if not place:
-        return
+        return []
 
     accidUpper: str = elem.get('m21TrillAccidUpper', '')
     accidLower: str = elem.get('m21TrillAccidLower', '')
@@ -1844,6 +1863,8 @@ def addTrill(
         trill.placement = place
 
     obj.expressions.append(trill)
+
+    return completedTrillExtensions
 
 
 def updateExpression(
@@ -3391,9 +3412,12 @@ def noteFromElement(
     if fermata is not None:
         theNote.expressions.append(fermata)
 
-    addArpeggio(elem, theNote, spannerBundle)
-    addTrill(elem, theNote, spannerBundle)
-    addOttavas(elem, theNote, spannerBundle)
+    completedSpanners: t.List[spanner.Spanner] = otherInfo.pop('completedSpanners', [])
+    completedSpanners += addArpeggio(elem, theNote, spannerBundle)
+    completedSpanners += addTrill(elem, theNote, spannerBundle)
+    completedSpanners += addOttavas(elem, theNote, spannerBundle)
+    if completedSpanners:
+        otherInfo['completedSpanners'] = completedSpanners
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -3779,9 +3803,12 @@ def chordFromElement(
     if fermata is not None:
         theChord.expressions.append(fermata)
 
-    addArpeggio(elem, theChord, spannerBundle)
-    addTrill(elem, theChord, spannerBundle)
-    addOttavas(elem, theChord, spannerBundle)
+    completedSpanners: t.List[spanner.Spanner] = otherInfo.pop('completedSpanners', [])
+    completedSpanners += addArpeggio(elem, theChord, spannerBundle)
+    completedSpanners += addTrill(elem, theChord, spannerBundle)
+    completedSpanners += addOttavas(elem, theChord, spannerBundle)
+    if completedSpanners:
+        otherInfo['completedSpanners'] = completedSpanners
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -5267,6 +5294,57 @@ _CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
 )
 
 
+def octaveFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any],
+) -> t.Tuple[
+        str,
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+        t.Optional[spanner.Ottava]
+]:
+    staffNStr: str = elem.get('staff', '1')
+    offset: OffsetQL = -1.
+    measSkip: t.Optional[int] = None
+    offset2: t.Optional[OffsetQL] = None
+
+    ottavaLocalId = elem.get('m21Ottava', '')
+    if not ottavaLocalId:
+        environLocal.warn('no Ottava created in octave preprocessing')
+        return ('', (-1., None, None), None)
+    ottava: t.Optional[spanner.Spanner] = (
+        safeGetSpannerByIdLocal(ottavaLocalId, spannerBundle)
+    )
+    if ottava is None:
+        environLocal.warn('no Ottava found from octave preprocessing')
+        return ('', (-1., None, None), None)
+
+    if t.TYPE_CHECKING:
+        assert isinstance(ottava, spanner.Ottava)
+
+    startId: str = elem.get('startid', '')
+    tstamp: str = elem.get('tstamp', '')
+    endId: str = elem.get('endid', '')
+    tstamp2: str = elem.get('tstamp2', '')
+    if not tstamp2 and not endId:
+        environLocal.warn('missing @tstamp2/@endid in <octave> element')
+        return ('', (-1., None, None), None)
+    if not tstamp and not startId:
+        environLocal.warn('missing @tstamp/@startid in <octave> element')
+        return ('', (-1., None, None), None)
+    if not startId:
+        ottava.mei_needs_start_anchor = True  # type: ignore
+    if not endId:
+        ottava.mei_needs_end_anchor = True  # type: ignore
+    if tstamp:
+        offset = _tstampToOffset(tstamp, activeMeter)
+    if tstamp2:
+        measSkip, offset2 = _tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
+
+    return staffNStr, (offset, measSkip, offset2), ottava
+
+
 def arpegFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -5374,9 +5452,9 @@ def trillFromElement(
             environLocal.warn('missing @tstamp/@startid in <trill> element')
             return [('', (-1., None, None), None)]
         if not startId:
-            trillExt.mei_needs_start_note = True  # type: ignore
+            trillExt.mei_needs_start_anchor = True  # type: ignore
         if not endId:
-            trillExt.mei_needs_end_note = True  # type: ignore
+            trillExt.mei_needs_end_anchor = True  # type: ignore
 
         measSkip: t.Optional[int] = None
         offset2: t.Optional[OffsetQL] = None
@@ -5439,8 +5517,8 @@ def hairpinFromElement(
         else:
             environLocal.warn(f'invalid @place = "{place}" in <hairpin>')
 
-    dw.mei_needs_start_note = True  # type: ignore
-    dw.mei_needs_end_note = True  # type: ignore
+    dw.mei_needs_start_anchor = True  # type: ignore
+    dw.mei_needs_end_anchor = True  # type: ignore
     spannerBundle.append(dw)
     return staffNStr, offsets, dw
 
@@ -5909,6 +5987,12 @@ def measureFromElement(
         ]
     ] = {}
 
+    if M21Utilities.m21SupportsSpannerFill():
+        spannersToFill: t.Dict[
+            str,
+            t.List[spanner.Spanner]
+        ] = {}
+
     # spanner end GeneralNotes we are waiting to insert in the correct measure
     pendingSpannerEnds: t.Optional[
         t.List[
@@ -5957,6 +6041,11 @@ def measureFromElement(
                 stavesWaitingFromStaffItem[staffNStr].append(
                     ((offset, None, None), endObj)
                 )
+                # we have installed an end anchor, we can fill now
+                if M21Utilities.m21SupportsSpannerFill():
+                    if spannersToFill.get(staffNStr, None) is None:
+                        spannersToFill[staffNStr] = []
+                    spannersToFill[staffNStr].append(spannerObj)
             else:
                 # spannerEnd is still pending (albeit with decremented measSkip)
                 if newPendingSpannerEnds is None:
@@ -5988,6 +6077,18 @@ def measureFromElement(
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
                 maxBarDuration = thisBarDuration
+
+            completedSpanners: t.List[spanner.Spanner] = otherInfo.pop('completedSpanners', [])
+            if M21Utilities.m21SupportsSpannerFill():
+                if completedSpanners:
+                    for sp in completedSpanners:
+                        localStaffNStr: str = nStr
+                        if hasattr(sp, 'mei_staff'):
+                            localStaffNStr = sp.mei_staff  # type: ignore
+                        if spannersToFill.get(localStaffNStr, None) is None:
+                            spannersToFill[localStaffNStr] = []
+                        spannersToFill[localStaffNStr].append(sp)
+
         elif staffDefTag == eachElem.tag:
             if nStr is None:
                 environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
@@ -5995,6 +6096,7 @@ def measureFromElement(
                 stavesWaitingFromStaffDef[nStr] = staffDefFromElement(
                     eachElem, spannerBundle, otherInfo
                 )
+
         elif eachElem.tag in staffItemsTagToFunction:
             offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
             m21Obj: t.Optional[Music21Object]
@@ -6032,16 +6134,16 @@ def measureFromElement(
                     if isinstance(m21Obj, spanner.Spanner):
                         spannerObj = m21Obj
                         # If it needs start or end notes make them now.
-                        needsStartNote: bool = False
-                        needsEndNote: bool = False
-                        if hasattr(m21Obj, 'mei_needs_start_note'):
-                            needsStartNote = spannerObj.mei_needs_start_note  # type: ignore
-                            del spannerObj.mei_needs_start_note  # type: ignore
-                        if hasattr(m21Obj, 'mei_needs_end_note'):
-                            needsEndNote = spannerObj.mei_needs_end_note  # type: ignore
-                            del spannerObj.mei_needs_end_note  # type: ignore
+                        needsStartAnchor: bool = False
+                        needsEndAnchor: bool = False
+                        if hasattr(m21Obj, 'mei_needs_start_anchor'):
+                            needsStartAnchor = spannerObj.mei_needs_start_anchor  # type: ignore
+                            del spannerObj.mei_needs_start_anchor  # type: ignore
+                        if hasattr(m21Obj, 'mei_needs_end_anchor'):
+                            needsEndAnchor = spannerObj.mei_needs_end_anchor  # type: ignore
+                            del spannerObj.mei_needs_end_anchor  # type: ignore
 
-                        if needsStartNote:
+                        if needsStartAnchor:
                             if M21Utilities.m21SupportsSpannerAnchor():
                                 # pylint: disable=no-member
                                 startObj = spanner.SpannerAnchor()  # type: ignore
@@ -6052,8 +6154,7 @@ def measureFromElement(
                             stavesWaitingFromStaffItem[staffNStr].append(
                                 ((offset1, None, None), startObj)
                             )
-
-                        if needsEndNote:
+                        if needsEndAnchor:
                             if measSkip2 == 0:
                                 # do the endObj as well, it's in this same Measure
                                 if M21Utilities.m21SupportsSpannerAnchor():
@@ -6066,6 +6167,11 @@ def measureFromElement(
                                 stavesWaitingFromStaffItem[staffNStr].append(
                                     ((offset2, None, None), endObj)
                                 )
+                                if M21Utilities.m21SupportsSpannerFill():
+                                    # we have installed an end anchor, we can fill now
+                                    if spannersToFill.get(staffNStr, None) is None:
+                                        spannersToFill[staffNStr] = []
+                                    spannersToFill[staffNStr].append(spannerObj)
                             else:
                                 # endNote has to wait for a subsequent measure
                                 if otherInfo.get('pendingSpannerEnds', None) is None:
@@ -6078,8 +6184,14 @@ def measureFromElement(
                         stavesWaitingFromStaffItem[staffNStr].append(
                             (offsets, m21Obj)
                         )
+
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
+
+    if M21Utilities.m21SupportsSpannerFill():
+        # Tell the caller which spanners to fill
+        if spannersToFill:
+            otherInfo['spannersToFill'] = spannersToFill
 
     # Process objects from a <staffDef>...
     # We must process them now because, if we did it in the loop above, the respective <staff> may
@@ -6311,6 +6423,8 @@ def sectionScoreCore(
     if topPartN == '' and allPartNs:
         topPartN = allPartNs[0]
 
+    spannersToFill: t.Dict[str, t.List[spanner.Spanner]] = {}
+
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section> or <ending>
         if measureTag == eachElem.tag and elem.tag in (sectionTag, endingTag):
@@ -6327,9 +6441,13 @@ def sectionScoreCore(
                 eachElem, activeMeter, spannerBundle, measureInfo, backupMeasureNum, allPartNs
             )
 
+            if M21Utilities.m21SupportsSpannerFill():
+                # Gather any spanners that are ready to be filled.
+                spannersToFill = measureInfo.pop('spannersToFill', {})
+
             # we toss measureInfo to clear the measure-specific stuff, BUT we don't want
             # to clear info['pendingSpannerEnds'] because they need to keep getting passed
-            # around until all spanners have ended. So we put it (update it) in otherInfo here.
+            # around until all spanners have ended. So we put it in otherInfo here.
             pendingSpannerEnds = measureInfo.get('pendingSpannerEnds', None)
             if pendingSpannerEnds:
                 otherInfo['pendingSpannerEnds'] = pendingSpannerEnds
@@ -6358,6 +6476,20 @@ def sectionScoreCore(
                 nextMeasureLeft = nl
             else:
                 nextMeasureLeft = None
+
+            if M21Utilities.m21SupportsSpannerFill():
+                if spannersToFill:
+                    # We had to wait to do this until the latest measure was in each part
+                    for eachStaffNStr in spannersToFill:
+                        if ' ' in eachStaffNStr:
+                            raise MeiInternalError('Spanner in multiple staves not supported yet')
+                        spanners: t.List[spanner.Spanner] = spannersToFill.get(eachStaffNStr, [])
+                        objList: t.List[Music21Object] = (
+                            t.cast(t.List[Music21Object], parsed[eachStaffNStr])
+                        )
+                        tempStream: stream.Stream = stream.Stream(objList)
+                        for sp in spanners:
+                            sp.fillIntermediateSpannedElements(tempStream)
 
         elif scoreDefTag == eachElem.tag:
             localResult = scoreDefFromElement(
@@ -6714,7 +6846,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     #         f'{MEI_NS}lv': lvFromElement,
     #        f'{MEI_NS}mNum': mNumFromElement,
     #        f'{MEI_NS}mordent': mordentFromElement,
-    # f'{MEI_NS}octave': octaveFromElement,  # all handled in _ppOctaves, note/chordFromElement
+    f'{MEI_NS}octave': octaveFromElement,
     #         f'{MEI_NS}pedal': pedalFromElement,
     #         f'{MEI_NS}phrase': phraseFromElement,
     #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
