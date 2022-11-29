@@ -3412,12 +3412,9 @@ def noteFromElement(
     if fermata is not None:
         theNote.expressions.append(fermata)
 
-    completedSpanners: t.List[spanner.Spanner] = otherInfo.pop('completedSpanners', [])
-    completedSpanners += addArpeggio(elem, theNote, spannerBundle)
-    completedSpanners += addTrill(elem, theNote, spannerBundle)
-    completedSpanners += addOttavas(elem, theNote, spannerBundle)
-    if completedSpanners:
-        otherInfo['completedSpanners'] = completedSpanners
+    addArpeggio(elem, theNote, spannerBundle)
+    addTrill(elem, theNote, spannerBundle)
+    addOttavas(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -3803,12 +3800,9 @@ def chordFromElement(
     if fermata is not None:
         theChord.expressions.append(fermata)
 
-    completedSpanners: t.List[spanner.Spanner] = otherInfo.pop('completedSpanners', [])
-    completedSpanners += addArpeggio(elem, theChord, spannerBundle)
-    completedSpanners += addTrill(elem, theChord, spannerBundle)
-    completedSpanners += addOttavas(elem, theChord, spannerBundle)
-    if completedSpanners:
-        otherInfo['completedSpanners'] = completedSpanners
+    addArpeggio(elem, theChord, spannerBundle)
+    addTrill(elem, theChord, spannerBundle)
+    addOttavas(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
@@ -5987,12 +5981,6 @@ def measureFromElement(
         ]
     ] = {}
 
-    if M21Utilities.m21SupportsSpannerFill():
-        spannersToFill: t.Dict[
-            str,
-            t.List[spanner.Spanner]
-        ] = {}
-
     # spanner end GeneralNotes we are waiting to insert in the correct measure
     pendingSpannerEnds: t.Optional[
         t.List[
@@ -6041,11 +6029,6 @@ def measureFromElement(
                 stavesWaitingFromStaffItem[staffNStr].append(
                     ((offset, None, None), endObj)
                 )
-                # we have installed an end anchor, we can fill now
-                if M21Utilities.m21SupportsSpannerFill():
-                    if spannersToFill.get(staffNStr, None) is None:
-                        spannersToFill[staffNStr] = []
-                    spannersToFill[staffNStr].append(spannerObj)
             else:
                 # spannerEnd is still pending (albeit with decremented measSkip)
                 if newPendingSpannerEnds is None:
@@ -6077,17 +6060,6 @@ def measureFromElement(
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
                 maxBarDuration = thisBarDuration
-
-            completedSpanners: t.List[spanner.Spanner] = otherInfo.pop('completedSpanners', [])
-            if M21Utilities.m21SupportsSpannerFill():
-                if completedSpanners:
-                    for sp in completedSpanners:
-                        localStaffNStr: str = nStr
-                        if hasattr(sp, 'mei_staff'):
-                            localStaffNStr = sp.mei_staff  # type: ignore
-                        if spannersToFill.get(localStaffNStr, None) is None:
-                            spannersToFill[localStaffNStr] = []
-                        spannersToFill[localStaffNStr].append(sp)
 
         elif staffDefTag == eachElem.tag:
             if nStr is None:
@@ -6167,11 +6139,6 @@ def measureFromElement(
                                 stavesWaitingFromStaffItem[staffNStr].append(
                                     ((offset2, None, None), endObj)
                                 )
-                                if M21Utilities.m21SupportsSpannerFill():
-                                    # we have installed an end anchor, we can fill now
-                                    if spannersToFill.get(staffNStr, None) is None:
-                                        spannersToFill[staffNStr] = []
-                                    spannersToFill[staffNStr].append(spannerObj)
                             else:
                                 # endNote has to wait for a subsequent measure
                                 if otherInfo.get('pendingSpannerEnds', None) is None:
@@ -6187,11 +6154,6 @@ def measureFromElement(
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
-
-    if M21Utilities.m21SupportsSpannerFill():
-        # Tell the caller which spanners to fill
-        if spannersToFill:
-            otherInfo['spannersToFill'] = spannersToFill
 
     # Process objects from a <staffDef>...
     # We must process them now because, if we did it in the loop above, the respective <staff> may
@@ -6423,8 +6385,6 @@ def sectionScoreCore(
     if topPartN == '' and allPartNs:
         topPartN = allPartNs[0]
 
-    spannersToFill: t.Dict[str, t.List[spanner.Spanner]] = {}
-
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section> or <ending>
         if measureTag == eachElem.tag and elem.tag in (sectionTag, endingTag):
@@ -6440,10 +6400,6 @@ def sectionScoreCore(
             measureResult = measureFromElement(
                 eachElem, activeMeter, spannerBundle, measureInfo, backupMeasureNum, allPartNs
             )
-
-            if M21Utilities.m21SupportsSpannerFill():
-                # Gather any spanners that are ready to be filled.
-                spannersToFill = measureInfo.pop('spannersToFill', {})
 
             # we toss measureInfo to clear the measure-specific stuff, BUT we don't want
             # to clear info['pendingSpannerEnds'] because they need to keep getting passed
@@ -6476,20 +6432,6 @@ def sectionScoreCore(
                 nextMeasureLeft = nl
             else:
                 nextMeasureLeft = None
-
-            if M21Utilities.m21SupportsSpannerFill():
-                if spannersToFill:
-                    # We had to wait to do this until the latest measure was in each part
-                    for eachStaffNStr in spannersToFill:
-                        if ' ' in eachStaffNStr:
-                            raise MeiInternalError('Spanner in multiple staves not supported yet')
-                        spanners: t.List[spanner.Spanner] = spannersToFill.get(eachStaffNStr, [])
-                        objList: t.List[Music21Object] = (
-                            t.cast(t.List[Music21Object], parsed[eachStaffNStr])
-                        )
-                        tempStream: stream.Stream = stream.Stream(objList)
-                        for sp in spanners:
-                            sp.fillIntermediateSpannedElements(tempStream)
 
         elif scoreDefTag == eachElem.tag:
             localResult = scoreDefFromElement(
@@ -6770,6 +6712,19 @@ def scoreFromElement(
         for eachObj in parsed[eachN]:
             thePartList[i].append(eachObj)
     theScore: stream.Score = stream.Score(thePartList)
+
+    if M21Utilities.m21SupportsSpannerFill():
+        # fill in any spanners
+        for sp in spannerBundle:
+            staffNStr: str = '1'  # default staff is '1'
+            if hasattr(sp, 'mei_staff'):
+                staffNStr = sp.mei_staff  # type: ignore
+            staffNs: t.List[str] = staffNStr.split(' ')
+            for i, staffN in enumerate(staffNs):
+                if i > 0:
+                    sp.fillStatus = False  # so we can fill some more
+                partIdx: int = allPartNs.index(staffN)
+                sp.fillIntermediateSpannedElements(thePartList[partIdx])
 
     # put slurs in the Score
     theScore.append(list(spannerBundle))
