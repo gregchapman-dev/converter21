@@ -3502,6 +3502,11 @@ def noteFromElement(
     if elem.get('visible') == 'false':
         theNote.style.hideObjectOnPrint = True
 
+    # stash the staffNum in theNote.mei_staff (in case a spanner needs to know)
+    staffNumStr: str = otherInfo.get('staffNumber', '')
+    if staffNumStr:
+        theNote.mei_staff = staffNumStr  # type: ignore
+
     return theNote
 
 
@@ -3583,6 +3588,11 @@ def restFromElement(
     # visibility
     if elem.get('visible') == 'false':
         theRest.style.hideObjectOnPrint = True
+
+    # stash the staffNum in theRest.mei_staff (in case a spanner needs to know)
+    staffNumStr: str = otherInfo.get('staffNumber', '')
+    if staffNumStr:
+        theRest.mei_staff = staffNumStr  # type: ignore
 
     return theRest
 
@@ -3853,6 +3863,11 @@ def chordFromElement(
     # visibility
     if elem.get('visible') == 'false':
         theChord.style.hideObjectOnPrint = True
+
+    # stash the staffNum in theChord.mei_staff (in case a spanner needs to know)
+    staffNumStr: str = otherInfo.get('staffNumber', '')
+    if staffNumStr:
+        theChord.mei_staff = staffNumStr  # type: ignore
 
     return theChord
 
@@ -5298,7 +5313,6 @@ def octaveFromElement(
         t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
         t.Optional[spanner.Ottava]
 ]:
-    staffNStr: str = elem.get('staff', '1')
     offset: OffsetQL = -1.
     measSkip: t.Optional[int] = None
     offset2: t.Optional[OffsetQL] = None
@@ -5316,6 +5330,15 @@ def octaveFromElement(
 
     if t.TYPE_CHECKING:
         assert isinstance(ottava, spanner.Ottava)
+
+    staffNStr: str = elem.get('staff', '')
+    if not staffNStr:
+        # get it from start note in ottava (should already be there)
+        startObj: t.Optional[Music21Object] = ottava.getFirst()
+        if startObj is not None and hasattr(startObj, 'mei_staff'):
+            staffNStr = startObj.mei_staff  # type: ignore
+    if not staffNStr:
+        staffNStr = '1'  # best we can do, hope it's ok
 
     startId: str = elem.get('startid', '')
     tstamp: str = elem.get('tstamp', '')
@@ -5392,7 +5415,7 @@ def trillFromElement(
     ] = []
 
     # If no @staff, presume it is staff 1
-    staffNStr = elem.get('staff', '1')
+    staffNStr = elem.get('staff', '')
 
     startId: str = elem.get('startid', '')
     tstamp: str = elem.get('tstamp', '')
@@ -5419,7 +5442,10 @@ def trillFromElement(
             trill.mei_trill_accidlower = accidlower  # type: ignore
 
         offset = _tstampToOffset(tstamp, activeMeter)
-        output.append((staffNStr, (offset, None, None), trill))
+        trillStaffNStr: str = staffNStr
+        if not trillStaffNStr:
+            trillStaffNStr = '1'
+        output.append((trillStaffNStr, (offset, None, None), trill))
 
     if elem.get('ignore_trill_extension_in_trillFromElement') != 'true':
         # this happens if we need a trill extension, but are missing @startid, @endid, or both
@@ -5456,7 +5482,17 @@ def trillFromElement(
             offset = _tstampToOffset(tstamp, activeMeter)
         if tstamp2:
             measSkip, offset2 = _tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
-        output.append((staffNStr, (offset, measSkip, offset2), trillExt))
+
+        trillExtStaffNStr: str = staffNStr
+        if not trillExtStaffNStr:
+            # get it from start note in ottava (should already be there)
+            startObj: t.Optional[Music21Object] = trillExt.getFirst()
+            if startObj is not None and hasattr(startObj, 'mei_staff'):
+                trillExtStaffNStr = startObj.mei_staff  # type: ignore
+        if not trillExtStaffNStr:
+            trillExtStaffNStr = '1'  # best we can do, hope it's ok
+
+        output.append((trillExtStaffNStr, (offset, measSkip, offset2), trillExt))
 
     if not output:
         return [('', (-1., None, None), None)]
@@ -6053,6 +6089,7 @@ def measureFromElement(
             if nStr is None:
                 raise MeiElementError(_STAFF_MUST_HAVE_N)
 
+            otherInfo['staffNumber'] = nStr
             staves[nStr] = stream.Measure(
                 staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo),
                 number=elem.get('n', backupNum)
@@ -6060,6 +6097,7 @@ def measureFromElement(
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
                 maxBarDuration = thisBarDuration
+            otherInfo.pop('staffNumber')
 
         elif staffDefTag == eachElem.tag:
             if nStr is None:
@@ -6716,9 +6754,17 @@ def scoreFromElement(
     if M21Utilities.m21SupportsSpannerFill():
         # fill in any spanners
         for sp in spannerBundle:
-            staffNStr: str = '1'  # default staff is '1'
+            staffNStr: str = ''
             if hasattr(sp, 'mei_staff'):
                 staffNStr = sp.mei_staff  # type: ignore
+            if not staffNStr:
+                # get it from start note in ottava (should already be there)
+                startObj: t.Optional[Music21Object] = sp.getFirst()
+                if startObj is not None and hasattr(startObj, 'mei_staff'):
+                    staffNStr = startObj.mei_staff  # type: ignore
+            if not staffNStr:
+                staffNStr = '1'  # best we can do, hope it's ok
+
             staffNs: t.List[str] = staffNStr.split(' ')
             for i, staffN in enumerate(staffNs):
                 if i > 0:
