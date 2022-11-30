@@ -3220,20 +3220,27 @@ def durationFromAttributes(
         durGesFloat = _qlDurationFromAttr(elem.get('dur.ges'))
 
     numDots: int
+    numDotsGes: t.Optional[int]
     if optionalDots is not None:
         numDots = optionalDots
     else:
         numDots = int(elem.get('dots', 0))
+    numDotsGes = int(elem.get('dots.ges')) if elem.get('dots.ges') else None
 
-    theDuration: t.Optional[duration.Duration] = None
-    if durGesFloat is not None:
-        theDuration = makeDuration(durGesFloat, numDots)
-        theDuration.linked = False
-        theDuration.type = duration.convertQuarterLengthToType(durFloat)
-        return theDuration
+    visualDuration: duration.Duration = makeDuration(durFloat, numDots)
+    if durGesFloat is not None or numDotsGes is not None:
+        gesDuration: duration.Duration
+        if durGesFloat is not None and numDotsGes is not None:
+            gesDuration = makeDuration(durGesFloat, numDotsGes)
+        elif durGesFloat is not None and numDotsGes is None:
+            gesDuration = makeDuration(durGesFloat, numDots)
+        elif durGesFloat is None and numDotsGes is not None:
+            gesDuration = makeDuration(durFloat, numDotsGes)
 
-    theDuration = makeDuration(durFloat, numDots)
-    return theDuration
+        visualDuration.linked = False
+        visualDuration.quarterLength = gesDuration.quarterLength
+
+    return visualDuration
 
 
 def noteFromElement(
