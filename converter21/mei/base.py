@@ -1783,7 +1783,7 @@ def addOttavas(
     ottavaId = elem.get('m21OttavaEnd', '')
     if ottavaId:
         ottava: t.Optional[spanner.Spanner] = safeGetSpannerByIdLocal(ottavaId, spannerBundle)
-        if ottava:
+        if ottava is not None:
             ottava.addSpannedElements(obj)
             completedOttavas.append(ottava)
 
@@ -1803,7 +1803,7 @@ def addArpeggio(
         arpSpanner: t.Optional[spanner.Spanner] = (
             safeGetSpannerByIdLocal(arpId, spannerBundle)
         )
-        if arpSpanner:
+        if arpSpanner is not None:
             arpSpanner.addSpannedElements(obj)
             completedArpeggioMarkSpanners.append(arpSpanner)
 
@@ -1833,7 +1833,7 @@ def addTrill(
         trillExt: t.Optional[spanner.Spanner] = (
             safeGetSpannerByIdLocal(trillExtId, spannerBundle)
         )
-        if trillExt:
+        if trillExt is not None:
             trillExt.addSpannedElements(obj)
             completedTrillExtensions.append(trillExt)
 

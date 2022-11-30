@@ -688,6 +688,17 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processHangingTieStarts()
 
+        if M21Utilities.m21SupportsSpannerFill():
+            # Fill intermediate elements in spanners.  This needs to happen before any
+            # transposition because Ottavas must be filled to be transposed correctly.
+            for sp in self.m21Score.spannerBundle:
+                spStaffIndex: int = -1
+                if hasattr(sp, 'humdrum_staff_index'):
+                    spStaffIndex = sp.humdrum_staff_index  # type: ignore
+                if spStaffIndex >= 0:
+                    ss: StaffStateVariables = self._staffStates[spStaffIndex]
+                    sp.fillIntermediateSpannedElements(ss.m21Part)
+
         # Transpose any transposing instrument parts to "written pitch"
         # For performance, check the instruments here, since stream.toWrittenPitch
         # can be expensive, even if there is no transposing instrument.
@@ -1095,6 +1106,7 @@ class HumdrumFile(HumdrumFileContent):
             self._currentEndingPerStaff = []
             for i in range(0, self.staffCount):
                 rb: m21.spanner.RepeatBracket = m21.spanner.RepeatBracket(number=endNum)
+                rb.humdrum_staff_index = i  # type: ignore
                 self._currentEndingPerStaff.append(rb)
                 self.m21Score.coreInsert(0, rb)
             self.m21Score.coreElementsChanged()
@@ -2049,6 +2061,8 @@ class HumdrumFile(HumdrumFileContent):
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it
             ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
+            ss.currentOttava1Up.humdrum_staff_index = staffIndex  # type: ignore
+
             # put it in the measure
             measure.insert(0, ss.currentOttava1Up)
             return
@@ -2059,6 +2073,7 @@ class HumdrumFile(HumdrumFileContent):
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it
             ss.currentOttava1Down = m21.spanner.Ottava(type='8ba', transposing=False)
+            ss.currentOttava1Down.humdrum_staff_index = staffIndex  # type: ignore
             # put it in the measure
             measure.insert(0, ss.currentOttava1Down)
             return
@@ -2069,6 +2084,7 @@ class HumdrumFile(HumdrumFileContent):
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it
             ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
+            ss.currentOttava2Up.humdrum_staff_index = staffIndex  # type: ignore
             # put it in the measure
             measure.insert(0, ss.currentOttava2Up)
             return
@@ -2079,6 +2095,7 @@ class HumdrumFile(HumdrumFileContent):
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it
             ss.currentOttava2Down = m21.spanner.Ottava(type='15ba', transposing=False)
+            ss.currentOttava2Down.humdrum_staff_index = staffIndex  # type: ignore
             # put it in the measure
             measure.insert(0, ss.currentOttava2Down)
             return
@@ -2144,10 +2161,11 @@ class HumdrumFile(HumdrumFileContent):
             # skip rests (notes and chords only)
             if not xtok.isRest:
                 noteTokens.append(xtok)
-                tok = tok.nextFieldToken
-                if tok is None:
-                    break
-                ttrack = tok.track
+
+            tok = tok.nextFieldToken
+            if tok is None:
+                break
+            ttrack = tok.track
 
         for noteTok in noteTokens:
             # the actual note or chord may not have been created yet, but
@@ -8090,6 +8108,8 @@ class HumdrumFile(HumdrumFileContent):
             newStaffIndex = staffIndex - staffAdj
             newStaffIndex = max(newStaffIndex, 0)
             newStaffIndex = min(newStaffIndex, self.staffCount - 1)
+
+            m21Hairpin.humdrum_staff_index = newStaffIndex  # type: ignore
 
             # here we always want measure, even if newStaffIndex == staffIndex,
             # because we like putting fake spanned objects up in the measure.
