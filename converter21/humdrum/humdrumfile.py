@@ -692,6 +692,8 @@ class HumdrumFile(HumdrumFileContent):
             # Fill intermediate elements in spanners.  This needs to happen before any
             # transposition because Ottavas must be filled to be transposed correctly.
             for sp in self.m21Score.spannerBundle:
+                if not isinstance(sp, m21.spanner.Ottava):
+                    continue
                 spStaffIndex: int = -1
                 if hasattr(sp, 'humdrum_staff_index'):
                     spStaffIndex = sp.humdrum_staff_index  # type: ignore
