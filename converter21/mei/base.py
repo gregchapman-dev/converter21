@@ -3220,12 +3220,15 @@ def durationFromAttributes(
         durGesFloat = _qlDurationFromAttr(elem.get('dur.ges'))
 
     numDots: int
-    numDotsGes: t.Optional[int]
     if optionalDots is not None:
         numDots = optionalDots
     else:
         numDots = int(elem.get('dots', 0))
-    numDotsGes = int(elem.get('dots.ges')) if elem.get('dots.ges') else None
+
+    numDotsGes: t.Optional[int] = None
+    dotsGesStr: str = elem.get('dots.ges', '')
+    if dotsGesStr:
+        numDotsGes = int(dotsGesStr)
 
     visualDuration: duration.Duration = makeDuration(durFloat, numDots)
     if durGesFloat is not None or numDotsGes is not None:
@@ -6765,31 +6768,34 @@ def scoreFromElement(
             thePartList[i].append(eachObj)
     theScore: stream.Score = stream.Score(thePartList)
 
-    if M21Utilities.m21SupportsSpannerFill():
-        # fill in any Ottava spanners
-        for sp in spannerBundle:
-            if not isinstance(sp, spanner.Ottava):
-                continue
-            staffNStr: str = ''
-            if hasattr(sp, 'mei_staff'):
-                staffNStr = sp.mei_staff  # type: ignore
-            if not staffNStr:
-                # get it from start note in ottava (should already be there)
-                startObj: t.Optional[Music21Object] = sp.getFirst()
-                if startObj is not None and hasattr(startObj, 'mei_staff'):
-                    staffNStr = startObj.mei_staff  # type: ignore
-            if not staffNStr:
-                staffNStr = '1'  # best we can do, hope it's ok
+    # fill in any Ottava spanners
+    for sp in spannerBundle:
+        if not isinstance(sp, spanner.Ottava):
+            continue
+        staffNStr: str = ''
+        if hasattr(sp, 'mei_staff'):
+            staffNStr = sp.mei_staff  # type: ignore
+        if not staffNStr:
+            # get it from start note in ottava (should already be there)
+            startObj: t.Optional[Music21Object] = sp.getFirst()
+            if startObj is not None and hasattr(startObj, 'mei_staff'):
+                staffNStr = startObj.mei_staff  # type: ignore
+        if not staffNStr:
+            staffNStr = '1'  # best we can do, hope it's ok
 
-            staffNs: t.List[str] = staffNStr.split(' ')
-            for i, staffN in enumerate(staffNs):
-                if i > 0:
-                    environLocal.warn(
-                        'Single Ottava in multiple staves: only filling from the first staff'
-                    )
-                    continue
-                partIdx: int = allPartNs.index(staffN)
+        staffNs: t.List[str] = staffNStr.split(' ')
+        for i, staffN in enumerate(staffNs):
+            if i > 0:
+                environLocal.warn(
+                    'Single Ottava in multiple staves: only filling from the first staff'
+                )
+                continue
+            partIdx: int = allPartNs.index(staffN)
+            if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
                 sp.fillIntermediateSpannedElements(thePartList[partIdx])
+            else:
+                # we use our own spanner fill routine, since music21 doesn't have one
+                M21Utilities.fillIntermediateSpannedElements(sp, thePartList[partIdx])
 
     # put spanners in the Score
     theScore.append(list(spannerBundle))

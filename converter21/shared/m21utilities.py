@@ -282,6 +282,80 @@ class M21Utilities:
             return m.group(1), m.group(2), m.group(3)
         return m21PitchName, '', ''
 
+    # to be used if music21 doesn't support spanner fill.
+    @staticmethod
+    def fillIntermediateSpannedElements(
+        ottava: m21.spanner.Ottava,
+        searchStream: m21.stream.Stream,
+        *,
+        includeEndBoundary: bool = False,
+        mustFinishInSpan: bool = False,
+        mustBeginInSpan: bool = True,
+        includeElementsThatEndAtStart: bool = False
+    ):
+        if hasattr(ottava, 'filledStatus') and ottava.filledStatus is True:  # type: ignore
+            # Don't fill twice.
+            return
+
+        if ottava.getFirst() is None:
+            # no spanned elements?  Nothing to fill.
+            return
+
+        endElement: m21.base.Music21Object | None = None
+        if len(ottava) > 1:
+            # Start and end elements are different, we can't just append everything, we need
+            # to save off the end element, remove it, add everything, then add the end element
+            # again.  Note that if there are actually more than 2 elements before we start
+            # filling, the new intermediate elements will come after the existing ones,
+            # regardless of offset.  But first and last will still be the same two elements
+            # as before, which is the most important thing.
+            endElement = ottava.getLast()
+            if t.TYPE_CHECKING:
+                assert endElement is not None
+            ottava.spannerStorage.remove(endElement)
+
+        try:
+            startOffsetInHierarchy: OffsetQL = ottava.getFirst().getOffsetInHierarchy(searchStream)
+        except m21.sites.SitesException:
+            # print('start element not in searchStream')
+            if endElement is not None:
+                ottava.addSpannedElements(endElement)
+            return
+
+        endOffsetInHierarchy: OffsetQL
+        if endElement is not None:
+            try:
+                endOffsetInHierarchy = (
+                    endElement.getOffsetInHierarchy(searchStream) + endElement.quarterLength
+                )
+            except m21.sites.SitesException:
+                # print('end element not in searchStream')
+                ottava.addSpannedElements(endElement)
+                return
+        else:
+            endOffsetInHierarchy = (
+                ottava.getLast().getOffsetInHierarchy(searchStream) + ottava.getLast().quarterLength
+            )
+
+        for foundElement in (searchStream
+                .recurse()
+                .getElementsByOffsetInHierarchy(
+                    startOffsetInHierarchy,
+                    endOffsetInHierarchy,
+                    includeEndBoundary=includeEndBoundary,
+                    mustFinishInSpan=mustFinishInSpan,
+                    mustBeginInSpan=mustBeginInSpan,
+                    includeElementsThatEndAtStart=includeElementsThatEndAtStart)
+                .getElementsByClass(m21.note.NotRest)):
+            if endElement is None or foundElement is not endElement:
+                ottava.addSpannedElements(foundElement)
+
+        if endElement is not None:
+            # add it back in as the end element
+            ottava.addSpannedElements(endElement)
+
+        ottava.filledStatus = True  # type: ignore
+
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:
         # m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
@@ -374,17 +448,19 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsSpannerAnchor = False
         return False
 
-    _cachedM21SupportsSpannerFill: t.Optional[bool] = None
+    # inheritAccidentalDisplay and fillIntermediateSpannedElements started being
+    # supported in music21 at the same time.
+    _cachedM21SupportsInheritAccidentalDisplayAndSpannerFill: t.Optional[bool] = None
     @staticmethod
-    def m21SupportsSpannerFill() -> bool:
-        if M21Utilities._cachedM21SupportsSpannerFill is not None:
-            return M21Utilities._cachedM21SupportsSpannerFill
+    def m21SupportsInheritAccidentalDisplayAndSpannerFill() -> bool:
+        if M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill is not None:
+            return M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill
 
         if hasattr(m21.spanner.Spanner, 'fillIntermediateSpannedElements'):
-            M21Utilities._cachedM21SupportsSpannerFill = True
+            M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill = True
             return True
 
-        M21Utilities._cachedM21SupportsSpannerFill = False
+        M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill = False
         return False
 
 

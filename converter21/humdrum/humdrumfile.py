@@ -456,6 +456,7 @@ class StaffStateVariables:
         self.currentOttava1Down: t.Optional[m21.spanner.Ottava] = None
         self.currentOttava2Up: t.Optional[m21.spanner.Ottava] = None
         self.currentOttava2Down: t.Optional[m21.spanner.Ottava] = None
+        self.hasOttavas: bool = False
 
         '''
             Next we have temporary (processing) state about this staff (current measure, etc)
@@ -688,28 +689,45 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processHangingTieStarts()
 
-        if M21Utilities.m21SupportsSpannerFill():
-            # Fill intermediate elements in spanners.  This needs to happen before any
-            # transposition because Ottavas must be filled to be transposed correctly.
-            for sp in self.m21Score.spannerBundle:
-                if not isinstance(sp, m21.spanner.Ottava):
-                    continue
-                spStaffIndex: int = -1
-                if hasattr(sp, 'humdrum_staff_index'):
-                    spStaffIndex = sp.humdrum_staff_index  # type: ignore
-                if spStaffIndex >= 0:
-                    ss: StaffStateVariables = self._staffStates[spStaffIndex]
-                    sp.fillIntermediateSpannedElements(ss.m21Part)
+        # Fill intermediate elements in spanners.  This needs to happen before any
+        # transposition because Ottavas must be filled to be transposed correctly.
+        for sp in self.m21Score.spannerBundle:
+            if not isinstance(sp, m21.spanner.Ottava):
+                continue
+            spStaffIndex: int = -1
+            if hasattr(sp, 'humdrum_staff_index'):
+                spStaffIndex = sp.humdrum_staff_index  # type: ignore
+            if spStaffIndex >= 0:
+                ss: StaffStateVariables = self._staffStates[spStaffIndex]
+                ss.hasOttavas = True
+                if ss.m21Part is not None:
+                    if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
+                        sp.fillIntermediateSpannedElements(ss.m21Part)
+                    else:
+                        # we have to use our own version of spanner fill
+                        M21Utilities.fillIntermediateSpannedElements(sp, ss.m21Part)
 
         # Transpose any transposing instrument parts to "written pitch"
-        # For performance, check the instruments here, since stream.toWrittenPitch
+        # For performance, check the instruments/ottavas here, since stream.toWrittenPitch
         # can be expensive, even if there is no transposing instrument.
         for ss in self._staffStates:
-            if ss.m21Part and ss.m21Part.atSoundingPitch is True:  # might be 'unknown' or False
+            if ss.m21Part is not None:
+                hasTransposingInstrument: bool = False
                 for inst in ss.m21Part.getElementsByClass(m21.instrument.Instrument):
                     if M21Utilities.isTransposingInstrument(inst):
-                        ss.m21Part.toWrittenPitch(inPlace=True)
-                        break  # you only need to transpose the part once
+                        hasTransposingInstrument = True
+                        break
+                if hasTransposingInstrument or ss.hasOttavas:
+                    if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
+                        ss.m21Part.toWrittenPitch(inPlace=True, inheritAccidentalDisplay=True)
+                    else:
+                        # minimize the problems introduced by non-inherited accidental display
+                        if hasTransposingInstrument:
+                            ss.m21Part.toWrittenPitch(inPlace=True)
+                        else:
+                            # just transpose the Ottavas to written pitch
+                            for ottava in ss.m21Part[m21.spanner.Ottava]:
+                                ottava.undoTransposition()
 
         return self.m21Score
 
