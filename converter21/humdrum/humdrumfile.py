@@ -2092,7 +2092,7 @@ class HumdrumFile(HumdrumFileContent):
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it
-            ss.currentOttava1Down = m21.spanner.Ottava(type='8ba', transposing=False)
+            ss.currentOttava1Down = m21.spanner.Ottava(type='8vb', transposing=False)
             ss.currentOttava1Down.humdrum_staff_index = staffIndex  # type: ignore
             # put it in the measure
             measure.insert(0, ss.currentOttava1Down)
@@ -2114,7 +2114,7 @@ class HumdrumFile(HumdrumFileContent):
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it
-            ss.currentOttava2Down = m21.spanner.Ottava(type='15ba', transposing=False)
+            ss.currentOttava2Down = m21.spanner.Ottava(type='15mb', transposing=False)
             ss.currentOttava2Down.humdrum_staff_index = staffIndex  # type: ignore
             # put it in the measure
             measure.insert(0, ss.currentOttava2Down)
