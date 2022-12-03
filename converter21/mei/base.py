@@ -6759,8 +6759,10 @@ def scoreFromElement(
     theScore: stream.Score = stream.Score(thePartList)
 
     if M21Utilities.m21SupportsSpannerFill():
-        # fill in any spanners
+        # fill in any Ottava spanners
         for sp in spannerBundle:
+            if not isinstance(sp, spanner.Ottava):
+                continue
             staffNStr: str = ''
             if hasattr(sp, 'mei_staff'):
                 staffNStr = sp.mei_staff  # type: ignore
@@ -6775,11 +6777,14 @@ def scoreFromElement(
             staffNs: t.List[str] = staffNStr.split(' ')
             for i, staffN in enumerate(staffNs):
                 if i > 0:
-                    sp.fillStatus = False  # so we can fill some more
+                    environLocal.warn(
+                        'Single Ottava in multiple staves: only filling from the first staff'
+                    )
+                    continue
                 partIdx: int = allPartNs.index(staffN)
                 sp.fillIntermediateSpannedElements(thePartList[partIdx])
 
-    # put slurs in the Score
+    # put spanners in the Score
     theScore.append(list(spannerBundle))
 
     return theScore
