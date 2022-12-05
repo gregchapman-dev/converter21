@@ -6789,7 +6789,7 @@ def scoreFromElement(
                 environLocal.warn(
                     'Single Ottava in multiple staves: only filling from the first staff'
                 )
-                continue
+                break
             partIdx: int = allPartNs.index(staffN)
             if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
                 sp.fillIntermediateSpannedElements(thePartList[partIdx])
