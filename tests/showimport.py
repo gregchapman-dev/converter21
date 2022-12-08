@@ -22,7 +22,7 @@ def runTheTest(filePath: Path):
     #     return False
 
     if score1 is None:
-        print('MEIConverter parse failure')
+        print('parse failure')
         return False
 
     if not score1.isWellFormedNotation():
