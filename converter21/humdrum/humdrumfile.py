@@ -1543,12 +1543,12 @@ class HumdrumFile(HumdrumFileContent):
 
                 output[staffIndex][layerIndex].append(token)
 
-                if layerIndex == 0 and token.isClef:
-                    layerCount = self._getCurrentLayerCount(token)
-                    # Duplicate clef in all layers (needed for cases when
-                    # a secondary layer ends before the end of a measure.
-                    for k in range(layerCount, len(output[staffIndex])):
-                        output[staffIndex][k].append(token)
+#                 if layerIndex == 0 and token.isClef:
+#                     layerCount = self._getCurrentLayerCount(token)
+#                     # Duplicate clef in all layers (needed for cases when
+#                     # a secondary layer ends before the end of a measure.
+#                     for k in range(layerCount, len(output[staffIndex])):
+#                         output[staffIndex][k].append(token)
 
         return output
 
@@ -2019,7 +2019,9 @@ class HumdrumFile(HumdrumFileContent):
         if self._handleRepInterp(measureIndex, voice, vOffsetInMeasure, layerTok):
             insertedIntoVoice = True
         self._handleColorInterp(measureIndex, layerTok)
-        if self._handleClefChange(measureIndex, voice, vOffsetInMeasure, layerData, tokenIdx):
+        if self._handleClefChange(
+            measureIndex, voice, vOffsetInMeasure, layerData, tokenIdx, staffIndex
+        ):
             insertedIntoVoice = True
 #         if self._handleTimeSigChange(
 #                   measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex):
@@ -2226,13 +2228,14 @@ class HumdrumFile(HumdrumFileContent):
         # self.setSpineColorFromColorInterpToken(token)
         return  # _handleColorInterp needs implementation
 
-    @staticmethod
-    def _handleClefChange(_measureIndex: int,
+    def _handleClefChange(self,
+                          measureIndex: int,
                           voice: m21.stream.Voice,
                           voiceOffsetInMeasure: HumNumIn,
                           layerData: t.List[t.Union[HumdrumToken, FakeRestToken]],
-                          tokenIdx: int) -> bool:
-        vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
+                          tokenIdx: int,
+                          staffIndex: int) -> bool:
+        # vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         token: t.Union[HumdrumToken, FakeRestToken] = layerData[tokenIdx]
         if token.isFakeRest:
             return False
@@ -2251,10 +2254,11 @@ class HumdrumFile(HumdrumFileContent):
 
         if forceClefChange or token.durationFromStart != 0:
             if token.isClef:
+                # we do clef changes up in the measure, not in the voices
                 clefOffsetInMeasure: HumNum = token.durationFromBarline
-                clefOffsetInVoice: HumNum = opFrac(clefOffsetInMeasure - vOffsetInMeasure)
                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(token)
-                voice.coreInsert(clefOffsetInVoice, m21Clef)
+                measure: m21.stream.Measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
+                measure.coreInsert(clefOffsetInMeasure, m21Clef)
                 return True
 
 #             elif token.isNull:
@@ -10613,9 +10617,9 @@ class HumdrumFile(HumdrumFileContent):
                         # so ignore the second one.
                         pass
                     else:
-                        # mark clef as a clef change to print in the layer
+                        # mark clef as a clef change to print in the measure
                         token.setValue('auto', 'clefChange', True)
-                        self._markOtherClefsAsChange(token)
+#                         self._markOtherClefsAsChange(token)
 
                     token = token.nextToken0  # stay left if there's a split
                     continue
@@ -10847,25 +10851,25 @@ class HumdrumFile(HumdrumFileContent):
     //     function will mark the secondary clefs so that they will
     //     be converted as clef changes.
     '''
-    @staticmethod
-    def _markOtherClefsAsChange(clef: HumdrumToken) -> None:
-        if clef.track is None:
-            return
-        ctrack: int = clef.track
-
-        current: t.Optional[HumdrumToken] = clef.nextFieldToken
-        while current is not None:
-            if current.track != ctrack:
-                break
-            current.setValue('auto', 'clefChange', 1)
-            current = current.nextFieldToken
-
-        current = clef.previousFieldToken
-        while current is not None:
-            if current.track != ctrack:
-                break
-            current.setValue('auto', 'clefChange', 1)
-            current = current.previousFieldToken
+#     @staticmethod
+#     def _markOtherClefsAsChange(clef: HumdrumToken) -> None:
+#         if clef.track is None:
+#             return
+#         ctrack: int = clef.track
+#
+#         current: t.Optional[HumdrumToken] = clef.nextFieldToken
+#         while current is not None:
+#             if current.track != ctrack:
+#                 break
+#             current.setValue('auto', 'clefChange', 1)
+#             current = current.nextFieldToken
+#
+#         current = clef.previousFieldToken
+#         while current is not None:
+#             if current.track != ctrack:
+#                 break
+#             current.setValue('auto', 'clefChange', 1)
+#             current = current.previousFieldToken
 
     '''
     //////////////////////////////
