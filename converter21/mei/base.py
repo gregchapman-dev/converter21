@@ -4427,6 +4427,16 @@ def tupletFromElement(
     return tupletMembers
 
 
+def _isLastDurationalElement(idx: int, elements: t.List[Music21Object]) -> bool:
+    if elements[idx].quarterLength == 0:
+        # it's not a durational element at all
+        return False
+    for i in range(idx + 1, len(elements) - 1):
+        if elements[i].quarterLength != 0:
+            # found a subsequent durational element, so it's not the last one
+            return False
+    return True
+
 def layerFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -4508,6 +4518,26 @@ def layerFromElement(
 
     # adjust the <layer>'s elements for possible tuplets
     theLayer = _guessTuplets(theLayer)
+
+    # Verovio, when converting from Humdrum to MEI, has been known to put <space> fillers
+    # immediately after the end of a measure's/layer's usual duration, as an errant response
+    # to a *clef token in the middle of a final rest or note.  We need to ignore these (as
+    # Verovio itself does when rendering such things to a printed score).
+    if activeMeter is not None:
+        expectedLayerDur: OffsetQL = 4.0 * opFrac(
+            Fraction(activeMeter.numerator, activeMeter.denominator)
+        )
+        removeThisOne: t.Optional[int] = None
+        currOffset: OffsetQL = 0.
+        for i, each in enumerate(theLayer):
+            if currOffset == expectedLayerDur:
+                if isinstance(each, note.Rest) and each.style.hideObjectOnPrint == True:
+                    if _isLastDurationalElement(i, theLayer):
+                        removeThisOne = i
+                        break
+            currOffset = opFrac(currOffset + each.quarterLength)
+        if removeThisOne is not None:
+            theLayer.pop(removeThisOne)
 
     # make the Voice
     theVoice: stream.Voice = stream.Voice()
