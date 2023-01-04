@@ -1821,7 +1821,8 @@ def addArpeggio(
 def addTrill(
     elem: Element,
     obj: note.NotRest,
-    spannerBundle: spanner.SpannerBundle
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
 ) -> t.List[spanner.Spanner]:
     completedTrillExtensions: t.List[spanner.Spanner] = []
     # if appropriate, add this note/chord to a trillExtension
@@ -1850,14 +1851,17 @@ def addTrill(
 
     # by default this goes up a note in the scale of the current key
     trill = expressions.Trill()
-    if not accidUpper and not accidLower:
-        pass  # we want just a Trill()
-    elif accidUpper:
+    if accidUpper:
         trill.mei_trill_accidupper = accidUpper  # type: ignore
-        trill = t.cast(expressions.Trill, updateExpression(trill, obj))
     elif accidLower:
         trill.mei_accid_lower = accidLower  # type: ignore
-        trill = t.cast(expressions.Trill, updateExpression(trill, obj))
+
+    trill = t.cast(
+        expressions.Trill,
+        updateExpression(
+            trill, obj, otherInfo['staffNumberForNotes'], otherInfo
+        )
+    )
 
     if place and place != 'place_unspecified':
         trill.placement = place
@@ -1869,45 +1873,57 @@ def addTrill(
 
 def updateExpression(
     expr: expressions.Expression,
-    obj: note.GeneralNote
+    obj: note.GeneralNote,
+    staffNStr: str,
+    otherInfo: t.Dict[str, t.Any]
 ) -> expressions.Expression:
-    if isinstance(expr, expressions.Trill) and isinstance(obj, note.NotRest):
-        mainPitch: pitch.Pitch
-        minorSecond: interval.DiatonicInterval
-        trill: expressions.Trill
+    if not isinstance(expr, expressions.Trill):
+        return expr
+    if not isinstance(obj, note.NotRest):
+        return expr
 
-        if hasattr(expr, 'mei_trill_accidupper'):
-            accidUpper: str = expr.mei_trill_accidupper  # type: ignore
-            mainPitch = obj.pitches[-1]  # top-most pitch if it's a chord
-            minorSecond = interval.DiatonicInterval('minor', 2)
-            halfStepUpPitch: pitch.Pitch = minorSecond.transposePitch(mainPitch)
-            _, halfStepUpAccid, _ = (
-                M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepUpPitch.nameWithOctave)
-            )
-            if halfStepUpAccid == _ACCID_GES_ATTR_DICT.get(accidUpper, ''):
-                trill = expressions.HalfStepTrill()
-            else:
-                trill = expressions.WholeStepTrill()
-            trill.placement = expr.placement
-            return trill
+    mainPitch: pitch.Pitch = obj.pitches[-1]  # top-most pitch if it's a chord
+    minorSecond: interval.DiatonicInterval = interval.DiatonicInterval('minor', 2)
+    halfStepUpPitch: pitch.Pitch = minorSecond.transposePitch(mainPitch)
+    otherPitch: pitch.Pitch
+    trill: expressions.Trill
 
-        if hasattr(expr, 'mei_trill_accidlower'):
-            accidLower: str = expr.mei_trill_accidupper  # type: ignore
-            mainPitch = obj.pitches[-1]  # top-most pitch if it's a chord
-            minorSecond = interval.DiatonicInterval('minor', 2)
-            minorSecond = minorSecond.reverse()
-            halfStepDownPitch: pitch.Pitch = minorSecond.transposePitch(mainPitch)
-            _, halfStepDownAccid, _ = (
-                M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepDownPitch.nameWithOctave)
-            )
-            if halfStepDownAccid == _ACCID_GES_ATTR_DICT.get(accidLower, ''):
-                trill = expressions.HalfStepTrill()
-            else:
-                trill = expressions.WholeStepTrill()
-            trill.placement = expr.placement
-            return trill
+    if hasattr(expr, 'mei_trill_accidupper'):
+        accidUpper: str = expr.mei_trill_accidupper  # type: ignore
+        _, halfStepUpAccid, _ = (
+            M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepUpPitch.nameWithOctave)
+        )
+        if halfStepUpAccid == _ACCID_GES_ATTR_DICT.get(accidUpper, ''):
+            trill = expressions.HalfStepTrill()
+            otherPitch = halfStepUpPitch
+        else:
+            trill = expressions.WholeStepTrill()
+            otherPitch = interval.DiatonicInterval('major', 2).transposePitch(mainPitch)
+        trill.placement = expr.placement
+        updateStaffAltersWithPitches(staffNStr, (otherPitch,), otherInfo)
+        return trill
 
-    return expr
+    if hasattr(expr, 'mei_trill_accidlower'):
+        environLocal.warn('trill with accidlower not supported')
+        return expr
+
+    # Has no upper/lower accid, just follows the current alter for next note up.
+    # No need to updateStaffAltersWithPitches (since we're using the current alter).
+    # But we still need to figure out HalfStepTrill vs WholeStepTrill.
+    otherPitch = interval.GenericInterval(2).transposePitch(mainPitch)
+    alterIdx: int = M21Utilities.pitchToBase7(otherPitch)
+    alter: int = otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx]
+    if alter == 0:
+        otherPitch.accidental = None
+    else:
+        otherPitch.accidental = pitch.Accidental()
+        otherPitch.accidental.alter = alter
+    if otherPitch.ps - mainPitch.ps == 1:
+        trill = expressions.HalfStepTrill()
+    else:
+        trill = expressions.WholeStepTrill()
+    return trill
+
 
 def beamTogether(someThings: t.List[Music21Object]):
     '''
@@ -2566,7 +2582,9 @@ def staffGrpFromElement(
         # return all staff defs in this staff group
         nStr: t.Optional[str] = el.get('n')
         if nStr and (el.tag == staffDefTag):
+            otherInfo['staffNumberForDef'] = nStr
             staffDefDict[nStr] = staffDefFromElement(el, spannerBundle, otherInfo)
+            otherInfo.pop('staffNumberForDef')
 
         # recurse if there are more groups, append to the working staffDefDict
         elif el.tag == staffGroupTag:
@@ -2693,7 +2711,7 @@ def staffDefFromElement(
         t.Any]
     ] = {
         f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}keySig': keySigFromElement,
+        f'{MEI_NS}keySig': keySigFromElementInStaffDef,
         f'{MEI_NS}meterSig': timeSigFromElement,
     }
 
@@ -2733,10 +2751,12 @@ def staffDefFromElement(
             post['meter'] = timesig
 
     # --> key signature
+    updateStaffKeyAndAlters: bool = False
     if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
         keysig = _keySigFromAttrs(elem, prefix='key.')
         if keysig is not None:
             post['key'] = keysig
+            updateStaffKeyAndAlters = True
 
     # --> clef
     if elem.get('clef.shape') is not None:
@@ -2767,16 +2787,62 @@ def staffDefFromElement(
             if 'clef' in post:
                 environLocal.warn(_EXTRA_CLEF_IN_STAFFDEF.format(post['clef'], eachItem))
             post['clef'] = eachItem
-        if isinstance(eachItem, (key.Key, key.KeySignature)):
+        if isinstance(eachItem, key.KeySignature):
             if 'key' in post:
                 environLocal.warn(_EXTRA_KEYSIG_IN_STAFFDEF.format(post['key'], eachItem))
             post['key'] = eachItem
+            updateStaffKeyAndAlters = False  # keySigFromElementInStaffDef just did this
         if isinstance(eachItem, meter.TimeSignature):
             if 'meter' in post:
                 environLocal.warn(_EXTRA_METERSIG_IN_STAFFDEF.format(post['meter'], eachItem))
             post['meter'] = eachItem
 
+    if updateStaffKeyAndAlters and 'key' in post:
+        nStr: str = otherInfo.get('staffNumberForDef', '')
+        if nStr:
+            updateStaffKeyAndAltersWithNewKey(
+                nStr,
+                t.cast(key.KeySignature, post['key']),
+                otherInfo
+            )
+
     return post
+
+
+def updateStaffKeyAndAltersWithNewKey(
+    staffNStr: str,
+    newKey: t.Optional[t.Union[key.Key, key.KeySignature]],
+    otherInfo: t.Dict[str, t.Any]
+):
+    if otherInfo.get('currKeyPerStaff', None) is None:
+        otherInfo['currKeyPerStaff'] = {}
+    otherInfo['currKeyPerStaff'][staffNStr] = newKey
+
+    keyAltersForStaff: t.List[int] = M21Utilities.getAltersForKey(newKey)
+
+    if otherInfo.get('currentImpliedAltersPerStaff', None) is None:
+        otherInfo['currentImpliedAltersPerStaff'] = {}
+    otherInfo['currentImpliedAltersPerStaff'][staffNStr] = keyAltersForStaff
+
+
+def updateStaffAltersWithPitches(
+    staffNStr: str,
+    pitches: t.Tuple[pitch.Pitch, ...],
+    otherInfo: t.Dict[str, t.Any]
+):
+    # every note and chord flows through this routine as it is parsed
+    if otherInfo.get('currentImpliedAltersPerStaff', None) is None:
+        otherInfo['currentImpliedAltersPerStaff'] = {}
+    if otherInfo['currentImpliedAltersPerStaff'].get(staffNStr, None) is None:
+        # should never happen, but...
+        otherInfo['currentImpliedAltersPerStaff'][staffNStr] = [0] * 70
+
+    for thePitch in pitches:
+        alterIdx: int = M21Utilities.pitchToBase7(thePitch)
+        alter: int = 0
+        if thePitch.accidental is not None:
+            alter = int(thePitch.accidental.alter)
+        otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx] = int(alter)
 
 
 def dotFromElement(
@@ -3403,6 +3469,10 @@ def noteFromElement(
     else:
         theNote.pitch = safePitch(pnameStr, None, octStr)
 
+    nStr: str = otherInfo.get('staffNumberForNotes', '')
+    if nStr:
+        updateStaffAltersWithPitches(nStr, theNote.pitches, otherInfo)
+
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:
         addSlurs(elem, theNote, spannerBundle)
@@ -3423,7 +3493,7 @@ def noteFromElement(
         theNote.expressions.append(fermata)
 
     addArpeggio(elem, theNote, spannerBundle)
-    addTrill(elem, theNote, spannerBundle)
+    addTrill(elem, theNote, spannerBundle, otherInfo)
     addOttavas(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
@@ -3513,7 +3583,7 @@ def noteFromElement(
         theNote.style.hideObjectOnPrint = True
 
     # stash the staffNum in theNote.mei_staff (in case a spanner needs to know)
-    staffNumStr: str = otherInfo.get('staffNumber', '')
+    staffNumStr: str = otherInfo.get('staffNumberForNotes', '')
     if staffNumStr:
         theNote.mei_staff = staffNumStr  # type: ignore
 
@@ -3600,7 +3670,7 @@ def restFromElement(
         theRest.style.hideObjectOnPrint = True
 
     # stash the staffNum in theRest.mei_staff (in case a spanner needs to know)
-    staffNumStr: str = otherInfo.get('staffNumber', '')
+    staffNumStr: str = otherInfo.get('staffNumberForNotes', '')
     if staffNumStr:
         theRest.mei_staff = staffNumStr  # type: ignore
 
@@ -3808,6 +3878,10 @@ def chordFromElement(
         theChord = theChord.getGrace(appoggiatura=False)
         theChord.duration.slash = True  # type: ignore
 
+    nStr: str = otherInfo.get('staffNumberForNotes', '')
+    if nStr:
+        updateStaffAltersWithPitches(nStr, theChord.pitches, otherInfo)
+
     # we can only process slurs if we got a SpannerBundle as the "spannerBundle" argument
     if spannerBundle is not None:
         addSlurs(elem, theChord, spannerBundle)
@@ -3828,7 +3902,7 @@ def chordFromElement(
         theChord.expressions.append(fermata)
 
     addArpeggio(elem, theChord, spannerBundle)
-    addTrill(elem, theChord, spannerBundle)
+    addTrill(elem, theChord, spannerBundle, otherInfo)
     addOttavas(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
@@ -3882,7 +3956,7 @@ def chordFromElement(
         theChord.style.hideObjectOnPrint = True
 
     # stash the staffNum in theChord.mei_staff (in case a spanner needs to know)
-    staffNumStr: str = otherInfo.get('staffNumber', '')
+    staffNumStr: str = otherInfo.get('staffNumberForNotes', '')
     if staffNumStr:
         theChord.mei_staff = staffNumStr  # type: ignore
 
@@ -3968,7 +4042,37 @@ def clefFromElement(
     return theClef
 
 
-def keySigFromElement(
+def keySigFromElementInStaffDef(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, t.Any]
+) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
+    newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+        _keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    )
+    nStr: str = otherInfo['staffNumberForDef']  # should always be there at this point
+    updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
+
+    return newKey
+
+
+def keySigFromElementInLayer(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, t.Any]
+) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
+    newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+        _keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
+    )
+    nStr: str = otherInfo['staffNumberForLayer']
+    updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
+
+    return newKey
+
+
+def _keySigFromElement(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
@@ -4521,8 +4625,8 @@ def layerFromElement(
 
     # Verovio, when converting from Humdrum to MEI, has been known to put <space> fillers
     # immediately after the end of a measure's/layer's usual duration, as an errant response
-    # to a *clef token in the middle of a final rest or note.  We need to ignore these (as
-    # Verovio itself does when rendering such things to a printed score).
+    # to a *clef token in the middle of a final rest or note.  This was fixed recently, but
+    # because many such MEI files have been saved, we need to ignore these.
     if activeMeter is not None:
         expectedLayerDur: OffsetQL = 4.0 * opFrac(
             Fraction(activeMeter.numerator, activeMeter.denominator)
@@ -4531,7 +4635,7 @@ def layerFromElement(
         currOffset: OffsetQL = 0.
         for i, each in enumerate(theLayer):
             if currOffset == expectedLayerDur:
-                if isinstance(each, note.Rest) and each.style.hideObjectOnPrint == True:
+                if isinstance(each, note.Rest) and each.style.hideObjectOnPrint:
                     if _isLastDurationalElement(i, theLayer):
                         removeThisOne = i
                         break
@@ -5088,7 +5192,8 @@ def _makeBarlines(
 
 def _addTimestampedExpressions(
     staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
-    tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]]
+    tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]],
+    otherInfo: t.Dict[str, t.Any]
 ):
     clonedExpression: expressions.Expression
 
@@ -5130,11 +5235,15 @@ def _addTimestampedExpressions(
                             continue
                         if eachObject.offset == offset:
                             if i == 0:
-                                expression = updateExpression(expression, eachObject)
+                                expression = updateExpression(
+                                    expression, eachObject, staffN, otherInfo
+                                )
                                 eachObject.expressions.append(expression)
                             else:
                                 clonedExpression = deepcopy(expression)
-                                clonedExpression = updateExpression(clonedExpression, eachObject)
+                                clonedExpression = updateExpression(
+                                    clonedExpression, eachObject, staffN, otherInfo
+                                )
                                 eachObject.expressions.append(clonedExpression)
 
                             doneWithStaff = True
@@ -5532,7 +5641,7 @@ def trillFromElement(
 
         trillExtStaffNStr: str = staffNStr
         if not trillExtStaffNStr:
-            # get it from start note in ottava (should already be there)
+            # get it from start note in trillExt (should already be there)
             startObj: t.Optional[Music21Object] = trillExt.getFirst()
             if startObj is not None and hasattr(startObj, 'mei_staff'):
                 trillExtStaffNStr = startObj.mei_staff  # type: ignore
@@ -6122,6 +6231,16 @@ def measureFromElement(
         if newPendingSpannerEnds:
             otherInfo['pendingSpannerEnds'] = newPendingSpannerEnds
 
+    # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for each staff.
+    # Each staff's currentImpliedAlters will be updated as notes/ornaments with visual
+    # accidentals are seen in this measure.
+    for eachN in expectedNs:
+        currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
+        currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+            currKeyPerStaff.get(eachN, None)
+        )
+        updateStaffKeyAndAltersWithNewKey(eachN, currentKey, otherInfo)
+
     # mapping from tag name to our converter function
     staffTag: str = f'{MEI_NS}staff'
     staffDefTag: str = f'{MEI_NS}staffDef'
@@ -6136,7 +6255,7 @@ def measureFromElement(
             if nStr is None:
                 raise MeiElementError(_STAFF_MUST_HAVE_N)
 
-            otherInfo['staffNumber'] = nStr
+            otherInfo['staffNumberForNotes'] = nStr
             staves[nStr] = stream.Measure(
                 staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo),
                 number=elem.get('n', backupNum)
@@ -6144,15 +6263,17 @@ def measureFromElement(
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
                 maxBarDuration = thisBarDuration
-            otherInfo.pop('staffNumber')
+            otherInfo.pop('staffNumberForNotes')
 
         elif staffDefTag == eachElem.tag:
             if nStr is None:
                 environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
             else:
+                otherInfo['staffNumberForDef'] = nStr
                 stavesWaitingFromStaffDef[nStr] = staffDefFromElement(
                     eachElem, spannerBundle, otherInfo
                 )
+                otherInfo.pop('staffNumberForDef')
 
         elif eachElem.tag in staffItemsTagToFunction:
             offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
@@ -6166,8 +6287,8 @@ def measureFromElement(
                 eachElem, activeMeter, spannerBundle, otherInfo
             )
 
-            # sometimes staffItemsTagToFunction actually returns a list of
-            # (staffNStr, offsets, m21Obj) triples
+            # Sometimes staffItemsTagToFunction actually returns a _list_ of
+            # (staffNStr, offsets, m21Obj) triples instead of just one such triple.
             triples: t.List[
                 t.Tuple[
                     str,
@@ -6360,7 +6481,7 @@ def measureFromElement(
     staves = _makeBarlines(elem, staves)
 
     # take the timestamped fermatas and find notes/barlines to put them on
-    _addTimestampedExpressions(staves, tsExpressions)
+    _addTimestampedExpressions(staves, tsExpressions, otherInfo)
 
     return staves
 
@@ -6532,8 +6653,14 @@ def sectionScoreCore(
                 if t.TYPE_CHECKING:
                     # because 'all-part objects' is a list of objects
                     assert isinstance(allPartObject, Music21Object)
+
+                newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = None
+                if isinstance(allPartObject, key.KeySignature):
+                    newKey = allPartObject
+
                 if isinstance(allPartObject, meter.TimeSignature):
                     activeMeter = allPartObject
+
                 for i, eachN in enumerate(allPartNs):
                     if i == 0:
                         to_insert = allPartObject
@@ -6541,6 +6668,10 @@ def sectionScoreCore(
                         # a single Music21Object should not exist in multiple parts
                         to_insert = deepcopy(allPartObject)
                     inNextThing[eachN].append(to_insert)
+
+                    if newKey is not None:
+                        updateStaffKeyAndAltersWithNewKey(eachN, newKey, otherInfo)
+
             for eachN in allPartNs:
                 if eachN in localResult:
                     resultNDict = localResult[eachN]
@@ -6555,12 +6686,14 @@ def sectionScoreCore(
         elif staffDefTag == eachElem.tag:
             nStr: t.Optional[str] = eachElem.get('n')
             if nStr is not None:
+                otherInfo['staffNumberForDef'] = nStr
                 for eachObj in staffDefFromElement(
                     eachElem, spannerBundle, otherInfo
                 ).values():
                     if isinstance(eachObj, meter.TimeSignature):
                         activeMeter = eachObj
                     inNextThing[nStr].append(eachObj)
+                otherInfo.pop('staffNumberForDef')
             else:
                 # At the moment, to process this here, we need an @n on the <staffDef>. A document
                 # may have a still-valid <staffDef> if the <staffDef> has an @xml:id with which
@@ -6865,7 +6998,7 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}mSpace': mSpaceFromElement,
     f'{MEI_NS}barLine': barLineFromElement,
     f'{MEI_NS}meterSig': timeSigFromElement,
-    f'{MEI_NS}keySig': keySigFromElement,
+    f'{MEI_NS}keySig': keySigFromElementInLayer,
 }
 
 staffItemsTagToFunction: t.Dict[str, t.Callable[

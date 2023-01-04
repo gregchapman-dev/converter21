@@ -4192,9 +4192,12 @@ class HumdrumFile(HumdrumFileContent):
             if tupletDurs[i] is None:
                 durationTupleNormal[i] = None
                 continue
+            tupletDursI = tupletDurs[i]
+            if t.TYPE_CHECKING:
+                assert tupletDursI is not None
             durTuple: m21.duration.DurationTuple = (
                 m21.duration.durationTupleFromQuarterLength(
-                    tupletDurs[i] / opFrac(numNotesNormal[i]))
+                    tupletDursI / opFrac(numNotesNormal[i]))
             )
             durationTupleNormal[i] = durTuple
             if durTuple.type == 'inexpressible':
@@ -4211,7 +4214,7 @@ class HumdrumFile(HumdrumFileContent):
                 # as one triplet of whole notes per measure (duration of triplet == breve). I would
                 # note that C++ code renders this measure weirdly, by putting a triplet bracket
                 # around the first two notes, and another "around" the last note. But we need to
-                # work around it, since the partial duration causes an inexpressible durationNormal
+                # work around it, since the partial duration causes an inexpressible duration
                 # and music21 really hates that. The workaround below seems OK, but the end result
                 # from export to MusicXML (or perhaps from the render by Musescore) adds rests to
                 # the tuplets to get them to be full duration. And that's even more wrong than what
@@ -4228,7 +4231,7 @@ class HumdrumFile(HumdrumFileContent):
                 proposedTupletDur: HumNum
                 for numNotes in reversed(range(1, numNotesActual[i])):
                     proposedTupletDur = opFrac(
-                        tupletDurs[i] / opFrac(Fraction(numNotes, numNotesActual[i]))
+                        tupletDursI / opFrac(Fraction(numNotes, numNotesActual[i]))
                     )
                     if Convert.isPowerOfTwo(proposedTupletDur):
                         durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
@@ -4243,7 +4246,7 @@ class HumdrumFile(HumdrumFileContent):
                 # try (next) for single-dotted power of two full tuplet duration
                 for numNotes in reversed(range(1, numNotesActual[i])):
                     proposedTupletDur = opFrac(
-                        tupletDurs[i] / opFrac(Fraction(numNotes, numNotesActual[i]))
+                        tupletDursI / opFrac(Fraction(numNotes, numNotesActual[i]))
                     )
                     tupletDurWithoutSingleDot: HumNum = opFrac(
                         proposedTupletDur / opFrac(Fraction(3, 2))

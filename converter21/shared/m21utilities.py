@@ -17,7 +17,7 @@ import re
 import typing as t
 
 import music21 as m21
-from music21.common.types import OffsetQL
+from music21.common.types import OffsetQL, OffsetQLIn, StepName
 
 from converter21.humdrum import HumdrumInternalError
 
@@ -265,7 +265,7 @@ class M21Utilities:
     @staticmethod
     def splitComplexRestDuration(rest: m21.note.Rest) -> t.Tuple[m21.note.Rest, ...]:
         atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
-        quarterLengthList: t.List[t.Union[int, float]] = [
+        quarterLengthList: t.List[OffsetQLIn] = [
             float(c.quarterLength * atm) for c in rest.duration.components
         ]
         splits: t.Tuple[m21.note.Rest, ...] = (
@@ -279,8 +279,48 @@ class M21Utilities:
         patt: str = r'([ABCDEFG])([-#]*)([\d]+)'
         m = re.match(patt, m21PitchName)
         if m:
-            return m.group(1), m.group(2), m.group(3)
-        return m21PitchName, '', ''
+            g2: str = m.group(2)
+            if g2 == '':
+                g2 = 'n'
+            return m.group(1), g2, m.group(3)
+        return m21PitchName, 'n', ''
+
+    _STEP_TO_PITCH_CLASS: t.Dict[str, int] = {
+        'C': 0,
+        'D': 1,
+        'E': 2,
+        'F': 3,
+        'G': 4,
+        'A': 5,
+        'B': 6
+    }
+
+    @staticmethod
+    def pitchToBase7(m21Pitch: m21.pitch.Pitch) -> int:
+        pc: int = M21Utilities._STEP_TO_PITCH_CLASS[m21Pitch.step]
+        octave: int = m21Pitch.implicitOctave  # implicit means return default (4) if None
+        return pc + (7 * octave)
+
+    @staticmethod
+    def getAltersForKey(
+        m21Key: t.Optional[t.Union[m21.key.Key, m21.key.KeySignature]]
+    ) -> t.List[int]:
+        # returns a list of pitch alterations (number of semitones up or down),
+        # indexed by pitch (base7), where index 0 is C0, and index 69 is B9.
+        alters: t.List[int] = [0] * 70
+        if m21Key is None:
+            return alters
+
+        STEPNAMES: tuple[StepName, ...] = ('C', 'D', 'E', 'F', 'G', 'A', 'B')
+        for pitchClass, pitchName in enumerate(STEPNAMES):
+            accid: t.Optional[m21.pitch.Accidental] = m21Key.accidentalByStep(pitchName)
+            if accid is None:
+                continue
+            alter: int = int(accid.alter)
+            for octave in range(0, 10):  # 0 through 9, inclusive
+                alters[pitchClass + (octave * 7)] = alter
+
+        return alters
 
     # to be used if music21 doesn't support spanner fill.
     @staticmethod

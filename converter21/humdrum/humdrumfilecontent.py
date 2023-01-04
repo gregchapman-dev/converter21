@@ -1081,7 +1081,8 @@ class HumdrumFileContent(HumdrumFileStructure):
         #    display of a specific accidental (or combination, such as 'n#')
         #
         # We will also mark a visible accidental if it is necessary because the
-        # accidental is not already in the key signature.
+        # accidental is not already in the key signature, and hasn't already occurred
+        # in this measure (in this staff and in this octave).
 
         spineStartCount: int = len(self.spineStartList)
 
