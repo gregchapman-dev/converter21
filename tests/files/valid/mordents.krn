@@ -1,0 +1,69 @@
+**kern
+*part1
+*staff1
+*clefG2
+*k[]
+*M2/4
+=1
+!! Mordent with no accidental (note above is D with no accidental)
+!LO:TX:b:t=whole
+4cM
+!! Mordent with flat (note above is D flat)
+!LO:TX:b:t=half
+4cm
+=2
+!! Mordent with sharp (note above is D sharp)
+!LO:TX:b:t=whole
+4c#M
+!! Mordent with natural (note above is D natural)
+!LO:TX:b:t=half
+4c#m
+=3
+*k[f#c#]
+!! Mordent with double-sharp accidental (note above is F double-sharp)
+!LO:TX:b:t=whole
+4e#M
+!! Mordent with natural accidental (note above is F natural)
+!LO:TX:b:t=half
+4em
+=4
+*k[b-e-]
+!! Mordent with natural accidental (note above is B natural)
+!LO:TX:b:t=whole
+4aM
+!! Mordent with double-flat accidental (note above is B double-flat)
+!LO:TX:b:t=half
+4a-m
+=5
+*k[]
+!! Inverted mordent with no accidental (note below is C with no accidental)
+!LO:TX:b:t=whole
+4dW
+!! Inverted mordent with flat (note below is C flat)
+!LO:TX:b:t=half
+4d--w
+=6
+!! Inverted mordent with sharp (note below is C sharp)
+!LO:TX:b:t=whole
+4d#W
+!! Inverted mordent with natural (note below is C natural)
+!LO:TX:b:t=half
+4d-w
+=7
+*k[f#c#]
+!! Inverted mordent with double-sharp accidental (note below is C double-sharp)
+!LO:TX:b:t=whole
+4d##W
+!! Inverted mordent with natural accidental (note below is C natural)
+!LO:TX:b:t=half
+4d-w
+=8
+*k[b-e-]
+!! Inverted mordent with natural accidental (note below is B natural)
+!LO:TX:b:t=whole
+4c#W
+!! Inverted mordent with double-flat accidental (note below is B double-flat)
+!LO:TX:b:t=half
+4c--w
+=
+*-
