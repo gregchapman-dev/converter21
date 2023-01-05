@@ -1,0 +1,27 @@
+**kern
+*clefG2
+*M2/0
+=1
+0c
+0d
+=
+0e
+0f
+=||
+*M2/0
+0c
+0d
+=||
+*M2/0
+*met(2)
+!!LO:TX:t=should remain "2" when fixed because of met(2)
+0e
+0f
+=||
+*M4/0
+0c
+0d
+0e
+0f
+==
+*-

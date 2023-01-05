@@ -1,0 +1,25 @@
+!! from beethoven sonata06-3.krn
+**kern	**kern	**dynam
+*part2	*part1	*part1
+*staff2	*staff1	*staff1
+*I"Piano	*I"Piano	*
+*I'Pno	*I'Pno	*
+*clefF4	*clefG2	*
+*k[b-]	*k[b-]	*
+*F:	*F:	*
+*M2/4	*M2/4	*
+=80	=80	=80
+*	*^	*
+8f'/L	8ccc'/L	8ee-X\L	.
+8a'/	8aa'/	8ee-\	.
+8g'/	8bb-'/	8ee-\	.
+8f'/J	8ccc'/J	8ee-\J	.
+=81	=81	=81	=81
+!	!LO:TX:t=cresc.	!	!
+*	*v	*v	*
+8b-'\L	8dd'\L 8ff	.
+8cc'\	8dd'\ 8ff	.
+8b-'\	8een'\ 8gg	.
+8a'\J	8ff'\J 8aa	.
+==	==	==
+*-	*-	*-
