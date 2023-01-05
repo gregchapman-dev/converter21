@@ -4051,8 +4051,9 @@ def keySigFromElementInStaffDef(
     newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
         _keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
-    nStr: str = otherInfo['staffNumberForDef']  # should always be there at this point
-    updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
+    nStr: str = otherInfo.get('staffNumberForDef', '')
+    if nStr:
+        updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
 
     return newKey
 
@@ -4066,8 +4067,9 @@ def keySigFromElementInLayer(
     newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
         _keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
-    nStr: str = otherInfo['staffNumberForLayer']
-    updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
+    nStr: str = otherInfo.get('staffNumberForLayer', '')
+    if nStr:
+        updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
 
     return newKey
 
@@ -5085,12 +5087,13 @@ def staffFromElement(
     # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
     # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
     # accidentals are seen in this layer.
-    staffNStr: str = otherInfo['staffNumberForNotes']
-    currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
-    currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
-        currKeyPerStaff.get(staffNStr, None)
-    )
-    updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
+    staffNStr: str = otherInfo.get('staffNumberForNotes', '')
+    if staffNStr:
+        currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
+        currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+            currKeyPerStaff.get(staffNStr, None)
+        )
+        updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
 
     layers: t.List[stream.Voice] = []
 

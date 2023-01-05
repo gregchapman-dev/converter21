@@ -1375,69 +1375,6 @@ class Test(unittest.TestCase):
     # '''Tests for clefFromElement()'''
     # NOTE: in this function's integration tests, the Element.tag attribute doesn't actually matter
 
-    @mock.patch('music21.clef.clefFromString')
-    @mock.patch('music21.clef.PercussionClef')
-    @mock.patch('music21.clef.TabClef')
-    def testUnit1aClefFromElement(self, mockTabClef, mockPercClef, mockClefFromString):
-        '''
-        clefFromElement(): all the elements that go in clef.clefFromString()...
-                           'shape', 'line', 'dis', and 'dis.place'
-        (mostly-unit test; only mock out clef and the ElementTree.Element)
-        '''
-        elem = mock.MagicMock()
-        elemGetReturns = ['theClefShape', 'theClefShape', 'theClefShape', '2', '8', 'above']
-        elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
-        mockClefFromString.return_value = mock.MagicMock(name='clefFromString()')
-        expected = mockClefFromString.return_value
-
-        actual = base.clefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        # this test fails on Python 3.5.
-        # mockClefFromString.assert_called_once_with_('theClefShape2', 1)
-        self.assertEqual(0, mockTabClef.call_count)
-        self.assertEqual(0, mockPercClef.call_count)
-
-    @mock.patch('music21.clef.clefFromString')
-    @mock.patch('music21.clef.PercussionClef')
-    @mock.patch('music21.clef.TabClef')
-    def testUnit1bClefFromElement(self, mockTabClef, mockPercClef, mockClefFromString):
-        '''
-        clefFromElement(): same as testUnit1a() but with 'perc' "shape"
-        '''
-        elem = mock.MagicMock()
-        elemGetReturns = ['perc']
-        elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
-        mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
-        expected = mockPercClef.return_value
-
-        actual = base.clefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        self.assertEqual(0, mockClefFromString.call_count)
-        self.assertEqual(0, mockTabClef.call_count)
-        self.assertEqual(1, mockPercClef.call_count)
-
-    @mock.patch('music21.clef.clefFromString')
-    @mock.patch('music21.clef.PercussionClef')
-    @mock.patch('music21.clef.TabClef')
-    def testUnit1cClefFromElement(self, mockTabClef, mockPercClef, mockClefFromString):
-        '''
-        clefFromElement(): same as testUnit1c() but with 'TAB' "shape"
-        '''
-        elem = mock.MagicMock()
-        elemGetReturns = ['TAB', 'TAB']
-        elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
-        mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
-        expected = mockTabClef.return_value
-
-        actual = base.clefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        self.assertEqual(0, mockClefFromString.call_count)
-        self.assertEqual(1, mockTabClef.call_count)
-        self.assertEqual(0, mockPercClef.call_count)
-
     def testIntegration1aClefFromElement(self):
         '''
         clefFromElement(): all the elements that go in clef.clefFromString()...
@@ -1485,27 +1422,6 @@ class Test(unittest.TestCase):
         actual = base.clefFromElement(clefElem, None, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
-
-    @mock.patch('music21.clef.clefFromString')
-    @mock.patch('music21.clef.PercussionClef')
-    @mock.patch('music21.clef.TabClef')
-    def testUnit2ClefFromElement(self, mockTabClef, mockPercClef, mockClefFromString):
-        '''
-        clefFromElement(): adds the "xml:id" attribute
-        '''
-        elem = mock.MagicMock()
-        elemGetReturns = ['perc', 'theXMLID', 'theXMLID']
-        elem.get.side_effect = lambda *unused: elemGetReturns.pop(0) if elemGetReturns else None
-        mockPercClef.return_value = mock.MagicMock(name='PercussionClef()')
-        expected = mockPercClef.return_value
-
-        actual = base.clefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        self.assertEqual(0, mockClefFromString.call_count)
-        self.assertEqual(0, mockTabClef.call_count)
-        self.assertEqual(1, mockPercClef.call_count)
-        self.assertEqual('theXMLID', actual.id)
 
     # -----------------------------------------------------------------------------
     # class TestLayerFromElement(unittest.TestCase):
