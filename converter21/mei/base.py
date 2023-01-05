@@ -5082,6 +5082,16 @@ def staffFromElement(
     ] = {
     }
 
+    # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
+    # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
+    # accidentals are seen in this layer.
+    staffNStr: str = otherInfo['staffNumberForNotes']
+    currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
+    currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+        currKeyPerStaff.get(staffNStr, None)
+    )
+    updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
+
     layers: t.List[stream.Voice] = []
 
     # track the @n values given to layerFromElement()
@@ -6230,16 +6240,6 @@ def measureFromElement(
                 )
         if newPendingSpannerEnds:
             otherInfo['pendingSpannerEnds'] = newPendingSpannerEnds
-
-    # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for each staff.
-    # Each staff's currentImpliedAlters will be updated as notes/ornaments with visual
-    # accidentals are seen in this measure.
-    for eachN in expectedNs:
-        currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
-        currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
-            currKeyPerStaff.get(eachN, None)
-        )
-        updateStaffKeyAndAltersWithNewKey(eachN, currentKey, otherInfo)
 
     # mapping from tag name to our converter function
     staffTag: str = f'{MEI_NS}staff'
