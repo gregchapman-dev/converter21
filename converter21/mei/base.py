@@ -228,6 +228,7 @@ _IGNORE_UNPROCESSED = (
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
+    f'{MEI_NS}mordent',     # mordents; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
     f'{MEI_NS}verse',       # lyrics; handled separately by noteFromElement()
@@ -344,15 +345,21 @@ class MeiToM21Converter:
         Returns a :class:`~music21.stream.Stream` subclass, depending on the MEI document.
         '''
 
-        environLocal.printDebug('*** pre-processing spanning elements')
+        environLocal.printDebug('*** pre-processing spanning/timestamped elements')
+
         _ppSlurs(self)
         _ppTies(self)
         _ppBeams(self)
         _ppTuplets(self)
+
         _ppFermatas(self)
         _ppArpeggios(self)
         _ppOctaves(self)
+
         _ppTrills(self)
+        _ppMordents(self)
+        # _ppTurns(self)
+
         _ppConclude(self)
 
         environLocal.printDebug('*** processing <score> elements')
@@ -1111,25 +1118,6 @@ def _ppFermatas(theConverter: MeiToM21Converter):
             c.m21Attr[startId]['fermata_shape'] = shape
 
 
-_ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: t.Dict[t.Tuple[str, str], str] = {
-    # default arrow is 'false'
-    ('', ''): 'normal',
-    ('', 'up'): 'normal',
-    ('', 'down'): 'down',                 # down arrow is implied
-    ('', 'nonarp'): 'non-arpeggio',       # arrow is ignored
-    # same again, because default arrow is 'false'
-    ('false', ''): 'normal',
-    ('false', 'up'): 'normal',
-    ('false', 'down'): 'down',            # down arrow is implied
-    ('false', 'nonarp'): 'non-arpeggio',  # arrow is ignored
-    # arrow is true, so order matters
-    ('true', ''): 'up',                   # default arrow direction is up
-    ('true', 'up'): 'up',
-    ('true', 'down'): 'down',
-    ('true', 'nonarp'): 'non-arpeggio',   # arrow is ignored
-}
-
-
 def _ppTrills(theConverter: MeiToM21Converter):
     '''
     Pre-processing helper for :func:`convertFromString` that handles trills specified in <trill>
@@ -1212,6 +1200,63 @@ def _ppTrills(theConverter: MeiToM21Converter):
             eachTrill.set('m21TrillExtension', thisIdLocal)
 
 
+def _ppMordents(theConverter: MeiToM21Converter):
+    '''
+    Pre-processing helper for :func:`convertFromString` that handles mordents in <mordent>
+    elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+    processed. This function reads from ``theConverter.documentRoot`` and writes into
+    ``theConverter.m21Attr``.
+
+    :param theConverter: The object responsible for storing data about this import.
+    :type theConverter: :class:`MeiToM21Converter`.
+
+    **This Preprocessor**
+
+    The mordent preprocessor works similarly to the tie preprocessor, adding @m21Mordent
+    attributes to any referenced notes/chords.
+
+    **Example of ``m21Attr``**
+
+    The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+    dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
+    dict holds attribute names and their values that should be added to the element with the
+    given @xml:id.
+
+    For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
+    element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
+    '''
+    environLocal.printDebug('*** pre-processing mordents')
+    # for readability, we use a single-letter variable
+    c = theConverter
+
+    for eachMordent in c.documentRoot.iterfind(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}mordent'):
+        startId: str = removeOctothorpe(eachMordent.get('startid', ''))  # type: ignore
+        place: str = eachMordent.get('place', 'place_unspecified')
+        form: str = eachMordent.get('form', '')
+        long: str = eachMordent.get('long', '')
+
+        if not startId:
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<mordent>', '@startid'))
+            continue
+
+        if long == 'true':
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<mordent>', '@long="true"'))
+            environLocal.warn('@long will be ignored')
+
+        # The mordent info gets stashed on the note/chord referenced by startId
+        accidUpper: str = eachMordent.get('accidupper', '')
+        accidLower: str = eachMordent.get('accidlower', '')
+
+        c.m21Attr[startId]['m21Mordent'] = place
+        if form:
+            c.m21Attr[startId]['m21MordentForm'] = form
+        if accidUpper:
+            c.m21Attr[startId]['m21MordentAccidUpper'] = accidUpper
+        if accidLower:
+            c.m21Attr[startId]['m21MordentAccidLower'] = accidLower
+
+
 _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: t.Dict[t.Tuple[str, str], str] = {
     ('8', 'above'): '8va',
     ('8', 'below'): '8vb',
@@ -1282,6 +1327,25 @@ def _ppOctaves(theConverter: MeiToM21Converter):
         staffNStr: str = eachOctave.get('staff', '')
         if staffNStr:
             ottava.mei_staff = staffNStr  # type: ignore
+
+
+_ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: t.Dict[t.Tuple[str, str], str] = {
+    # default arrow is 'false'
+    ('', ''): 'normal',
+    ('', 'up'): 'normal',
+    ('', 'down'): 'down',                 # down arrow is implied
+    ('', 'nonarp'): 'non-arpeggio',       # arrow is ignored
+    # same again, because default arrow is 'false'
+    ('false', ''): 'normal',
+    ('false', 'up'): 'normal',
+    ('false', 'down'): 'down',            # down arrow is implied
+    ('false', 'nonarp'): 'non-arpeggio',  # arrow is ignored
+    # arrow is true, so order matters
+    ('true', ''): 'up',                   # default arrow direction is up
+    ('true', 'up'): 'up',
+    ('true', 'down'): 'down',
+    ('true', 'nonarp'): 'non-arpeggio',   # arrow is ignored
+}
 
 
 def _ppArpeggios(theConverter: MeiToM21Converter):
@@ -1852,9 +1916,9 @@ def addTrill(
     # by default this goes up a note in the scale of the current key
     trill = expressions.Trill()
     if accidUpper:
-        trill.mei_trill_accidupper = accidUpper  # type: ignore
+        trill.mei_accidupper = accidUpper  # type: ignore
     elif accidLower:
-        trill.mei_accid_lower = accidLower  # type: ignore
+        trill.mei_accidlower = accidLower  # type: ignore
 
     trill = t.cast(
         expressions.Trill,
@@ -1871,58 +1935,182 @@ def addTrill(
     return completedTrillExtensions
 
 
+def addMordent(
+    elem: Element,
+    obj: note.NotRest,
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
+):
+    # Check to see if this note/chord needs a mordent, and if so,
+    # make the Mordent and append it to the note/chord's expressions.
+    mordent: expressions.GeneralMordent
+    place: str = elem.get('m21Mordent', '')
+    if not place:
+        return
+
+    accidUpper: str = elem.get('m21MordentAccidUpper', '')
+    accidLower: str = elem.get('m21MordentAccidLower', '')
+    form: str = elem.get('m21MordentForm', '')
+    mei_accidupper: str = ''
+    mei_accidlower: str = ''
+
+    if accidUpper:
+        if not form:
+            form = 'upper'
+        if form == 'upper':
+            mei_accidupper = accidUpper  # type: ignore
+
+    if accidLower:
+        if not form:
+            form = 'lower'
+        if form == 'lower':
+            mei_accidlower = accidLower  # type: ignore
+
+    if not form:
+        form = 'lower'  # I would prefer upper, but match Verovio
+
+    if form == 'upper':
+        # music21 calls an upper mordent (i.e that goes up from the main note) an InvertedMordent
+        mordent = expressions.InvertedMordent()
+    elif form == 'lower':
+        mordent = expressions.Mordent()
+
+    if mei_accidupper:
+        mordent.mei_accidupper = mei_accidupper  # type: ignore
+    elif mei_accidlower:
+        mordent.mei_accidlower = mei_accidlower  # type: ignore
+
+    mordent = t.cast(
+        expressions.GeneralMordent,
+        updateExpression(
+            mordent, obj, otherInfo['staffNumberForNotes'], otherInfo
+        )
+    )
+
+    # m21 mordents don't have placement... sigh...
+    #  if place and place != 'place_unspecified':
+    #      mordent.placement = place
+
+    obj.expressions.append(mordent)
+
+
 def updateExpression(
     expr: expressions.Expression,
     obj: note.GeneralNote,
     staffNStr: str,
     otherInfo: t.Dict[str, t.Any]
 ) -> expressions.Expression:
-    if not isinstance(expr, expressions.Trill):
+    if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent)):
         return expr
     if not isinstance(obj, note.NotRest):
         return expr
 
+    updatedExpr: expressions.Expression
+    pitchUp: pitch.Pitch
+    pitchDown: pitch.Pitch
+    stepUp: str = ''
+    stepDown: str = ''
+    otherPitches: t.List[pitch.Pitch] = []
     mainPitch: pitch.Pitch = obj.pitches[-1]  # top-most pitch if it's a chord
-    minorSecond: interval.DiatonicInterval = interval.DiatonicInterval('minor', 2)
-    halfStepUpPitch: pitch.Pitch = minorSecond.transposePitch(mainPitch)
-    otherPitch: pitch.Pitch
-    trill: expressions.Trill
 
-    if hasattr(expr, 'mei_trill_accidupper'):
-        accidUpper: str = expr.mei_trill_accidupper  # type: ignore
+    if hasattr(expr, 'mei_accidupper'):
+        minorSecondUp: interval.DiatonicInterval = interval.DiatonicInterval('minor', 2)
+        halfStepUpPitch: pitch.Pitch = minorSecondUp.transposePitch(mainPitch)
+        accidUpper: str = expr.mei_accidupper  # type: ignore
         _, halfStepUpAccid, _ = (
             M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepUpPitch.nameWithOctave)
         )
         if halfStepUpAccid == _ACCID_GES_ATTR_DICT.get(accidUpper, ''):
-            trill = expressions.HalfStepTrill()
-            otherPitch = halfStepUpPitch
+            stepUp = 'half'
+            pitchUp = halfStepUpPitch
         else:
-            trill = expressions.WholeStepTrill()
-            otherPitch = interval.DiatonicInterval('major', 2).transposePitch(mainPitch)
-        trill.placement = expr.placement
-        updateStaffAltersWithPitches(staffNStr, (otherPitch,), otherInfo)
-        return trill
+            stepUp = 'whole'
+            pitchUp = interval.DiatonicInterval('major', 2).transposePitch(mainPitch)
+        otherPitches.append(pitchUp)
 
-    if hasattr(expr, 'mei_trill_accidlower'):
-        environLocal.warn('trill with accidlower not supported')
-        return expr
+    elif hasattr(expr, 'mei_accidlower'):
+        minorSecondDown: interval.DiatonicInterval = (
+            interval.DiatonicInterval('minor', 2).reverse()
+        )
+        halfStepDownPitch: pitch.Pitch = minorSecondDown.transposePitch(mainPitch)
+        accidLower: str = expr.mei_accidlower  # type: ignore
+        _, halfStepDownAccid, _ = (
+            M21Utilities.splitM21PitchNameIntoNameAccidOctave(halfStepDownPitch.nameWithOctave)
+        )
+        if halfStepDownAccid == _ACCID_GES_ATTR_DICT.get(accidLower, ''):
+            stepDown = 'half'
+            pitchDown = halfStepDownPitch
+        else:
+            stepDown = 'whole'
+            pitchDown = interval.DiatonicInterval('major', 2).reverse().transposePitch(mainPitch)
+        otherPitches.append(pitchDown)
 
-    # Has no upper/lower accid, just follows the current alter for next note up.
-    # No need to updateStaffAltersWithPitches (since we're using the current alter).
-    # But we still need to figure out HalfStepTrill vs WholeStepTrill.
-    otherPitch = interval.GenericInterval(2).transposePitch(mainPitch)
-    alterIdx: int = M21Utilities.pitchToBase7(otherPitch)
-    alter: int = otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx]
-    if alter == 0:
-        otherPitch.accidental = None
     else:
-        otherPitch.accidental = pitch.Accidental()
-        otherPitch.accidental.alter = alter
-    if otherPitch.ps - mainPitch.ps == 1:
-        trill = expressions.HalfStepTrill()
-    else:
-        trill = expressions.WholeStepTrill()
-    return trill
+        # Has no upper/lower accid, just follows the current alter for next note up/down.
+        # No need to updateStaffAltersWithPitches (since we're using the current alter).
+        # But we still need to figure out HalfStepTrill vs WholeStepTrill.
+        alterIdx: int
+        alter: int
+        if isinstance(expr, (expressions.Trill, expressions.InvertedMordent)):
+            # going up
+            pitchUp = interval.GenericInterval(2).transposePitch(mainPitch)
+            alterIdx = M21Utilities.pitchToBase7(pitchUp)
+            alter = otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx]
+            if alter == 0:
+                pitchUp.accidental = None
+            else:
+                pitchUp.accidental = pitch.Accidental()
+                pitchUp.accidental.alter = alter
+
+            if pitchUp.ps - mainPitch.ps == 1:
+                stepUp = 'half'
+            else:
+                stepUp = 'whole'
+
+            otherPitches.append(pitchUp)
+
+        else:
+            # going down
+            pitchDown = interval.GenericInterval(2).reverse().transposePitch(mainPitch)
+            alterIdx = M21Utilities.pitchToBase7(pitchDown)
+            alter = otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx]
+            if alter == 0:
+                pitchDown.accidental = None
+            else:
+                pitchDown.accidental = pitch.Accidental()
+                pitchDown.accidental.alter = alter
+            if mainPitch.ps - pitchDown.ps == 1:
+                stepDown = 'half'
+            else:
+                stepDown = 'whole'
+
+            otherPitches.append(pitchDown)
+
+
+    if isinstance(expr, expressions.Trill):
+        if stepUp == 'half':
+            updatedExpr = expressions.HalfStepTrill()
+        else:
+            updatedExpr = expressions.WholeStepTrill()
+    elif isinstance(expr, expressions.InvertedMordent):
+        if stepUp == 'half':
+            updatedExpr = expressions.HalfStepInvertedMordent()
+        else:
+            updatedExpr = expressions.WholeStepInvertedMordent()
+    elif isinstance(expr, expressions.Mordent):
+        if stepDown == 'half':
+            updatedExpr = expressions.HalfStepMordent()
+        else:
+            updatedExpr = expressions.WholeStepMordent()
+
+    # don't lose placement
+    if hasattr(expr, 'placement'):
+        updatedExpr.placement = expr.placement  # type: ignore
+
+    # update alters (might be a no-op if we had no upper/loweraccid)
+    updateStaffAltersWithPitches(staffNStr, otherPitches, otherInfo)
+
+    return updatedExpr
 
 
 def beamTogether(someThings: t.List[Music21Object]):
@@ -2827,7 +3015,7 @@ def updateStaffKeyAndAltersWithNewKey(
 
 def updateStaffAltersWithPitches(
     staffNStr: str,
-    pitches: t.Tuple[pitch.Pitch, ...],
+    pitches: t.Sequence[pitch.Pitch],
     otherInfo: t.Dict[str, t.Any]
 ):
     # every note and chord flows through this routine as it is parsed
@@ -3494,6 +3682,7 @@ def noteFromElement(
 
     addArpeggio(elem, theNote, spannerBundle)
     addTrill(elem, theNote, spannerBundle, otherInfo)
+    addMordent(elem, theNote, spannerBundle, otherInfo)
     addOttavas(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
@@ -3903,6 +4092,7 @@ def chordFromElement(
 
     addArpeggio(elem, theChord, spannerBundle)
     addTrill(elem, theChord, spannerBundle, otherInfo)
+    addMordent(elem, theChord, spannerBundle, otherInfo)
     addOttavas(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
@@ -5606,9 +5796,9 @@ def trillFromElement(
         if place and place != 'place_unspecified':
             trill.placement = place
         if accidupper:
-            trill.mei_trill_accidupper = accidupper  # type: ignore
+            trill.mei_accidupper = accidupper  # type: ignore
         if accidlower:
-            trill.mei_trill_accidlower = accidlower  # type: ignore
+            trill.mei_accidlower = accidlower  # type: ignore
 
         offset = _tstampToOffset(tstamp, activeMeter)
         trillStaffNStr: str = staffNStr
@@ -6483,7 +6673,7 @@ def measureFromElement(
     # assign left and right barlines
     staves = _makeBarlines(elem, staves)
 
-    # take the timestamped fermatas and find notes/barlines to put them on
+    # take the timestamped fermatas, etc, and find notes/barlines to put them on
     _addTimestampedExpressions(staves, tsExpressions, otherInfo)
 
     return staves
