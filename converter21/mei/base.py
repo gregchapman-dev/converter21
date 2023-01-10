@@ -228,7 +228,6 @@ _IGNORE_UNPROCESSED = (
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
-    f'{MEI_NS}mordent',     # mordents; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
     f'{MEI_NS}verse',       # lyrics; handled separately by noteFromElement()
@@ -1236,25 +1235,24 @@ def _ppMordents(theConverter: MeiToM21Converter):
         form: str = eachMordent.get('form', '')
         long: str = eachMordent.get('long', '')
 
-        if not startId:
-            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<mordent>', '@startid'))
-            continue
+        if startId:
+            if long == 'true':
+                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<mordent>', '@long="true"'))
+                environLocal.warn('@long will be ignored')
 
-        if long == 'true':
-            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<mordent>', '@long="true"'))
-            environLocal.warn('@long will be ignored')
+            # The mordent info gets stashed on the note/chord referenced by startId
+            accidUpper: str = eachMordent.get('accidupper', '')
+            accidLower: str = eachMordent.get('accidlower', '')
 
-        # The mordent info gets stashed on the note/chord referenced by startId
-        accidUpper: str = eachMordent.get('accidupper', '')
-        accidLower: str = eachMordent.get('accidlower', '')
+            c.m21Attr[startId]['m21Mordent'] = place
+            if form:
+                c.m21Attr[startId]['m21MordentForm'] = form
+            if accidUpper:
+                c.m21Attr[startId]['m21MordentAccidUpper'] = accidUpper
+            if accidLower:
+                c.m21Attr[startId]['m21MordentAccidLower'] = accidLower
 
-        c.m21Attr[startId]['m21Mordent'] = place
-        if form:
-            c.m21Attr[startId]['m21MordentForm'] = form
-        if accidUpper:
-            c.m21Attr[startId]['m21MordentAccidUpper'] = accidUpper
-        if accidLower:
-            c.m21Attr[startId]['m21MordentAccidLower'] = accidLower
+            eachMordent.set('ignore_mordent_in_mordentFromElement', 'true')
 
 
 _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: t.Dict[t.Tuple[str, str], str] = {
@@ -5778,7 +5776,7 @@ def trillFromElement(
 
     startId: str = elem.get('startid', '')
     tstamp: str = elem.get('tstamp', '')
-    place: str = elem.get('m21Trill', '')
+    place: str = elem.get('place', 'place_unspecified')
     offset: t.Optional[OffsetQL] = None
 
     if elem.get('ignore_trill_in_trillFromElement') != 'true':
@@ -5852,6 +5850,78 @@ def trillFromElement(
             trillExtStaffNStr = '1'  # best we can do, hope it's ok
 
         output.append((trillExtStaffNStr, (offset, measSkip, offset2), trillExt))
+
+    if not output:
+        return [('', (-1., None, None), None)]
+    return output
+
+
+def mordentFromElement(
+        elem: Element,
+        activeMeter: t.Optional[meter.TimeSignature],
+        spannerBundle: spanner.SpannerBundle,
+        otherInfo: t.Dict[str, t.Any],
+) -> t.List[
+    t.Tuple[
+        str,
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+        t.Optional[expressions.GeneralMordent]
+    ]
+]:
+    output: t.List[
+        t.Tuple[
+            str,
+            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+            t.Optional[expressions.GeneralMordent]
+        ]
+    ] = []
+
+    # If no @staff, presume it is staff 1
+    staffNStr = elem.get('staff', '1')
+
+    tstamp: str = elem.get('tstamp', '')
+    form: str = elem.get('form', '')
+    # place: str = elem.get('place', 'place_unspecified')
+    offset: t.Optional[OffsetQL] = None
+
+    if elem.get('ignore_mordent_in_mordentFromElement') != 'true':
+        # this happens if we need a mordent, but are missing @startid
+        if not tstamp:
+            environLocal.warn('missing @tstamp/@startid in <trill> element')
+            return [('', (-1., None, None), None)]
+
+        accidupper: str = elem.get('accidupper', '')
+        accidlower: str = elem.get('accidlower', '')
+
+        # Make a placeholder Mordent or InvertedMordent; we'll interpret later
+        # (once we've found the note/chord) to figure out HalfStep vs WholeStep.
+        if not form:
+            if accidupper:
+                form = 'upper'
+            elif accidlower:
+                form = 'lower'
+            else:
+                form = 'upper'  # default
+
+        mordent: expressions.GeneralMordent
+        if form == 'upper':
+            # music21 calls an upper mordent (i.e that goes up from the main note)
+            # an InvertedMordent
+            mordent = expressions.InvertedMordent()
+        else:
+            mordent = expressions.Mordent()
+
+        # m21 mordents don't have placement... sigh...
+        # if place and place != 'place_unspecified':
+        #     mordent.placement = place
+
+        if accidupper:
+            mordent.mei_accidupper = accidupper  # type: ignore
+        if accidlower:
+            mordent.mei_accidlower = accidlower  # type: ignore
+
+        offset = _tstampToOffset(tstamp, activeMeter)
+        output.append((staffNStr, (offset, None, None), mordent))
 
     if not output:
         return [('', (-1., None, None), None)]
@@ -6584,7 +6654,8 @@ def measureFromElement(
                     and isinstance(eachObj, (
                         expressions.Fermata,
                         expressions.ArpeggioMark,
-                        expressions.Trill))):
+                        expressions.Trill,
+                        expressions.GeneralMordent))):
                 # save off to process later, skip for now
                 tsExpressions.append((staffNs, eachOffset, eachObj))
                 continue
@@ -7227,7 +7298,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     #         f'{MEI_NS}harm': harmFromElement,
     #         f'{MEI_NS}lv': lvFromElement,
     #        f'{MEI_NS}mNum': mNumFromElement,
-    #        f'{MEI_NS}mordent': mordentFromElement,
+    f'{MEI_NS}mordent': mordentFromElement,
     f'{MEI_NS}octave': octaveFromElement,
     #         f'{MEI_NS}pedal': pedalFromElement,
     #         f'{MEI_NS}phrase': phraseFromElement,
