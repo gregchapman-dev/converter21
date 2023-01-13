@@ -357,7 +357,7 @@ class MeiToM21Converter:
 
         _ppTrills(self)
         _ppMordents(self)
-        # _ppTurns(self)
+        _ppTurns(self)
 
         _ppConclude(self)
 
@@ -1255,6 +1255,65 @@ def _ppMordents(theConverter: MeiToM21Converter):
             eachMordent.set('ignore_mordent_in_mordentFromElement', 'true')
 
 
+def _ppTurns(theConverter: MeiToM21Converter):
+    '''
+    Pre-processing helper for :func:`convertFromString` that handles turns in <turn>
+    elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+    processed. This function reads from ``theConverter.documentRoot`` and writes into
+    ``theConverter.m21Attr``.
+
+    :param theConverter: The object responsible for storing data about this import.
+    :type theConverter: :class:`MeiToM21Converter`.
+
+    **This Preprocessor**
+
+    The turn preprocessor works similarly to the tie preprocessor, adding @m21Turn
+    attributes to any referenced notes/chords.
+
+    **Example of ``m21Attr``**
+
+    The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+    dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
+    dict holds attribute names and their values that should be added to the element with the
+    given @xml:id.
+
+    For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
+    element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
+    '''
+    environLocal.printDebug('*** pre-processing turns')
+    # for readability, we use a single-letter variable
+    c = theConverter
+
+    for eachTurn in c.documentRoot.iterfind(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}turn'):
+        startId: str = removeOctothorpe(eachTurn.get('startid', ''))  # type: ignore
+        place: str = eachTurn.get('place', 'place_unspecified')
+        form: str = eachTurn.get('form', '')
+        type: str = eachTurn.get('type', '')
+        delayed: str = eachTurn.get('delayed', '')
+
+        if startId:
+            if delayed == 'true':
+                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<turn>', '@delayed="true"'))
+                environLocal.warn('@delayed will be ignored')
+
+            # The turn info gets stashed on the note/chord referenced by startId
+            accidUpper: str = eachTurn.get('accidupper', '')
+            accidLower: str = eachTurn.get('accidlower', '')
+
+            c.m21Attr[startId]['m21Turn'] = place
+            if form:
+                c.m21Attr[startId]['m21TurnForm'] = form
+            if type:
+                c.m21Attr[startId]['m21TurnType'] = type
+            if accidUpper:
+                c.m21Attr[startId]['m21TurnAccidUpper'] = accidUpper
+            if accidLower:
+                c.m21Attr[startId]['m21TurnAccidLower'] = accidLower
+
+            eachTurn.set('ignore_turn_in_turnFromElement', 'true')
+
+
 _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: t.Dict[t.Tuple[str, str], str] = {
     ('8', 'above'): '8va',
     ('8', 'below'): '8vb',
@@ -1992,13 +2051,68 @@ def addMordent(
     obj.expressions.append(mordent)
 
 
+def addTurn(
+    elem: Element,
+    obj: note.NotRest,
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: t.Dict[str, t.Any]
+):
+    # Check to see if this note/chord needs a turn, and if so,
+    # make the Turn and append it to the note/chord's expressions.
+    turn: expressions.Turn  # this includes InvertedTurn as well
+    place: str = elem.get('m21Turn', '')
+    if not place:
+        return
+
+    accidUpper: str = elem.get('m21TurnAccidUpper', '')
+    accidLower: str = elem.get('m21TurnAccidLower', '')
+    form: str = elem.get('m21TurnForm', '')
+    type: str = elem.get('m21TurnType', '')
+    mei_accidupper: str = ''
+    mei_accidlower: str = ''
+
+    if accidUpper:
+        mei_accidupper = accidUpper  # type: ignore
+
+    if accidLower:
+        mei_accidlower = accidLower  # type: ignore
+
+    if not form:
+        if type == 'slashed':
+            form = 'lower'
+        else:
+            form = 'upper'  # default
+
+    if form == 'upper':
+        turn = expressions.Turn()
+    elif form == 'lower':
+        turn = expressions.InvertedTurn()
+
+    if mei_accidupper:
+        turn.mei_accidupper = mei_accidupper  # type: ignore
+    elif mei_accidlower:
+        turn.mei_accidlower = mei_accidlower  # type: ignore
+
+    turn = t.cast(
+        expressions.Turn,
+        updateExpression(
+            turn, obj, otherInfo['staffNumberForNotes'], otherInfo
+        )
+    )
+
+    if place and place != 'place_unspecified':
+        turn.placement = place
+
+    obj.expressions.append(turn)
+
+
 def updateExpression(
     expr: expressions.Expression,
     obj: note.GeneralNote,
     staffNStr: str,
     otherInfo: t.Dict[str, t.Any]
 ) -> expressions.Expression:
-    if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent)):
+    if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent, expressions.Turn)):
         return expr
     if not isinstance(obj, note.NotRest):
         return expr
@@ -2046,7 +2160,7 @@ def updateExpression(
     else:
         # Has no upper/lower accid, just follows the current alter for next note up/down.
         # No need to updateStaffAltersWithPitches (since we're using the current alter).
-        # But we still need to figure out HalfStepTrill vs WholeStepTrill.
+        # But we still need to figure out HalfStep vs WholeStep.
         alterIdx: int
         alter: int
         if isinstance(expr, (expressions.Trill, expressions.InvertedMordent)):
@@ -2100,6 +2214,14 @@ def updateExpression(
             updatedExpr = expressions.HalfStepMordent()
         else:
             updatedExpr = expressions.WholeStepMordent()
+    elif isinstance(expr, (expressions.Turn, expressions.InvertedTurn)):
+        # note that music21 doesn't (yet) really allow a Turn to specify its
+        # upper/lower interval.  You sort of can, but you can only specify one
+        # interval that is used for both.  See comments in music21 issue #1507
+        # about this.
+        # For now, while we have done the accidental analysis (because it has
+        # side-effects), we will not do anything here with that info.
+        updatedExpr = expr
 
     # don't lose placement
     if hasattr(expr, 'placement'):
@@ -3681,6 +3803,7 @@ def noteFromElement(
     addArpeggio(elem, theNote, spannerBundle)
     addTrill(elem, theNote, spannerBundle, otherInfo)
     addMordent(elem, theNote, spannerBundle, otherInfo)
+    addTurn(elem, theNote, spannerBundle, otherInfo)
     addOttavas(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
@@ -4091,6 +4214,7 @@ def chordFromElement(
     addArpeggio(elem, theChord, spannerBundle)
     addTrill(elem, theChord, spannerBundle, otherInfo)
     addMordent(elem, theChord, spannerBundle, otherInfo)
+    addTurn(elem, theChord, spannerBundle, otherInfo)
     addOttavas(elem, theChord, spannerBundle)
 
     # ties in the @tie attribute
@@ -5405,6 +5529,9 @@ def _addTimestampedExpressions(
             if not isinstance(eachMeasure, stream.Measure):
                 continue
 
+            nearestPrevNoteInStaff: t.Optional[note.GeneralNote] = None
+            offsetFromNearestPrevNote: t.Optional[OffsetQL] = None
+            staffForNearestNote: t.Optional[str] = None
             for eachMObj in eachMeasure:
                 if not isinstance(eachMObj, (stream.Stream, bar.Barline)):
                     continue
@@ -5450,15 +5577,40 @@ def _addTimestampedExpressions(
                             doneWithStaff = True
                             break
 
+                        # If expression is a delayed turn that is after eachObject,
+                        # look to see if eachObject is the nearest previous object
+                        # so far.
+                        if (isinstance(expression, expressions.Turn)
+                                and hasattr(expression, 'mei_delayed')
+                                and expression.mei_delayed == 'true'  # type: ignore
+                                and eachObject.offset < offset
+                        ):
+                            offsetFromThisPrevNote: OffsetQL = opFrac(offset - eachObject.offset)
+                            if (offsetFromNearestPrevNote is None
+                                    or offsetFromNearestPrevNote > offsetFromThisPrevNote
+                            ):
+                                offsetFromNearestPrevNote = opFrac(offset - eachObject.offset)
+                                nearestPrevNoteInStaff = eachObject
+                                staffForNearestNote = staffN
+
                     if doneWithStaff:
                         break
 
             if not doneWithStaff:
-                # we didn't find any place for the expression in this staff
-                environLocal.warn(
-                    f'No obj at offset {offset} found in staff {staffN}'
-                    f'for timestamped {expression.classes[0]}.'
-                )
+                # We didn't find any place for the expression at the offset in this staff.
+                # But if it is a delayed turn, then we should use the note with the closest
+                # offset LESS than the expression's offset.  Which we have stashed off in
+                # "nearestPrevNoteInStaff".
+                if nearestPrevNoteInStaff is not None:
+                    expression = updateExpression(
+                        expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
+                    )
+                    nearestPrevNoteInStaff.expressions.append(expression)
+                else:
+                    environLocal.warn(
+                        f'No obj at offset {offset} found in staff {staffN}'
+                        f'for timestamped {expression.classes[0]}.'
+                    )
 
 
 def _tstampToOffset(
@@ -5887,7 +6039,7 @@ def mordentFromElement(
     if elem.get('ignore_mordent_in_mordentFromElement') != 'true':
         # this happens if we need a mordent, but are missing @startid
         if not tstamp:
-            environLocal.warn('missing @tstamp/@startid in <trill> element')
+            environLocal.warn('missing @tstamp/@startid in <mordent> element')
             return [('', (-1., None, None), None)]
 
         accidupper: str = elem.get('accidupper', '')
@@ -5922,6 +6074,87 @@ def mordentFromElement(
 
         offset = _tstampToOffset(tstamp, activeMeter)
         output.append((staffNStr, (offset, None, None), mordent))
+
+    if not output:
+        return [('', (-1., None, None), None)]
+    return output
+
+
+def turnFromElement(
+        elem: Element,
+        activeMeter: t.Optional[meter.TimeSignature],
+        spannerBundle: spanner.SpannerBundle,
+        otherInfo: t.Dict[str, t.Any],
+) -> t.List[
+    t.Tuple[
+        str,
+        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+        t.Optional[expressions.Turn]
+    ]
+]:
+    output: t.List[
+        t.Tuple[
+            str,
+            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+            t.Optional[expressions.Turn]
+        ]
+    ] = []
+
+    # If no @staff, presume it is staff 1
+    staffNStr = elem.get('staff', '1')
+
+    tstamp: str = elem.get('tstamp', '')
+    form: str = elem.get('form', '')
+    type: str = elem.get('type', '')
+    delayed: str = elem.get('delayed', 'false')
+    place: str = elem.get('place', 'place_unspecified')
+    offset: t.Optional[OffsetQL] = None
+
+    if elem.get('ignore_turn_in_turnFromElement') != 'true':
+        # this happens if we need a turn, but are missing @startid
+        if not tstamp:
+            environLocal.warn('missing @tstamp/@startid in <turn> element')
+            return [('', (-1., None, None), None)]
+
+        if delayed == 'true':
+            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<turn>', '@delayed="true"'))
+            environLocal.warn('@delayed will be ignored')
+
+        accidupper: str = elem.get('accidupper', '')
+        accidlower: str = elem.get('accidlower', '')
+
+        # Make a placeholder Turn or InvertedTurn; we'll interpret later
+        # (once we've found the note/chord) to figure out HalfStep vs WholeStep.
+        # ACTUALLY, music21 has some shortcomings here, that interpretation
+        # won't really happen until I have music21 issue #1507 completed.
+        if not form:
+            if type == 'slashed':
+                form = 'lower'
+            else:
+                form = 'upper'  # default
+
+        turn: expressions.Turn
+        if form == 'upper':
+            turn = expressions.Turn()
+        else:
+            turn = expressions.InvertedTurn()
+
+        if place and place != 'place_unspecified':
+            turn.placement = place
+
+        if accidupper:
+            turn.mei_accidupper = accidupper  # type: ignore
+        if accidlower:
+            turn.mei_accidlower = accidlower  # type: ignore
+
+        if delayed == 'true':
+            # we said we would ignore @delayed, and we do, but we have a little
+            # extra searching to do to find the right note to put delayed turns
+            # on, and we can't ignore _that_.
+            turn.mei_delayed = 'true'  # type: ignore
+
+        offset = _tstampToOffset(tstamp, activeMeter)
+        output.append((staffNStr, (offset, None, None), turn))
 
     if not output:
         return [('', (-1., None, None), None)]
@@ -6655,7 +6888,8 @@ def measureFromElement(
                         expressions.Fermata,
                         expressions.ArpeggioMark,
                         expressions.Trill,
-                        expressions.GeneralMordent))):
+                        expressions.GeneralMordent,
+                        expressions.Turn))):
                 # save off to process later, skip for now
                 tsExpressions.append((staffNs, eachOffset, eachObj))
                 continue
@@ -7306,7 +7540,7 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     #         f'{MEI_NS}reh': rehFromElement,
     f'{MEI_NS}tempo': tempoFromElement,
     f'{MEI_NS}trill': trillFromElement,
-    #        f'{MEI_NS}turn': turnFromElement,
+    f'{MEI_NS}turn': turnFromElement,
 }
 
 noteChildrenTagToFunction: t.Dict[str, t.Callable[

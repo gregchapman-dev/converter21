@@ -6502,7 +6502,6 @@ class HumdrumFile(HumdrumFileContent):
         # TODO: handle turn accidentals
 
         # LATER: music21 doesn't explicitly handle delayed turns
-        # LATER: (positioned at end of note duration)
         gnote.expressions.append(turn)
 
 
