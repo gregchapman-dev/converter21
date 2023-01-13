@@ -5515,6 +5515,11 @@ def _makeBarlines(
     return staves
 
 
+def _canBeOnRest(expr: expressions.Expression) -> bool:
+    if isinstance(expr, expressions.Fermata):
+        return True
+    return False
+
 def _addTimestampedExpressions(
     staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
     tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]],
@@ -5523,6 +5528,7 @@ def _addTimestampedExpressions(
     clonedExpression: expressions.Expression
 
     for staffNs, offset, expression in tsExpressions:
+        canBeOnRest: bool = _canBeOnRest(expression)
         for i, staffN in enumerate(staffNs):
             doneWithStaff: bool = False
             eachMeasure: t.Union[stream.Measure, bar.Repeat] = staves[staffN]
@@ -5559,7 +5565,9 @@ def _addTimestampedExpressions(
                 if isinstance(eachMObj, stream.Stream):
                     eachVoice: stream.Stream = eachMObj
                     for eachObject in eachVoice:
-                        if not isinstance(eachObject, note.GeneralNote):
+                        if canBeOnRest and not isinstance(eachObject, note.GeneralNote):
+                            continue
+                        if not canBeOnRest and not isinstance(eachObject, note.NotRest):
                             continue
                         if eachObject.offset == offset:
                             if i == 0:
