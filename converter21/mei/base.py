@@ -5529,6 +5529,12 @@ def _addTimestampedExpressions(
 
     for staffNs, offset, expression in tsExpressions:
         canBeOnRest: bool = _canBeOnRest(expression)
+        isDelayedTurn: bool = (
+            isinstance(expression, expressions.Turn)
+            and hasattr(expression, 'mei_delayed')
+            and expression.mei_delayed == 'true'  # type: ignore
+        )
+
         for i, staffN in enumerate(staffNs):
             doneWithStaff: bool = False
             eachMeasure: t.Union[stream.Measure, bar.Repeat] = staves[staffN]
@@ -5569,37 +5575,34 @@ def _addTimestampedExpressions(
                             continue
                         if not canBeOnRest and not isinstance(eachObject, note.NotRest):
                             continue
-                        if eachObject.offset == offset:
-                            if i == 0:
-                                expression = updateExpression(
-                                    expression, eachObject, staffN, otherInfo
-                                )
-                                eachObject.expressions.append(expression)
-                            else:
-                                clonedExpression = deepcopy(expression)
-                                clonedExpression = updateExpression(
-                                    clonedExpression, eachObject, staffN, otherInfo
-                                )
-                                eachObject.expressions.append(clonedExpression)
 
-                            doneWithStaff = True
-                            break
+                        if not isDelayedTurn:
+                            if eachObject.offset == offset:
+                                if i == 0:
+                                    expression = updateExpression(
+                                        expression, eachObject, staffN, otherInfo
+                                    )
+                                    eachObject.expressions.append(expression)
+                                else:
+                                    clonedExpression = deepcopy(expression)
+                                    clonedExpression = updateExpression(
+                                        clonedExpression, eachObject, staffN, otherInfo
+                                    )
+                                    eachObject.expressions.append(clonedExpression)
 
-                        # If expression is a delayed turn that is after eachObject,
-                        # look to see if eachObject is the nearest previous object
-                        # so far.
-                        if (isinstance(expression, expressions.Turn)
-                                and hasattr(expression, 'mei_delayed')
-                                and expression.mei_delayed == 'true'  # type: ignore
-                                and eachObject.offset < offset
-                        ):
-                            offsetFromThisPrevNote: OffsetQL = opFrac(offset - eachObject.offset)
-                            if (offsetFromNearestPrevNote is None
-                                    or offsetFromNearestPrevNote > offsetFromThisPrevNote
-                            ):
-                                offsetFromNearestPrevNote = opFrac(offset - eachObject.offset)
-                                nearestPrevNoteInStaff = eachObject
-                                staffForNearestNote = staffN
+                                doneWithStaff = True
+                                break
+                        else:
+                            # If expression is a delayed turn, look to see if eachObject
+                            # is the nearest previous object so far in this staff.
+                            if eachObject.offset < offset:
+                                offsetFromThisPrevNote: OffsetQL = opFrac(offset - eachObject.offset)
+                                if (offsetFromNearestPrevNote is None
+                                        or offsetFromNearestPrevNote > offsetFromThisPrevNote
+                                ):
+                                    offsetFromNearestPrevNote = opFrac(offset - eachObject.offset)
+                                    nearestPrevNoteInStaff = eachObject
+                                    staffForNearestNote = staffN
 
                     if doneWithStaff:
                         break
