@@ -1289,7 +1289,7 @@ def _ppTurns(theConverter: MeiToM21Converter):
         startId: str = removeOctothorpe(eachTurn.get('startid', ''))  # type: ignore
         place: str = eachTurn.get('place', 'place_unspecified')
         form: str = eachTurn.get('form', '')
-        type: str = eachTurn.get('type', '')
+        theType: str = eachTurn.get('type', '')
         delayed: str = eachTurn.get('delayed', '')
 
         if startId:
@@ -1304,8 +1304,8 @@ def _ppTurns(theConverter: MeiToM21Converter):
             c.m21Attr[startId]['m21Turn'] = place
             if form:
                 c.m21Attr[startId]['m21TurnForm'] = form
-            if type:
-                c.m21Attr[startId]['m21TurnType'] = type
+            if theType:
+                c.m21Attr[startId]['m21TurnType'] = theType
             if accidUpper:
                 c.m21Attr[startId]['m21TurnAccidUpper'] = accidUpper
             if accidLower:
@@ -1965,21 +1965,6 @@ def addTrill(
     trill: expressions.Trill
     place: str = elem.get('m21Trill', '')
     if not place:
-        # OK, there's no trill on this note/chord, but if it's a chord
-        # we should see if any of the notes have a trill, and if so,
-        # pull it up to this chord (because music21).
-        if isinstance(obj, chord.Chord):
-            gotOne: bool = False
-            for n in obj.notes:
-                for expr in n.expressions:
-                    if isinstance(expr, expressions.Trill):
-                        gotOne = True
-                        obj.expressions.append(expr)
-                        n.expressions.remove(expr)
-                        break
-                if gotOne:
-                    break
-
         return completedTrillExtensions
 
     accidUpper: str = elem.get('m21TrillAccidUpper', '')
@@ -2082,7 +2067,7 @@ def addTurn(
     accidUpper: str = elem.get('m21TurnAccidUpper', '')
     accidLower: str = elem.get('m21TurnAccidLower', '')
     form: str = elem.get('m21TurnForm', '')
-    type: str = elem.get('m21TurnType', '')
+    theType: str = elem.get('m21TurnType', '')
     mei_accidupper: str = ''
     mei_accidlower: str = ''
 
@@ -2093,7 +2078,7 @@ def addTurn(
         mei_accidlower = accidLower  # type: ignore
 
     if not form:
-        if type == 'slashed':
+        if theType == 'slashed':
             form = 'lower'
         else:
             form = 'upper'  # default
@@ -4232,6 +4217,23 @@ def chordFromElement(
     addTurn(elem, theChord, spannerBundle, otherInfo)
     addOttavas(elem, theChord, spannerBundle)
 
+    # See if any of the notes within the chord have a trill/mordent/turn,
+    # and if so, pull it up to the chord (because music21 doesn't really
+    # support those ornaments on notes within chords).
+    gotOne: bool = False
+    for n in theChord.notes:
+        for expr in n.expressions:
+            if isinstance(
+                expr,
+                (expressions.Trill, expressions.GeneralMordent, expressions.Turn)
+            ):
+                gotOne = True
+                theChord.expressions.append(expr)
+                n.expressions.remove(expr)
+                break
+        if gotOne:
+            break
+
     # ties in the @tie attribute
     tieStr: t.Optional[str] = elem.get('tie')
     if tieStr is not None:
@@ -5611,10 +5613,11 @@ def _addTimestampedExpressions(
                             # If expression is a delayed turn, look to see if eachObject
                             # is the nearest previous object so far in this staff.
                             if eachObject.offset < offset:
-                                offsetFromThisPrevNote: OffsetQL = opFrac(offset - eachObject.offset)
+                                offsetFromThisPrevNote: OffsetQL = opFrac(
+                                    offset - eachObject.offset
+                                )
                                 if (offsetFromNearestPrevNote is None
-                                        or offsetFromNearestPrevNote > offsetFromThisPrevNote
-                                ):
+                                        or offsetFromNearestPrevNote > offsetFromThisPrevNote):
                                     offsetFromNearestPrevNote = opFrac(offset - eachObject.offset)
                                     nearestPrevNoteInStaff = eachObject
                                     staffForNearestNote = staffN
@@ -5628,6 +5631,9 @@ def _addTimestampedExpressions(
                 # offset LESS than the expression's offset.  Which we have stashed off in
                 # "nearestPrevNoteInStaff".
                 if nearestPrevNoteInStaff is not None:
+                    if t.TYPE_CHECKING:
+                        # Since nearestPrevNoteInStaff is set, so is staffForNearestNote
+                        assert staffForNearestNote is not None
                     expression = updateExpression(
                         expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
                     )
@@ -6131,7 +6137,7 @@ def turnFromElement(
 
     tstamp: str = elem.get('tstamp', '')
     form: str = elem.get('form', '')
-    type: str = elem.get('type', '')
+    theType: str = elem.get('type', '')
     delayed: str = elem.get('delayed', 'false')
     place: str = elem.get('place', 'place_unspecified')
     offset: t.Optional[OffsetQL] = None
@@ -6154,7 +6160,7 @@ def turnFromElement(
         # ACTUALLY, music21 has some shortcomings here, that interpretation
         # won't really happen until I have music21 issue #1507 completed.
         if not form:
-            if type == 'slashed':
+            if theType == 'slashed':
                 form = 'lower'
             else:
                 form = 'upper'  # default
@@ -6767,6 +6773,8 @@ def measureFromElement(
     staffTag: str = f'{MEI_NS}staff'
     staffDefTag: str = f'{MEI_NS}staffDef'
 
+    measureNum: t.Union[str, int] = elem.get('n', backupNum)
+
     # track the bar's duration
     maxBarDuration: t.Optional[OffsetQL] = None
 
@@ -6780,7 +6788,7 @@ def measureFromElement(
             otherInfo['staffNumberForNotes'] = nStr
             staves[nStr] = stream.Measure(
                 staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo),
-                number=elem.get('n', backupNum)
+                number=measureNum
             )
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
@@ -6985,7 +6993,7 @@ def measureFromElement(
             restVoice.id = '1'
             # just in case (e.g., when all the other voices are <mRest>)
             restVoice[0].m21wasMRest = True
-            staves[eachN] = stream.Measure([restVoice], number=elem.get('n', backupNum))
+            staves[eachN] = stream.Measure([restVoice], number=measureNum)
 
     # First search for Rest objects created by an <mRest> element that didn't have @dur set. This
     # will only work in cases where not all of the parts are resting. However, it avoids a more
