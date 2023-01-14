@@ -1965,7 +1965,22 @@ def addTrill(
     trill: expressions.Trill
     place: str = elem.get('m21Trill', '')
     if not place:
-        return []
+        # OK, there's no trill on this note/chord, but if it's a chord
+        # we should see if any of the notes have a trill, and if so,
+        # pull it up to this chord (because music21).
+        if isinstance(obj, chord.Chord):
+            gotOne: bool = False
+            for n in obj.notes:
+                for expr in n.expressions:
+                    if isinstance(expr, expressions.Trill):
+                        gotOne = True
+                        obj.expressions.append(expr)
+                        n.expressions.remove(expr)
+                        break
+                if gotOne:
+                    break
+
+        return completedTrillExtensions
 
     accidUpper: str = elem.get('m21TrillAccidUpper', '')
     accidLower: str = elem.get('m21TrillAccidLower', '')
