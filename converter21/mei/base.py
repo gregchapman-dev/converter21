@@ -1178,6 +1178,8 @@ def _ppTrills(theConverter: MeiToM21Converter):
         trillExt = expressions.TrillExtension()
         if place and place != 'place_unspecified':
             trillExt.placement = place
+        else:
+            trillExt.placement = None  # type: ignore
 
         if t.TYPE_CHECKING:
             # work around Spanner.idLocal being incorrectly type-hinted as None
@@ -1986,6 +1988,8 @@ def addTrill(
 
     if place and place != 'place_unspecified':
         trill.placement = place
+    else:
+        trill.placement = None  # type: ignore
 
     obj.expressions.append(trill)
 
@@ -2044,9 +2048,12 @@ def addMordent(
         )
     )
 
-    # m21 mordents don't have placement... sigh...
-    #  if place and place != 'place_unspecified':
-    #      mordent.placement = place
+    # m21 mordents might not have placement... sigh...
+    # But if I set it, it _will_ get exported to MusicXML (ha!).
+    if place and place != 'place_unspecified':
+        mordent.placement = place  # type: ignore
+    else:
+        mordent.placement = None  # type: ignore
 
     obj.expressions.append(mordent)
 
@@ -2102,6 +2109,8 @@ def addTurn(
 
     if place and place != 'place_unspecified':
         turn.placement = place
+    else:
+        turn.placement = None  # type: ignore
 
     obj.expressions.append(turn)
 
@@ -5975,8 +5984,12 @@ def trillFromElement(
         # Make a placeholder Trill, we'll interpret later (once we've found
         # the note/chord) to figure out WholeStepTrill vs HalfStepTrill.
         trill = expressions.Trill()
+
         if place and place != 'place_unspecified':
             trill.placement = place
+        else:
+            trill.placement = None  # type: ignore
+
         if accidupper:
             trill.mei_accidupper = accidupper  # type: ignore
         if accidlower:
@@ -6065,7 +6078,7 @@ def mordentFromElement(
 
     tstamp: str = elem.get('tstamp', '')
     form: str = elem.get('form', '')
-    # place: str = elem.get('place', 'place_unspecified')
+    place: str = elem.get('place', 'place_unspecified')
     offset: t.Optional[OffsetQL] = None
 
     if elem.get('ignore_mordent_in_mordentFromElement') != 'true':
@@ -6095,9 +6108,12 @@ def mordentFromElement(
         else:
             mordent = expressions.Mordent()
 
-        # m21 mordents don't have placement... sigh...
-        # if place and place != 'place_unspecified':
-        #     mordent.placement = place
+        # m21 mordents might not have placement... sigh...
+        # But if I set it, it _will_ get exported to MusicXML (ha!).
+        if place and place != 'place_unspecified':
+            mordent.placement = place  # type: ignore
+        else:
+            mordent.placement = None  # type: ignore
 
         if accidupper:
             mordent.mei_accidupper = accidupper  # type: ignore
@@ -6173,6 +6189,9 @@ def turnFromElement(
 
         if place and place != 'place_unspecified':
             turn.placement = place
+        else:
+            turn.placement = None  # type: ignore
+
 
         if accidupper:
             turn.mei_accidupper = accidupper  # type: ignore

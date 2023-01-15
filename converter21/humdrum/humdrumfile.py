@@ -6164,6 +6164,9 @@ class HumdrumFile(HumdrumFileContent):
         # if m_currentlayer == 2:
         #     trill.placement = 'below'
 
+        # our better default
+        trill.placement = None  # type: ignore
+
         if self._signifiers.above:
             if tpos < len(token.text) - 1:
                 if token.text[tpos + 1] == self._signifiers.above:
@@ -6399,23 +6402,19 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 mordent = m21.expressions.WholeStepInvertedMordent()
 
+        # Fix default placement (would otherwise be 'above')
+        mordent.placement = None  # type: ignore
+
         query: str
-        style: m21.style.Style
         if self._signifiers.above:
             query = '[Mm]+' + self._signifiers.above
             if re.search(query, token.text):
-                style = mordent.style
-                if t.TYPE_CHECKING:
-                    assert isinstance(style, m21.style.TextStyle)
-                style.alignVertical = 'top'
+                mordent.placement = 'above'  # type: ignore
 
         if self._signifiers.below:
             query = '[Mm]+' + self._signifiers.below
             if re.search(query, token.text):
-                style = mordent.style
-                if t.TYPE_CHECKING:
-                    assert isinstance(style, m21.style.TextStyle)
-                style.alignVertical = 'bottom'
+                mordent.placement = 'below'  # type: ignore
 
         # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
         # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
@@ -6489,6 +6488,8 @@ class HumdrumFile(HumdrumFileContent):
         else:
             turn = m21.expressions.Turn()
 
+        # our better default
+        turn.placement = None  # type: ignore
         if self._signifiers.above:
             if turnEnd < len(tok) - 1:
                 if tok[turnEnd + 1] == self._signifiers.above:
