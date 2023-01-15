@@ -19,7 +19,7 @@ import sys
 
 from music21 import converter
 from music21.base import VERSION_STR
-from converter21 import HumdrumConverter
+import converter21
 
 def getInputFormatsList() -> [str]:
     c = converter.Converter()
@@ -92,9 +92,8 @@ def getOutputExtensionsListForFormat(form: str) -> [str]:
 '''
     main entry point (parse arguments and do conversion)
 '''
-# unregister built-in Humdrum converter, and replace with our better one
-converter.unregisterSubconverter(converter.subConverters.ConverterHumdrum)
-converter.registerSubconverter(HumdrumConverter)
+# replace music21's built-in converters with ours (currently Humdrum read/write and MEI read)
+converter21.register()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file',

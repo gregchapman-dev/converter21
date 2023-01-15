@@ -17,7 +17,7 @@ import typing as t
 
 from music21 import converter
 from music21.base import VERSION_STR
-from converter21 import HumdrumConverter
+import converter21
 
 def getInputFormatsList() -> t.List[str]:
     c = converter.Converter()
@@ -92,9 +92,8 @@ def getOutputExtensionsListForFormat(form: str) -> t.List[str]:
 
 # main entry point (parse arguments and do conversion)
 if __name__ == "__main__":
-    # unregister music21's built-in Humdrum converter, and replace with ours
-    converter.unregisterSubconverter(converter.subConverters.ConverterHumdrum)
-    converter.registerSubconverter(HumdrumConverter)
+    # replace music21's built-in converters with ours (currently Humdrum read/write and MEI read)
+    converter21.register()
 
     parser = argparse.ArgumentParser(
         prog='python3 -m converter21',

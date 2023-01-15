@@ -6,7 +6,7 @@ import subprocess
 
 from music21.base import VERSION_STR
 from music21 import converter
-from converter21 import MEIConverter, HumdrumConverter
+import converter21
 
 
 def runTheTest(filePath: Path):
@@ -42,10 +42,8 @@ def runTheTest(filePath: Path):
 '''
     main entry point (parse arguments and do conversion)
 '''
-converter.unregisterSubconverter(converter.subConverters.ConverterMEI)
-converter.registerSubconverter(MEIConverter)
-converter.unregisterSubconverter(converter.subConverters.ConverterHumdrum)
-converter.registerSubconverter(HumdrumConverter)
+# replace music21's built-in converters with ours (currently Humdrum and MEI)
+converter21.register()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file')
