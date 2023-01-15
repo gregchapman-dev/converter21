@@ -221,8 +221,6 @@ def runTheDiff(krnPath: Path, results) -> bool:
 
     # import the mei file into music21
     try:
-        m21.converter.unregisterSubconverter(m21.converter.subConverters.ConverterMEI)
-        m21.converter.registerSubconverter(MEIConverter)
         score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
     except KeyboardInterrupt:
         sys.exit(0)
@@ -284,6 +282,8 @@ parser.add_argument(
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
+
+converter21.register()
 
 listPath: Path = Path(args.list_file)
 goodPath: Path = Path(str(listPath.parent) + '/' + str(listPath.stem)

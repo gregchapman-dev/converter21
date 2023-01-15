@@ -4475,9 +4475,9 @@ class Test(unittest.TestCase):
     def testUniqueInstances(self):
         from music21 import common
         from music21 import converter
-        from converter21 import MEIConverter
-        converter.unregisterSubconverter(converter.subConverters.ConverterMEI)
-        converter.registerSubconverter(MEIConverter)
+        import converter21
+        converter21.register(converter21.ConverterName.MEI)
+
         fp = common.getSourceFilePath() / 'mei' / 'test' / 'test_file.mei'
         s = converter.parse(fp, forceSource=True)
 

@@ -6,7 +6,7 @@ from typing import List, Tuple
 import music21 as m21
 from music21.base import VERSION_STR
 from music21 import converter
-from converter21 import MEIConverter
+import converter21
 
 def runTheTest(filePath: Path, results) -> bool:
     print(f'{filePath}: ')
@@ -51,11 +51,11 @@ def runTheTest(filePath: Path, results) -> bool:
 '''
     main entry point (parse arguments and do conversion)
 '''
-converter.unregisterSubconverter(converter.subConverters.ConverterMEI)
-converter.registerSubconverter(MEIConverter)
+
+converter21.register()
 
 parser = argparse.ArgumentParser(
-            description='Loop over listfile (list of .krn files), importing and then exporting back to .krn, comparing original .krn with exported .krn.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn file paths that had no music-score-diff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
+            description='Loop over listfile (list of .krn/.mei files), importing them all, making sure none of the imports fail or crash.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn/.mei file paths that successfully imported, badList.txt contains the ones that failed, or crashed, and resultsList.txt contains every file with a note about what happened.')
 parser.add_argument(
         'list_file',
         help='file containing a list of the .krn files to compare (full paths)')

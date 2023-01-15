@@ -15,7 +15,7 @@ from musicdiff import DetailLevel
 # The things we're testing
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
-from converter21 import MEIConverter
+import converter21
 
 def runTheFullTest(krnPath: Path):
     print(f'krn file: {krnPath}')
@@ -56,10 +56,6 @@ def runTheFullTest(krnPath: Path):
         capture_output=True
     )
 
-    # import the mei file into music21
-    m21.converter.unregisterSubconverter(m21.converter.subConverters.ConverterMEI)
-    m21.converter.registerSubconverter(MEIConverter)
-
     print(f'Parsing MEI file: {meiPath}')
     score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
 
@@ -98,5 +94,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('input_file')
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
+
+converter21.register(converter21.ConverterName.MEI)
 
 runTheFullTest(Path(args.input_file))
