@@ -11,10 +11,9 @@ from musicdiff.annotation import AnnScore, AnnExtra
 from musicdiff import Comparison
 from musicdiff import DetailLevel
 
-# The things we're testing
+import converter21
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
-from converter21 import MEIConverter
 
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
     obj = score.recurse().getElementById(theID)
