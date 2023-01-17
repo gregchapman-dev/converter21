@@ -702,7 +702,7 @@ class HumdrumFile(HumdrumFileContent):
                 ss.hasOttavas = True
                 if ss.m21Part is not None:
                     if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
-                        sp.fillIntermediateSpannedElements(ss.m21Part)
+                        sp.fillIntermediateSpannedElements(ss.m21Part)  # type: ignore
                     else:
                         # we have to use our own version of spanner fill
                         M21Utilities.fillIntermediateSpannedElements(sp, ss.m21Part)
@@ -719,7 +719,10 @@ class HumdrumFile(HumdrumFileContent):
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
                     if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
-                        ss.m21Part.toWrittenPitch(inPlace=True, inheritAccidentalDisplay=True)
+                        ss.m21Part.toWrittenPitch(
+                            inPlace=True,
+                            inheritAccidentalDisplay=True  # type: ignore
+                        )
                     else:
                         # minimize the problems introduced by non-inherited accidental display
                         if hasTransposingInstrument:
@@ -7155,6 +7158,7 @@ class HumdrumFile(HumdrumFileContent):
                     verseLabel = self._getVerseLabelText(labels[0])
 
             vtexts: t.List[str] = []
+            vtoks: t.List[HumdrumToken] = []
             vcolor: str = ''
             ftrack: int = fieldTok.track
             fstrack: int = fieldTok.subTrack
@@ -7169,16 +7173,18 @@ class HumdrumFile(HumdrumFileContent):
                 value = value.replace(r'\a3', 'ä')
                 value = value.replace(r'\o3', 'ö')
                 vtexts.append(value)
+                vtoks.append(fieldTok)
                 vcolor = self._spineColor[ftrack][fstrack]
             else:
                 # not silbe
                 vtexts.append(fieldTok.text)
+                vtoks.append(fieldTok)
                 vcolor = self._spineColor[ftrack][fstrack]
 
             if isVVdata:
                 self._splitSyllableBySpaces(vtexts)
 
-            for content in vtexts:
+            for content, vtoken in zip(vtexts, vtoks):
                 # emit music21 lyrics and attach to obj
                 verseNum += 1
                 if not content:
@@ -7227,6 +7233,8 @@ class HumdrumFile(HumdrumFileContent):
                     contents[idx] = html.unescape(c)
                     contents[idx] = contents[idx].replace(r'\n', '\n')
 
+                ij: t.Optional[str] = vtoken.getValueString('auto', 'ij')
+
                 # add elements for sub-syllables due to elisions:
                 if len(contents) > 1:
                     verse.components = []
@@ -7238,6 +7246,9 @@ class HumdrumFile(HumdrumFileContent):
                 else:
                     # applyRaw=False means do all the parsing of hyphens to figure out syllabic
                     verse.setTextAndSyllabic(contents[0], applyRaw=False)
+
+                if ij:
+                    verse.style.fontStyle = 'italic'  # type: ignore
 
                 obj.lyrics.append(verse)
 

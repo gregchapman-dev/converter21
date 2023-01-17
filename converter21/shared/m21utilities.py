@@ -269,7 +269,7 @@ class M21Utilities:
             float(c.quarterLength * atm) for c in rest.duration.components
         ]
         splits: t.Tuple[m21.note.Rest, ...] = (
-            rest.splitByQuarterLengths(quarterLengthList, addTies=False)
+            rest.splitByQuarterLengths(quarterLengthList, addTies=False)  # type: ignore
         )
 
         return splits

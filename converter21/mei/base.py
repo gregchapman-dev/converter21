@@ -3427,7 +3427,13 @@ def sylFromElement(
 #     conAttr: t.Optional[str] = elem.get('con')
 #     con: t.Optional[str] = conDict.get(conAttr, '-')
 
-    text: str = elem.text if elem.text is not None else ''
+    output: note.Lyric
+    text: str
+    styleDict: t.Dict[str, str]
+
+    text, styleDict = textFromElem(elem)
+    text = html.unescape(text)
+    text = text.strip()
 #     if 'i' == wordPos:
 #         text = text + con
 #     elif 'm' == wordPos:
@@ -3440,13 +3446,28 @@ def sylFromElement(
     if len(text) == 2 and text[0] == '\u00a0':
         text = text[1]
 
+    fontStyle = styleDict.get('fontStyle', None)
+    fontWeight = styleDict.get('fontWeight', None)
+    fontFamily = styleDict.get('fontFamily', None)
+    justify = styleDict.get('justify', None)
+
     if wordPos is None:
         # no wordPos? Last chance is to use trailing and leading hyphens (applyRaw=False)
-        return note.Lyric(text=text, applyRaw=False)
+        output = note.Lyric(text=text, applyRaw=False)
+    else:
+        syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict.get(wordPos, None)
+        output = note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
 
-    syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict.get(wordPos, None)
-    return note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
+    if fontStyle is not None or fontWeight is not None:
+        output.style.fontStyle = (  # type: ignore
+            _m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
+        )
+    if fontFamily is not None:
+        output.style.fontFamily = fontFamily  # type: ignore
+    if justify is not None:
+        output.style.justify = justify  # type: ignore
 
+    return output
 
 def verseFromElement(
     elem: Element,
@@ -7506,7 +7527,7 @@ def scoreFromElement(
                 break
             partIdx: int = allPartNs.index(staffN)
             if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
-                sp.fillIntermediateSpannedElements(thePartList[partIdx])
+                sp.fillIntermediateSpannedElements(thePartList[partIdx])  # type: ignore
             else:
                 # we use our own spanner fill routine, since music21 doesn't have one
                 M21Utilities.fillIntermediateSpannedElements(sp, thePartList[partIdx])
