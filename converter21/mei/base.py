@@ -4152,7 +4152,7 @@ def chordFromElement(
     theNoteList: t.List[note.Note] = []
     theArticList: t.List[articulations.Articulation] = []
     theLyricList: t.List[note.Lyric] = []
-    spannersFromNotes: t.Dict[note.Note, t.List[spanner.Spanner]] = {}
+    spannersFromNotes: t.List[t.Tuple[note.Note, t.List[spanner.Spanner]]] = []
     # iterate all immediate children
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                chordChildrenTagToFunction,
@@ -4164,7 +4164,7 @@ def chordFromElement(
             theNoteList.append(subElement)
             spannersFromThisNote: t.List[spanner.Spanner] = subElement.getSpannerSites()
             if spannersFromThisNote:
-                spannersFromNotes[subElement] = spannersFromThisNote
+                spannersFromNotes.append((subElement, spannersFromThisNote))
         if isinstance(subElement, articulations.Articulation):
             theArticList.append(subElement)
         elif isinstance(subElement, note.Lyric):
@@ -4176,8 +4176,8 @@ def chordFromElement(
     if theLyricList:
         theChord.lyrics = theLyricList
     if spannersFromNotes:
-        for eachNote in spannersFromNotes:
-            for eachSpanner in spannersFromNotes[eachNote]:
+        for eachNote, spanners in spannersFromNotes:
+            for eachSpanner in spanners:
                 eachSpanner.replaceSpannedElement(eachNote, theChord)
 
     # set the Chord's duration
