@@ -2935,7 +2935,7 @@ class HumdrumToken(HumHash):
     //
     // HumdrumToken::getVisualDuration -- Returns LO:N:vis parameter if it is attached
     //    to a token directly or indirectly through a linked parameter.  Returns empty string
-    //    if no explicit visual durtation (so the visual duration is same as the logical duration).
+    //    if no explicit visual duration (so the visual duration is same as the logical duration).
     '''
     def getVisualDuration(self, subtokenIdx: int = -1) -> str:
         visDurStr = self.layoutParameter('N', 'vis', subtokenIdx)

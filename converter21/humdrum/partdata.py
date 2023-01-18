@@ -38,6 +38,7 @@ class PartData:
         self.ownerScore: ScoreData = ownerScore
         self.spannerBundle: m21.spanner.SpannerBundle = ownerScore.spannerBundle
         self._partIndex: int = partIndex
+        self._hasDynamics: bool = False
 
         # partStaves will be a list of one Part, or a list of multiple PartStaffs,
         # but we don't really care. We make a StaffData out of each one.
@@ -64,6 +65,10 @@ class PartData:
     @property
     def staffCount(self) -> int:
         return len(self.staves)
+
+    @property
+    def hasDynamics(self) -> bool:
+        return self._hasDynamics
 
     @staticmethod
     def _findPartName(
@@ -113,3 +118,6 @@ class PartData:
 
     def reportLinkedSlurToOwner(self) -> str:
         return self.ownerScore.reportLinkedSlurToOwner()
+
+    def receiveDynamic(self):
+        self._hasDynamics = True

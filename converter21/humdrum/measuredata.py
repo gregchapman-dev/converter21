@@ -22,8 +22,8 @@ from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import EventData
 from converter21.humdrum import Convert
-from converter21.humdrum import M21Utilities
 from converter21.humdrum import M21Convert
+from converter21.shared import M21Utilities
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -62,13 +62,13 @@ class MeasureData:
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
         # leftBarlineStyle describes the left barline of this measure
-        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.leftBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
         # rightBarlineStyle describes the right barline of this measure
-        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.rightBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
         # measureStyle is a combination of this measure's leftBarlineStyle and
         # the previous measure's rightBarlineStyle.  It's the style we use when
         # writing a barline ('=') token.
-        self.measureStyle: MeasureStyle = MeasureStyle.Regular
+        self.measureStyle: MeasureStyle = MeasureStyle.NoBarline
 
         self.leftBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
         self.rightBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
@@ -172,9 +172,15 @@ class MeasureData:
         self.leftBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.leftBarline)
         self.rightBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.rightBarline)
 
+        # measure index 0 only: pretend there is a left barline (hidden) if there is none
+        # That first barline in Humdrum files is important for parse-ability.
+        if self.measureIndex == 0:
+            if self.leftBarlineStyle == MeasureStyle.NoBarline:
+                self.leftBarlineStyle = MeasureStyle.Invisible
+
         # Grab the previous measure's right barline style (if there is one) and
         # combine it with our left barline style, giving our measureStyle.
-        prevRightMeasureStyle: MeasureStyle = MeasureStyle.Regular
+        prevRightMeasureStyle: MeasureStyle = MeasureStyle.NoBarline
         if self._prevMeasData is not None:
             prevRightMeasureStyle = self._prevMeasData.rightBarlineStyle
         self.measureStyle = M21Convert.combineTwoMeasureStyles(self.leftBarlineStyle,
@@ -231,7 +237,9 @@ class MeasureData:
             # treat the measure itself as voice 0
             self._parseEventsIn(self.m21Measure, 0)
         else:
-            # first parse the voices...
+            # first parse any leading non-stream/non-notes elements (clefs, keysigs, timesigs)
+            self._parseEventsAtTopLevelOf(self.m21Measure, firstBit=True)
+            # ...then parse the voices...
             for voiceIndex, voice in enumerate(self.m21Measure.voices):
                 emptyStartDuration: HumNum = voice.offset
                 emptyEndDuration: HumNum = opFrac(
@@ -239,10 +247,10 @@ class MeasureData:
                 )
                 self._parseEventsIn(voice, voiceIndex, emptyStartDuration, emptyEndDuration)
 
-            # ... then parse the non-streams last, so that the ending barline lands after
-            # any objects in the voices that are also at the last offset in the measure
+            # ... then parse the rest of the non-stream elements last, so that the ending barline
+            # lands after any objects in the voices that are also at the last offset in the measure
             # (e.g. TextExpressions after the last note in the measure).
-            self._parseEventsAtTopLevelOf(self.m21Measure)
+            self._parseEventsAtTopLevelOf(self.m21Measure, firstBit=False)
 
         self._sortEvents()
 
@@ -271,8 +279,24 @@ class MeasureData:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
 
-        for elementIndex, element in enumerate(m21Stream.recurse()
-                                                    .getElementsNotOfClass(m21.stream.Stream)):
+        elementList: t.List[m21.base.Music21Object] = list(
+            m21Stream.recurse().getElementsNotOfClass(m21.stream.Stream)
+        )
+        for elementIndex, element in enumerate(elementList):
+            if (isinstance(element, m21.dynamics.Dynamic)
+                    and M21Convert.getDynamicString(element) in ('sf', 'sfz')
+                    and not M21Convert.isCentered(element)):
+                # 'sf' and 'sfz' should be exported as 'z' or 'zz' on an associated note/chord
+                # if possible, so look forward and backward for same-offset notes/chords to
+                # do that with.  Note that we don't do this if the dynamic is centered between
+                # two staves, since that is not really associated with a particular note.
+                noteOrChord: t.Optional[m21.note.NotRest] = (
+                    self._findAssociatedNoteOrChord(elementIndex, elementList)
+                )
+                if noteOrChord:
+                    noteOrChord.humdrum_sf_or_sfz = element  # type: ignore
+                    continue
+
             event = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
                 self.events.append(event)
@@ -302,6 +326,55 @@ class MeasureData:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
 
+    @staticmethod
+    def _findAssociatedNoteOrChord(
+        elementIndex: int,
+        elementList: t.List[m21.base.Music21Object]
+    ) -> t.Optional[m21.note.NotRest]:
+        # We're looking for a nearby note or chord with the same offset
+        # (and not a grace note/chord).
+        output: t.Optional[m21.note.NotRest] = None
+
+        wantedOffset = elementList[elementIndex].offset
+        proposed: m21.base.Music21Object
+
+        # first look backward (but only until offset is different)
+        index: int = elementIndex - 1
+        while index in range(0, len(elementList)):
+            proposed = elementList[index]
+            if proposed.offset != wantedOffset:
+                break
+            if not isinstance(proposed, m21.note.NotRest):
+                index -= 1
+                continue
+            if isinstance(proposed.duration,
+                    (m21.duration.GraceDuration, m21.duration.AppoggiaturaDuration)):
+                index -= 1
+                continue
+            output = proposed
+            break
+
+        if output is not None:
+            return output
+
+        # didn't find it backward, try forward
+        index = elementIndex + 1
+        while index in range(0, len(elementList)):
+            proposed = elementList[index]
+            if proposed.offset != wantedOffset:
+                break
+            if not isinstance(proposed, m21.note.NotRest):
+                index += 1
+                continue
+            if isinstance(proposed.duration,
+                    (m21.duration.GraceDuration, m21.duration.AppoggiaturaDuration)):
+                index += 1
+                continue
+            output = proposed
+            break
+
+        return output
+
     def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> t.List[EventData]:
         if t.TYPE_CHECKING:
             assert isinstance(event.m21Object, m21.note.GeneralNote)
@@ -328,19 +401,38 @@ class MeasureData:
                 wedgeStartTime = startNote.getOffsetInHierarchy(score)
                 wedgeDuration = opFrac(wedgeEndTime - wedgeStartTime)
 
+            wedgeStartEvent: EventData
+            wedgeEndEvent: EventData
+
             if thisEventIsStart and thisEventIsEnd:
+                # We could make a combined event here, to try to get '>]', but
+                # '>]' is evil because it requires the next token to the left
+                # to be of the appropriate duration, and we have no (simple)
+                # control over that.  So we always split up the start and end
+                # so we only count on the start time of the appropriate token.
+
                 # print(f'wedgeStartStopEvent: {event}', file=sys.stderr)
-                # one note for the wedge? let's make one event, so it can become '>]' or whatever
-                wedgeStartStopEvent: EventData = EventData(wedge, -1, event.voiceIndex, self,
-                                                           offsetInScore=wedgeStartTime,
-                                                           duration=wedgeDuration)
-                output.append(wedgeStartStopEvent)
+                wedgeStartEvent = EventData(
+                    wedge, -1, event.voiceIndex, self,
+                    offsetInScore=wedgeStartTime,
+                    duration=wedgeDuration
+                )
+                output.append(wedgeStartEvent)
+
+                wedgeEndEvent = EventData(
+                    wedge, -1, event.voiceIndex, self,
+                    offsetInScore=wedgeEndTime,
+                    duration=0
+                )
+                output.append(wedgeEndEvent)
             elif thisEventIsStart:
                 # add the start event, with duration
                 # print(f'wedgeStartEvent: {event}', file=sys.stderr)
-                wedgeStartEvent: EventData = EventData(wedge, -1, event.voiceIndex, self,
-                                                       offsetInScore=wedgeStartTime,
-                                                       duration=wedgeDuration)
+                wedgeStartEvent = EventData(
+                    wedge, -1, event.voiceIndex, self,
+                    offsetInScore=wedgeStartTime,
+                    duration=wedgeDuration
+                )
                 output.append(wedgeStartEvent)
             elif thisEventIsEnd:
                 # add the end event (duration == 0)
@@ -358,18 +450,46 @@ class MeasureData:
                 else:
                     endVoiceIndex = matchingStartEvent.voiceIndex
                     endSelf = matchingStartEvent.ownerMeasure
-                wedgeEndEvent: EventData = EventData(wedge, -1, endVoiceIndex, endSelf,
-                                                     offsetInScore=wedgeEndTime,
-                                                     duration=0)
+                wedgeEndEvent = EventData(
+                    wedge, -1, endVoiceIndex, endSelf,
+                    offsetInScore=wedgeEndTime,
+                    duration=0
+                )
                 output.append(wedgeEndEvent)
 
         return output
 
-    def _parseEventsAtTopLevelOf(self, m21Stream: m21.stream.Measure) -> None:
+    def _parseEventsAtTopLevelOf(
+        self,
+        m21Stream: m21.stream.Measure,
+        firstBit: t.Optional[bool]  # None -> all of it, True -> first bit, False -> non-first-bit
+    ) -> None:
+        skipping: bool = False
+        if firstBit is False:
+            skipping = True
+
         for elementIndex, element in enumerate(m21Stream):
             if 'Stream' in element.classes:
                 # skip substreams, just parse the top-level objects
+                if firstBit is True:
+                    # we hit a Voice, done with first bit
+                    return
+                elif firstBit is False:
+                    # we hit a Voice, done with skipping
+                    skipping = False
                 continue
+
+            if firstBit is True:
+                if isinstance(element, (m21.note.GeneralNote, m21.stream.Stream)):
+                    # done with first bit
+                    return
+            elif firstBit is False and skipping:
+                if not isinstance(element, m21.note.GeneralNote):
+                    # skip first bit
+                    continue
+                else:
+                    # found a note, done with skipping
+                    skipping = False
 
             event: EventData = EventData(element, elementIndex, -1, self)
             if event is not None:

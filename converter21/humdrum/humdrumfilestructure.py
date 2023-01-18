@@ -876,7 +876,7 @@ Line: {line.text}'''
     //
     // HumdrumFileStructure::getStrandCount --
     '''
-    def strandCount(self, spineIndex: int = None) -> int:
+    def strandCount(self, spineIndex: t.Optional[int] = None) -> int:
         if not self.areStrandsAnalyzed:
             self.analyzeStrands()
 

@@ -21,6 +21,7 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 
 from converter21.humdrum import SliceType
+from converter21.humdrum import MeasureStyle
 from converter21.humdrum import GridVoice
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridPart
@@ -56,11 +57,7 @@ class HumGrid:
         self._figuredBass: t.List[bool] = [False] * 100
         self._harmony: t.List[bool] = [False] * 100
         self._partNames: t.List[str] = []  # grows as necessary
-
-        # indexed by part,staff (max == 100 parts, max = 4 staves per part)
-        self._dynamics: t.List[t.List[bool]] = []
-        for _ in range(0, 100):
-            self._dynamics.append([False] * 4)
+        self._dynamics: t.List[bool] = [False] * 100
 
         # options:
         self._pickup: bool = False
@@ -195,10 +192,9 @@ class HumGrid:
     //
     // HumGrid::hasDynamics -- Return true if there are any dynamics for the part/staff.
     '''
-    def hasDynamics(self, partIndex: int, staffIndex: int) -> bool:
+    def hasDynamics(self, partIndex: int) -> bool:
         if 0 <= partIndex < len(self._dynamics):
-            if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                return self._dynamics[partIndex][staffIndex]
+            return self._dynamics[partIndex]
         return False
 
     '''
@@ -206,10 +202,9 @@ class HumGrid:
     //
     // HumGrid::getDynamicsCount --
     '''
-    def dynamicsCount(self, partIndex: int, staffIndex) -> int:
+    def dynamicsCount(self, partIndex: int) -> int:
         if 0 <= partIndex < len(self._dynamics):
-            if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                return int(self._dynamics[partIndex][staffIndex])  # cast bool to int (0 or 1)
+            return int(self._dynamics[partIndex])  # cast bool to int (0 or 1)
         return 0
 
 
@@ -244,10 +239,9 @@ class HumGrid:
     // HumGrid::setDynamicsPresent -- Indicate that part needs a **dynam spine.
         Actually, indicate that part,staff needs a **dynam spine.  Dynamics are on the staff.
     '''
-    def setDynamicsPresent(self, partIndex: int, staffIndex: int) -> None:
+    def setDynamicsPresent(self, partIndex: int) -> None:
         if 0 <= partIndex < len(self._dynamics):
-            if 0 <= staffIndex < len(self._dynamics[partIndex]):
-                self._dynamics[partIndex][staffIndex] = True
+            self._dynamics[partIndex] = True
 
     '''
     //////////////////////////////
@@ -972,6 +966,15 @@ class HumGrid:
             if measure.duration == 0:
                 continue
 
+            hasBarline: bool = False
+            for mStyle in measure.measureStylePerStaff:
+                if mStyle != MeasureStyle.NoBarline:
+                    hasBarline = True
+                    break
+
+            if not hasBarline:
+                continue
+
             mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
             measure.slices.insert(0, mslice)  # barline is first slice in measure
 
@@ -1002,9 +1005,14 @@ class HumGrid:
                         voiceCount = 1
 
                     for _ in range(0, voiceCount):
-                        token = self.createBarToken(measure, staffIndex)
-                        gv: GridVoice = GridVoice(token, 0)
-                        staff.voices.append(gv)
+                        token: t.Optional[str] = self.createBarToken(measure, staffIndex)
+                        if token is None:
+                            # Humdrum can't have a mixture of barlines and "no barline", so
+                            # instead of "no barline", create an invisible barline.
+                            token = self.createInvisibleBarToken(measure, staffIndex)
+                        if token is not None:
+                            gv: GridVoice = GridVoice(token, 0)
+                            staff.voices.append(gv)
 
                     staffIndex += 1
 
@@ -1020,6 +1028,17 @@ class HumGrid:
         if not self.measures:
             return
 
+        measure: GridMeasure = self.measures[-1]
+
+        hasBarline: bool = False
+        for mStyle in measure.rightBarlineStylePerStaff:
+            if mStyle != MeasureStyle.NoBarline:
+                hasBarline = True
+                break
+
+        if not hasBarline:
+            return
+
         modelSlice: GridSlice = self.measures[-1].slices[-1]
         if modelSlice is None:
             return
@@ -1027,8 +1046,6 @@ class HumGrid:
         # probably not the correct timestamp, but probably not important
         # to get correct:
         timestamp: HumNum = modelSlice.timestamp
-
-        measure: GridMeasure = self.measures[-1]
 
         mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
         measure.slices.append(mslice)
@@ -1038,7 +1055,10 @@ class HumGrid:
             part = GridPart()
             mslice.parts.append(part)
             for _ in range(0, len(modelPart.staves)):
-                measureStyle: str = self.getLastBarlineStyle(measure, staffIndex)
+                measureStyle: t.Optional[str] = self.getLastBarlineStyle(measure, staffIndex)
+                if measureStyle is None:
+                    # we can't mix barlines with "no barline", so make an invisible barline
+                    measureStyle = '-'
                 staff = GridStaff()
                 part.staves.append(staff)
                 token: HumdrumToken = HumdrumToken('=' + measureStyle)
@@ -1051,9 +1071,12 @@ class HumGrid:
     //
     // HumGrid::createBarToken --
     '''
-    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> str:
-        token: str = ''
-        measureStyle: str = self.getMeasureStyle(measure, staffIndex)
+    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
+        measureStyle: t.Optional[str] = self.getMeasureStyle(measure, staffIndex)
+        if measureStyle is None:  # a.k.a. measureStyle == MeasureStyle.NoBarline
+            return None
+
+        token: str
         measureNumStr: str = measure.measureNumberString
 
         if measureNumStr:
@@ -1073,6 +1096,12 @@ class HumGrid:
             token += measureStyle
 
         return token
+
+    def createInvisibleBarToken(self, measure: GridMeasure, staffIndex: int) -> str:
+        measureNumStr: str = measure.measureNumberString
+        if measureNumStr:
+            return '=' + measureNumStr + '-'
+        return '=-'
 
 #     '''
 #     //////////////////////////////
@@ -1133,16 +1162,26 @@ class HumGrid:
     // HumGrid::getBarStyle --
     '''
     @staticmethod
-    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str:
-        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.measureStyle)
+    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
+        output: t.Optional[str] = Convert.measureStyleToHumdrumBarlineStyleStr(
+            measure.measureStyle(staffIndex)
+        )
+        if output is None:
+            return None
+
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.fermataStyle(staffIndex)
         )
         return output
 
     @staticmethod
-    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str:
-        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(measure.rightBarlineStyle)
+    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
+        output: t.Optional[str] = Convert.measureStyleToHumdrumBarlineStyleStr(
+            measure.rightBarlineStyle(staffIndex)
+        )
+        if output is None:
+            return None
+
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.rightBarlineFermataStyle(staffIndex)
         )
@@ -1188,6 +1227,40 @@ class HumGrid:
                     if voice.token is None:
                         voice.token = token
 
+    def makeFakeBarlineSlice(
+        self,
+        measure: GridMeasure,
+        timestamp: HumNumIn,
+        voicesPerStaff: int = 1,
+        matchVoicesToSlice: t.Optional[GridSlice] = None
+    ) -> GridSlice:
+        fakeSlice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
+
+        staffIndex: int = 0
+        for p in range(0, self.partCount):
+            part = GridPart()
+            fakeSlice.parts.append(part)
+            for s in range(0, self.staffCount(p)):
+                staff = GridStaff()
+                part.staves.append(staff)
+
+                if matchVoicesToSlice is not None:
+                    thisVoiceCount = len(matchVoicesToSlice.parts[p].staves[s].voices)
+                else:
+                    thisVoiceCount = voicesPerStaff
+
+                if thisVoiceCount == 0:
+                    thisVoiceCount = 1
+
+                for _ in range(0, thisVoiceCount):
+                    token: str = self.createInvisibleBarToken(measure, staffIndex)
+                    gv: GridVoice = GridVoice(token, 0)
+                    staff.voices.append(gv)
+
+                staffIndex += 1
+
+        return fakeSlice
+
     '''
     //////////////////////////////
     //
@@ -1195,7 +1268,55 @@ class HumGrid:
         returns True if any manipulators were added
     '''
     def manipulatorCheck(self) -> bool:
+        # We may need to make a fake starting barline for the first measure, and/or a fake
+        # ending barline for the last measure. This is so that if we start without a barline
+        # (or end without a barline), we'll still split and merge appropriately before the
+        # first line of the first measure/after the last line of the last measure.
+        fakeFirstSlice: t.Optional[GridSlice] = None
+        fakeLastSlice: t.Optional[GridSlice] = None
+
+        # check if we need fakeFirstSlice
+        for measure in self.measures:
+            if not measure.slices:
+                continue
+
+            if not measure.slices[0].isMeasureSlice:
+                # we need a fake first slice
+                fakeFirstSlice = self.makeFakeBarlineSlice(
+                    measure, measure.slices[0].timestamp, voicesPerStaff=1
+                )
+
+            # all done, either way
+            break
+
+        # check if we need fakeLastSlice
+        for m in reversed(range(0, len(self.measures))):
+            measure = self.measures[m]
+            if not measure.slices:
+                continue
+
+            if not measure.slices[-1].isMeasureSlice:
+                # we need a fake last slice
+                fakeLastSlice = self.makeFakeBarlineSlice(
+                    measure, measure.slices[-1].timestamp, voicesPerStaff=1
+                )
+
+            # all done, either way
+            break
+
+        manipulator: t.Optional[GridSlice]
+        lastSpinedLine: t.Optional[GridSlice] = None
         output: bool = False
+
+        startNextMeasureAtSlice1: bool = False
+        if fakeFirstSlice is not None:
+            firstSpinedLine: t.Optional[GridSlice] = self.getNextSpinedLine(slicei=-1, measurei=0)
+            manipulator = self.manipulatorCheckTwoSlices(fakeFirstSlice, firstSpinedLine)
+            if manipulator is not None:
+                output = True
+                measure.slices.insert(0, manipulator)
+                startNextMeasureAtSlice1 = True
+
         for m, measure in enumerate(self.measures):
             if not measure.slices:
                 continue
@@ -1205,16 +1326,28 @@ class HumGrid:
             # and we have to do the iteration by hand to have that kind
             # of control.
             i: int = 0
-            while i < len(measure.slices):
-                slice1: GridSlice = measure.slices[i]
+            if startNextMeasureAtSlice1:
+                # step over the manipulator we inserted at the start
+                i = 1
+                startNextMeasureAtSlice1 = False
 
+            while True:
+                if i >= len(measure.slices):  # not in while; len(measure.slices) may have changed
+                    break
+
+                slice1: GridSlice = measure.slices[i]
                 if not slice1.hasSpines:
                     # Don't monitor manipulators on no-spined lines.
                     i += 1
                     continue
 
-                slice2: t.Optional[GridSlice] = self.getNextSpinedLine(i, m)
-                manipulator: t.Optional[GridSlice] = self.manipulatorCheckTwoSlices(slice1, slice2)
+                lastSpinedLine = slice1
+
+                slice2: t.Optional[GridSlice] = self.getNextSpinedLine(slicei=i, measurei=m)
+                if slice2 is not None:
+                    lastSpinedLine = slice2
+
+                manipulator = self.manipulatorCheckTwoSlices(slice1, slice2)
                 if manipulator is None:
                     i += 1
                     continue
@@ -1222,6 +1355,13 @@ class HumGrid:
                 output = True
                 measure.slices.insert(i + 1, manipulator)
                 i += 2  # skip over the new manipulator line (expand it later)
+
+            # one last check, if there's a fakeLastSlice
+            if fakeLastSlice is not None:
+                manipulator = self.manipulatorCheckTwoSlices(lastSpinedLine, fakeLastSlice)
+                if manipulator is not None:
+                    output = True
+                    measure.slices.append(manipulator)
 
         return output
 
@@ -1878,6 +2018,8 @@ class HumGrid:
     def insertSideNullInterpretations(self, line: HumdrumLine, p: int, s: int) -> None:
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken('*'))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('*'))
             for _ in range(0, self.harmonyCount(p)):
@@ -1885,8 +2027,6 @@ class HumGrid:
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):  # xmlIdCount is always 0 or 1, but...
-                line.appendToken(HumdrumToken('*'))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken('*'))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken('*'))
@@ -1919,12 +2059,14 @@ class HumGrid:
 
         for p in reversed(range(0, len(gridSlice.parts))):
             part = gridSlice.parts[p]
+            staffNums: t.List[int] = []
             for s in reversed(range(0, len(part.staves))):
+                staffNums.append(staffCount)
                 text: str = '*staff' + str(staffCount)
                 line.appendToken(HumdrumToken(text))
-                self.insertSideStaffInfo(line, p, s, staffCount)  # insert staff sides
+                self.insertSideStaffInfo(line, p, s, [staffCount])  # insert staff sides
                 staffCount -= 1
-            self.insertSideStaffInfo(line, p, -1, -1)  # insert part sides
+            self.insertSideStaffInfo(line, p, -1, staffNums)  # insert part sides
         outFile.insertLine(0, line)  # insert at line 0
 
     '''
@@ -1932,21 +2074,33 @@ class HumGrid:
     //
     // HumGrid::insertSideStaffInfo --
     '''
-    def insertSideStaffInfo(self, line: HumdrumLine, p: int, s: int, staffNum: int) -> None:
-        if staffNum < 0:
-            # part side info (no staff markers)
+    def insertSideStaffInfo(
+        self,
+        line: HumdrumLine,
+        p: int,
+        s: int,
+        staffNums: t.List[int]  # >1 element if s is negative (i.e. part sides)
+    ) -> None:
+        text: str
+        if s < 0:
+            # part side info (no staff markers, except dynamics, which might have *staff1/2)
+            if self.hasDynamics(p):
+                text = '*staff'
+                for i, staffNum in enumerate(reversed(staffNums)):
+                    if i > 0:
+                        text += '/'
+                    text += str(staffNum)
+                line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('*'))
             for _ in range(0, self.harmonyCount(p)):
                 line.appendToken(HumdrumToken('*'))
         else:
             # staff side info (staff markers)
-            text: str = '*'
-            if staffNum > 0:
-                text = '*staff' + str(staffNum)
+            text = '*'
+            if staffNums[0] > 0:
+                text = '*staff' + str(staffNums[0])
             for _ in range(0, self.xmlIdCount(p)):
-                line.appendToken(HumdrumToken(text))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken(text))
@@ -1990,6 +2144,8 @@ class HumGrid:
         text: str = '*part' + str(p + 1)
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.harmonyCount(p)):
@@ -1997,8 +2153,6 @@ class HumGrid:
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):
-                line.appendToken(HumdrumToken(text))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken(text))
@@ -2038,6 +2192,8 @@ class HumGrid:
     def insertExInterpSides(self, line: HumdrumLine, p: int, s: int) -> None:
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken('**dynam'))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('**fb'))
             for _ in range(0, self.harmonyCount(p)):
@@ -2046,8 +2202,6 @@ class HumGrid:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):
                 line.appendToken(HumdrumToken('**xmlid'))
-            if self.hasDynamics(p, s):
-                line.appendToken(HumdrumToken('**dynam'))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken('**text'))
 
@@ -2087,6 +2241,8 @@ class HumGrid:
         text: str = '*-'
         if s < 0:
             # part side info
+            if self.hasDynamics(p):
+                line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.harmonyCount(p)):
@@ -2094,8 +2250,6 @@ class HumGrid:
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):
-                line.appendToken(HumdrumToken(text))
-            if self.hasDynamics(p, s):
                 line.appendToken(HumdrumToken(text))
             for _ in range(0, self.verseCount(p, s)):
                 line.appendToken(HumdrumToken(text))

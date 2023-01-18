@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
+import subprocess
 from typing import List, Tuple
 import music21 as m21
 from music21.base import VERSION_STR
@@ -10,7 +11,7 @@ from musicdiff.annotation import AnnScore, AnnExtra
 from musicdiff import Comparison
 from musicdiff import DetailLevel
 
-# The things we're testing
+import converter21
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
 
@@ -198,54 +199,28 @@ def runTheDiff(krnPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # export score back to humdrum (without any makeNotation fixups)
-
-    hdw: HumdrumWriter = HumdrumWriter(score1)
-    hdw.makeNotation = False
-    hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
-    # hdw.expandTremolos = False
+    # use verovio to convert humdrum file to mei file
 
     try:
-        success: bool = True
-        fp = Path(tempfile.gettempdir()) / krnPath.name
-        with open(fp, 'w', encoding='utf-8') as f:
-            success = hdw.write(f)
-        if not success:
-            print('export failed')
-            print('export failed', file=results)
-            results.flush()
-            return False
+        meiPath = Path(tempfile.gettempdir())
+        meiPath /= krnPath.name
+        meiPath = meiPath.with_suffix('.mei')
+        subprocess.run(
+            ['verovio', '-a', '-t', 'mei', '-o', f'{meiPath}', str(krnPath)],
+            check=True,
+            capture_output=True
+        )
     except KeyboardInterrupt:
         sys.exit(0)
     except:
-        print('export crash')
-        print('export crash', file=results)
+        print('conversion to mei with verovio failed')
+        print('conversion to mei with verovio failed', file=results)
         results.flush()
         return False
 
-    # and then try to parse the exported humdrum file
+    # import the mei file into music21
     try:
-        hfb2 = HumdrumFile(str(fp))
-        if not hfb2.isValid:
-            print('HumdrumFile2 parse failure')
-            print('HumdrumFile2 parse failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('HumdrumFile2 parse crash')
-        print('HumdrumFile2 parse crash', file=results)
-        results.flush()
-        return False
-
-    try:
-        score2 = hfb2.createMusic21Stream()
-        if score2 is None:
-            print('score2 creation failure')
-            print('score2 creation failure', file=results)
-            results.flush()
-            return False
+        score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
     except KeyboardInterrupt:
         sys.exit(0)
     except:
@@ -306,6 +281,8 @@ parser.add_argument(
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
+
+converter21.register()
 
 listPath: Path = Path(args.list_file)
 goodPath: Path = Path(str(listPath.parent) + '/' + str(listPath.stem)

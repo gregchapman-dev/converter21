@@ -1,0 +1,42 @@
+!!!COM: Joplin, Scott
+!!!CDT: 1868/11/24-1917/04/01
+!!!OTL: Maple Leaf Rag
+!!!ODT: 1899
+!!!AGN: Rag
+!!!OMD: Tempo di marcia
+**kern	**kern	**dynam
+*staff2	*staff1	*staff1/2
+*Ipiano	*Ipiano	*Ipiano
+*clefF4	*clefG2	*clefG2
+*k[b-e-a-d-]	*k[b-e-a-d-]	*k[b-e-a-d-]
+*kcancel	*kcancel	*
+*M2/4	*M2/4	*M2/4
+*MM100	*MM100	*MM100
+=8	=8	=8
+8A-	16r	.
+.	(16a-LL	.
+8r	16cc-	.
+.	16aa-JJ)	.
+8a-	16r	.
+.	(16aa-LL	.
+8r	16ccc-	.
+*clefG2	*	*
+.	16aaa-JJ)	.
+==	==	==
+*-	*-	*-
+!!!RDF**kern: > = above
+!!!RDF**kern: < = below
+!!!URL-vhv: https://verovio.humdrum.org/?file=joplin/mapleleaf.krn
+!!!URL-pdf-original: https://github.com/craigsapp/joplin/blob/master/reference-edition/mapleleaf.pdf
+!!!PPR: John Stark & Son
+!!!PDT: 1899
+!!!YEC: Copyright 2004 by Craig Stuart Sapp
+!!!YEN: United States of America
+!!!ENC: Craig Stuart Sapp
+!!!END: 2004/06/08
+!!!EED: Craig Stuart Sapp
+!!!EEV: 2021/06/29
+!!!YEC: 2021 Craig Stuart Sapp
+!!!URL: https://github.com/craigsapp/joplin
+!!!YEM: Licence: (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0
+!!!YER: 2021

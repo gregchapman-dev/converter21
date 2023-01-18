@@ -18,6 +18,7 @@ from fractions import Fraction
 
 from music21.common import opFrac
 
+from converter21.shared import SharedConstants
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import HumNum, HumNumIn
@@ -494,7 +495,7 @@ class Convert:
 
     @staticmethod
     def getMetronomeMarkInfo(
-            text: str
+        text: str
     ) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[str], t.Optional[str]]:
         # takes strings like
         # "Andante M.M. [quarter] = 88.1"  # PATTERNS[0]
@@ -518,6 +519,117 @@ class Convert:
                 return True
 
         return False
+
+
+    @staticmethod
+    def getTempoText(text: str) -> str:
+        output: str = ''
+
+        pattern: str = r'(.*)\[([^=\]]*)\]\s*=\s*(\d+.*)'
+        m = re.search(pattern, text)
+        if m is None:
+            return ''
+
+        first: str = m.group(1)
+        second: str = m.group(2)
+        third: str = m.group(3)
+
+        second = Convert.humdrumTempoNoteNameToSmuflText(second)
+
+        if first:
+            if first[-1] == '(':
+                # Add _very_ thin spacer (HAIR SPACE) after opening parenthesis
+                # to separate parenthesis and notehead:
+                first += chr(0x200A)
+
+        output += first
+
+        # Add the musical symbols (notes and dots), adding a space between them
+        dotChar: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+        counter: int = 0
+        for i, char in enumerate(second):
+            if i > 0:
+                # Add a space element between music symbols.
+                if char == dotChar:
+                    # use a THIN SPACE before dot
+                    output += chr(0x2009)
+                else:
+                    # use a "non-breaking space" otherwise
+                    output += chr(0x00A0)
+
+            output += char
+
+        output += chr(0x00A0) + '=' + chr(0x00A0) + third
+
+        return output
+
+    @staticmethod
+    def humdrumTempoNoteNameToSmuflText(text: str) -> str:
+        output: str = ''
+        if not text:
+            return output
+
+        finaltext: str
+        if text[0] == '[' and text[-1] == ']':
+            finaltext = text[1:-1]
+        else:
+            finaltext = text
+
+        # Remove styling qualifiers
+        finaltext = re.sub('[|@].*', '', finaltext)
+
+        # https://www.smufl.org/version/1.2/range/metronomeMarks
+
+        # Count the number of augmentation dots on the note, and then remove them:
+        dots: int = 0
+        if re.search('-dot$', finaltext):
+            dots = 1
+            if re.search('-dot-dot$', finaltext):
+                dots = 2
+                if re.search('-dot-dot-dot$', finaltext):
+                    dots = 3
+                # Only allowing three augmentation dots.
+        finaltext = re.sub('(-dot)+', '', finaltext)
+
+        # Check for "." used as an augmentation dot (typically used with numbers):
+        m = re.search(r'(\.+)$', finaltext)
+        if m:
+            dotstring: str = m.group(1)
+            dots += len(dotstring)
+            finaltext = re.sub(r'\.+$', '', finaltext)
+
+        if finaltext in ('quarter', '4'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteQuarterUp', '')
+        elif finaltext in ('half', '2'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteHalfUp', '')
+        elif finaltext in ('whole', '1'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
+        elif finaltext in ('breve', 'double-whole', '0'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteDoubleWhole', '')
+        elif finaltext in ('eighth', '8', '8th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
+        elif finaltext in ('sixteenth', '16', '16th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote16thUp', '')
+        elif finaltext in ('32', '32nd'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote32ndUp', '')
+        elif finaltext in ('64', '64th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote64thUp', '')
+        elif finaltext in ('128', '128th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote128thUp', '')
+        elif finaltext in ('256', '256th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote256thUp', '')
+        elif finaltext in ('512', '512th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
+        elif finaltext in ('1024', '1024th'):
+            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
+
+        if dots > 0:
+            output += (
+                SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+                * dots
+            )
+
+        return output
 
     '''
         *** Math ***
@@ -1375,16 +1487,19 @@ class Convert:
     def diatonicChromaticToTrans(d: int, c: int) -> str:
         return 'd' + str(d) + 'c' + str(c)
 
-    _humdrumBarlineStyleFromMeasureStyle: t.Dict[MeasureStyle, str] = {
+    _humdrumBarlineStyleFromMeasureStyle: t.Dict[MeasureStyle, t.Optional[str]] = {
         MeasureStyle.Double: '||',
         MeasureStyle.HeavyHeavy: '!!',
         MeasureStyle.HeavyLight: '!|',
         MeasureStyle.Final: '=',                    # first '=' of '==' is already there
         MeasureStyle.Short: "'",
         MeasureStyle.Tick: '`',
+        MeasureStyle.Dotted: '.',
+        MeasureStyle.Dashed: ':',
         MeasureStyle.Invisible: '-',
         MeasureStyle.Regular: '',
         MeasureStyle.Heavy: '!',
+        MeasureStyle.NoBarline: None,
         MeasureStyle.RepeatBackwardRegular: ':|',
         MeasureStyle.RepeatBackwardHeavy: ':!',
         MeasureStyle.RepeatBackwardHeavyLight: ':!|',
@@ -1408,8 +1523,8 @@ class Convert:
     }
 
     @staticmethod
-    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> str:
-        output: str = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
+    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> t.Optional[str]:
+        output: t.Optional[str] = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
         return output
 
     _humdrumFermataStyleFromFermataStyle: t.Dict[FermataStyle, str] = {

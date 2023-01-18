@@ -13,10 +13,11 @@
 #    All methods are static.  M21Utilities is just a namespace for these conversion functions and
 #    look-up tables.
 
+import re
 import typing as t
 
 import music21 as m21
-from music21.common.types import OffsetQL
+from music21.common.types import OffsetQL, OffsetQLIn, StepName
 
 from converter21.humdrum import HumdrumInternalError
 
@@ -264,15 +265,136 @@ class M21Utilities:
     @staticmethod
     def splitComplexRestDuration(rest: m21.note.Rest) -> t.Tuple[m21.note.Rest, ...]:
         atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
-        quarterLengthList: t.List[t.Union[int, float]] = [
+        quarterLengthList: t.List[OffsetQLIn] = [
             float(c.quarterLength * atm) for c in rest.duration.components
         ]
         splits: t.Tuple[m21.note.Rest, ...] = (
-            rest.splitByQuarterLengths(quarterLengthList, addTies=False)
+            rest.splitByQuarterLengths(quarterLengthList, addTies=False)  # type: ignore
         )
 
         return splits
 
+    @staticmethod
+    def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
+        patt: str = r'([ABCDEFG])([-#]*)([\d]+)'
+        m = re.match(patt, m21PitchName)
+        if m:
+            g2: str = m.group(2)
+            if g2 == '':
+                g2 = 'n'
+            return m.group(1), g2, m.group(3)
+        return m21PitchName, 'n', ''
+
+    _STEP_TO_PITCH_CLASS: t.Dict[str, int] = {
+        'C': 0,
+        'D': 1,
+        'E': 2,
+        'F': 3,
+        'G': 4,
+        'A': 5,
+        'B': 6
+    }
+
+    @staticmethod
+    def pitchToBase7(m21Pitch: m21.pitch.Pitch) -> int:
+        pc: int = M21Utilities._STEP_TO_PITCH_CLASS[m21Pitch.step]
+        octave: int = m21Pitch.implicitOctave  # implicit means return default (4) if None
+        return pc + (7 * octave)
+
+    @staticmethod
+    def getAltersForKey(
+        m21Key: t.Optional[t.Union[m21.key.Key, m21.key.KeySignature]]
+    ) -> t.List[int]:
+        # returns a list of pitch alterations (number of semitones up or down),
+        # indexed by pitch (base7), where index 0 is C0, and index 69 is B9.
+        alters: t.List[int] = [0] * 70
+        if m21Key is None:
+            return alters
+
+        STEPNAMES: tuple[StepName, ...] = ('C', 'D', 'E', 'F', 'G', 'A', 'B')
+        for pitchClass, pitchName in enumerate(STEPNAMES):
+            accid: t.Optional[m21.pitch.Accidental] = m21Key.accidentalByStep(pitchName)
+            if accid is None:
+                continue
+            alter: int = int(accid.alter)
+            for octave in range(0, 10):  # 0 through 9, inclusive
+                alters[pitchClass + (octave * 7)] = alter
+
+        return alters
+
+    # to be used if music21 doesn't support spanner fill.
+    @staticmethod
+    def fillIntermediateSpannedElements(
+        ottava: m21.spanner.Ottava,
+        searchStream: m21.stream.Stream,
+        *,
+        includeEndBoundary: bool = False,
+        mustFinishInSpan: bool = False,
+        mustBeginInSpan: bool = True,
+        includeElementsThatEndAtStart: bool = False
+    ):
+        if hasattr(ottava, 'filledStatus') and ottava.filledStatus is True:  # type: ignore
+            # Don't fill twice.
+            return
+
+        if ottava.getFirst() is None:
+            # no spanned elements?  Nothing to fill.
+            return
+
+        endElement: m21.base.Music21Object | None = None
+        if len(ottava) > 1:
+            # Start and end elements are different, we can't just append everything, we need
+            # to save off the end element, remove it, add everything, then add the end element
+            # again.  Note that if there are actually more than 2 elements before we start
+            # filling, the new intermediate elements will come after the existing ones,
+            # regardless of offset.  But first and last will still be the same two elements
+            # as before, which is the most important thing.
+            endElement = ottava.getLast()
+            if t.TYPE_CHECKING:
+                assert endElement is not None
+            ottava.spannerStorage.remove(endElement)
+
+        try:
+            startOffsetInHierarchy: OffsetQL = ottava.getFirst().getOffsetInHierarchy(searchStream)
+        except m21.sites.SitesException:
+            # print('start element not in searchStream')
+            if endElement is not None:
+                ottava.addSpannedElements(endElement)
+            return
+
+        endOffsetInHierarchy: OffsetQL
+        if endElement is not None:
+            try:
+                endOffsetInHierarchy = (
+                    endElement.getOffsetInHierarchy(searchStream) + endElement.quarterLength
+                )
+            except m21.sites.SitesException:
+                # print('end element not in searchStream')
+                ottava.addSpannedElements(endElement)
+                return
+        else:
+            endOffsetInHierarchy = (
+                ottava.getLast().getOffsetInHierarchy(searchStream) + ottava.getLast().quarterLength
+            )
+
+        for foundElement in (searchStream
+                .recurse()
+                .getElementsByOffsetInHierarchy(
+                    startOffsetInHierarchy,
+                    endOffsetInHierarchy,
+                    includeEndBoundary=includeEndBoundary,
+                    mustFinishInSpan=mustFinishInSpan,
+                    mustBeginInSpan=mustBeginInSpan,
+                    includeElementsThatEndAtStart=includeElementsThatEndAtStart)
+                .getElementsByClass(m21.note.NotRest)):
+            if endElement is None or foundElement is not endElement:
+                ottava.addSpannedElements(foundElement)
+
+        if endElement is not None:
+            # add it back in as the end element
+            ottava.addSpannedElements(endElement)
+
+        ottava.filledStatus = True  # type: ignore
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:
@@ -352,6 +474,36 @@ class M21Utilities:
 
         M21Utilities._cachedM21SupportsArpeggioMarks = False
         return False
+
+    _cachedM21SupportsSpannerAnchor: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsSpannerAnchor() -> bool:
+        if M21Utilities._cachedM21SupportsSpannerAnchor is not None:
+            return M21Utilities._cachedM21SupportsSpannerAnchor
+
+        if hasattr(m21.spanner, 'SpannerAnchor'):
+            M21Utilities._cachedM21SupportsSpannerAnchor = True
+            return True
+
+        M21Utilities._cachedM21SupportsSpannerAnchor = False
+        return False
+
+    # inheritAccidentalDisplay and fillIntermediateSpannedElements started being
+    # supported in music21 at the same time.
+    _cachedM21SupportsInheritAccidentalDisplayAndSpannerFill: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsInheritAccidentalDisplayAndSpannerFill() -> bool:
+        if M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill is not None:
+            return M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill
+
+        if hasattr(m21.spanner.Spanner, 'fillIntermediateSpannedElements'):
+            M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill = True
+            return True
+
+        M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill = False
+        return False
+
+
 
 
 class M21StaffGroupTree:

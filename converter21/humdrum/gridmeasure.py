@@ -29,7 +29,7 @@ from converter21.humdrum import SliceType
 from converter21.humdrum import GridVoice
 # from converter21.humdrum import GridSide
 from converter21.humdrum import GridStaff
-# from converter21.humdrum import GridPart
+from converter21.humdrum import GridPart
 from converter21.humdrum import GridSlice
 
 # you can't import this here, because the recursive import causes very weird issues.
@@ -55,10 +55,10 @@ class GridMeasure:
         self._timestamp: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
-        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
-        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
+        self.leftBarlineStylePerStaff: t.List[MeasureStyle] = []
+        self.rightBarlineStylePerStaff: t.List[MeasureStyle] = []
         self.fermataStylePerStaff: t.List[FermataStyle] = []
-        self.measureStyle: MeasureStyle = MeasureStyle.Regular
+        self.measureStylePerStaff: t.List[MeasureStyle] = []
         self.measureNumberString: str = ''
 
         self.inRepeatBracket: bool = False
@@ -105,7 +105,7 @@ class GridMeasure:
     // GridMeasure::appendGlobalLayout --
     '''
     def appendGlobalLayout(self, tok: str, timestamp: HumNumIn) -> GridSlice:
-        gs: GridSlice = GridSlice(self, timestamp, SliceType.GlobalLayouts, 1)
+        gs: GridSlice = GridSlice(self, timestamp, SliceType.GlobalLayouts, [1])
         gs.addToken(tok, 0, 0, 0)
         gs.duration = opFrac(0)
         self.slices.append(gs)
@@ -125,7 +125,7 @@ class GridMeasure:
             part: int,
             staff: int,
             voice: int,
-            maxStaff: int,
+            staffCounts: t.List[int],
             graceNumber: int
     ) -> t.Optional[GridSlice]:
         ts: HumNum = opFrac(timestamp)
@@ -140,7 +140,7 @@ class GridMeasure:
 
         if not self.slices:
             # add a new GridSlice to an empty list.
-            gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
+            gs = GridSlice(self, ts, SliceType.GraceNotes, staffCounts)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
@@ -163,7 +163,7 @@ class GridMeasure:
 
                 if self.slices[idx].isDataSlice:
                     # insert grace note after this note
-                    gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
+                    gs = GridSlice(self, ts, SliceType.GraceNotes, staffCounts)
                     gs.addToken(tok, part, staff, voice)
                     self.slices.insert(idx + 1, gs)
                     return gs
@@ -203,7 +203,7 @@ class GridMeasure:
 
             if self.slices[idx].isDataSlice:
                 # insert grace note after this note
-                gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
+                gs = GridSlice(self, ts, SliceType.GraceNotes, staffCounts)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx + 1, gs)
                 return gs
@@ -211,7 +211,7 @@ class GridMeasure:
             idx -= 1
 
         # grace note should be added at start of measure
-        gs = GridSlice(self, ts, SliceType.GraceNotes, maxStaff)
+        gs = GridSlice(self, ts, SliceType.GraceNotes, staffCounts)
         gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
@@ -230,7 +230,7 @@ class GridMeasure:
             part: int,
             staff: int,
             voice: int,
-            maxStaff: int
+            staffCounts: t.List[int]
     ) -> GridSlice:
         ts: HumNum = opFrac(timestamp)
         gs: GridSlice
@@ -238,7 +238,7 @@ class GridMeasure:
         if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, ts, SliceType.Notes, maxStaff)
+            gs = GridSlice(self, ts, SliceType.Notes, staffCounts)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
@@ -258,13 +258,13 @@ class GridMeasure:
                 return gs
 
             if gridSlice.timestamp > ts:
-                gs = GridSlice(self, ts, SliceType.Notes, maxStaff)
+                gs = GridSlice(self, ts, SliceType.Notes, staffCounts)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx, gs)
                 return gs
 
         # Couldn't find a place for it, so place at end of measure.
-        gs = GridSlice(self, ts, SliceType.Notes, maxStaff)
+        gs = GridSlice(self, ts, SliceType.Notes, staffCounts)
         gs.addToken(tok, part, staff, voice)
         self.slices.append(gs)
         return gs
@@ -281,7 +281,7 @@ class GridMeasure:
             part: int,
             staff: int,
             voice: int,
-            maxStaff: int
+            staffCounts: t.List[int]
     ) -> GridSlice:
         ts: HumNum = opFrac(timestamp)
         gs: GridSlice
@@ -289,7 +289,7 @@ class GridMeasure:
         if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, ts, sliceType, maxStaff)
+            gs = GridSlice(self, ts, sliceType, staffCounts)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
@@ -306,19 +306,19 @@ class GridMeasure:
                 # timestamp, so add the new slice before the data slice (eventually
                 # keeping track of the order in which the other non-data slices should
                 # be placed).
-                gs = GridSlice(self, ts, sliceType, maxStaff)
+                gs = GridSlice(self, ts, sliceType, staffCounts)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx, gs)
                 return gs
 
             if gridSlice.timestamp > ts:
-                gs = GridSlice(self, ts, sliceType, maxStaff)
+                gs = GridSlice(self, ts, sliceType, staffCounts)
                 gs.addToken(tok, part, staff, voice)
                 self.slices.insert(idx, gs)
                 return gs
 
         # Couldn't find a place for the token, so place at end of measure
-        gs = GridSlice(self, ts, sliceType, maxStaff)
+        gs = GridSlice(self, ts, sliceType, staffCounts)
         gs.addToken(tok, part, staff, voice)
         self.slices.append(gs)
         return gs
@@ -331,9 +331,9 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addTempoToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Tempos,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -343,9 +343,9 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addTimeSigToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.TimeSigs,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -358,9 +358,9 @@ class GridMeasure:
     //      The meter signtature should occur immediately after a time signature line.
     '''
     def addMeterSigToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.MeterSigs,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -370,9 +370,9 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addKeySigToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.KeySigs,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -385,9 +385,9 @@ class GridMeasure:
     //    same time.
     '''
     def addTransposeToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Transpositions,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -397,9 +397,9 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addClefToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Clefs,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -409,9 +409,9 @@ class GridMeasure:
     //    token at the specified part, staff, and voice index.
     '''
     def addBarlineToken(self, tok: str, timestamp: HumNumIn,
-                      part: int, staff: int, voice: int, maxStaff: int) -> GridSlice:
+                      part: int, staff: int, voice: int, staffCounts: t.List[int]) -> GridSlice:
         return self.addTokenOfSliceType(tok, timestamp, SliceType.Measures,
-                                        part, staff, voice, maxStaff)
+                                        part, staff, voice, staffCounts)
 
     '''
     //////////////////////////////
@@ -422,14 +422,14 @@ class GridMeasure:
     '''
     def addLabelToken(self, tok: str, timestamp: HumNumIn,
                       part: int, staff: int, voice: int,
-                      maxPart: int) -> GridSlice:
+                      staffCounts: t.List[int]) -> GridSlice:
         ts: HumNum = opFrac(timestamp)
         gs: GridSlice
 
         if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, ts, SliceType.Labels, maxPart)
+            gs = GridSlice(self, ts, SliceType.Labels, staffCounts)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
@@ -442,7 +442,7 @@ class GridMeasure:
                 return gs
 
         # Couldn't find a place for the label, so place at beginning of measure
-        gs = GridSlice(self, ts, SliceType.Labels, maxPart)
+        gs = GridSlice(self, ts, SliceType.Labels, staffCounts)
         gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
@@ -456,14 +456,14 @@ class GridMeasure:
     '''
     def addLabelAbbrToken(self, tok: str, timestamp: HumNumIn,
                           part: int, staff: int, voice: int,
-                          maxPart: int) -> GridSlice:
+                          staffCounts: t.List[int]) -> GridSlice:
         ts: HumNum = opFrac(timestamp)
         gs: GridSlice
 
         if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, ts, SliceType.LabelAbbrs, maxPart)
+            gs = GridSlice(self, ts, SliceType.LabelAbbrs, staffCounts)
             gs.addToken(tok, part, staff, voice)
             self.slices.append(gs)
             return gs
@@ -476,7 +476,7 @@ class GridMeasure:
                 return gs
 
         # Couldn't find a place for the label abbr, so place at beginning of measure
-        gs = GridSlice(self, ts, SliceType.LabelAbbrs, maxPart)
+        gs = GridSlice(self, ts, SliceType.LabelAbbrs, staffCounts)
         gs.addToken(tok, part, staff, voice)
         self.slices.insert(0, gs)
         return gs
@@ -496,7 +496,7 @@ class GridMeasure:
         if not self.slices or self.slices[-1].timestamp < ts:
             # add a new GridSlice to an empty list or at end of list if timestamp
             # is after last entry in list.
-            gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
+            gs = GridSlice(self, ts, SliceType.GlobalComments, [1])
             gs.addToken(tok, 0, 0, 0)
             self.slices.append(gs)
             return gs
@@ -519,20 +519,62 @@ class GridMeasure:
                             gs = gridSlice
                             return gs
 
-                gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
+                gs = GridSlice(self, ts, SliceType.GlobalComments, [1])
                 gs.addToken(tok, 0, 0, 0)
                 self.slices.insert(idx, gs)
                 return gs
 
             if gridSlice.timestamp > ts:
                 # insert before this slice
-                gs = GridSlice(self, ts, SliceType.GlobalComments, 1)
+                gs = GridSlice(self, ts, SliceType.GlobalComments, [1])
                 gs.addToken(tok, 0, 0, 0)
                 self.slices.insert(idx, gs)
                 return gs
 
-        # I think we should put it at the beginning in this case --gregc
         return None
+
+    def addGlobalReference(self, tok: str, timestamp: HumNumIn) -> t.Optional[GridSlice]:
+        ts: HumNum = opFrac(timestamp)
+        gs: GridSlice
+
+        if not self.slices or self.slices[-1].timestamp < ts:
+            # add a new GridSlice to an empty list or at end of list if timestamp
+            # is after last entry in list.
+            gs = GridSlice(self, ts, SliceType.ReferenceRecords, [1])
+            gs.addToken(tok, 0, 0, 0)
+            self.slices.append(gs)
+            return gs
+
+        # search for existing data line (of any type) with the same timestamp
+        for idx, gridSlice in enumerate(self.slices):
+            if gridSlice.timestamp == ts:
+                # found the correct timestamp on a slice, so add the global reference
+                # before the slice.  But don't add if the slice we found is a
+                # global reference with the same text.
+                if gridSlice.isReferenceRecord:
+                    if len(gridSlice.parts[0].staves[0].voices) > 0:
+                        voice0: t.Optional[GridVoice] = gridSlice.parts[0].staves[0].voices[0]
+                        if (voice0 is not None
+                                and voice0.token is not None
+                                and tok == voice0.token.text):
+                            # do not insert duplicate reference records
+                            gs = gridSlice
+                            return gs
+
+                gs = GridSlice(self, ts, SliceType.ReferenceRecords, [1])
+                gs.addToken(tok, 0, 0, 0)
+                self.slices.insert(idx, gs)
+                return gs
+
+            if gridSlice.timestamp > ts:
+                # insert before this slice
+                gs = GridSlice(self, ts, SliceType.ReferenceRecords, [1])
+                gs.addToken(tok, 0, 0, 0)
+                self.slices.insert(idx, gs)
+                return gs
+
+        return None
+
 
     '''
     //////////////////////////////
@@ -586,17 +628,14 @@ class GridMeasure:
                     doFirstBarlineNow = True
 
                 if doFirstBarlineNow and not didFirstBarline:
-                    if t.TYPE_CHECKING:
-                        # assumption: we'll see the first barline well before we run into
-                        # something that will make us do it.
-                        assert isinstance(firstBarlineSlice, GridSlice)
-                    firstBarlineSlice.transferTokens(outFile, recip)
+                    if firstBarlineSlice is not None:
+                        firstBarlineSlice.transferTokens(outFile, recip)
                     didFirstBarline = True
                     # and the slice that made us do the first barline now...
                     gridSlice.transferTokens(outFile, recip)
                     continue
 
-                if gridSlice.isMeasureSlice and firstBarlineSlice is None:
+                if not didFirstBarline and gridSlice.isMeasureSlice and firstBarlineSlice is None:
                     firstBarlineSlice = gridSlice
                 else:
                     gridSlice.transferTokens(outFile, recip)
@@ -795,7 +834,7 @@ class GridMeasure:
     // GridMeasure::addDynamicsLayoutParameters --
     '''
     def addDynamicsLayoutParameters(self, associatedSlice: GridSlice,
-                                    partIndex: int, staffIndex: int,
+                                    partIndex: int,
                                     locomment: str) -> None:
         if len(self.slices) == 0:
             # something strange happened: expecting at least one item in measure.
@@ -822,9 +861,9 @@ class GridMeasure:
         prevIdx: int = associatedSliceIdx - 1
         prevSlice: GridSlice = self.slices[prevIdx]
         if prevSlice.isLocalLayoutSlice:
-            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
-            if prevStaff.dynamics is None:
-                prevStaff.dynamics = HumdrumToken(locomment)
+            prevPart: GridPart = prevSlice.parts[partIndex]
+            if prevPart.dynamics is None:
+                prevPart.dynamics = HumdrumToken(locomment)
                 return
 
         # if we get here, we couldn't use the previous slice, so we need to insert
@@ -841,8 +880,8 @@ class GridMeasure:
             newSlice.initializeBySlice(self.slices[-1])
             self.slices.append(newSlice)
 
-        newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
-        newStaff.dynamics = HumdrumToken(locomment)
+        newPart: GridPart = newSlice.parts[partIndex]
+        newPart.dynamics = HumdrumToken(locomment)
 
     '''
     //////////////////////////////
@@ -889,5 +928,25 @@ class GridMeasure:
 #             print(f'rightBarlineFermataStyle({staffIndex}): {output}')
 
 #         print(f'rightBarlineFermataStyle({staffIndex}): {output}')
+
+        return output
+
+    def measureStyle(self, staffIndex: int) -> MeasureStyle:
+        output: MeasureStyle = MeasureStyle.Regular
+
+        if 0 <= staffIndex < len(self.measureStylePerStaff):
+            output = self.measureStylePerStaff[staffIndex]
+
+        # print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
+
+        return output
+
+    def rightBarlineStyle(self, staffIndex: int) -> MeasureStyle:
+        output: MeasureStyle = MeasureStyle.Regular
+
+        if 0 <= staffIndex < len(self.measureStylePerStaff):
+            output = self.rightBarlineStylePerStaff[staffIndex]
+
+        # print(f'measureStyle({staffIndex}): {output}', file=sys.stderr)
 
         return output

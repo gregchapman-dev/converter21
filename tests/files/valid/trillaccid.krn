@@ -1,0 +1,38 @@
+**kern
+*part1
+*staff1
+*clefG2
+*k[]
+*M2/4
+=1
+!! Trill with no accidental (note above is D with no accidental)
+!LO:TX:b:t=whole
+4cT
+!! Trill with flat (note above is D flat)
+!LO:TX:b:t=half
+4ct
+=2
+!! Trill with sharp (note above is D sharp)
+!LO:TX:b:t=whole
+4c#T
+!! Trill with no accidental (note above is D with no accidental)
+!LO:TX:b:t=half
+4c#t
+=3
+*k[f#c#]
+!! Trill with double-sharp accidental (note above is F double-sharp)
+!LO:TX:b:t=whole
+4e#T
+!! Trill with natural accidental (note above is F natural)
+!LO:TX:b:t=half
+4et
+=4
+*k[b-e-]
+!! Trill with natural accidental (note above is B natural)
+!LO:TX:b:t=whole
+4aT
+!! Trill with double-flat accidental (note above is B double-flat)
+!LO:TX:b:t=half
+4a-t
+=
+*-

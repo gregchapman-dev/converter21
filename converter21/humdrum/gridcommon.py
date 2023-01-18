@@ -92,6 +92,7 @@ class SliceType(IntEnum):
 class MeasureVisualStyle(IntEnum):
     # this enum is sorted so that we can use max() to pick between
     # previous right barline and current left barline visual style
+    NoBarline = auto()
     Regular = auto()
     Double = auto()
     HeavyHeavy = auto()
@@ -99,6 +100,8 @@ class MeasureVisualStyle(IntEnum):
     Final = auto()      # In MusicXML, this is called 'light-heavy'
     Short = auto()
     Tick = auto()
+    Dotted = auto()
+    Dashed = auto()
     Heavy = auto()
     # some special ones only used with RepeatBoth
     HeavyLightHeavy = auto()
@@ -122,9 +125,12 @@ class MeasureStyle(Enum):
     Final = (MeasureVisualStyle.Final, MeasureType.NotRepeat)  # aka. 'light-heavy'
     Short = (MeasureVisualStyle.Short, MeasureType.NotRepeat)
     Tick = (MeasureVisualStyle.Tick, MeasureType.NotRepeat)
+    Dotted = (MeasureVisualStyle.Dotted, MeasureType.NotRepeat)
+    Dashed = (MeasureVisualStyle.Dashed, MeasureType.NotRepeat)
     Invisible = (MeasureVisualStyle.Invisible, MeasureType.NotRepeat)
     Regular = (MeasureVisualStyle.Regular, MeasureType.NotRepeat)
     Heavy = (MeasureVisualStyle.Heavy, MeasureType.NotRepeat)
+    NoBarline = (MeasureVisualStyle.NoBarline, MeasureType.NotRepeat)
 
     RepeatBackwardRegular = (MeasureVisualStyle.Regular, MeasureType.RepeatBackward)
     RepeatBackwardHeavy = (MeasureVisualStyle.Heavy, MeasureType.RepeatBackward)
