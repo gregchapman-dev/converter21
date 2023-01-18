@@ -1,13 +1,15 @@
-# -*- coding: utf-8 -*-
-# -----------------------------------------------------------------------------
-# Name:         mei/test_main.py
-# Purpose:      Tests for mei/base.py
+# ------------------------------------------------------------------------------
+# Name:          test_base.py
+# Purpose:       Tests for MEI parser
 #
-# Authors:      Christopher Antila
+# Authors:       Greg Chapman <gregc@mac.com>
+#                These tests are based on the tests by Christopher Antila in
+#                https://github.com/cuthbertLab/music21
+#                (music21 is Copyright 2006-2022 Michael Scott Asato Cuthbert)
 #
-# Copyright:    Copyright © 2014 Michael Scott Asato Cuthbert and the music21 Project
-# License:      BSD, see license.txt
-# -----------------------------------------------------------------------------
+# Copyright:     (c) 2021-2022 Greg Chapman
+# License:       MIT, see LICENSE
+# ------------------------------------------------------------------------------
 '''
 Tests for :mod:`converter21.mei.base`.
 '''

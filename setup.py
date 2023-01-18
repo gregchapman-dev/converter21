@@ -10,14 +10,14 @@
 
 import setuptools
 
-converter21version = '1.4.1'
+converter21version = '2.0.0'
 
 if __name__ == '__main__':
     setuptools.setup(
         name='converter21',
         version=converter21version,
 
-        description='A music21-extending score converter package, and command line tool (adds Humdrum writer, replaces Humdrum parser)',
+        description='A music21-extending score converter package and command line tool (replaces music21\'s Humdrum and MEI parser, and adds a Humdrum writer)',
         long_description=open('README.md').read(),
         long_description_content_type='text/markdown',
 
@@ -43,6 +43,7 @@ if __name__ == '__main__':
             'format',
             'formats',
             'humdrum',
+            'MEI'
             'writer',
             'parser',
             'reader',
@@ -53,10 +54,10 @@ if __name__ == '__main__':
 
         packages=setuptools.find_packages(),
 
-        python_requires='>=3.7',
+        python_requires='>=3.9',
 
         install_requires=[
-            'music21>=7.2',
+            'music21>=8.2',
         ],
 
         project_urls={

@@ -1,13 +1,15 @@
-# -*- coding: utf-8 -*-
-# -----------------------------------------------------------------------------
-# Name:         mei/base.py
-# Purpose:      Public interfaces for the MEI module
+# ------------------------------------------------------------------------------
+# Name:          base.py
+# Purpose:       MEI parser
 #
-# Authors:      Christopher Antila
+# Authors:       Greg Chapman <gregc@mac.com>
+#                The core of this code was based on the MEI parser (primarily written
+#                by Christopher Antila) in https://github.com/cuthbertLab/music21
+#                (music21 is Copyright 2006-2022 by Michael Scott Asato Cuthbert)
 #
-# Copyright:    Copyright © 2014 Michael Scott Asato Cuthbert and the music21 Project
-# License:      BSD, see license.txt
-# -----------------------------------------------------------------------------
+# Copyright:     (c) 2021-2022 Greg Chapman
+# License:       MIT, see LICENSE
+# ------------------------------------------------------------------------------
 '''
 These are the public interfaces for the MEI module by Christopher Antila
 
