@@ -701,7 +701,7 @@ class HumdrumFile(HumdrumFileContent):
                 ss: StaffStateVariables = self._staffStates[spStaffIndex]
                 ss.hasOttavas = True
                 if ss.m21Part is not None:
-                    if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
+                    if M21Utilities.m21SupportsSpannerFill():
                         sp.fillIntermediateSpannedElements(ss.m21Part)  # type: ignore
                     else:
                         # we have to use our own version of spanner fill
@@ -718,13 +718,11 @@ class HumdrumFile(HumdrumFileContent):
                         hasTransposingInstrument = True
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
-                    if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
-                        ss.m21Part.toWrittenPitch(
-                            inPlace=True,
-                            inheritAccidentalDisplay=True  # type: ignore
-                        )
+                    if M21Utilities.m21SupportsSpannerFill():
+                        ss.m21Part.toWrittenPitch(inPlace=True)
                     else:
-                        # minimize the problems introduced by non-inherited accidental display
+                        # minimize the problems introduced by a lost inherited accidental
+                        # display bug in music21 (that was fixed in the SpannerFill PR).
                         if hasTransposingInstrument:
                             ss.m21Part.toWrittenPitch(inPlace=True)
                         else:

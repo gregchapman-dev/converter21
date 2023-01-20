@@ -7528,7 +7528,7 @@ def scoreFromElement(
                 )
                 break
             partIdx: int = allPartNs.index(staffN)
-            if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
+            if M21Utilities.m21SupportsSpannerFill():
                 sp.fillIntermediateSpannedElements(thePartList[partIdx])  # type: ignore
             else:
                 # we use our own spanner fill routine, since music21 doesn't have one
