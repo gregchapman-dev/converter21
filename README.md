@@ -6,7 +6,7 @@ The Humdrum portion of this software is derived/translated from the C++ code in 
 The core of the MEI portion of this software was based on the MEI converter in [music21](https://github.com/cuthbertlab/music21), by Michael Scott Asato Cuthbert.
 
 ## Setup
-Depends on [music21](https://pypi.org/project/music21), which should also be configured (instructions [here](https://web.mit.edu/music21/doc/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://pypi.org/project/musicdiff), but converter21 itself does not.
+Depends on [music21](https://pypi.org/project/music21) v8.1, which should also be configured (instructions [here](https://web.mit.edu/music21/doc/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://pypi.org/project/musicdiff), but converter21 itself does not.
 
 ## Command line tool usage:
 ```

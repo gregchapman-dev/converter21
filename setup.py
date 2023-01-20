@@ -10,7 +10,7 @@
 
 import setuptools
 
-converter21version = '2.0.0'
+converter21version = '2.0.1'
 
 if __name__ == '__main__':
     setuptools.setup(
@@ -57,7 +57,7 @@ if __name__ == '__main__':
         python_requires='>=3.9',
 
         install_requires=[
-            'music21>=8.2',
+            'music21>=8.1',
         ],
 
         project_urls={
