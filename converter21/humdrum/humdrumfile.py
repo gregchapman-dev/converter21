@@ -689,7 +689,7 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processHangingTieStarts()
 
-        # Fill intermediate elements in spanners.  This needs to happen before any
+        # Fill intermediate elements in Ottavas.  This needs to happen before any
         # transposition because Ottavas must be filled to be transposed correctly.
         for sp in self.m21Score.spannerBundle:
             if not isinstance(sp, m21.spanner.Ottava):
@@ -702,10 +702,10 @@ class HumdrumFile(HumdrumFileContent):
                 ss.hasOttavas = True
                 if ss.m21Part is not None:
                     if M21Utilities.m21SupportsSpannerFill():
-                        sp.fillIntermediateSpannedElements(ss.m21Part)  # type: ignore
+                        sp.fill(ss.m21Part)  # type: ignore
                     else:
                         # we have to use our own version of spanner fill
-                        M21Utilities.fillIntermediateSpannedElements(sp, ss.m21Part)
+                        M21Utilities.fillOttava(sp, ss.m21Part)
 
         # Transpose any transposing instrument parts to "written pitch"
         # For performance, check the instruments/ottavas here, since stream.toWrittenPitch

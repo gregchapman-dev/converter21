@@ -7529,10 +7529,10 @@ def scoreFromElement(
                 break
             partIdx: int = allPartNs.index(staffN)
             if M21Utilities.m21SupportsSpannerFill():
-                sp.fillIntermediateSpannedElements(thePartList[partIdx])  # type: ignore
+                sp.fill(thePartList[partIdx])  # type: ignore
             else:
                 # we use our own spanner fill routine, since music21 doesn't have one
-                M21Utilities.fillIntermediateSpannedElements(sp, thePartList[partIdx])
+                M21Utilities.fillOttava(sp, thePartList[partIdx])
 
     # put spanners in the Score
     theScore.append(list(spannerBundle))

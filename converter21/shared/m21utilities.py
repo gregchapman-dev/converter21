@@ -324,7 +324,7 @@ class M21Utilities:
 
     # to be used if music21 doesn't support spanner fill.
     @staticmethod
-    def fillIntermediateSpannedElements(
+    def fillOttava(
         ottava: m21.spanner.Ottava,
         searchStream: m21.stream.Stream,
         *,
@@ -494,7 +494,7 @@ class M21Utilities:
         if M21Utilities._cachedM21SupportsSpannerFill is not None:
             return M21Utilities._cachedM21SupportsSpannerFill
 
-        if hasattr(m21.spanner.Spanner, 'fillIntermediateSpannedElements'):
+        if hasattr(m21.spanner.Spanner, 'fill'):
             M21Utilities._cachedM21SupportsSpannerFill = True
             return True
 
