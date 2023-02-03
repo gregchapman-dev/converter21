@@ -719,7 +719,7 @@ class HumdrumFile(HumdrumFileContent):
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
                     if M21Utilities.m21SupportsSpannerFill():
-                        ss.m21Part.toWrittenPitch(inPlace=True)
+                        ss.m21Part.toWrittenPitch(inPlace=True, preserveAccidentalDisplay=True)
                     else:
                         # minimize the problems introduced by a lost inherited accidental
                         # display bug in music21 (that was fixed in the SpannerFill PR).
