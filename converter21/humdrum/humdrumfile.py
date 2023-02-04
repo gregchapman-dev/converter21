@@ -4147,14 +4147,15 @@ class HumdrumFile(HumdrumFileContent):
                 iQuotient: int = int(quotient)
                 nextPowOfTwo = opFrac(self._nextLowerPowerOfTwo(iQuotient))
 
-            if Fraction(dotlessDur[i]).numerator == 3:
+            dotlessDurFraction: Fraction = Fraction(dotlessDur[i])
+            if (dotlessDurFraction.numerator == 3
+                    and Convert.isPowerOfTwo(dotlessDurFraction.denominator)):
                 # correction for duplets
                 nextPowOfTwo = opFrac(nextPowOfTwo / opFrac(2))
 
             tupletMultiplier[i] = opFrac(dotlessDur[i] / nextPowOfTwo)
 
             tupletMultiplierFraction: Fraction = Fraction(tupletMultiplier[i])
-            dotlessDurFraction: Fraction = Fraction(dotlessDur[i])
 
             numNotesActual[i] = tupletMultiplierFraction.denominator
             numNotesNormal[i] = tupletMultiplierFraction.numerator
