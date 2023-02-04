@@ -3620,8 +3620,10 @@ def durationFromAttributes(
     elem: Element,
     optionalDots: t.Optional[int] = None
 ) -> duration.Duration:
-    durFloat: float = _qlDurationFromAttr(elem.get('dur'))
+    durFloat: t.Optional[float] = None
     durGesFloat: t.Optional[float] = None
+    if elem.get('dur'):
+        durFloat = _qlDurationFromAttr(elem.get('dur'))
     if elem.get('dur.ges'):
         durGesFloat = _qlDurationFromAttr(elem.get('dur.ges'))
 
@@ -3635,6 +3637,10 @@ def durationFromAttributes(
     dotsGesStr: str = elem.get('dots.ges', '')
     if dotsGesStr:
         numDotsGes = int(dotsGesStr)
+
+    if durFloat is None:
+        durFloat = durGesFloat
+        durGesFloat = None
 
     visualDuration: duration.Duration = makeDuration(durFloat, numDots)
     if durGesFloat is not None or numDotsGes is not None:
