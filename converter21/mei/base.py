@@ -3641,6 +3641,9 @@ def durationFromAttributes(
     if durFloat is None:
         durFloat = durGesFloat
         durGesFloat = None
+    if durFloat is None:
+        # There's no @dur or @dur.ges, go with that weird default 1/1024th note
+        durFloat = _qlDurationFromAttr(None)
 
     visualDuration: duration.Duration = makeDuration(durFloat, numDots)
     if durGesFloat is not None or numDotsGes is not None:
