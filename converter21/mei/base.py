@@ -187,8 +187,9 @@ from uuid import uuid4
 
 # music21
 from music21.base import Music21Object
-from music21.common.types import OffsetQL
+from music21.common.enums import OrnamentDelay
 from music21.common.numberTools import opFrac
+from music21.common.types import OffsetQL
 from music21 import articulations
 from music21 import bar
 from music21 import beam
@@ -224,9 +225,9 @@ _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
-    # f'{MEI_NS}sb',        # system break
-    # f'{MEI_NS}lb',        # line break
-    # f'{MEI_NS}pb',        # page break
+    f'{MEI_NS}sb',        # system break
+    f'{MEI_NS}lb',        # line break
+    f'{MEI_NS}pb',        # page break
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
@@ -1297,10 +1298,6 @@ def _ppTurns(theConverter: MeiToM21Converter):
         delayed: str = eachTurn.get('delayed', '')
 
         if startId:
-            if delayed == 'true':
-                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<turn>', '@delayed="true"'))
-                environLocal.warn('@delayed will be ignored')
-
             # The turn info gets stashed on the note/chord referenced by startId
             accidUpper: str = eachTurn.get('accidupper', '')
             accidLower: str = eachTurn.get('accidlower', '')
@@ -1314,6 +1311,8 @@ def _ppTurns(theConverter: MeiToM21Converter):
                 c.m21Attr[startId]['m21TurnAccidUpper'] = accidUpper
             if accidLower:
                 c.m21Attr[startId]['m21TurnAccidLower'] = accidLower
+            if delayed:
+                c.m21Attr[startId]['m21TurnDelayed'] = delayed
 
             eachTurn.set('ignore_turn_in_turnFromElement', 'true')
 
@@ -2075,16 +2074,9 @@ def addTurn(
 
     accidUpper: str = elem.get('m21TurnAccidUpper', '')
     accidLower: str = elem.get('m21TurnAccidLower', '')
+    delayed: str = elem.get('m21TurnDelayed', '')
     form: str = elem.get('m21TurnForm', '')
     theType: str = elem.get('m21TurnType', '')
-    mei_accidupper: str = ''
-    mei_accidlower: str = ''
-
-    if accidUpper:
-        mei_accidupper = accidUpper  # type: ignore
-
-    if accidLower:
-        mei_accidlower = accidLower  # type: ignore
 
     if not form:
         if theType == 'slashed':
@@ -2092,15 +2084,26 @@ def addTurn(
         else:
             form = 'upper'  # default
 
-    if form == 'upper':
-        turn = expressions.Turn()
-    elif form == 'lower':
-        turn = expressions.InvertedTurn()
+    if M21Utilities.m21SupportsDelayedTurns():
+        delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
+        if delayed == 'true':
+            # this is not a timed delay, because we have @startid, not @tstamp
+            delay = OrnamentDelay.DEFAULT_DELAY
 
-    if mei_accidupper:
-        turn.mei_accidupper = mei_accidupper  # type: ignore
-    elif mei_accidlower:
-        turn.mei_accidlower = mei_accidlower  # type: ignore
+        if form == 'upper':
+            turn = expressions.Turn(delay=delay)
+        else:
+            turn = expressions.InvertedTurn(delay=delay)
+    else:
+        if form == 'upper':
+            turn = expressions.Turn()
+        elif form == 'lower':
+            turn = expressions.InvertedTurn()
+
+    if accidUpper:
+        turn.mei_accidupper = accidUpper  # type: ignore
+    elif accidLower:
+        turn.mei_accidlower = accidLower  # type: ignore
 
     turn = t.cast(
         expressions.Turn,
@@ -5670,11 +5673,19 @@ def _addTimestampedExpressions(
                 # We didn't find any place for the expression at the offset in this staff.
                 # But if it is a delayed turn, then we should use the note with the closest
                 # offset LESS than the expression's offset.  Which we have stashed off in
-                # "nearestPrevNoteInStaff".
+                # "nearestPrevNoteInStaff".  offsetFromNearestPrevNote is the turn's delay.
                 if nearestPrevNoteInStaff is not None:
                     if t.TYPE_CHECKING:
                         # Since nearestPrevNoteInStaff is set, so is staffForNearestNote
+                        # and offsetFromNearestPrevNote
                         assert staffForNearestNote is not None
+                        assert offsetFromNearestPrevNote is not None
+
+                    if isDelayedTurn and M21Utilities.m21SupportsDelayedTurns():
+                        if t.TYPE_CHECKING:
+                            assert isinstance(expression, expressions.Turn)
+                        expression.delay = offsetFromNearestPrevNote
+
                     expression = updateExpression(
                         expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
                     )
@@ -6004,12 +6015,7 @@ def trillFromElement(
     place: str = elem.get('place', 'place_unspecified')
     offset: t.Optional[OffsetQL] = None
 
-    if elem.get('ignore_trill_in_trillFromElement') != 'true':
-        # this happens if we need a trill, but are missing @startid
-        if not tstamp:
-            environLocal.warn('missing @tstamp/@startid in <trill> element')
-            return [('', (-1., None, None), None)]
-
+    if tstamp and elem.get('ignore_trill_in_trillFromElement') != 'true':
         accidupper: str = elem.get('accidupper', '')
         accidlower: str = elem.get('accidlower', '')
 
@@ -6196,10 +6202,6 @@ def turnFromElement(
             environLocal.warn('missing @tstamp/@startid in <turn> element')
             return [('', (-1., None, None), None)]
 
-        if delayed == 'true':
-            environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<turn>', '@delayed="true"'))
-            environLocal.warn('@delayed will be ignored')
-
         accidupper: str = elem.get('accidupper', '')
         accidlower: str = elem.get('accidlower', '')
 
@@ -6214,10 +6216,25 @@ def turnFromElement(
                 form = 'upper'  # default
 
         turn: expressions.Turn
-        if form == 'upper':
-            turn = expressions.Turn()
+        if M21Utilities.m21SupportsDelayedTurns():
+            delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
+            if delayed == 'true':
+                # we'll mark it as "default" delayed for now.
+                # Once we have a note for it, we'll figure out
+                # what the delay is (turn.offset - note.offset)
+                # and recreate a turn/inverted turn with that
+                # exact delay at that point.
+                delay = OrnamentDelay.DEFAULT_DELAY
+
+            if form == 'upper':
+                turn = expressions.Turn(delay=delay)
+            else:
+                turn = expressions.InvertedTurn(delay=delay)
         else:
-            turn = expressions.InvertedTurn()
+            if form == 'upper':
+                turn = expressions.Turn()
+            else:
+                turn = expressions.InvertedTurn()
 
         if place and place != 'place_unspecified':
             turn.placement = place
@@ -6231,9 +6248,6 @@ def turnFromElement(
             turn.mei_accidlower = accidlower  # type: ignore
 
         if delayed == 'true':
-            # we said we would ignore @delayed, and we do, but we have a little
-            # extra searching to do to find the right note to put delayed turns
-            # on, and we can't ignore _that_.
             turn.mei_delayed = 'true'  # type: ignore
 
         offset = _tstampToOffset(tstamp, activeMeter)

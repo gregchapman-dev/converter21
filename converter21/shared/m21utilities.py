@@ -501,7 +501,18 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsSpannerFill = False
         return False
 
+    _cachedM21SupportsDelayedTurns: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsDelayedTurns() -> bool:
+        if M21Utilities._cachedM21SupportsDelayedTurns is not None:
+            return M21Utilities._cachedM21SupportsDelayedTurns
 
+        if hasattr(m21.expressions.Turn, 'isDelayed'):
+            M21Utilities._cachedM21SupportsDelayedTurns = True
+            return True
+
+        M21Utilities._cachedM21SupportsDelayedTurns = False
+        return False
 
 
 class M21StaffGroupTree:

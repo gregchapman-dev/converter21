@@ -22,6 +22,7 @@ from pathlib import Path
 
 import music21 as m21
 from music21.common import opFrac
+from music21.common.enums import OrnamentDelay
 
 # from converter21.humdrum import HumdrumSyntaxError
 from converter21.humdrum import HumdrumInternalError
@@ -6485,10 +6486,20 @@ class HumdrumFile(HumdrumFileContent):
             isInverted = True
 
         turn: t.Union[m21.expressions.Turn, m21.expressions.InvertedTurn]
-        if isInverted:
-            turn = m21.expressions.InvertedTurn()
+        if M21Utilities.m21SupportsDelayedTurns():
+            delay: OrnamentDelay = OrnamentDelay.NO_DELAY
+            if isDelayed:
+                delay = OrnamentDelay.DEFAULT_DELAY
+
+            if isInverted:
+                turn = m21.expressions.InvertedTurn(delay=delay)
+            else:
+                turn = m21.expressions.Turn(delay=delay)
         else:
-            turn = m21.expressions.Turn()
+            if isInverted:
+                turn = m21.expressions.InvertedTurn()
+            else:
+                turn = m21.expressions.Turn()
 
         # our better default
         turn.placement = None  # type: ignore
@@ -6504,7 +6515,6 @@ class HumdrumFile(HumdrumFileContent):
 
         # TODO: handle turn accidentals
 
-        # LATER: music21 doesn't explicitly handle delayed turns
         gnote.expressions.append(turn)
 
 
