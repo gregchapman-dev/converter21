@@ -22,6 +22,8 @@ from pathlib import Path
 
 import music21 as m21
 from music21.common import opFrac
+if hasattr(m21.common.enums, 'OrnamentDelay'):
+    from music21.common.enums import OrnamentDelay  # type: ignore
 
 # from converter21.humdrum import HumdrumSyntaxError
 from converter21.humdrum import HumdrumInternalError
@@ -689,7 +691,7 @@ class HumdrumFile(HumdrumFileContent):
 
         self._processHangingTieStarts()
 
-        # Fill intermediate elements in spanners.  This needs to happen before any
+        # Fill intermediate elements in Ottavas.  This needs to happen before any
         # transposition because Ottavas must be filled to be transposed correctly.
         for sp in self.m21Score.spannerBundle:
             if not isinstance(sp, m21.spanner.Ottava):
@@ -701,11 +703,11 @@ class HumdrumFile(HumdrumFileContent):
                 ss: StaffStateVariables = self._staffStates[spStaffIndex]
                 ss.hasOttavas = True
                 if ss.m21Part is not None:
-                    if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
-                        sp.fillIntermediateSpannedElements(ss.m21Part)  # type: ignore
+                    if M21Utilities.m21SupportsSpannerFill():
+                        sp.fill(ss.m21Part)  # type: ignore
                     else:
                         # we have to use our own version of spanner fill
-                        M21Utilities.fillIntermediateSpannedElements(sp, ss.m21Part)
+                        M21Utilities.fillOttava(sp, ss.m21Part)
 
         # Transpose any transposing instrument parts to "written pitch"
         # For performance, check the instruments/ottavas here, since stream.toWrittenPitch
@@ -718,13 +720,14 @@ class HumdrumFile(HumdrumFileContent):
                         hasTransposingInstrument = True
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
-                    if M21Utilities.m21SupportsInheritAccidentalDisplayAndSpannerFill():
-                        ss.m21Part.toWrittenPitch(
+                    if M21Utilities.m21SupportsSpannerFill():
+                        ss.m21Part.toWrittenPitch(  # type: ignore
                             inPlace=True,
-                            inheritAccidentalDisplay=True  # type: ignore
+                            preserveAccidentalDisplay=True
                         )
                     else:
-                        # minimize the problems introduced by non-inherited accidental display
+                        # minimize the problems introduced by a lost inherited accidental
+                        # display bug in music21 (that was fixed in the SpannerFill PR).
                         if hasTransposingInstrument:
                             ss.m21Part.toWrittenPitch(inPlace=True)
                         else:
@@ -4149,14 +4152,15 @@ class HumdrumFile(HumdrumFileContent):
                 iQuotient: int = int(quotient)
                 nextPowOfTwo = opFrac(self._nextLowerPowerOfTwo(iQuotient))
 
-            if Fraction(dotlessDur[i]).numerator == 3:
+            dotlessDurFraction: Fraction = Fraction(dotlessDur[i])
+            if (dotlessDurFraction.numerator == 3
+                    and Convert.isPowerOfTwo(dotlessDurFraction.denominator)):
                 # correction for duplets
                 nextPowOfTwo = opFrac(nextPowOfTwo / opFrac(2))
 
             tupletMultiplier[i] = opFrac(dotlessDur[i] / nextPowOfTwo)
 
             tupletMultiplierFraction: Fraction = Fraction(tupletMultiplier[i])
-            dotlessDurFraction: Fraction = Fraction(dotlessDur[i])
 
             numNotesActual[i] = tupletMultiplierFraction.denominator
             numNotesNormal[i] = tupletMultiplierFraction.numerator
@@ -6486,10 +6490,24 @@ class HumdrumFile(HumdrumFileContent):
             isInverted = True
 
         turn: t.Union[m21.expressions.Turn, m21.expressions.InvertedTurn]
-        if isInverted:
-            turn = m21.expressions.InvertedTurn()
+        if M21Utilities.m21SupportsDelayedTurns():
+            delay: OrnamentDelay = OrnamentDelay.NO_DELAY
+            if isDelayed:
+                delay = OrnamentDelay.DEFAULT_DELAY
+
+            if isInverted:
+                turn = m21.expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
+                    delay=delay  # type: ignore
+                )
+            else:
+                turn = m21.expressions.Turn(  # pylint: disable=unexpected-keyword-arg
+                    delay=delay  # type: ignore
+                )
         else:
-            turn = m21.expressions.Turn()
+            if isInverted:
+                turn = m21.expressions.InvertedTurn()
+            else:
+                turn = m21.expressions.Turn()
 
         # our better default
         turn.placement = None  # type: ignore
@@ -6505,7 +6523,6 @@ class HumdrumFile(HumdrumFileContent):
 
         # TODO: handle turn accidentals
 
-        # LATER: music21 doesn't explicitly handle delayed turns
         gnote.expressions.append(turn)
 
 

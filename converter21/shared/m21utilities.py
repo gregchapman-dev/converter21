@@ -324,7 +324,7 @@ class M21Utilities:
 
     # to be used if music21 doesn't support spanner fill.
     @staticmethod
-    def fillIntermediateSpannedElements(
+    def fillOttava(
         ottava: m21.spanner.Ottava,
         searchStream: m21.stream.Stream,
         *,
@@ -488,22 +488,31 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsSpannerAnchor = False
         return False
 
-    # inheritAccidentalDisplay and fillIntermediateSpannedElements started being
-    # supported in music21 at the same time.
-    _cachedM21SupportsInheritAccidentalDisplayAndSpannerFill: t.Optional[bool] = None
+    _cachedM21SupportsSpannerFill: t.Optional[bool] = None
     @staticmethod
-    def m21SupportsInheritAccidentalDisplayAndSpannerFill() -> bool:
-        if M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill is not None:
-            return M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill
+    def m21SupportsSpannerFill() -> bool:
+        if M21Utilities._cachedM21SupportsSpannerFill is not None:
+            return M21Utilities._cachedM21SupportsSpannerFill
 
-        if hasattr(m21.spanner.Spanner, 'fillIntermediateSpannedElements'):
-            M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill = True
+        if hasattr(m21.spanner.Spanner, 'fill'):
+            M21Utilities._cachedM21SupportsSpannerFill = True
             return True
 
-        M21Utilities._cachedM21SupportsInheritAccidentalDisplayAndSpannerFill = False
+        M21Utilities._cachedM21SupportsSpannerFill = False
         return False
 
+    _cachedM21SupportsDelayedTurns: t.Optional[bool] = None
+    @staticmethod
+    def m21SupportsDelayedTurns() -> bool:
+        if M21Utilities._cachedM21SupportsDelayedTurns is not None:
+            return M21Utilities._cachedM21SupportsDelayedTurns
 
+        if hasattr(m21.expressions.Turn, 'isDelayed'):
+            M21Utilities._cachedM21SupportsDelayedTurns = True
+            return True
+
+        M21Utilities._cachedM21SupportsDelayedTurns = False
+        return False
 
 
 class M21StaffGroupTree:
