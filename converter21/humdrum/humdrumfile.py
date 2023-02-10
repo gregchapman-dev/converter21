@@ -22,7 +22,8 @@ from pathlib import Path
 
 import music21 as m21
 from music21.common import opFrac
-from music21.common.enums import OrnamentDelay
+if hasattr(m21.common.enums, 'OrnamentDelay'):
+    from music21.common.enums import OrnamentDelay
 
 # from converter21.humdrum import HumdrumSyntaxError
 from converter21.humdrum import HumdrumInternalError

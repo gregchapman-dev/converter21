@@ -186,8 +186,10 @@ from fractions import Fraction  # for typing
 from uuid import uuid4
 
 # music21
+import music21 as m21
 from music21.base import Music21Object
-from music21.common.enums import OrnamentDelay
+if hasattr(m21.common.enums, 'OrnamentDelay'):
+    from music21.common.enums import OrnamentDelay
 from music21.common.numberTools import opFrac
 from music21.common.types import OffsetQL
 from music21 import articulations
