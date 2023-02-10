@@ -23,7 +23,7 @@ from pathlib import Path
 import music21 as m21
 from music21.common import opFrac
 if hasattr(m21.common.enums, 'OrnamentDelay'):
-    from music21.common.enums import OrnamentDelay
+    from music21.common.enums import OrnamentDelay  # type: ignore
 
 # from converter21.humdrum import HumdrumSyntaxError
 from converter21.humdrum import HumdrumInternalError
@@ -721,7 +721,10 @@ class HumdrumFile(HumdrumFileContent):
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
                     if M21Utilities.m21SupportsSpannerFill():
-                        ss.m21Part.toWrittenPitch(inPlace=True, preserveAccidentalDisplay=True)
+                        ss.m21Part.toWrittenPitch(  # type: ignore
+                            inPlace=True,
+                            preserveAccidentalDisplay=True
+                        )
                     else:
                         # minimize the problems introduced by a lost inherited accidental
                         # display bug in music21 (that was fixed in the SpannerFill PR).
@@ -6493,9 +6496,13 @@ class HumdrumFile(HumdrumFileContent):
                 delay = OrnamentDelay.DEFAULT_DELAY
 
             if isInverted:
-                turn = m21.expressions.InvertedTurn(delay=delay)
+                turn = m21.expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
+                    delay=delay  # type: ignore
+                )
             else:
-                turn = m21.expressions.Turn(delay=delay)
+                turn = m21.expressions.Turn(  # pylint: disable=unexpected-keyword-arg
+                    delay=delay  # type: ignore
+                )
         else:
             if isInverted:
                 turn = m21.expressions.InvertedTurn()

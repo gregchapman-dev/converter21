@@ -189,7 +189,7 @@ from uuid import uuid4
 import music21 as m21
 from music21.base import Music21Object
 if hasattr(m21.common.enums, 'OrnamentDelay'):
-    from music21.common.enums import OrnamentDelay
+    from music21.common.enums import OrnamentDelay  # type: ignore
 from music21.common.numberTools import opFrac
 from music21.common.types import OffsetQL
 from music21 import articulations
@@ -2093,9 +2093,13 @@ def addTurn(
             delay = OrnamentDelay.DEFAULT_DELAY
 
         if form == 'upper':
-            turn = expressions.Turn(delay=delay)
+            turn = expressions.Turn(  # pylint: disable=unexpected-keyword-arg
+                delay=delay  # type: ignore
+            )
         else:
-            turn = expressions.InvertedTurn(delay=delay)
+            turn = expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
+                delay=delay  # type: ignore
+            )
     else:
         if form == 'upper':
             turn = expressions.Turn()
@@ -5686,7 +5690,7 @@ def _addTimestampedExpressions(
                     if isDelayedTurn and M21Utilities.m21SupportsDelayedTurns():
                         if t.TYPE_CHECKING:
                             assert isinstance(expression, expressions.Turn)
-                        expression.delay = offsetFromNearestPrevNote
+                        expression.delay = offsetFromNearestPrevNote  # type: ignore
 
                     expression = updateExpression(
                         expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
@@ -6229,9 +6233,13 @@ def turnFromElement(
                 delay = OrnamentDelay.DEFAULT_DELAY
 
             if form == 'upper':
-                turn = expressions.Turn(delay=delay)
+                turn = expressions.Turn(  # pylint: disable=unexpected-keyword-arg
+                    delay=delay  # type: ignore
+                )
             else:
-                turn = expressions.InvertedTurn(delay=delay)
+                turn = expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
+                    delay=delay  # type: ignore
+                )
         else:
             if form == 'upper':
                 turn = expressions.Turn()
@@ -7830,5 +7838,4 @@ _DOC_ORDER = [
 ]
 
 if __name__ == '__main__':
-    import music21
-    music21.mainTest()
+    m21.mainTest()
