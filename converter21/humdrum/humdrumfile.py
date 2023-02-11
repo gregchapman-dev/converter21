@@ -1201,7 +1201,7 @@ class HumdrumFile(HumdrumFileContent):
         # set up self._m21BreakAtStartOfNextMeasure for the next measure
         self._checkForFormalBreak(endLineIdx)
 
-            # LATER: mensural support
+#             LATER: mensural support
 #             if self._oclefs or self._omets or self._okeys:
 #                 self._storeOriginalClefMensurationKeyApp()
 

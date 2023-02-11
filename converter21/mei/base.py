@@ -4436,7 +4436,7 @@ def pageBreakFromElement(
     if nStr:
         try:
             pageNumber = int(nStr)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass
 
     pageLayout: m21.layout.PageLayout = m21.layout.PageLayout(isNew=True, pageNumber=pageNumber)
@@ -5456,7 +5456,7 @@ def staffFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[t.Union[Music21Object, stream.Voice]]:
+) -> t.List[Music21Object]:
     '''
     <staff> A group of equidistant horizontal lines on which notes are placed in order to
     represent pitch or a grouping element for individual 'strands' of notes, rests, etc. that may
@@ -5509,7 +5509,7 @@ def staffFromElement(
     ] = {
     }
 
-    nextBreak: t.Optional[t.Union[m21.layout.PageLayout, m21.layout.SystemLayout]] = None
+    nextBreak: t.Optional[Music21Object] = None
 
     staffNStr: str = otherInfo.get('staffNumberForNotes', '')
     if staffNStr:
@@ -5527,7 +5527,7 @@ def staffFromElement(
             # at the start of the measure in the topmost Part.
             nextBreak = otherInfo.pop('nextBreak', None)
 
-    layers: t.List[stream.Voice] = []
+    layers: t.List[Music21Object] = []
 
     # track the @n values given to layerFromElement()
     currentNValue: str = '1'
@@ -6919,7 +6919,7 @@ def measureFromElement(
 
             otherInfo['staffNumberForNotes'] = nStr
             measureList = staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo)
-            staves[nStr] = stream.Measure(number=measureNum)
+            meas: stream.Measure = stream.Measure(number=measureNum)
 
             # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
             # if it starts with obj, Measure() will get confused and append everything,
@@ -6929,7 +6929,9 @@ def measureFromElement(
             # need to return object offsets with each object, so we can insert them
             # appropriately.
             for measureObj in measureList:
-                staves[nStr].insert(0, measureObj)
+                meas.insert(0, measureObj)
+
+            staves[nStr] = meas
 
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
