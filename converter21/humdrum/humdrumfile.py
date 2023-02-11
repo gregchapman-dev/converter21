@@ -1039,8 +1039,6 @@ class HumdrumFile(HumdrumFileContent):
 
         # self._addFTremSlurs() This appears to do nothing in iohumdrum.cpp
 
-        self._checkForFormalBreak(endIdx)
-
         return endIdx
 
     def _repositionStartIndex(self, startIdx: int) -> int:
@@ -1200,6 +1198,8 @@ class HumdrumFile(HumdrumFileContent):
             # Q: along with notes and rests?
             self._addKeyTimeChangesToSystemMeasures(measureKey)
 
+        # set up self._m21BreakAtStartOfNextMeasure for the next measure
+        self._checkForFormalBreak(endLineIdx)
 
             # LATER: mensural support
 #             if self._oclefs or self._omets or self._okeys:
@@ -9551,12 +9551,12 @@ class HumdrumFile(HumdrumFileContent):
             assert isinstance(token, HumdrumToken)
 
         group: str = token.layoutParameter('LB', 'g')
-        if group == 'z':
+        if group and not group.startswith('original'):
             self._m21BreakAtStartOfNextMeasure = m21.layout.SystemLayout(isNew=True)
             return
 
         group = token.layoutParameter('PB', 'g')
-        if group == 'z':
+        if group and not group.startswith('original'):
             self._m21BreakAtStartOfNextMeasure = m21.layout.PageLayout(isNew=True)
             return
 

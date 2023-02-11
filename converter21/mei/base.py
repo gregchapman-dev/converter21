@@ -227,9 +227,6 @@ _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
-    f'{MEI_NS}sb',        # system break
-    f'{MEI_NS}lb',        # line break
-    f'{MEI_NS}pb',        # page break
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
@@ -4421,6 +4418,55 @@ def clefFromElement(
     return theClef
 
 
+def pageBreakFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, t.Any]
+) -> t.Optional[m21.layout.PageLayout]:
+    pbType: str = elem.get('type', '')
+    if pbType.startswith('original'):  # startswith because sometimes there are '\t*'s after
+        # ignore any original page breaks (like our Humdrum parser does)
+        return None
+
+    # Some day music21 will support non-numeric page numbers (e.g. 'iv' or 'p17-3').
+    # In the meantime, we drop them on the floor.
+    pageNumber: t.Optional[int] = None
+    nStr: str = elem.get('n', '')
+    if nStr:
+        try:
+            pageNumber = int(nStr)
+        except Exception:
+            pass
+
+    pageLayout: m21.layout.PageLayout = m21.layout.PageLayout(isNew=True, pageNumber=pageNumber)
+
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        pageLayout.id = xmlId
+
+    return pageLayout
+
+
+def systemBreakFromElement(
+    elem: Element,
+    activeMeter: t.Optional[meter.TimeSignature],
+    spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
+    otherInfo: t.Dict[str, t.Any]
+) -> t.Optional[m21.layout.SystemLayout]:
+    sbType: str = elem.get('type', '')
+    if sbType.startswith('original'):  # startswith because sometimes there are '\t*'s after
+        # ignore any 'original' system breaks (like our Humdrum parser does)
+        return None
+
+    systemLayout: m21.layout.SystemLayout = m21.layout.SystemLayout(isNew=True)
+    xmlId: t.Optional[str] = elem.get(_XMLID)
+    if xmlId is not None:
+        systemLayout.id = xmlId
+
+    return systemLayout
+
+
 def keySigFromElementInStaffDef(
     elem: Element,
     activeMeter: t.Optional[meter.TimeSignature],
@@ -5410,7 +5456,7 @@ def staffFromElement(
     activeMeter: t.Optional[meter.TimeSignature],
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
-) -> t.List[stream.Voice]:
+) -> t.List[t.Union[Music21Object, stream.Voice]]:
     '''
     <staff> A group of equidistant horizontal lines on which notes are placed in order to
     represent pitch or a grouping element for individual 'strands' of notes, rests, etc. that may
@@ -5463,16 +5509,23 @@ def staffFromElement(
     ] = {
     }
 
-    # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
-    # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
-    # accidentals are seen in this layer.
+    nextBreak: t.Optional[t.Union[m21.layout.PageLayout, m21.layout.SystemLayout]] = None
+
     staffNStr: str = otherInfo.get('staffNumberForNotes', '')
     if staffNStr:
+        # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
+        # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
+        # accidentals are seen in this layer.
         currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
         currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
             currKeyPerStaff.get(staffNStr, None)
         )
         updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
+
+        if staffNStr == otherInfo.get('topPartN'):
+            # this is the top Part; in music21 page breaks/system breaks go
+            # at the start of the measure in the topmost Part.
+            nextBreak = otherInfo.pop('nextBreak', None)
 
     layers: t.List[stream.Voice] = []
 
@@ -5493,6 +5546,10 @@ def staffFromElement(
             )
         elif eachTag.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
+
+    if nextBreak is not None:
+        # return the page/system break as the first element of the list
+        return [nextBreak] + layers
 
     return layers
 
@@ -6861,10 +6918,19 @@ def measureFromElement(
                 raise MeiElementError(_STAFF_MUST_HAVE_N)
 
             otherInfo['staffNumberForNotes'] = nStr
-            staves[nStr] = stream.Measure(
-                staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo),
-                number=measureNum
-            )
+            measureList = staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo)
+            staves[nStr] = stream.Measure(number=measureNum)
+
+            # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
+            # if it starts with obj, Measure() will get confused and append everything,
+            # including Voices, and that will be all wrong.  This by-hand approach
+            # (insert(0) everything) will work until such time as we generate top-level
+            # objects in the measure that are not at offset 0, and at that point we will
+            # need to return object offsets with each object, so we can insert them
+            # appropriately.
+            for measureObj in measureList:
+                staves[nStr].insert(0, measureObj)
+
             thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
             if maxBarDuration is None or maxBarDuration < thisBarDuration:
                 maxBarDuration = thisBarDuration
@@ -7181,6 +7247,8 @@ def sectionScoreCore(
     measureTag: str = f'{MEI_NS}measure'
     scoreDefTag: str = f'{MEI_NS}scoreDef'
     staffDefTag: str = f'{MEI_NS}staffDef'
+    pbTag: str = f'{MEI_NS}pb'
+    sbTag: str = f'{MEI_NS}sb'
 
     # hold the music21.stream.Part that we're building
     parsed: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
@@ -7195,12 +7263,23 @@ def sectionScoreCore(
         inNextThing.update(pendingInNextThing)
 
     topPartN: str = otherInfo.get('topPartN', '')
-    if topPartN == '' and allPartNs:
-        topPartN = allPartNs[0]
+    if not topPartN:
+        raise MeiInternalError('no topPartN seen')
+
+    # we ignore any <pb>/<sb> elements before the first <measure> in the document
+    # This is because Verovio's Humdrum -> MEI conversion likes to put one in that
+    # wasn't in the Humdrum doc, leaving the first page blank.
+    # Here's the verovio/src/iohumdrum.cpp comment:
+    #   // An initial page break is required in order for the system
+    #   // breaks encoded in the file to be activated, so adding a
+    #   // dummy page break here:
+
+    haveSeenMeasure: bool = False
 
     for eachElem in elem.iterfind('*'):
         # only process <measure> elements if this is a <section> or <ending>
         if measureTag == eachElem.tag and elem.tag in (sectionTag, endingTag):
+            haveSeenMeasure = True
             backupMeasureNum += 1
 
             # Make a new measureInfo to pass in for each measure.
@@ -7222,6 +7301,11 @@ def sectionScoreCore(
                 otherInfo['pendingSpannerEnds'] = pendingSpannerEnds
             else:
                 otherInfo.pop('pendingSpannerEnds', None)
+
+            # Also, we don't want to re-introduce info['nextBreak'] if measureFromElement
+            # consumed it.
+            if measureInfo.get('nextBreak', None) is None:
+                otherInfo.pop('nextBreak', None)
 
             # process and append each part's stuff to the staff
             for eachN in allPartNs:
@@ -7389,6 +7473,30 @@ def sectionScoreCore(
                     # we know eachList is not a list of lists, it's just a list or an object,
                     # so disable mypy checking the type.
                     parsed[eachN].append(eachList)  # type: ignore
+
+        elif eachElem.tag == pbTag:
+            if haveSeenMeasure:
+                pageBreak: t.Optional[m21.layout.PageLayout] = pageBreakFromElement(
+                    eachElem,
+                    activeMeter,
+                    spannerBundle,
+                    otherInfo
+                )
+                if pageBreak is not None:
+                    otherInfo['nextBreak'] = pageBreak
+
+        elif eachElem.tag == sbTag:
+            if haveSeenMeasure:
+                systemBreak: t.Optional[m21.layout.SystemLayout] = systemBreakFromElement(
+                    eachElem,
+                    activeMeter,
+                    spannerBundle,
+                    otherInfo
+                )
+                # if we see both breaks, ignore the system break and use the page break
+                if systemBreak is not None:
+                    if not isinstance(otherInfo.get('nextBreak'), m21.layout.PageLayout):
+                        otherInfo['nextBreak'] = systemBreak
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
