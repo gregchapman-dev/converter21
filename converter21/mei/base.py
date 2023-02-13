@@ -170,9 +170,7 @@ the future, but they are a lower priority because music21 is not primarily a lay
 tool.
 
 * <multiRest>: a multi-measure rest (these will be "converted" to single-measure rests)
-* <pb>: a page break
 * <lb>: a line break
-* <sb>: a system break
 
 '''
 import typing as t
@@ -228,12 +226,19 @@ MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
     f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
+    f'{MEI_NS}pedal',       # pedal marks are skipped for now
+    f'{MEI_NS}harm',        # harm (chord symbols) are skipped for now
+    f'{MEI_NS}expansion',   # expansions are intentionally skipped
+    f'{MEI_NS}bracketSpan', # bracketSpans (phrases, ligatures, ...) are intentionally skipped
+    f'{MEI_NS}mensur',      # mensur is intentionally skipped, we use the invis <meterSig> instead
     f'{MEI_NS}slur',        # slurs; handled in convertFromString()
     f'{MEI_NS}tie',         # ties; handled in convertFromString()
     f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
     f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
     f'{MEI_NS}verse',       # lyrics; handled separately by noteFromElement()
     f'{MEI_NS}instrDef',    # instrument; handled separately by staffDefFromElement()
+    f'{MEI_NS}label',       # instrument; handled separately by staffDefFromElement()
+    f'{MEI_NS}labelAbbr',   # instrument; handled separately by staffDefFromElement()
     f'{MEI_NS}measure',     # measure; handled separately by {score,section}FromElement()
 )
 
@@ -7500,6 +7505,14 @@ def sectionScoreCore(
                     if not isinstance(otherInfo.get('nextBreak'), m21.layout.PageLayout):
                         otherInfo['nextBreak'] = systemBreak
 
+        elif eachElem.tag == f'{MEI_NS}choice':
+            # ignore <choice> in <section> silently if contents are:
+            # <orig> <expansion/> </orig> <reg> <expansion type="norep"/> </reg>
+            # because there isn't anything interesting there, and verovio's humdrum -> MEI
+            # conversion puts this in <section> all the time.
+            if not _isExpansionChoiceRepVsNoRep(eachElem):
+                environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
+
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
             environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
@@ -7509,6 +7522,44 @@ def sectionScoreCore(
     otherInfo['pending inNextThing'] = inNextThing
 
     return parsed, activeMeter, nextMeasureLeft, backupMeasureNum
+
+
+def _isExpansionChoiceRepVsNoRep(elem: Element) -> bool:
+    if elem.tag != f'{MEI_NS}choice':
+        return False
+
+    foundRep: bool = False
+    foundNoRep: bool = False
+    choices: t.List[Element] = list(elem.iterfind('*'))
+    if len(choices) != 2:
+        return False
+
+    for choice in choices:
+        if choice.tag not in (f'{MEI_NS}orig', f'{MEI_NS}reg'):
+            return False
+        items: t.List[Element] = list(choice.iterfind('*'))
+        if len(items) != 1:
+            return False
+        if items[0].tag != f'{MEI_NS}expansion':
+            return False
+
+        typeStr: str = items[0].get('type', '')
+        if typeStr not in ('', 'norep'):
+            return False
+
+        if typeStr == 'norep':
+            if foundNoRep:
+                return False
+            foundNoRep = True
+        elif typeStr == '':
+            if foundRep:
+                return False
+            foundRep = True
+
+    if not foundRep or not foundNoRep:
+        return False
+
+    return True
 
 
 def sectionFromElement(
