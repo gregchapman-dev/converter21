@@ -7507,10 +7507,10 @@ def sectionScoreCore(
 
         elif eachElem.tag == f'{MEI_NS}choice':
             # ignore <choice> in <section> silently if contents are:
-            # <orig> <expansion/> </orig> <reg> <expansion type="norep"/> </reg>
+            # <orig> <expansion/> </orig> <reg> <expansion/> </reg>...
             # because there isn't anything interesting there, and verovio's humdrum -> MEI
             # conversion puts this in <section> all the time.
-            if not _isExpansionChoiceRepVsNoRep(eachElem):
+            if not _isExpansionChoice(eachElem):
                 environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
         elif eachElem.tag not in _IGNORE_UNPROCESSED:
@@ -7524,17 +7524,11 @@ def sectionScoreCore(
     return parsed, activeMeter, nextMeasureLeft, backupMeasureNum
 
 
-def _isExpansionChoiceRepVsNoRep(elem: Element) -> bool:
+def _isExpansionChoice(elem: Element) -> bool:
     if elem.tag != f'{MEI_NS}choice':
         return False
 
-    foundRep: bool = False
-    foundNoRep: bool = False
-    choices: t.List[Element] = list(elem.iterfind('*'))
-    if len(choices) != 2:
-        return False
-
-    for choice in choices:
+    for choice in elem.iterfind('*'):
         if choice.tag not in (f'{MEI_NS}orig', f'{MEI_NS}reg'):
             return False
         items: t.List[Element] = list(choice.iterfind('*'))
@@ -7542,22 +7536,6 @@ def _isExpansionChoiceRepVsNoRep(elem: Element) -> bool:
             return False
         if items[0].tag != f'{MEI_NS}expansion':
             return False
-
-        typeStr: str = items[0].get('type', '')
-        if typeStr not in ('', 'norep'):
-            return False
-
-        if typeStr == 'norep':
-            if foundNoRep:
-                return False
-            foundNoRep = True
-        elif typeStr == '':
-            if foundRep:
-                return False
-            foundRep = True
-
-    if not foundRep or not foundNoRep:
-        return False
 
     return True
 
