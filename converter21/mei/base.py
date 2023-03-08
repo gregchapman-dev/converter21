@@ -2729,7 +2729,7 @@ def scaleToTuplet(
                 elif bracketVisible == 'false':
                     newTuplet.bracket = False
 
-                # num visibility (True/False)/format('number'/'ratio')
+                # num visibility (True/False) and format('number'/'ratio')
                 # (MEI has visibility and format, music21 has visibility for each number)
                 if numVisible == 'false':
                     newTuplet.tupletActualShow = None
