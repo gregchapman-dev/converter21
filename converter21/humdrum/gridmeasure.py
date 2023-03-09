@@ -414,6 +414,71 @@ class GridMeasure:
                                         part, staff, voice, staffCounts)
 
     '''
+    GridMeasure::addTupletDisplayToken -- Add a *tuplet/*Xtuplet/*brackettup/*Xbrackettup/etc
+    token in the data slice at the given timestamp (or create a new TupletDisplay slice at
+    that timestamp), placing the token at the specified part, staff, and voice index.
+    '''
+    def addTupletDisplayToken(
+        self,
+        tok: str,
+        timestamp: HumNumIn,
+        part: int,
+        staff: int,
+        voice: int,
+        staffCounts: t.List[int]
+    ) -> GridSlice:
+        ts: HumNum = opFrac(timestamp)
+        gs: GridSlice
+
+        if not self.slices or self.slices[-1].timestamp < ts:
+            # add a new GridSlice to an empty list or at end of list if timestamp
+            # is after last entry in list.
+            gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
+            gs.addToken(tok, part, staff, voice)
+            self.slices.append(gs)
+            return gs
+
+        # search for existing line with same timestamp and the same slice type
+        for idx, gridSlice in enumerate(self.slices):
+            if gridSlice.timestamp == ts and gridSlice.sliceType == SliceType.TupletDisplay:
+                voices: t.Optional[GridVoice] = gridSlice.parts[part].staves[staff].voices
+                prevTok: t.Optional[HumdrumToken] = None
+                if voice < len(voices):
+                    prevTok = voices[voice].token
+                if prevTok is None or prevTok.text == '*':
+                    # go ahead and overwrite it (adding new voice if necessary)
+                    gridSlice.addToken(tok, part, staff, voice)
+                    gs = gridSlice
+                else:
+                    # don't overwrite important token, instead insert a new slice
+                    gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
+                    gs.addToken(tok, part, staff, voice)
+                    self.slices.insert(idx, gs)
+                return gs
+
+            if gridSlice.timestamp == ts and gridSlice.isDataSlice:
+                # found the correct timestamp, but no slice of the right type at the
+                # timestamp, so add the new slice before the data slice (eventually
+                # keeping track of the order in which the other non-data slices should
+                # be placed).
+                gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
+                gs.addToken(tok, part, staff, voice)
+                self.slices.insert(idx, gs)
+                return gs
+
+            if gridSlice.timestamp > ts:
+                gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
+                gs.addToken(tok, part, staff, voice)
+                self.slices.insert(idx, gs)
+                return gs
+
+        # Couldn't find a place for the token, so place at end of measure
+        gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
+        gs.addToken(tok, part, staff, voice)
+        self.slices.append(gs)
+        return gs
+
+    '''
     //////////////////////////////
     //
     // GridMeasure::addLabelToken -- Add an instrument label token in a label slice at

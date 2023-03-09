@@ -72,6 +72,7 @@ class SliceType(IntEnum):
     Ottavas = auto()           # Interpretation, RegularInterpretation, Spined
     VerseLabels = auto()       # Interpretation, RegularInterpretation, Spined
     SectionNames = auto()      # Interpretation, RegularInterpretation, Spined
+    TupletDisplay = auto()     # Interpretation, RegularInterpretation, Spined
     RegularInterpretation_ = auto()
     Exclusives = auto()        # Interpretation, Manipulator, Spined
     Terminators = auto()       # Interpretation, Manipulator, Spined

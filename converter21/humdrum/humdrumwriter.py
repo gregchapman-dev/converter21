@@ -133,6 +133,8 @@ class HumdrumWriter:
         self._forceRecipSpine: bool = False  # set to true sometimes in figured bass, harmony code
         self._hasTremolo: bool = False       # has fingered or bowed tremolo(s) that need expanding
         self._hasOrnaments: bool = False     # has trills, mordents, or turns that need refinement
+        self._tupletNumsSuppressed: t.Dict[int, t.Dict[int, t.Dict[int, bool]]] = {}
+        self._tupletBracketsSuppressed: t.Dict[int, t.Dict[int, t.Dict[int, bool]]] = {}
 
         # temporary data (to be emitted with next durational object)
         # First elements of text tuple are part index, staff index, voice index
@@ -153,6 +155,100 @@ class HumdrumWriter:
         # The initial OMD token that was not emitted inline, but instead will be used
         # to put the metadata.movementName back the way it was (if appropriate).
         self.initialOMDToken: t.Optional[str] = None
+
+    def tupletNumsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int
+    ) -> bool:
+        if not self._tupletNumsSuppressed:
+            return False
+
+        partTupletNumsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+            self._tupletNumsSuppressed.get(partIndex, {})
+        )
+        if not partTupletNumsSuppressed:
+            return False
+
+        staffTupletNumsSuppressed: t.Dict[int, bool] = (
+            partTupletNumsSuppressed.get(staffIndex, {})
+        )
+        if not staffTupletNumsSuppressed:
+            return False
+
+        voiceTupletNumsSuppressed: bool = (
+            staffTupletNumsSuppressed.get(voiceIndex, False)
+        )
+        return voiceTupletNumsSuppressed
+
+    def setTupletNumsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int,
+        value: bool
+    ):
+        partTupletNumsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+            self._tupletNumsSuppressed.get(partIndex, {})
+        )
+        if not partTupletNumsSuppressed:
+            self._tupletNumsSuppressed[partIndex] = partTupletNumsSuppressed
+
+        staffTupletNumsSuppressed: t.Dict[int, bool] = (
+            partTupletNumsSuppressed.get(staffIndex, {})
+        )
+        if not staffTupletNumsSuppressed:
+            partTupletNumsSuppressed[staffIndex] = staffTupletNumsSuppressed
+
+        staffTupletNumsSuppressed[voiceIndex] = value
+
+    def tupletBracketsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int
+    ) -> bool:
+        if not self._tupletBracketsSuppressed:
+            return False
+
+        partTupletBracketsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+            self._tupletBracketsSuppressed.get(partIndex, {})
+        )
+        if not partTupletBracketsSuppressed:
+            return False
+
+        staffTupletBracketsSuppressed: t.Dict[int, bool] = (
+            partTupletBracketsSuppressed.get(staffIndex, {})
+        )
+        if not staffTupletBracketsSuppressed:
+            return False
+
+        voiceTupletBracketsSuppressed: bool = (
+            staffTupletBracketsSuppressed.get(voiceIndex, False)
+        )
+        return voiceTupletBracketsSuppressed
+
+    def setTupletBracketsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int,
+        value: bool
+    ):
+        partTupletBracketsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+            self._tupletBracketsSuppressed.get(partIndex, {})
+        )
+        if not partTupletBracketsSuppressed:
+            self._tupletBracketsSuppressed[partIndex] = partTupletBracketsSuppressed
+
+        staffTupletBracketsSuppressed: t.Dict[int, bool] = (
+            partTupletBracketsSuppressed.get(staffIndex, {})
+        )
+        if not staffTupletBracketsSuppressed:
+            partTupletBracketsSuppressed[staffIndex] = staffTupletBracketsSuppressed
+
+        staffTupletBracketsSuppressed[voiceIndex] = value
 
     def _chosenSignifierForRDFDefinition(self,
             rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
@@ -2256,6 +2352,59 @@ class HumdrumWriter:
                         outSlice, partIndex, staffIndex, voiceIndex, layoutString
                     )
 
+                # implement tuplet number/bracket visibility
+                # *tuplet means display tuplet numbers (default)
+                # *Xtuplet means suppress tuplet numbers
+                # *brackettup means display tuplet brackets (default is whatever *{X}tuplet says)
+                # *Xbrackettup means suppress tuplet brackets (even if tuplet num is displayed)
+                if event.isTupletStart:
+                    if (not event.suppressTupletNum
+                            and self.tupletNumsSuppressed(partIndex, staffIndex, voiceIndex)):
+                        outgm.addTupletDisplayToken(
+                            '*tuplet',
+                            nowTime,
+                            partIndex,
+                            staffIndex,
+                            voiceIndex,
+                            self.staffCounts
+                        )
+                        self.setTupletNumsSuppressed(partIndex, staffIndex, voiceIndex, False)
+                    elif (event.suppressTupletNum
+                            and not self.tupletNumsSuppressed(partIndex, staffIndex, voiceIndex)):
+                        outgm.addTupletDisplayToken(
+                            '*Xtuplet',
+                            nowTime,
+                            partIndex,
+                            staffIndex,
+                            voiceIndex,
+                            self.staffCounts
+                        )
+                        self.setTupletNumsSuppressed(partIndex, staffIndex, voiceIndex, True)
+
+                    if (not event.suppressTupletBracket
+                            and self.tupletBracketsSuppressed(partIndex, staffIndex, voiceIndex)):
+                        outgm.addTupletDisplayToken(
+                            '*brackettup',
+                            nowTime,
+                            partIndex,
+                            staffIndex,
+                            voiceIndex,
+                            self.staffCounts
+                        )
+                        self.setTupletBracketsSuppressed(partIndex, staffIndex, voiceIndex, False)
+                    elif (event.suppressTupletBracket
+                            and not self.tupletBracketsSuppressed(
+                                partIndex, staffIndex, voiceIndex)):
+                        outgm.addTupletDisplayToken(
+                            '*Xbrackettup',
+                            nowTime,
+                            partIndex,
+                            staffIndex,
+                            voiceIndex,
+                            self.staffCounts
+                        )
+                        self.setTupletBracketsSuppressed(partIndex, staffIndex, voiceIndex, True)
+
                 vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
                 if vcount > 0:
                     event.reportVerseCountToOwner(vcount)
@@ -2759,8 +2908,8 @@ class HumdrumWriter:
         '''
         From a note/chord/rest, put it in a measure/part/score
         '''
-        # make a copy, as this process will change tuple types
-        # this method is called infrequently, and only for display of a single
+        # Make a copy, as this process will change tuplet types.
+        # This method is called infrequently, and only for display of a single
         # note
         nCopy = copy.deepcopy(n)
 
@@ -2784,8 +2933,8 @@ class HumdrumWriter:
         '''
         Rarely rarely used.  Only if you call .show() on a duration object
         '''
-        # make a copy, as we this process will change tuple types
-        # not needed, since fromGeneralNote does it too.  but so
+        # Make a copy, as this process will change tuplet types.
+        # Not needed, since fromGeneralNote does it too.  But so
         # rarely used, it doesn't matter, and the extra safety is nice.
         dCopy = copy.deepcopy(d)
         n = m21.note.Note()
