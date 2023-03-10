@@ -2797,24 +2797,24 @@ def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
             tupletNum = eachNote.m21TupletNum  # type: ignore
             tupletNumbase = eachNote.m21TupletNumbase  # type: ignore
             if hasattr(eachNote, 'm21TupletBracketVisible'):
-                tupletBracketVisible = eachNote.m21TupletBracketVisible
+                tupletBracketVisible = eachNote.m21TupletBracketVisible  # type: ignore
+                del eachNote.m21TupletBracketVisible  # type: ignore
             if hasattr(eachNote, 'm21TupletBracketPlace'):
-                tupletBracketPlace = eachNote.m21TupletBracketPlace
+                tupletBracketPlace = eachNote.m21TupletBracketPlace  # type: ignore
+                del eachNote.m21TupletBracketPlace  # type: ignore
             if hasattr(eachNote, 'm21TupletNumVisible'):
-                tupletNumVisible = eachNote.m21TupletNumVisible
+                tupletNumVisible = eachNote.m21TupletNumVisible  # type: ignore
+                del eachNote.m21TupletNumVisible  # type: ignore
             if hasattr(eachNote, 'm21TupletNumPlace'):
-                tupletNumPlace = eachNote.m21TupletNumPlace
+                tupletNumPlace = eachNote.m21TupletNumPlace  # type: ignore
+                del eachNote.m21TupletNumPlace  # type: ignore
             if hasattr(eachNote, 'm21TupletNumFormat'):
-                tupletNumFormat = eachNote.m21TupletNumFormat
+                tupletNumFormat = eachNote.m21TupletNumFormat  # type: ignore
+                del eachNote.m21TupletNumFormat  # type: ignore
 
             del eachNote.m21TupletSearch  # type: ignore
             del eachNote.m21TupletNum  # type: ignore
             del eachNote.m21TupletNumbase  # type: ignore
-            del eachNote.m21TupletBracketVisible  # type: ignore
-            del eachNote.m21TupletBracketPlace  # type: ignore
-            del eachNote.m21TupletNumVisible  # type: ignore
-            del eachNote.m21TupletNumPlace  # type: ignore
-            del eachNote.m21TupletNumFormat  # type: ignore
 
             if t.TYPE_CHECKING:
                 assert tupletNum is not None
@@ -7439,7 +7439,7 @@ def sectionScoreCore(
 
     topPartN: str = otherInfo.get('topPartN', '')
     if not topPartN:
-        raise MeiInternalError('no topPartN seen')
+        topPartN = allPartNs[0]
 
     # we ignore any <pb>/<sb> elements before the first <measure> in the document
     # This is because Verovio's Humdrum -> MEI conversion likes to put one in that
