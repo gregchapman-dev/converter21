@@ -463,7 +463,7 @@ class GridMeasure:
 
             if prevTok is None or prevTok.text == '*':
                 # go ahead and overwrite it (adding new voice if necessary)
-                gridSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+                prevSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
             else:
                 # don't overwrite important token, instead insert a new slice
                 newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.TupletDisplay)
