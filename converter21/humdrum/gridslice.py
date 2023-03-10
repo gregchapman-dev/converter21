@@ -290,6 +290,10 @@ class GridSlice:
         return self.sliceType == SliceType.VerseLabels
 
     @property
+    def isTupletDisplaySlice(self) -> bool:
+        return self.sliceType == SliceType.TupletDisplay
+
+    @property
     def isSectionNameSlice(self) -> bool:
         return self.sliceType == SliceType.SectionNames
 

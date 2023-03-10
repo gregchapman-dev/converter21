@@ -414,69 +414,70 @@ class GridMeasure:
                                         part, staff, voice, staffCounts)
 
     '''
-    GridMeasure::addTupletDisplayToken -- Add a *tuplet/*Xtuplet/*brackettup/*Xbrackettup/etc
-    token in the data slice at the given timestamp (or create a new TupletDisplay slice at
-    that timestamp), placing the token at the specified part, staff, and voice index.
+    GridMeasure::addTupletDisplayTokenBefore -- Add a *tuplet/*Xtuplet/*brackettup/*Xbrackettup/etc
+    token just before associatedSlice, placing the token at the specified part, staff, and voice index.
     '''
-    def addTupletDisplayToken(
+    def addTupletDisplayTokenBefore(
         self,
         tok: str,
-        timestamp: HumNumIn,
-        part: int,
-        staff: int,
-        voice: int,
-        staffCounts: t.List[int]
-    ) -> GridSlice:
-        ts: HumNum = opFrac(timestamp)
-        gs: GridSlice
+        associatedSlice: GridSlice,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int
+    ) -> None:
+        newSlice: GridSlice
 
-        if not self.slices or self.slices[-1].timestamp < ts:
-            # add a new GridSlice to an empty list or at end of list if timestamp
-            # is after last entry in list.
-            gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
-            gs.addToken(tok, part, staff, voice)
-            self.slices.append(gs)
-            return gs
+        # add this display token just before the associatedSlice
+        if associatedSlice is None:
+            return
 
-        # search for existing line with same timestamp and the same slice type
-        for idx, gridSlice in enumerate(self.slices):
-            if gridSlice.timestamp == ts and gridSlice.sliceType == SliceType.TupletDisplay:
-                voices: t.Optional[GridVoice] = gridSlice.parts[part].staves[staff].voices
-                prevTok: t.Optional[HumdrumToken] = None
-                if voice < len(voices):
-                    prevTok = voices[voice].token
-                if prevTok is None or prevTok.text == '*':
-                    # go ahead and overwrite it (adding new voice if necessary)
-                    gridSlice.addToken(tok, part, staff, voice)
-                    gs = gridSlice
-                else:
-                    # don't overwrite important token, instead insert a new slice
-                    gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
-                    gs.addToken(tok, part, staff, voice)
-                    self.slices.insert(idx, gs)
-                return gs
+        if len(self.slices) == 0:
+            # something strange happened: expecting at least one item in measure.
+            # associatedSlice is supposed to already be in the measure.
+            return
 
-            if gridSlice.timestamp == ts and gridSlice.isDataSlice:
-                # found the correct timestamp, but no slice of the right type at the
-                # timestamp, so add the new slice before the data slice (eventually
-                # keeping track of the order in which the other non-data slices should
-                # be placed).
-                gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
-                gs.addToken(tok, part, staff, voice)
-                self.slices.insert(idx, gs)
-                return gs
+        associatedSliceIdx: t.Optional[int] = None
+        # find owning line (associatedSlice)
+        foundIt: bool = False
+        for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
+            gridSlice: GridSlice = self.slices[associatedSliceIdx]
+            if gridSlice is associatedSlice:
+                foundIt = True
+                break
+        if not foundIt:
+            # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
+            return
 
-            if gridSlice.timestamp > ts:
-                gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
-                gs.addToken(tok, part, staff, voice)
-                self.slices.insert(idx, gs)
-                return gs
+        # see if the previous slice is a TupletDisplay slice we can use
+        prevIdx: int = associatedSliceIdx - 1
+        prevSlice: GridSlice = self.slices[prevIdx]
+        if prevSlice.isTupletDisplaySlice:
+            prevVoices: t.List[t.Optional[GridVoice]] = (
+                prevSlice.parts[partIndex].staves[staffIndex].voices
+            )
+            prevTok: t.Optional[HumdrumToken] = None
+            if voiceIndex < len(prevVoices):
+                prevVoice: t.Optional[GridVoice] = prevVoices[voiceIndex]
+                if prevVoice is not None:
+                    prevTok = prevVoice.token
 
-        # Couldn't find a place for the token, so place at end of measure
-        gs = GridSlice(self, ts, SliceType.TupletDisplay, staffCounts)
-        gs.addToken(tok, part, staff, voice)
-        self.slices.append(gs)
-        return gs
+            if prevTok is None or prevTok.text == '*':
+                # go ahead and overwrite it (adding new voice if necessary)
+                gridSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+            else:
+                # don't overwrite important token, instead insert a new slice
+                newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.TupletDisplay)
+                newSlice.initializeBySlice(associatedSlice)
+                newSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+                self.slices.insert(associatedSliceIdx, newSlice)
+            return
+
+        # if we get here, we couldn't use the previous slice, so we need to insert
+        # a new TupletDisplay slice to use, just before the associated slice.
+        newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.TupletDisplay)
+        newSlice.initializeBySlice(associatedSlice)
+        newSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+        self.slices.insert(associatedSliceIdx, newSlice)
 
     '''
     //////////////////////////////

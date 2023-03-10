@@ -2360,48 +2360,44 @@ class HumdrumWriter:
                 if event.isTupletStart:
                     if (not event.suppressTupletNum
                             and self.tupletNumsSuppressed(partIndex, staffIndex, voiceIndex)):
-                        outgm.addTupletDisplayToken(
+                        outgm.addTupletDisplayTokenBefore(
                             '*tuplet',
-                            nowTime,
+                            outSlice,
                             partIndex,
                             staffIndex,
-                            voiceIndex,
-                            self.staffCounts
+                            voiceIndex
                         )
                         self.setTupletNumsSuppressed(partIndex, staffIndex, voiceIndex, False)
                     elif (event.suppressTupletNum
                             and not self.tupletNumsSuppressed(partIndex, staffIndex, voiceIndex)):
-                        outgm.addTupletDisplayToken(
+                        outgm.addTupletDisplayTokenBefore(
                             '*Xtuplet',
-                            nowTime,
+                            outSlice,
                             partIndex,
                             staffIndex,
-                            voiceIndex,
-                            self.staffCounts
+                            voiceIndex
                         )
                         self.setTupletNumsSuppressed(partIndex, staffIndex, voiceIndex, True)
 
                     if (not event.suppressTupletBracket
                             and self.tupletBracketsSuppressed(partIndex, staffIndex, voiceIndex)):
-                        outgm.addTupletDisplayToken(
+                        outgm.addTupletDisplayTokenBefore(
                             '*brackettup',
-                            nowTime,
+                            outSlice,
                             partIndex,
                             staffIndex,
-                            voiceIndex,
-                            self.staffCounts
+                            voiceIndex
                         )
                         self.setTupletBracketsSuppressed(partIndex, staffIndex, voiceIndex, False)
                     elif (event.suppressTupletBracket
                             and not self.tupletBracketsSuppressed(
                                 partIndex, staffIndex, voiceIndex)):
-                        outgm.addTupletDisplayToken(
+                        outgm.addTupletDisplayTokenBefore(
                             '*Xbrackettup',
-                            nowTime,
+                            outSlice,
                             partIndex,
                             staffIndex,
-                            voiceIndex,
-                            self.staffCounts
+                            voiceIndex
                         )
                         self.setTupletBracketsSuppressed(partIndex, staffIndex, voiceIndex, True)
 
