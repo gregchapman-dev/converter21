@@ -133,10 +133,10 @@ class HumdrumWriter:
         self._forceRecipSpine: bool = False  # set to true sometimes in figured bass, harmony code
         self._hasTremolo: bool = False       # has fingered or bowed tremolo(s) that need expanding
         self._hasOrnaments: bool = False     # has trills, mordents, or turns that need refinement
-        # current state of *tuplet/*Xtuplet
-        self._tupletsSuppressed: t.Dict[int, t.Dict[int, t.Dict[int, bool]]] = {}
+        # current state of *tuplet/*Xtuplet (partIndex, staffIndex)
+        self._tupletsSuppressed: t.Dict[int, t.Dict[int, bool]] = {}
         # current state of *brackettup/*Xbrackettup
-        self._tupletBracketsSuppressed: t.Dict[int, t.Dict[int, t.Dict[int, bool]]] = {}
+        self._tupletBracketsSuppressed: t.Dict[int, t.Dict[int, bool]] = {}
 
         # temporary data (to be emitted with next durational object)
         # First elements of text tuple are part index, staff index, voice index
@@ -162,95 +162,67 @@ class HumdrumWriter:
         self,
         partIndex: int,
         staffIndex: int,
-        voiceIndex: int
     ) -> bool:
         if not self._tupletsSuppressed:
             return False
 
-        partTupletsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+        partTupletsSuppressed: t.Dict[int, bool] = (
             self._tupletsSuppressed.get(partIndex, {})
         )
         if not partTupletsSuppressed:
             return False
 
-        staffTupletsSuppressed: t.Dict[int, bool] = (
-            partTupletsSuppressed.get(staffIndex, {})
+        staffTupletsSuppressed: bool = (
+            partTupletsSuppressed.get(staffIndex, False)
         )
-        if not staffTupletsSuppressed:
-            return False
-
-        voiceTupletsSuppressed: bool = (
-            staffTupletsSuppressed.get(voiceIndex, False)
-        )
-        return voiceTupletsSuppressed
+        return staffTupletsSuppressed
 
     def setTupletsSuppressed(
         self,
         partIndex: int,
         staffIndex: int,
-        voiceIndex: int,
         value: bool
     ):
-        partTupletsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+        partTupletsSuppressed: t.Dict[int, bool] = (
             self._tupletsSuppressed.get(partIndex, {})
         )
         if not partTupletsSuppressed:
             self._tupletsSuppressed[partIndex] = partTupletsSuppressed
 
-        staffTupletsSuppressed: t.Dict[int, bool] = (
-            partTupletsSuppressed.get(staffIndex, {})
-        )
-        if not staffTupletsSuppressed:
-            partTupletsSuppressed[staffIndex] = staffTupletsSuppressed
-
-        staffTupletsSuppressed[voiceIndex] = value
+        partTupletsSuppressed[staffIndex] = value
 
     def tupletBracketsSuppressed(
         self,
         partIndex: int,
         staffIndex: int,
-        voiceIndex: int
     ) -> bool:
         if not self._tupletBracketsSuppressed:
             return False
 
-        partTupletBracketsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+        partTupletBracketsSuppressed: t.Dict[int, bool] = (
             self._tupletBracketsSuppressed.get(partIndex, {})
         )
         if not partTupletBracketsSuppressed:
             return False
 
-        staffTupletBracketsSuppressed: t.Dict[int, bool] = (
-            partTupletBracketsSuppressed.get(staffIndex, {})
+        staffTupletBracketsSuppressed: bool = (
+            partTupletBracketsSuppressed.get(staffIndex, False)
         )
-        if not staffTupletBracketsSuppressed:
-            return False
-
-        voiceTupletBracketsSuppressed: bool = (
-            staffTupletBracketsSuppressed.get(voiceIndex, False)
-        )
-        return voiceTupletBracketsSuppressed
+        return staffTupletBracketsSuppressed
 
     def setTupletBracketsSuppressed(
         self,
         partIndex: int,
         staffIndex: int,
-        voiceIndex: int,
         value: bool
     ):
-        partTupletBracketsSuppressed: t.Dict[int, t.Dict[int, bool]] = (
+        partTupletBracketsSuppressed: t.Dict[int, bool] = (
             self._tupletBracketsSuppressed.get(partIndex, {})
         )
         if not partTupletBracketsSuppressed:
             self._tupletBracketsSuppressed[partIndex] = partTupletBracketsSuppressed
 
-        staffTupletBracketsSuppressed: t.Dict[int, bool] = (
-            partTupletBracketsSuppressed.get(staffIndex, {})
-        )
-        if not staffTupletBracketsSuppressed:
-            partTupletBracketsSuppressed[staffIndex] = staffTupletBracketsSuppressed
-
-        staffTupletBracketsSuppressed[voiceIndex] = value
+        partTupletBracketsSuppressed[staffIndex] = value
 
     def _chosenSignifierForRDFDefinition(self,
             rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
@@ -2362,7 +2334,7 @@ class HumdrumWriter:
                 # *Xbrackettup means suppress tuplet brackets (only makes a difference if tuplet
                 # is displayed)
                 if event.isTupletStart:
-                    if self.tupletsSuppressed(partIndex, staffIndex, voiceIndex):
+                    if self.tupletsSuppressed(partIndex, staffIndex):
                         if not event.suppressTupletNum:
                             outgm.addTupletDisplayTokenBefore(
                                 '*tuplet',
@@ -2371,11 +2343,11 @@ class HumdrumWriter:
                                 staffIndex,
                                 voiceIndex
                             )
-                            self.setTupletsSuppressed(partIndex, staffIndex, voiceIndex, False)
+                            self.setTupletsSuppressed(partIndex, staffIndex, False)
 
-                            # Also check to make sure *brackettup is in the right state since Humdrum
-                            # is about to start paying attention to it.
-                            if (self.tupletBracketsSuppressed(partIndex, staffIndex, voiceIndex)
+                            # Also check to make sure *brackettup is in the right state,
+                            # since Humdrum is about to start paying attention to it.
+                            if (self.tupletBracketsSuppressed(partIndex, staffIndex)
                                     != event.suppressTupletBracket):
                                 s1: str = '*brackettup'
                                 if event.suppressTupletBracket:
@@ -2390,7 +2362,6 @@ class HumdrumWriter:
                                 self.setTupletBracketsSuppressed(
                                     partIndex,
                                     staffIndex,
-                                    voiceIndex,
                                     event.suppressTupletBracket
                                 )
                     else:
@@ -2403,14 +2374,14 @@ class HumdrumWriter:
                                 staffIndex,
                                 voiceIndex
                             )
-                            self.setTupletsSuppressed(partIndex, staffIndex, voiceIndex, True)
+                            self.setTupletsSuppressed(partIndex, staffIndex, True)
 
                             # We don't check state of *brackettup here, since it doesn't matter.
                             # We'll update it next time we emit *tuplet to turn tuplets back on.
                         else:
                             # Tuplets are on, and we're leaving them on.  Better check that
                             # *brackettup state doesn't need to change.
-                            if (self.tupletBracketsSuppressed(partIndex, staffIndex, voiceIndex)
+                            if (self.tupletBracketsSuppressed(partIndex, staffIndex)
                                     != event.suppressTupletBracket):
                                 s2: str = '*brackettup'
                                 if event.suppressTupletBracket:
@@ -2425,7 +2396,6 @@ class HumdrumWriter:
                                 self.setTupletBracketsSuppressed(
                                     partIndex,
                                     staffIndex,
-                                    voiceIndex,
                                     event.suppressTupletBracket
                                 )
 
