@@ -133,6 +133,10 @@ class HumdrumWriter:
         self._forceRecipSpine: bool = False  # set to true sometimes in figured bass, harmony code
         self._hasTremolo: bool = False       # has fingered or bowed tremolo(s) that need expanding
         self._hasOrnaments: bool = False     # has trills, mordents, or turns that need refinement
+        # current state of *tuplet/*Xtuplet (partIndex, staffIndex)
+        self._tupletsSuppressed: t.Dict[int, t.Dict[int, bool]] = {}
+        # current state of *brackettup/*Xbrackettup
+        self._tupletBracketsSuppressed: t.Dict[int, t.Dict[int, bool]] = {}
 
         # temporary data (to be emitted with next durational object)
         # First elements of text tuple are part index, staff index, voice index
@@ -153,6 +157,72 @@ class HumdrumWriter:
         # The initial OMD token that was not emitted inline, but instead will be used
         # to put the metadata.movementName back the way it was (if appropriate).
         self.initialOMDToken: t.Optional[str] = None
+
+    def tupletsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+    ) -> bool:
+        if not self._tupletsSuppressed:
+            return False
+
+        partTupletsSuppressed: t.Dict[int, bool] = (
+            self._tupletsSuppressed.get(partIndex, {})
+        )
+        if not partTupletsSuppressed:
+            return False
+
+        staffTupletsSuppressed: bool = (
+            partTupletsSuppressed.get(staffIndex, False)
+        )
+        return staffTupletsSuppressed
+
+    def setTupletsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        value: bool
+    ):
+        partTupletsSuppressed: t.Dict[int, bool] = (
+            self._tupletsSuppressed.get(partIndex, {})
+        )
+        if not partTupletsSuppressed:
+            self._tupletsSuppressed[partIndex] = partTupletsSuppressed
+
+        partTupletsSuppressed[staffIndex] = value
+
+    def tupletBracketsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+    ) -> bool:
+        if not self._tupletBracketsSuppressed:
+            return False
+
+        partTupletBracketsSuppressed: t.Dict[int, bool] = (
+            self._tupletBracketsSuppressed.get(partIndex, {})
+        )
+        if not partTupletBracketsSuppressed:
+            return False
+
+        staffTupletBracketsSuppressed: bool = (
+            partTupletBracketsSuppressed.get(staffIndex, False)
+        )
+        return staffTupletBracketsSuppressed
+
+    def setTupletBracketsSuppressed(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        value: bool
+    ):
+        partTupletBracketsSuppressed: t.Dict[int, bool] = (
+            self._tupletBracketsSuppressed.get(partIndex, {})
+        )
+        if not partTupletBracketsSuppressed:
+            self._tupletBracketsSuppressed[partIndex] = partTupletBracketsSuppressed
+
+        partTupletBracketsSuppressed[staffIndex] = value
 
     def _chosenSignifierForRDFDefinition(self,
             rdfDefinition: t.Union[str, t.Tuple[t.Tuple[str, t.Optional[str]], ...]],
@@ -2256,6 +2326,79 @@ class HumdrumWriter:
                         outSlice, partIndex, staffIndex, voiceIndex, layoutString
                     )
 
+                # implement tuplet number/bracket visibility
+                # *tuplet means display tuplets (default)
+                # *Xtuplet means suppress tuplets (both num and bracket are suppressed)
+                # *brackettup means display tuplet brackets (default, but only makes a
+                # difference if tuplet is displayed)
+                # *Xbrackettup means suppress tuplet brackets (only makes a difference if tuplet
+                # is displayed)
+                if event.isTupletStart:
+                    if self.tupletsSuppressed(partIndex, staffIndex):
+                        if not event.suppressTupletNum:
+                            outgm.addTupletDisplayTokenBefore(
+                                '*tuplet',
+                                outSlice,
+                                partIndex,
+                                staffIndex,
+                                voiceIndex
+                            )
+                            self.setTupletsSuppressed(partIndex, staffIndex, False)
+
+                            # Also check to make sure *brackettup is in the right state,
+                            # since Humdrum is about to start paying attention to it.
+                            if (self.tupletBracketsSuppressed(partIndex, staffIndex)
+                                    != event.suppressTupletBracket):
+                                s1: str = '*brackettup'
+                                if event.suppressTupletBracket:
+                                    s1 = '*Xbrackettup'
+                                outgm.addTupletDisplayTokenBefore(
+                                    s1,
+                                    outSlice,
+                                    partIndex,
+                                    staffIndex,
+                                    voiceIndex
+                                )
+                                self.setTupletBracketsSuppressed(
+                                    partIndex,
+                                    staffIndex,
+                                    event.suppressTupletBracket
+                                )
+                    else:
+                        # Tuplets are not currently suppressed (*tuplet is current in force)
+                        if event.suppressTupletNum:
+                            outgm.addTupletDisplayTokenBefore(
+                                '*Xtuplet',
+                                outSlice,
+                                partIndex,
+                                staffIndex,
+                                voiceIndex
+                            )
+                            self.setTupletsSuppressed(partIndex, staffIndex, True)
+
+                            # We don't check state of *brackettup here, since it doesn't matter.
+                            # We'll update it next time we emit *tuplet to turn tuplets back on.
+                        else:
+                            # Tuplets are on, and we're leaving them on.  Better check that
+                            # *brackettup state doesn't need to change.
+                            if (self.tupletBracketsSuppressed(partIndex, staffIndex)
+                                    != event.suppressTupletBracket):
+                                s2: str = '*brackettup'
+                                if event.suppressTupletBracket:
+                                    s2 = '*Xbrackettup'
+                                outgm.addTupletDisplayTokenBefore(
+                                    s2,
+                                    outSlice,
+                                    partIndex,
+                                    staffIndex,
+                                    voiceIndex
+                                )
+                                self.setTupletBracketsSuppressed(
+                                    partIndex,
+                                    staffIndex,
+                                    event.suppressTupletBracket
+                                )
+
                 vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
                 if vcount > 0:
                     event.reportVerseCountToOwner(vcount)
@@ -2759,8 +2902,8 @@ class HumdrumWriter:
         '''
         From a note/chord/rest, put it in a measure/part/score
         '''
-        # make a copy, as this process will change tuple types
-        # this method is called infrequently, and only for display of a single
+        # Make a copy, as this process will change tuplet types.
+        # This method is called infrequently, and only for display of a single
         # note
         nCopy = copy.deepcopy(n)
 
@@ -2784,8 +2927,8 @@ class HumdrumWriter:
         '''
         Rarely rarely used.  Only if you call .show() on a duration object
         '''
-        # make a copy, as we this process will change tuple types
-        # not needed, since fromGeneralNote does it too.  but so
+        # Make a copy, as this process will change tuplet types.
+        # Not needed, since fromGeneralNote does it too.  But so
         # rarely used, it doesn't matter, and the extra safety is nice.
         dCopy = copy.deepcopy(d)
         n = m21.note.Note()

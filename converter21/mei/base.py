@@ -225,21 +225,21 @@ _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
-    f'{MEI_NS}annot',       # annotations are skipped; someday maybe goes into editorial?
-    f'{MEI_NS}pedal',       # pedal marks are skipped for now
-    f'{MEI_NS}harm',        # harm (chord symbols) are skipped for now
-    f'{MEI_NS}expansion',   # expansions are intentionally skipped
-    f'{MEI_NS}bracketSpan', # bracketSpans (phrases, ligatures, ...) are intentionally skipped
-    f'{MEI_NS}mensur',      # mensur is intentionally skipped, we use the invis <meterSig> instead
-    f'{MEI_NS}slur',        # slurs; handled in convertFromString()
-    f'{MEI_NS}tie',         # ties; handled in convertFromString()
-    f'{MEI_NS}tupletSpan',  # tuplets; handled in convertFromString()
-    f'{MEI_NS}beamSpan',    # beams; handled in convertFromString()
-    f'{MEI_NS}verse',       # lyrics; handled separately by noteFromElement()
-    f'{MEI_NS}instrDef',    # instrument; handled separately by staffDefFromElement()
-    f'{MEI_NS}label',       # instrument; handled separately by staffDefFromElement()
-    f'{MEI_NS}labelAbbr',   # instrument; handled separately by staffDefFromElement()
-    f'{MEI_NS}measure',     # measure; handled separately by {score,section}FromElement()
+    f'{MEI_NS}annot',        # annotations are skipped; someday maybe goes into editorial?
+    f'{MEI_NS}pedal',        # pedal marks are skipped for now
+    f'{MEI_NS}harm',         # harm (chord symbols) are skipped for now
+    f'{MEI_NS}expansion',    # expansions are intentionally skipped
+    f'{MEI_NS}bracketSpan',  # bracketSpans (phrases, ligatures, ...) are intentionally skipped
+    f'{MEI_NS}mensur',       # mensur is intentionally skipped, we use the invis <meterSig> instead
+    f'{MEI_NS}slur',         # slurs; handled in convertFromString()
+    f'{MEI_NS}tie',          # ties; handled in convertFromString()
+    f'{MEI_NS}tupletSpan',   # tuplets; handled in convertFromString()
+    f'{MEI_NS}beamSpan',     # beams; handled in convertFromString()
+    f'{MEI_NS}verse',        # lyrics; handled separately by noteFromElement()
+    f'{MEI_NS}instrDef',     # instrument; handled separately by staffDefFromElement()
+    f'{MEI_NS}label',        # instrument; handled separately by staffDefFromElement()
+    f'{MEI_NS}labelAbbr',    # instrument; handled separately by staffDefFromElement()
+    f'{MEI_NS}measure',      # measure; handled separately by {score,section}FromElement()
 )
 
 
@@ -1039,6 +1039,8 @@ def _ppTuplets(theConverter: MeiToM21Converter):
     # for readability, we use a single-letter variable
     c = theConverter
 
+    tempStr: str
+
     # pre-processing <tupletSpan> tags
     for eachTuplet in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tupletSpan'):
@@ -1056,6 +1058,22 @@ def _ppTuplets(theConverter: MeiToM21Converter):
                     # protect against extra spaces around the contained xml:id values
                     c.m21Attr[eachXmlid]['m21TupletNum'] = eachTuplet.get('num')
                     c.m21Attr[eachXmlid]['m21TupletNumbase'] = eachTuplet.get('numbase')
+                    # the following attributes may or may not be there
+                    tempStr = eachTuplet.get('bracket.visible', '')
+                    if tempStr:
+                        c.m21Attr[eachXmlid]['m21TupletBracketVisible'] = tempStr
+                    tempStr = eachTuplet.get('bracket.place', '')
+                    if tempStr:
+                        c.m21Attr[eachXmlid]['m21TupletBracketPlace'] = tempStr
+                    tempStr = eachTuplet.get('num.visible', '')
+                    if tempStr:
+                        c.m21Attr[eachXmlid]['m21TupletNumVisible'] = tempStr
+                    tempStr = eachTuplet.get('num.place', '')
+                    if tempStr:
+                        c.m21Attr[eachXmlid]['m21TupletNumPlace'] = tempStr
+                    tempStr = eachTuplet.get('num.format', '')
+                    if tempStr:
+                        c.m21Attr[eachXmlid]['m21TupletNumFormat'] = tempStr
         else:
             # For <tupletSpan> elements that don't give a @plist attribute, we have to do some
             # guesswork and hope we find all the related elements. Right here, we're only setting
@@ -1066,9 +1084,42 @@ def _ppTuplets(theConverter: MeiToM21Converter):
             c.m21Attr[startid]['m21TupletSearch'] = 'start'
             c.m21Attr[startid]['m21TupletNum'] = eachTuplet.get('num')
             c.m21Attr[startid]['m21TupletNumbase'] = eachTuplet.get('numbase')
+            # the following attributes may or may not be there
+            tempStr = eachTuplet.get('bracket.visible', '')
+            if tempStr:
+                c.m21Attr[startid]['m21TupletBracketVisible'] = tempStr
+            tempStr = eachTuplet.get('bracket.place', '')
+            if tempStr:
+                c.m21Attr[startid]['m21TupletBracketPlace'] = tempStr
+            tempStr = eachTuplet.get('num.visible', '')
+            if tempStr:
+                c.m21Attr[startid]['m21TupletNumVisible'] = tempStr
+            tempStr = eachTuplet.get('num.place', '')
+            if tempStr:
+                c.m21Attr[startid]['m21TupletNumPlace'] = tempStr
+            tempStr = eachTuplet.get('num.format', '')
+            if tempStr:
+                c.m21Attr[startid]['m21TupletNumFormat'] = tempStr
+
             c.m21Attr[endid]['m21TupletSearch'] = 'end'
             c.m21Attr[endid]['m21TupletNum'] = eachTuplet.get('num')
             c.m21Attr[endid]['m21TupletNumbase'] = eachTuplet.get('numbase')
+            # the following attributes may or may not be there
+            tempStr = eachTuplet.get('bracket.visible', '')
+            if tempStr:
+                c.m21Attr[endid]['m21TupletBracketVisible'] = tempStr
+            tempStr = eachTuplet.get('bracket.place', '')
+            if tempStr:
+                c.m21Attr[endid]['m21TupletBracketPlace'] = tempStr
+            tempStr = eachTuplet.get('num.visible', '')
+            if tempStr:
+                c.m21Attr[endid]['m21TupletNumVisible'] = tempStr
+            tempStr = eachTuplet.get('num.place', '')
+            if tempStr:
+                c.m21Attr[endid]['m21TupletNumPlace'] = tempStr
+            tempStr = eachTuplet.get('num.format', '')
+            if tempStr:
+                c.m21Attr[endid]['m21TupletNumFormat'] = tempStr
 
 
 def _ppFermatas(theConverter: MeiToM21Converter):
@@ -2603,6 +2654,12 @@ def scaleToTuplet(
         wasList = False
 
     for obj in objs:
+        bracketVisible: t.Optional[str] = None
+        bracketPlace: t.Optional[str] = None
+        numVisible: t.Optional[str] = None
+        numPlace: t.Optional[str] = None
+        numFormat: t.Optional[str] = None
+
         if not isinstance(obj, (note.Note, note.Rest, chord.Chord)):
             # silently skip objects that don't have a duration
             continue
@@ -2616,23 +2673,78 @@ def scaleToTuplet(
             obj.m21TupletNum = elem.get('m21TupletNum')  # type: ignore
             obj.m21TupletNumbase = elem.get('m21TupletNumbase')  # type: ignore
 
+            bracketVisible = elem.get('m21TupletBracketVisible')
+            bracketPlace = elem.get('m21TupletBracketPlace')
+            numVisible = elem.get('m21TupletNumVisible')
+            numPlace = elem.get('m21TupletNumPlace')
+            numFormat = elem.get('m21TupletNumFormat')
+            if bracketVisible is not None:
+                obj.m21TupletBracketVisible = bracketVisible  # type: ignore
+            if bracketPlace is not None:
+                obj.m21TupletBracketPlace = bracketPlace  # type: ignore
+            if numVisible is not None:
+                obj.m21TupletNumVisible = numVisible  # type: ignore
+            if numPlace is not None:
+                obj.m21TupletNumPlace = numPlace  # type: ignore
+            if numFormat is not None:
+                obj.m21TupletNumFormat = numFormat  # type: ignore
+
         else:
             num: t.Optional[str] = elem.get('m21TupletNum')
             numbase: t.Optional[str] = elem.get('m21TupletNumbase')
             if num and numbase:
-                obj.duration.appendTuplet(duration.Tuplet(
+                newTuplet = duration.Tuplet(
                     numberNotesActual=int(num),
                     numberNotesNormal=int(numbase),
                     durationNormal=obj.duration.type,
-                    durationActual=obj.duration.type))
+                    durationActual=obj.duration.type
+                )
 
                 tupletType: t.Optional[str] = elem.get('m21TupletType')
                 if tupletType is not None:
-                    obj.duration.tuplets[0].type = tupletType  # type: ignore
+                    newTuplet.type = tupletType  # type: ignore
                 elif elem.get('tuplet', '').startswith('i'):
-                    obj.duration.tuplets[0].type = 'start'
+                    newTuplet.type = 'start'
                 elif elem.get('tuplet', '').startswith('t'):
-                    obj.duration.tuplets[0].type = 'stop'
+                    newTuplet.type = 'stop'
+
+                bracketVisible = elem.get('m21TupletBracketVisible')
+                bracketPlace = elem.get('m21TupletBracketPlace')
+                numVisible = elem.get('m21TupletNumVisible')
+                numPlace = elem.get('m21TupletNumPlace')
+                numFormat = elem.get('m21TupletNumFormat')
+
+                # placement (MEI has two: num and bracket placement, music21 has only one)
+                placement: t.Optional[str] = None
+                if bracketVisible is None or bracketVisible == 'true':
+                    placement = bracketPlace
+                if placement is None and (numVisible is None or numVisible == 'true'):
+                    placement = numPlace
+                if placement is not None:
+                    newTuplet.placement = placement  # type: ignore
+                else:
+                    newTuplet.placement = None  # type: ignore
+
+                # bracket visibility
+                if bracketVisible is None or bracketVisible == 'true':
+                    newTuplet.bracket = True
+                elif bracketVisible == 'false':
+                    newTuplet.bracket = False
+
+                # num visibility (True/False) and format('number'/'ratio')
+                # (MEI has visibility and format, music21 has visibility for each number)
+                if numVisible == 'false':
+                    newTuplet.tupletActualShow = None
+                    newTuplet.tupletNormalShow = None
+                elif numVisible is None or numVisible == 'true':
+                    if numFormat is None or numFormat == 'count':
+                        newTuplet.tupletActualShow = 'number'
+                        newTuplet.tupletNormalShow = None
+                    elif numFormat == 'ratio':
+                        newTuplet.tupletActualShow = 'number'
+                        newTuplet.tupletNormalShow = 'number'
+
+                obj.duration.appendTuplet(newTuplet)
 
     if wasList:
         return objs
@@ -2664,9 +2776,15 @@ def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
     # NB: this is a hidden function because it uses the "m21TupletSearch" attribute, which are only
     #     supposed to be used within the MEI import module
 
-    inATuplet = False  # we hit m21TupletSearch=='start' but not 'end' yet
-    tupletNum = None
-    tupletNumbase = None
+    inATuplet: bool = False  # we hit m21TupletSearch=='start' but not 'end' yet
+    tupletNum: t.Optional[str] = None
+    tupletNumbase: t.Optional[str] = None
+    tupletBracketVisible: t.Optional[str] = None
+    tupletBracketPlace: t.Optional[str] = None
+    tupletNumVisible: t.Optional[str] = None
+    tupletNumPlace: t.Optional[str] = None
+    tupletNumFormat: t.Optional[str] = None
+    fakeTupletElem: t.Optional[Element] = None
 
     for eachNote in theLayer:
         # we'll skip objects that don't have a duration
@@ -2676,17 +2794,51 @@ def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
         if (hasattr(eachNote, 'm21TupletSearch')
                 and eachNote.m21TupletSearch == 'start'):  # type: ignore
             inATuplet = True
-            tupletNum = int(eachNote.m21TupletNum)  # type: ignore
-            tupletNumbase = int(eachNote.m21TupletNumbase)  # type: ignore
+            tupletNum = eachNote.m21TupletNum  # type: ignore
+            tupletNumbase = eachNote.m21TupletNumbase  # type: ignore
+            if hasattr(eachNote, 'm21TupletBracketVisible'):
+                tupletBracketVisible = eachNote.m21TupletBracketVisible
+            if hasattr(eachNote, 'm21TupletBracketPlace'):
+                tupletBracketPlace = eachNote.m21TupletBracketPlace
+            if hasattr(eachNote, 'm21TupletNumVisible'):
+                tupletNumVisible = eachNote.m21TupletNumVisible
+            if hasattr(eachNote, 'm21TupletNumPlace'):
+                tupletNumPlace = eachNote.m21TupletNumPlace
+            if hasattr(eachNote, 'm21TupletNumFormat'):
+                tupletNumFormat = eachNote.m21TupletNumFormat
 
             del eachNote.m21TupletSearch  # type: ignore
             del eachNote.m21TupletNum  # type: ignore
             del eachNote.m21TupletNumbase  # type: ignore
+            del eachNote.m21TupletBracketVisible  # type: ignore
+            del eachNote.m21TupletBracketPlace  # type: ignore
+            del eachNote.m21TupletNumVisible  # type: ignore
+            del eachNote.m21TupletNumPlace  # type: ignore
+            del eachNote.m21TupletNumFormat  # type: ignore
+
+            if t.TYPE_CHECKING:
+                assert tupletNum is not None
+                assert tupletNumbase is not None
+
+            fakeTupletElem = Element('',
+                                     m21TupletNum=tupletNum,
+                                     m21TupletNumbase=tupletNumbase)
+            if tupletBracketVisible is not None:
+                fakeTupletElem.set('m21TupletBracketVisible', tupletBracketVisible)
+            if tupletBracketPlace is not None:
+                fakeTupletElem.set('m21TupletBracketPlace', tupletBracketPlace)
+            if tupletNumVisible is not None:
+                fakeTupletElem.set('m21TupletNumVisible', tupletNumVisible)
+            if tupletNumPlace is not None:
+                fakeTupletElem.set('m21TupletNumPlace', tupletNumPlace)
+            if tupletNumFormat is not None:
+                fakeTupletElem.set('m21TupletNumFormat', tupletNumFormat)
 
         if inATuplet:
-            scaleToTuplet(eachNote, Element('',
-                                            m21TupletNum=str(tupletNum),
-                                            m21TupletNumbase=str(tupletNumbase)))
+            if t.TYPE_CHECKING:
+                assert fakeTupletElem is not None
+
+            scaleToTuplet(eachNote, fakeTupletElem)
 
             if (hasattr(eachNote, 'm21TupletSearch')
                     and eachNote.m21TupletSearch == 'end'):  # type: ignore
@@ -4923,6 +5075,11 @@ def tupletFromElement(
     numbaseStr: t.Optional[str] = elem.get('numbase')
     if numStr is None or numbaseStr is None:
         raise MeiAttributeError(_MISSING_TUPLET_DATA)
+    bracketVisibleStr: t.Optional[str] = elem.get('bracket.visible')
+    bracketPlaceStr: t.Optional[str] = elem.get('bracket.place')
+    numVisibleStr: t.Optional[str] = elem.get('num.visible')
+    numPlaceStr: t.Optional[str] = elem.get('num.place')
+    numFormatStr: t.Optional[str] = elem.get('num.format')
 
     # iterate all immediate children
     tupletMembers: t.List[Music21Object] = _processEmbeddedElements(
@@ -4935,7 +5092,18 @@ def tupletFromElement(
     )
 
     # "tuplet-ify" the duration of everything held within
-    newElem = Element('c', m21TupletNum=numStr, m21TupletNumbase=numbaseStr)
+    newElem = Element('', m21TupletNum=numStr, m21TupletNumbase=numbaseStr)
+    if bracketVisibleStr is not None:
+        newElem.set('m21TupletBracketVisible', bracketVisibleStr)
+    if bracketPlaceStr is not None:
+        newElem.set('m21TupletBracketPlace', bracketPlaceStr)
+    if numVisibleStr is not None:
+        newElem.set('m21TupletNumVisible', numVisibleStr)
+    if numPlaceStr is not None:
+        newElem.set('m21TupletNumPlace', numPlaceStr)
+    if numFormatStr is not None:
+        newElem.set('m21TupletNumFormat', numFormatStr)
+
     tupletMembers = t.cast(t.List[Music21Object], scaleToTuplet(tupletMembers, newElem))
 
     # Set the Tuplet.type property for the first and final note in a tuplet.
@@ -4953,12 +5121,12 @@ def tupletFromElement(
         # no members of tuplet
         return []
 
-    tupletMembers[firstNote].duration.tuplets[0].type = 'start'
+    tupletMembers[firstNote].duration.tuplets[-1].type = 'start'
     if lastNote is None:
         # when there is only one object in the tuplet
-        tupletMembers[firstNote].duration.tuplets[0].type = 'stop'
+        tupletMembers[firstNote].duration.tuplets[-1].type = 'stop'
     else:
-        tupletMembers[lastNote].duration.tuplets[0].type = 'stop'
+        tupletMembers[lastNote].duration.tuplets[-1].type = 'stop'
 
     return tupletMembers
 

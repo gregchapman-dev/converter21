@@ -47,6 +47,7 @@ class EventData:
         )
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
+        self._durationTuplets: t.Tuple[m21.duration.Tuplet, ...] = ()
         self._voiceIndex: int = voiceIndex
         self._elementIndex: int = elementIndex
         self._element: m21.base.Music21Object = element
@@ -85,6 +86,8 @@ class EventData:
             self._duration = opFrac(duration)
         else:
             self._duration = opFrac(element.duration.quarterLength)
+            if element.duration.tuplets:
+                self._durationTuplets = element.duration.tuplets
 
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
@@ -160,6 +163,24 @@ class EventData:
     @property
     def duration(self) -> HumNum:
         return self._duration
+
+    @property
+    def isTupletStart(self) -> bool:
+        if self._durationTuplets is not None and len(self._durationTuplets) > 0:
+            return self._durationTuplets[0].type == 'start'
+        return False
+
+    @property
+    def suppressTupletNum(self) -> bool:
+        if not self._durationTuplets:
+            return False
+        return self._durationTuplets[0].tupletActualShow is None
+
+    @property
+    def suppressTupletBracket(self) -> bool:
+        if not self._durationTuplets:
+            return False
+        return self._durationTuplets[0].bracket is False
 
     @property
     def name(self) -> str:
