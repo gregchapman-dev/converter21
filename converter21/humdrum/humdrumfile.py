@@ -6340,6 +6340,22 @@ class HumdrumFile(HumdrumFileContent):
 #         # TODO: ... (if there is one)
 #         gnote.articulations.append(breathMark)
 
+    def _computeM21Accidental(
+        self,
+        valueStr: t.Optional[str]
+    ) -> t.Optional[m21.pitch.Accidental]:
+        if not valueStr:
+            return None
+
+        try:
+            accidNum: int = int(valueStr)
+        except:  # pylint: disable=bare-except
+            return None
+
+        accid = m21.pitch.Accidental(accidNum)
+        accid.displayStatus = True
+        return accid
+
     '''
     //////////////////////////////
     //
@@ -6373,7 +6389,6 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         isLower: bool = False
-        isHalfStep: bool = False
         subTokenIdx: int = 0
         tpos: int = -1
         for i, chit in enumerate(token.text):
@@ -6383,31 +6398,28 @@ class HumdrumFile(HumdrumFileContent):
             if chit in ('w', 'W'):
                 tpos = i
                 isLower = True
-                isHalfStep = chit == 'w'
                 break
             if chit in ('m', 'M'):
                 tpos = i
-                isHalfStep = chit == 'm'
                 break
-
-        if subTokenIdx == 0 and ' ' not in token.text:
-            subTokenIdx = -1
 
         if tpos == -1:
             # no mordent on note
             return
 
         mordent: m21.expressions.GeneralMordent
+        accidStr: t.Optional[str] = None
         if isLower:
-            if isHalfStep:
-                mordent = m21.expressions.HalfStepMordent()
-            else:
-                mordent = m21.expressions.WholeStepMordent()
+            accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentLowerAccidental')
         else:
-            if isHalfStep:
-                mordent = m21.expressions.HalfStepInvertedMordent()
-            else:
-                mordent = m21.expressions.WholeStepInvertedMordent()
+            accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
+
+        accid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
+
+        if isLower:
+            mordent = m21.expressions.Mordent(accid=accid)
+        else:
+            mordent = m21.expressions.InvertedMordent(accid=accid)
 
         # Fix default placement (would otherwise be 'above')
         mordent.placement = None  # type: ignore
@@ -6430,7 +6442,9 @@ class HumdrumFile(HumdrumFileContent):
         # LATER: ... can't really support them here.
 #         if 'mm' in token.text or 'MM' in token.text or 'ww' in token.text or 'WW' in token.text:
 #             mordent.isLong = True # or whatever
+
         gnote.expressions.append(mordent)
+
     '''
     //////////////////////////////
     //
