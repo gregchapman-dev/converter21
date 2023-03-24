@@ -2142,25 +2142,25 @@ def addTurn(
         if form == 'upper':
             turn = expressions.Turn(
                 delay=delay,
-                accidUpper=m21AccidUpper,
-                accidLower=m21AccidLower
+                upperAccid=m21AccidUpper,
+                lowerAccid=m21AccidLower
             )
         else:
-            turn = expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
+            turn = expressions.InvertedTurn(
                 delay=delay,
-                accidUpper=m21AccidUpper,
-                accidLower=m21AccidLower
+                upperAccid=m21AccidUpper,
+                lowerAccid=m21AccidLower
             )
     else:
         if form == 'upper':
             turn = expressions.Turn(
-                accidUpper=m21AccidUpper,
-                accidLower=m21AccidLower
+                upperAccid=m21AccidUpper,
+                lowerAccid=m21AccidLower
             )
         elif form == 'lower':
             turn = expressions.InvertedTurn(
-                accidUpper=m21AccidUpper,
-                accidLower=m21AccidLower
+                upperAccid=m21AccidUpper,
+                lowerAccid=m21AccidLower
             )
 
     updateAltersFromExpression(
@@ -6374,25 +6374,25 @@ def turnFromElement(
             if form == 'upper':
                 turn = expressions.Turn(  # pylint: disable=unexpected-keyword-arg
                     delay=delay,  # type: ignore
-                    accidUpper=m21AccidUpper,
-                    accidLower=m21AccidLower
+                    upperAccid=m21AccidUpper,
+                    lowerAccid=m21AccidLower
                 )
             else:
                 turn = expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
                     delay=delay,  # type: ignore
-                    accidUpper=m21AccidUpper,
-                    accidLower=m21AccidLower
+                    upperAccid=m21AccidUpper,
+                    lowerAccid=m21AccidLower
                 )
         else:
             if form == 'upper':
                 turn = expressions.Turn(
-                    accidUpper=m21AccidUpper,
-                    accidLower=m21AccidLower
+                    upperAccid=m21AccidUpper,
+                    lowerAccid=m21AccidLower
                 )
             else:
                 turn = expressions.InvertedTurn(
-                    accidUpper=m21AccidUpper,
-                    accidLower=m21AccidLower
+                    upperAccid=m21AccidUpper,
+                    lowerAccid=m21AccidLower
                 )
 
         if place and place != 'place_unspecified':
