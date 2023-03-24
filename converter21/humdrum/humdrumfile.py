@@ -6400,6 +6400,9 @@ class HumdrumFile(HumdrumFileContent):
 #         if 'mm' in token.text or 'MM' in token.text or 'ww' in token.text or 'WW' in token.text:
 #             mordent.isLong = True # or whatever
 
+#       TODO: Set an explicit visual accidental for the mordent.
+#       TODO: std::string acctext = token->getLayoutParameter("MOR", "acc");
+
         gnote.expressions.append(mordent)
 
     '''

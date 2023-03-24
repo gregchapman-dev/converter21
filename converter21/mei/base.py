@@ -2189,24 +2189,21 @@ def updateAltersFromExpression(
 
     mainPitch: pitch.Pitch = obj.pitches[-1]  # top-most pitch if it's a chord
 
-    # Trills and Mordents have a single accidental.
+    # Trills and Mordents have a single size (interval).
     if (isinstance(expr, (expressions.Trill, expressions.GeneralMordent))
             and expr.accid is not None):
-        otherPitch: pitch.Pitch = deepcopy(mainPitch)
-        otherPitch.transpose(expr.getSize(obj), inPlace=True)
+        otherPitch: pitch.Pitch = mainPitch.transpose(expr.getSize(mainPitch))
         updateStaffAltersWithPitches(staffNStr, [otherPitch], otherInfo)
         return
 
-    # Turns have both an upper and lower accidental.
+    # Turns have both an upper and lower size (interval).
     if isinstance(expr, expressions.Turn):
         pitches: t.List[pitch.Pitch] = []
         if expr.upperAccid is not None:
-            pitchUp: pitch.Pitch = deepcopy(mainPitch)
-            pitchUp.transpose(expr.getUpperSize(obj), inPlace=True)
+            pitchUp: pitch.Pitch = mainPitch.transpose(expr.getUpperSize(mainPitch))
             pitches.append(pitchUp)
         if expr.lowerAccid is not None:
-            pitchDown: pitch.Pitch = deepcopy(mainPitch)
-            pitchDown.transpose(expr.getLowerSize(obj), inPlace=True)
+            pitchDown: pitch.Pitch = mainPitch.transpose(expr.getLowerSize(mainPitch))
             pitches.append(pitchDown)
         if pitches:
             updateStaffAltersWithPitches(staffNStr, pitches, otherInfo)
