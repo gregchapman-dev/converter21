@@ -6074,97 +6074,54 @@ class HumdrumFile(HumdrumFileContent):
             # continuation trill, so don't start a new one
             return
 
-        if subTokenIdx == 0 and ' ' not in token.text:
-            subTokenIdx = -1
+        # music21 now supports Trill accidentals. That is handled by accidental analysis
+        # in HumdrumFileContent, and then here we adjust that based on any '!LO:TR:acc='
+        # accidental.
 
-        # music21 has a HalfStepTrill and a WholeStepTrill, which map to 't' and 'T',
-        # respectively, but that is actually handled by accidental analysis in HumdrumFileContent,
-        # and then here we adjust that based on any '!LO:TR:acc=' accidental.  We take that
-        # analysis, and figure out what the interval is, and create the right type of trill.
-
-        # default step for 't' is +1, 'T' is +2
-        stepsUp: int = +1
-        if 'T' in token.text:
-            stepsUp = +2
-
-        stepsUpFromAnalysis: int = stepsUp
-        tokindex: int = max(subTokenIdx, 0)
-        trillPitchName: t.Optional[str] = (
-            token.getValueString('auto', str(tokindex), 'trillNoteM21Pitch')
-        )
-        trillOtherPitchName: t.Optional[str] = (
-            token.getValueString('auto', str(tokindex), 'trillOtherNoteM21Pitch')
+        trillAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'trillAccidental')
         )
 
-        if trillPitchName is not None and trillOtherPitchName is not None:
-            trillPitch = m21.pitch.Pitch(trillPitchName)
-            trillOtherPitch = m21.pitch.Pitch(trillOtherPitchName)
-            interval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
-                trillPitch, trillOtherPitch
-            )
-            stepsUpFromAnalysis = int(interval.semitones)
-            if stepsUpFromAnalysis != stepsUp:
-                print(f'stepsUpFromAnalysis ({stepsUpFromAnalysis}) != stepsUp ({stepsUp})')
-                stepsUp = stepsUpFromAnalysis
-
-            # replace the trill accidental if different in layout parameters, such as:
-            #    !LO:TR:acc=##
-            # for a double sharp, or
-            #    !LO:TR:acc=none
-            # for no accidental
-            lcount: int = token.linkedParameterSetCount
-            value: str = ''
-            for p in range(0, lcount):
-                hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
-                if hps is None:
-                    continue
-                if hps.namespace1 != 'LO':
-                    continue
-                if hps.namespace2 != 'TR':
-                    continue
-                for q in range(0, hps.count):
-                    key: str = hps.getParameterName(q)
-                    if key == 'acc':
-                        value = hps.getParameterValue(q)
-                        break
-                if value:
+        # replace the trill accidental if different in layout parameters, such as:
+        #    !LO:TR:acc=##
+        # for a double sharp, or
+        #    !LO:TR:acc=none
+        # for no accidental
+        lcount: int = token.linkedParameterSetCount
+        value: str = ''
+        for p in range(0, lcount):
+            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
+            if hps is None:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            if hps.namespace2 != 'TR':
+                continue
+            for q in range(0, hps.count):
+                key: str = hps.getParameterName(q)
+                if key == 'acc':
+                    value = hps.getParameterValue(q)
                     break
-
-            trillNewOtherPitchName: t.Optional[str] = trillOtherPitchName
-            name: str
-            _accidStr: str
-            octaveStr: str
-            name, _accidStr, octaveStr = (
-                M21Utilities.splitM21PitchNameIntoNameAccidOctave(trillOtherPitchName)
-            )
             if value:
-                if value == 'none':
-                    pass  # 'none' doesn't change pitch, just says "don't print it"
-                elif value == 'n':
-                    trillNewOtherPitchName = name + octaveStr
-                else:
-                    trillNewOtherPitchName = name + value + octaveStr
-            trillNewOtherPitch = m21.pitch.Pitch(trillNewOtherPitchName)
-            newInterval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
-                trillPitch, trillNewOtherPitch
-            )
-            stepsUpFromLayoutParams: int = int(newInterval.semitones)
-            if stepsUpFromLayoutParams != stepsUpFromAnalysis:
-                print(f'stepsUpFromLayoutParams ({stepsUpFromLayoutParams})'
-                    f'!= stepsUpFromAnalysis ({stepsUpFromAnalysis})')
-                stepsUp = stepsUpFromLayoutParams
+                break
 
-        trill: m21.expressions.Trill
-        if stepsUp == +1:
-            trill = m21.expressions.HalfStepTrill()
-        elif stepsUp == +2:
-            trill = m21.expressions.WholeStepTrill()
-        else:
-            print(f'**** non-standard trill stepsUp = {stepsUp}', file=sys.stderr)
-            trill = m21.expressions.Trill()
-            trill.size = m21.interval.ChromaticInterval(stepsUp)
-            # trill._setAccidentalFromKeySig = False
+        if value:
+            if value == 'none':
+                # 'none' doesn't change pitch, just says "don't print it"
+                if trillAccid is not None:
+                    trillAccid.displayStatus = False
+            elif value == 'n':
+                trillAccid = self._computeM21Accidental('0')
+            elif value == '#':
+                trillAccid = self._computeM21Accidental('1')
+            elif value == '##':
+                trillAccid = self._computeM21Accidental('2')
+            elif value == '-':
+                trillAccid = self._computeM21Accidental('-1')
+            elif value == '--':
+                trillAccid = self._computeM21Accidental('-2')
 
+        trill: m21.expressions.Trill = m21.expressions.Trill(accid=trillAccid)
         startNote.expressions.append(trill)
 
         # here the C++ code sets placement to 'below' if layer == 2
