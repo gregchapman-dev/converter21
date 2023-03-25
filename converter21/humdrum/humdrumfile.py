@@ -6055,7 +6055,11 @@ class HumdrumFile(HumdrumFileContent):
         'n#': '1',
         '--': '-2',
         '##': '2',
-        'x': '2'
+        'x': '2',
+        '#x': '3',
+        'x#': '3',
+        '###': '3',
+        '---': '-3',
     }
 
     '''
@@ -6495,14 +6499,14 @@ class HumdrumFile(HumdrumFileContent):
     // accidental.  This can be done when MEI allows @accidlower.ges and @accidupper.ges.
     //
     // Assuming not in chord for now.
-
-    # TODO: merge new iohumdrum.cpp changes in addTurn/addMordent (accidental stuff)
-    # --gregc 01July2021
     '''
     def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
         tok: str = token.text
         turnStart: int = -1
         turnEnd: int = -1
+
+        # assume not in chord for now
+        subTokenIdx: int = 0
 
         for i, ch in enumerate(tok):
             if ch in ('s', 'S', '$'):
@@ -6517,7 +6521,7 @@ class HumdrumFile(HumdrumFileContent):
 
         turnStr: str = tok[turnStart:turnEnd + 1]
         if turnStr == 's':
-            # invalid turn indication (leading 's' must be followed by 'S' or '$')
+            # invalid turn indication; leading 's' (not delayed) must be followed by 'S' or '$'
             return
 
         isDelayed: bool = turnStr[0] != 's'
@@ -6527,28 +6531,77 @@ class HumdrumFile(HumdrumFileContent):
         elif turnStr[0] == '$':
             isInverted = True
 
-        turn: t.Union[m21.expressions.Turn, m21.expressions.InvertedTurn]
+        # check for automatic upper and lower accidental on turn:
+        loweraccid: t.Optional[str] = token.getValueString(
+            'auto', str(subTokenIdx), 'turnLowerAccidental'
+        )
+        upperaccid: t.Optional[str] = token.getValueString(
+            'auto', str(subTokenIdx), 'turnUpperAccidental'
+        )
+        turnLowerAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(loweraccid)
+        turnUpperAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(upperaccid)
+
+        # Check for LO:TURN forced visual accidentals
+        lacctext: str = token.layoutParameter('TURN', 'lacc')
+        uacctext: str = token.layoutParameter('TURN', 'uacc')
+        if lacctext and lacctext != 'true':
+            if lacctext in ('none', 'false'):
+                # doesn't change pitch, just says "don't print it"
+                if turnLowerAccid is not None:
+                    turnLowerAccid.displayStatus = False
+            else:
+                turnLowerAccid = self._computeM21Accidental(
+                    self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(lacctext, '')
+                )
+        if uacctext and uacctext != 'true':
+            if uacctext in ('none', 'false'):
+                # doesn't change pitch, just says "don't print it"
+                if turnUpperAccid is not None:
+                    turnUpperAccid.displayStatus = False
+            else:
+                turnUpperAccid = self._computeM21Accidental(
+                    self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(uacctext, '')
+                )
+
+        # Check to see if accidentals need to be flipped:
+        facctext: str = token.layoutParameter('TURN', 'facc')
+        if facctext == 'true':
+            turnLowerAccid, turnUpperAccid = turnUpperAccid, turnLowerAccid
+
+        # Create Turn/InvertedTurn object, using upper and lower accids
+        turn: m21.expressions.Turn
         if M21Utilities.m21SupportsDelayedTurns():
             delay: OrnamentDelay = OrnamentDelay.NO_DELAY
             if isDelayed:
                 delay = OrnamentDelay.DEFAULT_DELAY
 
             if isInverted:
-                turn = m21.expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
-                    delay=delay  # type: ignore
+                turn = m21.expressions.InvertedTurn(
+                    delay=delay,
+                    accidUpper=turnUpperAccid,
+                    accidLower=turnLowerAccid
                 )
             else:
-                turn = m21.expressions.Turn(  # pylint: disable=unexpected-keyword-arg
-                    delay=delay  # type: ignore
+                turn = m21.expressions.Turn(
+                    delay=delay,
+                    accidUpper=turnUpperAccid,
+                    accidLower=turnLowerAccid
                 )
         else:
             if isInverted:
-                turn = m21.expressions.InvertedTurn()
+                turn = m21.expressions.InvertedTurn(
+                    accidUpper=turnUpperAccid,
+                    accidLower=turnLowerAccid
+                )
             else:
-                turn = m21.expressions.Turn()
+                turn = m21.expressions.Turn(
+                    accidUpper=turnUpperAccid,
+                    accidLower=turnLowerAccid
+                )
 
         # our better default
         turn.placement = None  # type: ignore
+
         if self._signifiers.above:
             if turnEnd < len(tok) - 1:
                 if tok[turnEnd + 1] == self._signifiers.above:
@@ -6558,8 +6611,6 @@ class HumdrumFile(HumdrumFileContent):
             if turnEnd < len(tok) - 1:
                 if tok[turnEnd + 1] == self._signifiers.below:
                     turn.placement = 'below'
-
-        # TODO: handle turn accidentals
 
         gnote.expressions.append(turn)
 
