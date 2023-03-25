@@ -6098,34 +6098,15 @@ class HumdrumFile(HumdrumFileContent):
         # for a double sharp, or
         #    !LO:TR:acc=none
         # for no accidental
-        lcount: int = token.linkedParameterSetCount
-        value: str = ''
-        found: bool = False
-        for p in range(0, lcount):
-            hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
-            if hps is None:
-                continue
-            if hps.namespace1 != 'LO':
-                continue
-            if hps.namespace2 != 'TR':
-                continue
-            for q in range(0, hps.count):
-                key: str = hps.getParameterName(q)
-                if key == 'acc':
-                    value = hps.getParameterValue(q)
-                    found = True
-                    break
-            if found:
-                break
-
-        if found:
-            if value == 'none' or value == 'false':
+        accText: str = token.layoutParameter('TR', 'acc')
+        if accText:
+            if accText in ('none', 'false'):
                 # doesn't change pitch, just says "don't print it"
                 if trillAccid is not None:
                     trillAccid.displayStatus = False
             else:
-                accid = self._computeM21Accidental(
-                    _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(value, '')
+                trillAccid = self._computeM21Accidental(
+                    self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                 )
 
         trill: m21.expressions.Trill = m21.expressions.Trill(accid=trillAccid)
@@ -6181,7 +6162,7 @@ class HumdrumFile(HumdrumFileContent):
                 # check to see if the next non-grace note/rest has a TTT or ttt on it.
                 # if so, then do not terminate the trill extension line at this
                 # grace notes.
-                ntok: HumdrumToken = endtok.nextToken0
+                ntok: t.Optional[HumdrumToken] = endTok.nextToken0
                 while ntok:
                     if ntok.isBarline:
                         lastNoteOrBar = ntok
@@ -6197,7 +6178,7 @@ class HumdrumFile(HumdrumFileContent):
                     lastNoteOrBar = ntok
 
                     # at this point ntok is a durational note/chord/rest
-                    if 'TTT' not in ntok and 'ttt' not in ntok:
+                    if 'TTT' not in ntok.text and 'ttt' not in ntok.text:
                         endTok = ntok
                         break
                     ntok = ntok.nextToken0
@@ -6362,7 +6343,7 @@ class HumdrumFile(HumdrumFileContent):
 
         mindices: t.List[int] = []   # indices of subtokens with mordent
         mstrings: t.List[str] = []   # list of mordent strings (including '<', '>', 'y')
-        mpitches: t.List[str] = []   # pitches of notes with mordents
+        mpitches: t.List[int] = []   # pitches of notes with mordents
 
         query: str = '('
         query += '[wWmM]+'
@@ -6414,9 +6395,9 @@ class HumdrumFile(HumdrumFileContent):
         else:
             # Single voice so put above if a single mordent,
             # but place a second mordent below if a dyad.
-            if len(mindex) == 1:
+            if len(mindices) == 1:
                 mplaces[0] = +1
-            elif len(mindex) = 2:
+            elif len(mindices) == 2:
                 if highest == mpitches[0]:
                     mplaces[0] = +1
                     mplaces[1] = -1
@@ -6429,11 +6410,11 @@ class HumdrumFile(HumdrumFileContent):
                 # it will have to be manually specified.
                 mplaces = [+1] * len(mplaces)
 
-        for i, subTokenIdx in enumerate(mindices):
-            if not mstring[i]:
+        for i, (mstring, mplace, subTokenIdx) in enumerate(zip(mstrings, mplaces, mindices)):
+            if not mstring:
                 continue
 
-            isLower: bool = mstrings[i][0] in 'wW'
+            isLower: bool = mstring[0] in 'wW'
 
             mordent: m21.expressions.GeneralMordent
             accidStr: t.Optional[str] = None
@@ -6442,36 +6423,37 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
 
-            accid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
+            mordentAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
 
             # Set any explicit visual accidental for the mordent.
             # Maybe in the future allow for lacc and uacc to place the accidental.
             # Also deal multiple mordents in a chord later.
             accText: str = token.layoutParameter('MOR', 'acc')
             if accText and accText != 'true':
-                if accText == 'none' or accText == 'false':
+                if accText in ('none', 'false'):
                     # doesn't change pitch, just says "don't print it"
-                    accid.displayStatus = False
+                    if mordentAccid is not None:
+                        mordentAccid.displayStatus = False
                 else:
-                    accid = self._computeM21Accidental(
-                        _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
+                    mordentAccid = self._computeM21Accidental(
+                        self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                     )
 
             if isLower:
-                mordent = m21.expressions.Mordent(accid=accid)
+                mordent = m21.expressions.Mordent(accid=mordentAccid)
             else:
-                mordent = m21.expressions.InvertedMordent(accid=accid)
+                mordent = m21.expressions.InvertedMordent(accid=mordentAccid)
 
             # Default placement has been set up in mplaces.
-            direction: int = mplaces[i]
+            direction: int = mplace
 
             # Override default with any explicit placement of the mordent
             if self._signifiers.above:
-                if self._signifiers.above in mstrings[i]:
+                if self._signifiers.above in mstring:
                     direction = +1
 
             if self._signifiers.below:
-                if self._signifiers.below in mstrings[i]:
+                if self._signifiers.below in mstring:
                     direction = -1
 
             mordent.placement = None  # type: ignore
