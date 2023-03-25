@@ -2029,9 +2029,9 @@ def addTrill(
     accidLower: str = elem.get('m21TrillAccidLower', '')
     m21Accid: t.Optional[pitch.Accidental] = None
     if accidUpper:
-        m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidUpper, ''))  # type: ignore
+        m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidUpper, ''))  # type: ignore
     elif accidLower:
-        m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidLower, ''))  # type: ignore
+        m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidLower, ''))  # type: ignore
     trill = expressions.Trill(accid=m21Accid)
 
     updateAltersFromExpression(
@@ -2066,9 +2066,9 @@ def addMordent(
     form: str = elem.get('m21MordentForm', '')
     m21Accid: t.Optional[pitch.Accidental] = None
     if accidUpper:
-        m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidUpper, ''))  # type: ignore
+        m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidUpper, ''))  # type: ignore
     elif accidLower:
-        m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidLower, ''))  # type: ignore
+        m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidLower, ''))  # type: ignore
 
     if accidUpper:
         if not form:
@@ -2129,9 +2129,9 @@ def addTurn(
     m21AccidUpper: t.Optional[pitch.Accidental] = None
     m21AccidLower: t.Optional[pitch.Accidental] = None
     if accidUpper:
-        m21AccidUpper = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidUpper, ''))  # type: ignore
+        m21AccidUpper = pitch.Accidental(_ACCID_ATTR_DICT.get(accidUpper, ''))  # type: ignore
     if accidLower:
-        m21AccidLower = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidLower, ''))  # type: ignore
+        m21AccidLower = pitch.Accidental(_ACCID_ATTR_DICT.get(accidLower, ''))  # type: ignore
 
     if M21Utilities.m21SupportsDelayedTurns():
         delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
@@ -6159,9 +6159,9 @@ def trillFromElement(
         accidlower: str = elem.get('accidlower', '')
         m21Accid: t.Optional[pitch.Accidental] = None
         if accidupper:
-            m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidupper, ''))  # type: ignore
+            m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidupper, ''))  # type: ignore
         elif accidlower:
-            m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidlower, ''))  # type: ignore
+            m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidlower, ''))  # type: ignore
 
         trill = expressions.Trill(accid=m21Accid)
 
@@ -6266,9 +6266,9 @@ def mordentFromElement(
         accidlower: str = elem.get('accidlower', '')
         m21Accid: t.Optional[pitch.Accidental] = None
         if accidupper:
-            m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidupper, ''))  # type: ignore
+            m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidupper, ''))  # type: ignore
         elif accidlower:
-            m21Accid = pitch.Accidental(_ACCID_GES_ATTR_DICT.get(accidlower, ''))  # type: ignore
+            m21Accid = pitch.Accidental(_ACCID_ATTR_DICT.get(accidlower, ''))  # type: ignore
 
         if not form:
             if accidupper:
@@ -6343,11 +6343,11 @@ def turnFromElement(
         m21AccidLower: t.Optional[pitch.Accidental] = None
         if accidupper:
             m21AccidUpper = pitch.Accidental(
-                _ACCID_GES_ATTR_DICT.get(accidupper, '')  # type: ignore
+                _ACCID_ATTR_DICT.get(accidupper, '')  # type: ignore
             )
         if accidlower:
             m21AccidLower = pitch.Accidental(
-                _ACCID_GES_ATTR_DICT.get(accidlower, '')  # type: ignore
+                _ACCID_ATTR_DICT.get(accidlower, '')  # type: ignore
             )
 
         # Make a placeholder Turn or InvertedTurn; we'll interpret later
