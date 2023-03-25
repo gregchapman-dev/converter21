@@ -1341,16 +1341,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         upperb40 = Convert.base7ToBase40(upperDiatonic) + upperAccid
 
                         if lowerInt == 0:
-                            # need to calculate lower interval (but it will not appear
-                            # below the inverted turn, just calculating for performance
-                            # rendering.
-                            lowerInt = lowerb40 + b40
+                            # need to calculate lower interval
+                            lowerInt = lowerb40 - b40
                             lowerb40 = b40 + lowerInt
 
                         if upperInt == 0:
-                            # need to calculate upper interval (but it will not appear
-                            # above the inverted turn, just calculating for performance
-                            # rendering.
+                            # need to calculate upper interval
                             upperInt = upperb40 - b40
                             upperb40 = b40 + upperInt
 
@@ -1359,12 +1355,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if uacc != upperAccid:
                             token.setValue(
                                 'auto', str(k), 'turnUpperAccidental', str(uacc))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + uacc
+                            dstates[spineStartIdx][upperDiatonic] = uacc
 
                         if bacc != lowerAccid:
                             token.setValue(
-                                'auto', str(k), 'turnUpperAccidental', str(bacc))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + bacc
+                                'auto', str(k), 'turnLowerAccidental', str(bacc))
+                            dstates[spineStartIdx][lowerDiatonic] = bacc
                     elif 'S' in subtok:
                         # regular turn
                         loc = subtok.find('S')
@@ -1393,16 +1389,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         upperb40 = Convert.base7ToBase40(upperDiatonic) + upperAccid
 
                         if lowerInt == 0:
-                            # need to calculate lower interval (but it will not appear
-                            # below the inverted turn, just calculating for performance
-                            # rendering.
-                            lowerInt = lowerb40 + b40
+                            # need to calculate lower interval
+                            lowerInt = lowerb40 - b40
                             lowerb40 = b40 + lowerInt
 
                         if upperInt == 0:
-                            # need to calculate upper interval (but it will not appear
-                            # above the inverted turn, just calculating for performance
-                            # rendering.
+                            # need to calculate upper interval
                             upperInt = upperb40 - b40
                             upperb40 = b40 + upperInt
 
@@ -1411,12 +1403,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         if uacc != upperAccid:
                             token.setValue(
                                 'auto', str(k), 'turnUpperAccidental', str(uacc))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + uacc
+                            dstates[spineStartIdx][upperDiatonic] = uacc
 
                         if bacc != lowerAccid:
                             token.setValue(
-                                'auto', str(k), 'turnUpperAccidental', str(bacc))
-                            dstates[spineStartIdx][exprDiatonic] = -1000 + bacc
+                                'auto', str(k), 'turnLowerAccidental', str(bacc))
+                            dstates[spineStartIdx][lowerDiatonic] = bacc
 
                     if isGrace and accid != gdstates[spineStartIdx][diatonic]:
                         # accidental is different from the previous state so should be
