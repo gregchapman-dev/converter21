@@ -6089,6 +6089,7 @@ class HumdrumFile(HumdrumFileContent):
         # for no accidental
         lcount: int = token.linkedParameterSetCount
         value: str = ''
+        found: bool = False
         for p in range(0, lcount):
             hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
             if hps is None:
@@ -6101,11 +6102,12 @@ class HumdrumFile(HumdrumFileContent):
                 key: str = hps.getParameterName(q)
                 if key == 'acc':
                     value = hps.getParameterValue(q)
+                    found = True
                     break
-            if value:
+            if found:
                 break
 
-        if value:
+        if found:
             if value == 'none':
                 # 'none' doesn't change pitch, just says "don't print it"
                 if trillAccid is not None:
@@ -6170,33 +6172,30 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             # it's a note/chord/rest
-#             if endTok.isGrace:
-#                 # check to see if the next non-grace note/rest has a TTT or ttt on it.
-#                 # if so, then do not terminate the trill extension line at this
-#                 # grace notes.
-#                 ntok: HumdrumToken = endtok.nextToken0
-#                 while ntok:
-#                     if ntok.isBarline:
-#                         lastNoteOrBar = ntok
-#
-#                     if not ntok.isData:
-#                         ntok = ntok.nextToken0
-#                         continue
-#
-#                     if ntok.isGrace:
-#                         ntok = ntok.nextToken0
-#                         continue
-#
-#                     lastNoteOrBar = ntok
-#                     # at this point ntok is a durational note/chord/rest
-#                     # BUG: C++ code only breaks if 'TTT' and 'ttt' are NOT found,
-#                     # BUG: ... and it never sets endTok at all. I believe the end
-#                     # BUG: ... result is that this grace note loop is a (potentially
-#                     # BUG: ... expensive) no-op.
-#                     # TODO: Fix the isGrace loop when searching for end of trill extension
-#                     if 'TTT' in ntok or 'ttt' in ntok:
-#                         endTok = ntok
-#                     break
+            if endTok.isGrace:
+                # check to see if the next non-grace note/rest has a TTT or ttt on it.
+                # if so, then do not terminate the trill extension line at this
+                # grace notes.
+                ntok: HumdrumToken = endtok.nextToken0
+                while ntok:
+                    if ntok.isBarline:
+                        lastNoteOrBar = ntok
+
+                    if not ntok.isData:
+                        ntok = ntok.nextToken0
+                        continue
+
+                    if ntok.isGrace:
+                        ntok = ntok.nextToken0
+                        continue
+
+                    lastNoteOrBar = ntok
+
+                    # at this point ntok is a durational note/chord/rest
+                    if 'TTT' not in ntok and 'ttt' not in ntok:
+                        endTok = ntok
+                        break
+                    ntok = ntok.nextToken0
 
             if lastNoteOrBar.isData:
                 nextToLastNote = lastNoteOrBar
@@ -6206,9 +6205,14 @@ class HumdrumFile(HumdrumFileContent):
 
             endTok = endTok.nextToken0
 
+        # This code is now quite different from C++ code, as we are creating a spanner, not
+        # MEI stuff (where there are more cases to consider).
         if endTok and nextToLastNote:
+            # endTok (first note after trill extension) was found, use nextToLastNote in spanner
             endTok = nextToLastNote
         elif not endTok and lastNoteOrBar and lastNoteOrBar.isData:
+            # reached the end of the music without finding a note after trill extension, so
+            # use the lastNoteOrBar in spanner
             endTok = lastNoteOrBar
         else:
             # it must start and end on the same note
