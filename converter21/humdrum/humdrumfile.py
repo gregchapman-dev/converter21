@@ -6047,6 +6047,17 @@ class HumdrumFile(HumdrumFileContent):
         if 's' in lowerText or '$' in lowerText:
             self._addTurn(gnote, token)
 
+    _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR: t.Dict[str, str] = {
+        '#': '1',
+        '-': '-1',
+        'n': '0',
+        'n-': '-1',
+        'n#': '1',
+        '--': '-2',
+        '##': '2',
+        'x': '2'
+    }
+
     '''
     //////////////////////////////
     //
@@ -6108,20 +6119,14 @@ class HumdrumFile(HumdrumFileContent):
                 break
 
         if found:
-            if value == 'none':
-                # 'none' doesn't change pitch, just says "don't print it"
+            if value == 'none' or value == 'false':
+                # doesn't change pitch, just says "don't print it"
                 if trillAccid is not None:
                     trillAccid.displayStatus = False
-            elif value == 'n':
-                trillAccid = self._computeM21Accidental('0')
-            elif value == '#':
-                trillAccid = self._computeM21Accidental('1')
-            elif value == '##':
-                trillAccid = self._computeM21Accidental('2')
-            elif value == '-':
-                trillAccid = self._computeM21Accidental('-1')
-            elif value == '--':
-                trillAccid = self._computeM21Accidental('-2')
+            else:
+                accid = self._computeM21Accidental(
+                    _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(value, '')
+                )
 
         trill: m21.expressions.Trill = m21.expressions.Trill(accid=trillAccid)
         startNote.expressions.append(trill)
@@ -6349,65 +6354,138 @@ class HumdrumFile(HumdrumFileContent):
 
     '''
     def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
-        isLower: bool = False
-        subTokenIdx: int = 0
-        tpos: int = -1
-        for i, chit in enumerate(token.text):
-            if chit == ' ':
-                subTokenIdx += 1
-                continue
-            if chit in ('w', 'W'):
-                tpos = i
-                isLower = True
-                break
-            if chit in ('m', 'M'):
-                tpos = i
-                break
-
-        if tpos == -1:
-            # no mordent on note
+        subtoks: t.List[str] = token.subtokens
+        if not subtoks:
             return
 
-        mordent: m21.expressions.GeneralMordent
-        accidStr: t.Optional[str] = None
-        if isLower:
-            accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentLowerAccidental')
-        else:
-            accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
+        subtrack: int = token.subTrack
 
-        accid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
+        mindices: t.List[int] = []   # indices of subtokens with mordent
+        mstrings: t.List[str] = []   # list of mordent strings (including '<', '>', 'y')
+        mpitches: t.List[str] = []   # pitches of notes with mordents
 
-        if isLower:
-            mordent = m21.expressions.Mordent(accid=accid)
-        else:
-            mordent = m21.expressions.InvertedMordent(accid=accid)
-
-        # Fix default placement (would otherwise be 'above')
-        mordent.placement = None  # type: ignore
-
-        query: str
+        query: str = '('
+        query += '[wWmM]+'
+        query += '[y'
         if self._signifiers.above:
-            query = '[Mm]+' + self._signifiers.above
-            if re.search(query, token.text):
-                mordent.placement = 'above'  # type: ignore
-
+            query += self._signifiers.above
         if self._signifiers.below:
-            query = '[Mm]+' + self._signifiers.below
-            if re.search(query, token.text):
-                mordent.placement = 'below'  # type: ignore
+            query += self._signifiers.below
+        query += ']*'
+        query += ')'
 
-        # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
-        # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
+        for i, subtok in enumerate(subtoks):
+            if 'r' in subtok:
+                continue
 
-        # LATER: long mordents ('MM', 'mm', 'WW', 'ww') are not supported by music21, so we
-        # LATER: ... can't really support them here.
-#         if 'mm' in token.text or 'MM' in token.text or 'ww' in token.text or 'WW' in token.text:
-#             mordent.isLong = True # or whatever
+            m = re.search(query, subtok)
+            if not m:
+                continue
 
-#       TODO: Set an explicit visual accidental for the mordent.
-#       TODO: std::string acctext = token->getLayoutParameter("MOR", "acc");
+            match: str = m.group(1)
+            if 'y' in match:
+                # Hidden mordent, so suppress from conversion
+                continue
 
-        gnote.expressions.append(mordent)
+            mindices.append(i)
+            mstrings.append(match)
+            mpitches.append(Convert.kernToBase40(subtok))
+
+        if not mindices:
+            # no mordents found
+            return
+
+        # find highest and lowest pitch
+        highest: int = mpitches[0]
+        lowest: int = mpitches[0]
+        for mpitch in mpitches:
+            highest = max(highest, mpitch)
+            lowest = min(lowest, mpitch)
+
+        mplaces: t.List[int] = [0] * len(mindices)
+        if subtrack:
+            if subtrack % 2 != 0:
+                # force above for first/third/fifth/etc. layers:
+                mplaces = [+1] * len(mplaces)
+            else:
+                # force below for second/fourth/etc. layers:
+                mplaces = [-1] * len(mplaces)
+
+        else:
+            # Single voice so put above if a single mordent,
+            # but place a second mordent below if a dyad.
+            if len(mindex) == 1:
+                mplaces[0] = +1
+            elif len(mindex) = 2:
+                if highest == mpitches[0]:
+                    mplaces[0] = +1
+                    mplaces[1] = -1
+                else:
+                    mplaces[0] = -1
+                    mplaces[1] = +1
+            else:
+                # If there are three or more mordents in a chord, place them
+                # all above the staff, and if any should be placed below, then
+                # it will have to be manually specified.
+                mplaces = [+1] * len(mplaces)
+
+        for i, subTokenIdx in enumerate(mindices):
+            if not mstring[i]:
+                continue
+
+            isLower: bool = mstrings[i][0] in 'wW'
+
+            mordent: m21.expressions.GeneralMordent
+            accidStr: t.Optional[str] = None
+            if isLower:
+                accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentLowerAccidental')
+            else:
+                accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
+
+            accid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
+
+            # Set any explicit visual accidental for the mordent.
+            # Maybe in the future allow for lacc and uacc to place the accidental.
+            # Also deal multiple mordents in a chord later.
+            accText: str = token.layoutParameter('MOR', 'acc')
+            if accText and accText != 'true':
+                if accText == 'none' or accText == 'false':
+                    # doesn't change pitch, just says "don't print it"
+                    accid.displayStatus = False
+                else:
+                    accid = self._computeM21Accidental(
+                        _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
+                    )
+
+            if isLower:
+                mordent = m21.expressions.Mordent(accid=accid)
+            else:
+                mordent = m21.expressions.InvertedMordent(accid=accid)
+
+            # Default placement has been set up in mplaces.
+            direction: int = mplaces[i]
+
+            # Override default with any explicit placement of the mordent
+            if self._signifiers.above:
+                if self._signifiers.above in mstrings[i]:
+                    direction = +1
+
+            if self._signifiers.below:
+                if self._signifiers.below in mstrings[i]:
+                    direction = -1
+
+            mordent.placement = None  # type: ignore
+            if direction < 0:
+                mordent.placement = 'below'
+            elif direction > 0:
+                mordent.placement = 'above'
+
+            # LATER: long mordents ('MM', 'mm', 'WW', 'ww') are not supported by music21, so we
+            # LATER: ... can't really support them here.
+#           if 'MM' in mstrings[i] or 'WW' in mstrings[i]:   # 'mm'? 'ww'?
+#               mordent.isLong = True
+
+            gnote.expressions.append(mordent)
 
     '''
     //////////////////////////////
