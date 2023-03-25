@@ -6105,9 +6105,7 @@ class HumdrumFile(HumdrumFileContent):
         accText: str = token.layoutParameter('TR', 'acc')
         if accText:
             if accText in ('none', 'false'):
-                # doesn't change pitch, just says "don't print it"
-                if trillAccid is not None:
-                    trillAccid.displayStatus = False
+                trillAccid = None
             else:
                 trillAccid = self._computeM21Accidental(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
@@ -6435,9 +6433,7 @@ class HumdrumFile(HumdrumFileContent):
             accText: str = token.layoutParameter('MOR', 'acc')
             if accText and accText != 'true':
                 if accText in ('none', 'false'):
-                    # doesn't change pitch, just says "don't print it"
-                    if mordentAccid is not None:
-                        mordentAccid.displayStatus = False
+                    mordentAccid = None
                 else:
                     mordentAccid = self._computeM21Accidental(
                         self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
@@ -6546,18 +6542,14 @@ class HumdrumFile(HumdrumFileContent):
         uacctext: str = token.layoutParameter('TURN', 'uacc')
         if lacctext and lacctext != 'true':
             if lacctext in ('none', 'false'):
-                # doesn't change pitch, just says "don't print it"
-                if turnLowerAccid is not None:
-                    turnLowerAccid.displayStatus = False
+                turnLowerAccid = None
             else:
                 turnLowerAccid = self._computeM21Accidental(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(lacctext, '')
                 )
         if uacctext and uacctext != 'true':
             if uacctext in ('none', 'false'):
-                # doesn't change pitch, just says "don't print it"
-                if turnUpperAccid is not None:
-                    turnUpperAccid.displayStatus = False
+                turnUpperAccid = None
             else:
                 turnUpperAccid = self._computeM21Accidental(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(uacctext, '')
