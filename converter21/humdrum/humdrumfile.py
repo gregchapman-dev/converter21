@@ -6578,25 +6578,25 @@ class HumdrumFile(HumdrumFileContent):
             if isInverted:
                 turn = m21.expressions.InvertedTurn(
                     delay=delay,
-                    accidUpper=turnUpperAccid,
-                    accidLower=turnLowerAccid
+                    upperAccid=turnUpperAccid,
+                    lowerAccid=turnLowerAccid
                 )
             else:
                 turn = m21.expressions.Turn(
                     delay=delay,
-                    accidUpper=turnUpperAccid,
-                    accidLower=turnLowerAccid
+                    upperAccid=turnUpperAccid,
+                    lowerAccid=turnLowerAccid
                 )
         else:
             if isInverted:
                 turn = m21.expressions.InvertedTurn(
-                    accidUpper=turnUpperAccid,
-                    accidLower=turnLowerAccid
+                    upperAccid=turnUpperAccid,
+                    lowerAccid=turnLowerAccid
                 )
             else:
                 turn = m21.expressions.Turn(
-                    accidUpper=turnUpperAccid,
-                    accidLower=turnLowerAccid
+                    upperAccid=turnUpperAccid,
+                    lowerAccid=turnLowerAccid
                 )
 
         # our better default
