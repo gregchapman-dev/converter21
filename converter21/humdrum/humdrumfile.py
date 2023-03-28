@@ -6115,7 +6115,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # Now, resolve the Trill's "other" pitch based on startNote's pitch (or highest pitch
         # if startNote is a chord with pitches)
-        if hasattr(startNote, 'pitches') and startNote.pitches:
+        if startNote.pitches:
             trill.resolveOtherPitches(startNote.pitches[-1])
 
         startNote.expressions.append(trill)
@@ -6474,7 +6474,7 @@ class HumdrumFile(HumdrumFileContent):
 
             # Now, resolve the mordent's "other" pitch based on gnote's pitch (or highest pitch
             # if gnote is a chord with pitches)
-            if hasattr(gnote, 'pitches') and gnote.pitches:
+            if gnote.pitches:
                 mordent.resolveOtherPitches(gnote.pitches[-1])
 
             gnote.expressions.append(mordent)
@@ -6616,7 +6616,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # Now, resolve the Turn "other" pitches based on gnote's pitch (or highest pitch
         # if gnote is a chord with pitches)
-        if hasattr(gnote, 'pitches') and gnote.pitches:
+        if gnote.pitches:
             turn.resolveOtherPitches(gnote.pitches[-1])
 
         gnote.expressions.append(turn)
