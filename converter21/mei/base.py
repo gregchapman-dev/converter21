@@ -2050,7 +2050,7 @@ def addTrill(
 
     # Now, resolve the Trill's "other" pitch based on obj's pitch (or highest pitch
     # if obj is a chord with pitches)
-    if hasattr(obj, 'pitches'):
+    if hasattr(obj, 'pitches') and obj.pitches:
         trill.resolveOtherPitches(obj.pitches[-1])
 
     obj.expressions.append(trill)
@@ -2110,7 +2110,7 @@ def addMordent(
 
     # Now, resolve the mordent's "other" pitch based on obj's pitch (or highest pitch
     # if obj is a chord with pitches)
-    if hasattr(obj, 'pitches'):
+    if hasattr(obj, 'pitches') and obj.pitches:
         mordent.resolveOtherPitches(obj.pitches[-1])
 
     obj.expressions.append(mordent)
@@ -2189,7 +2189,7 @@ def addTurn(
 
     # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
     # if obj is a chord with pitches)
-    if hasattr(obj, 'pitches'):
+    if hasattr(obj, 'pitches') and obj.pitches:
         turn.resolveOtherPitches(obj.pitches[-1])
 
     obj.expressions.append(turn)
@@ -2204,7 +2204,7 @@ def updateAltersFromExpression(
     if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent, expressions.Turn)):
         return
 
-    if not hasattr(obj, 'pitches'):
+    if not hasattr(obj, 'pitches') and obj.pitches:
         return
 
     mainPitch: pitch.Pitch = obj.pitches[-1]  # top-most pitch if it's a chord
@@ -5815,7 +5815,7 @@ def _addTimestampedExpressions(
                                     # is a chord with pitches)
                                     ex: expressions.Expression = eachObject.expressions[-1]
                                     if isinstance(ex, expressions.Ornament):
-                                        if hasattr(eachObject, 'pitches'):
+                                        if hasattr(eachObject, 'pitches') and eachObject.pitches:
                                             ex.resolveOtherPitches(eachObject.pitches[-1])
 
                                 doneWithStaff = True
@@ -5860,7 +5860,8 @@ def _addTimestampedExpressions(
                     # Resolve the expression's "other" pitches based on nearestPrevNoteInStaff's
                     # pitch (or highest pitch if nearestPrevNoteInStaff is a chord with pitches)
                     if isinstance(expression, expressions.Ornament):
-                        if hasattr(nearestPrevNoteInStaff, 'pitches'):
+                        if (hasattr(nearestPrevNoteInStaff, 'pitches')
+                                and nearestPrevNoteInStaff.pitches):
                             expression.resolveOtherPitches(nearestPrevNoteInStaff.pitches[-1])
 
                     nearestPrevNoteInStaff.expressions.append(expression)
