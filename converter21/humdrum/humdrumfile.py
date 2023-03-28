@@ -6093,7 +6093,7 @@ class HumdrumFile(HumdrumFileContent):
         # in HumdrumFileContent, and then here we adjust that based on any '!LO:TR:acc='
         # accidental.
 
-        trillAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(
+        trillAccid: t.Optional[str] = self._computeM21AccidentalName(
             token.getValueString('auto', str(subTokenIdx), 'trillAccidental')
         )
 
@@ -6105,15 +6105,19 @@ class HumdrumFile(HumdrumFileContent):
         accText: str = token.layoutParameter('TR', 'acc')
         if accText:
             if accText in ('none', 'false'):
-                # doesn't change pitch, just says "don't print it"
-                if trillAccid is not None:
-                    trillAccid.displayStatus = False
+                trillAccid = None
             else:
-                trillAccid = self._computeM21Accidental(
+                trillAccid = self._computeM21AccidentalName(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                 )
 
         trill: m21.expressions.Trill = m21.expressions.Trill(accid=trillAccid)
+
+        # Now, resolve the Trill's "other" pitch based on startNote's pitch (or highest pitch
+        # if startNote is a chord with pitches)
+        if hasattr(startNote, 'pitches'):
+            trill.resolveOtherPitches(startNote.pitches[-1])
+
         startNote.expressions.append(trill)
 
         # here the C++ code sets placement to 'below' if layer == 2
@@ -6291,10 +6295,10 @@ class HumdrumFile(HumdrumFileContent):
 #         # TODO: ... (if there is one)
 #         gnote.articulations.append(breathMark)
 
-    def _computeM21Accidental(
+    def _computeM21AccidentalName(
         self,
         valueStr: t.Optional[str]
-    ) -> t.Optional[m21.pitch.Accidental]:
+    ) -> t.Optional[str]:
         if not valueStr:
             return None
 
@@ -6303,9 +6307,8 @@ class HumdrumFile(HumdrumFileContent):
         except:  # pylint: disable=bare-except
             return None
 
-        accid = m21.pitch.Accidental(accidNum)
-        accid.displayStatus = True
-        return accid
+        accid: m21.pitch.Accidental = m21.pitch.Accidental(accidNum)
+        return accid.name
 
     '''
     //////////////////////////////
@@ -6427,7 +6430,7 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
 
-            mordentAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
+            mordentAccid: t.Optional[str] = self._computeM21AccidentalName(accidStr)
 
             # Set any explicit visual accidental for the mordent.
             # Maybe in the future allow for lacc and uacc to place the accidental.
@@ -6435,11 +6438,9 @@ class HumdrumFile(HumdrumFileContent):
             accText: str = token.layoutParameter('MOR', 'acc')
             if accText and accText != 'true':
                 if accText in ('none', 'false'):
-                    # doesn't change pitch, just says "don't print it"
-                    if mordentAccid is not None:
-                        mordentAccid.displayStatus = False
+                    mordentAccid = None
                 else:
-                    mordentAccid = self._computeM21Accidental(
+                    mordentAccid = self._computeM21AccidentalName(
                         self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                     )
 
@@ -6470,6 +6471,11 @@ class HumdrumFile(HumdrumFileContent):
             # LATER: ... can't really support them here.
 #           if 'MM' in mstrings[i] or 'WW' in mstrings[i]:   # 'mm'? 'ww'?
 #               mordent.isLong = True
+
+            # Now, resolve the mordent's "other" pitch based on gnote's pitch (or highest pitch
+            # if gnote is a chord with pitches)
+            if hasattr(gnote, 'pitches'):
+                mordent.resolveOtherPitches(gnote.pitches[-1])
 
             gnote.expressions.append(mordent)
 
@@ -6538,28 +6544,24 @@ class HumdrumFile(HumdrumFileContent):
         upperaccid: t.Optional[str] = token.getValueString(
             'auto', str(subTokenIdx), 'turnUpperAccidental'
         )
-        turnLowerAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(loweraccid)
-        turnUpperAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(upperaccid)
+        turnLowerAccid: t.Optional[str] = self._computeM21AccidentalName(loweraccid)
+        turnUpperAccid: t.Optional[str] = self._computeM21AccidentalName(upperaccid)
 
         # Check for LO:TURN forced visual accidentals
         lacctext: str = token.layoutParameter('TURN', 'lacc')
         uacctext: str = token.layoutParameter('TURN', 'uacc')
         if lacctext and lacctext != 'true':
             if lacctext in ('none', 'false'):
-                # doesn't change pitch, just says "don't print it"
-                if turnLowerAccid is not None:
-                    turnLowerAccid.displayStatus = False
+                turnLowerAccid = None
             else:
-                turnLowerAccid = self._computeM21Accidental(
+                turnLowerAccid = self._computeM21AccidentalName(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(lacctext, '')
                 )
         if uacctext and uacctext != 'true':
             if uacctext in ('none', 'false'):
-                # doesn't change pitch, just says "don't print it"
-                if turnUpperAccid is not None:
-                    turnUpperAccid.displayStatus = False
+                turnUpperAccid = None
             else:
-                turnUpperAccid = self._computeM21Accidental(
+                turnUpperAccid = self._computeM21AccidentalName(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(uacctext, '')
                 )
 
@@ -6611,6 +6613,11 @@ class HumdrumFile(HumdrumFileContent):
             if turnEnd < len(tok) - 1:
                 if tok[turnEnd + 1] == self._signifiers.below:
                     turn.placement = 'below'
+
+        # Now, resolve the Turn "other" pitches based on gnote's pitch (or highest pitch
+        # if gnote is a chord with pitches)
+        if hasattr(gnote, 'pitches'):
+            turn.resolveOtherPitches(gnote.pitches[-1])
 
         gnote.expressions.append(turn)
 
