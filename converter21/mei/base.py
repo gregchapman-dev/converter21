@@ -1996,10 +1996,12 @@ def addArpeggio(
 
     return completedArpeggioMarkSpanners
 
-def _m21AccidentalNameFromAccid(accidStr: str) -> t.Optional[str]:
-    m21AccidName: t.Optional[str] = None
+def _m21AccidentalNameFromAccid(accidStr: str) -> str:
+    m21AccidName: str = ''
     if accidStr:
-        m21AccidName = _ACCID_ATTR_DICT.get(accidStr, None)
+        accidName: t.Optional[str] = _ACCID_ATTR_DICT.get(accidStr, '')
+        if accidName:
+            m21AccidName = accidName
     return m21AccidName
 
 def addTrill(
@@ -2008,6 +2010,7 @@ def addTrill(
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
 ) -> t.List[spanner.Spanner]:
+    staffN: str = otherInfo['staffNumberForNotes']
     completedTrillExtensions: t.List[spanner.Spanner] = []
     # if appropriate, add this note/chord to a trillExtension
     trillExtId: str = elem.get('m21TrillExtensionStart', '')
@@ -2032,15 +2035,15 @@ def addTrill(
 
     accidUpper: str = elem.get('m21TrillAccidUpper', '')
     accidLower: str = elem.get('m21TrillAccidLower', '')
-    m21AccidName: t.Optional[str] = None
+    m21AccidName: str = ''
     if accidUpper:
         m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
     elif accidLower:
         m21AccidName = _m21AccidentalNameFromAccid(accidLower)
-    trill = expressions.Trill(accid=m21AccidName)
+    trill = expressions.Trill(accidentalName=m21AccidName)
 
     updateAltersFromExpression(
-        trill, obj, otherInfo['staffNumberForNotes'], otherInfo
+        trill, obj, staffN, otherInfo
     )
 
     if place and place != 'place_unspecified':
@@ -2051,7 +2054,7 @@ def addTrill(
     # Now, resolve the Trill's "other" pitch based on obj's pitch (or highest pitch
     # if obj is a chord with pitches)
     if obj.pitches:
-        trill.resolveOtherPitches(obj.pitches[-1])
+        trill.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
 
     obj.expressions.append(trill)
 
@@ -2071,10 +2074,12 @@ def addMordent(
     if not place:
         return
 
+    staffN: str = otherInfo['staffNumberForNotes']
+
     accidUpper: str = elem.get('m21MordentAccidUpper', '')
     accidLower: str = elem.get('m21MordentAccidLower', '')
     form: str = elem.get('m21MordentForm', '')
-    m21AccidName: t.Optional[str] = None
+    m21AccidName: str = ''
     if accidUpper:
         m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
     elif accidLower:
@@ -2093,12 +2098,17 @@ def addMordent(
 
     if form == 'upper':
         # music21 calls an upper mordent (i.e that goes up from the main note) an InvertedMordent
-        mordent = expressions.InvertedMordent(accid=m21AccidName)
+        mordent = expressions.InvertedMordent(accidentalName=m21AccidName)
     elif form == 'lower':
-        mordent = expressions.Mordent(accid=m21AccidName)
+        mordent = expressions.Mordent(accidentalName=m21AccidName)
+
+    # Now, resolve the mordent's "other" pitch based on obj's pitch (or highest pitch
+    # if obj is a chord with pitches)
+    if obj.pitches:
+        mordent.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
 
     updateAltersFromExpression(
-        mordent, obj, otherInfo['staffNumberForNotes'], otherInfo
+        mordent, obj, staffN, otherInfo
     )
 
     # m21 mordents might not have placement... sigh...
@@ -2107,11 +2117,6 @@ def addMordent(
         mordent.placement = place  # type: ignore
     else:
         mordent.placement = None  # type: ignore
-
-    # Now, resolve the mordent's "other" pitch based on obj's pitch (or highest pitch
-    # if obj is a chord with pitches)
-    if obj.pitches:
-        mordent.resolveOtherPitches(obj.pitches[-1])
 
     obj.expressions.append(mordent)
 
@@ -2129,6 +2134,8 @@ def addTurn(
     if not place:
         return
 
+    staffN: str = otherInfo['staffNumberForNotes']
+
     accidUpper: str = elem.get('m21TurnAccidUpper', '')
     accidLower: str = elem.get('m21TurnAccidLower', '')
     delayed: str = elem.get('m21TurnDelayed', '')
@@ -2141,8 +2148,8 @@ def addTurn(
         else:
             form = 'upper'  # default
 
-    m21AccidUpper: t.Optional[str] = None
-    m21AccidLower: t.Optional[str] = None
+    m21AccidUpper: str = ''
+    m21AccidLower: str = ''
     if accidUpper:
         m21AccidUpper = _m21AccidentalNameFromAccid(accidUpper)
     if accidLower:
@@ -2157,40 +2164,40 @@ def addTurn(
         if form == 'upper':
             turn = expressions.Turn(
                 delay=delay,
-                upperAccid=m21AccidUpper,
-                lowerAccid=m21AccidLower
+                upperAccidentalName=m21AccidUpper,
+                lowerAccidentalName=m21AccidLower
             )
         else:
             turn = expressions.InvertedTurn(
                 delay=delay,
-                upperAccid=m21AccidUpper,
-                lowerAccid=m21AccidLower
+                upperAccidentalName=m21AccidUpper,
+                lowerAccidentalName=m21AccidLower
             )
     else:
         if form == 'upper':
             turn = expressions.Turn(
-                upperAccid=m21AccidUpper,
-                lowerAccid=m21AccidLower
+                upperAccidentalName=m21AccidUpper,
+                lowerAccidentalName=m21AccidLower
             )
         elif form == 'lower':
             turn = expressions.InvertedTurn(
-                upperAccid=m21AccidUpper,
-                lowerAccid=m21AccidLower
+                upperAccidentalName=m21AccidUpper,
+                lowerAccidentalName=m21AccidLower
             )
 
+    # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
+    # if obj is a chord with pitches)
+    if obj.pitches:
+        turn.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
+
     updateAltersFromExpression(
-        turn, obj, otherInfo['staffNumberForNotes'], otherInfo
+        turn, obj, staffN, otherInfo
     )
 
     if place and place != 'place_unspecified':
         turn.placement = place
     else:
         turn.placement = None  # type: ignore
-
-    # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
-    # if obj is a chord with pitches)
-    if obj.pitches:
-        turn.resolveOtherPitches(obj.pitches[-1])
 
     obj.expressions.append(turn)
 
@@ -2204,29 +2211,8 @@ def updateAltersFromExpression(
     if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent, expressions.Turn)):
         return
 
-    if obj.pitches:
-        return
-
-    mainPitch: pitch.Pitch = obj.pitches[-1]  # top-most pitch if it's a chord
-
-    # Trills and Mordents have a single size (interval).
-    if (isinstance(expr, (expressions.Trill, expressions.GeneralMordent))
-            and expr.accid is not None):
-        otherPitch: pitch.Pitch = mainPitch.transpose(expr.getSize(mainPitch))
-        updateStaffAltersWithPitches(staffNStr, [otherPitch], otherInfo)
-        return
-
-    # Turns have both an upper and lower size (interval).
-    if isinstance(expr, expressions.Turn):
-        pitches: t.List[pitch.Pitch] = []
-        if expr.upperAccid is not None:
-            pitchUp: pitch.Pitch = mainPitch.transpose(expr.getUpperSize(mainPitch))
-            pitches.append(pitchUp)
-        if expr.lowerAccid is not None:
-            pitchDown: pitch.Pitch = mainPitch.transpose(expr.getLowerSize(mainPitch))
-            pitches.append(pitchDown)
-        if pitches:
-            updateStaffAltersWithPitches(staffNStr, pitches, otherInfo)
+    updateStaffAltersWithPitches(staffNStr, list(expr.ornamentalPitches), otherInfo)
+    return
 
 
 def beamTogether(someThings: t.List[Music21Object]):
@@ -5546,6 +5532,16 @@ def passThruEditorialFTremChildrenFromElement(
 
     return theList
 
+def _currKeyForStaff(
+    staffNStr: str,
+    otherInfo: t.Dict[str, t.Any]
+) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
+    currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
+    currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+        currKeyPerStaff.get(staffNStr, None)
+    )
+    return currentKey
+
 
 def staffFromElement(
     elem: Element,
@@ -5612,9 +5608,8 @@ def staffFromElement(
         # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
         # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
         # accidentals are seen in this layer.
-        currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
         currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
-            currKeyPerStaff.get(staffNStr, None)
+            _currKeyForStaff(staffNStr, otherInfo)
         )
         updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
 
@@ -5799,24 +5794,32 @@ def _addTimestampedExpressions(
                         if not isDelayedTurn:
                             if eachObject.offset == offset:
                                 if i == 0:
+                                    if isinstance(expression, expressions.Ornament):
+                                        # Resolve the ornament's ornamental pitches
+                                        # based on eachObject
+                                        if eachObject.pitches:
+                                            expression.resolveOrnamentalPitches(
+                                                eachObject,
+                                                keySig=_currKeyForStaff(staffN, otherInfo)
+                                            )
                                     updateAltersFromExpression(
                                         expression, eachObject, staffN, otherInfo
                                     )
                                     eachObject.expressions.append(expression)
                                 else:
                                     clonedExpression = deepcopy(expression)
+                                    if isinstance(clonedExpression, expressions.Ornament):
+                                        # Resolve the ornament's ornamental pitches
+                                        # based on eachObject
+                                        if eachObject.pitches:
+                                            clonedExpression.resolveOrnamentalPitches(
+                                                eachObject,
+                                                keySig=_currKeyForStaff(staffN, otherInfo)
+                                            )
                                     updateAltersFromExpression(
                                         clonedExpression, eachObject, staffN, otherInfo
                                     )
                                     eachObject.expressions.append(clonedExpression)
-
-                                    # Resolve the expression's "other" pitches based on
-                                    # eachObject's pitch (or highest pitch if eachObject
-                                    # is a chord with pitches)
-                                    ex: expressions.Expression = eachObject.expressions[-1]
-                                    if isinstance(ex, expressions.Ornament):
-                                        if eachObject.pitches:
-                                            ex.resolveOtherPitches(eachObject.pitches[-1])
 
                                 doneWithStaff = True
                                 break
@@ -5853,15 +5856,18 @@ def _addTimestampedExpressions(
                             assert isinstance(expression, expressions.Turn)
                         expression.delay = offsetFromNearestPrevNote  # type: ignore
 
-                    updateAltersFromExpression(
-                        expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
-                    )
-
                     # Resolve the expression's "other" pitches based on nearestPrevNoteInStaff's
                     # pitch (or highest pitch if nearestPrevNoteInStaff is a chord with pitches)
                     if isinstance(expression, expressions.Ornament):
                         if nearestPrevNoteInStaff.pitches:
-                            expression.resolveOtherPitches(nearestPrevNoteInStaff.pitches[-1])
+                            expression.resolveOrnamentalPitches(
+                                nearestPrevNoteInStaff,
+                                keySig=_currKeyForStaff(staffForNearestNote, otherInfo)
+                            )
+
+                    updateAltersFromExpression(
+                        expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
+                    )
 
                     nearestPrevNoteInStaff.expressions.append(expression)
                 else:
@@ -6192,13 +6198,13 @@ def trillFromElement(
     if tstamp and elem.get('ignore_trill_in_trillFromElement') != 'true':
         accidUpper: str = elem.get('accidupper', '')
         accidLower: str = elem.get('accidlower', '')
-        m21AccidName: t.Optional[str] = None
+        m21AccidName: str = ''
         if accidUpper:
             m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
         elif accidLower:
             m21AccidName = _m21AccidentalNameFromAccid(accidLower)
 
-        trill = expressions.Trill(accid=m21AccidName)
+        trill = expressions.Trill(accidentalName=m21AccidName)
 
         if place and place != 'place_unspecified':
             trill.placement = place
@@ -6299,7 +6305,7 @@ def mordentFromElement(
 
         accidUpper: str = elem.get('accidupper', '')
         accidLower: str = elem.get('accidlower', '')
-        m21AccidName: t.Optional[str] = None
+        m21AccidName: str = ''
         if accidUpper:
             m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
         elif accidLower:
@@ -6317,9 +6323,9 @@ def mordentFromElement(
         if form == 'upper':
             # music21 calls an upper mordent (i.e that goes up from the main note)
             # an InvertedMordent
-            mordent = expressions.InvertedMordent(accid=m21AccidName)
+            mordent = expressions.InvertedMordent(accidentalName=m21AccidName)
         else:
-            mordent = expressions.Mordent(accid=m21AccidName)
+            mordent = expressions.Mordent(accidentalName=m21AccidName)
 
         # m21 mordents might not have placement... sigh...
         # But if I set it, it _will_ get exported to MusicXML (ha!).
@@ -6374,8 +6380,8 @@ def turnFromElement(
 
         accidUpper: str = elem.get('accidupper', '')
         accidLower: str = elem.get('accidlower', '')
-        m21AccidUpper: t.Optional[str] = None
-        m21AccidLower: t.Optional[str] = None
+        m21AccidUpper: str = ''
+        m21AccidLower: str = ''
         if accidUpper:
             m21AccidUpper = _m21AccidentalNameFromAccid(accidUpper)
         if accidLower:
@@ -6405,25 +6411,25 @@ def turnFromElement(
             if form == 'upper':
                 turn = expressions.Turn(  # pylint: disable=unexpected-keyword-arg
                     delay=delay,  # type: ignore
-                    upperAccid=m21AccidUpper,
-                    lowerAccid=m21AccidLower
+                    upperAccidentalName=m21AccidUpper,
+                    lowerAccidentalName=m21AccidLower
                 )
             else:
                 turn = expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
                     delay=delay,  # type: ignore
-                    upperAccid=m21AccidUpper,
-                    lowerAccid=m21AccidLower
+                    upperAccidentalName=m21AccidUpper,
+                    lowerAccidentalName=m21AccidLower
                 )
         else:
             if form == 'upper':
                 turn = expressions.Turn(
-                    upperAccid=m21AccidUpper,
-                    lowerAccid=m21AccidLower
+                    upperAccidentalName=m21AccidUpper,
+                    lowerAccidentalName=m21AccidLower
                 )
             else:
                 turn = expressions.InvertedTurn(
-                    upperAccid=m21AccidUpper,
-                    lowerAccid=m21AccidLower
+                    upperAccidentalName=m21AccidUpper,
+                    lowerAccidentalName=m21AccidLower
                 )
 
         if place and place != 'place_unspecified':

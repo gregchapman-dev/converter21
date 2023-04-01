@@ -464,6 +464,7 @@ class StaffStateVariables:
             Next we have temporary (processing) state about this staff (current measure, etc)
         '''
         self.mostRecentlySeenClefTok: t.Optional[HumdrumToken] = None
+        self.currentM21KeySig: t.Optional[m21.key.KeySignature] = None
 
     def printState(self, prefix: str) -> None:
         print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
@@ -1416,6 +1417,8 @@ class HumdrumFile(HumdrumFileContent):
                     if m21KeySig is not None:
                         m21OffsetInMeasure = keySigTok.durationFromBarline
                         measure.coreInsert(m21OffsetInMeasure, m21KeySig)
+                        # always track current keysig per staff
+                        self._staffStates[staffIndex].currentM21KeySig = m21KeySig
                         insertedIntoMeasure = True
 
                 if insertedIntoMeasure:
@@ -5585,7 +5588,7 @@ class HumdrumFile(HumdrumFileContent):
         # TODO: chord stem directions
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
         self._addArticulations(chord, layerTok)
-        self._addOrnaments(chord, layerTok)
+        self._addOrnaments(chord, layerTok, staffIndex)
         self._addArpeggio(chord, layerTok)
         self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
 
@@ -5845,7 +5848,7 @@ class HumdrumFile(HumdrumFileContent):
 #               && layerdata[i]->find(m_signifiers.hairpinAccent) != std::string::npos) {
 #           addHairpinAccent(layerdata[i]);
         self._addArticulations(note, layerTok)
-        self._addOrnaments(note, layerTok)
+        self._addOrnaments(note, layerTok, staffIndex)
         self._addArpeggio(note, layerTok)
         self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
         voice.coreInsert(noteOffsetInVoice, note)
@@ -6033,19 +6036,24 @@ class HumdrumFile(HumdrumFileContent):
             self._signifiers.below
         )
 
-    def _addOrnaments(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addOrnaments(
+        self,
+        gnote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
         lowerText = token.text.lower()
         if 't' in lowerText:
-            self._addTrill(gnote, token)
+            self._addTrill(gnote, token, staffIndex)
         if ';' in lowerText:
             self._addFermata(gnote, token)
 # handled in articulations code
 #         if ',' in lowerText:
 #             self._addBreath(gnote, token)
         if 'w' in lowerText or 'm' in lowerText:
-            self._addMordent(gnote, token)
+            self._addMordent(gnote, token, staffIndex)
         if 's' in lowerText or '$' in lowerText:
-            self._addTurn(gnote, token)
+            self._addTurn(gnote, token, staffIndex)
 
     _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR: t.Dict[str, str] = {
         '#': '1',
@@ -6067,7 +6075,14 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::addTrill -- Add trill for note.
     '''
-    def _addTrill(self, startNote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addTrill(
+        self,
+        startNote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
         subTokenIdx: int = 0
         tpos: int = -1
         for i, ch in enumerate(token.text):
@@ -6093,7 +6108,7 @@ class HumdrumFile(HumdrumFileContent):
         # in HumdrumFileContent, and then here we adjust that based on any '!LO:TR:acc='
         # accidental.
 
-        trillAccid: t.Optional[str] = self._computeM21AccidentalName(
+        trillAccid: str = self._computeM21AccidentalName(
             token.getValueString('auto', str(subTokenIdx), 'trillAccidental')
         )
 
@@ -6105,18 +6120,17 @@ class HumdrumFile(HumdrumFileContent):
         accText: str = token.layoutParameter('TR', 'acc')
         if accText:
             if accText in ('none', 'false'):
-                trillAccid = None
+                trillAccid = ''
             else:
                 trillAccid = self._computeM21AccidentalName(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                 )
 
-        trill: m21.expressions.Trill = m21.expressions.Trill(accid=trillAccid)
+        trill: m21.expressions.Trill = m21.expressions.Trill(accidentalName=trillAccid)
 
-        # Now, resolve the Trill's "other" pitch based on startNote's pitch (or highest pitch
-        # if startNote is a chord with pitches)
+        # Now, resolve the Trill's "other" pitch based on startNote
         if startNote.pitches:
-            trill.resolveOtherPitches(startNote.pitches[-1])
+            trill.resolveOrnamentalPitches(startNote, keySig=ss.currentM21KeySig)
 
         startNote.expressions.append(trill)
 
@@ -6298,14 +6312,14 @@ class HumdrumFile(HumdrumFileContent):
     def _computeM21AccidentalName(
         self,
         valueStr: t.Optional[str]
-    ) -> t.Optional[str]:
+    ) -> str:
         if not valueStr:
-            return None
+            return ''
 
         try:
             accidNum: int = int(valueStr)
         except:  # pylint: disable=bare-except
-            return None
+            return ''
 
         accid: m21.pitch.Accidental = m21.pitch.Accidental(accidNum)
         return accid.name
@@ -6341,7 +6355,14 @@ class HumdrumFile(HumdrumFileContent):
         so... --gregc
 
     '''
-    def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addMordent(
+        self,
+        gnote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
         subtoks: t.List[str] = token.subtokens
         if not subtoks:
             return
@@ -6430,7 +6451,7 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
 
-            mordentAccid: t.Optional[str] = self._computeM21AccidentalName(accidStr)
+            mordentAccid: str = self._computeM21AccidentalName(accidStr)
 
             # Set any explicit visual accidental for the mordent.
             # Maybe in the future allow for lacc and uacc to place the accidental.
@@ -6438,16 +6459,16 @@ class HumdrumFile(HumdrumFileContent):
             accText: str = token.layoutParameter('MOR', 'acc')
             if accText and accText != 'true':
                 if accText in ('none', 'false'):
-                    mordentAccid = None
+                    mordentAccid = ''
                 else:
                     mordentAccid = self._computeM21AccidentalName(
                         self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                     )
 
             if isLower:
-                mordent = m21.expressions.Mordent(accid=mordentAccid)
+                mordent = m21.expressions.Mordent(accidentalName=mordentAccid)
             else:
-                mordent = m21.expressions.InvertedMordent(accid=mordentAccid)
+                mordent = m21.expressions.InvertedMordent(accidentalName=mordentAccid)
 
             # Default placement has been set up in mplaces.
             direction: int = mplace
@@ -6472,10 +6493,9 @@ class HumdrumFile(HumdrumFileContent):
 #           if 'MM' in mstrings[i] or 'WW' in mstrings[i]:   # 'mm'? 'ww'?
 #               mordent.isLong = True
 
-            # Now, resolve the mordent's "other" pitch based on gnote's pitch (or highest pitch
-            # if gnote is a chord with pitches)
+            # Now, resolve the mordent's "other" pitch based on gnote
             if gnote.pitches:
-                mordent.resolveOtherPitches(gnote.pitches[-1])
+                mordent.resolveOrnamentalPitches(gnote, keySig=ss.currentM21KeySig)
 
             gnote.expressions.append(mordent)
 
@@ -6506,7 +6526,13 @@ class HumdrumFile(HumdrumFileContent):
     //
     // Assuming not in chord for now.
     '''
-    def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addTurn(
+        self,
+        gnote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
+        ss: StaffStateVariables = self._staffStates[staffIndex]
         tok: str = token.text
         turnStart: int = -1
         turnEnd: int = -1
@@ -6544,22 +6570,22 @@ class HumdrumFile(HumdrumFileContent):
         upperaccid: t.Optional[str] = token.getValueString(
             'auto', str(subTokenIdx), 'turnUpperAccidental'
         )
-        turnLowerAccid: t.Optional[str] = self._computeM21AccidentalName(loweraccid)
-        turnUpperAccid: t.Optional[str] = self._computeM21AccidentalName(upperaccid)
+        turnLowerAccid: str = self._computeM21AccidentalName(loweraccid)
+        turnUpperAccid: str = self._computeM21AccidentalName(upperaccid)
 
         # Check for LO:TURN forced visual accidentals
         lacctext: str = token.layoutParameter('TURN', 'lacc')
         uacctext: str = token.layoutParameter('TURN', 'uacc')
         if lacctext and lacctext != 'true':
             if lacctext in ('none', 'false'):
-                turnLowerAccid = None
+                turnLowerAccid = ''
             else:
                 turnLowerAccid = self._computeM21AccidentalName(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(lacctext, '')
                 )
         if uacctext and uacctext != 'true':
             if uacctext in ('none', 'false'):
-                turnUpperAccid = None
+                turnUpperAccid = ''
             else:
                 turnUpperAccid = self._computeM21AccidentalName(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(uacctext, '')
@@ -6580,25 +6606,25 @@ class HumdrumFile(HumdrumFileContent):
             if isInverted:
                 turn = m21.expressions.InvertedTurn(
                     delay=delay,
-                    upperAccid=turnUpperAccid,
-                    lowerAccid=turnLowerAccid
+                    upperAccidentalName=turnUpperAccid,
+                    lowerAccidentalName=turnLowerAccid
                 )
             else:
                 turn = m21.expressions.Turn(
                     delay=delay,
-                    upperAccid=turnUpperAccid,
-                    lowerAccid=turnLowerAccid
+                    upperAccidentalName=turnUpperAccid,
+                    lowerAccidentalName=turnLowerAccid
                 )
         else:
             if isInverted:
                 turn = m21.expressions.InvertedTurn(
-                    upperAccid=turnUpperAccid,
-                    lowerAccid=turnLowerAccid
+                    upperAccidentalName=turnUpperAccid,
+                    lowerAccidentalName=turnLowerAccid
                 )
             else:
                 turn = m21.expressions.Turn(
-                    upperAccid=turnUpperAccid,
-                    lowerAccid=turnLowerAccid
+                    upperAccidentalName=turnUpperAccid,
+                    lowerAccidentalName=turnLowerAccid
                 )
 
         # our better default
@@ -6614,10 +6640,9 @@ class HumdrumFile(HumdrumFileContent):
                 if tok[turnEnd + 1] == self._signifiers.below:
                     turn.placement = 'below'
 
-        # Now, resolve the Turn "other" pitches based on gnote's pitch (or highest pitch
-        # if gnote is a chord with pitches)
+        # Now, resolve the Turn "other" pitches based on gnote
         if gnote.pitches:
-            turn.resolveOtherPitches(gnote.pitches[-1])
+            turn.resolveOrnamentalPitches(gnote, keySig=ss.currentM21KeySig)
 
         gnote.expressions.append(turn)
 
@@ -10956,6 +10981,8 @@ class HumdrumFile(HumdrumFileContent):
             # hang on to this until we have a first measure to put it in
             m21KeySig = M21Convert.m21KeySignature(keySigTok, keyTok)
             ss.firstM21KeySig = m21KeySig
+            # also always track current keysig per staff
+            ss.currentM21KeySig = m21KeySig
 
         m21TimeSig = None
         if timeSigTok:
