@@ -2010,7 +2010,7 @@ def addTrill(
     spannerBundle: spanner.SpannerBundle,
     otherInfo: t.Dict[str, t.Any]
 ) -> t.List[spanner.Spanner]:
-    staffN: str = otherInfo['staffNumberForNotes']
+    staffN: str = otherInfo.get('staffNumberForNotes', '')
     completedTrillExtensions: t.List[spanner.Spanner] = []
     # if appropriate, add this note/chord to a trillExtension
     trillExtId: str = elem.get('m21TrillExtensionStart', '')
@@ -2042,19 +2042,17 @@ def addTrill(
         m21AccidName = _m21AccidentalNameFromAccid(accidLower)
     trill = expressions.Trill(accidentalName=m21AccidName)
 
-    updateAltersFromExpression(
-        trill, obj, staffN, otherInfo
-    )
+    if staffN:
+        # Now, resolve the Trill's ornamental pitch based on obj
+        trill.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
+        updateAltersFromExpression(
+            trill, obj, staffN, otherInfo
+        )
 
     if place and place != 'place_unspecified':
         trill.placement = place
     else:
         trill.placement = None  # type: ignore
-
-    # Now, resolve the Trill's "other" pitch based on obj's pitch (or highest pitch
-    # if obj is a chord with pitches)
-    if obj.pitches:
-        trill.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
 
     obj.expressions.append(trill)
 
@@ -2074,7 +2072,7 @@ def addMordent(
     if not place:
         return
 
-    staffN: str = otherInfo['staffNumberForNotes']
+    staffN: str = otherInfo.get('staffNumberForNotes', '')
 
     accidUpper: str = elem.get('m21MordentAccidUpper', '')
     accidLower: str = elem.get('m21MordentAccidLower', '')
@@ -2102,14 +2100,13 @@ def addMordent(
     elif form == 'lower':
         mordent = expressions.Mordent(accidentalName=m21AccidName)
 
-    # Now, resolve the mordent's "other" pitch based on obj's pitch (or highest pitch
-    # if obj is a chord with pitches)
-    if obj.pitches:
+    # Now, resolve the mordent's ornamental pitch based on obj
+    if staffN:
         mordent.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
+        updateAltersFromExpression(
+            mordent, obj, staffN, otherInfo
+        )
 
-    updateAltersFromExpression(
-        mordent, obj, staffN, otherInfo
-    )
 
     # m21 mordents might not have placement... sigh...
     # But if I set it, it _will_ get exported to MusicXML (ha!).
@@ -2134,7 +2131,7 @@ def addTurn(
     if not place:
         return
 
-    staffN: str = otherInfo['staffNumberForNotes']
+    staffN: str = otherInfo.get('staffNumberForNotes', '')
 
     accidUpper: str = elem.get('m21TurnAccidUpper', '')
     accidLower: str = elem.get('m21TurnAccidLower', '')
@@ -2187,12 +2184,11 @@ def addTurn(
 
     # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
     # if obj is a chord with pitches)
-    if obj.pitches:
+    if staffN:
         turn.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
-
-    updateAltersFromExpression(
-        turn, obj, staffN, otherInfo
-    )
+        updateAltersFromExpression(
+            turn, obj, staffN, otherInfo
+        )
 
     if place and place != 'place_unspecified':
         turn.placement = place
@@ -5797,28 +5793,26 @@ def _addTimestampedExpressions(
                                     if isinstance(expression, expressions.Ornament):
                                         # Resolve the ornament's ornamental pitches
                                         # based on eachObject
-                                        if eachObject.pitches:
-                                            expression.resolveOrnamentalPitches(
-                                                eachObject,
-                                                keySig=_currKeyForStaff(staffN, otherInfo)
-                                            )
-                                    updateAltersFromExpression(
-                                        expression, eachObject, staffN, otherInfo
-                                    )
+                                        expression.resolveOrnamentalPitches(
+                                            eachObject,
+                                            keySig=_currKeyForStaff(staffN, otherInfo)
+                                        )
+                                        updateAltersFromExpression(
+                                            expression, eachObject, staffN, otherInfo
+                                        )
                                     eachObject.expressions.append(expression)
                                 else:
                                     clonedExpression = deepcopy(expression)
                                     if isinstance(clonedExpression, expressions.Ornament):
                                         # Resolve the ornament's ornamental pitches
                                         # based on eachObject
-                                        if eachObject.pitches:
-                                            clonedExpression.resolveOrnamentalPitches(
-                                                eachObject,
-                                                keySig=_currKeyForStaff(staffN, otherInfo)
-                                            )
-                                    updateAltersFromExpression(
-                                        clonedExpression, eachObject, staffN, otherInfo
-                                    )
+                                        clonedExpression.resolveOrnamentalPitches(
+                                            eachObject,
+                                            keySig=_currKeyForStaff(staffN, otherInfo)
+                                        )
+                                        updateAltersFromExpression(
+                                            clonedExpression, eachObject, staffN, otherInfo
+                                        )
                                     eachObject.expressions.append(clonedExpression)
 
                                 doneWithStaff = True
@@ -5859,15 +5853,14 @@ def _addTimestampedExpressions(
                     # Resolve the expression's "other" pitches based on nearestPrevNoteInStaff's
                     # pitch (or highest pitch if nearestPrevNoteInStaff is a chord with pitches)
                     if isinstance(expression, expressions.Ornament):
-                        if nearestPrevNoteInStaff.pitches:
-                            expression.resolveOrnamentalPitches(
-                                nearestPrevNoteInStaff,
-                                keySig=_currKeyForStaff(staffForNearestNote, otherInfo)
-                            )
+                        expression.resolveOrnamentalPitches(
+                            nearestPrevNoteInStaff,
+                            keySig=_currKeyForStaff(staffForNearestNote, otherInfo)
+                        )
 
-                    updateAltersFromExpression(
-                        expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
-                    )
+                        updateAltersFromExpression(
+                            expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
+                        )
 
                     nearestPrevNoteInStaff.expressions.append(expression)
                 else:
