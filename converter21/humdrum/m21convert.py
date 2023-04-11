@@ -2470,7 +2470,7 @@ class M21Convert:
                 upperCh = 'S'
 
             if gNote.pitches:
-                intv = m21.interval.Interval(gNote.pitches[0], orn.upperOrnamentalPitch)
+                intv = m21.interval.Interval(gNote.pitches[0], orn.lowerOrnamentalPitch)
                 semitones = float(intv.chromatic.semitones)
 
             if abs(semitones) <= 1:
