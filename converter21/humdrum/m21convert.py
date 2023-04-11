@@ -933,12 +933,16 @@ class M21Convert:
         layouts: t.List[str] = []
 
         # rest postfix possibility 0: fermata
-        postfix += M21Convert._getHumdrumStringFromM21Expressions(
+        exprStr: str
+        expressionLayouts: t.List[str]
+        exprStr, expressionLayouts = M21Convert._getHumdrumStringAndLayoutsFromM21Expressions(
             m21Rest.expressions,
-            m21Rest.duration,
+            m21Rest,
             recip,
             owner=owner
         )
+        postfix += exprStr
+        layouts += expressionLayouts
 
         # rest postfix possibility 1: pitch (for vertical positioning)
         if m21Rest.stepShift != 0:
@@ -1066,13 +1070,18 @@ class M21Convert:
             expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
                 M21Utilities.getAllExpressionsFromGeneralNote(m21GeneralNote, spannerBundle)
             )
-            expressionStr = M21Convert._getHumdrumStringFromM21Expressions(
-                expressions,
-                m21GeneralNote.duration,
-                recip,
-                beamStr.count('L'),  # beamStarts
-                owner
+            expressionLayouts: t.List[str]
+            expressionStr, expressionLayouts = (
+                M21Convert._getHumdrumStringAndLayoutsFromM21Expressions(
+                    expressions,
+                    m21GeneralNote,
+                    recip,
+                    beamStr.count('L'),  # beamStarts
+                    owner=owner
+                )
             )
+            layouts += expressionLayouts
+
             articStr = M21Convert._getHumdrumStringFromM21Articulations(
                 m21GeneralNote.articulations,
                 owner
@@ -1277,13 +1286,17 @@ class M21Convert:
         expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
             M21Utilities.getAllExpressionsFromGeneralNote(m21Chord, spannerBundle)
         )
-        exprStr: str = M21Convert._getHumdrumStringFromM21Expressions(
+        expressionLayouts: t.List[str]
+        exprStr: str
+        exprStr, expressionLayouts = M21Convert._getHumdrumStringAndLayoutsFromM21Expressions(
             expressions,
-            m21Chord.duration,
+            m21Chord,
             recip,
             beamStr.count('L'),  # beamStarts
-            owner
+            owner=owner
         )
+        layoutsForChord += expressionLayouts
+
         stemStr: str = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21Chord)
         slurStarts, slurStops = M21Convert._getKernSlurStartsAndStopsFromGeneralNote(
             m21Chord,
@@ -2235,46 +2248,69 @@ class M21Convert:
         measureOfFirstSpanned: t.Optional[m21.stream.Measure] = None
         for i, gnote in enumerate(spanner):
             if i == 0:
-                measureOfFirstSpanned = gnote.getContextByClass(m21.stream.Measure)
+                measureOfFirstSpanned = M21Convert._getMeasureContaining(gnote)
                 continue
-            if gnote.getContextByClass(m21.stream.Measure) is not measureOfFirstSpanned:
+            if M21Convert._getMeasureContaining(gnote) is not measureOfFirstSpanned:
                 return False
         return True
 
     @staticmethod
-    def _getHumdrumStringFromM21Expressions(
+    def _getHumdrumStringAndLayoutsFromM21Expressions(
             m21Expressions: t.Sequence[t.Union[m21.expressions.Expression, m21.spanner.Spanner]],
-            duration: m21.duration.Duration,
+            m21GeneralNote: m21.note.GeneralNote,
             recip: str,
             beamStarts: t.Optional[int] = None,
             owner=None
-    ) -> str:
+    ) -> t.Tuple[str, t.List[str]]:
         # expressions are Fermata, Trill, Mordent, Turn, Tremolo (one note)
         # also the following two Spanners: TrillExtension and TremoloSpanner (multiple notes)
         output: str = ''
+        layouts: t.List[str] = []
+
+        trillSeen: str = ''
+        trillExtStartSeen: bool = False
         for expr in m21Expressions:
-            if isinstance(expr, m21.expressions.Trill):
-                # TODO: print('export of Trill not implemented')
+            if isinstance(
+                expr,
+                (m21.expressions.Trill, m21.expressions.GeneralMordent, m21.expressions.Turn)
+            ):
+                ornStr, ornLayouts = (
+                    M21Convert._getHumdrumStringAndLayoutsFromM21TrillMordentTurn(
+                        expr, m21GeneralNote
+                    )
+                )
+                output += ornStr
+                layouts += ornLayouts
+                if isinstance(expr, m21.expressions.Trill):
+                    trillSeen = ornStr
                 continue
-            if isinstance(expr, m21.expressions.Mordent):
-                # TODO: print('export of Mordent not implemented')
-                continue
-            if isinstance(expr, m21.expressions.Turn):
-                # TODO: print('export of Turn not implemented')
-                continue
+
             if isinstance(expr, (m21.expressions.Tremolo, m21.expressions.TremoloSpanner)):
                 output += M21Convert._getHumdrumStringFromTremolo(
-                    expr, duration, recip, beamStarts, owner
+                    expr, m21GeneralNote.duration, recip, beamStarts, owner
                 )
                 continue
+
             if isinstance(expr, m21.expressions.TrillExtension):
-                # TODO: print('export of TrillExtension not implemented')
+                if m21GeneralNote and expr.isFirst(m21GeneralNote):
+                    # turn any trill start into trill with wavy-line later
+                    trillExtStartSeen = True
+                else:
+                    # continue the trill extension
+                    # This should technically be 'ttt' or 'TTT', depending on
+                    # whether the trill is a half or whole step trill, but it
+                    # actually doesn't matter to any of the parsers I've seen,
+                    # so just use 'TTT' instead of tracking trill intervals
+                    # from previous notes.
+                    output += 'TTT'
                 continue
+
             if isinstance(expr, m21.expressions.Fermata):
                 output += ';'
                 if expr.type == 'upright':
                     output += '<'
                 continue
+
             if M21Utilities.m21SupportsArpeggioMarks():
                 if isinstance(expr, m21.expressions.ArpeggioMark):  # type: ignore
                     output += ':'
@@ -2285,7 +2321,12 @@ class M21Convert:
                     else:
                         output += '::'
                     continue
-        return output
+
+        if trillSeen and trillExtStartSeen:
+            # replace a 't' or 'T' (trill sign) with a 'tt' or 'TT' (trill sign + wavy line)
+            re.sub(trillSeen, trillSeen + trillSeen, output, count=1)
+
+        return output, layouts
 
     numberOfFlagsToDurationReciprocal: t.Dict[int, int] = {
         0: 4,
@@ -2301,12 +2342,156 @@ class M21Convert:
     }
 
     @staticmethod
+    def _getHumdrumStringAndLayoutsFromM21TrillMordentTurn(
+        orn: m21.expressions.Trill | m21.expressions.GeneralMordent | m21.expressions.Turn,
+        gNote: m21.note.GeneralNote,
+        _owner=None
+    ) -> t.Tuple[str, t.List[str]]:
+        output: str = ''
+        layouts: t.List[str] = []
+
+        # don't re-resolve them if they're already there, you'll lose their displayStatus
+        if not orn.ornamentalPitches:
+            orn.resolveOrnamentalPitches(gNote)
+
+        accid: str
+        if isinstance(orn, m21.expressions.Trill):
+            # one ornamental pitch, either above (Trill) or below (InvertedTrill)
+            # Humdrum doesn't really support InvertedTrill, so we just do the best
+            # we can by putting it below the note.
+            if (orn.ornamentalPitch
+                    and orn.ornamentalPitch.accidental
+                    and orn.ornamentalPitch.accidental.displayStatus):
+                accid = m21.pitch.accidentalNameToModifier.get(
+                    orn.ornamentalPitch.name, ''
+                )
+                if accid:
+                    layouts.append(f'!LO:TR:acc={accid}')
+
+            semitones: float = 0.0
+            if gNote.pitches:
+                intv = m21.interval.Interval(gNote.pitches[0], orn.ornamentalPitch)
+                semitones = float(intv.chromatic.semitones)
+
+            if abs(semitones) <= 1:
+                if semitones > 0:
+                    output = 't'
+                else:
+                    output = 't<'
+            else:
+                if semitones > 0:
+                    output = 'T'
+                else:
+                    output = 'T<'
+
+            return output, layouts
+
+        if isinstance(orn, m21.expressions.GeneralMordent):
+            # one ornamental pitch, either above (InvertedMordent) or below (Mordent)
+            # 'M' and 'm' are above, 'W' and 'w' are below.
+            if (orn.ornamentalPitch
+                    and orn.ornamentalPitch.accidental
+                    and orn.ornamentalPitch.accidental.displayStatus):
+                accid = m21.pitch.accidentalNameToModifier.get(
+                    orn.ornamentalPitch.name, ''
+                )
+                if accid:
+                    layouts.append(f'!LO:MOR:acc={accid}')
+
+            semitones = 0.0
+            if gNote.pitches:
+                intv = m21.interval.Interval(gNote.pitches[0], orn.ornamentalPitch)
+                semitones = float(intv.chromatic.semitones)
+
+            if abs(semitones) <= 1:
+                if semitones > 0:
+                    output = 'm'
+                else:
+                    output = 'w'
+            else:
+                if semitones > 0:
+                    output = 'M'
+                else:
+                    output = 'W'
+
+            return output, layouts
+
+        if isinstance(orn, m21.expressions.Turn):
+            # two ornamental pitches, one above and one below
+            if (orn.upperOrnamentalPitch
+                    and orn.upperOrnamentalPitch.accidental
+                    and orn.upperOrnamentalPitch.accidental.displayStatus):
+                accid = m21.pitch.accidentalNameToModifier.get(
+                    orn.upperOrnamentalPitch.name, ''
+                )
+                if accid:
+                    layouts.append(f'!LO:TURN:uacc={accid}')
+
+            if (orn.lowerOrnamentalPitch
+                    and orn.lowerOrnamentalPitch.accidental
+                    and orn.lowerOrnamentalPitch.accidental.displayStatus):
+                accid = m21.pitch.accidentalNameToModifier.get(
+                    orn.lowerOrnamentalPitch.name, ''
+                )
+                if accid:
+                    layouts.append(f'!LO:TURN:lacc={accid}')
+
+            # '$..' is inverted
+            # 'S..' is not inverted
+            # 's' at the start before '$..' or 'S..' means not delayed
+            # The values of the '..' characters describe how many semitones the upper and
+            # lower notes are above and below the main note.
+            prefix: str
+            if isinstance(orn, m21.expressions.InvertedTurn):
+                if orn.isDelayed:
+                    # delayed, inverted
+                    prefix = '$'
+                else:
+                    # not delayed, inverted
+                    prefix = 's$'
+            else:
+                if orn.isDelayed:
+                    # delayed, not inverted
+                    prefix = 'S'
+                else:
+                    # not delayed, not inverted
+                    prefix = 'sS'
+
+            upperCh: str
+            lowerCh: str
+            semitones = 0.0
+            if gNote.pitches:
+                intv = m21.interval.Interval(gNote.pitches[0], orn.upperOrnamentalPitch)
+                semitones = float(intv.chromatic.semitones)
+
+            if abs(semitones) <= 1:
+                upperCh = 's'
+            else:
+                upperCh = 'S'
+
+            if gNote.pitches:
+                intv = m21.interval.Interval(gNote.pitches[0], orn.upperOrnamentalPitch)
+                semitones = float(intv.chromatic.semitones)
+
+            if abs(semitones) <= 1:
+                lowerCh = 's'
+            else:
+                lowerCh = 'S'
+
+            output = prefix + upperCh + lowerCh
+
+            return output, layouts
+
+        return '', []  # we should never get here
+
+
+    @staticmethod
     def _getHumdrumStringFromTremolo(
-            tremolo: t.Union[m21.expressions.Tremolo, m21.expressions.TremoloSpanner],
-            duration: m21.duration.Duration,
-            recip: str,
-            beamStarts: t.Optional[int],
-            _owner=None
+        tremolo: t.Union[m21.expressions.Tremolo, m21.expressions.TremoloSpanner],
+        duration: m21.duration.Duration,
+        recip: str,
+        beamStarts: t.Optional[int],
+        _owner=None
     ) -> str:
         output: str = ''
         fingered: bool

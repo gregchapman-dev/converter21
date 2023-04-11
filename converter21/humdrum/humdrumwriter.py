@@ -132,7 +132,6 @@ class HumdrumWriter:
         # private data, computed along the way...
         self._forceRecipSpine: bool = False  # set to true sometimes in figured bass, harmony code
         self._hasTremolo: bool = False       # has fingered or bowed tremolo(s) that need expanding
-        self._hasOrnaments: bool = False     # has trills, mordents, or turns that need refinement
         # current state of *tuplet/*Xtuplet (partIndex, staffIndex)
         self._tupletsSuppressed: t.Dict[int, t.Dict[int, bool]] = {}
         # current state of *brackettup/*Xbrackettup
@@ -429,10 +428,6 @@ class HumdrumWriter:
             hline.createLineFromTokens()
 
 #         chord.run(outfile) # makes sure each note in the chord has the right stuff on it?
-
-#           if self._hasOrnaments: # maybe outgrid.hasOrnaments? or m21Score.hasOrnaments?
-#               # figures out actual trill, mordent, turn type based on current key and accidentals
-#               trillspell.run(outfile)
 
         # client can disable tremolo expansion by setting self.expandTremolos to False
         if self._hasTremolo and self.expandTremolos:
