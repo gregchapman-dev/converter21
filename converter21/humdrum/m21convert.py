@@ -2359,10 +2359,11 @@ class M21Convert:
             # one ornamental pitch, either above (Trill) or below (InvertedTrill)
             # Humdrum doesn't really support InvertedTrill, so we just do the best
             # we can by putting it below the note.
-            if (orn.accidentalName
-                    or (orn.ornamentalPitch
-                        and orn.ornamentalPitch.accidental
-                        and orn.ornamentalPitch.accidental.displayStatus)):
+            if t.TYPE_CHECKING:
+                assert orn.ornamentalPitch is not None
+
+            if (orn.ornamentalPitch.accidental
+                    and orn.ornamentalPitch.accidental.displayStatus):
                 accid = m21.pitch.accidentalNameToModifier.get(
                     orn.ornamentalPitch.accidental.name, ''
                 )
@@ -2390,10 +2391,10 @@ class M21Convert:
         if isinstance(orn, m21.expressions.GeneralMordent):
             # one ornamental pitch, either above (InvertedMordent) or below (Mordent)
             # 'M' and 'm' are above, 'W' and 'w' are below.
-            if (orn.accidentalName
-                    or (orn.ornamentalPitch
-                        and orn.ornamentalPitch.accidental
-                        and orn.ornamentalPitch.accidental.displayStatus)):
+            if t.TYPE_CHECKING:
+                assert orn.ornamentalPitch is not None
+            if (orn.ornamentalPitch.accidental
+                    and orn.ornamentalPitch.accidental.displayStatus):
                 accid = m21.pitch.accidentalNameToModifier.get(
                     orn.ornamentalPitch.accidental.name, ''
                 )
@@ -2420,20 +2421,19 @@ class M21Convert:
 
         if isinstance(orn, m21.expressions.Turn):
             # two ornamental pitches, one above and one below
-            if (orn.upperAccidentalName
-                    or (orn.upperOrnamentalPitch
-                        and orn.upperOrnamentalPitch.accidental
-                        and orn.upperOrnamentalPitch.accidental.displayStatus)):
+            if t.TYPE_CHECKING:
+                assert orn.upperOrnamentalPitch is not None
+                assert orn.lowerOrnamentalPitch is not None
+            if (orn.upperOrnamentalPitch.accidental
+                    and orn.upperOrnamentalPitch.accidental.displayStatus):
                 accid = m21.pitch.accidentalNameToModifier.get(
                     orn.upperOrnamentalPitch.accidental.name, ''
                 )
                 if accid:
                     layouts.append(f'!LO:TURN:uacc={accid}')
 
-            if (orn.lowerAccidentalName
-                    or (orn.lowerOrnamentalPitch
-                        and orn.lowerOrnamentalPitch.accidental
-                        and orn.lowerOrnamentalPitch.accidental.displayStatus)):
+            if (orn.lowerOrnamentalPitch.accidental
+                    and orn.lowerOrnamentalPitch.accidental.displayStatus):
                 accid = m21.pitch.accidentalNameToModifier.get(
                     orn.lowerOrnamentalPitch.accidental.name, ''
                 )

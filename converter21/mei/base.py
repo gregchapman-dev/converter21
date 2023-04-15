@@ -2040,7 +2040,11 @@ def addTrill(
         m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
     elif accidLower:
         m21AccidName = _m21AccidentalNameFromAccid(accidLower)
-    trill = expressions.Trill(accidentalName=m21AccidName)
+    trill = expressions.Trill()
+    if m21AccidName:
+        m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+        m21Accid.displayStatus = True
+        trill.accidental = m21Accid
 
     if staffN:
         # Now, resolve the Trill's ornamental pitch based on obj
@@ -2100,6 +2104,11 @@ def addMordent(
     elif form == 'lower':
         mordent = expressions.Mordent(accidentalName=m21AccidName)
 
+    if m21AccidName:
+        m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+        m21Accid.displayStatus = True
+        mordent.accidental = m21Accid
+
     # Now, resolve the mordent's ornamental pitch based on obj
     if staffN:
         mordent.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
@@ -2145,12 +2154,23 @@ def addTurn(
         else:
             form = 'upper'  # default
 
-    m21AccidUpper: str = ''
-    m21AccidLower: str = ''
+    m21AccidNameUpper: str = ''
+    m21AccidNameLower: str = ''
     if accidUpper:
-        m21AccidUpper = _m21AccidentalNameFromAccid(accidUpper)
+        m21AccidNameUpper = _m21AccidentalNameFromAccid(accidUpper)
     if accidLower:
-        m21AccidLower = _m21AccidentalNameFromAccid(accidLower)
+        m21AccidNameUpper = _m21AccidentalNameFromAccid(accidLower)
+
+    m21AccidUpper: t.Optional[pitch.Accidental] = None
+    if m21AccidNameUpper:
+        m21AccidUpper = pitch.Accidental(m21AccidNameUpper)
+        m21AccidUpper.displayStatus = True
+
+    m21AccidLower: t.Optional[pitch.Accidental] = None
+    if m21AccidNameLower:
+        m21AccidLower = pitch.Accidental(m21AccidNameLower)
+        m21AccidLower.displayStatus = True
+
 
     if M21Utilities.m21SupportsDelayedTurns():
         delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
@@ -2161,25 +2181,25 @@ def addTurn(
         if form == 'upper':
             turn = expressions.Turn(
                 delay=delay,
-                upperAccidentalName=m21AccidUpper,
-                lowerAccidentalName=m21AccidLower
+                upperAccidental=m21AccidUpper,
+                lowerAccidental=m21AccidLower
             )
         else:
             turn = expressions.InvertedTurn(
                 delay=delay,
-                upperAccidentalName=m21AccidUpper,
-                lowerAccidentalName=m21AccidLower
+                upperAccidental=m21AccidUpper,
+                lowerAccidental=m21AccidLower
             )
     else:
         if form == 'upper':
             turn = expressions.Turn(
-                upperAccidentalName=m21AccidUpper,
-                lowerAccidentalName=m21AccidLower
+                upperAccidental=m21AccidUpper,
+                lowerAccidental=m21AccidLower
             )
         elif form == 'lower':
             turn = expressions.InvertedTurn(
-                upperAccidentalName=m21AccidUpper,
-                lowerAccidentalName=m21AccidLower
+                upperAccidental=m21AccidUpper,
+                lowerAccidental=m21AccidLower
             )
 
     # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch

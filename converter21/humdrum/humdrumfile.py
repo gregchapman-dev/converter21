@@ -6108,25 +6108,38 @@ class HumdrumFile(HumdrumFileContent):
         # in HumdrumFileContent, and then here we adjust that based on any '!LO:TR:acc='
         # accidental.
 
-        trillAccid: str = self._computeM21AccidentalName(
-            token.getValueString('auto', str(subTokenIdx), 'trillAccidental')
+        trillAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'trillAccidental.vis')
         )
+        if trillAccid is not None:
+            # we have a visual accidental
+            trillAccid.displayStatus = True
+        else:
+            trillAccid = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'trillAccidental.ges')
+            )
+            if trillAccid is not None:
+                # we have a gestural accidental
+                trillAccid.displayStatus = False
 
         # replace the trill accidental if different in layout parameters, such as:
         #    !LO:TR:acc=##
         # for a double sharp, or
         #    !LO:TR:acc=none
-        # for no accidental
+        # for no visible accidental
         accText: str = token.layoutParameter('TR', 'acc')
         if accText:
             if accText in ('none', 'false'):
-                trillAccid = ''
+                if trillAccid is not None:
+                    trillAccid.displayStatus = False
             else:
-                trillAccid = self._computeM21AccidentalName(
+                trillAccid = self._computeM21Accidental(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                 )
+                if trillAccid is not None:
+                    trillAccid.displayStatus = True
 
-        trill: m21.expressions.Trill = m21.expressions.Trill(accidentalName=trillAccid)
+        trill: m21.expressions.Trill = m21.expressions.Trill(accidental=trillAccid)
 
         # Now, resolve the Trill's "other" pitch based on startNote
         if startNote.pitches:
@@ -6309,20 +6322,20 @@ class HumdrumFile(HumdrumFileContent):
 #         # TODO: ... (if there is one)
 #         gnote.articulations.append(breathMark)
 
-    def _computeM21AccidentalName(
+    def _computeM21Accidental(
         self,
         valueStr: t.Optional[str]
-    ) -> str:
+    ) -> t.Optional[m21.pitch.Accidental]:
         if not valueStr:
-            return ''
+            return None
 
         try:
             accidNum: int = int(valueStr)
         except:  # pylint: disable=bare-except
-            return ''
+            return None
 
         accid: m21.pitch.Accidental = m21.pitch.Accidental(accidNum)
-        return accid.name
+        return accid
 
     '''
     //////////////////////////////
@@ -6451,7 +6464,7 @@ class HumdrumFile(HumdrumFileContent):
             else:
                 accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
 
-            mordentAccid: str = self._computeM21AccidentalName(accidStr)
+            mordentAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
 
             # Set any explicit visual accidental for the mordent.
             # Maybe in the future allow for lacc and uacc to place the accidental.
@@ -6459,16 +6472,19 @@ class HumdrumFile(HumdrumFileContent):
             accText: str = token.layoutParameter('MOR', 'acc')
             if accText and accText != 'true':
                 if accText in ('none', 'false'):
-                    mordentAccid = ''
+                    if mordentAccid is not None:
+                        mordentAccid.displayStatus = False
                 else:
-                    mordentAccid = self._computeM21AccidentalName(
+                    mordentAccid = self._computeM21Accidental(
                         self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
                     )
+                    if mordentAccid is not None:
+                        mordentAccid.displayStatus = True
 
             if isLower:
-                mordent = m21.expressions.Mordent(accidentalName=mordentAccid)
+                mordent = m21.expressions.Mordent(accidental=mordentAccid)
             else:
-                mordent = m21.expressions.InvertedMordent(accidentalName=mordentAccid)
+                mordent = m21.expressions.InvertedMordent(accidental=mordentAccid)
 
             # Default placement has been set up in mplaces.
             direction: int = mplace
@@ -6570,26 +6586,33 @@ class HumdrumFile(HumdrumFileContent):
         upperaccid: t.Optional[str] = token.getValueString(
             'auto', str(subTokenIdx), 'turnUpperAccidental'
         )
-        turnLowerAccid: str = self._computeM21AccidentalName(loweraccid)
-        turnUpperAccid: str = self._computeM21AccidentalName(upperaccid)
+        turnLowerAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(loweraccid)
+        turnUpperAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(upperaccid)
 
         # Check for LO:TURN forced visual accidentals
         lacctext: str = token.layoutParameter('TURN', 'lacc')
         uacctext: str = token.layoutParameter('TURN', 'uacc')
         if lacctext and lacctext != 'true':
             if lacctext in ('none', 'false'):
-                turnLowerAccid = ''
+                if turnLowerAccid is not None:
+                    turnLowerAccid.displayStatus = False
             else:
-                turnLowerAccid = self._computeM21AccidentalName(
+                turnLowerAccid = self._computeM21Accidental(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(lacctext, '')
                 )
+                if turnLowerAccid is not None:
+                    turnLowerAccid.displayStatus = True
+
         if uacctext and uacctext != 'true':
             if uacctext in ('none', 'false'):
-                turnUpperAccid = ''
+                if turnUpperAccid is not None:
+                    turnUpperAccid.displayStatus = False
             else:
-                turnUpperAccid = self._computeM21AccidentalName(
+                turnUpperAccid = self._computeM21Accidental(
                     self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(uacctext, '')
                 )
+                if turnUpperAccid is not None:
+                    turnUpperAccid.displayStatus = True
 
         # Check to see if accidentals need to be flipped:
         facctext: str = token.layoutParameter('TURN', 'facc')
@@ -6606,25 +6629,25 @@ class HumdrumFile(HumdrumFileContent):
             if isInverted:
                 turn = m21.expressions.InvertedTurn(
                     delay=delay,
-                    upperAccidentalName=turnUpperAccid,
-                    lowerAccidentalName=turnLowerAccid
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
                 )
             else:
                 turn = m21.expressions.Turn(
                     delay=delay,
-                    upperAccidentalName=turnUpperAccid,
-                    lowerAccidentalName=turnLowerAccid
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
                 )
         else:
             if isInverted:
                 turn = m21.expressions.InvertedTurn(
-                    upperAccidentalName=turnUpperAccid,
-                    lowerAccidentalName=turnLowerAccid
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
                 )
             else:
                 turn = m21.expressions.Turn(
-                    upperAccidentalName=turnUpperAccid,
-                    lowerAccidentalName=turnLowerAccid
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
                 )
 
         # our better default
