@@ -2159,7 +2159,7 @@ def addTurn(
     if accidUpper:
         m21AccidNameUpper = _m21AccidentalNameFromAccid(accidUpper)
     if accidLower:
-        m21AccidNameUpper = _m21AccidentalNameFromAccid(accidLower)
+        m21AccidNameLower = _m21AccidentalNameFromAccid(accidLower)
 
     m21AccidUpper: t.Optional[pitch.Accidental] = None
     if m21AccidNameUpper:

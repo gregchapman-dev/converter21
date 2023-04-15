@@ -6579,15 +6579,35 @@ class HumdrumFile(HumdrumFileContent):
         elif turnStr[0] == '$':
             isInverted = True
 
+
         # check for automatic upper and lower accidental on turn:
-        loweraccid: t.Optional[str] = token.getValueString(
-            'auto', str(subTokenIdx), 'turnLowerAccidental'
+        turnLowerAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'turnLowerAccidental.vis')
         )
-        upperaccid: t.Optional[str] = token.getValueString(
-            'auto', str(subTokenIdx), 'turnUpperAccidental'
+        if turnLowerAccid is not None:
+            # we have a visual lower accidental
+            turnLowerAccid.displayStatus = True
+        else:
+            turnLowerAccid = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'turnLowerAccidental.ges')
+            )
+            if turnLowerAccid is not None:
+                # we have a gestural lower accidental
+                turnLowerAccid.displayStatus = False
+
+        turnUpperAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'turnUpperAccidental.vis')
         )
-        turnLowerAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(loweraccid)
-        turnUpperAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(upperaccid)
+        if turnUpperAccid is not None:
+            # we have a visual upper accidental
+            turnUpperAccid.displayStatus = True
+        else:
+            turnUpperAccid = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'turnUpperAccidental.ges')
+            )
+            if turnUpperAccid is not None:
+                # we have a gestural upper accidental
+                turnUpperAccid.displayStatus = False
 
         # Check for LO:TURN forced visual accidentals
         lacctext: str = token.layoutParameter('TURN', 'lacc')
