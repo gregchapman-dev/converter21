@@ -2359,23 +2359,24 @@ class M21Convert:
             # one ornamental pitch, either above (Trill) or below (InvertedTrill)
             # Humdrum doesn't really support InvertedTrill, so we just do the best
             # we can by putting it below the note.
-            if t.TYPE_CHECKING:
-                assert orn.ornamentalPitch is not None
-
-            if (orn.ornamentalPitch.accidental
-                    and orn.ornamentalPitch.accidental.displayStatus):
-                accid = m21.pitch.accidentalNameToModifier.get(
-                    orn.ornamentalPitch.accidental.name, ''
-                )
-                if accid:
-                    layouts.append(f'!LO:TR:acc={accid}')
+            if orn.ornamentalPitch is not None:
+                if (orn.ornamentalPitch.accidental
+                        and orn.ornamentalPitch.accidental.displayStatus):
+                    accid = m21.pitch.accidentalNameToModifier.get(
+                        orn.ornamentalPitch.accidental.name, ''
+                    )
+                    if accid:
+                        layouts.append(f'!LO:TR:acc={accid}')
 
             semitones: float = 0.0
             if gNote.pitches:
                 intv = m21.interval.Interval(gNote.pitches[0], orn.ornamentalPitch)
                 semitones = float(intv.chromatic.semitones)
 
-            if abs(semitones) <= 1:
+            if semitones == 0:
+                # trill on Unpitched.  Call it 't'
+                output = 't'
+            elif abs(semitones) <= 1:
                 if semitones > 0:
                     output = 't'
                 else:
@@ -2391,22 +2392,24 @@ class M21Convert:
         if isinstance(orn, m21.expressions.GeneralMordent):
             # one ornamental pitch, either above (InvertedMordent) or below (Mordent)
             # 'M' and 'm' are above, 'W' and 'w' are below.
-            if t.TYPE_CHECKING:
-                assert orn.ornamentalPitch is not None
-            if (orn.ornamentalPitch.accidental
-                    and orn.ornamentalPitch.accidental.displayStatus):
-                accid = m21.pitch.accidentalNameToModifier.get(
-                    orn.ornamentalPitch.accidental.name, ''
-                )
-                if accid:
-                    layouts.append(f'!LO:MOR:acc={accid}')
+            if orn.ornamentalPitch is not None:
+                if (orn.ornamentalPitch.accidental
+                        and orn.ornamentalPitch.accidental.displayStatus):
+                    accid = m21.pitch.accidentalNameToModifier.get(
+                        orn.ornamentalPitch.accidental.name, ''
+                    )
+                    if accid:
+                        layouts.append(f'!LO:MOR:acc={accid}')
 
             semitones = 0.0
             if gNote.pitches:
                 intv = m21.interval.Interval(gNote.pitches[0], orn.ornamentalPitch)
                 semitones = float(intv.chromatic.semitones)
 
-            if abs(semitones) <= 1:
+            if semitones == 0:
+                # mordent on Unpitched.  Call it 'm'
+                output = 't'
+            elif abs(semitones) <= 1:
                 if semitones > 0:
                     output = 'm'
                 else:
@@ -2421,24 +2424,23 @@ class M21Convert:
 
         if isinstance(orn, m21.expressions.Turn):
             # two ornamental pitches, one above and one below
-            if t.TYPE_CHECKING:
-                assert orn.upperOrnamentalPitch is not None
-                assert orn.lowerOrnamentalPitch is not None
-            if (orn.upperOrnamentalPitch.accidental
-                    and orn.upperOrnamentalPitch.accidental.displayStatus):
-                accid = m21.pitch.accidentalNameToModifier.get(
-                    orn.upperOrnamentalPitch.accidental.name, ''
-                )
-                if accid:
-                    layouts.append(f'!LO:TURN:uacc={accid}')
+            if orn.upperOrnamentalPitch is not None:
+                if (orn.upperOrnamentalPitch.accidental
+                        and orn.upperOrnamentalPitch.accidental.displayStatus):
+                    accid = m21.pitch.accidentalNameToModifier.get(
+                        orn.upperOrnamentalPitch.accidental.name, ''
+                    )
+                    if accid:
+                        layouts.append(f'!LO:TURN:uacc={accid}')
 
-            if (orn.lowerOrnamentalPitch.accidental
-                    and orn.lowerOrnamentalPitch.accidental.displayStatus):
-                accid = m21.pitch.accidentalNameToModifier.get(
-                    orn.lowerOrnamentalPitch.accidental.name, ''
-                )
-                if accid:
-                    layouts.append(f'!LO:TURN:lacc={accid}')
+            if orn.lowerOrnamentalPitch is not None:
+                if (orn.lowerOrnamentalPitch.accidental
+                        and orn.lowerOrnamentalPitch.accidental.displayStatus):
+                    accid = m21.pitch.accidentalNameToModifier.get(
+                        orn.lowerOrnamentalPitch.accidental.name, ''
+                    )
+                    if accid:
+                        layouts.append(f'!LO:TURN:lacc={accid}')
 
             # '$..' is inverted
             # 'S..' is not inverted
@@ -2468,7 +2470,10 @@ class M21Convert:
                 intv = m21.interval.Interval(gNote.pitches[0], orn.upperOrnamentalPitch)
                 semitones = float(intv.chromatic.semitones)
 
-            if abs(semitones) <= 1:
+            if semitones == 0:
+                # turn on Unpitched, call it 's'
+                upperCh = 's'
+            elif abs(semitones) <= 1:
                 upperCh = 's'
             else:
                 upperCh = 'S'
@@ -2477,7 +2482,10 @@ class M21Convert:
                 intv = m21.interval.Interval(gNote.pitches[0], orn.lowerOrnamentalPitch)
                 semitones = float(intv.chromatic.semitones)
 
-            if abs(semitones) <= 1:
+            if semitones == 0:
+                # turn on Unpitched, call it 's'
+                lowerCh = 's'
+            elif abs(semitones) <= 1:
                 lowerCh = 's'
             else:
                 lowerCh = 'S'
