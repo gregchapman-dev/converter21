@@ -6457,14 +6457,20 @@ class HumdrumFile(HumdrumFileContent):
 
             isLower: bool = mstring[0] in 'wW'
 
-            mordent: m21.expressions.GeneralMordent
-            accidStr: t.Optional[str] = None
-            if isLower:
-                accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentLowerAccidental')
+            mordentAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'mordentAccidental.vis')
+            )
+            if mordentAccid is not None:
+                # we have a visual accidental
+                mordentAccid.displayStatus = True
             else:
-                accidStr = token.getValueString('auto', str(subTokenIdx), 'mordentUpperAccidental')
+                mordentAccid = self._computeM21Accidental(
+                    token.getValueString('auto', str(subTokenIdx), 'mordentAccidental.ges')
+                )
+                if mordentAccid is not None:
+                    # we have a gestural accidental
+                    mordentAccid.displayStatus = False
 
-            mordentAccid: t.Optional[m21.pitch.Accidental] = self._computeM21Accidental(accidStr)
 
             # Set any explicit visual accidental for the mordent.
             # Maybe in the future allow for lacc and uacc to place the accidental.
@@ -6481,6 +6487,7 @@ class HumdrumFile(HumdrumFileContent):
                     if mordentAccid is not None:
                         mordentAccid.displayStatus = True
 
+            mordent: m21.expressions.GeneralMordent
             if isLower:
                 mordent = m21.expressions.Mordent(accidental=mordentAccid)
             else:

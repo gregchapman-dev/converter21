@@ -1294,12 +1294,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         exprAccid = Convert.base40ToAccidental(exprNote)
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
-                                'auto', str(k), 'mordentUpperAccidental.vis', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.vis', str(exprAccid))
                             dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                         else:
                             # no visual accidental, but we need to know the gestural accidental
                             token.setValue(
-                                'auto', str(k), 'mordentUpperAccidental.ges', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.ges', str(exprAccid))
 
                     elif 'm' in subtok:
                         # minor second upper mordent
@@ -1308,12 +1308,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         exprAccid = Convert.base40ToAccidental(exprNote)
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
-                                'auto', str(k), 'mordentUpperAccidental.vis', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.vis', str(exprAccid))
                             dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                         else:
                             # no visual accidental, but we need to know the gestural accidental
                             token.setValue(
-                                'auto', str(k), 'mordentUpperAccidental.ges', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.ges', str(exprAccid))
 
                     elif 'W' in subtok:
                         # major second lower mordent
@@ -1322,12 +1322,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         exprAccid = Convert.base40ToAccidental(exprNote)
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
-                                'auto', str(k), 'mordentLowerAccidental.vis', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.vis', str(exprAccid))
                             dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                         else:
                             # no visual accidental, but we need to know the gestural accidental
                             token.setValue(
-                                'auto', str(k), 'mordentLowerAccidental.ges', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.ges', str(exprAccid))
 
                     elif 'w' in subtok:
                         # minor second lower mordent
@@ -1336,12 +1336,12 @@ class HumdrumFileContent(HumdrumFileStructure):
                         exprAccid = Convert.base40ToAccidental(exprNote)
                         if dstates[spineStartIdx][exprDiatonic] != exprAccid:
                             token.setValue(
-                                'auto', str(k), 'mordentLowerAccidental.vis', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.vis', str(exprAccid))
                             dstates[spineStartIdx][exprDiatonic] = -1000 + exprAccid
                         else:
                             # no visual accidental, but we need to know the gestural accidental
                             token.setValue(
-                                'auto', str(k), 'mordentLowerAccidental.ges', str(exprAccid))
+                                'auto', str(k), 'mordentAccidental.ges', str(exprAccid))
 
                     elif '$' in subtok:
                         # inverted turn
