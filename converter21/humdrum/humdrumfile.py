@@ -464,6 +464,7 @@ class StaffStateVariables:
             Next we have temporary (processing) state about this staff (current measure, etc)
         '''
         self.mostRecentlySeenClefTok: t.Optional[HumdrumToken] = None
+        self.currentM21KeySig: t.Optional[m21.key.KeySignature] = None
 
     def printState(self, prefix: str) -> None:
         print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
@@ -1416,6 +1417,8 @@ class HumdrumFile(HumdrumFileContent):
                     if m21KeySig is not None:
                         m21OffsetInMeasure = keySigTok.durationFromBarline
                         measure.coreInsert(m21OffsetInMeasure, m21KeySig)
+                        # always track current keysig per staff
+                        self._staffStates[staffIndex].currentM21KeySig = m21KeySig
                         insertedIntoMeasure = True
 
                 if insertedIntoMeasure:
@@ -5585,7 +5588,7 @@ class HumdrumFile(HumdrumFileContent):
         # TODO: chord stem directions
 #         self._assignAutomaticStem(chord, layerTok, staffIndex)
         self._addArticulations(chord, layerTok)
-        self._addOrnaments(chord, layerTok)
+        self._addOrnaments(chord, layerTok, staffIndex)
         self._addArpeggio(chord, layerTok)
         self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
 
@@ -5845,7 +5848,7 @@ class HumdrumFile(HumdrumFileContent):
 #               && layerdata[i]->find(m_signifiers.hairpinAccent) != std::string::npos) {
 #           addHairpinAccent(layerdata[i]);
         self._addArticulations(note, layerTok)
-        self._addOrnaments(note, layerTok)
+        self._addOrnaments(note, layerTok, staffIndex)
         self._addArpeggio(note, layerTok)
         self._processDirections(measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex)
         voice.coreInsert(noteOffsetInVoice, note)
@@ -6033,26 +6036,53 @@ class HumdrumFile(HumdrumFileContent):
             self._signifiers.below
         )
 
-    def _addOrnaments(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addOrnaments(
+        self,
+        gnote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
         lowerText = token.text.lower()
         if 't' in lowerText:
-            self._addTrill(gnote, token)
+            self._addTrill(gnote, token, staffIndex)
         if ';' in lowerText:
             self._addFermata(gnote, token)
 # handled in articulations code
 #         if ',' in lowerText:
 #             self._addBreath(gnote, token)
         if 'w' in lowerText or 'm' in lowerText:
-            self._addMordent(gnote, token)
+            self._addMordent(gnote, token, staffIndex)
         if 's' in lowerText or '$' in lowerText:
-            self._addTurn(gnote, token)
+            self._addTurn(gnote, token, staffIndex)
+
+    _LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR: t.Dict[str, str] = {
+        '#': '1',
+        '-': '-1',
+        'n': '0',
+        'n-': '-1',
+        'n#': '1',
+        '--': '-2',
+        '##': '2',
+        'x': '2',
+        '#x': '3',
+        'x#': '3',
+        '###': '3',
+        '---': '-3',
+    }
 
     '''
     //////////////////////////////
     //
     // HumdrumInput::addTrill -- Add trill for note.
     '''
-    def _addTrill(self, startNote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addTrill(
+        self,
+        startNote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+
         subTokenIdx: int = 0
         tpos: int = -1
         for i, ch in enumerate(token.text):
@@ -6074,96 +6104,46 @@ class HumdrumFile(HumdrumFileContent):
             # continuation trill, so don't start a new one
             return
 
-        if subTokenIdx == 0 and ' ' not in token.text:
-            subTokenIdx = -1
+        # music21 now supports Trill accidentals. That is handled by accidental analysis
+        # in HumdrumFileContent, and then here we adjust that based on any '!LO:TR:acc='
+        # accidental.
 
-        # music21 has a HalfStepTrill and a WholeStepTrill, which map to 't' and 'T',
-        # respectively, but that is actually handled by accidental analysis in HumdrumFileContent,
-        # and then here we adjust that based on any '!LO:TR:acc=' accidental.  We take that
-        # analysis, and figure out what the interval is, and create the right type of trill.
-
-        # default step for 't' is +1, 'T' is +2
-        stepsUp: int = +1
-        if 'T' in token.text:
-            stepsUp = +2
-
-        stepsUpFromAnalysis: int = stepsUp
-        tokindex: int = max(subTokenIdx, 0)
-        trillPitchName: t.Optional[str] = (
-            token.getValueString('auto', str(tokindex), 'trillNoteM21Pitch')
+        trillAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'trillAccidental.vis')
         )
-        trillOtherPitchName: t.Optional[str] = (
-            token.getValueString('auto', str(tokindex), 'trillOtherNoteM21Pitch')
-        )
-
-        if trillPitchName is not None and trillOtherPitchName is not None:
-            trillPitch = m21.pitch.Pitch(trillPitchName)
-            trillOtherPitch = m21.pitch.Pitch(trillOtherPitchName)
-            interval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
-                trillPitch, trillOtherPitch
-            )
-            stepsUpFromAnalysis = int(interval.semitones)
-            if stepsUpFromAnalysis != stepsUp:
-                print(f'stepsUpFromAnalysis ({stepsUpFromAnalysis}) != stepsUp ({stepsUp})')
-                stepsUp = stepsUpFromAnalysis
-
-            # replace the trill accidental if different in layout parameters, such as:
-            #    !LO:TR:acc=##
-            # for a double sharp, or
-            #    !LO:TR:acc=none
-            # for no accidental
-            lcount: int = token.linkedParameterSetCount
-            value: str = ''
-            for p in range(0, lcount):
-                hps: t.Optional[HumParamSet] = token.getLinkedParameterSet(p)
-                if hps is None:
-                    continue
-                if hps.namespace1 != 'LO':
-                    continue
-                if hps.namespace2 != 'TR':
-                    continue
-                for q in range(0, hps.count):
-                    key: str = hps.getParameterName(q)
-                    if key == 'acc':
-                        value = hps.getParameterValue(q)
-                        break
-                if value:
-                    break
-
-            trillNewOtherPitchName: t.Optional[str] = trillOtherPitchName
-            name: str
-            _accidStr: str
-            octaveStr: str
-            name, _accidStr, octaveStr = (
-                M21Utilities.splitM21PitchNameIntoNameAccidOctave(trillOtherPitchName)
-            )
-            if value:
-                if value == 'none':
-                    pass  # 'none' doesn't change pitch, just says "don't print it"
-                elif value == 'n':
-                    trillNewOtherPitchName = name + octaveStr
-                else:
-                    trillNewOtherPitchName = name + value + octaveStr
-            trillNewOtherPitch = m21.pitch.Pitch(trillNewOtherPitchName)
-            newInterval: m21.interval.ChromaticInterval = m21.interval.notesToChromatic(
-                trillPitch, trillNewOtherPitch
-            )
-            stepsUpFromLayoutParams: int = int(newInterval.semitones)
-            if stepsUpFromLayoutParams != stepsUpFromAnalysis:
-                print(f'stepsUpFromLayoutParams ({stepsUpFromLayoutParams})'
-                    f'!= stepsUpFromAnalysis ({stepsUpFromAnalysis})')
-                stepsUp = stepsUpFromLayoutParams
-
-        trill: m21.expressions.Trill
-        if stepsUp == +1:
-            trill = m21.expressions.HalfStepTrill()
-        elif stepsUp == +2:
-            trill = m21.expressions.WholeStepTrill()
+        if trillAccid is not None:
+            # we have a visual accidental
+            trillAccid.displayStatus = True
         else:
-            print(f'**** non-standard trill stepsUp = {stepsUp}', file=sys.stderr)
-            trill = m21.expressions.Trill()
-            trill.size = m21.interval.ChromaticInterval(stepsUp)
-            # trill._setAccidentalFromKeySig = False
+            trillAccid = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'trillAccidental.ges')
+            )
+            if trillAccid is not None:
+                # we have a gestural accidental
+                trillAccid.displayStatus = False
+
+        # replace the trill accidental if different in layout parameters, such as:
+        #    !LO:TR:acc=##
+        # for a double sharp, or
+        #    !LO:TR:acc=none
+        # for no visible accidental
+        accText: str = token.layoutParameter('TR', 'acc')
+        if accText:
+            if accText in ('none', 'false'):
+                if trillAccid is not None:
+                    trillAccid.displayStatus = False
+            else:
+                trillAccid = self._computeM21Accidental(
+                    self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
+                )
+                if trillAccid is not None:
+                    trillAccid.displayStatus = True
+
+        trill: m21.expressions.Trill = m21.expressions.Trill(accidental=trillAccid)
+
+        # Now, resolve the Trill's "other" pitch based on startNote
+        if startNote.pitches:
+            trill.resolveOrnamentalPitches(startNote, keySig=ss.currentM21KeySig)
 
         startNote.expressions.append(trill)
 
@@ -6213,33 +6193,30 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             # it's a note/chord/rest
-#             if endTok.isGrace:
-#                 # check to see if the next non-grace note/rest has a TTT or ttt on it.
-#                 # if so, then do not terminate the trill extension line at this
-#                 # grace notes.
-#                 ntok: HumdrumToken = endtok.nextToken0
-#                 while ntok:
-#                     if ntok.isBarline:
-#                         lastNoteOrBar = ntok
-#
-#                     if not ntok.isData:
-#                         ntok = ntok.nextToken0
-#                         continue
-#
-#                     if ntok.isGrace:
-#                         ntok = ntok.nextToken0
-#                         continue
-#
-#                     lastNoteOrBar = ntok
-#                     # at this point ntok is a durational note/chord/rest
-#                     # BUG: C++ code only breaks if 'TTT' and 'ttt' are NOT found,
-#                     # BUG: ... and it never sets endTok at all. I believe the end
-#                     # BUG: ... result is that this grace note loop is a (potentially
-#                     # BUG: ... expensive) no-op.
-#                     # TODO: Fix the isGrace loop when searching for end of trill extension
-#                     if 'TTT' in ntok or 'ttt' in ntok:
-#                         endTok = ntok
-#                     break
+            if endTok.isGrace:
+                # check to see if the next non-grace note/rest has a TTT or ttt on it.
+                # if so, then do not terminate the trill extension line at this
+                # grace notes.
+                ntok: t.Optional[HumdrumToken] = endTok.nextToken0
+                while ntok:
+                    if ntok.isBarline:
+                        lastNoteOrBar = ntok
+
+                    if not ntok.isData:
+                        ntok = ntok.nextToken0
+                        continue
+
+                    if ntok.isGrace:
+                        ntok = ntok.nextToken0
+                        continue
+
+                    lastNoteOrBar = ntok
+
+                    # at this point ntok is a durational note/chord/rest
+                    if 'TTT' not in ntok.text and 'ttt' not in ntok.text:
+                        endTok = ntok
+                        break
+                    ntok = ntok.nextToken0
 
             if lastNoteOrBar.isData:
                 nextToLastNote = lastNoteOrBar
@@ -6249,9 +6226,14 @@ class HumdrumFile(HumdrumFileContent):
 
             endTok = endTok.nextToken0
 
+        # This code is now quite different from C++ code, as we are creating a spanner, not
+        # MEI stuff (where there are more cases to consider).
         if endTok and nextToLastNote:
+            # endTok (first note after trill extension) was found, use nextToLastNote in spanner
             endTok = nextToLastNote
         elif not endTok and lastNoteOrBar and lastNoteOrBar.isData:
+            # reached the end of the music without finding a note after trill extension, so
+            # use the lastNoteOrBar in spanner
             endTok = lastNoteOrBar
         else:
             # it must start and end on the same note
@@ -6340,6 +6322,21 @@ class HumdrumFile(HumdrumFileContent):
 #         # TODO: ... (if there is one)
 #         gnote.articulations.append(breathMark)
 
+    def _computeM21Accidental(
+        self,
+        valueStr: t.Optional[str]
+    ) -> t.Optional[m21.pitch.Accidental]:
+        if not valueStr:
+            return None
+
+        try:
+            accidNum: int = int(valueStr)
+        except:  # pylint: disable=bare-except
+            return None
+
+        accid: m21.pitch.Accidental = m21.pitch.Accidental(accidNum)
+        return accid
+
     '''
     //////////////////////////////
     //
@@ -6371,66 +6368,160 @@ class HumdrumFile(HumdrumFileContent):
         so... --gregc
 
     '''
-    def _addMordent(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
-        isLower: bool = False
-        isHalfStep: bool = False
-        subTokenIdx: int = 0
-        tpos: int = -1
-        for i, chit in enumerate(token.text):
-            if chit == ' ':
-                subTokenIdx += 1
-                continue
-            if chit in ('w', 'W'):
-                tpos = i
-                isLower = True
-                isHalfStep = chit == 'w'
-                break
-            if chit in ('m', 'M'):
-                tpos = i
-                isHalfStep = chit == 'm'
-                break
+    def _addMordent(
+        self,
+        gnote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
+        ss: StaffStateVariables = self._staffStates[staffIndex]
 
-        if subTokenIdx == 0 and ' ' not in token.text:
-            subTokenIdx = -1
-
-        if tpos == -1:
-            # no mordent on note
+        subtoks: t.List[str] = token.subtokens
+        if not subtoks:
             return
 
-        mordent: m21.expressions.GeneralMordent
-        if isLower:
-            if isHalfStep:
-                mordent = m21.expressions.HalfStepMordent()
-            else:
-                mordent = m21.expressions.WholeStepMordent()
-        else:
-            if isHalfStep:
-                mordent = m21.expressions.HalfStepInvertedMordent()
-            else:
-                mordent = m21.expressions.WholeStepInvertedMordent()
+        subtrack: int = token.subTrack
 
-        # Fix default placement (would otherwise be 'above')
-        mordent.placement = None  # type: ignore
+        mindices: t.List[int] = []   # indices of subtokens with mordent
+        mstrings: t.List[str] = []   # list of mordent strings (including '<', '>', 'y')
+        mpitches: t.List[int] = []   # pitches of notes with mordents
 
-        query: str
+        query: str = '('
+        query += '[wWmM]+'
+        query += '[y'
         if self._signifiers.above:
-            query = '[Mm]+' + self._signifiers.above
-            if re.search(query, token.text):
-                mordent.placement = 'above'  # type: ignore
-
+            query += self._signifiers.above
         if self._signifiers.below:
-            query = '[Mm]+' + self._signifiers.below
-            if re.search(query, token.text):
-                mordent.placement = 'below'  # type: ignore
+            query += self._signifiers.below
+        query += ']*'
+        query += ')'
 
-        # C++ code also has special cases for m_currentlayer 1 and 2 (i.e. layerIndex 0 and 1)
-        # where layer 1 goes 'above', and layer 2 goes 'below', and others get no direction.
+        for i, subtok in enumerate(subtoks):
+            if 'r' in subtok:
+                continue
 
-        # LATER: long mordents ('MM', 'mm', 'WW', 'ww') are not supported by music21, so we
-        # LATER: ... can't really support them here.
-#         if 'mm' in token.text or 'MM' in token.text or 'ww' in token.text or 'WW' in token.text:
-#             mordent.isLong = True # or whatever
-        gnote.expressions.append(mordent)
+            m = re.search(query, subtok)
+            if not m:
+                continue
+
+            match: str = m.group(1)
+            if 'y' in match:
+                # Hidden mordent, so suppress from conversion
+                continue
+
+            mindices.append(i)
+            mstrings.append(match)
+            mpitches.append(Convert.kernToBase40(subtok))
+
+        if not mindices:
+            # no mordents found
+            return
+
+        # find highest and lowest pitch
+        highest: int = mpitches[0]
+        lowest: int = mpitches[0]
+        for mpitch in mpitches:
+            highest = max(highest, mpitch)
+            lowest = min(lowest, mpitch)
+
+        mplaces: t.List[int] = [0] * len(mindices)
+        if subtrack:
+            if subtrack % 2 != 0:
+                # force above for first/third/fifth/etc. layers:
+                mplaces = [+1] * len(mplaces)
+            else:
+                # force below for second/fourth/etc. layers:
+                mplaces = [-1] * len(mplaces)
+
+        else:
+            # Single voice so put above if a single mordent,
+            # but place a second mordent below if a dyad.
+            if len(mindices) == 1:
+                mplaces[0] = +1
+            elif len(mindices) == 2:
+                if highest == mpitches[0]:
+                    mplaces[0] = +1
+                    mplaces[1] = -1
+                else:
+                    mplaces[0] = -1
+                    mplaces[1] = +1
+            else:
+                # If there are three or more mordents in a chord, place them
+                # all above the staff, and if any should be placed below, then
+                # it will have to be manually specified.
+                mplaces = [+1] * len(mplaces)
+
+        for i, (mstring, mplace, subTokenIdx) in enumerate(zip(mstrings, mplaces, mindices)):
+            if not mstring:
+                continue
+
+            isLower: bool = mstring[0] in 'wW'
+
+            mordentAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'mordentAccidental.vis')
+            )
+            if mordentAccid is not None:
+                # we have a visual accidental
+                mordentAccid.displayStatus = True
+            else:
+                mordentAccid = self._computeM21Accidental(
+                    token.getValueString('auto', str(subTokenIdx), 'mordentAccidental.ges')
+                )
+                if mordentAccid is not None:
+                    # we have a gestural accidental
+                    mordentAccid.displayStatus = False
+
+
+            # Set any explicit visual accidental for the mordent.
+            # Maybe in the future allow for lacc and uacc to place the accidental.
+            # Also deal multiple mordents in a chord later.
+            accText: str = token.layoutParameter('MOR', 'acc')
+            if accText and accText != 'true':
+                if accText in ('none', 'false'):
+                    if mordentAccid is not None:
+                        mordentAccid.displayStatus = False
+                else:
+                    mordentAccid = self._computeM21Accidental(
+                        self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(accText, '')
+                    )
+                    if mordentAccid is not None:
+                        mordentAccid.displayStatus = True
+
+            mordent: m21.expressions.GeneralMordent
+            if isLower:
+                mordent = m21.expressions.Mordent(accidental=mordentAccid)
+            else:
+                mordent = m21.expressions.InvertedMordent(accidental=mordentAccid)
+
+            # Default placement has been set up in mplaces.
+            direction: int = mplace
+
+            # Override default with any explicit placement of the mordent
+            if self._signifiers.above:
+                if self._signifiers.above in mstring:
+                    direction = +1
+
+            if self._signifiers.below:
+                if self._signifiers.below in mstring:
+                    direction = -1
+
+            mordent.placement = None  # type: ignore
+            if direction < 0:
+                mordent.placement = 'below'
+            elif direction > 0:
+                mordent.placement = 'above'
+
+            # LATER: long mordents ('MM', 'mm', 'WW', 'ww') are not supported by music21, so we
+            # LATER: ... can't really support them here.
+#           if 'MM' in mstrings[i] or 'WW' in mstrings[i]:   # 'mm'? 'ww'?
+#               mordent.isLong = True
+
+            # Now, resolve the mordent's "other" pitch based on gnote
+            if gnote.pitches:
+                mordent.resolveOrnamentalPitches(gnote, keySig=ss.currentM21KeySig)
+
+            gnote.expressions.append(mordent)
+
     '''
     //////////////////////////////
     //
@@ -6457,14 +6548,20 @@ class HumdrumFile(HumdrumFileContent):
     // accidental.  This can be done when MEI allows @accidlower.ges and @accidupper.ges.
     //
     // Assuming not in chord for now.
-
-    # TODO: merge new iohumdrum.cpp changes in addTurn/addMordent (accidental stuff)
-    # --gregc 01July2021
     '''
-    def _addTurn(self, gnote: m21.note.GeneralNote, token: HumdrumToken) -> None:
+    def _addTurn(
+        self,
+        gnote: m21.note.GeneralNote,
+        token: HumdrumToken,
+        staffIndex: int
+    ) -> None:
+        ss: StaffStateVariables = self._staffStates[staffIndex]
         tok: str = token.text
         turnStart: int = -1
         turnEnd: int = -1
+
+        # assume not in chord for now
+        subTokenIdx: int = 0
 
         for i, ch in enumerate(tok):
             if ch in ('s', 'S', '$'):
@@ -6479,7 +6576,7 @@ class HumdrumFile(HumdrumFileContent):
 
         turnStr: str = tok[turnStart:turnEnd + 1]
         if turnStr == 's':
-            # invalid turn indication (leading 's' must be followed by 'S' or '$')
+            # invalid turn indication; leading 's' (not delayed) must be followed by 'S' or '$'
             return
 
         isDelayed: bool = turnStr[0] != 's'
@@ -6489,28 +6586,100 @@ class HumdrumFile(HumdrumFileContent):
         elif turnStr[0] == '$':
             isInverted = True
 
-        turn: t.Union[m21.expressions.Turn, m21.expressions.InvertedTurn]
+
+        # check for automatic upper and lower accidental on turn:
+        turnLowerAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'turnLowerAccidental.vis')
+        )
+        if turnLowerAccid is not None:
+            # we have a visual lower accidental
+            turnLowerAccid.displayStatus = True
+        else:
+            turnLowerAccid = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'turnLowerAccidental.ges')
+            )
+            if turnLowerAccid is not None:
+                # we have a gestural lower accidental
+                turnLowerAccid.displayStatus = False
+
+        turnUpperAccid: m21.pitch.Accidental | None = self._computeM21Accidental(
+            token.getValueString('auto', str(subTokenIdx), 'turnUpperAccidental.vis')
+        )
+        if turnUpperAccid is not None:
+            # we have a visual upper accidental
+            turnUpperAccid.displayStatus = True
+        else:
+            turnUpperAccid = self._computeM21Accidental(
+                token.getValueString('auto', str(subTokenIdx), 'turnUpperAccidental.ges')
+            )
+            if turnUpperAccid is not None:
+                # we have a gestural upper accidental
+                turnUpperAccid.displayStatus = False
+
+        # Check for LO:TURN forced visual accidentals
+        lacctext: str = token.layoutParameter('TURN', 'lacc')
+        uacctext: str = token.layoutParameter('TURN', 'uacc')
+        if lacctext and lacctext != 'true':
+            if lacctext in ('none', 'false'):
+                if turnLowerAccid is not None:
+                    turnLowerAccid.displayStatus = False
+            else:
+                turnLowerAccid = self._computeM21Accidental(
+                    self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(lacctext, '')
+                )
+                if turnLowerAccid is not None:
+                    turnLowerAccid.displayStatus = True
+
+        if uacctext and uacctext != 'true':
+            if uacctext in ('none', 'false'):
+                if turnUpperAccid is not None:
+                    turnUpperAccid.displayStatus = False
+            else:
+                turnUpperAccid = self._computeM21Accidental(
+                    self._LAYOUT_ACCIDENTAL_TO_ACCIDENTAL_NUM_STR.get(uacctext, '')
+                )
+                if turnUpperAccid is not None:
+                    turnUpperAccid.displayStatus = True
+
+        # Check to see if accidentals need to be flipped:
+        facctext: str = token.layoutParameter('TURN', 'facc')
+        if facctext == 'true':
+            turnLowerAccid, turnUpperAccid = turnUpperAccid, turnLowerAccid
+
+        # Create Turn/InvertedTurn object, using upper and lower accids
+        turn: m21.expressions.Turn
         if M21Utilities.m21SupportsDelayedTurns():
             delay: OrnamentDelay = OrnamentDelay.NO_DELAY
             if isDelayed:
                 delay = OrnamentDelay.DEFAULT_DELAY
 
             if isInverted:
-                turn = m21.expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
-                    delay=delay  # type: ignore
+                turn = m21.expressions.InvertedTurn(
+                    delay=delay,
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
                 )
             else:
-                turn = m21.expressions.Turn(  # pylint: disable=unexpected-keyword-arg
-                    delay=delay  # type: ignore
+                turn = m21.expressions.Turn(
+                    delay=delay,
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
                 )
         else:
             if isInverted:
-                turn = m21.expressions.InvertedTurn()
+                turn = m21.expressions.InvertedTurn(
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
+                )
             else:
-                turn = m21.expressions.Turn()
+                turn = m21.expressions.Turn(
+                    upperAccidental=turnUpperAccid,
+                    lowerAccidental=turnLowerAccid
+                )
 
         # our better default
         turn.placement = None  # type: ignore
+
         if self._signifiers.above:
             if turnEnd < len(tok) - 1:
                 if tok[turnEnd + 1] == self._signifiers.above:
@@ -6521,7 +6690,9 @@ class HumdrumFile(HumdrumFileContent):
                 if tok[turnEnd + 1] == self._signifiers.below:
                     turn.placement = 'below'
 
-        # TODO: handle turn accidentals
+        # Now, resolve the Turn "other" pitches based on gnote
+        if gnote.pitches:
+            turn.resolveOrnamentalPitches(gnote, keySig=ss.currentM21KeySig)
 
         gnote.expressions.append(turn)
 
@@ -10860,6 +11031,8 @@ class HumdrumFile(HumdrumFileContent):
             # hang on to this until we have a first measure to put it in
             m21KeySig = M21Convert.m21KeySignature(keySigTok, keyTok)
             ss.firstM21KeySig = m21KeySig
+            # also always track current keysig per staff
+            ss.currentM21KeySig = m21KeySig
 
         m21TimeSig = None
         if timeSigTok:

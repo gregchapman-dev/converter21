@@ -80,6 +80,7 @@ disable=
     import-self,  # fix is either to get rid of it or move away many tests...
     wrong-import-position,
     no-else-return,
+    broad-exception-raised,
     too-many-ancestors,
     inconsistent-return-statements,
     keyword-arg-before-vararg,
@@ -382,4 +383,4 @@ int-import-graph=
 
 # Exceptions that will emit a warning when being caught. Defaults to
 # "Exception"
-overgeneral-exceptions=Exception
+# overgeneral-exceptions=Exception
