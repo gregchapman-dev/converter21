@@ -5,9 +5,9 @@
 # Authors:       Greg Chapman <gregc@mac.com>
 #                The core of this code was based on the MEI parser (primarily written
 #                by Christopher Antila) in https://github.com/cuthbertLab/music21
-#                (music21 is Copyright 2006-2022 by Michael Scott Asato Cuthbert)
+#                (music21 is Copyright 2006-2023 by Michael Scott Asato Cuthbert)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 '''
@@ -309,7 +309,7 @@ class MeiToM21Converter:
     :raises: :exc:`MeiValidityError` when the MEI file is not valid XML.
     '''
 
-    def __init__(self, theDocument: t.Optional[str] = None) -> None:
+    def __init__(self, theDocument: str | None = None) -> None:
         #  The __init__() documentation doesn't isn't processed by Sphinx,
         #  so I put it at class level.
         environLocal.printDebug('*** initializing MeiToM21Converter')
@@ -344,7 +344,7 @@ class MeiToM21Converter:
         # _ppSlurs() and used while importing whatever note, rest, chord, or other object.
         self.spannerBundle: spanner.SpannerBundle = spanner.SpannerBundle()
 
-    def run(self) -> t.Union[stream.Score, stream.Part, stream.Opus]:
+    def run(self) -> stream.Score | stream.Part | stream.Opus:
         '''
         Run conversion of the internal MEI document to produce a music21 object.
 
@@ -369,13 +369,13 @@ class MeiToM21Converter:
         _ppConclude(self)
 
         environLocal.printDebug('*** processing <score> elements')
-        scoreElem: t.Optional[Element] = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}score')
+        scoreElem: Element | None = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}score')
         if scoreElem is None:
             # no <score> found, return an empty Score
             return stream.Score()
 
-        otherInfo: t.Dict = {}
-        activeMeter: t.Optional[meter.TimeSignature] = None
+        otherInfo: dict = {}
+        activeMeter: meter.TimeSignature | None = None
         theScore: stream.Score = scoreFromElement(
             scoreElem, activeMeter, self.spannerBundle, otherInfo
         )
@@ -390,8 +390,8 @@ class MeiToM21Converter:
 # -----------------------------------------------------------------------------
 def safePitch(
     name: str,
-    accidental: t.Optional[t.Union[pitch.Accidental, str]] = None,
-    octave: t.Union[str, int] = ''
+    accidental: pitch.Accidental | str | None = None,
+    octave: str | int = ''
 ) -> pitch.Pitch:
     '''
     Safely build a :class:`~music21.pitch.Pitch` from a string.
@@ -428,7 +428,7 @@ def safePitch(
 
 
 def makeDuration(
-    base: t.Union[float, int, Fraction] = 0.0,
+    base: float | int | Fraction = 0.0,
     dots: int = 0
 ) -> duration.Duration:
     '''
@@ -460,7 +460,7 @@ def makeDuration(
     return returnDuration
 
 
-def allPartsPresent(scoreElem: Element) -> t.Tuple[t.Tuple[str, ...], str]:
+def allPartsPresent(scoreElem: Element) -> tuple[tuple[str, ...], str]:
     # noinspection PyShadowingNames
     '''
     Find the @n values for all <staffDef> elements in a <score> element. This assumes that every
@@ -498,11 +498,11 @@ def allPartsPresent(scoreElem: Element) -> t.Tuple[t.Tuple[str, ...], str]:
     '''
     # xpathQuery = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}staffDef'
     xpathQuery: str = f'.//{MEI_NS}staffDef'
-    partNs: t.List[str] = []  # hold the @n attribute for all the parts
+    partNs: list[str] = []  # hold the @n attribute for all the parts
     topPart: str = ''
 
     for staffDef in scoreElem.findall(xpathQuery):
-        nStr: t.Optional[str] = staffDef.get('n')
+        nStr: str | None = staffDef.get('n')
         if nStr and nStr not in partNs:
             partNs.append(nStr)
             if not topPart:
@@ -519,7 +519,7 @@ def allPartsPresent(scoreElem: Element) -> t.Tuple[t.Tuple[str, ...], str]:
 # -----------------------------------------------------------------------------
 # for _accidentalFromAttr()
 # None is for when @accid is omitted
-_ACCID_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
+_ACCID_ATTR_DICT: dict[str | None, str | None] = {
     's': '#', 'f': '-', 'ss': '##', 'x': '##', 'ff': '--', 'xs': '###',
     'ts': '###', 'tf': '---', 'n': 'n', 'nf': '-', 'ns': '#',
     'su': '#~', 'sd': '~', 'fu': '`', 'fd': '-`', 'nu': '~', 'nd': '`',
@@ -529,7 +529,7 @@ _ACCID_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 
 # for _accidGesFromAttr()
 # None is for when @accid is omitted
-_ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
+_ACCID_GES_ATTR_DICT: dict[str | None, str | None] = {
     's': '#', 'f': '-', 'ss': '##', 'ff': '--', 'n': 'n',
     'su': '#~', 'sd': '~', 'fu': '`', 'fd': '-`',
     None: None
@@ -537,7 +537,7 @@ _ACCID_GES_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
-_DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
+_DUR_ATTR_DICT: d[str | None, float] = {
     'maxima': 32.0,                # maxima is not mei-CMN, but we'll allow it
     'long': 16.0, 'longa': 16.0,   # longa is not mei-CMN, but we'll allow it
     'breve': 8.0, 'brevis': 8.0,   # brevis is not mei-CMN, but we'll allow it
@@ -556,7 +556,7 @@ _DUR_ATTR_DICT: t.Dict[t.Optional[str], float] = {
     None: 0.00390625
 }
 
-_DUR_TO_NUMBEAMS: t.Dict[str, int] = {
+_DUR_TO_NUMBEAMS: dict[str, int] = {
     # not present implies zero beams
     '8': 1, 'fusa': 1,       # fusa is not mei-CMN, but we'll allow it
     '16': 2, 'semifusa': 2,  # semifusa is not mei-CMN, but we'll allow it
@@ -569,7 +569,7 @@ _DUR_TO_NUMBEAMS: t.Dict[str, int] = {
     '2048': 9
 }
 
-_QL_TO_NUMFLAGS: t.Dict[OffsetQL, int] = {
+_QL_TO_NUMFLAGS: dict[OffsetQL, int] = {
     # not present implies zero beams
     0.5: 1,  # 0.5ql is an eighth note -> one beam
     0.25: 2,
@@ -582,7 +582,7 @@ _QL_TO_NUMFLAGS: t.Dict[OffsetQL, int] = {
     0.001953125: 9
 }
 
-_STEMMOD_TO_NUMSLASHES: t.Dict[str, int] = {
+_STEMMOD_TO_NUMSLASHES: dict[str, int] = {
     # not present implies zero slashes
     '1slash': 1,
     '2slash': 2,
@@ -598,7 +598,7 @@ _STEMMOD_TO_NUMSLASHES: t.Dict[str, int] = {
 # for _articulationFromAttr()
 # NOTE: 'marc-stacc' and 'ten-stacc' require multiple music21 events, so they are handled
 #       separately in _articulationFromAttr().
-_ARTIC_ATTR_DICT: t.Dict[t.Optional[str], t.Type] = {
+_ARTIC_ATTR_DICT: dict[str | None, t.Type] = {
     'acc': articulations.Accent,
     'stacc': articulations.Staccato,
     'ten': articulations.Tenuto,
@@ -634,7 +634,7 @@ _ARTIC_ATTR_DICT: t.Dict[t.Optional[str], t.Type] = {
 
 # for _barlineFromAttr()
 # TODO: make new music21 Barline styles for 'dbldashed' and 'dbldotted'
-_BAR_ATTR_DICT: t.Dict[t.Optional[str], str] = {
+_BAR_ATTR_DICT: dict[str | None, str] = {
     'dashed': 'dashed',
     'dotted': 'dotted',
     'dbl': 'double',
@@ -644,7 +644,7 @@ _BAR_ATTR_DICT: t.Dict[t.Optional[str], str] = {
 }
 
 # for _stemDirectionFromAttr()
-_STEMDIR_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
+_STEMDIR_ATTR_DICT: dict[str | None, str | None] = {
     'down': 'down',
     'up': 'up'
 }
@@ -653,9 +653,9 @@ _STEMDIR_ATTR_DICT: t.Dict[t.Optional[str], t.Optional[str]] = {
 # One-to-One Translator Functions
 # -----------------------------------------------------------------------------
 def _attrTranslator(
-    attr: t.Optional[str],
+    attr: str | None,
     name: str,
-    mapping: t.Dict[t.Optional[str], t.Any]
+    mapping: dict[str | None, t.Any]
 ) -> t.Any:
     '''
     Helper function for other functions that need to translate the value of an attribute to another
@@ -685,7 +685,7 @@ def _attrTranslator(
         return None
 
 
-def _accidentalFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
+def _accidentalFromAttr(attr: str | None) -> str | None:
     '''
     Use :func:`_attrTranslator` to convert the value of an "accid" attribute to its music21 string.
 
@@ -696,7 +696,7 @@ def _accidentalFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
     return _attrTranslator(attr, 'accid', _ACCID_ATTR_DICT)
 
 
-def _accidGesFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
+def _accidGesFromAttr(attr: str | None) -> str | None:
     '''
     Use :func:`_attrTranslator` to convert the value of an @accid.ges
     attribute to its music21 string.
@@ -708,7 +708,7 @@ def _accidGesFromAttr(attr: t.Optional[str]) -> t.Optional[str]:
     return _attrTranslator(attr, 'accid.ges', _ACCID_GES_ATTR_DICT)
 
 
-def _qlDurationFromAttr(attr: t.Optional[str]) -> float:
+def _qlDurationFromAttr(attr: str | None) -> float:
     '''
     Use :func:`_attrTranslator` to convert an MEI "dur" attribute to a music21 quarterLength.
 
@@ -721,7 +721,7 @@ def _qlDurationFromAttr(attr: t.Optional[str]) -> float:
     return _attrTranslator(attr, 'dur', _DUR_ATTR_DICT)
 
 
-def _articulationFromAttr(attr: t.Optional[str]) -> t.Tuple[articulations.Articulation, ...]:
+def _articulationFromAttr(attr: str | None) -> tuple[articulations.Articulation, ...]:
     '''
     Use :func:`_attrTranslator` to convert an MEI "artic" attribute to a
     :class:`music21.articulations.Articulation` subclass.
@@ -740,21 +740,21 @@ def _articulationFromAttr(attr: t.Optional[str]) -> t.Tuple[articulations.Articu
         articClass: t.Type = _attrTranslator(attr, 'artic', _ARTIC_ATTR_DICT)
         if articClass is not None:
             return (articClass(),)
-    return tuple()  # empty t.Tuple
+    return tuple()  # empty tuple
 
 
-def _makeArticList(attr: str) -> t.List[articulations.Articulation]:
+def _makeArticList(attr: str) -> list[articulations.Articulation]:
     '''
     Use :func:`_articulationFromAttr` to convert the actual value of an MEI "artic" attribute
     (including multiple items) into a list suitable for :attr:`GeneralNote.articulations`.
     '''
-    articList: t.List[articulations.Articulation] = []
+    articList: list[articulations.Articulation] = []
     for eachArtic in attr.split(' '):
         articList.extend(_articulationFromAttr(eachArtic))
     return articList
 
 
-def _getOctaveShift(dis: t.Optional[str], disPlace: t.Optional[str]) -> int:
+def _getOctaveShift(dis: str | None, disPlace: str | None) -> int:
     '''
     Use :func:`_getOctaveShift` to calculate the :attr:`octaveShift` attribute for a
     :class:`~music21.clef.Clef` subclass. Any of the arguments may be ``None``.
@@ -777,7 +777,7 @@ def _getOctaveShift(dis: t.Optional[str], disPlace: t.Optional[str]) -> int:
         return octavesDict[dis]
 
 
-def _sharpsFromAttr(signature: t.Optional[str]) -> int:
+def _sharpsFromAttr(signature: str | None) -> int:
     '''
     Use :func:`_sharpsFromAttr` to convert MEI's ``data.KEYSIGNATURE`` datatype to an integer
     representing the number of sharps, for use with music21's :class:`~music21.key.KeySignature`.
@@ -934,8 +934,8 @@ def _ppTies(theConverter: MeiToM21Converter):
 
     for eachTie in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
-        startId: t.Optional[str] = removeOctothorpe(eachTie.get('startid'))
-        endId: t.Optional[str] = removeOctothorpe(eachTie.get('endid'))
+        startId: str | None = removeOctothorpe(eachTie.get('startid'))
+        endId: str | None = removeOctothorpe(eachTie.get('endid'))
         if startId is not None and endId is not None:
             if startId in c.m21Attr and c.m21Attr[startId].get('tie', '') == 't':
                 # the startid note is already a tie end, so now it's both end and start
@@ -1156,7 +1156,7 @@ def _ppFermatas(theConverter: MeiToM21Converter):
 
     for eachFermata in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
-        startId: t.Optional[str] = removeOctothorpe(eachFermata.get('startid'))
+        startId: str | None = removeOctothorpe(eachFermata.get('startid'))
         if startId is None:
             # leave this alone, we'll handle it later in fermataFromElement
             continue
@@ -1372,7 +1372,7 @@ def _ppTurns(theConverter: MeiToM21Converter):
             eachTurn.set('ignore_turn_in_turnFromElement', 'true')
 
 
-_M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: t.Dict[t.Tuple[str, str], str] = {
+_M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: dict[tuple[str, str], str] = {
     ('8', 'above'): '8va',
     ('8', 'below'): '8vb',
     ('15', 'above'): '15ma',
@@ -1444,7 +1444,7 @@ def _ppOctaves(theConverter: MeiToM21Converter):
             ottava.mei_staff = staffNStr  # type: ignore
 
 
-_ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: t.Dict[t.Tuple[str, str], str] = {
+_ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: dict[tuple[str, str], str] = {
     # default arrow is 'false'
     ('', ''): 'normal',
     ('', 'up'): 'normal',
@@ -1494,15 +1494,15 @@ def _ppArpeggios(theConverter: MeiToM21Converter):
 
     for eachArpeg in c.documentRoot.iterfind(
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}arpeg'):
-        plistStr: t.Optional[str] = eachArpeg.get('plist')
-        plist: t.List[str] = []
+        plistStr: str | None = eachArpeg.get('plist')
+        plist: list[str] = []
         if plistStr:
             # if there's a plist, split it into a list
             plist = plistStr.split(' ')
 
         # If there's a startid, put it at the front of the list (but don't duplicate it
         # if it's already there).
-        startId: t.Optional[str] = eachArpeg.get('startid')
+        startId: str | None = eachArpeg.get('startid')
         if startId:
             if startId in plist:
                 plist.remove(startId)
@@ -1574,11 +1574,11 @@ def _ppConclude(theConverter: MeiToM21Converter):
 
     # conclude pre-processing by adding music21-specific attributes to their respective elements
     for eachObject in c.documentRoot.iterfind('*//*'):
-        objXmlId: t.Optional[str] = eachObject.get(_XMLID)
+        objXmlId: str | None = eachObject.get(_XMLID)
         # we have a defaultdict, so this "if" isn't strictly necessary; but without it, every single
         # element with an @xml:id creates a new, empty dict, which would consume a lot of memory
         if objXmlId and objXmlId in c.m21Attr:
-            objAttrs: t.Dict = c.m21Attr[objXmlId]
+            objAttrs: dict = c.m21Attr[objXmlId]
             for eachAttr in objAttrs:
                 oldAttrValue: str = eachObject.get(eachAttr, '')
                 newAttrValue: str = objAttrs[eachAttr]
@@ -1589,18 +1589,18 @@ def _ppConclude(theConverter: MeiToM21Converter):
 # -----------------------------------------------------------------------------
 def _processEmbeddedElements(
     elements: t.Iterable[Element],
-    mapping: t.Dict[str, t.Callable[
+    mapping: dict[str, t.Callable[
         [Element,
-            t.Optional[meter.TimeSignature],
+            meter.TimeSignature | None,
             spanner.SpannerBundle,
-            t.Dict[str, str]],
+            dict[str, str]],
         t.Any]
     ],
     callerTag: str,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List:
+    otherInfo: dict[str, t.Any]
+) -> list[t.Any]:
     # noinspection PyShadowingNames
     '''
     From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each element
@@ -1650,11 +1650,11 @@ def _processEmbeddedElements(
     >>> _processEmbeddedElements(elements, mapping, 'doctest2', None, None, {})
     [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
     '''
-    processed: t.List = []
+    processed: list[t.Any] = []
 
     for eachElem in elements:
         if eachElem.tag in mapping:
-            result: t.Union[Music21Object, t.Tuple[Music21Object], t.List[Music21Object]] = (
+            result: Music21Object | tuple[Music21Object, ...] | list[Music21Object] | None = (
                 mapping[eachElem.tag](eachElem, activeMeter, spannerBundle, otherInfo)
             )
             if isinstance(result, list):
@@ -1668,7 +1668,7 @@ def _processEmbeddedElements(
     return processed
 
 
-def _timeSigFromAttrs(elem: Element, prefix: str = '') -> t.Optional[meter.TimeSignature]:
+def _timeSigFromAttrs(elem: Element, prefix: str = '') -> meter.TimeSignature | None:
     '''
     From any tag with @meter.count and @meter.unit attributes, make a :class:`TimeSignature`.
 
@@ -1678,12 +1678,12 @@ def _timeSigFromAttrs(elem: Element, prefix: str = '') -> t.Optional[meter.TimeS
     :rtype: :class:`~music21.meter.TimeSignature`
     '''
     timeSig: meter.TimeSignature
-    count: t.Optional[str] = elem.get(prefix + 'count')
-    unit: t.Optional[str] = elem.get(prefix + 'unit')
-    sym: t.Optional[str] = elem.get(prefix + 'sym')
+    count: str | None = elem.get(prefix + 'count')
+    unit: str | None = elem.get(prefix + 'unit')
+    sym: str | None = elem.get(prefix + 'sym')
     # We ignore form="invis" because this usually happens in the presence of
     # <mensur>, which we (and music21) do not support, so we really need this guy.
-    # form: t.Optional[str] = elem.get(prefix + 'form')
+    # form: str | None = elem.get(prefix + 'form')
     if sym:
         if (sym == 'cut'
                 and (count is None or count == '2')
@@ -1712,7 +1712,7 @@ def _timeSigFromAttrs(elem: Element, prefix: str = '') -> t.Optional[meter.TimeS
 def _keySigFromAttrs(
     elem: Element,
     prefix: str = ''
-) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
+) -> key.Key | key.KeySignature | None:
     '''
     From any tag with (at minimum) either @pname or @sig attributes, make a
     :class:`KeySignature` or :class:`Key`, as possible.
@@ -1723,16 +1723,16 @@ def _keySigFromAttrs(
 
     Returns the key or key signature.
     '''
-    theKeySig: t.Optional[t.Union[key.KeySignature, key.Key]] = None
-    theKey: t.Optional[key.Key] = None
+    theKeySig: key.KeySignature | key.Key | None = None
+    theKey: key.Key | None = None
 
-    pname: t.Optional[str] = elem.get(prefix + 'pname')
-    mode: t.Optional[str] = elem.get(prefix + 'mode')
-    accid: t.Optional[str] = elem.get(prefix + 'accid')
-    sig: t.Optional[str] = elem.get(prefix + 'sig')
-    form: t.Optional[str] = elem.get(prefix + 'form')
+    pname: str | None = elem.get(prefix + 'pname')
+    mode: str | None = elem.get(prefix + 'mode')
+    accid: str | None = elem.get(prefix + 'accid')
+    sig: str | None = elem.get(prefix + 'sig')
+    form: str | None = elem.get(prefix + 'form')
     if pname is not None and mode is not None:
-        accidental: t.Optional[str] = _accidentalFromAttr(accid)
+        accidental: str | None = _accidentalFromAttr(accid)
         tonic: str
         if accidental is None:
             tonic = pname
@@ -1745,7 +1745,7 @@ def _keySigFromAttrs(
         if mode:
             theKeySig = theKeySig.asKey(mode=mode)
 
-    output: t.Optional[t.Union[key.KeySignature, key.Key]]
+    output: key.KeySignature | key.Key | None
     if theKey is not None and theKeySig is not None:
         if theKey.sharps != theKeySig.sharps:
             # if they disagree, pick the one that was specified by number of sharps/flats
@@ -1804,8 +1804,8 @@ def _transpositionFromAttrs(elem: Element) -> interval.Interval:
 
 
 def _barlineFromAttr(
-    attr: t.Optional[str]
-) -> t.Union[bar.Barline, bar.Repeat, t.Tuple[bar.Repeat, bar.Repeat]]:
+    attr: str | None
+) -> bar.Barline | bar.Repeat | tuple[bar.Repeat, bar.Repeat]:
     '''
     Use :func:`_attrTranslator` to convert the value of a "left" or "right" attribute to a
     :class:`Barline` or :class:`Repeat` or occasionally a tuple of :class:`Repeat`. The only time a
@@ -1853,7 +1853,7 @@ def _tieFromAttr(attr: str) -> tie.Tie:
 def safeGetSpannerByIdLocal(
     theId: str,
     spannerBundle: spanner.SpannerBundle
-) -> t.Optional[spanner.Spanner]:
+) -> spanner.Spanner | None:
     try:
         return spannerBundle.getByIdLocal(theId)[0]
     except IndexError:
@@ -1912,20 +1912,20 @@ def addSlurs(
     '''
     addedSlur: bool = False
 
-    def getSlurNumAndType(eachSlur: str) -> t.Tuple[str, str]:
+    def getSlurNumAndType(eachSlur: str) -> tuple[str, str]:
         # eachSlur is of the form "[i|m|t][1-6]"
         slurNum: str = eachSlur[1:]
         slurType: str = eachSlur[:1]
         return slurNum, slurType
 
-    startStr: t.Optional[str] = elem.get('m21SlurStart')
-    endStr: t.Optional[str] = elem.get('m21SlurEnd')
+    startStr: str | None = elem.get('m21SlurStart')
+    endStr: str | None = elem.get('m21SlurEnd')
     if startStr is not None:
         addedSlur = safeAddToSpannerByIdLocal(obj, startStr, spannerBundle)
     if endStr is not None:
         addedSlur = safeAddToSpannerByIdLocal(obj, endStr, spannerBundle)
 
-    slurStr: t.Optional[str] = elem.get('slur')
+    slurStr: str | None = elem.get('slur')
     if slurStr is not None:
         theseSlurs = slurStr.split(' ')
         for eachSlur in theseSlurs:
@@ -1952,8 +1952,8 @@ def addOttavas(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-) -> t.List[spanner.Spanner]:
-    completedOttavas: t.List[spanner.Spanner] = []
+) -> list[spanner.Spanner]:
+    completedOttavas: list[spanner.Spanner] = []
 
     ottavaId: str = elem.get('m21OttavaStart', '')
     if ottavaId:
@@ -1961,7 +1961,7 @@ def addOttavas(
 
     ottavaId = elem.get('m21OttavaEnd', '')
     if ottavaId:
-        ottava: t.Optional[spanner.Spanner] = safeGetSpannerByIdLocal(ottavaId, spannerBundle)
+        ottava: spanner.Spanner | None = safeGetSpannerByIdLocal(ottavaId, spannerBundle)
         if ottava is not None:
             ottava.addSpannedElements(obj)
             completedOttavas.append(ottava)
@@ -1973,13 +1973,13 @@ def addArpeggio(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle
-) -> t.List[spanner.Spanner]:
-    completedArpeggioMarkSpanners: t.List[spanner.Spanner] = []
+) -> list[spanner.Spanner]:
+    completedArpeggioMarkSpanners: list[spanner.Spanner] = []
 
     # if appropriate, add this note/chord to an ArpeggioMarkSpanner
     arpId: str = elem.get('m21ArpeggioMarkSpanner', '')
     if arpId:
-        arpSpanner: t.Optional[spanner.Spanner] = (
+        arpSpanner: spanner.Spanner | None = (
             safeGetSpannerByIdLocal(arpId, spannerBundle)
         )
         if arpSpanner is not None:
@@ -1999,7 +1999,7 @@ def addArpeggio(
 def _m21AccidentalNameFromAccid(accidStr: str) -> str:
     m21AccidName: str = ''
     if accidStr:
-        accidName: t.Optional[str] = _ACCID_ATTR_DICT.get(accidStr, '')
+        accidName: str | None = _ACCID_ATTR_DICT.get(accidStr, '')
         if accidName:
             m21AccidName = accidName
     return m21AccidName
@@ -2008,17 +2008,17 @@ def addTrill(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[spanner.Spanner]:
+    otherInfo: dict[str, t.Any]
+) -> list[spanner.Spanner]:
     staffN: str = otherInfo.get('staffNumberForNotes', '')
-    completedTrillExtensions: t.List[spanner.Spanner] = []
+    completedTrillExtensions: list[spanner.Spanner] = []
     # if appropriate, add this note/chord to a trillExtension
     trillExtId: str = elem.get('m21TrillExtensionStart', '')
     if trillExtId:
         safeAddToSpannerByIdLocal(obj, trillExtId, spannerBundle)
     trillExtId = elem.get('m21TrillExtensionEnd', '')
     if trillExtId:
-        trillExt: t.Optional[spanner.Spanner] = (
+        trillExt: spanner.Spanner | None = (
             safeGetSpannerByIdLocal(trillExtId, spannerBundle)
         )
         if trillExt is not None:
@@ -2067,7 +2067,7 @@ def addMordent(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ):
     # Check to see if this note/chord needs a mordent, and if so,
     # make the Mordent and append it to the note/chord's expressions.
@@ -2131,7 +2131,7 @@ def addTurn(
     elem: Element,
     obj: note.NotRest,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ):
     # Check to see if this note/chord needs a turn, and if so,
     # make the Turn and append it to the note/chord's expressions.
@@ -2161,12 +2161,12 @@ def addTurn(
     if accidLower:
         m21AccidNameLower = _m21AccidentalNameFromAccid(accidLower)
 
-    m21AccidUpper: t.Optional[pitch.Accidental] = None
+    m21AccidUpper: pitch.Accidental | None = None
     if m21AccidNameUpper:
         m21AccidUpper = pitch.Accidental(m21AccidNameUpper)
         m21AccidUpper.displayStatus = True
 
-    m21AccidLower: t.Optional[pitch.Accidental] = None
+    m21AccidLower: pitch.Accidental | None = None
     if m21AccidNameLower:
         m21AccidLower = pitch.Accidental(m21AccidNameLower)
         m21AccidLower.displayStatus = True
@@ -2222,7 +2222,7 @@ def updateAltersFromExpression(
     expr: expressions.Expression,
     obj: note.GeneralNote,
     staffNStr: str,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ):
     if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent, expressions.Turn)):
         return
@@ -2231,7 +2231,7 @@ def updateAltersFromExpression(
     return
 
 
-def beamTogether(someThings: t.List[Music21Object]):
+def beamTogether(someThings: list[Music21Object]):
     '''
     Beam some things together. The function beams every object that has a :attr:`beams` attribute,
     leaving the other objects unmodified.
@@ -2285,7 +2285,7 @@ def beamTogether(someThings: t.List[Music21Object]):
         if duration.convertTypeToNumber(thing.duration.type) <= 4:
             continue
 
-        nextThing: t.Optional[Music21Object] = None
+        nextThing: Music21Object | None = None
         for j in range(i + 1, len(someThings)):
             if (hasattr(someThings[j], 'beams')
                     and someThings[j].duration.isGrace == isGraceBeam
@@ -2314,7 +2314,7 @@ def beamTogether(someThings: t.List[Music21Object]):
         if duration.convertTypeToNumber(thing.duration.type) <= 4:
             continue
 
-        prevThing: t.Optional[Music21Object] = None
+        prevThing: Music21Object | None = None
         for j in reversed(range(0, i)):  # i - 1 .. 0
             if (hasattr(someThings[j], 'beams')
                     and someThings[j].duration.isGrace == isGraceBeam
@@ -2332,7 +2332,7 @@ def beamTogether(someThings: t.List[Music21Object]):
                 b.direction = 'left'
 
 
-def applyBreaksecs(someThings: t.List[Music21Object]):
+def applyBreaksecs(someThings: list[Music21Object]):
     # First see if this is a beamed grace note group, or a beamed non-grace note group.
     # Each will skip over the other type of note.
     isGraceBeam: bool = False
@@ -2351,7 +2351,7 @@ def applyBreaksecs(someThings: t.List[Music21Object]):
         if duration.convertTypeToNumber(thing.duration.type) <= 4:
             continue
 
-        breaksecNum: t.Optional[int] = None
+        breaksecNum: int | None = None
         if not hasattr(thing, 'mei_breaksec'):
             continue
 
@@ -2372,7 +2372,7 @@ def applyBreaksecs(someThings: t.List[Music21Object]):
             if b.type == 'continue':
                 b.type = 'stop'
 
-        nextThing: t.Optional[Music21Object] = None
+        nextThing: Music21Object | None = None
         for j in range(i + 1, len(someThings)):
             if (hasattr(someThings[j], 'beams')
                     and someThings[j].duration.isGrace == isGraceBeam
@@ -2390,7 +2390,7 @@ def applyBreaksecs(someThings: t.List[Music21Object]):
                 b.type = 'start'
 
 
-def removeOctothorpe(xmlid: t.Optional[str]) -> t.Optional[str]:
+def removeOctothorpe(xmlid: str | None) -> str | None:
     '''
     Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
 
@@ -2465,7 +2465,7 @@ def metaSetComposer(work: Element, meta: metadata.Metadata) -> metadata.Metadata
     :return: The ``meta`` argument, having relevant metadata added.
     '''
     composers = []
-    persName: t.Optional[Element]
+    persName: Element | None
     for persName in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}respStmt/{MEI_NS}persName'):
         if persName is not None and persName.get('role') == 'composer' and persName.text:
             composers.append(persName.text)
@@ -2495,7 +2495,7 @@ def metaSetDate(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
     '''
     date = work.find(f'./{MEI_NS}history/{MEI_NS}creation/{MEI_NS}date')
     if date is not None:  # must use explicit "is not None" for an Element
-        isodate: t.Optional[str] = date.get('isodate')
+        isodate: str | None = date.get('isodate')
         if date.text or isodate:
             dateStr: str
             if isodate:
@@ -2540,9 +2540,9 @@ def metaSetDate(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
 
 # noinspection PyTypeChecker
 def scaleToTuplet(
-    objs: t.Union[Music21Object, t.List[Music21Object]],
+    objs: Music21Object | list[Music21Object],
     elem: Element
-) -> t.Union[Music21Object, t.List[Music21Object]]:
+) -> Music21Object | list[Music21Object]:
     '''
     Scale the duration of some objects by a ratio indicated by a tuplet. The ``elem`` must have the
     @m21TupletNum and @m21TupletNumbase attributes set, and optionally the @m21TupletSearch or
@@ -2579,11 +2579,11 @@ def scaleToTuplet(
         wasList = False
 
     for obj in objs:
-        bracketVisible: t.Optional[str] = None
-        bracketPlace: t.Optional[str] = None
-        numVisible: t.Optional[str] = None
-        numPlace: t.Optional[str] = None
-        numFormat: t.Optional[str] = None
+        bracketVisible: str | None = None
+        bracketPlace: str | None = None
+        numVisible: str | None = None
+        numPlace: str | None = None
+        numFormat: str | None = None
 
         if not isinstance(obj, (note.Note, note.Rest, chord.Chord)):
             # silently skip objects that don't have a duration
@@ -2615,8 +2615,8 @@ def scaleToTuplet(
                 obj.m21TupletNumFormat = numFormat  # type: ignore
 
         else:
-            num: t.Optional[str] = elem.get('m21TupletNum')
-            numbase: t.Optional[str] = elem.get('m21TupletNumbase')
+            num: str | None = elem.get('m21TupletNum')
+            numbase: str | None = elem.get('m21TupletNumbase')
             if num and numbase:
                 newTuplet = duration.Tuplet(
                     numberNotesActual=int(num),
@@ -2625,7 +2625,7 @@ def scaleToTuplet(
                     durationActual=obj.duration.type
                 )
 
-                tupletType: t.Optional[str] = elem.get('m21TupletType')
+                tupletType: str | None = elem.get('m21TupletType')
                 if tupletType is not None:
                     newTuplet.type = tupletType  # type: ignore
                 elif elem.get('tuplet', '').startswith('i'):
@@ -2640,7 +2640,7 @@ def scaleToTuplet(
                 numFormat = elem.get('m21TupletNumFormat')
 
                 # placement (MEI has two: num and bracket placement, music21 has only one)
-                placement: t.Optional[str] = None
+                placement: str | None = None
                 if bracketVisible is None or bracketVisible == 'true':
                     placement = bracketPlace
                 if placement is None and (numVisible is None or numVisible == 'true'):
@@ -2677,7 +2677,7 @@ def scaleToTuplet(
         return objs[0]
 
 
-def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
+def _guessTuplets(theLayer: list[Music21Object]) -> list[Music21Object]:
     # TODO: nested tuplets don't work when they're both specified with <tupletSpan>
     # TODO: adjust this to work with cross-measure tuplets (i.e., where only the "start" or "end"
     #       is found in theLayer)
@@ -2702,14 +2702,14 @@ def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
     #     supposed to be used within the MEI import module
 
     inATuplet: bool = False  # we hit m21TupletSearch=='start' but not 'end' yet
-    tupletNum: t.Optional[str] = None
-    tupletNumbase: t.Optional[str] = None
-    tupletBracketVisible: t.Optional[str] = None
-    tupletBracketPlace: t.Optional[str] = None
-    tupletNumVisible: t.Optional[str] = None
-    tupletNumPlace: t.Optional[str] = None
-    tupletNumFormat: t.Optional[str] = None
-    fakeTupletElem: t.Optional[Element] = None
+    tupletNum: str | None = None
+    tupletNumbase: str | None = None
+    tupletBracketVisible: str | None = None
+    tupletBracketPlace: str | None = None
+    tupletNumVisible: str | None = None
+    tupletNumPlace: str | None = None
+    tupletNumFormat: str | None = None
+    fakeTupletElem: Element | None = None
 
     for eachNote in theLayer:
         # we'll skip objects that don't have a duration
@@ -2785,8 +2785,8 @@ def _guessTuplets(theLayer: t.List[Music21Object]) -> t.List[Music21Object]:
 def scoreDefFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]:
+    otherInfo: dict[str, t.Any]
+) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
     '''
     <scoreDef> Container for score meta-information.
 
@@ -2883,7 +2883,7 @@ def scoreDefFromElement(
     topPart: str = 'top-part objects'
     allParts: str = 'all-part objects'
     wholeScore: str = 'whole-score objects'
-    post: t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]] = {
+    post: dict[str, list[Music21Object] | dict[str, Music21Object]] = {
         topPart: [],
         allParts: [],
         wholeScore: []
@@ -2899,14 +2899,14 @@ def scoreDefFromElement(
     pap = post[allParts]
     if t.TYPE_CHECKING:
         assert isinstance(pap, list)
-    postAllParts: t.List[Music21Object] = pap
+    postAllParts: list[Music21Object] = pap
 
     # --> time signature
     if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
         timesig = _timeSigFromAttrs(elem, prefix='meter.')
         if timesig is not None:
             postAllParts.append(timesig)
-    meterSigElem: t.Optional[Element] = elem.find(f'{MEI_NS}meterSig')
+    meterSigElem: Element | None = elem.find(f'{MEI_NS}meterSig')
     if meterSigElem is not None:
         timesig = _timeSigFromAttrs(meterSigElem)
         if timesig is not None:
@@ -2917,7 +2917,7 @@ def scoreDefFromElement(
         keysig = _keySigFromAttrs(elem, prefix='key.')
         if keysig is not None:
             postAllParts.append(keysig)
-    keySigElem: t.Optional[Element] = elem.find(f'{MEI_NS}keySig')
+    keySigElem: Element | None = elem.find(f'{MEI_NS}keySig')
     if keySigElem is not None:
         keysig = _keySigFromAttrs(keySigElem)
         if keysig is not None:
@@ -2933,11 +2933,9 @@ def scoreDefFromElement(
 def staffGrpFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-    staffDefDict: t.Optional[
-        t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]
-    ] = None,
-) -> t.Dict[str, t.Union[t.List[Music21Object], t.Dict[str, Music21Object]]]:
+    otherInfo: dict[str, t.Any],
+    staffDefDict: dict[str, list[Music21Object] | dict[str, Music21Object]] | None,
+) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
     '''
     <staffGrp> A group of bracketed or braced staves.
 
@@ -2987,7 +2985,7 @@ def staffGrpFromElement(
 
     for el in elem.findall('*'):
         # return all staff defs in this staff group
-        nStr: t.Optional[str] = el.get('n')
+        nStr: str | None = el.get('n')
         if nStr and (el.tag == staffDefTag):
             otherInfo['staffNumberForDef'] = nStr
             staffDefDict[nStr] = staffDefFromElement(el, spannerBundle, otherInfo)
@@ -3003,8 +3001,8 @@ def staffGrpFromElement(
 def staffDefFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Dict[str, Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> dict[str, Music21Object]:
     '''
     <staffDef> Container for staff meta-information.
 
@@ -3110,11 +3108,11 @@ def staffDefFromElement(
     - MEI.shared: clefGrp label layerDef
     '''
     # mapping from tag name to our converter function
-    tagToFunction: t.Dict[str, t.Callable[
+    tagToFunction: dict[str, t.Callable[
         [Element,
-            t.Optional[meter.TimeSignature],
+            meter.TimeSignature | None,
             spanner.SpannerBundle,
-            t.Dict[str, str]],
+            dict[str, str]],
         t.Any]
     ] = {
         f'{MEI_NS}clef': clefFromElement,
@@ -3124,7 +3122,7 @@ def staffDefFromElement(
 
     # first make the Instrument
     instrDefElem = elem.find(f'{MEI_NS}instrDef')
-    post: t.Dict[str, Music21Object]
+    post: dict[str, Music21Object]
     if instrDefElem is not None:
         post = {'instrument': instrDefFromElement(instrDefElem, None, spannerBundle, otherInfo)}
     else:
@@ -3167,11 +3165,11 @@ def staffDefFromElement(
 
     # --> clef
     if elem.get('clef.shape') is not None:
-        shape: t.Optional[str] = elem.get('clef.shape')
-        line: t.Optional[str] = elem.get('clef.line')
-        dis: t.Optional[str] = elem.get('clef.dis')
-        displace: t.Optional[str] = elem.get('clef.dis.place')
-        attribDict: t.Dict[str, str] = {}
+        shape: str | None = elem.get('clef.shape')
+        line: str | None = elem.get('clef.line')
+        dis: str | None = elem.get('clef.dis')
+        displace: str | None = elem.get('clef.dis.place')
+        attribDict: dict[str, str] = {}
         if shape:
             attribDict['shape'] = shape
         if line:
@@ -3218,14 +3216,14 @@ def staffDefFromElement(
 
 def updateStaffKeyAndAltersWithNewKey(
     staffNStr: str,
-    newKey: t.Optional[t.Union[key.Key, key.KeySignature]],
-    otherInfo: t.Dict[str, t.Any]
+    newKey: key.Key | key.KeySignature | None,
+    otherInfo: dict[str, t.Any]
 ):
     if otherInfo.get('currKeyPerStaff', None) is None:
         otherInfo['currKeyPerStaff'] = {}
     otherInfo['currKeyPerStaff'][staffNStr] = newKey
 
-    keyAltersForStaff: t.List[int] = M21Utilities.getAltersForKey(newKey)
+    keyAltersForStaff: list[int] = M21Utilities.getAltersForKey(newKey)
 
     if otherInfo.get('currentImpliedAltersPerStaff', None) is None:
         otherInfo['currentImpliedAltersPerStaff'] = {}
@@ -3235,7 +3233,7 @@ def updateStaffKeyAndAltersWithNewKey(
 def updateStaffAltersWithPitches(
     staffNStr: str,
     pitches: t.Sequence[pitch.Pitch],
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ):
     # every note and chord (and Trill/Mordent/Turn) flows through this routine
     if otherInfo.get('currentImpliedAltersPerStaff', None) is None:
@@ -3254,9 +3252,9 @@ def updateStaffAltersWithPitches(
 
 def dotFromElement(
     elem: Element,  # pylint: disable=unused-argument
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]  # pylint: disable=unused-argument
+    otherInfo: dict[str, t.Any]  # pylint: disable=unused-argument
 ) -> int:
     '''
     Returns ``1`` no matter what is passed in.
@@ -3287,10 +3285,10 @@ def dotFromElement(
 
 def articFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[articulations.Articulation]:
+    otherInfo: dict[str, t.Any]
+) -> list[articulations.Articulation]:
     '''
     <artic> An indication of how to play a note or chord.
 
@@ -3353,10 +3351,10 @@ def articFromElement(
 
 def accidFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[pitch.Accidental]:
+    otherInfo: dict[str, t.Any]
+) -> pitch.Accidental | None:
     '''
     <accid> Records a temporary alteration to the pitch of a note.
 
@@ -3407,8 +3405,8 @@ def accidFromElement(
     **Contained Elements not Implemented:** none
     '''
     # 1. get @accid/@accid.ges string and displayStatus
-    accidStr: t.Optional[str] = None
-    displayStatus: t.Optional[bool] = None
+    accidStr: str | None = None
+    displayStatus: bool | None = None
     if elem.get('accid.ges') is not None:
         accidStr = _accidGesFromAttr(elem.get('accid.ges'))
         displayStatus = False
@@ -3418,8 +3416,8 @@ def accidFromElement(
 
     # 2. is it cautionary (display unconditionally in normal position)
     #       or editorial (display unconditionally above the note)
-    displayLocation: t.Optional[str] = None
-    func: t.Optional[str] = elem.get('func')
+    displayLocation: str | None = None
+    func: str | None = elem.get('func')
     if func is not None:
         if func == 'edit':
             displayStatus = True
@@ -3429,8 +3427,8 @@ def accidFromElement(
             displayLocation = 'normal'
 
     # 3. paren or bracket?
-    displayStyle: t.Optional[str] = None
-    enclose: t.Optional[str] = elem.get('enclose')
+    displayStyle: str | None = None
+    enclose: str | None = elem.get('enclose')
     if enclose is not None:
         if enclose == 'paren':
             displayStatus = True
@@ -3453,9 +3451,9 @@ def accidFromElement(
 
 def sylFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Lyric:
     '''
     <syl> Individual lyric syllable.
@@ -3496,7 +3494,7 @@ def sylFromElement(
     - MEI.ptrref: ptr ref
     - MEI.shared: address bibl date identifier lb name num rend repository stack title
     '''
-    wordPosDict: t.Dict[t.Optional[str], t.Optional[t.Literal['begin', 'middle', 'end']]] = {
+    wordPosDict: dict[str | None, t.Literal['begin', 'middle', 'end'] | None] = {
         'i': 'begin',
         'm': 'middle',
         't': 'end',
@@ -3504,7 +3502,7 @@ def sylFromElement(
     }
 
     # music21 only supports hyphen continuations.
-    # conDict: t.Dict[t.Optional[str], str] = {
+    # conDict: dict[str | None, str] = {
     #     's': ' ',
     #     'd': '-',
     #     't': '~',
@@ -3512,14 +3510,14 @@ def sylFromElement(
     #     None: '-'
     # }
 
-    wordPos: t.Optional[str] = elem.get('wordpos')
+    wordPos: str | None = elem.get('wordpos')
 
-#     conAttr: t.Optional[str] = elem.get('con')
-#     con: t.Optional[str] = conDict.get(conAttr, '-')
+#     conAttr: str | None = elem.get('con')
+#     con: str | None = conDict.get(conAttr, '-')
 
     output: note.Lyric
     text: str
-    styleDict: t.Dict[str, str]
+    styleDict: dict[str, str]
 
     text, styleDict = textFromElem(elem)
     text = html.unescape(text)
@@ -3545,7 +3543,7 @@ def sylFromElement(
         # no wordPos? Last chance is to use trailing and leading hyphens (applyRaw=False)
         output = note.Lyric(text=text, applyRaw=False)
     else:
-        syllabic: t.Optional[t.Literal['begin', 'middle', 'end']] = wordPosDict.get(wordPos, None)
+        syllabic: t.Literal['begin', 'middle', 'end'] | None = wordPosDict.get(wordPos, None)
         output = note.Lyric(text=text, syllabic=syllabic, applyRaw=True)
 
     if fontStyle is not None or fontWeight is not None:
@@ -3561,9 +3559,9 @@ def sylFromElement(
 
 def verseFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Lyric:
     '''
     <verse> Lyric verse.
@@ -3601,11 +3599,11 @@ def verseFromElement(
 
     - MEI.shared: dir dynam lb space tempo
     '''
-    tagToFunction: t.Dict[str, t.Callable[
+    tagToFunction: dict[str, t.Callable[
         [Element,
-            t.Optional[meter.TimeSignature],
+            meter.TimeSignature | None,
             spanner.SpannerBundle,
-            t.Dict[str, str]],
+            dict[str, str]],
         t.Any]
     ] = {
         f'{MEI_NS}label': stringFromElement,
@@ -3614,9 +3612,9 @@ def verseFromElement(
         f'{MEI_NS}syl': sylFromElement
     }
 
-    nStr: t.Optional[str] = elem.get('n')
-    label: t.Optional[str] = None
-    syllables: t.List[note.Lyric] = []
+    nStr: str | None = elem.get('n')
+    label: str | None = None
+    syllables: list[note.Lyric] = []
 
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                tagToFunction,
@@ -3654,9 +3652,9 @@ def verseFromElement(
 
 def stringFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> str:
     text: str = ''
     for el in elem.iter():
@@ -3673,8 +3671,8 @@ def stringFromElement(
                 text += el.tail
     return text
 
-def fermataFromNoteChordOrRestElement(elem: Element) -> t.Optional[expressions.Fermata]:
-    fermataPlace: t.Optional[str] = elem.get('fermata')
+def fermataFromNoteChordOrRestElement(elem: Element) -> expressions.Fermata | None:
+    fermataPlace: str | None = elem.get('fermata')
     if fermataPlace is None:
         return None
 
@@ -3706,10 +3704,10 @@ def fermataFromNoteChordOrRestElement(elem: Element) -> t.Optional[expressions.F
 
 def durationFromAttributes(
     elem: Element,
-    optionalDots: t.Optional[int] = None
+    optionalDots: int | None = None
 ) -> duration.Duration:
-    durFloat: t.Optional[float] = None
-    durGesFloat: t.Optional[float] = None
+    durFloat: float | None = None
+    durGesFloat: float | None = None
     if elem.get('dur'):
         durFloat = _qlDurationFromAttr(elem.get('dur'))
     if elem.get('dur.ges'):
@@ -3721,7 +3719,7 @@ def durationFromAttributes(
     else:
         numDots = int(elem.get('dots', 0))
 
-    numDotsGes: t.Optional[int] = None
+    numDotsGes: int | None = None
     dotsGesStr: str = elem.get('dots.ges', '')
     if dotsGesStr:
         numDotsGes = int(dotsGesStr)
@@ -3751,9 +3749,9 @@ def durationFromAttributes(
 
 def noteFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Note:
     # NOTE: this function should stay in sync with chordFromElement() where sensible
     '''
@@ -3842,9 +3840,9 @@ def noteFromElement(
 
     # get any @accid/@accid.ges from this element.
     # We'll overwrite with any subElements below.
-    theAccid: t.Optional[str] = _accidentalFromAttr(elem.get('accid'))
-    theAccidGes: t.Optional[str] = _accidGesFromAttr(elem.get('accid.ges'))
-    theAccidObj: t.Optional[pitch.Accidental] = None
+    theAccid: str | None = _accidentalFromAttr(elem.get('accid'))
+    theAccidGes: str | None = _accidGesFromAttr(elem.get('accid.ges'))
+    theAccidObj: pitch.Accidental | None = None
 
     # iterate all immediate children
     dotElements = 0  # count the number of <dot> elements
@@ -3872,7 +3870,7 @@ def noteFromElement(
         theNote.duration = theDuration
 
     # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
-    graceStr: t.Optional[str] = elem.get('grace')
+    graceStr: str | None = elem.get('grace')
     if graceStr == 'acc':
         theNote = theNote.getGrace(appoggiatura=True)
         theNote.duration.slash = False  # type: ignore
@@ -3915,17 +3913,17 @@ def noteFromElement(
         addSlurs(elem, theNote, spannerBundle)
 
     # id in the @xml:id attribute
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theNote.id = xmlId
 
     # articulations in the @artic attribute
-    articStr: t.Optional[str] = elem.get('artic')
+    articStr: str | None = elem.get('artic')
     if articStr is not None:
         theNote.articulations.extend(_makeArticList(articStr))
 
     # expressions from element attributes (perhaps fake attributes created during preprocessing)
-    fermata: t.Optional[expressions.Fermata] = fermataFromNoteChordOrRestElement(elem)
+    fermata: expressions.Fermata | None = fermataFromNoteChordOrRestElement(elem)
     if fermata is not None:
         theNote.expressions.append(fermata)
 
@@ -3936,7 +3934,7 @@ def noteFromElement(
     addOttavas(elem, theNote, spannerBundle)
 
     # ties in the @tie attribute
-    tieStr: t.Optional[str] = elem.get('tie')
+    tieStr: str | None = elem.get('tie')
     if tieStr is not None:
         theNote.tie = _tieFromAttr(tieStr)
 
@@ -3945,11 +3943,11 @@ def noteFromElement(
             assert isinstance(theNote.style, style.NoteStyle)
         theNote.style.noteSize = 'cue'
 
-    colorStr: t.Optional[str] = elem.get('color')
+    colorStr: str | None = elem.get('color')
     if colorStr is not None:
         theNote.style.color = colorStr
 
-    headShape: t.Optional[str] = elem.get('head.shape')
+    headShape: str | None = elem.get('head.shape')
     if headShape is not None:
         if headShape == '+':
             theNote.notehead = 'cross'
@@ -3972,20 +3970,20 @@ def noteFromElement(
                 # use default notehead if unrecognized (NotRestException)
                 pass
 
-    stemDirStr: t.Optional[str] = elem.get('stem.dir')
+    stemDirStr: str | None = elem.get('stem.dir')
     if stemDirStr is not None:
         # We don't pay attention to stem direction if the note
         # is supposed to be in another staff (which we don't yet
         # support).
         theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
-    stemModStr: t.Optional[str] = elem.get('stem.mod')
+    stemModStr: str | None = elem.get('stem.mod')
     if stemModStr is not None:
         # just add it as an attribute, to be read by callers if they like
         theNote.mei_stem_mod = stemModStr  # type: ignore
 
-    stemLenStr: t.Optional[str] = elem.get('stem.len')
-    stemLen: t.Optional[float] = None
+    stemLenStr: str | None = elem.get('stem.len')
+    stemLen: float | None = None
     if stemLenStr is not None:
         try:
             stemLen = float(stemLenStr)
@@ -3994,13 +3992,13 @@ def noteFromElement(
         if stemLen is not None and stemLen == 0:
             theNote.stemDirection = 'noStem'
 
-    stemVisible: t.Optional[str] = elem.get('stem.visible')
+    stemVisible: str | None = elem.get('stem.visible')
     if stemVisible is not None and stemVisible == 'false':
         theNote.stemDirection = 'noStem'
 
     # breaksec="n" means that the beams that cross this note drop down to "n" beams
     # between this note and the next note.  Mark this in theNote with a custom attribute.
-    breaksec: t.Optional[str] = elem.get('breaksec')
+    breaksec: str | None = elem.get('breaksec')
     if breaksec is not None:
         theNote.mei_breaksec = breaksec  # type: ignore
 
@@ -4031,9 +4029,9 @@ def noteFromElement(
 
 def restFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Rest:
     '''
     <rest/> is a non-sounding event found in the source being transcribed
@@ -4078,7 +4076,7 @@ def restFromElement(
     theDuration: duration.Duration = durationFromAttributes(elem)
     theRest = note.Rest(duration=theDuration)
 
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theRest.id = xmlId
 
@@ -4092,7 +4090,7 @@ def restFromElement(
             assert isinstance(theRest.style, style.NoteStyle)
         theRest.style.noteSize = 'cue'
 
-    colorStr: t.Optional[str] = elem.get('color')
+    colorStr: str | None = elem.get('color')
     if colorStr is not None:
         theRest.style.color = colorStr
 
@@ -4118,9 +4116,9 @@ def restFromElement(
 
 def mRestFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Rest:
     '''
     <mRest/> Complete measure rest in any meter.
@@ -4145,9 +4143,9 @@ def mRestFromElement(
 
 def spaceFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Rest:
     '''
     <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that the
@@ -4163,7 +4161,7 @@ def spaceFromElement(
     theSpace: note.Rest = note.Rest(duration=theDuration)
     theSpace.style.hideObjectOnPrint = True
 
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theSpace.id = xmlId
 
@@ -4180,9 +4178,9 @@ def spaceFromElement(
 
 def mSpaceFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> note.Rest:
     '''
     <mSpace/> A measure containing only empty space in any meter.
@@ -4207,9 +4205,9 @@ def mSpaceFromElement(
 
 def chordFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> chord.Chord:
     # NOTE: this function should stay in sync with noteFromElement() where sensible
     '''
@@ -4269,10 +4267,10 @@ def chordFromElement(
 
     - MEI.edittrans: (all)
     '''
-    theNoteList: t.List[note.Note] = []
-    theArticList: t.List[articulations.Articulation] = []
-    theLyricList: t.List[note.Lyric] = []
-    spannersFromNotes: t.List[t.Tuple[note.Note, t.List[spanner.Spanner]]] = []
+    theNoteList: list[note.Note] = []
+    theArticList: list[articulations.Articulation] = []
+    theLyricList: list[note.Lyric] = []
+    spannersFromNotes: list[tuple[note.Note, list[spanner.Spanner]]] = []
     # iterate all immediate children
     for subElement in _processEmbeddedElements(elem.findall('*'),
                                                chordChildrenTagToFunction,
@@ -4282,7 +4280,7 @@ def chordFromElement(
                                                otherInfo):
         if isinstance(subElement, note.Note):
             theNoteList.append(subElement)
-            spannersFromThisNote: t.List[spanner.Spanner] = subElement.getSpannerSites()
+            spannersFromThisNote: list[spanner.Spanner] = subElement.getSpannerSites()
             if spannersFromThisNote:
                 spannersFromNotes.append((subElement, spannersFromThisNote))
         if isinstance(subElement, articulations.Articulation):
@@ -4305,7 +4303,7 @@ def chordFromElement(
     theChord.duration = theDuration
 
     # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
-    graceStr: t.Optional[str] = elem.get('grace')
+    graceStr: str | None = elem.get('grace')
     if graceStr == 'acc':
         theChord = theChord.getGrace(appoggiatura=True)
         theChord.duration.slash = False  # type: ignore
@@ -4326,12 +4324,12 @@ def chordFromElement(
         addSlurs(elem, theChord, spannerBundle)
 
     # id in the @xml:id attribute
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theChord.id = xmlId
 
     # articulations in the @artic attribute
-    articStr: t.Optional[str] = elem.get('artic')
+    articStr: str | None = elem.get('artic')
     if articStr is not None:
         theChord.articulations.extend(_makeArticList(articStr))
 
@@ -4364,7 +4362,7 @@ def chordFromElement(
             break
 
     # ties in the @tie attribute
-    tieStr: t.Optional[str] = elem.get('tie')
+    tieStr: str | None = elem.get('tie')
     if tieStr is not None:
         theChord.tie = _tieFromAttr(tieStr)
 
@@ -4373,30 +4371,30 @@ def chordFromElement(
             assert isinstance(theChord.style, style.NoteStyle)
         theChord.style.noteSize = 'cue'
 
-    colorStr: t.Optional[str] = elem.get('color')
+    colorStr: str | None = elem.get('color')
     if colorStr is not None:
         theChord.style.color = colorStr
 
-    stemDirStr: t.Optional[str] = elem.get('stem.dir')
+    stemDirStr: str | None = elem.get('stem.dir')
     if stemDirStr is not None:
         # We don't pay attention to stem direction if the chord
         # is supposed to be in another staff (which we don't yet
         # support).
         theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
 
-    stemModStr: t.Optional[str] = elem.get('stem.mod')
+    stemModStr: str | None = elem.get('stem.mod')
     if stemModStr is not None:
         # just add it as an attribute, to be read by callers if they like
         theChord.mei_stem_mod = stemModStr  # type: ignore
 
     # breaksec="n" means that the beams that cross this note drop down to "n" beams
     # between this note and the next note.  Mark this in theNote with a custom attribute.
-    breaksec: t.Optional[str] = elem.get('breaksec')
+    breaksec: str | None = elem.get('breaksec')
     if breaksec is not None:
         theChord.mei_breaksec = breaksec  # type: ignore
 
     # beams indicated by a <beamSpan> held elsewhere
-    m21BeamStr: t.Optional[str] = elem.get('m21Beam')
+    m21BeamStr: str | None = elem.get('m21Beam')
     if m21BeamStr is not None:
         if duration.convertTypeToNumber(theChord.duration.type) > 4:
             theChord.beams.fill(theChord.duration.type, m21BeamStr)
@@ -4423,10 +4421,10 @@ def chordFromElement(
 
 def clefFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[clef.Clef]:
+    otherInfo: dict[str, t.Any]
+) -> clef.Clef | None:
     '''
     <clef> Indication of the exact location of a particular note on the staff and, therefore,
     the other notes as well.
@@ -4468,9 +4466,9 @@ def clefFromElement(
     if elem.get('sameas') is not None:
         return None
 
-    shapeStr: t.Optional[str] = elem.get('shape')
-    lineStr: t.Optional[str] = elem.get('line')
-    octaveShiftOverride: t.Optional[int] = None
+    shapeStr: str | None = elem.get('shape')
+    lineStr: str | None = elem.get('line')
+    octaveShiftOverride: int | None = None
     if 'perc' == shapeStr:
         theClef = clef.PercussionClef()
     elif 'TAB' == shapeStr:
@@ -4493,7 +4491,7 @@ def clefFromElement(
                 _getOctaveShift(elem.get('dis'), elem.get('dis.place'))
             )
 
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theClef.id = xmlId
 
@@ -4502,10 +4500,10 @@ def clefFromElement(
 
 def pageBreakFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[m21.layout.PageLayout]:
+    otherInfo: dict[str, t.Any]
+) -> m21.layout.PageLayout | None:
     pbType: str = elem.get('type', '')
     if pbType.startswith('original'):  # startswith because sometimes there are '\t*'s after
         # ignore any original page breaks (like our Humdrum parser does)
@@ -4513,7 +4511,7 @@ def pageBreakFromElement(
 
     # Some day music21 will support non-numeric page numbers (e.g. 'iv' or 'p17-3').
     # In the meantime, we drop them on the floor.
-    pageNumber: t.Optional[int] = None
+    pageNumber: int | None = None
     nStr: str = elem.get('n', '')
     if nStr:
         try:
@@ -4523,7 +4521,7 @@ def pageBreakFromElement(
 
     pageLayout: m21.layout.PageLayout = m21.layout.PageLayout(isNew=True, pageNumber=pageNumber)
 
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         pageLayout.id = xmlId
 
@@ -4532,17 +4530,17 @@ def pageBreakFromElement(
 
 def systemBreakFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[m21.layout.SystemLayout]:
+    otherInfo: dict[str, t.Any]
+) -> m21.layout.SystemLayout | None:
     sbType: str = elem.get('type', '')
     if sbType.startswith('original'):  # startswith because sometimes there are '\t*'s after
         # ignore any 'original' system breaks (like our Humdrum parser does)
         return None
 
     systemLayout: m21.layout.SystemLayout = m21.layout.SystemLayout(isNew=True)
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         systemLayout.id = xmlId
 
@@ -4551,11 +4549,11 @@ def systemBreakFromElement(
 
 def keySigFromElementInStaffDef(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
-    newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+    otherInfo: dict[str, t.Any]
+) -> key.Key | key.KeySignature | None:
+    newKey: key.Key | key.KeySignature | None = (
         _keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
     nStr: str = otherInfo.get('staffNumberForDef', '')
@@ -4567,11 +4565,11 @@ def keySigFromElementInStaffDef(
 
 def keySigFromElementInLayer(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
-    newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+    otherInfo: dict[str, t.Any]
+) -> key.Key | key.KeySignature | None:
+    newKey: key.Key | key.KeySignature | None = (
         _keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
     nStr: str = otherInfo.get('staffNumberForLayer', '')
@@ -4583,15 +4581,15 @@ def keySigFromElementInLayer(
 
 def _keySigFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
-    theKey: t.Optional[t.Union[key.Key, key.KeySignature]] = _keySigFromAttrs(elem)
+    otherInfo: dict[str, t.Any]
+) -> key.Key | key.KeySignature | None:
+    theKey: key.Key | key.KeySignature | None = _keySigFromAttrs(elem)
     if theKey is None:
         return None
 
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theKey.id = xmlId
 
@@ -4600,15 +4598,15 @@ def _keySigFromElement(
 
 def timeSigFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[meter.TimeSignature]:
-    theTimeSig: t.Optional[meter.TimeSignature] = _timeSigFromAttrs(elem)
+    otherInfo: dict[str, t.Any]
+) -> meter.TimeSignature | None:
+    theTimeSig: meter.TimeSignature | None = _timeSigFromAttrs(elem)
     if theTimeSig is None:
         return None
 
-    xmlId: t.Optional[str] = elem.get(_XMLID)
+    xmlId: str | None = elem.get(_XMLID)
     if xmlId is not None:
         theTimeSig.id = xmlId
 
@@ -4617,9 +4615,9 @@ def timeSigFromElement(
 
 def instrDefFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> instrument.Instrument:
     # TODO: robuster handling of <instrDef>, including <instrGrp> and if held in a <staffGrp>
     '''
@@ -4648,14 +4646,14 @@ def instrDefFromElement(
 
     **Contained Elements not Implemented:** none
     '''
-    instrNumStr: t.Optional[str] = elem.get('midi.instrnum')
+    instrNumStr: str | None = elem.get('midi.instrnum')
     if instrNumStr is not None:
         try:
             return instrument.instrumentFromMidiProgram(int(instrNumStr))
         except (TypeError, instrument.InstrumentException):
             pass
 
-    instrNameStr: t.Optional[str] = elem.get('midi.instrname', '')
+    instrNameStr: str | None = elem.get('midi.instrname', '')
     if t.TYPE_CHECKING:
         # default if missing is ''
         assert instrNameStr is not None
@@ -4673,9 +4671,9 @@ def instrDefFromElement(
 
 def beamFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> t.Sequence[Music21Object]:
     '''
     <beam> A container for a series of explicitly beamed events that begins and ends entirely
@@ -4758,7 +4756,7 @@ def beamFromElement(
     # NB: The doctest is a sufficient integration test. Since there is no logic, I don't think we
     #     need to bother with unit testing.
 
-    beamedStuff: t.List[Music21Object] = _processEmbeddedElements(
+    beamedStuff: list[Music21Object] = _processEmbeddedElements(
         elem.findall('*'),
         beamChildrenTagToFunction,
         elem.tag,
@@ -4775,15 +4773,15 @@ def beamFromElement(
 
 def bTremFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     '''
     <bTrem> contains one <note> or <chord> (or editorial elements that resolve to a single
     note or chord)
     '''
-    bTremStuff: t.List[Music21Object] = _processEmbeddedElements(
+    bTremStuff: list[Music21Object] = _processEmbeddedElements(
         elem.findall('*'),
         bTremChildrenTagToFunction,
         elem.tag,
@@ -4818,15 +4816,15 @@ def bTremFromElement(
 
 def fTremFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     '''
     <fTrem> contains two <note>s or two <chord>s or one of each (or editorial elements that
     resolve to two <note>s or two <chord>s or one of each)
     '''
-    fTremStuff: t.List[Music21Object] = _processEmbeddedElements(
+    fTremStuff: list[Music21Object] = _processEmbeddedElements(
         elem.findall('*'),
         fTremChildrenTagToFunction,
         elem.tag,
@@ -4886,10 +4884,10 @@ def fTremFromElement(
 
 def barLineFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Union[bar.Barline, bar.Repeat, t.Tuple[bar.Repeat, ...]]:
+    otherInfo: dict[str, t.Any]
+) -> bar.Barline | bar.Repeat | tuple[bar.Repeat, bar.Repeat]:
     '''
     <barLine> Vertical line drawn through one or more staves that divides musical notation into
     metrical units.
@@ -4943,10 +4941,10 @@ def barLineFromElement(
 
 def tupletFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     '''
     <tuplet> A group of notes with "irregular" (sometimes called "irrational") rhythmic values,
     for example, three notes in the time normally occupied by two or nine in the time of five.
@@ -4996,18 +4994,18 @@ def tupletFromElement(
     - MEI.shared: clefGrp custos keySig pad
     '''
     # get the @num and @numbase attributes, without which we can't properly calculate the tuplet
-    numStr: t.Optional[str] = elem.get('num')
-    numbaseStr: t.Optional[str] = elem.get('numbase')
+    numStr: str | None = elem.get('num')
+    numbaseStr: str | None = elem.get('numbase')
     if numStr is None or numbaseStr is None:
         raise MeiAttributeError(_MISSING_TUPLET_DATA)
-    bracketVisibleStr: t.Optional[str] = elem.get('bracket.visible')
-    bracketPlaceStr: t.Optional[str] = elem.get('bracket.place')
-    numVisibleStr: t.Optional[str] = elem.get('num.visible')
-    numPlaceStr: t.Optional[str] = elem.get('num.place')
-    numFormatStr: t.Optional[str] = elem.get('num.format')
+    bracketVisibleStr: str | None = elem.get('bracket.visible')
+    bracketPlaceStr: str | None = elem.get('bracket.place')
+    numVisibleStr: str | None = elem.get('num.visible')
+    numPlaceStr: str | None = elem.get('num.place')
+    numFormatStr: str | None = elem.get('num.format')
 
     # iterate all immediate children
-    tupletMembers: t.List[Music21Object] = _processEmbeddedElements(
+    tupletMembers: list[Music21Object] = _processEmbeddedElements(
         elem.findall('*'),
         tupletChildrenTagToFunction,
         elem.tag,
@@ -5029,7 +5027,7 @@ def tupletFromElement(
     if numFormatStr is not None:
         newElem.set('m21TupletNumFormat', numFormatStr)
 
-    tupletMembers = t.cast(t.List[Music21Object], scaleToTuplet(tupletMembers, newElem))
+    tupletMembers = t.cast(list[Music21Object], scaleToTuplet(tupletMembers, newElem))
 
     # Set the Tuplet.type property for the first and final note in a tuplet.
     # We have to find the first and last duration-having thing, not just the first and last objects
@@ -5056,7 +5054,7 @@ def tupletFromElement(
     return tupletMembers
 
 
-def _isLastDurationalElement(idx: int, elements: t.List[Music21Object]) -> bool:
+def _isLastDurationalElement(idx: int, elements: list[Music21Object]) -> bool:
     if elements[idx].quarterLength == 0:
         # it's not a durational element at all
         return False
@@ -5068,10 +5066,10 @@ def _isLastDurationalElement(idx: int, elements: t.List[Music21Object]) -> bool:
 
 def layerFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-    overrideN: t.Optional[str] = None
+    otherInfo: dict[str, t.Any],
+    overrideN: str | None = None
 ) -> stream.Voice:
     '''
     <layer> An independent stream of events on a staff.
@@ -5136,7 +5134,7 @@ def layerFromElement(
     '''
 
     # iterate all immediate children
-    theLayer: t.List[Music21Object] = _processEmbeddedElements(
+    theLayer: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         layerChildrenTagToFunction,
         elem.tag,
@@ -5156,7 +5154,7 @@ def layerFromElement(
         expectedLayerDur: OffsetQL = 4.0 * opFrac(
             Fraction(activeMeter.numerator, activeMeter.denominator)
         )
-        removeThisOne: t.Optional[int] = None
+        removeThisOne: int | None = None
         currOffset: OffsetQL = 0.
         for i, each in enumerate(theLayer):
             if currOffset == expectedLayerDur:
@@ -5179,7 +5177,7 @@ def layerFromElement(
     if overrideN:
         theVoice.id = overrideN
     else:
-        nStr: t.Optional[str] = elem.get('n')
+        nStr: str | None = elem.get('n')
         if nStr is not None:
             theVoice.id = nStr
         else:
@@ -5190,16 +5188,16 @@ def layerFromElement(
 
 def appChoiceLayerChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         layerChildrenTagToFunction,
         chosen.tag,
@@ -5212,12 +5210,12 @@ def appChoiceLayerChildrenFromElement(
 
 def passThruEditorialLayerChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         layerChildrenTagToFunction,
         elem.tag,
@@ -5231,25 +5229,25 @@ def passThruEditorialLayerChildrenFromElement(
 
 def appChoiceStaffItemsFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[
-    t.Tuple[
+    otherInfo: dict[str, t.Any]
+) -> list[
+    tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
         Music21Object
     ]
 ]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[
-        t.Tuple[
+    theList: list[
+        tuple[
             str,
-            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
             Music21Object
         ]
     ] = (
@@ -5267,21 +5265,21 @@ def appChoiceStaffItemsFromElement(
 
 def passThruEditorialStaffItemsFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[
-    t.Tuple[
+    otherInfo: dict[str, t.Any]
+) -> list[
+    tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
         Music21Object
     ]
 ]:
     # iterate all immediate children
-    theList: t.List[
-        t.Tuple[
+    theList: list[
+        tuple[
             str,
-            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
             Music21Object
         ]
     ] = (
@@ -5299,16 +5297,16 @@ def passThruEditorialStaffItemsFromElement(
 
 def appChoiceNoteChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         noteChildrenTagToFunction,
         chosen.tag,
@@ -5322,12 +5320,12 @@ def appChoiceNoteChildrenFromElement(
 
 def passThruEditorialNoteChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         noteChildrenTagToFunction,
         elem.tag,
@@ -5341,16 +5339,16 @@ def passThruEditorialNoteChildrenFromElement(
 
 def appChoiceChordChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         chordChildrenTagToFunction,
         chosen.tag,
@@ -5364,12 +5362,12 @@ def appChoiceChordChildrenFromElement(
 
 def passThruEditorialChordChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         chordChildrenTagToFunction,
         elem.tag,
@@ -5383,16 +5381,16 @@ def passThruEditorialChordChildrenFromElement(
 
 def appChoiceBeamChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         beamChildrenTagToFunction,
         chosen.tag,
@@ -5406,12 +5404,12 @@ def appChoiceBeamChildrenFromElement(
 
 def passThruEditorialBeamChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         beamChildrenTagToFunction,
         elem.tag,
@@ -5425,16 +5423,16 @@ def passThruEditorialBeamChildrenFromElement(
 
 def appChoiceTupletChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         tupletChildrenTagToFunction,
         chosen.tag,
@@ -5448,12 +5446,12 @@ def appChoiceTupletChildrenFromElement(
 
 def passThruEditorialTupletChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         tupletChildrenTagToFunction,
         elem.tag,
@@ -5467,16 +5465,16 @@ def passThruEditorialTupletChildrenFromElement(
 
 def appChoiceBTremChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         bTremChildrenTagToFunction,
         chosen.tag,
@@ -5490,12 +5488,12 @@ def appChoiceBTremChildrenFromElement(
 
 def passThruEditorialBTremChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         bTremChildrenTagToFunction,
         elem.tag,
@@ -5509,16 +5507,16 @@ def passThruEditorialBTremChildrenFromElement(
 
 def appChoiceFTremChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
-    chosen: t.Optional[Element] = chooseSubElement(elem)
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
+    chosen: Element | None = chooseSubElement(elem)
     if chosen is None:
         return []
 
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         chosen.iterfind('*'),
         fTremChildrenTagToFunction,
         chosen.tag,
@@ -5532,12 +5530,12 @@ def appChoiceFTremChildrenFromElement(
 
 def passThruEditorialFTremChildrenFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     # iterate all immediate children
-    theList: t.List[Music21Object] = _processEmbeddedElements(
+    theList: list[Music21Object] = _processEmbeddedElements(
         elem.iterfind('*'),
         fTremChildrenTagToFunction,
         elem.tag,
@@ -5550,10 +5548,10 @@ def passThruEditorialFTremChildrenFromElement(
 
 def _currKeyForStaff(
     staffNStr: str,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.Optional[t.Union[key.Key, key.KeySignature]]:
-    currKeyPerStaff: t.Dict = otherInfo.get('currKeyPerStaff', {})
-    currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+    otherInfo: dict[str, t.Any]
+) -> key.Key | key.KeySignature | None:
+    currKeyPerStaff: dict = otherInfo.get('currKeyPerStaff', {})
+    currentKey: key.Key | key.KeySignature | None = (
         currKeyPerStaff.get(staffNStr, None)
     )
     return currentKey
@@ -5561,10 +5559,10 @@ def _currKeyForStaff(
 
 def staffFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
-) -> t.List[Music21Object]:
+    otherInfo: dict[str, t.Any]
+) -> list[Music21Object]:
     '''
     <staff> A group of equidistant horizontal lines on which notes are placed in order to
     represent pitch or a grouping element for individual 'strands' of notes, rests, etc. that may
@@ -5608,23 +5606,23 @@ def staffFromElement(
     '''
     # mapping from tag name to our converter function
     layerTagName: str = f'{MEI_NS}layer'
-    tagToFunction: t.Dict[str, t.Callable[
+    tagToFunction: dict[str, t.Callable[
         [Element,
-            t.Optional[meter.TimeSignature],
+            meter.TimeSignature | None,
             spanner.SpannerBundle,
-            t.Dict[str, str]],
+            dict[str, str]],
         t.Any]
     ] = {
     }
 
-    nextBreak: t.Optional[Music21Object] = None
+    nextBreak: Music21Object | None = None
 
     staffNStr: str = otherInfo.get('staffNumberForNotes', '')
     if staffNStr:
         # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
         # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
         # accidentals are seen in this layer.
-        currentKey: t.Optional[t.Union[key.Key, key.KeySignature]] = (
+        currentKey: key.Key | key.KeySignature | None = (
             _currKeyForStaff(staffNStr, otherInfo)
         )
         updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
@@ -5634,7 +5632,7 @@ def staffFromElement(
             # at the start of the measure in the topmost Part.
             nextBreak = otherInfo.pop('nextBreak', None)
 
-    layers: t.List[Music21Object] = []
+    layers: list[Music21Object] = []
 
     # track the @n values given to layerFromElement()
     currentNValue: str = '1'
@@ -5662,7 +5660,7 @@ def staffFromElement(
 
 
 def _correctMRestDurs(
-    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
+    staves: dict[str, stream.Measure | bar.Repeat],
     targetQL: OffsetQL
 ):
     '''
@@ -5705,8 +5703,8 @@ def _correctMRestDurs(
 
 def _makeBarlines(
     elem: Element,
-    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]]
-) -> t.Dict[str, t.Union[stream.Measure, bar.Repeat]]:
+    staves: dict[str, stream.Measure | bar.Repeat]
+) -> dict[str, stream.Measure | bar.Repeat]:
     '''
     This is a helper function for :func:`measureFromElement`, made independent only to improve
     that function's ease of testing.
@@ -5721,7 +5719,7 @@ def _makeBarlines(
     :returns: The ``staves`` dictionary with properly-set barlines.
     :rtype: dict
     '''
-    leftStr: t.Optional[str] = elem.get('left')
+    leftStr: str | None = elem.get('left')
     if leftStr is not None:
         bars = _barlineFromAttr(leftStr)
         if isinstance(bars, tuple):
@@ -5732,7 +5730,7 @@ def _makeBarlines(
             if isinstance(eachMeasure, stream.Measure):
                 eachMeasure.leftBarline = deepcopy(bars)
 
-    rightStr: t.Optional[str] = elem.get('right', 'single')
+    rightStr: str | None = elem.get('right', 'single')
     bars = _barlineFromAttr(rightStr)
     if isinstance(bars, tuple):
         # this means @right was "rptboth"
@@ -5752,9 +5750,9 @@ def _canBeOnRest(expr: expressions.Expression) -> bool:
     return False
 
 def _addTimestampedExpressions(
-    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]],
-    tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]],
-    otherInfo: t.Dict[str, t.Any]
+    staves: dict[str, stream.Measure | bar.Repeat],
+    tsExpressions: list[tuple[list[str], OffsetQL, expressions.Expression]],
+    otherInfo: dict[str, t.Any]
 ):
     clonedExpression: expressions.Expression
 
@@ -5768,13 +5766,13 @@ def _addTimestampedExpressions(
 
         for i, staffN in enumerate(staffNs):
             doneWithStaff: bool = False
-            eachMeasure: t.Union[stream.Measure, bar.Repeat] = staves[staffN]
+            eachMeasure: stream.Measure | bar.Repeat = staves[staffN]
             if not isinstance(eachMeasure, stream.Measure):
                 continue
 
-            nearestPrevNoteInStaff: t.Optional[note.GeneralNote] = None
-            offsetFromNearestPrevNote: t.Optional[OffsetQL] = None
-            staffForNearestNote: t.Optional[str] = None
+            nearestPrevNoteInStaff: note.GeneralNote | None = None
+            offsetFromNearestPrevNote: OffsetQL | None = None
+            staffForNearestNote: str | None = None
             for eachMObj in eachMeasure:
                 if not isinstance(eachMObj, (stream.Stream, bar.Barline)):
                     continue
@@ -5892,7 +5890,7 @@ def _addTimestampedExpressions(
 
 def _tstampToOffset(
     tstamp: str,
-    activeMeter: t.Optional[meter.TimeSignature]
+    activeMeter: meter.TimeSignature | None
 ) -> OffsetQL:
     beat: float
     try:
@@ -5904,7 +5902,7 @@ def _tstampToOffset(
     return _beatToOffset(beat, activeMeter)
 
 
-def _beatToOffset(beat: float, activeMeter: t.Optional[meter.TimeSignature]) -> OffsetQL:
+def _beatToOffset(beat: float, activeMeter: meter.TimeSignature | None) -> OffsetQL:
     # beat is expressed in beats, as expressed in the written time signature.
     # We will need to offset it (beats are 1-based, offsets are 0-based) and convert
     # it to quarter notes (OffsetQL)
@@ -5926,8 +5924,8 @@ def _beatToOffset(beat: float, activeMeter: t.Optional[meter.TimeSignature]) -> 
 
 def _tstamp2ToMeasSkipAndOffset(
     tstamp2: str,
-    activeMeter: t.Optional[meter.TimeSignature]
-) -> t.Tuple[int, OffsetQL]:
+    activeMeter: meter.TimeSignature | None
+) -> tuple[int, OffsetQL]:
     measSkip: int
     beat: float
     offset: OffsetQL
@@ -5960,8 +5958,8 @@ def _tstamp2ToMeasSkipAndOffset(
 def _tstampsToOffset1AndMeasSkipAndOffset2(
     tstamp: str,
     tstamp2: str,
-    activeMeter: t.Optional[meter.TimeSignature]
-) -> t.Tuple[OffsetQL, int, OffsetQL]:
+    activeMeter: meter.TimeSignature | None
+) -> tuple[OffsetQL, int, OffsetQL]:
     offset: OffsetQL = _tstampToOffset(tstamp, activeMeter)
     measSkip: int
     offset2: OffsetQL
@@ -5970,7 +5968,7 @@ def _tstampsToOffset1AndMeasSkipAndOffset2(
     return offset, measSkip, offset2
 
 
-_NOTE_UNICODE_CHAR_TO_NOTE_NAME: t.Dict[str, str] = {
+_NOTE_UNICODE_CHAR_TO_NOTE_NAME: dict[str, str] = {
     '\uE1D0': 'breve',    # noteDoubleWhole
     '\uE1D1': 'breve',    # noteDoubleWholeSquare
     '\uE1D2': 'whole',    # noteWhole
@@ -5999,7 +5997,7 @@ _NOTE_UNICODE_CHAR_TO_NOTE_NAME: t.Dict[str, str] = {
 _METRONOME_MARK_PATTERN: str = r'^((.*?)\s*)([^=\s])\s*=\s*(\d+\.?\d*)[\s]*$'
 def _getBPMInfo(
     text: str
-) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[int]]:
+) -> tuple[str | None, str | None, int | None]:
     # takes strings like "Andante M.M. 𝅗𝅥 = 128" and returns
     # 'Andante M.M.', '𝅗𝅥', and 128 (but only if the first match
     # is actually a note symbol from the SMuFL range (0xE1D0 - 0xE1EF).
@@ -6007,9 +6005,9 @@ def _getBPMInfo(
     if m is None:
         return None, None, None
 
-    tempoName: t.Optional[str] = m.group(2)
-    noteChar: t.Optional[str] = m.group(3)
-    notesPerMinute: t.Optional[str] = m.group(4)
+    tempoName: str | None = m.group(2)
+    noteChar: str | None = m.group(3)
+    notesPerMinute: str | None = m.group(4)
 
     if notesPerMinute is None or noteChar is None:
         return None, None, None
@@ -6020,8 +6018,8 @@ def _getBPMInfo(
     return None, None, None
 
 
-def chooseSubElement(appOrChoice: Element) -> t.Optional[Element]:
-    chosen: t.Optional[Element] = None
+def chooseSubElement(appOrChoice: Element) -> Element | None:
+    chosen: Element | None = None
     if appOrChoice.tag == f'{MEI_NS}app':
         # choose 'lem' (lemma) if present, else first 'rdg' (reading)
         chosen = appOrChoice.find(f'{MEI_NS}lem')
@@ -6044,7 +6042,7 @@ def chooseSubElement(appOrChoice: Element) -> t.Optional[Element]:
     return chosen  # None, if we get here
 
 
-_EDITORIAL_ELEMENTS: t.Tuple[str, ...] = (
+_EDITORIAL_ELEMENTS: tuple[str, ...] = (
     f'{MEI_NS}abbr',
     f'{MEI_NS}add',
     f'{MEI_NS}app',
@@ -6063,14 +6061,14 @@ _EDITORIAL_ELEMENTS: t.Tuple[str, ...] = (
     f'{MEI_NS}unclear',
 )
 
-_IGNORED_EDITORIALS: t.Tuple[str, ...] = (
+_IGNORED_EDITORIALS: tuple[str, ...] = (
     f'{MEI_NS}abbr',
     f'{MEI_NS}del',
     f'{MEI_NS}ref',
     f'{MEI_NS}restore',  # I could support restore with a special FromElement API
 )                        # that reverses the meaning of del and add
 
-_PASSTHRU_EDITORIALS: t.Tuple[str, ...] = (
+_PASSTHRU_EDITORIALS: tuple[str, ...] = (
     f'{MEI_NS}add',
     f'{MEI_NS}corr',
     f'{MEI_NS}damage',
@@ -6083,7 +6081,7 @@ _PASSTHRU_EDITORIALS: t.Tuple[str, ...] = (
     f'{MEI_NS}unclear',
 )
 
-_CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
+_CHOOSING_EDITORIALS: tuple[str, ...] = (
     f'{MEI_NS}app',
     f'{MEI_NS}choice',
 )
@@ -6091,23 +6089,23 @@ _CHOOSING_EDITORIALS: t.Tuple[str, ...] = (
 
 def octaveFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-        t.Optional[spanner.Ottava]
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        spanner.Ottava | None
 ]:
     offset: OffsetQL = -1.
-    measSkip: t.Optional[int] = None
-    offset2: t.Optional[OffsetQL] = None
+    measSkip: int | None = None
+    offset2: OffsetQL | None = None
 
     ottavaLocalId = elem.get('m21Ottava', '')
     if not ottavaLocalId:
         environLocal.warn('no Ottava created in octave preprocessing')
         return ('', (-1., None, None), None)
-    ottava: t.Optional[spanner.Spanner] = (
+    ottava: spanner.Spanner | None = (
         safeGetSpannerByIdLocal(ottavaLocalId, spannerBundle)
     )
     if ottava is None:
@@ -6120,7 +6118,7 @@ def octaveFromElement(
     staffNStr: str = elem.get('staff', '')
     if not staffNStr:
         # get it from start note in ottava (should already be there)
-        startObj: t.Optional[Music21Object] = ottava.getFirst()
+        startObj: Music21Object | None = ottava.getFirst()
         if startObj is not None and hasattr(startObj, 'mei_staff'):
             staffNStr = startObj.mei_staff  # type: ignore
     if not staffNStr:
@@ -6150,19 +6148,19 @@ def octaveFromElement(
 
 def arpegFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-        t.Optional[expressions.ArpeggioMark]
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        expressions.ArpeggioMark | None
 ]:
     if elem.get('ignore_in_arpegFromElement') == 'true':
         return '', (-1., None, None), None
 
     staffNStr: str = elem.get('staff', '1')
-    tstamp: t.Optional[str] = elem.get('tstamp')
+    tstamp: str | None = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp/@startid/@plist in <arpeg> element')
         return '', (-1., None, None), None
@@ -6182,21 +6180,21 @@ def arpegFromElement(
 
 def trillFromElement(
         elem: Element,
-        activeMeter: t.Optional[meter.TimeSignature],
+        activeMeter: meter.TimeSignature | None,
         spannerBundle: spanner.SpannerBundle,
-        otherInfo: t.Dict[str, t.Any],
-) -> t.List[
-    t.Tuple[
+        otherInfo: dict[str, t.Any],
+) -> list[
+    tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-        t.Optional[t.Union[expressions.Trill, expressions.TrillExtension]]
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        expressions.Trill | expressions.TrillExtension | None
     ]
 ]:
-    output: t.List[
-        t.Tuple[
+    output: list[
+        tuple[
             str,
-            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-            t.Optional[t.Union[expressions.Trill, expressions.TrillExtension]]
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
+            expressions.Trill | expressions.TrillExtension | None
         ]
     ] = []
 
@@ -6206,7 +6204,7 @@ def trillFromElement(
     startId: str = elem.get('startid', '')
     tstamp: str = elem.get('tstamp', '')
     place: str = elem.get('place', 'place_unspecified')
-    offset: t.Optional[OffsetQL] = None
+    offset: OffsetQL | None = None
 
     if tstamp and elem.get('ignore_trill_in_trillFromElement') != 'true':
         accidUpper: str = elem.get('accidupper', '')
@@ -6236,7 +6234,7 @@ def trillFromElement(
         if not trillExtLocalId:
             environLocal.warn('no TrillExtension created in trill preprocessing')
             return [('', (-1., None, None), None)]
-        trillExt: t.Optional[spanner.Spanner] = (
+        trillExt: spanner.Spanner | None = (
             safeGetSpannerByIdLocal(trillExtLocalId, spannerBundle)
         )
         if trillExt is None:
@@ -6259,8 +6257,8 @@ def trillFromElement(
         if not endId:
             trillExt.mei_needs_end_anchor = True  # type: ignore
 
-        measSkip: t.Optional[int] = None
-        offset2: t.Optional[OffsetQL] = None
+        measSkip: int | None = None
+        offset2: OffsetQL | None = None
         if tstamp:
             offset = _tstampToOffset(tstamp, activeMeter)
         if tstamp2:
@@ -6269,7 +6267,7 @@ def trillFromElement(
         trillExtStaffNStr: str = staffNStr
         if not trillExtStaffNStr:
             # get it from start note in trillExt (should already be there)
-            startObj: t.Optional[Music21Object] = trillExt.getFirst()
+            startObj: Music21Object | None = trillExt.getFirst()
             if startObj is not None and hasattr(startObj, 'mei_staff'):
                 trillExtStaffNStr = startObj.mei_staff  # type: ignore
         if not trillExtStaffNStr:
@@ -6284,21 +6282,21 @@ def trillFromElement(
 
 def mordentFromElement(
         elem: Element,
-        activeMeter: t.Optional[meter.TimeSignature],
+        activeMeter: meter.TimeSignature | None,
         spannerBundle: spanner.SpannerBundle,
-        otherInfo: t.Dict[str, t.Any],
-) -> t.List[
-    t.Tuple[
+        otherInfo: dict[str, t.Any],
+) -> list[
+    tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-        t.Optional[expressions.GeneralMordent]
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        expressions.GeneralMordent | None
     ]
 ]:
-    output: t.List[
-        t.Tuple[
+    output: list[
+        tuple[
             str,
-            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-            t.Optional[expressions.GeneralMordent]
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
+            expressions.GeneralMordent | None
         ]
     ] = []
 
@@ -6308,7 +6306,7 @@ def mordentFromElement(
     tstamp: str = elem.get('tstamp', '')
     form: str = elem.get('form', '')
     place: str = elem.get('place', 'place_unspecified')
-    offset: t.Optional[OffsetQL] = None
+    offset: OffsetQL | None = None
 
     if elem.get('ignore_mordent_in_mordentFromElement') != 'true':
         # this happens if we need a mordent, but are missing @startid
@@ -6357,21 +6355,21 @@ def mordentFromElement(
 
 def turnFromElement(
         elem: Element,
-        activeMeter: t.Optional[meter.TimeSignature],
+        activeMeter: meter.TimeSignature | None,
         spannerBundle: spanner.SpannerBundle,
-        otherInfo: t.Dict[str, t.Any],
-) -> t.List[
-    t.Tuple[
+        otherInfo: dict[str, t.Any],
+) -> list[
+    tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-        t.Optional[expressions.Turn]
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        expressions.Turn | None
     ]
 ]:
-    output: t.List[
-        t.Tuple[
+    output: list[
+        tuple[
             str,
-            t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-            t.Optional[expressions.Turn]
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
+            expressions.Turn | None
         ]
     ] = []
 
@@ -6383,7 +6381,7 @@ def turnFromElement(
     theType: str = elem.get('type', '')
     delayed: str = elem.get('delayed', 'false')
     place: str = elem.get('place', 'place_unspecified')
-    offset: t.Optional[OffsetQL] = None
+    offset: OffsetQL | None = None
 
     if elem.get('ignore_turn_in_turnFromElement') != 'true':
         # this happens if we need a turn, but are missing @startid
@@ -6461,25 +6459,25 @@ def turnFromElement(
 
 def hairpinFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
         str,
-        t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-        t.Optional[dynamics.DynamicWedge]
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        dynamics.DynamicWedge | None
 ]:
     # If no @staff, presume it is staff 1
     staffNStr = elem.get('staff', '1')
-    offsets: t.Tuple[OffsetQL, int, OffsetQL]
+    offsets: tuple[OffsetQL, int, OffsetQL]
     dw: dynamics.DynamicWedge
 
     # @tstamp/@tstamp2 only for the moment.
-    tstamp: t.Optional[str] = elem.get('tstamp')
+    tstamp: str | None = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp in <hairpin> element')
         return '', (-1., None, None), None
-    tstamp2: t.Optional[str] = elem.get('tstamp2')
+    tstamp2: str | None = elem.get('tstamp2')
     if tstamp2 is None:
         environLocal.warn('missing @tstamp2 in <hairpin> element')
         return '', (-1., None, None), None
@@ -6495,7 +6493,7 @@ def hairpinFromElement(
         environLocal.warn(f'invalid @form = "{form}" in <hairpin>')
         return '', (-1., None, None), None
 
-    place: t.Optional[str] = elem.get('place')
+    place: str | None = elem.get('place')
     if place:
         if place == 'above':
             dw.placement = 'above'
@@ -6515,21 +6513,21 @@ def hairpinFromElement(
 
 def dynamFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
     str,
-    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-    t.Optional[dynamics.Dynamic]
+    tuple[OffsetQL | None, int | None, OffsetQL | None],
+    dynamics.Dynamic | None
 ]:
     staffNStr: str
-    offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
+    offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
     dynamObj: dynamics.Dynamic
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive dynamic info from that.
-    teWithStyle: t.Optional[expressions.TextExpression]
+    teWithStyle: expressions.TextExpression | None
     staffNStr, offsets, teWithStyle = (
         dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
@@ -6556,21 +6554,21 @@ def dynamFromElement(
 
 def tempoFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
     str,
-    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-    t.Optional[tempo.TempoIndication]
+    tuple[OffsetQL | None, int | None, OffsetQL | None],
+    tempo.TempoIndication | None
 ]:
     tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
 
     # first parse as a <dir> giving a TextExpression with style,
     # then try to derive tempo info from that.
     staffNStr: str
-    offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
-    teWithStyle: t.Optional[expressions.TextExpression]
+    offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
+    teWithStyle: expressions.TextExpression | None
     staffNStr, offsets, teWithStyle = (
         dirFromElement(elem, activeMeter, spannerBundle, otherInfo)
     )
@@ -6595,7 +6593,7 @@ def tempoFromElement(
     if not midiBPMStr:
         # only use the pending one if it's useful.  We pop it out of otherInfo either way.
         midiBPMStr = pendingMidiBPMStr
-    midiBPM: t.Optional[int] = None
+    midiBPM: int | None = None
     if midiBPMStr:
         try:
             midiBPM = int(float(midiBPMStr))
@@ -6640,8 +6638,8 @@ def _glyphNumToUnicodeChar(num: str) -> str:
     return chr(int(m.group(2), 16))
 
 
-def textFromElem(elem: Element) -> t.Tuple[str, t.Dict[str, str]]:
-    styleDict: t.Dict[str, str] = {}
+def textFromElem(elem: Element) -> tuple[str, dict[str, str]]:
+    styleDict: dict[str, str] = {}
     text: str = ''
     if elem.text:
         if elem.text[0] != '\n' or not elem.text.isspace():
@@ -6666,7 +6664,7 @@ def textFromElem(elem: Element) -> t.Tuple[str, t.Dict[str, str]]:
                 styleDict['justify'] = justify
 
         elif el.tag in _CHOOSING_EDITORIALS:
-            subEl: t.Optional[Element] = chooseSubElement(el)
+            subEl: Element | None = chooseSubElement(el)
             if subEl is None:
                 continue
             el = subEl
@@ -6697,7 +6695,7 @@ def textFromElem(elem: Element) -> t.Tuple[str, t.Dict[str, str]]:
 
         # grab the text from el
         elText: str
-        elStyleDict: t.Dict[str, str]
+        elStyleDict: dict[str, str]
         elText, elStyleDict = textFromElem(el)
         text += elText
         styleDict.update(elStyleDict)
@@ -6711,13 +6709,13 @@ def textFromElem(elem: Element) -> t.Tuple[str, t.Dict[str, str]]:
 
 def dirFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
     str,
-    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-    t.Optional[expressions.TextExpression]
+    tuple[OffsetQL | None, int | None, OffsetQL | None],
+    expressions.TextExpression | None
 ]:
     # returns (staffNStr, (offset, None, None), te)
 
@@ -6726,12 +6724,12 @@ def dirFromElement(
     offset: OffsetQL
     te: expressions.TextExpression
 
-    typeAtt: t.Optional[str] = elem.get('type')
+    typeAtt: str | None = elem.get('type')
     if typeAtt is not None and typeAtt == 'fingering':
         return '', (-1., None, None), None
 
     # @tstamp is required for now, someday we'll be able to derive offsets from @startid
-    tstamp: t.Optional[str] = elem.get('tstamp')
+    tstamp: str | None = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('missing @tstamp in <dir> element')
         return '', (-1., None, None), None
@@ -6739,14 +6737,14 @@ def dirFromElement(
     offset = _tstampToOffset(tstamp, activeMeter)
 
     # technically not always legal, but I've seen it in <dynam>, so support it here for everyone.
-    enclose: t.Optional[str] = elem.get('enclose')
+    enclose: str | None = elem.get('enclose')
 
-    fontStyle: t.Optional[str] = None
-    fontWeight: t.Optional[str] = None
-    fontFamily: t.Optional[str] = None
-    justify: t.Optional[str] = None
+    fontStyle: str | None = None
+    fontWeight: str | None = None
+    fontFamily: str | None = None
+    justify: str | None = None
     text: str
-    styleDict: t.Dict[str, str]
+    styleDict: dict[str, str]
 
     text, styleDict = textFromElem(elem)
     text = html.unescape(text)
@@ -6781,7 +6779,7 @@ def dirFromElement(
     if justify is not None:
         te.style.justify = justify
 
-    place: t.Optional[str] = elem.get('place')
+    place: str | None = elem.get('place')
     if place:
         if place == 'above':
             te.placement = 'above'
@@ -6797,13 +6795,13 @@ def dirFromElement(
 
 def fermataFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-) -> t.Tuple[
+    otherInfo: dict[str, t.Any],
+) -> tuple[
     str,
-    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
-    t.Optional[expressions.Fermata]
+    tuple[OffsetQL | None, int | None, OffsetQL | None],
+    expressions.Fermata | None
 ]:
     # returns (staffNStr, (offset, None, None), fermata)
 
@@ -6818,7 +6816,7 @@ def fermataFromElement(
 
     # tstamp is required, since it doesn't have a @startid (if it had a @startid, we
     # would have processed it in _ppFermatas, and ignored it here).
-    tstamp: t.Optional[str] = elem.get('tstamp')
+    tstamp: str | None = elem.get('tstamp')
     if tstamp is None:
         environLocal.warn('<fermata> element is missing @tstamp and @startid')
         return '', (-1., None, None), None
@@ -6849,9 +6847,9 @@ def fermataFromElement(
 
 
 def _m21FontStyleFromMeiFontStyleAndWeight(
-    meiFontStyle: t.Optional[str],
-    meiFontWeight: t.Optional[str]
-) -> t.Optional[str]:
+    meiFontStyle: str | None,
+    meiFontWeight: str | None
+) -> str | None:
     if meiFontStyle is None:
         meiFontStyle = 'normal'
     if meiFontWeight is None:
@@ -6884,12 +6882,12 @@ def _m21FontStyleFromMeiFontStyleAndWeight(
 
 def measureFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
+    otherInfo: dict[str, t.Any],
     backupNum: int,
     expectedNs: t.Iterable[str]
-) -> t.Dict[str, t.Union[stream.Measure, bar.Repeat]]:
+) -> dict[str, stream.Measure | bar.Repeat]:
     '''
     <measure> Unit of musical time consisting of a fixed number of note-values of a given type, as
     determined by the prevailing meter, and delimited in musical notation by two bar lines.
@@ -6959,37 +6957,31 @@ def measureFromElement(
     - MEI.usersymbols: anchoredText curve line symbol
     '''
     # staves is mostly Measures, but can contain a single Repeat, as well
-    staves: t.Dict[str, t.Union[stream.Measure, bar.Repeat]] = {}
+    staves: dict[str, stream.Measure | bar.Repeat] = {}
 
     # for staff-specific objects processed before the corresponding staff
     # key1 is @n, key2 is 'meter', 'key', 'instrument', etc
-    stavesWaitingFromStaffDef: t.Dict[str, t.Dict[str, Music21Object]] = {}
+    stavesWaitingFromStaffDef: dict[str, dict[str, Music21Object]] = {}
 
     # for staffItem objects processed before the corresponding staff
     # key is @staff, value is a list of tuple(offsets, object)
-    stavesWaitingFromStaffItem: t.Dict[
+    stavesWaitingFromStaffItem: dict[
         str,
-        t.List[
-            t.Tuple[
-                t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],  # offsets
+        list[
+            tuple[
+                tuple[OffsetQL | None, int | None, OffsetQL | None],  # offsets
                 Music21Object
             ]
         ]
     ] = {}
 
     # spanner end GeneralNotes we are waiting to insert in the correct measure
-    pendingSpannerEnds: t.Optional[
-        t.List[
-            t.Tuple[str, spanner.Spanner, int, OffsetQL]
-        ]
-    ] = otherInfo.pop('pendingSpannerEnds', None)
+    pendingSpannerEnds: list[tuple[str, spanner.Spanner, int, OffsetQL]] | None = (
+        otherInfo.pop('pendingSpannerEnds', None)
+    )
 
     # spanner end GeneralNotes we are STILL waiting to insert after processing this measure
-    newPendingSpannerEnds: t.Optional[
-        t.List[
-            t.Tuple[str, spanner.Spanner, int, OffsetQL]
-        ]
-    ] = None
+    newPendingSpannerEnds: list[tuple[str, spanner.Spanner, int, OffsetQL]] | None = None
 
     spannerObj: spanner.Spanner
     startObj: Music21Object
@@ -7039,14 +7031,14 @@ def measureFromElement(
     staffTag: str = f'{MEI_NS}staff'
     staffDefTag: str = f'{MEI_NS}staffDef'
 
-    measureNum: t.Union[str, int] = elem.get('n', backupNum)
+    measureNum: str | int = elem.get('n', backupNum)
 
     # track the bar's duration
-    maxBarDuration: t.Optional[OffsetQL] = None
+    maxBarDuration: OffsetQL | None = None
 
     # iterate all immediate children
     for eachElem in elem.iterfind('*'):
-        nStr: t.Optional[str] = eachElem.get('n')
+        nStr: str | None = eachElem.get('n')
         if staffTag == eachElem.tag:
             if nStr is None:
                 raise MeiElementError(_STAFF_MUST_HAVE_N)
@@ -7083,11 +7075,11 @@ def measureFromElement(
                 otherInfo.pop('staffNumberForDef')
 
         elif eachElem.tag in staffItemsTagToFunction:
-            offsets: t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]]
-            m21Obj: t.Optional[Music21Object]
-            triple: t.Tuple[
+            offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
+            m21Obj: Music21Object | None
+            triple: tuple[
                 str,
-                t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+                tuple[OffsetQL | None, int | None, OffsetQL | None],
                 Music21Object
             ]
             triple = staffItemsTagToFunction[eachElem.tag](
@@ -7096,10 +7088,10 @@ def measureFromElement(
 
             # Sometimes staffItemsTagToFunction actually returns a _list_ of
             # (staffNStr, offsets, m21Obj) triples instead of just one such triple.
-            triples: t.List[
-                t.Tuple[
+            triples: list[
+                tuple[
                     str,
-                    t.Tuple[t.Optional[OffsetQL], t.Optional[int], t.Optional[OffsetQL]],
+                    tuple[OffsetQL | None, int | None, OffsetQL | None],
                     Music21Object
                 ]
             ]
@@ -7112,9 +7104,9 @@ def measureFromElement(
                 if m21Obj is not None:
                     if staffNStr not in stavesWaitingFromStaffItem:
                         stavesWaitingFromStaffItem[staffNStr] = []
-                    offset1: t.Optional[OffsetQL] = offsets[0]
-                    measSkip2: t.Optional[int] = offsets[1]
-                    offset2: t.Optional[OffsetQL] = offsets[2]
+                    offset1: OffsetQL | None = offsets[0]
+                    measSkip2: int | None = offsets[1]
+                    offset2: OffsetQL | None = offsets[2]
 
                     if isinstance(m21Obj, spanner.Spanner):
                         spannerObj = m21Obj
@@ -7183,13 +7175,13 @@ def measureFromElement(
     # a list of (offset, expression) pairs containing all the expressions (e.g.
     # fermatas, arpeggios) that have @timestamp instead of @startid/@plist (the
     # ones with @startid/@plist have already been processed).
-    tsExpressions: t.List[t.Tuple[t.List[str], OffsetQL, expressions.Expression]] = []
+    tsExpressions: list[tuple[list[str], OffsetQL, expressions.Expression]] = []
 
     # Process objects from staffItems (e.g. Direction, Fermata, etc)
     for whichStaff, eachList in stavesWaitingFromStaffItem.items():
         for (eachOffset, eachMeasSkip2, eachOffset2), eachObj in eachList:
             # parse whichStaff, which might be '1', '2', '1 2', etc
-            staffNs: t.List[str] = re.findall(r'[\d]+', whichStaff)
+            staffNs: list[str] = re.findall(r'[\d]+', whichStaff)
             if not staffNs:
                 raise MeiAttributeError(
                     _STAFFITEM_MUST_HAVE_VALID_STAFF.format(eachObj.classes[0], whichStaff)
@@ -7210,7 +7202,7 @@ def measureFromElement(
                 # into two objects with a simple offset and put the two of them in a spanner.
                 raise MeiInternalError('StaffItem spanner seen unexpectedly')
 
-            spanners: t.List[spanner.Spanner] = eachObj.getSpannerSites()
+            spanners: list[spanner.Spanner] = eachObj.getSpannerSites()
             isSpannedObject: bool = bool(spanners)
             betweenTwoStaves: bool = False
             if len(staffNs) == 2:
@@ -7297,16 +7289,16 @@ def measureFromElement(
 
 def sectionScoreCore(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-    allPartNs: t.Tuple[str, ...],
-    nextMeasureLeft: t.Optional[bar.Repeat] = None,
+    otherInfo: dict[str, t.Any],
+    allPartNs: tuple[str, ...],
+    nextMeasureLeft: bar.Repeat | None = None,
     backupMeasureNum: int = 0,
-) -> t.Tuple[
-        t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]],
-        t.Optional[meter.TimeSignature],
-        t.Optional[bar.Repeat],
+) -> tuple[
+        dict[str, list[Music21Object | list[Music21Object]]],
+        meter.TimeSignature | None,
+        bar.Repeat | None,
         int]:
     '''
     This function is the "core" of both :func:`sectionFromElement` and :func:`scoreFromElement`,
@@ -7387,11 +7379,11 @@ def sectionScoreCore(
     sbTag: str = f'{MEI_NS}sb'
 
     # hold the music21.stream.Part that we're building
-    parsed: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
+    parsed: dict[str, list[Music21Object | list[Music21Object]]] = {
         n: [] for n in allPartNs
     }
     # hold things that belong in the following "Thing" (either Measure or Section)
-    inNextThing: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = {
+    inNextThing: dict[str, list[Music21Object | list[Music21Object]]] = {
         n: [] for n in allPartNs
     }
     pendingInNextThing = otherInfo.pop('pending inNextThing', None)
@@ -7421,7 +7413,7 @@ def sectionScoreCore(
             # Make a new measureInfo to pass in for each measure.
             # It will contain the current otherInfo contents, but
             # any measure-specific info will be cleared here.
-            measureInfo: t.Dict[str, t.Any] = {}
+            measureInfo: dict[str, t.Any] = {}
             measureInfo.update(otherInfo)
 
             # process all the stuff in the <measure>
@@ -7481,7 +7473,7 @@ def sectionScoreCore(
                     # because 'all-part objects' is a list of objects
                     assert isinstance(allPartObject, Music21Object)
 
-                newKey: t.Optional[t.Union[key.Key, key.KeySignature]] = None
+                newKey: key.Key | key.KeySignature | None = None
                 if isinstance(allPartObject, key.KeySignature):
                     newKey = allPartObject
 
@@ -7511,7 +7503,7 @@ def sectionScoreCore(
                         inNextThing[eachN].append(eachObj)
 
         elif staffDefTag == eachElem.tag:
-            nStr: t.Optional[str] = eachElem.get('n')
+            nStr: str | None = eachElem.get('n')
             if nStr is not None:
                 otherInfo['staffNumberForDef'] = nStr
                 for eachObj in staffDefFromElement(
@@ -7576,10 +7568,10 @@ def sectionScoreCore(
                 # NOTE that this is different for <section> and <score>.
                 if elem.tag in (sectionTag, endingTag):
                     # First make a RepeatBracket if this is an <ending>.
-                    rb: t.Optional[spanner.RepeatBracket] = None
+                    rb: spanner.RepeatBracket | None = None
                     if endingTag == eachElem.tag:
                         # make the RepeatBracket for the ending
-                        bracketNStr: t.Optional[str] = eachElem.get('n')
+                        bracketNStr: str | None = eachElem.get('n')
                         n: int = 0
                         if bracketNStr is not None:
                             try:
@@ -7612,7 +7604,7 @@ def sectionScoreCore(
 
         elif eachElem.tag == pbTag:
             if haveSeenMeasure:
-                pageBreak: t.Optional[m21.layout.PageLayout] = pageBreakFromElement(
+                pageBreak: m21.layout.PageLayout | None = pageBreakFromElement(
                     eachElem,
                     activeMeter,
                     spannerBundle,
@@ -7623,7 +7615,7 @@ def sectionScoreCore(
 
         elif eachElem.tag == sbTag:
             if haveSeenMeasure:
-                systemBreak: t.Optional[m21.layout.SystemLayout] = systemBreakFromElement(
+                systemBreak: m21.layout.SystemLayout | None = systemBreakFromElement(
                     eachElem,
                     activeMeter,
                     spannerBundle,
@@ -7660,7 +7652,7 @@ def _isExpansionChoice(elem: Element) -> bool:
     for choice in elem.iterfind('*'):
         if choice.tag not in (f'{MEI_NS}orig', f'{MEI_NS}reg'):
             return False
-        items: t.List[Element] = list(choice.iterfind('*'))
+        items: list[Element] = list(choice.iterfind('*'))
         if len(items) != 1:
             return False
         if items[0].tag != f'{MEI_NS}expansion':
@@ -7671,16 +7663,16 @@ def _isExpansionChoice(elem: Element) -> bool:
 
 def sectionFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any],
-    allPartNs: t.Tuple[str, ...],
-    nextMeasureLeft: t.Optional[bar.Repeat],
+    otherInfo: dict[str, t.Any],
+    allPartNs: tuple[str, ...],
+    nextMeasureLeft: bar.Repeat | None,
     backupMeasureNum: int
-) -> t.Tuple[
-        t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]],
-        t.Optional[meter.TimeSignature],
-        t.Optional[bar.Repeat],
+) -> tuple[
+        dict[str, list[Music21Object | list[Music21Object]]],
+        meter.TimeSignature | None,
+        bar.Repeat | None,
         int]:
     '''
     <section> Segment of music data.
@@ -7732,9 +7724,9 @@ def sectionFromElement(
 
 def scoreFromElement(
     elem: Element,
-    activeMeter: t.Optional[meter.TimeSignature],
+    activeMeter: meter.TimeSignature | None,
     spannerBundle: spanner.SpannerBundle,
-    otherInfo: t.Dict[str, t.Any]
+    otherInfo: dict[str, t.Any]
 ) -> stream.Score:
     '''
     <score> Full score view of the musical content.
@@ -7780,13 +7772,13 @@ def scoreFromElement(
 
     # Get a tuple of all the @n attributes for the <staff> tags in this score. Each <staff> tag
     # corresponds to what will be a music21 Part.
-    allPartNs: t.Tuple[str, ...]
+    allPartNs: tuple[str, ...]
     topPartN: str
     allPartNs, topPartN = allPartsPresent(elem)
     otherInfo['topPartN'] = topPartN
 
     # This is the actual processing.
-    parsed: t.Dict[str, t.List[t.Union[Music21Object, t.List[Music21Object]]]] = (
+    parsed: dict[str, list[Music21Object | list[Music21Object]]] = (
         sectionScoreCore(
             elem,
             activeMeter,
@@ -7798,7 +7790,7 @@ def scoreFromElement(
     # We must iterate here over "allPartNs," which preserves the part-order found in the MEI
     # document. Iterating the keys in "parsed" would not preserve the order.
     environLocal.printDebug('*** making the Score')
-    thePartList: t.List[stream.Part] = [stream.Part() for _ in range(len(allPartNs))]
+    thePartList: list[stream.Part] = [stream.Part() for _ in range(len(allPartNs))]
     for i, eachN in enumerate(allPartNs):
         # set "atSoundingPitch" so transposition works
         thePartList[i].atSoundingPitch = False
@@ -7815,13 +7807,13 @@ def scoreFromElement(
             staffNStr = sp.mei_staff  # type: ignore
         if not staffNStr:
             # get it from start note in ottava (should already be there)
-            startObj: t.Optional[Music21Object] = sp.getFirst()
+            startObj: Music21Object | None = sp.getFirst()
             if startObj is not None and hasattr(startObj, 'mei_staff'):
                 staffNStr = startObj.mei_staff  # type: ignore
         if not staffNStr:
             staffNStr = '1'  # best we can do, hope it's ok
 
-        staffNs: t.List[str] = staffNStr.split(' ')
+        staffNs: list[str] = staffNStr.split(' ')
         for i, staffN in enumerate(staffNs):
             if i > 0:
                 environLocal.warn(
@@ -7841,11 +7833,11 @@ def scoreFromElement(
     return theScore
 
 
-layerChildrenTagToFunction: t.Dict[str, t.Callable[
+layerChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceLayerChildrenFromElement,
@@ -7876,11 +7868,11 @@ layerChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}keySig': keySigFromElementInLayer,
 }
 
-staffItemsTagToFunction: t.Dict[str, t.Callable[
+staffItemsTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceStaffItemsFromElement,
@@ -7920,11 +7912,11 @@ staffItemsTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}turn': turnFromElement,
 }
 
-noteChildrenTagToFunction: t.Dict[str, t.Callable[
+noteChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceNoteChildrenFromElement,
@@ -7946,11 +7938,11 @@ noteChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}syl': sylFromElement
 }
 
-chordChildrenTagToFunction: t.Dict[str, t.Callable[
+chordChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceChordChildrenFromElement,
@@ -7971,11 +7963,11 @@ chordChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}syl': sylFromElement,
 }
 
-beamChildrenTagToFunction: t.Dict[str, t.Callable[
+beamChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceBeamChildrenFromElement,
@@ -8002,11 +7994,11 @@ beamChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}barLine': barLineFromElement,
 }
 
-tupletChildrenTagToFunction: t.Dict[str, t.Callable[
+tupletChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceTupletChildrenFromElement,
@@ -8033,11 +8025,11 @@ tupletChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}barLine': barLineFromElement,
 }
 
-bTremChildrenTagToFunction: t.Dict[str, t.Callable[
+bTremChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceBTremChildrenFromElement,
@@ -8056,11 +8048,11 @@ bTremChildrenTagToFunction: t.Dict[str, t.Callable[
     f'{MEI_NS}chord': chordFromElement,
 }
 
-fTremChildrenTagToFunction: t.Dict[str, t.Callable[
+fTremChildrenTagToFunction: dict[str, t.Callable[
     [Element,
-        t.Optional[meter.TimeSignature],
+        meter.TimeSignature | None,
         spanner.SpannerBundle,
-        t.Dict[str, str]],
+        dict[str, str]],
     t.Any]
 ] = {
     f'{MEI_NS}app': appChoiceFTremChildrenFromElement,

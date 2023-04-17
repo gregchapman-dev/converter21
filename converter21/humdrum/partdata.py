@@ -8,7 +8,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -30,7 +30,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 class PartData:
     def __init__(
             self,
-            partStaves: t.List[m21.stream.Part],    # or PartStaff (derived from Part)
+            partStaves: list[m21.stream.Part],    # or PartStaff (derived from Part)
             ownerScore,                             # ScoreData
             partIndex: int
     ) -> None:
@@ -42,7 +42,7 @@ class PartData:
 
         # partStaves will be a list of one Part, or a list of multiple PartStaffs,
         # but we don't really care. We make a StaffData out of each one.
-        self.staves: t.List[StaffData] = []
+        self.staves: list[StaffData] = []
         for s, partStaff in enumerate(partStaves):
             staffData: StaffData = StaffData(partStaff, self, s)
             self.staves.append(staffData)
@@ -72,7 +72,7 @@ class PartData:
 
     @staticmethod
     def _findPartName(
-            partStaves: t.List[m21.stream.Part]  # or PartStaff (derived from Part)
+            partStaves: list[m21.stream.Part]  # or PartStaff (derived from Part)
     ) -> str:
         if len(partStaves) == 0:
             return ''
@@ -80,7 +80,7 @@ class PartData:
         if len(partStaves) == 1:
             return partStaves[0].partName
 
-        possibleNames: t.List[str] = [partStaff.partName for partStaff in partStaves]
+        possibleNames: list[str] = [partStaff.partName for partStaff in partStaves]
         for possibleName in possibleNames:
             if possibleName:  # skip any '' or None partNames
                 return possibleName  # return the first real name you see
@@ -89,7 +89,7 @@ class PartData:
 
     @staticmethod
     def _findPartAbbrev(
-            partStaves: t.List[m21.stream.Part]  # or PartStaff (derived from Part)
+            partStaves: list[m21.stream.Part]  # or PartStaff (derived from Part)
     ) -> str:
         if len(partStaves) == 0:
             return ''
@@ -97,7 +97,7 @@ class PartData:
         if len(partStaves) == 1:
             return partStaves[0].partAbbreviation
 
-        possibleAbbrevs: t.List[str] = [partStaff.partAbbreviation for partStaff in partStaves]
+        possibleAbbrevs: list[str] = [partStaff.partAbbreviation for partStaff in partStaves]
         for possibleAbbrev in possibleAbbrevs:
             if possibleAbbrev:  # skip any '' or None partAbbrevs
                 return possibleAbbrev  # return the first real abbrev you see

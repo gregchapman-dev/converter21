@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
-from typing import List, Tuple
+import typing as t
 import music21 as m21
 from music21.base import VERSION_STR
 
@@ -18,7 +18,11 @@ def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Obj
     obj = score.recurse().getElementById(theID)
     return obj
 
-def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2: m21.stream.Score) -> str:
+def oplistSummary(
+    op_list: list[tuple[str, t.Any, t.Any]],
+    _score1: m21.stream.Score,
+    _score2: m21.stream.Score
+) -> str:
     output: str = ''
     counts: dict = {}
 

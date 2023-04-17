@@ -9,7 +9,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -44,16 +44,16 @@ class ScoreData:
         self.m21Score: m21.stream.Score = score
         self.spannerBundle: m21.spanner.SpannerBundle = ownerWriter.spannerBundle
 
-        self.parts: t.List[PartData] = []
+        self.parts: list[PartData] = []
 
         # key is id(m21Object): a large integer that is actually the mem address of m21Object
-        self.eventFromM21Object: t.Dict[int, EventData] = {}
+        self.eventFromM21Object: dict[int, EventData] = {}
 
         # Following staff group code stolen from musicxml exporter in music21.
         # Keep it up-to-date!
 
         staffGroups = self.m21Score.getElementsByClass('StaffGroup')
-        joinableGroups: t.List[m21.layout.StaffGroup] = []
+        joinableGroups: list[m21.layout.StaffGroup] = []
 
         # Joinable groups must consist of only PartStaffs with Measures
         # that exist in self.m21Score
@@ -70,7 +70,7 @@ class ScoreData:
 
         # Deduplicate joinable groups (ex: bracket and brace enclose same PartStaffs)
         permutations = set()
-        deduplicatedGroups: t.List[m21.layout.StaffGroup] = []
+        deduplicatedGroups: list[m21.layout.StaffGroup] = []
         for jg in joinableGroups:
             containedParts = tuple(jg)
             if containedParts not in permutations:
@@ -83,8 +83,8 @@ class ScoreData:
         if len(set(joinable_components_list)) != len(joinable_components_list):
             joinableGroups = []
 
-        partsWithMoreThanOneStaff: t.List[t.List[m21.stream.Part]] = []
-        groupedParts: t.List[m21.stream.PartStaff] = []
+        partsWithMoreThanOneStaff: list[list[m21.stream.Part]] = []
+        groupedParts: list[m21.stream.PartStaff] = []
         for jg in joinableGroups:
             partsWithMoreThanOneStaff.append([])
             for partStaff in jg:
@@ -116,8 +116,8 @@ class ScoreData:
     def partCount(self) -> int:
         return len(self.parts)
 
-    def getStaffCounts(self) -> t.List[int]:
-        output: t.List[int] = []
+    def getStaffCounts(self) -> list[int]:
+        output: list[int] = []
         for part in self.parts:
             output.append(part.staffCount)
         return output

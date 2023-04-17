@@ -7,7 +7,7 @@
 #                https://github.com/cuthbertLab/music21
 #                (music21 is Copyright 2006-2022 Michael Scott Asato Cuthbert)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 '''

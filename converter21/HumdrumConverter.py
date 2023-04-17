@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import typing as t
@@ -29,7 +29,7 @@ class HumdrumConverter(converter.subConverters.SubConverter):
 
     def __init__(self, **keywords) -> None:
         super().__init__(**keywords)
-        self.humdrumFile: t.Optional[HumdrumFile] = None
+        self.humdrumFile: HumdrumFile | None = None
 
     # --------------------------------------------------------------------------
 
@@ -67,8 +67,8 @@ class HumdrumConverter(converter.subConverters.SubConverter):
 
     # pylint: disable=arguments-differ
     def parseFile(self,
-            filePath: t.Union[str, Path],
-            number: t.Optional[int] = None,
+            filePath: str | Path,
+            number: int | None = None,
             **_keywords) -> stream.Score:
         '''
         Create HumdrumFile object from a file path, and create a music21 Stream from it.

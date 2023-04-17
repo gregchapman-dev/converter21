@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -78,7 +78,7 @@ class M21Utilities:
 
     @staticmethod
     def createNote(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.note.Note:
         note = m21.note.Note()
 
@@ -96,7 +96,7 @@ class M21Utilities:
 
     @staticmethod
     def createUnpitched(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.note.Unpitched:
         unpitched = m21.note.Unpitched()
 
@@ -114,7 +114,7 @@ class M21Utilities:
 
     @staticmethod
     def createChord(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.chord.Chord:
         chord = m21.chord.Chord()
 
@@ -132,7 +132,7 @@ class M21Utilities:
 
     @staticmethod
     def createRest(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.note.Rest:
         rest = m21.note.Rest()
 
@@ -151,8 +151,8 @@ class M21Utilities:
     @staticmethod
     def getTextExpressionsFromGeneralNote(
             gnote: m21.note.GeneralNote
-    ) -> t.List[m21.expressions.TextExpression]:
-        output: t.List[m21.expressions.TextExpression] = []
+    ) -> list[m21.expressions.TextExpression]:
+        output: list[m21.expressions.TextExpression] = []
         for exp in gnote.expressions:
             if isinstance(exp, m21.expressions.TextExpression):
                 output.append(exp)
@@ -166,11 +166,11 @@ class M21Utilities:
     def getAllExpressionsFromGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]]:
-        expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = []
+    ) -> list[m21.expressions.Expression | m21.spanner.Spanner]:
+        expressions: list[m21.expressions.Expression | m21.spanner.Spanner] = []
 
         # start with the expression spanners (TrillExtension and TremoloSpanner)
-        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites()
+        spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites()
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -192,9 +192,9 @@ class M21Utilities:
     def getDynamicWedgesStartedOrStoppedWithGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.List[m21.dynamics.DynamicWedge]:
-        output: t.List[m21.dynamics.DynamicWedge] = []
-        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+    ) -> list[m21.dynamics.DynamicWedge]:
+        output: list[m21.dynamics.DynamicWedge] = []
+        spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -209,9 +209,9 @@ class M21Utilities:
     def getDynamicWedgesStartedWithGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.List[m21.dynamics.DynamicWedge]:
-        output: t.List[m21.dynamics.DynamicWedge] = []
-        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+    ) -> list[m21.dynamics.DynamicWedge]:
+        output: list[m21.dynamics.DynamicWedge] = []
+        spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -229,7 +229,7 @@ class M21Utilities:
 
     @staticmethod
     def isTransposingInstrument(inst: m21.instrument.Instrument) -> bool:
-        trans: t.Optional[m21.interval.Interval] = inst.transposition
+        trans: m21.interval.Interval | None = inst.transposition
         if trans is None:
             return False  # not a transposing instrument
 
@@ -248,7 +248,7 @@ class M21Utilities:
             if rest.duration.type != 'complex':
                 continue
             insertPoint = rest.offset
-            restList: t.Tuple[m21.note.Rest, ...] = M21Utilities.splitComplexRestDuration(rest)
+            restList: tuple[m21.note.Rest, ...] = M21Utilities.splitComplexRestDuration(rest)
             s.replace(rest, restList[0])
             insertPoint += restList[0].quarterLength
             for subsequent in restList[1:]:
@@ -263,19 +263,19 @@ class M21Utilities:
                     sp.replaceSpannedElement(rest, restList[-1])
 
     @staticmethod
-    def splitComplexRestDuration(rest: m21.note.Rest) -> t.Tuple[m21.note.Rest, ...]:
+    def splitComplexRestDuration(rest: m21.note.Rest) -> tuple[m21.note.Rest, ...]:
         atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
-        quarterLengthList: t.List[OffsetQLIn] = [
+        quarterLengthList: list[OffsetQLIn] = [
             float(c.quarterLength * atm) for c in rest.duration.components
         ]
-        splits: t.Tuple[m21.note.Rest, ...] = (
+        splits: tuple[m21.note.Rest, ...] = (
             rest.splitByQuarterLengths(quarterLengthList, addTies=False)  # type: ignore
         )
 
         return splits
 
     @staticmethod
-    def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
+    def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> tuple[str, str, str]:
         patt: str = r'([ABCDEFG])([-#]*)([\d]+)'
         m = re.match(patt, m21PitchName)
         if m:
@@ -285,7 +285,7 @@ class M21Utilities:
             return m.group(1), g2, m.group(3)
         return m21PitchName, 'n', ''
 
-    _STEP_TO_PITCH_CLASS: t.Dict[str, int] = {
+    _STEP_TO_PITCH_CLASS: dict[str, int] = {
         'C': 0,
         'D': 1,
         'E': 2,
@@ -303,17 +303,17 @@ class M21Utilities:
 
     @staticmethod
     def getAltersForKey(
-        m21Key: t.Optional[t.Union[m21.key.Key, m21.key.KeySignature]]
-    ) -> t.List[int]:
+        m21Key: m21.key.Key | m21.key.KeySignature | None]
+    ) -> list[int]:
         # returns a list of pitch alterations (number of semitones up or down),
         # indexed by pitch (base7), where index 0 is C0, and index 69 is B9.
-        alters: t.List[int] = [0] * 70
+        alters: list[int] = [0] * 70
         if m21Key is None:
             return alters
 
         STEPNAMES: tuple[StepName, ...] = ('C', 'D', 'E', 'F', 'G', 'A', 'B')
         for pitchClass, pitchName in enumerate(STEPNAMES):
-            accid: t.Optional[m21.pitch.Accidental] = m21Key.accidentalByStep(pitchName)
+            accid: m21.pitch.Accidental | None = m21Key.accidentalByStep(pitchName)
             if accid is None:
                 continue
             alter: int = int(accid.alter)
@@ -397,7 +397,7 @@ class M21Utilities:
         ottava.filledStatus = True  # type: ignore
 
     @staticmethod
-    def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:
+    def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
         # m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
         if len(m21.VERSION) == 0:
             raise HumdrumInternalError('music21 version must be set!')
@@ -449,7 +449,7 @@ class M21Utilities:
 
         return True  # four elements equal, that's all we care about
 
-    _cachedM21SupportsDublinCoreMetadata: t.Optional[bool] = None
+    _cachedM21SupportsDublinCoreMetadata: bool | None = None
     @staticmethod
     def m21SupportsDublinCoreMetadata() -> bool:
         if M21Utilities._cachedM21SupportsDublinCoreMetadata is not None:
@@ -462,7 +462,7 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsDublinCoreMetadata = False
         return False
 
-    _cachedM21SupportsArpeggioMarks: t.Optional[bool] = None
+    _cachedM21SupportsArpeggioMarks: bool | None = None
     @staticmethod
     def m21SupportsArpeggioMarks() -> bool:
         if M21Utilities._cachedM21SupportsArpeggioMarks is not None:
@@ -475,7 +475,7 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsArpeggioMarks = False
         return False
 
-    _cachedM21SupportsSpannerAnchor: t.Optional[bool] = None
+    _cachedM21SupportsSpannerAnchor: bool | None = None
     @staticmethod
     def m21SupportsSpannerAnchor() -> bool:
         if M21Utilities._cachedM21SupportsSpannerAnchor is not None:
@@ -488,7 +488,7 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsSpannerAnchor = False
         return False
 
-    _cachedM21SupportsSpannerFill: t.Optional[bool] = None
+    _cachedM21SupportsSpannerFill: bool | None = None
     @staticmethod
     def m21SupportsSpannerFill() -> bool:
         if M21Utilities._cachedM21SupportsSpannerFill is not None:
@@ -501,7 +501,7 @@ class M21Utilities:
         M21Utilities._cachedM21SupportsSpannerFill = False
         return False
 
-    _cachedM21SupportsDelayedTurns: t.Optional[bool] = None
+    _cachedM21SupportsDelayedTurns: bool | None = None
     @staticmethod
     def m21SupportsDelayedTurns() -> bool:
         if M21Utilities._cachedM21SupportsDelayedTurns is not None:
@@ -519,18 +519,18 @@ class M21StaffGroupTree:
     def __init__(
             self,
             sg: m21.layout.StaffGroup,
-            staffNumbersByM21Part: t.Dict[m21.stream.Part, int]
+            staffNumbersByM21Part: dict[m21.stream.Part, int]
     ) -> None:
         # about this staff group
         self.staffGroup: m21.layout.StaffGroup = sg
-        self.staffNums: t.Set[int] = set(staffNumbersByM21Part[m21Part]
+        self.staffNums: set[int] = set(staffNumbersByM21Part[m21Part]
                                             for m21Part in
                                                 sg.spannerStorage.elements)
         self.numStaves: int = len(self.staffNums)
         self.lowestStaffNumber: int = min(self.staffNums)
 
         # tree links
-        self.children: t.List[M21StaffGroupTree] = []
+        self.children: list[M21StaffGroupTree] = []
 
 class M21StaffGroupDescriptionTree:
     def __init__(self) -> None:
@@ -540,12 +540,12 @@ class M21StaffGroupDescriptionTree:
         self.barTogether: bool = False  # see m21.layout.StaffGroup.barTogether
         # staves referenced by this group (includes staves in subgroups).
         # staffIndices is in staff order.
-        self.staffIndices: t.List[int] = []
+        self.staffIndices: list[int] = []
         # staves actually in this group (i.e. not in a subgroup).
         # ownedStaffIndices is in staff order.
-        self.ownedStaffIndices: t.List[int] = []
+        self.ownedStaffIndices: list[int] = []
 
         # tree links:
         # children == subgroups, parent = enclosing group (None for top)
-        self.children: t.List[M21StaffGroupDescriptionTree] = []
-        self.parent: t.Optional[M21StaffGroupDescriptionTree] = None
+        self.children: list[M21StaffGroupDescriptionTree] = []
+        self.parent: M21StaffGroupDescriptionTree | None = None

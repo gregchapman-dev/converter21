@@ -9,7 +9,7 @@
 # License:      BSD, see license.txt
 #
 # Note:         This was copied verbatim from music21/converter/subConverters.py, and then modified
-#               to live in converter21.  My hope is to eventually re-submit this as a PR to music21.
+#               to live in converter21.
 # ------------------------------------------------------------------------------
 import typing as t
 import pathlib
@@ -33,8 +33,8 @@ class MEIConverter(SubConverter):
     def parseData(
         self,
         dataString: str,
-        number: t.Optional[int] = None
-    ) -> t.Union[stream.Score, stream.Part, stream.Opus]:
+        number: int | None = None
+    ) -> stream.Score | stream.Part | stream.Opus:
         '''
         Convert a string with an MEI document into its corresponding music21 elements.
 
@@ -61,8 +61,8 @@ class MEIConverter(SubConverter):
 
     def parseFile(
         self,
-        filePath: t.Union[str, pathlib.Path],
-        number: t.Optional[int] = None,
+        filePath: str | pathlib.Path,
+        number: int | None = None,
         **keywords,
     ) -> stream.Stream:
         '''

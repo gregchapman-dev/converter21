@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ from converter21.shared import M21Utilities
 
 
 class M21Convert:
-    humdrumMensurationSymbolToM21TimeSignatureSymbol: t.Dict[str, str] = {
+    humdrumMensurationSymbolToM21TimeSignatureSymbol: dict[str, str] = {
         'c': 'common',  # modern common time (4/4)
         'c|': 'cut',    # modern cut time (2/2)
         # 'C': '',      # mensural common (not supported in music21)
@@ -44,12 +44,12 @@ class M21Convert:
         # 'O|': '',     # mensural 'cut O' (not supported in music21)
     }
 
-    m21TimeSignatureSymbolToHumdrumMensurationSymbol: t.Dict[str, str] = {
+    m21TimeSignatureSymbolToHumdrumMensurationSymbol: dict[str, str] = {
         'common': 'c',  # modern common time (4/4)
         'cut': 'c|',    # modern cut time (2/2)
     }
 
-    diatonicToM21PitchName: t.Dict[int, str] = {
+    diatonicToM21PitchName: dict[int, str] = {
         0: 'C',
         1: 'D',
         2: 'E',
@@ -61,7 +61,7 @@ class M21Convert:
 
     if hasattr(m21.common.types, 'StepName'):
         # same as diatonicToM21PitchName, but the values are typed as StepName
-        diatonicToM21StepName: t.Dict[int, m21.common.types.StepName] = {
+        diatonicToM21StepName: dict[int, m21.common.types.StepName] = {
             0: 'C',
             1: 'D',
             2: 'E',
@@ -71,7 +71,7 @@ class M21Convert:
             6: 'B',
         }
 
-    humdrumReferenceKeyToEncodingScheme: t.Dict[str, str] = {
+    humdrumReferenceKeyToEncodingScheme: dict[str, str] = {
         # Note that we only enter things in this dict that aren't free-form text (that's the
         # default). Note also that 'humdrum:date' covers all the ways humdrum encodes dates in
         # a string. The string might represent a single date, a pair of dates, or even a list
@@ -88,7 +88,7 @@ class M21Convert:
         'END': 'humdrum:date',  # encoding date
     }
 
-    humdrumReferenceKeyToM21MetadataPropertyUniqueName: t.Dict[str, str] = {
+    humdrumReferenceKeyToM21MetadataPropertyUniqueName: dict[str, str] = {
         # dict value is music21's unique name or '' (if there is no m21Metadata equivalent)
         # Authorship information:
         'COM': 'composer',              # composer's name
@@ -199,13 +199,13 @@ class M21Convert:
     }
 
     # This dict is private because we wrap a function around it.
-    _m21MetadataPropertyUniqueNameToHumdrumReferenceKey: t.Dict[str, str] = {
+    _m21MetadataPropertyUniqueNameToHumdrumReferenceKey: dict[str, str] = {
         uniqueName: hdKey for (hdKey, uniqueName) in
         humdrumReferenceKeyToM21MetadataPropertyUniqueName.items() if uniqueName != ''
     }
 
     # Only used by old (pre-DublinCore) metadata code
-    humdrumReferenceKeyToM21ContributorRole: t.Dict[str, str] = {
+    humdrumReferenceKeyToM21ContributorRole: dict[str, str] = {
         'COM': 'composer',
         'COA': 'attributed composer',
         'COS': 'suspected composer',
@@ -223,7 +223,7 @@ class M21Convert:
     }
 
     # Only used by old (pre-DublinCore) metadata code
-    m21ContributorRoleToHumdrumReferenceKey: t.Dict[str, str] = {
+    m21ContributorRoleToHumdrumReferenceKey: dict[str, str] = {
         'composer': 'COM',
         'attributed composer': 'COA',
         'suspected composer': 'COS',
@@ -240,27 +240,27 @@ class M21Convert:
         'electronic encoder': 'ENC'
     }
 
-    humdrumDecoGroupStyleToM21GroupSymbol: t.Dict[str, str] = {
+    humdrumDecoGroupStyleToM21GroupSymbol: dict[str, str] = {
         '{': 'brace',
         '[': 'bracket',
         '<': 'square',   # what is this one supposed to be, it's often ignored in iohumdrum.cpp
     }
 
-    m21GroupSymbolToHumdrumDecoGroupStyleStart: t.Dict[str, str] = {
+    m21GroupSymbolToHumdrumDecoGroupStyleStart: dict[str, str] = {
         'brace': '{',
         'bracket': '[',
         'square': '<',    # what is this one supposed to be, it's often ignored in iohumdrum.cpp
         'line': '',       # humdrum doesn't have line, but "no style" is close
     }
 
-    m21GroupSymbolToHumdrumDecoGroupStyleStop: t.Dict[str, str] = {
+    m21GroupSymbolToHumdrumDecoGroupStyleStop: dict[str, str] = {
         'brace': '}',
         'bracket': ']',
         'square': '>',    # what is this one supposed to be, it's often ignored in iohumdrum.cpp
         'line': '',       # humdrum doesn't have line, but "no style" is close
     }
 
-    humdrumStandardKeyStringsToNumSharps: t.Dict[str, int] = {
+    humdrumStandardKeyStringsToNumSharps: dict[str, int] = {
         '': 0,
         'f#': 1,
         'f#c#': 2,
@@ -278,7 +278,7 @@ class M21Convert:
         'b-e-a-d-g-c-f-': -7,
     }
 
-    numSharpsToHumdrumStandardKeyStrings: t.Dict[int, str] = {
+    numSharpsToHumdrumStandardKeyStrings: dict[int, str] = {
         0: '',
         1: 'f#',
         2: 'f#c#',
@@ -296,7 +296,7 @@ class M21Convert:
         -7: 'b-e-a-d-g-c-f-',
     }
 
-    humdrumModeToM21Mode: t.Dict[str, str] = {
+    humdrumModeToM21Mode: dict[str, str] = {
         'dor': 'dorian',
         'phr': 'phrygian',
         'lyd': 'lydian',
@@ -306,7 +306,7 @@ class M21Convert:
         'loc': 'locrian',
     }
 
-    m21ModeToHumdrumMode: t.Dict[str, str] = {
+    m21ModeToHumdrumMode: dict[str, str] = {
         'dorian': 'dor',
         'phrygian': 'phr',
         'lydian': 'lyd',
@@ -317,7 +317,7 @@ class M21Convert:
     }
 
     # place articulations in stacking order (nearest to furthest from note)
-    humdrumArticulationStringToM21ArticulationClassName: t.Dict[str, str] = {
+    humdrumArticulationStringToM21ArticulationClassName: dict[str, str] = {
         "'": 'Staccato',
         '`': 'Staccatissimo',
         '~': 'Tenuto',
@@ -330,7 +330,7 @@ class M21Convert:
         '"': 'Pizzicato'
     }
 
-    m21ArticulationClassNameToHumdrumArticulationString: t.Dict[str, str] = {
+    m21ArticulationClassNameToHumdrumArticulationString: dict[str, str] = {
         'Staccato': "'",
         'Staccatissimo': '`',
         'Tenuto': '~',
@@ -426,17 +426,17 @@ class M21Convert:
             tokenStr: str,
             rdfAbove: str,
             rdfBelow: str
-    ) -> t.List[m21.articulations.Articulation]:
+    ) -> list[m21.articulations.Articulation]:
         # music21 doesn't have different articulation lists per note in a chord, just a single
         # articulation list for the chord itself.  So we search the entire tokenStr for
         # articulations, and add them all to the chord.  This works for non-chord (note) tokens
         # as well.
         # store info about articulations in various dicts, keyed by humdrum articulation string
         # which is usually a single character, but can be two (e.g. '^^')
-        articFound: t.Dict[str, bool] = {}
-        articPlacement: t.Dict[str, str] = {}  # value is 'below', 'above', or ''
+        articFound: dict[str, bool] = {}
+        articPlacement: dict[str, str] = {}  # value is 'below', 'above', or ''
         # gestural means "not printed on the page, but it's what the performer did/should do"
-        articIsGestural: t.Dict[str, bool] = {}
+        articIsGestural: dict[str, bool] = {}
 
         tsize: int = len(tokenStr)
         ch: str = ''
@@ -533,7 +533,7 @@ class M21Convert:
 #             staffindex, justification, color, vgroup);
 #     }
 
-        artics: t.List[m21.articulations.Articulation] = []
+        artics: list[m21.articulations.Articulation] = []
 
         for humdrumArticString in M21Convert.humdrumArticulationStringToM21ArticulationClassName:
             if articFound.get(humdrumArticString, False):
@@ -660,7 +660,7 @@ class M21Convert:
         if m21KeySig is None:
             # try non-standard key sig
             badKeySig: bool = False
-            alteredPitches: t.List[str] = [
+            alteredPitches: list[str] = [
                 keySig[i:i + 2].upper() for i in range(0, len(keySig), 2)
             ]
             for pitch in alteredPitches:
@@ -781,7 +781,7 @@ class M21Convert:
             m21GeneralNote: m21.Music21Object,
             spannerBundle: m21.spanner.SpannerBundle,
             owner=None
-    ) -> t.Tuple[str, t.List[str]]:
+    ) -> tuple[str, list[str]]:
         # this method can take any Music21Object, but only GeneralNotes return
         # anything interesting.
         if isinstance(m21GeneralNote, m21.note.Note):
@@ -841,7 +841,7 @@ class M21Convert:
     @staticmethod
     def kernRecipAndGraceTypeFromGeneralNote(
         m21GeneralNote: m21.note.GeneralNote
-    ) -> t.Tuple[str, str, str]:
+    ) -> tuple[str, str, str]:
         # returns (recip, vdurRecip, graceType)
         recip: str = ''
         vdurRecip: str = ''
@@ -860,7 +860,7 @@ class M21Convert:
             m21Unpitched: m21.note.Unpitched,
             spannerBundle: m21.spanner.SpannerBundle,
             owner=None
-    ) -> t.Tuple[str, t.List[str]]:
+    ) -> tuple[str, list[str]]:
         prefix: str = ''
         recip: str = ''
         vdurRecip: str = ''
@@ -868,7 +868,7 @@ class M21Convert:
         recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Unpitched)
         pitch: str = M21Convert.kernPitchFromM21Unpitched(m21Unpitched, owner)
         postfix: str = ''
-        layouts: t.List[str] = []
+        layouts: list[str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
             m21Unpitched,
             recip,
@@ -900,13 +900,13 @@ class M21Convert:
             m21Rest: m21.note.Rest,
             spannerBundle: m21.spanner.SpannerBundle,
             owner=None
-    ) -> t.Tuple[str, t.List[str]]:
+    ) -> tuple[str, list[str]]:
         pitch: str = 'r'  # "pitch" of a rest is 'r'
         recip: str = ''
         vdurRecip: str = ''
         graceType: str = ''
         recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Rest)
-        postfixAndLayouts: t.Tuple[str, t.List[str]] = (
+        postfixAndLayouts: tuple[str, list[str]] = (
             M21Convert.kernPostfixAndLayoutsFromM21Rest(
                 m21Rest,
                 recip,
@@ -914,7 +914,7 @@ class M21Convert:
                 owner)
         )
         postfix: str = postfixAndLayouts[0]
-        layouts: t.List[str] = postfixAndLayouts[1]
+        layouts: list[str] = postfixAndLayouts[1]
 
         token: str = recip + graceType + pitch + postfix
 
@@ -928,13 +928,13 @@ class M21Convert:
                                          recip: str,
                                          _spannerBundle: m21.spanner.SpannerBundle,
                                          owner=None,
-                                         ) -> t.Tuple[str, t.List[str]]:
+                                         ) -> tuple[str, list[str]]:
         postfix: str = ''
-        layouts: t.List[str] = []
+        layouts: list[str] = []
 
         # rest postfix possibility 0: fermata
         exprStr: str
-        expressionLayouts: t.List[str]
+        expressionLayouts: list[str]
         exprStr, expressionLayouts = M21Convert._getHumdrumStringAndLayoutsFromM21Expressions(
             m21Rest.expressions,
             m21Rest,
@@ -973,7 +973,7 @@ class M21Convert:
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Note(m21Note: m21.note.Note,
                                              spannerBundle: m21.spanner.SpannerBundle,
-                                             owner=None) -> t.Tuple[str, t.List[str]]:
+                                             owner=None) -> tuple[str, list[str]]:
         recip: str = ''
         vdurRecip: str = ''
         graceType: str = ''
@@ -981,7 +981,7 @@ class M21Convert:
         pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
         prefix: str = ''
         postfix: str = ''
-        layouts: t.List[str] = []
+        layouts: list[str] = []
         prefix, postfix, layouts = M21Convert.kernPrefixPostfixAndLayoutsFromM21GeneralNote(
             m21Note,
             recip,
@@ -1044,10 +1044,10 @@ class M21Convert:
             isFirstNoteInChord: bool = False,
             isStandaloneNote: bool = True,
             owner=None
-    ) -> t.Tuple[str, str, t.List[str]]:
+    ) -> tuple[str, str, list[str]]:
         prefix: str = ''
         postfix: str = ''
-        layouts: t.List[str] = []
+        layouts: list[str] = []
 
         # postfix possibility: invisible note
         invisibleStr: str = M21Convert._getKernInvisibilityFromGeneralNote(m21GeneralNote)
@@ -1067,10 +1067,10 @@ class M21Convert:
             # not from this note
             beamStr = M21Convert._getHumdrumBeamStringFromM21GeneralNote(m21GeneralNote)
 
-            expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
+            expressions: list[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
                 M21Utilities.getAllExpressionsFromGeneralNote(m21GeneralNote, spannerBundle)
             )
-            expressionLayouts: t.List[str]
+            expressionLayouts: list[str]
             expressionStr, expressionLayouts = (
                 M21Convert._getHumdrumStringAndLayoutsFromM21Expressions(
                     expressions,
@@ -1109,11 +1109,11 @@ class M21Convert:
             + stemStr + beamStr + invisibleStr
         )
 
-        noteLayouts: t.List[str] = M21Convert._getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote)
+        noteLayouts: list[str] = M21Convert._getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote)
         layouts += noteLayouts
 
         if isStandaloneNote:
-            dynLayouts: t.List[str] = (
+            dynLayouts: list[str] = (
                 M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21GeneralNote)
             )
             layouts += dynLayouts
@@ -1138,7 +1138,7 @@ class M21Convert:
         return (prefix, postfix, layouts)
 
     @staticmethod
-    def _getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> t.List[str]:
+    def _getNoteHeadLayoutsFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> list[str]:
         if not isinstance(m21GeneralNote, m21.note.NotRest):
             # no notehead stuff, get out
             return []
@@ -1168,13 +1168,13 @@ class M21Convert:
     def _getKernSlurStartsAndStopsFromGeneralNote(
             m21GeneralNote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.Tuple[str, str]:
+    ) -> tuple[str, str]:
         # FUTURE: Handle crossing (non-nested) slurs during export to humdrum '&('
         outputStarts: str = ''
         outputStops: str = ''
 
-        spanners: t.List[m21.spanner.Spanner] = m21GeneralNote.getSpannerSites()
-        slurStarts: t.List[str] = []  # 'above', 'below', or None
+        spanners: list[m21.spanner.Spanner] = m21GeneralNote.getSpannerSites()
+        slurStarts: list[str] = []  # 'above', 'below', or None
         slurEndCount: int = 0
 
         for slur in spanners:
@@ -1218,15 +1218,15 @@ class M21Convert:
             m21Chord: m21.chord.Chord,
             spannerBundle: m21.spanner.SpannerBundle,
             owner=None
-    ) -> t.Tuple[str, t.List[str]]:
-        pitchPerNote: t.List[str] = M21Convert.kernPitchesFromM21Chord(m21Chord, owner)
+    ) -> tuple[str, list[str]]:
+        pitchPerNote: list[str] = M21Convert.kernPitchesFromM21Chord(m21Chord, owner)
         recip: str = ''
         vdurRecip: str = ''
         graceType: str = ''
         recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Chord)
-        prefixPerNote: t.List[str] = []
-        postfixPerNote: t.List[str] = []
-        layoutsForChord: t.List[str] = []
+        prefixPerNote: list[str] = []
+        postfixPerNote: list[str] = []
+        layoutsForChord: list[str] = []
 
         prefixPerNote, postfixPerNote, layoutsForChord = (
             M21Convert.kernPrefixesPostfixesAndLayoutsFromM21Chord(
@@ -1258,8 +1258,8 @@ class M21Convert:
         return token, layoutsForChord
 
     @staticmethod
-    def kernPitchesFromM21Chord(m21Chord: m21.chord.Chord, owner=None) -> t.List[str]:
-        pitches: t.List[str] = []
+    def kernPitchesFromM21Chord(m21Chord: m21.chord.Chord, owner=None) -> list[str]:
+        pitches: list[str] = []
         for m21Note in m21Chord:
             pitch: str = M21Convert.kernPitchFromM21Pitch(m21Note.pitch, owner)
             pitches.append(pitch)
@@ -1271,10 +1271,10 @@ class M21Convert:
             recip: str,
             spannerBundle: m21.spanner.SpannerBundle,
             owner=None
-    ) -> t.Tuple[t.List[str], t.List[str], t.List[str]]:
-        prefixPerNote: t.List[str] = []    # one per note
-        postfixPerNote: t.List[str] = []   # one per note
-        layoutsForChord: t.List[str] = []  # 0 or more per note, maybe 1 for the whole chord
+    ) -> tuple[list[str], list[str], list[str]]:
+        prefixPerNote: list[str] = []    # one per note
+        postfixPerNote: list[str] = []   # one per note
+        layoutsForChord: list[str] = []  # 0 or more per note, maybe 1 for the whole chord
 
         # Here we get the chord signifiers, which might be applied to each note in the token,
         # or just the first, or just the last.
@@ -1283,10 +1283,10 @@ class M21Convert:
             m21Chord.articulations,
             owner
         )
-        expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
+        expressions: list[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = (
             M21Utilities.getAllExpressionsFromGeneralNote(m21Chord, spannerBundle)
         )
-        expressionLayouts: t.List[str]
+        expressionLayouts: list[str]
         exprStr: str
         exprStr, expressionLayouts = M21Convert._getHumdrumStringAndLayoutsFromM21Expressions(
             expressions,
@@ -1303,7 +1303,7 @@ class M21Convert:
             spannerBundle
         )
         sfOrSfz: str = M21Convert._getSfOrSfzFromM21GeneralNote(m21Chord)
-        dynLayouts: t.List[str] = M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21Chord)
+        dynLayouts: list[str] = M21Convert._getDynamicsLayoutsFromM21GeneralNote(m21Chord)
         layoutsForChord += dynLayouts
 
         # Here we get each note's signifiers
