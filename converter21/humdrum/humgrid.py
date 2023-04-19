@@ -1409,7 +1409,8 @@ class HumGrid:
     //   for each part/staff pairing between adjacent lines.  If they do not match,
     //   then add spine manipulator line to Grid between the two lines.
     '''
-    def manipulatorCheckTwoSlices(self,
+    def manipulatorCheckTwoSlices(
+        self,
         ice1: GridSlice | None,
         ice2: GridSlice | None
     ) -> GridSlice | None:

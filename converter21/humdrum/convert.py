@@ -13,7 +13,6 @@
 import sys
 import re
 import math
-import typing as t
 from fractions import Fraction
 
 from music21.common import opFrac

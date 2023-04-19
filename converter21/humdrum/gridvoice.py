@@ -15,7 +15,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import typing as t
 
 from music21.common import opFrac
 

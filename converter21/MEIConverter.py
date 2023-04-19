@@ -93,7 +93,7 @@ class MEIConverter(SubConverter):
         if t.TYPE_CHECKING:
             # self.stream is a property defined in SubConverter, and it's not
             # type-hinted properly.  But we know what this is.
-            assert isinstance(output, (stream.Score, stream.Part, stream.Opus))
+            assert isinstance(self.stream, (stream.Score, stream.Part, stream.Opus))
 
         return self.stream
 

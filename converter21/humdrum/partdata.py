@@ -12,7 +12,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import typing as t
 
 import music21 as m21
 

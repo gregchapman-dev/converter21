@@ -9,7 +9,8 @@
 # Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-import typing as t
+
+from converter21.humdrum import HumdrumInternalError
 
 NAME_IDX: int = 0
 VALUE_IDX: int = 1
@@ -20,8 +21,11 @@ class HumParamSet:
     //
     // HumParamSet::HumParamSet --
     '''
-    def __init__(self, token: 'HumdrumToken' | str | None = None) -> None:
+    def __init__(self, token=None) -> None:  # token: HumdrumToken | str | None
         from converter21.humdrum import HumdrumToken
+        if token is not None and not isinstance(token, (HumdrumToken, str)):
+            raise HumdrumInternalError('HumParamSet token must be HumdrumToken | str | None')
+
         self._token: HumdrumToken | None = None
         self._ns1: str = ''
         self._ns2: str = ''

@@ -16,6 +16,7 @@ import typing as t
 
 from music21 import Music21Object
 from music21.common import opFrac
+from music21.common import OffsetQL
 
 from converter21.humdrum import HumdrumInternalError
 
@@ -79,9 +80,11 @@ def fixupNamespace1Namespace2(
     return (ns1, ns2)
 
 class HumParameter:
-    def __init__(self, value: t.Any | None, origin: 'HumdrumToken' | None = None) -> None:
+    def __init__(self, value: t.Any | None, origin=None) -> None:
         # value can be of any type (different from humlib, where it's always a string)
         from converter21.humdrum import HumdrumToken
+        if origin is not None and not isinstance(origin, HumdrumToken):
+            raise HumdrumInternalError('HumParameter origin must be HumdrumToken | None')
         self._value: t.Any | None = value
         self._origin: HumdrumToken | None = origin
 
@@ -94,11 +97,14 @@ class HumParameter:
         self._value = newValue
 
     @property
-    def origin(self) -> 'HumdrumToken' | None:
+    def origin(self):  # -> HumdrumToken | None:
         return self._origin
 
     @origin.setter
-    def origin(self, newOrigin: 'HumdrumToken' | None) -> None:
+    def origin(self, newOrigin) -> None:  # newOrigin: HumdrumToken | None
+        from converter21.humdrum import HumdrumToken
+        if newOrigin is not None and not isinstance(newOrigin, HumdrumToken):
+            raise HumdrumInternalError('invalid newOrigin')
         self._origin = newOrigin
 
 class HumHash:
@@ -207,7 +213,7 @@ class HumHash:
             return None
         # pylint: enable=bare-except
 
-    def getValueToken(self, *ns1ns2key) -> 'HumdrumToken' | None:
+    def getValueToken(self, *ns1ns2key):  # -> HumdrumToken | None:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
@@ -244,7 +250,7 @@ class HumHash:
             return 0
         # pylint: enable=bare-except
 
-    def getValueHumNum(self, *ns1ns2key) -> 'HumNum':
+    def getValueHumNum(self, *ns1ns2key) -> OffsetQL:  # -> HumNum:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return opFrac(0)
@@ -380,7 +386,7 @@ class HumHash:
     // HumHash::getOrigin -- Get the source token for the parameter.
     //    Returns NULL if there is no origin.
     '''
-    def getOrigin(self, *ns1ns2key) -> 'HumdrumToken':
+    def getOrigin(self, *ns1ns2key):  # -> HumdrumToken:
         if not self._parameters:
             return None
 

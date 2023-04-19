@@ -9,9 +9,8 @@
 # Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-import typing as t
 
-from converter21.humdrum import HumdrumSyntaxError
+from converter21.humdrum import HumdrumSyntaxError, HumdrumInternalError
 
 class HumAddress:
     def __init__(self) -> None:
@@ -182,11 +181,14 @@ class HumAddress:
     //   a HumdrumLine, the parameter's value should be NULL.
     '''
     @property
-    def ownerLine(self) -> 'HumdrumLine' | None:
+    def ownerLine(self):  # -> HumdrumLine | None:
         return self._ownerLine
 
     @ownerLine.setter
-    def ownerLine(self, newOwnerLine: 'HumdrumLine' | None) -> None:
+    def ownerLine(self, newOwnerLine) -> None:  # newOwnerLine: t.Optional[HumdrumLine]
+        from converter21.humdrum import HumdrumLine
+        if newOwnerLine is not None and not isinstance(newOwnerLine, HumdrumLine):
+            raise HumdrumInternalError('invalid newOwnerLine')
         self._ownerLine = newOwnerLine
         # blow away cache of dataType, because it depends on ownerLine
         self._dataTypeTokenCached = None
@@ -204,12 +206,12 @@ class HumAddress:
     '''
     //////////////////////////////
     //
-    // HumAddress::getDataType -- Return the exclusive interpretation string of the
+    // HumAddress::getDataType -- Return the exclusive interpretation
     //    token associated with the address.
     //
     '''
     @property
-    def dataType(self) -> 'HumdrumToken':
+    def dataType(self):  # -> HumdrumToken:
         if self._dataTypeTokenCached is not None:
             return self._dataTypeTokenCached
 

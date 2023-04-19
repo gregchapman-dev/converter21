@@ -537,7 +537,7 @@ _ACCID_GES_ATTR_DICT: dict[str | None, str | None] = {
 
 # for _qlDurationFromAttr()
 # None is for when @dur is omitted; it's silly so it can be identified
-_DUR_ATTR_DICT: d[str | None, float] = {
+_DUR_ATTR_DICT: dict[str | None, float] = {
     'maxima': 32.0,                # maxima is not mei-CMN, but we'll allow it
     'long': 16.0, 'longa': 16.0,   # longa is not mei-CMN, but we'll allow it
     'breve': 8.0, 'brevis': 8.0,   # brevis is not mei-CMN, but we'll allow it
@@ -2934,7 +2934,7 @@ def staffGrpFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
     otherInfo: dict[str, t.Any],
-    staffDefDict: dict[str, list[Music21Object] | dict[str, Music21Object]] | None,
+    staffDefDict: dict[str, list[Music21Object] | dict[str, Music21Object]] | None = None,
 ) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
     '''
     <staffGrp> A group of bracketed or braced staves.

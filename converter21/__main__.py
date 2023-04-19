@@ -13,7 +13,6 @@
 import argparse
 import os
 import sys
-import typing as t
 
 from music21 import converter
 from music21.base import VERSION_STR

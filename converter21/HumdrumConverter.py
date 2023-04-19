@@ -9,7 +9,6 @@
 # Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-import typing as t
 from pathlib import Path
 
 from music21 import converter

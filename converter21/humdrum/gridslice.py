@@ -686,11 +686,11 @@ class GridSlice:
     // GridSlice::setOwner --
     '''
     @property
-    def ownerGrid(self) -> 'HumGrid':
+    def ownerGrid(self):  # -> HumGrid:
         return self._ownerGrid
 
     @ownerGrid.setter
-    def ownerGrid(self, newOwnerGrid: 'HumGrid') -> None:
+    def ownerGrid(self, newOwnerGrid) -> None:  # newOwnerGrid: HumGrid
         from converter21.humdrum import HumGrid
         if not isinstance(newOwnerGrid, HumGrid):
             raise HumdrumInternalError('invalid newOwnerGrid')
@@ -702,7 +702,7 @@ class GridSlice:
     // GridSlice::getMeasure --
     '''
     @property
-    def measure(self) -> 'GridMeasure':
+    def measure(self):  # -> GridMeasure:
         return self._measure
 
     '''

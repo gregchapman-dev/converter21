@@ -11,7 +11,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 from fractions import Fraction
-import typing as t
 
 # HumNum is a type that can be float or Fraction.  The idea is that float
 # should be used for performance (if exactly accurate), and Fraction will

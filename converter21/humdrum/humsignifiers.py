@@ -10,7 +10,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import re
-import typing as t
 
 SIGNIFIER_UNKNOWN: str = 'unknown'
 SIGNIFIER_LINK: str = 'link'

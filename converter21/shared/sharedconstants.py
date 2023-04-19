@@ -1,5 +1,3 @@
-import typing as t
-
 class SharedConstants:
     _SMUFL_NAME_TO_UNICODE_CHAR: dict[str, str] = {
         'space': chr(0x0020),

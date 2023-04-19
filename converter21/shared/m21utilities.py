@@ -303,7 +303,7 @@ class M21Utilities:
 
     @staticmethod
     def getAltersForKey(
-        m21Key: m21.key.Key | m21.key.KeySignature | None]
+        m21Key: m21.key.Key | m21.key.KeySignature | None
     ) -> list[int]:
         # returns a list of pitch alterations (number of semitones up or down),
         # indexed by pitch (base7), where index 0 is C0, and index 69 is B9.

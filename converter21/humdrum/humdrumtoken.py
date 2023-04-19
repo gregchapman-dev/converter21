@@ -13,12 +13,12 @@
 import sys
 import re
 import copy
-import typing as t
 from fractions import Fraction
 
 from music21.common import opFrac
 
 from converter21.humdrum import HumAddress
+from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumHash
 from converter21.humdrum import HumParamSet
@@ -2520,11 +2520,14 @@ class HumdrumToken(HumHash):
     //    owns this token.
     '''
     @property
-    def ownerLine(self) -> 'HumdrumLine' | None
+    def ownerLine(self):  # -> HumdrumLine | None:
         return self._address.ownerLine
 
     @ownerLine.setter
-    def ownerLine(self, newOwnerLine: 'HumdrumLine' | None) -> None:
+    def ownerLine(self, newOwnerLine) -> None:  # newOwnerLine: HumdrumLine | None
+        from converter21.humdrum import HumdrumLine
+        if newOwnerLine is not None and not isinstance(newOwnerLine, HumdrumLine):
+            raise HumdrumInternalError('invalid newOwnerLine')
         self._address.ownerLine = newOwnerLine
         if self._atLeastOneCachedDataTypePropertyExists:
             # some cached properties depend on dataType,
