@@ -14,7 +14,6 @@
 #    look-up tables.
 
 import re
-import typing as t
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
@@ -180,9 +179,8 @@ class M21Utilities:
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 expressions.append(spanner)
                 continue
-            if M21Utilities.m21SupportsArpeggioMarks():
-                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):  # type: ignore
-                    expressions.append(spanner)
+            if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                expressions.append(spanner)
 
         # finish up with gnote.expressions
         expressions += gnote.expressions
@@ -322,80 +320,6 @@ class M21Utilities:
 
         return alters
 
-    # to be used if music21 doesn't support spanner fill.
-    @staticmethod
-    def fillOttava(
-        ottava: m21.spanner.Ottava,
-        searchStream: m21.stream.Stream,
-        *,
-        includeEndBoundary: bool = False,
-        mustFinishInSpan: bool = False,
-        mustBeginInSpan: bool = True,
-        includeElementsThatEndAtStart: bool = False
-    ):
-        if hasattr(ottava, 'filledStatus') and ottava.filledStatus is True:  # type: ignore
-            # Don't fill twice.
-            return
-
-        if ottava.getFirst() is None:
-            # no spanned elements?  Nothing to fill.
-            return
-
-        endElement: m21.base.Music21Object | None = None
-        if len(ottava) > 1:
-            # Start and end elements are different, we can't just append everything, we need
-            # to save off the end element, remove it, add everything, then add the end element
-            # again.  Note that if there are actually more than 2 elements before we start
-            # filling, the new intermediate elements will come after the existing ones,
-            # regardless of offset.  But first and last will still be the same two elements
-            # as before, which is the most important thing.
-            endElement = ottava.getLast()
-            if t.TYPE_CHECKING:
-                assert endElement is not None
-            ottava.spannerStorage.remove(endElement)
-
-        try:
-            startOffsetInHierarchy: OffsetQL = ottava.getFirst().getOffsetInHierarchy(searchStream)
-        except m21.sites.SitesException:
-            # print('start element not in searchStream')
-            if endElement is not None:
-                ottava.addSpannedElements(endElement)
-            return
-
-        endOffsetInHierarchy: OffsetQL
-        if endElement is not None:
-            try:
-                endOffsetInHierarchy = (
-                    endElement.getOffsetInHierarchy(searchStream) + endElement.quarterLength
-                )
-            except m21.sites.SitesException:
-                # print('end element not in searchStream')
-                ottava.addSpannedElements(endElement)
-                return
-        else:
-            endOffsetInHierarchy = (
-                ottava.getLast().getOffsetInHierarchy(searchStream) + ottava.getLast().quarterLength
-            )
-
-        for foundElement in (searchStream
-                .recurse()
-                .getElementsByOffsetInHierarchy(
-                    startOffsetInHierarchy,
-                    endOffsetInHierarchy,
-                    includeEndBoundary=includeEndBoundary,
-                    mustFinishInSpan=mustFinishInSpan,
-                    mustBeginInSpan=mustBeginInSpan,
-                    includeElementsThatEndAtStart=includeElementsThatEndAtStart)
-                .getElementsByClass(m21.note.NotRest)):
-            if endElement is None or foundElement is not endElement:
-                ottava.addSpannedElements(foundElement)
-
-        if endElement is not None:
-            # add it back in as the end element
-            ottava.addSpannedElements(endElement)
-
-        ottava.filledStatus = True  # type: ignore
-
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
         # m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
@@ -448,71 +372,6 @@ class M21Utilities:
             return True
 
         return True  # four elements equal, that's all we care about
-
-    _cachedM21SupportsDublinCoreMetadata: bool | None = None
-    @staticmethod
-    def m21SupportsDublinCoreMetadata() -> bool:
-        if M21Utilities._cachedM21SupportsDublinCoreMetadata is not None:
-            return M21Utilities._cachedM21SupportsDublinCoreMetadata
-
-        if hasattr(m21.metadata.Metadata, 'bestTitle'):
-            M21Utilities._cachedM21SupportsDublinCoreMetadata = True
-            return True
-
-        M21Utilities._cachedM21SupportsDublinCoreMetadata = False
-        return False
-
-    _cachedM21SupportsArpeggioMarks: bool | None = None
-    @staticmethod
-    def m21SupportsArpeggioMarks() -> bool:
-        if M21Utilities._cachedM21SupportsArpeggioMarks is not None:
-            return M21Utilities._cachedM21SupportsArpeggioMarks
-
-        if hasattr(m21.expressions, 'ArpeggioMark'):
-            M21Utilities._cachedM21SupportsArpeggioMarks = True
-            return True
-
-        M21Utilities._cachedM21SupportsArpeggioMarks = False
-        return False
-
-    _cachedM21SupportsSpannerAnchor: bool | None = None
-    @staticmethod
-    def m21SupportsSpannerAnchor() -> bool:
-        if M21Utilities._cachedM21SupportsSpannerAnchor is not None:
-            return M21Utilities._cachedM21SupportsSpannerAnchor
-
-        if hasattr(m21.spanner, 'SpannerAnchor'):
-            M21Utilities._cachedM21SupportsSpannerAnchor = True
-            return True
-
-        M21Utilities._cachedM21SupportsSpannerAnchor = False
-        return False
-
-    _cachedM21SupportsSpannerFill: bool | None = None
-    @staticmethod
-    def m21SupportsSpannerFill() -> bool:
-        if M21Utilities._cachedM21SupportsSpannerFill is not None:
-            return M21Utilities._cachedM21SupportsSpannerFill
-
-        if hasattr(m21.spanner.Spanner, 'fill'):
-            M21Utilities._cachedM21SupportsSpannerFill = True
-            return True
-
-        M21Utilities._cachedM21SupportsSpannerFill = False
-        return False
-
-    _cachedM21SupportsDelayedTurns: bool | None = None
-    @staticmethod
-    def m21SupportsDelayedTurns() -> bool:
-        if M21Utilities._cachedM21SupportsDelayedTurns is not None:
-            return M21Utilities._cachedM21SupportsDelayedTurns
-
-        if hasattr(m21.expressions.Turn, 'isDelayed'):
-            M21Utilities._cachedM21SupportsDelayedTurns = True
-            return True
-
-        M21Utilities._cachedM21SupportsDelayedTurns = False
-        return False
 
 
 class M21StaffGroupTree:

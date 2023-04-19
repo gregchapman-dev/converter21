@@ -2314,16 +2314,15 @@ class M21Convert:
                     output += '<'
                 continue
 
-            if M21Utilities.m21SupportsArpeggioMarks():
-                if isinstance(expr, m21.expressions.ArpeggioMark):  # type: ignore
+            if isinstance(expr, m21.expressions.ArpeggioMark):
+                output += ':'
+                continue
+            if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):
+                if M21Convert._allSpannedGeneralNotesInSameMeasure(expr):
                     output += ':'
-                    continue
-                if isinstance(expr, m21.expressions.ArpeggioMarkSpanner):  # type: ignore
-                    if M21Convert._allSpannedGeneralNotesInSameMeasure(expr):
-                        output += ':'
-                    else:
-                        output += '::'
-                    continue
+                else:
+                    output += '::'
+                continue
 
         if trillSeen and trillExtStartSeen:
             # replace a 't' or 'T' (trill sign) with a 'tt' or 'TT' (trill sign + wavy line)

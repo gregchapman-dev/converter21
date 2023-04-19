@@ -2172,35 +2172,23 @@ def addTurn(
         m21AccidLower.displayStatus = True
 
 
-    if M21Utilities.m21SupportsDelayedTurns():
-        delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
-        if delayed == 'true':
-            # this is not a timed delay, because we have @startid, not @tstamp
-            delay = OrnamentDelay.DEFAULT_DELAY
+    delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
+    if delayed == 'true':
+        # this is not a timed delay, because we have @startid, not @tstamp
+        delay = OrnamentDelay.DEFAULT_DELAY
 
-        if form == 'upper':
-            turn = expressions.Turn(
-                delay=delay,
-                upperAccidental=m21AccidUpper,
-                lowerAccidental=m21AccidLower
-            )
-        else:
-            turn = expressions.InvertedTurn(
-                delay=delay,
-                upperAccidental=m21AccidUpper,
-                lowerAccidental=m21AccidLower
-            )
+    if form == 'upper':
+        turn = expressions.Turn(
+            delay=delay,
+            upperAccidental=m21AccidUpper,
+            lowerAccidental=m21AccidLower
+        )
     else:
-        if form == 'upper':
-            turn = expressions.Turn(
-                upperAccidental=m21AccidUpper,
-                lowerAccidental=m21AccidLower
-            )
-        elif form == 'lower':
-            turn = expressions.InvertedTurn(
-                upperAccidental=m21AccidUpper,
-                lowerAccidental=m21AccidLower
-            )
+        turn = expressions.InvertedTurn(
+            delay=delay,
+            upperAccidental=m21AccidUpper,
+            lowerAccidental=m21AccidLower
+        )
 
     # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
     # if obj is a chord with pitches)
@@ -5863,10 +5851,10 @@ def _addTimestampedExpressions(
                         assert staffForNearestNote is not None
                         assert offsetFromNearestPrevNote is not None
 
-                    if isDelayedTurn and M21Utilities.m21SupportsDelayedTurns():
+                    if isDelayedTurn:
                         if t.TYPE_CHECKING:
                             assert isinstance(expression, expressions.Turn)
-                        expression.delay = offsetFromNearestPrevNote  # type: ignore
+                        expression.delay = offsetFromNearestPrevNote
 
                     # Resolve the expression's "other" pitches based on nearestPrevNoteInStaff's
                     # pitch (or highest pitch if nearestPrevNoteInStaff is a chord with pitches)
@@ -6409,39 +6397,27 @@ def turnFromElement(
                 form = 'upper'  # default
 
         turn: expressions.Turn
-        if M21Utilities.m21SupportsDelayedTurns():
-            delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
-            if delayed == 'true':
-                # we'll mark it as "default" delayed for now.
-                # Once we have a note for it, we'll figure out
-                # what the delay is (turn.offset - note.offset)
-                # and recreate a turn/inverted turn with that
-                # exact delay at that point.
-                delay = OrnamentDelay.DEFAULT_DELAY
+        delay: OrnamentDelay | OffsetQL = OrnamentDelay.NO_DELAY
+        if delayed == 'true':
+            # we'll mark it as "default" delayed for now.
+            # Once we have a note for it, we'll figure out
+            # what the delay is (turn.offset - note.offset)
+            # and recreate a turn/inverted turn with that
+            # exact delay at that point.
+            delay = OrnamentDelay.DEFAULT_DELAY
 
-            if form == 'upper':
-                turn = expressions.Turn(  # pylint: disable=unexpected-keyword-arg
-                    delay=delay,  # type: ignore
-                    upperAccidentalName=m21AccidUpper,
-                    lowerAccidentalName=m21AccidLower
-                )
-            else:
-                turn = expressions.InvertedTurn(  # pylint: disable=unexpected-keyword-arg
-                    delay=delay,  # type: ignore
-                    upperAccidentalName=m21AccidUpper,
-                    lowerAccidentalName=m21AccidLower
-                )
+        if form == 'upper':
+            turn = expressions.Turn(
+                delay=delay,
+                upperAccidentalName=m21AccidUpper,
+                lowerAccidentalName=m21AccidLower
+            )
         else:
-            if form == 'upper':
-                turn = expressions.Turn(
-                    upperAccidentalName=m21AccidUpper,
-                    lowerAccidentalName=m21AccidLower
-                )
-            else:
-                turn = expressions.InvertedTurn(
-                    upperAccidentalName=m21AccidUpper,
-                    lowerAccidentalName=m21AccidLower
-                )
+            turn = expressions.InvertedTurn(
+                delay=delay,
+                upperAccidentalName=m21AccidUpper,
+                lowerAccidentalName=m21AccidLower
+            )
 
         if place and place != 'place_unspecified':
             turn.placement = place
@@ -7005,12 +6981,7 @@ def measureFromElement(
 
             if measSkip == 0:
                 # do the spannerEnd, it's in this Measure
-                if M21Utilities.m21SupportsSpannerAnchor():
-                    # pylint: disable=no-member
-                    endObj = spanner.SpannerAnchor()  # type: ignore
-                    # pylint: enable=no-member
-                else:
-                    endObj = note.GeneralNote(duration=duration.Duration(0.))
+                endObj = spanner.SpannerAnchor()
                 spannerObj.addSpannedElements(endObj)
                 if staffNStr not in stavesWaitingFromStaffItem:
                     stavesWaitingFromStaffItem[staffNStr] = []
@@ -7121,12 +7092,7 @@ def measureFromElement(
                             del spannerObj.mei_needs_end_anchor  # type: ignore
 
                         if needsStartAnchor:
-                            if M21Utilities.m21SupportsSpannerAnchor():
-                                # pylint: disable=no-member
-                                startObj = spanner.SpannerAnchor()  # type: ignore
-                                # pylint: enable=no-member
-                            else:
-                                startObj = note.GeneralNote(duration=duration.Duration(0.))
+                            startObj = spanner.SpannerAnchor()
                             spannerObj.addSpannedElements(startObj)
                             stavesWaitingFromStaffItem[staffNStr].append(
                                 ((offset1, None, None), startObj)
@@ -7134,12 +7100,7 @@ def measureFromElement(
                         if needsEndAnchor:
                             if measSkip2 == 0:
                                 # do the endObj as well, it's in this same Measure
-                                if M21Utilities.m21SupportsSpannerAnchor():
-                                    # pylint: disable=no-member
-                                    endObj = spanner.SpannerAnchor()  # type: ignore
-                                    # pylint: enable=no-member
-                                else:
-                                    endObj = note.GeneralNote(duration=duration.Duration(0.))
+                                endObj = spanner.SpannerAnchor()
                                 spannerObj.addSpannedElements(endObj)
                                 stavesWaitingFromStaffItem[staffNStr].append(
                                     ((offset2, None, None), endObj)
@@ -7821,11 +7782,7 @@ def scoreFromElement(
                 )
                 break
             partIdx: int = allPartNs.index(staffN)
-            if M21Utilities.m21SupportsSpannerFill():
-                sp.fill(thePartList[partIdx])  # type: ignore
-            else:
-                # we use our own spanner fill routine, since music21 doesn't have one
-                M21Utilities.fillOttava(sp, thePartList[partIdx])
+            sp.fill(thePartList[partIdx])
 
     # put spanners in the Score
     theScore.append(list(spannerBundle))

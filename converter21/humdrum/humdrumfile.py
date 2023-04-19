@@ -702,15 +702,11 @@ class HumdrumFile(HumdrumFileContent):
                 ss: StaffStateVariables = self._staffStates[spStaffIndex]
                 ss.hasOttavas = True
                 if ss.m21Part is not None:
-                    if M21Utilities.m21SupportsSpannerFill():
-                        sp.fill(ss.m21Part)  # type: ignore
-                    else:
-                        # we have to use our own version of spanner fill
-                        M21Utilities.fillOttava(sp, ss.m21Part)
+                    sp.fill(ss.m21Part)
 
-        # Transpose any transposing instrument parts to "written pitch"
-        # For performance, check the instruments/ottavas here, since stream.toWrittenPitch
-        # can be expensive, even if there is no transposing instrument.
+        # Transpose any transposing instrument parts (or parts with ottavas) to "written pitch".
+        # For performance, check the instruments/ottavas here, since stream.toWrittenPitch can
+        # be expensive, even if there is no transposing instrument or ottavas.
         for ss in self._staffStates:
             if ss.m21Part is not None:
                 hasTransposingInstrument: bool = False
@@ -719,20 +715,7 @@ class HumdrumFile(HumdrumFileContent):
                         hasTransposingInstrument = True
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
-                    if M21Utilities.m21SupportsSpannerFill():
-                        ss.m21Part.toWrittenPitch(  # type: ignore
-                            inPlace=True,
-                            preserveAccidentalDisplay=True
-                        )
-                    else:
-                        # minimize the problems introduced by a lost inherited accidental
-                        # display bug in music21 (that was fixed in the SpannerFill PR).
-                        if hasTransposingInstrument:
-                            ss.m21Part.toWrittenPitch(inPlace=True)
-                        else:
-                            # just transpose the Ottavas to written pitch
-                            for ottava in ss.m21Part[m21.spanner.Ottava]:
-                                ottava.undoTransposition()
+                    ss.m21Part.toWrittenPitch(inPlace=True, preserveAccidentalDisplay=True)
 
         return self.m21Score
 
@@ -5825,12 +5808,6 @@ class HumdrumFile(HumdrumFileContent):
         chords/notes, so it is always translated to an ArpeggioMarkSpanner.
     '''
     def _addArpeggio(self, gnote: m21.note.GeneralNote, layerTok: HumdrumToken):
-        if not M21Utilities.m21SupportsArpeggioMarks():
-            # M21 ArpeggioMark support will (hopefully) be in v8.  It is in a PR
-            # at the moment, and if we're using that branch, we want to run our
-            # arpeggio code.
-            return
-
         arpeggiatedTokens: list[HumdrumToken] = []
 
         if '::' in layerTok.text:
@@ -6602,34 +6579,22 @@ class HumdrumFile(HumdrumFileContent):
 
         # Create Turn/InvertedTurn object, using upper and lower accids
         turn: m21.expressions.Turn
-        if M21Utilities.m21SupportsDelayedTurns():
-            delay: OrnamentDelay = OrnamentDelay.NO_DELAY
-            if isDelayed:
-                delay = OrnamentDelay.DEFAULT_DELAY
+        delay: OrnamentDelay = OrnamentDelay.NO_DELAY
+        if isDelayed:
+            delay = OrnamentDelay.DEFAULT_DELAY
 
-            if isInverted:
-                turn = m21.expressions.InvertedTurn(
-                    delay=delay,
-                    upperAccidental=turnUpperAccid,
-                    lowerAccidental=turnLowerAccid
-                )
-            else:
-                turn = m21.expressions.Turn(
-                    delay=delay,
-                    upperAccidental=turnUpperAccid,
-                    lowerAccidental=turnLowerAccid
-                )
+        if isInverted:
+            turn = m21.expressions.InvertedTurn(
+                delay=delay,
+                upperAccidental=turnUpperAccid,
+                lowerAccidental=turnLowerAccid
+            )
         else:
-            if isInverted:
-                turn = m21.expressions.InvertedTurn(
-                    upperAccidental=turnUpperAccid,
-                    lowerAccidental=turnLowerAccid
-                )
-            else:
-                turn = m21.expressions.Turn(
-                    upperAccidental=turnUpperAccid,
-                    lowerAccidental=turnLowerAccid
-                )
+            turn = m21.expressions.Turn(
+                delay=delay,
+                upperAccidental=turnUpperAccid,
+                lowerAccidental=turnLowerAccid
+            )
 
         # our better default
         turn.placement = None  # type: ignore
@@ -8362,13 +8327,8 @@ class HumdrumFile(HumdrumFileContent):
             if startNoteToken:
                 startNote = self._getGeneralNoteOrPlaceHolder(startNoteToken)
             else:
-                # couldn't find a startNote, so make a fake one and insert it in the measure
-                if M21Utilities.m21SupportsSpannerAnchor():
-                    # pylint: disable=no-member
-                    startNote = m21.spanner.SpannerAnchor()  # type: ignore
-                    # pylint: enable=no-member
-                else:
-                    startNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
+                # couldn't find a startNote, so use a spannerAnchor instead
+                startNote = m21.spanner.SpannerAnchor()
                 measure.insert(
                     opFrac(voiceOffsetInMeasure + dynamicOffsetInVoice),
                     startNote
@@ -8378,13 +8338,9 @@ class HumdrumFile(HumdrumFileContent):
             if endNoteToken:
                 endNote = self._getGeneralNoteOrPlaceHolder(endNoteToken)
             else:
-                # couldn't find an endNote, so make a fake one and insert it in a measure
-                if M21Utilities.m21SupportsSpannerAnchor():
-                    # pylint: disable=no-member
-                    endNote = m21.spanner.SpannerAnchor()  # type: ignore
-                    # pylint: enable=no-member
-                else:
-                    endNote = m21.note.GeneralNote(duration=m21.duration.Duration(0))
+                # couldn't find a endNote, so use a spannerAnchor instead
+                endNote = m21.spanner.SpannerAnchor()
+
                 # compute measures to skip and offset2 (in that final measure)
                 offset2: HumNum
                 if leftNoteDuration > 0:
@@ -9762,29 +9718,15 @@ class HumdrumFile(HumdrumFileContent):
             parsedKey = m.group(1)
             langCode: str = m.group(5)
             isTranslated: bool = langCode != '' and m.group(4) != '@@'
-            if M21Utilities.m21SupportsDublinCoreMetadata():
-                encodingScheme: str | None = (
-                    M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
-                )
-                # pylint: disable=unexpected-keyword-arg
-                # Make pylint ignore unexpected keywords (because we won't make this
-                # call unless those keyword args are actually there)
-                parsedValue = m21.metadata.Text(
-                    v,
-                    language=langCode.lower() if langCode else None,
-                    isTranslated=isTranslated,
-                    encodingScheme=encodingScheme
-                )
-                # pylint: enable=unexpected-keyword-arg
-            else:
-                parsedValue = m21.metadata.Text(v)
-                # There's no way in m21 metadata Text to say that this one is
-                # not translated, except to leave off the language code.
-                # Which sucks, because now we've dropped what that original
-                # language is on the floor.
-                if langCode and isTranslated:
-                    # ISO 639-1 and 639-2 codes are lower-case
-                    parsedValue.language = langCode.lower()
+            encodingScheme: str | None = (
+                M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
+            )
+            parsedValue = m21.metadata.Text(
+                v,
+                language=langCode.lower() if langCode else None,
+                isTranslated=isTranslated,
+                encodingScheme=encodingScheme
+            )
 
         # we consider any key a humdrum standard key if it is parseable, and starts with 3 chars
         # that are in the list of humdrum reference keys ('COM', 'OTL', etc)
@@ -9840,115 +9782,31 @@ class HumdrumFile(HumdrumFileContent):
         m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
 
-        # parsedKeysAdded is only used in the old (pre-DublinCore) path,
-        # but we will leave its initialization here to keep pylint et al happy.
-        parsedKeysAdded = []
-
         for k, v in self._biblio:
             parsedKey: str
             parsedValue: m21.metadata.Text
             isStandardHumdrumKey: bool
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
-            if M21Utilities.m21SupportsDublinCoreMetadata():
-                m21UniqueName: str | None = (
-                    M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
-                        parsedKey, None)
-                )
-                if m21UniqueName:
-                    m21Value: t.Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
-                    m21Metadata.add(m21UniqueName, m21Value)
-                    continue
-
-                # Doesn't match any known m21.metadata-supported metadata (or it does, and
-                # we couldn't parse it, so we'll have to treat it verbatim).
-                if isStandardHumdrumKey:
-                    # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
-                    # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
-                    # it in as "custom" unparsed
-                    m21Metadata.addCustom('humdrumraw:' + k, v)
-                else:
-                    # freeform key/value, put it in as custom
-                    m21Metadata.addCustom(k, v)
-
+            m21UniqueName: str | None = (
+                M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                    parsedKey, None)
+            )
+            if m21UniqueName:
+                m21Value: t.Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
+                m21Metadata.add(m21UniqueName, m21Value)
                 continue
 
-            # old code (pre-DublinCore)
-            alreadyAddedSomethingLikeThis: bool = parsedKey in parsedKeysAdded
-
-            # contributors can handle more than one of a particular role, so don't check
-            # or append to parsedKeysAdded.
-            if parsedKey in M21Convert.humdrumReferenceKeyToM21ContributorRole:
-                contrib = m21.metadata.Contributor()
-                contrib.name = parsedValue
-                contrib.role = M21Convert.humdrumReferenceKeyToM21ContributorRole[parsedKey]
-                # print('contributor = key: {} -> {} -> {}, value: {}/{}'.format(
-                #       k, parsedKey, contrib.role, parsedValue, parsedValue.language),
-                #       file=sys.stderr)
-                m21Metadata.addContributor(contrib)
-                continue
-
-            if (not alreadyAddedSomethingLikeThis
-                    and parsedKey.lower() in m21Metadata.workIdAbbreviationDict):
-                # print('workId = key: {} -> {} -> {}, value: {}/{}'.format(
-                #       k, parsedKey, m21Metadata.workIdAbbreviationDict[parsedKey.lower()],
-                #       parsedValue, parsedValue.language), file=sys.stderr)
-                m21Metadata.setWorkId(parsedKey, parsedValue)
-                parsedKeysAdded.append(parsedKey)
-                continue
-
-            if (not alreadyAddedSomethingLikeThis
-                    and parsedKey == 'YEC'):  # electronic edition copyright
-                # print('copyright = key: {} -> {}, value: {}/{}'.format(
-                #       k, parsedKey, parsedValue, parsedValue.language), file=sys.stderr)
-                m21Metadata.copyright = m21.metadata.Copyright(parsedValue)
-                parsedKeysAdded.append(parsedKey)
-                continue
-
-            if (not alreadyAddedSomethingLikeThis
-                    and parsedKey == 'ODT'):  # date of composition
-                date = M21Convert.m21DateObjectFromString(str(parsedValue))
-                if date is not None:
-                    # print('date = key: {} -> {}, value: {} -> {}'.format(
-                    #       k, parsedKey, parsedValue, date), file=sys.stderr)
-                    m21Metadata.date = date
-                    parsedKeysAdded.append(parsedKey)
-                    continue
-
-            # Doesn't match any known m21.metadata-supported metadata (or it does, and we
-            # already put one in metadata, so we can't put this one there, or it does, and
+            # Doesn't match any known m21.metadata-supported metadata (or it does, and
             # we couldn't parse it, so we'll have to treat it verbatim).
-            # Add verbatim to m21Score.metadata.editorial, which is (among other
-            # things) a dictionary.
             if isStandardHumdrumKey:
-                newk: str = k
-
-                # insert/increment a number just after the standard key if necessary,
-                # to make it unique
-                if alreadyAddedSomethingLikeThis:
-                    # We added it without a number (but it might have had one)
-                    # so we just start at '1' now.  We basically have to renumber
-                    # things entirely.  So if you had no numbers, you'll have them
-                    # now, and if you did have numbers, you have new numbers now.
-                    newk = self._replaceOrInsertNumberInReferenceKey(newk, 1)
-
-                while 'humdrum:' + newk in m21Metadata.editorial:
-                    newk = self._incrementOrInsertNumberInReferenceKey(newk, 1)
-
-                # prepend the unparsed key with 'humdrum:', and put it in editorial unparsed
-                newk = 'humdrum:' + newk
-
-                # print('editorial = key: {}, value: {}'.format(newk, v), file=sys.stderr)
-                m21Metadata.editorial[newk] = v
+                # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
+                # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
+                # it in as "custom" unparsed
+                m21Metadata.addCustom('humdrumraw:' + k, v)
             else:
-                # freeform key/value, put it in editorial unparsed
-                # print('editorial = key: {}, value: {}'.format(k, v), file=sys.stderr)
-                if k not in m21Metadata.editorial:
-                    # you only get the first of multiple identical free-form keys
-                    m21Metadata.editorial[k] = v
-                else:
-                    print(f'dropping non-unique metadata key \'{k}\': \'{v}\' on the floor',
-                            file=sys.stderr)
+                # freeform key/value, put it in as custom
+                m21Metadata.addCustom(k, v)
 
     def _createStaffGroupsAndParts(self) -> None:
         decoration: str = self.getReferenceValueForKey('system-decoration')
