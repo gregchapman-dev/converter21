@@ -322,57 +322,60 @@ class M21Utilities:
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
-        # m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
         if len(m21.VERSION) == 0:
             raise HumdrumInternalError('music21 version must be set!')
 
-        # compare element 0
-        if m21.VERSION[0] < neededVersion[0]:
+        try:
+            # compare element 0
+            if int(m21.VERSION[0]) < neededVersion[0]:
+                return False
+            if int(m21.VERSION[0]) > neededVersion[0]:
+                return True
+
+            # element 0 is equal... go on to next element
+            if len(m21.VERSION) == 1 or len(neededVersion) == 1:
+                # there is no next element to compare, so we are done.
+                # result is True only if m21 version has >= elements of needed version.
+                # if neededVersion has more elements, then result is False
+                return len(m21.VERSION) >= len(neededVersion)
+
+            # compare element 1
+            if int(m21.VERSION[1]) < neededVersion[1]:
+                return False
+            if int(m21.VERSION[1]) > neededVersion[1]:
+                return True
+
+            # element 1 is equal... go on to next element
+            if len(m21.VERSION) == 2 or len(neededVersion) == 2:
+                # there is no next element to compare, so we are done.
+                # result is True only if m21 version has >= elements of needed version.
+                # if neededVersion has more elements, then result is False
+                return len(m21.VERSION) >= len(neededVersion)
+
+            # compare element 2
+            if int(m21.VERSION[2]) < neededVersion[2]:
+                return False
+            if int(m21.VERSION[2]) > neededVersion[2]:
+                return True
+
+            # element 2 is equal... go on to next element
+            if len(m21.VERSION) == 3 or len(neededVersion) == 3:
+                # there is no next element to compare, so we are done.
+                # result is True only if m21 version has >= elements of needed version.
+                # if neededVersion has more elements, then result is False
+                return len(m21.VERSION) >= len(neededVersion)
+
+            # compare element 3 (probably a string)
+            if m21.VERSION[3] < neededVersion[3]:
+                return False
+            if m21.VERSION[3] > neededVersion[3]:
+                return True
+
+            return True  # four elements equal, that's all we care about
+        except Exception:
             return False
-        if m21.VERSION[0] > neededVersion[0]:
-            return True
 
-        # element 0 is equal... go on to next element
-        if len(m21.VERSION) == 1 or len(neededVersion) == 1:
-            # there is no next element to compare, so we are done.
-            # result is True only if m21 version has >= elements of needed version.
-            # if neededVersion has more elements, then result is False
-            return len(m21.VERSION) >= len(neededVersion)
-
-        # compare element 1
-        if m21.VERSION[1] < neededVersion[1]:
-            return False
-        if m21.VERSION[1] > neededVersion[1]:
-            return True
-
-        # element 1 is equal... go on to next element
-        if len(m21.VERSION) == 2 or len(neededVersion) == 2:
-            # there is no next element to compare, so we are done.
-            # result is True only if m21 version has >= elements of needed version.
-            # if neededVersion has more elements, then result is False
-            return len(m21.VERSION) >= len(neededVersion)
-
-        # compare element 2
-        if m21.VERSION[2] < neededVersion[2]:
-            return False
-        if m21.VERSION[2] > neededVersion[2]:
-            return True
-
-        # element 2 is equal... go on to next element
-        if len(m21.VERSION) == 3 or len(neededVersion) == 3:
-            # there is no next element to compare, so we are done.
-            # result is True only if m21 version has >= elements of needed version.
-            # if neededVersion has more elements, then result is False
-            return len(m21.VERSION) >= len(neededVersion)
-
-        # compare element 3 (probably a string)
-        if m21.VERSION[3] < neededVersion[3]:
-            return False
-        if m21.VERSION[3] > neededVersion[3]:
-            return True
-
-        return True  # four elements equal, that's all we care about
-
+        return False
 
 class M21StaffGroupTree:
     def __init__(

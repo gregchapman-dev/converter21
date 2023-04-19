@@ -22,6 +22,11 @@ from enum import IntEnum, auto
 
 from .HumdrumConverter import HumdrumConverter
 from .MEIConverter import MEIConverter
+from .shared import M21Utilities
+
+class Music21VersionException(Exception):
+    # raised if the version of music21 is not recent enough
+    pass
 
 class ConverterName(IntEnum):
     HUMDRUM = auto()
@@ -31,6 +36,10 @@ def register(
     *converterNames: ConverterName
 ):
     import music21 as m21
+
+    # PUT THIS BACK IN ONCE music21 v9.1 is released
+    # if not M21Utilities.m21VersionIsAtLeast((9, 1, 0, '')):
+    #     raise Music21VersionException('music21 version needs to be 9.1 or greater')
 
     # default (if no converterNames passed in) is to register everything we have
     if not converterNames:
