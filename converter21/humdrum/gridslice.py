@@ -51,7 +51,7 @@ class GridSlice:
         timestamp: HumNumIn,
         sliceType: SliceType,
         staffCounts: list[int] | None = None,
-        fromSlice: 'GridSlice' | None = None
+        fromSlice: t.Optional['GridSlice'] = None
     ) -> None:
         from converter21.humdrum import GridMeasure
         from converter21.humdrum import HumGrid

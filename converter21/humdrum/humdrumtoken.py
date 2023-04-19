@@ -11,6 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
 import re
 import copy
 from fractions import Fraction
@@ -343,7 +344,7 @@ class HumdrumToken(HumHash):
     //    spine.  The default value is index 0, since mostly there will only
     //    be one previous token.
     '''
-    def getPreviousNonNullDataToken(self, index: int = 0) -> 'HumdrumToken' | None:
+    def getPreviousNonNullDataToken(self, index: int = 0) -> t.Optional['HumdrumToken']:
         # handle Python-style negative indexing
         if index < 0:
             index += self.previousNonNullDataTokenCount
@@ -377,7 +378,7 @@ class HumdrumToken(HumHash):
     //    following this one in the spine.  The default value for index is 0 since
     //    the next non-null data token count will typically be 1.
     '''
-    def getNextNonNullDataToken(self, index: int = 0) -> 'HumdrumToken' | None:
+    def getNextNonNullDataToken(self, index: int = 0) -> t.Optional['HumdrumToken']:
         # handle Python-style negative indexing
         if index < 0:
             index += self.nextNonNullDataTokenCount
@@ -623,13 +624,13 @@ class HumdrumToken(HumHash):
     // default value: index = 0
     // @SEEALSO: getNextTokens, getPreviousToken
     '''
-    def nextToken(self, index: int) -> 'HumdrumToken' | None:
+    def nextToken(self, index: int) -> t.Optional['HumdrumToken']:
         if 0 <= index < len(self._nextTokens):
             return self._nextTokens[index]
         return None
 
     @property
-    def nextToken0(self) -> 'HumdrumToken' | None:
+    def nextToken0(self) -> t.Optional['HumdrumToken']:
         return self._nextToken0
 
     def updateNextToken0(self) -> None:
@@ -654,17 +655,17 @@ class HumdrumToken(HumHash):
     //    index value is zero.
     // default value: index = 0
     '''
-    def previousToken(self, index: int) -> 'HumdrumToken' | None:
+    def previousToken(self, index: int) -> t.Optional['HumdrumToken']:
         if 0 <= index < len(self._previousTokens):
             return self._previousTokens[index]
         return None
 
     @property
-    def previousToken0(self) -> 'HumdrumToken' | None:
+    def previousToken0(self) -> t.Optional['HumdrumToken']:
         return self._previousToken0
 
     @property
-    def previousTokenN(self) -> 'HumdrumToken' | None:
+    def previousTokenN(self) -> t.Optional['HumdrumToken']:
         if self._previousTokens:
             return self._previousTokens[-1]
         return None
@@ -694,7 +695,7 @@ class HumdrumToken(HumHash):
         This returns the token representing the next field in the ownerLine of this token --gregc
     '''
     @property
-    def nextFieldToken(self) -> 'HumdrumToken' | None:
+    def nextFieldToken(self) -> t.Optional['HumdrumToken']:
         from converter21.humdrum import HumdrumLine
         self.ownerLine: HumdrumLine
         if self.ownerLine is None:
@@ -710,7 +711,7 @@ class HumdrumToken(HumHash):
         This returns the token representing the previous field in the ownerLine of this token
     '''
     @property
-    def previousFieldToken(self) -> 'HumdrumToken' | None:
+    def previousFieldToken(self) -> t.Optional['HumdrumToken']:
         if self.ownerLine is None:
             return None
         if self.fieldIndex < 1:
@@ -2735,11 +2736,11 @@ class HumdrumToken(HumHash):
     //    or NULL if it is not in a strophe.
     '''
     @property
-    def strophe(self) -> 'HumdrumToken' | None:
+    def strophe(self) -> t.Optional['HumdrumToken']:
         return self._strophe
 
     @strophe.setter
-    def strophe(self, strophe: 'HumdrumToken' | None) -> None:
+    def strophe(self, strophe: t.Optional['HumdrumToken']) -> None:
         if strophe is None:
             self._strophe = None
             return

@@ -47,7 +47,7 @@ class MeasureData:
             measure: m21.stream.Measure,
             ownerStaff,      # StaffData
             measureIndex: int,
-            prevMeasData: 'MeasureData' | None
+            prevMeasData: t.Optional['MeasureData']
     ) -> None:
         from converter21.humdrum import StaffData
         self.m21Measure: m21.stream.Measure = measure
