@@ -2345,7 +2345,7 @@ def applyBreaksecs(someThings: list[Music21Object]):
 
         try:
             breaksecNum = int(thing.mei_breaksec)  # type: ignore
-        except:  # pylint: disable=bare-except
+        except Exception:
             pass
         if breaksecNum is None:
             continue
@@ -3975,7 +3975,7 @@ def noteFromElement(
     if stemLenStr is not None:
         try:
             stemLen = float(stemLenStr)
-        except:  # pylint: disable=bare-except
+        except Exception:
             pass
         if stemLen is not None and stemLen == 0:
             theNote.stemDirection = 'noStem'
@@ -4504,7 +4504,7 @@ def pageBreakFromElement(
     if nStr:
         try:
             pageNumber = int(nStr)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             pass
 
     pageLayout: m21.layout.PageLayout = m21.layout.PageLayout(isNew=True, pageNumber=pageNumber)
@@ -5935,7 +5935,7 @@ def _tstamp2ToMeasSkipAndOffset(
             beat = float(int(m.group(3)))
         else:
             beat = float(m.group(3))
-    except:  # pylint: disable=bare-except
+    except Exception:
         # warn about malformed tstamp2, assuming '0m+0.000'
         return 0, 0.
 
@@ -7537,7 +7537,7 @@ def sectionScoreCore(
                         if bracketNStr is not None:
                             try:
                                 n = int(bracketNStr)
-                            except:  # pylint: disable=bare-except
+                            except Exception:
                                 pass
                         rb = spanner.RepeatBracket(number=n)
 

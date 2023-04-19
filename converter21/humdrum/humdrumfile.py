@@ -6262,7 +6262,7 @@ class HumdrumFile(HumdrumFileContent):
 
         try:
             accidNum: int = int(valueStr)
-        except:  # pylint: disable=bare-except
+        except Exception:
             return None
 
         accid: m21.pitch.Accidental = m21.pitch.Accidental(accidNum)
@@ -11366,7 +11366,7 @@ class HumdrumFile(HumdrumFileContent):
                         if paramVal[0].isdigit():
                             try:
                                 staffAdj = int(paramVal)
-                            except:  # pylint: disable=bare-except
+                            except Exception:
                                 return (True, staffAdj)
                             if staffAdj:
                                 staffAdj = -(staffAdj - 1)
@@ -11436,7 +11436,7 @@ class HumdrumFile(HumdrumFileContent):
                         if paramVal[0].isdigit():
                             try:
                                 staffAdj = int(paramVal)
-                            except:  # pylint: disable=bare-except
+                            except Exception:
                                 return (True, staffAdj)
                             if staffAdj:
                                 staffAdj = -(staffAdj - 1)
@@ -11483,7 +11483,7 @@ class HumdrumFile(HumdrumFileContent):
                         if paramVal[0].isdigit():
                             try:
                                 staffAdj = int(paramVal)
-                            except:  # pylint: disable=bare-except
+                            except Exception:
                                 return (True, staffAdj)
                             if staffAdj:
                                 staffAdj = -(staffAdj - 1)

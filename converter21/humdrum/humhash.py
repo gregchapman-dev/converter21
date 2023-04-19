@@ -32,9 +32,9 @@ def getKeyTuple(inKey: str) -> tuple[str, str, str]:
 
 def fixupNamespace1Namespace2Key(*ns1ns2key: str) -> tuple[str, str, str]:
     if len(ns1ns2key) < 1:
-        raise Exception("too few specifiers (need at least a key)")
+        raise ValueError("too few specifiers (need at least a key)")
     if len(ns1ns2key) > 3:
-        raise Exception("too many specifiers (should be at most 3: ns1, ns2, key)")
+        raise ValueError("too many specifiers (should be at most 3: ns1, ns2, key)")
 
     ns1 = ''
     ns2 = ''
@@ -206,12 +206,10 @@ class HumHash:
         if isinstance(value, Music21Object):
             return None
 
-        # pylint: disable=bare-except
         try:
             return str(value)  # can convert from int, HumNum, Fraction, float, str, etc
-        except:
+        except Exception:
             return None
-        # pylint: enable=bare-except
 
     def getValueToken(self, *ns1ns2key):  # -> HumdrumToken | None:
         value = self.getValue(*ns1ns2key)
@@ -243,12 +241,10 @@ class HumHash:
         if isinstance(value, HumdrumToken):
             return 0
 
-        # pylint: disable=bare-except
         try:
             return int(value)  # can convert from int, float, HumNum, Fraction, str
-        except:
+        except Exception:
             return 0
-        # pylint: enable=bare-except
 
     def getValueHumNum(self, *ns1ns2key) -> OffsetQL:  # -> HumNum:
         value = self.getValue(*ns1ns2key)
@@ -259,12 +255,10 @@ class HumHash:
         if isinstance(value, HumdrumToken):
             return opFrac(0)
 
-        # pylint: disable=bare-except
         try:
             return opFrac(value)  # can convert from int, float, Fraction, str
-        except:
+        except Exception:
             return opFrac(0)
-        # pylint: enable=bare-except
 
     def getValueFloat(self, *ns1ns2key) -> float:
         value = self.getValue(*ns1ns2key)
@@ -275,12 +269,10 @@ class HumHash:
         if isinstance(value, HumdrumToken):
             return 0.0
 
-        # pylint: disable=bare-except
         try:
             return float(value)  # can convert from int, HumNum, Fraction, str
-        except:
+        except Exception:
             return 0.0
-        # pylint: enable=bare-except
 
     def getValueBool(self, *ns1ns2key) -> bool:
         # this one's weird.  We default to True (unless there's some fairly
@@ -303,12 +295,10 @@ class HumHash:
                 return False
             return True
 
-        # pylint: disable=bare-except
         try:
             return int(value) != 0
-        except:
+        except Exception:
             return True  # it's not None, so...
-        # pylint: enable=bare-except
 
     '''
     //////////////////////////////
