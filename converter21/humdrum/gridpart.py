@@ -9,7 +9,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -30,7 +30,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class GridPart:
     def __init__(self) -> None:
-        self.staves: t.List[GridStaff] = []
+        self.staves: list[GridStaff] = []
         self.sides: GridSide = GridSide()
         self._partName: str = ''
 
@@ -61,9 +61,9 @@ class GridPart:
         return 1
 
     @property
-    def dynamics(self) -> t.Optional[HumdrumToken]:
+    def dynamics(self) -> HumdrumToken | None:
         return self.sides.dynamics
 
     @dynamics.setter
-    def dynamics(self, newDynamics: t.Optional[HumdrumToken]) -> None:
+    def dynamics(self, newDynamics: HumdrumToken | None) -> None:
         self.sides.dynamics = newDynamics

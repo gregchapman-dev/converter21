@@ -7,7 +7,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import re
@@ -32,16 +32,16 @@ class HumdrumFileContent(HumdrumFileStructure):
     # HumdrumFileContent has no private data to initialize, just a bunch more functions
     # So... no __init__.  Well, OK, to keep pylint happy about attribute-defined-outside-init,
     # a quick __init__ that sets a few attributes that are already set in HumdrumFileBase.py
-    def __init__(self, fileName: t.Optional[t.Union[str, Path]] = None) -> None:
+    def __init__(self, fileName: str | Path | None = None) -> None:
         super().__init__(fileName)  # initialize the HumdrumFileBase fields
         self._hasInformalBreaks: bool = False
         self._hasFormalBreaks: bool = False
 
         # spinecolor = self._spineColor[track][subtrack]
-        self._spineColor: t.List[t.List[str]] = []
+        self._spineColor: list[list[str]] = []
 
-        self._staffStarts: t.List[HumdrumToken] = []     # len = staffCount
-        self._staffStartsIndexByTrack: t.List[int] = []  # len = staffCount + 1
+        self._staffStarts: list[HumdrumToken] = []     # len = staffCount
+        self._staffStartsIndexByTrack: list[int] = []  # len = staffCount + 1
 
     def readString(self, contents: str) -> bool:
         if not super().readString(contents):
@@ -105,7 +105,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         for staffStart in self._staffStarts:
             self.analyzeStaffCrossStaffStemDirections(staffStart)
 
-    def analyzeStaffCrossStaffStemDirections(self, startToken: t.Optional[HumdrumToken]) -> None:
+    def analyzeStaffCrossStaffStemDirections(self, startToken: HumdrumToken | None) -> None:
         if startToken is None:
             return
         if not startToken.isKern:
@@ -116,15 +116,15 @@ class HumdrumFileContent(HumdrumFileStructure):
             # no cross-staff notes present in data
             return
 
-        current: t.Optional[HumdrumToken] = startToken
+        current: HumdrumToken | None = startToken
         while current is not None:
             if current.isData:
                 self.checkCrossStaffStems(current, above, below)
             current = current.nextToken0
 
     def checkCrossStaffStems(self, token: HumdrumToken, above: str, below: str) -> None:
-        track: t.Optional[int] = token.track
-        current: t.Optional[HumdrumToken] = token
+        track: int | None = token.track
+        current: HumdrumToken | None = token
         while current is not None:
             if current.track != track:
                 break
@@ -168,9 +168,9 @@ class HumdrumFileContent(HumdrumFileStructure):
 
     def prepareStaffAboveNoteStems(self, token: HumdrumToken) -> None:
         token.setValue('auto', 'stem.dir', '-1')
-        track: t.Optional[int] = token.track
-        curr: t.Optional[HumdrumToken] = token.nextFieldToken
-        ttrack: t.Optional[int]
+        track: int | None = token.track
+        curr: HumdrumToken | None = token.nextFieldToken
+        ttrack: int | None
 
         # Find the next higher **kern spine (if any)
         while curr is not None:
@@ -193,7 +193,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             return
 
         endTime: HumNum = opFrac(token.durationFromStart + token.duration)
-        curr2: t.Optional[HumdrumToken] = curr
+        curr2: HumdrumToken | None = curr
         while curr2 is not None:
             if curr2.durationFromStart >= endTime:
                 # exceeded the duration of the cross-staff note, so stop looking
@@ -229,9 +229,9 @@ class HumdrumFileContent(HumdrumFileStructure):
 
     def prepareStaffBelowNoteStems(self, token: HumdrumToken) -> None:
         token.setValue('auto', 'stem.dir', '1')
-        track: t.Optional[int] = token.track
-        curr: t.Optional[HumdrumToken] = token.previousFieldToken
-        ttrack: t.Optional[int]
+        track: int | None = token.track
+        curr: HumdrumToken | None = token.previousFieldToken
+        ttrack: int | None
 
         # Find the next lower **kern spine (if any):
         while curr is not None:
@@ -253,9 +253,9 @@ class HumdrumFileContent(HumdrumFileStructure):
             return
 
         # Find the first subtrack of the identified spine
-        targetTrack: t.Optional[int] = curr.track
+        targetTrack: int | None = curr.track
         while curr is not None:
-            ptok: t.Optional[HumdrumToken] = curr.previousFieldToken
+            ptok: HumdrumToken | None = curr.previousFieldToken
             if ptok is None:
                 break
             ttrack = ptok.track
@@ -267,7 +267,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         # Should now be at the first subtrack of the target staff.
 
         endTime: HumNum = opFrac(token.durationFromStart + token.duration)
-        curr2: t.Optional[HumdrumToken] = curr
+        curr2: HumdrumToken | None = curr
         while curr2 is not None:
             if curr2.durationFromStart >= endTime:
                 # exceeded the duration of the cross-staff note, so stop looking
@@ -330,13 +330,13 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     @staticmethod
     def markAdjacentNullsWithClef(clef: HumdrumToken) -> None:
-        ctrack: t.Optional[int] = clef.track
+        ctrack: int | None = clef.track
         if ctrack is None:
             return
 
-        track: t.Optional[int] = 0
+        track: int | None = 0
 
-        current: t.Optional[HumdrumToken] = clef.nextFieldToken
+        current: HumdrumToken | None = clef.nextFieldToken
         while current is not None:
             track = current.track
             if track != ctrack:
@@ -453,13 +453,13 @@ class HumdrumFileContent(HumdrumFileStructure):
             endElisionLevel(slurOrPhrase, index)
     '''
     def analyzeSlursOrPhrases(self, slurOrPhrase: str, spineDataType: str) -> bool:
-        spineStarts: t.List[HumdrumToken] = self.spineStartListOfType(spineDataType)
+        spineStarts: list[HumdrumToken] = self.spineStartListOfType(spineDataType)
         if not spineStarts:
             return True
 
         # labels: first is previous label, last is next label
-        labels: t.List[TokenPair] = [TokenPair(None, None)] * self.lineCount
-        l: t.List[t.Optional[HumdrumToken]] = [None] * self.lineCount
+        labels: list[TokenPair] = [TokenPair(None, None)] * self.lineCount
+        l: list[HumdrumToken | None] = [None] * self.lineCount
 
         for i, line in enumerate(self._lines):
             if not line.isInterpretation:
@@ -468,7 +468,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             if token is not None and token.text.startswith('*>') and '[' not in token.text:
                 l[i] = token
 
-        current: t.Optional[HumdrumToken] = None
+        current: HumdrumToken | None = None
         for i, label in enumerate(l):
             if label is not None:
                 current = label
@@ -480,7 +480,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                 current = label
             labels[i].last = current
 
-        endings: t.List[int] = [0] * self.lineCount
+        endings: list[int] = [0] * self.lineCount
         ending: int = 0
         for i, label in enumerate(l):
             if label is not None:
@@ -491,8 +491,8 @@ class HumdrumFileContent(HumdrumFileStructure):
             endings[i] = ending
 
         output: bool = True
-        slurStarts: t.List[HumdrumToken] = []
-        slurEnds: t.List[HumdrumToken] = []
+        slurStarts: list[HumdrumToken] = []
+        slurEnds: list[HumdrumToken] = []
         linkSignifier: str = self._signifiers.linked
         for spineStart in spineStarts:
             output = (
@@ -510,14 +510,14 @@ class HumdrumFileContent(HumdrumFileStructure):
         return output
 
     def analyzeSpineSlursOrPhrases(
-            self,
-            slurOrPhrase: str,
-            spineStart: HumdrumToken,
-            linkStarts: t.List[HumdrumToken],
-            linkEnds: t.List[HumdrumToken],
-            labels: t.List[TokenPair],
-            endings: t.List[int],
-            linkSig: str
+        self,
+        slurOrPhrase: str,
+        spineStart: HumdrumToken,
+        linkStarts: list[HumdrumToken],
+        linkEnds: list[HumdrumToken],
+        labels: list[TokenPair],
+        endings: list[int],
+        linkSig: str
     ) -> bool:
         beginStr: str = ''
         endStr: str = ''
@@ -552,14 +552,14 @@ class HumdrumFileContent(HumdrumFileStructure):
 
         # tracktokens == the 2-D data list for the track,
         # arranged in layers with the second dimension.
-        trackTokens: t.List[t.List[HumdrumToken]] = self.getTrackSequence(
+        trackTokens: list[list[HumdrumToken]] = self.getTrackSequence(
             startToken=spineStart, options=self.OPT_DATA | self.OPT_NOEMPTY
         )
 
         # opens == list of phrase/slur openings for each track and elision level
         # first dimension: elision level (max: 4)
         # second dimension: layer number (max: 8)
-        opens: t.List[t.List[t.List[HumdrumToken]]] = []
+        opens: list[list[list[HumdrumToken]]] = []
         for _el in range(0, 4):
             opens.append([])
             for _tr in range(0, 8):
@@ -613,7 +613,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                             lineIndex: int = token.lineIndex
                             endNum: int = endings[lineIndex]
                             pIndex: int = -1
-                            first: t.Optional[HumdrumToken] = labels[lineIndex].first
+                            first: HumdrumToken | None = labels[lineIndex].first
                             if first is not None:
                                 pIndex = first.lineIndex - 1
 
@@ -664,10 +664,12 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::createLinkedSlurs --  Currently assume that
     //    start and ends are matched.
     '''
-    def createLinkedSlursOrPhrases(self,
-            slurOrPhrase: str,
-            linkStarts: t.List[HumdrumToken],
-            linkEnds: t.List[HumdrumToken]) -> None:
+    def createLinkedSlursOrPhrases(
+        self,
+        slurOrPhrase: str,
+        linkStarts: list[HumdrumToken],
+        linkEnds: list[HumdrumToken]
+    ) -> None:
         shortest: int = len(linkStarts)
         if shortest > len(linkEnds):
             shortest = len(linkEnds)
@@ -685,10 +687,10 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     @staticmethod
     def _isLinkedSlurOrPhraseEnd(
-            slurOrPhrase: str,
-            token: HumdrumToken,
-            index: int,
-            pattern: str
+        slurOrPhrase: str,
+        token: HumdrumToken,
+        index: int,
+        pattern: str
     ) -> bool:
         endStr: str = ''
         if slurOrPhrase == HumdrumToken.SLUR:
@@ -727,10 +729,10 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     @staticmethod
     def _isLinkedSlurOrPhraseBegin(
-            slurOrPhrase: str,
-            token: HumdrumToken,
-            index: int,
-            pattern: str
+        slurOrPhrase: str,
+        token: HumdrumToken,
+        index: int,
+        pattern: str
     ) -> bool:
         startStr: str = slurOrPhrase
 
@@ -762,9 +764,9 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     @staticmethod
     def _linkSlurOrPhraseEndpoints(
-            slurOrPhrase: str,
-            startTok: HumdrumToken,
-            endTok: HumdrumToken
+        slurOrPhrase: str,
+        startTok: HumdrumToken,
+        endTok: HumdrumToken
     ) -> None:
         if slurOrPhrase == HumdrumToken.SLUR:
             prefix = 'slur'
@@ -822,8 +824,8 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     def analyzeKernTies(self) -> bool:
         output: bool = True
-        linkedTieStarts: t.List[t.Tuple[HumdrumToken, int]] = []
-        linkedTieEnds: t.List[t.Tuple[HumdrumToken, int]] = []
+        linkedTieStarts: list[tuple[HumdrumToken, int]] = []
+        linkedTieEnds: list[tuple[HumdrumToken, int]] = []
         linkSignifier: str = self._signifiers.linked
 
         output = self.generateLinkedTieStartsAndEnds(linkedTieStarts, linkedTieEnds, linkSignifier)
@@ -837,10 +839,10 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
 
     def generateLinkedTieStartsAndEnds(
-            self,
-            linkedTieStarts: t.List[t.Tuple[HumdrumToken, int]],
-            linkedTieEnds: t.List[t.Tuple[HumdrumToken, int]],
-            linkSignifier: str
+        self,
+        linkedTieStarts: list[tuple[HumdrumToken, int]],
+        linkedTieEnds: list[tuple[HumdrumToken, int]],
+        linkSignifier: str
     ) -> bool:
         # Use this in the future to limit to grand-staff search (or 3 staves for organ):
         # vector<vector<HTp> > tracktokens;
@@ -855,7 +857,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         lmiddle: str = linkSignifier + '_'
         lend: str = linkSignifier + ']'
 
-        startDatabase: t.List[t.Tuple[t.Optional[HumdrumToken], int]] = [(None, -1)] * 400
+        startDatabase: list[tuple[HumdrumToken | None, int]] = [(None, -1)] * 400
 
         for line in self._lines:
             if not line.isData:
@@ -878,7 +880,7 @@ class HumdrumFileContent(HumdrumFileStructure):
 
                     if lend in subtokenStr:
                         endb40: int = Convert.kernToBase40(subtokenStr)
-                        endEntry: t.Tuple[t.Optional[HumdrumToken], int] = startDatabase[endb40]
+                        endEntry: tuple[HumdrumToken | None, int] = startDatabase[endb40]
                         if endEntry[0] is not None:
                             if t.TYPE_CHECKING:
                                 assert isinstance(endEntry[0], HumdrumToken)
@@ -888,7 +890,7 @@ class HumdrumFileContent(HumdrumFileStructure):
 
                     if lmiddle in subtokenStr:
                         middleb40: int = Convert.kernToBase40(subtokenStr)
-                        middleEntry: t.Tuple[t.Optional[HumdrumToken], int] = (
+                        middleEntry: tuple[HumdrumToken | None, int] = (
                             startDatabase[middleb40]
                         )
                         if middleEntry[0] is not None:
@@ -906,9 +908,9 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumFileContent::createLinkedTies --
     '''
     def createLinkedTies(
-            self,
-            linkStarts: t.List[t.Tuple[HumdrumToken, int]],
-            linkEnds: t.List[t.Tuple[HumdrumToken, int]]
+        self,
+        linkStarts: list[tuple[HumdrumToken, int]],
+        linkEnds: list[tuple[HumdrumToken, int]]
     ) -> None:
         shortest = len(linkStarts)
         if shortest > len(linkEnds):
@@ -929,10 +931,10 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     @staticmethod
     def _linkTieEndpoints(
-            tieStart: HumdrumToken,
-            startSubtokenIdx: int,
-            tieEnd: HumdrumToken,
-            endSubtokenIdx: int
+        tieStart: HumdrumToken,
+        startSubtokenIdx: int,
+        tieEnd: HumdrumToken,
+        endSubtokenIdx: int
     ) -> None:
         durTag: str = 'tieDuration'
         startTag: str = 'tieStart'
@@ -990,7 +992,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     def checkForExplicitVerticalRestPositions(self) -> None:
         # default to treble clef
         defaultBaseline: int = Convert.kernClefToBaseline('*clefG2')
-        baselines: t.List[int] = [defaultBaseline] * (self.maxTrack + 1)
+        baselines: list[int] = [defaultBaseline] * (self.maxTrack + 1)
 
         for line in self._lines:
             if line.isInterpretation:
@@ -1086,14 +1088,14 @@ class HumdrumFileContent(HumdrumFileStructure):
 
         spineStartCount: int = len(self.spineStartList)
 
-        spineStartIdxFromTrackNum: t.List[int] = [-1] * (self.maxTrack + 1)
+        spineStartIdxFromTrackNum: list[int] = [-1] * (self.maxTrack + 1)
         for i, startTok in enumerate(self.spineStartList):
             if startTok is not None and startTok.track is not None:
                 spineStartIdxFromTrackNum[startTok.track] = i
 
         # keysigs == key signature spellings of diatonic pitch classes.  This array
         # is duplicated into dstates after each barline.
-        keysigs: t.List[t.List[int]] = []
+        keysigs: list[list[int]] = []
         for _ in range(0, spineStartCount):
             keysigs.append([0] * 7)
 
@@ -1105,20 +1107,20 @@ class HumdrumFileContent(HumdrumFileStructure):
         # Eventually this algorithm should be adjusted for dealing with
         # cross-staff notes, where the cross-staff notes should be following
         # the accidentals of a different spine...
-        dstates: t.List[t.List[int]] = []
+        dstates: list[list[int]] = []
         for _ in range(0, spineStartCount):
             dstates.append([0] * 70)  # 10 octave limit may cause problems; fix later
 
         # gdstates == grace note diatonic states for every pitch in a spine.
-        gdstates: t.List[t.List[int]] = []
+        gdstates: list[list[int]] = []
         for _ in range(0, spineStartCount):
             gdstates.append([0] * 70)
 
         # firstInBar == keep track of first beat in measure.
-        firstInBar: t.List[bool] = [False] * spineStartCount
+        firstInBar: list[bool] = [False] * spineStartCount
 
         lastTrack: int = -1
-        concurrentState: t.List[int] = [0] * 70
+        concurrentState: list[int] = [0] * 70
 
         spineStartIdx: int
         for line in self._lines:
@@ -1545,7 +1547,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         return True
 
     @staticmethod
-    def fillKeySignature(keysig: t.List[int], ks_tstring: str):
+    def fillKeySignature(keysig: list[int], ks_tstring: str):
         for i in range(0, len(keysig)):
             keysig[i] = 0
 
@@ -1579,7 +1581,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             keysig[3] = -1
 
     @staticmethod
-    def resetDiatonicStatesWithKeySignature(states: t.List[int], keysig: t.List[int]):
+    def resetDiatonicStatesWithKeySignature(states: list[int], keysig: list[int]):
         for i in range(0, len(states)):
             states[i] = keysig[i % 7]
 
@@ -1592,8 +1594,8 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     def analyzeOttavas(self) -> None:
         trackCount: int = self.maxTrack
-        activeOttava: t.List[int] = [0] * (trackCount + 1)  # 0th element goes unused
-        octaveState: t.List[int] = [0] * (trackCount + 1)   # 0th element goes unused
+        activeOttava: list[int] = [0] * (trackCount + 1)  # 0th element goes unused
+        octaveState: list[int] = [0] * (trackCount + 1)   # 0th element goes unused
 
         ttrack: int
 
@@ -1657,12 +1659,12 @@ class HumdrumFileContent(HumdrumFileStructure):
     // Returns true if there are any *ij/*Xij markers in the data.
     '''
     def analyzeTextRepetition(self) -> None:
-        spineStarts: t.List[t.Optional[HumdrumToken]] = self.spineStartList
+        spineStarts: list[HumdrumToken | None] = self.spineStartList
 
         for start in spineStarts:
             ijstate: bool = False
             startij: bool = False
-            lastIJToken: t.Optional[HumdrumToken] = None  # last token seen in ij range
+            lastIJToken: HumdrumToken | None = None  # last token seen in ij range
 
             if start is None:
                 raise HumdrumInternalError('start that is None found in spineStarts')
@@ -1671,7 +1673,7 @@ class HumdrumFileContent(HumdrumFileStructure):
             if not start.isDataType('**text') and not start.isDataType('**silbe'):
                 continue
 
-            current: t.Optional[HumdrumToken] = start
+            current: HumdrumToken | None = start
             while current is not None:
                 if current.isNull:
                     current = current.nextToken0
@@ -1707,7 +1709,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     def analyzeRScale(self) -> bool:
         numActiveTracks: int = 0  # number of tracks currently having an active rscale parameter
-        rscales: t.List[HumNum] = [opFrac(1)] * (self.maxTrack + 1)
+        rscales: list[HumNum] = [opFrac(1)] * (self.maxTrack + 1)
         ttrack: int
 
         for line in self._lines:
@@ -1797,8 +1799,8 @@ class HumdrumFileContent(HumdrumFileStructure):
     def setSpineColorFromColorInterpToken(self, token: HumdrumToken) -> None:
         m = re.search(r'^\*color:(.*)', token.text)
         if m:
-            ctrack: t.Optional[int] = token.track
-            strack: t.Optional[int] = token.subTrack
+            ctrack: int | None = token.track
+            strack: int | None = token.subTrack
             if ctrack is None or strack is None:
                 return
             if strack < MAXCOLORSUBTRACK:
@@ -1823,7 +1825,7 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     def hasPickup(self) -> int:
         barlineIdx: int = -1
-        tsig: t.Optional[HumdrumToken] = None
+        tsig: HumdrumToken | None = None
 
         for i, line in enumerate(self._lines):
             if line.isBarline:

@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import typing as t
@@ -20,14 +20,14 @@ class HumParamSet:
     //
     // HumParamSet::HumParamSet --
     '''
-    def __init__(self, token=None) -> None:  # token: t.Optional[t.Union[HumdrumToken, str]]
+    def __init__(self, token: 'HumdrumToken' | str | None = None) -> None:
         from converter21.humdrum import HumdrumToken
-        self._token: t.Optional[HumdrumToken] = None
+        self._token: HumdrumToken | None = None
         self._ns1: str = ''
         self._ns2: str = ''
         # _parameters is a list of parameters.
         # _parameters[i] is a 2-element list of str, ['key', 'value']
-        self._parameters: t.List[t.List[str]] = []
+        self._parameters: list[list[str]] = []
 
         if isinstance(token, str):
             self.readString(token)
@@ -145,7 +145,7 @@ class HumParamSet:
             firstNonBang = i
             break
 
-        pieces: t.List[str] = text[firstNonBang:].split(':')
+        pieces: list[str] = text[firstNonBang:].split(':')
 
         if len(pieces) < 3:
             return

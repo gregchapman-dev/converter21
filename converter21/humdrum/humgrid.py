@@ -7,7 +7,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -43,21 +43,21 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class HumGrid:
     def __init__(self) -> None:
-        self.measures: t.List[GridMeasure] = []
-        self._allSlices: t.List[GridSlice] = []
+        self.measures: list[GridMeasure] = []
+        self._allSlices: list[GridSlice] = []
 
         self.hasRepeatBrackets: bool = False
 
         # indexed by part (max = 100 parts)
-        self._verseCount: t.List[t.List[int]] = []
+        self._verseCount: list[list[int]] = []
         for _ in range(0, 100):
             self._verseCount.append([])
-        self._harmonyCount: t.List[int] = [0] * 100
-        self._xmlIds: t.List[bool] = [False] * 100
-        self._figuredBass: t.List[bool] = [False] * 100
-        self._harmony: t.List[bool] = [False] * 100
-        self._partNames: t.List[str] = []  # grows as necessary
-        self._dynamics: t.List[bool] = [False] * 100
+        self._harmonyCount: list[int] = [0] * 100
+        self._xmlIds: list[bool] = [False] * 100
+        self._figuredBass: list[bool] = [False] * 100
+        self._harmony: list[bool] = [False] * 100
+        self._partNames: list[str] = []  # grows as necessary
+        self._dynamics: list[bool] = [False] * 100
 
         # options:
         self._pickup: bool = False
@@ -449,12 +449,12 @@ class HumGrid:
             # grace slices are of zero duration; do not extend
             return
 
-        gv: t.Optional[GridVoice] = thisSlice.parts[parti].staves[staffi].voices[voicei]
+        gv: GridVoice | None = thisSlice.parts[parti].staves[staffi].voices[voicei]
         if gv is None:
             # STRANGE: voice should not be None
             return
 
-        token: t.Optional[HumdrumToken] = gv.token
+        token: HumdrumToken | None = gv.token
         if token is None:
             # STRANGE: token should not be None
             return
@@ -491,8 +491,8 @@ class HumGrid:
             if timeLeft < 0:
                 return
 
-            sliceType: t.Optional[SliceType] = None
-            gs: t.Optional[GridStaff] = None
+            sliceType: SliceType | None = None
+            gs: GridStaff | None = None
             s: int = slicei + 1
 
             while s < len(self._allSlices) and timeLeft > 0:
@@ -503,7 +503,7 @@ class HumGrid:
 
                 currTs = nextTs
                 nexts: int = 1
-                nextsSlice: t.Optional[GridSlice] = None
+                nextsSlice: GridSlice | None = None
                 while s < len(self._allSlices) - nexts:
                     nextsSlice = self._allSlices[s + nexts]
                     if t.TYPE_CHECKING:
@@ -531,9 +531,9 @@ class HumGrid:
                     # if there is already a non-null token here, don't overwrite it,
                     # raise an exception instead.  This should not happen.
                     if voicei < len(gs.voices):
-                        vi: t.Optional[GridVoice] = gs.voices[voicei]
+                        vi: GridVoice | None = gs.voices[voicei]
                         if vi is not None:
-                            vitok: t.Optional[HumdrumToken] = vi.token
+                            vitok: HumdrumToken | None = vi.token
                             if vitok is not None:
                                 if vitok.text != '.':
                                     raise HumdrumInternalError(
@@ -601,8 +601,8 @@ class HumGrid:
 
             # theSlice is of the sliceType we are looking for.
             # Find the last note and next note.
-            lastNote: t.Optional[GridSlice] = None
-            nextNote: t.Optional[GridSlice] = None
+            lastNote: GridSlice | None = None
+            nextNote: GridSlice | None = None
 
             for j in range(i + 1, len(self._allSlices)):
                 if self._allSlices[j].isNoteSlice:
@@ -627,9 +627,11 @@ class HumGrid:
             contracting to a single spine
     '''
     @staticmethod
-    def _fillInNullTokensForSlice(theSlice: GridSlice,
-                                  lastSpined: GridSlice,
-                                  nextSpined: GridSlice) -> None:
+    def _fillInNullTokensForSlice(
+        theSlice: GridSlice,
+        lastSpined: GridSlice,
+        nextSpined: GridSlice
+    ) -> None:
         nullChar: str = theSlice.nullTokenStringForSlice()
 
         for p, part in enumerate(theSlice.parts):
@@ -711,7 +713,7 @@ class HumGrid:
             prevMeasure.slices.append(firstSliceOfThisMeasure)
     '''
 
-    def checkForMissingNullTokens(self, sliceType: t.Optional[SliceType] = None) -> None:
+    def checkForMissingNullTokens(self, sliceType: SliceType | None = None) -> None:
         for i, gridSlice in enumerate(self._allSlices):
             if sliceType is not None:
                 if not gridSlice.isSliceOfType(sliceType):
@@ -769,7 +771,7 @@ class HumGrid:
                                 # add slice duration to cumulative duration.
                                 duration = opFrac(duration + slicep.duration)
                                 continue
-                            vp: t.Optional[GridVoice] = sp.voices[v]
+                            vp: GridVoice | None = sp.voices[v]
                             if vp is None:
                                 # found another void spot which should be dealt with later
                                 break
@@ -792,7 +794,7 @@ class HumGrid:
     //    fill in with invisible rests.
     '''
     def addInvisibleRestsInFirstTrack(self) -> None:
-        nextEvent: t.List[t.List[GridSlice]] = []
+        nextEvent: list[list[GridSlice]] = []
         lastSlice: GridSlice = self._allSlices[-1]
         self.setPartStaffDimensions(nextEvent, lastSlice)
 
@@ -833,9 +835,11 @@ class HumGrid:
     //
     // HumGrid::setPartStaffDimensions --
     '''
-    def setPartStaffDimensions(self,
-            nextEvent: t.List[t.List[GridSlice]],
-            startSlice: GridSlice) -> None:
+    def setPartStaffDimensions(
+        self,
+        nextEvent: list[list[GridSlice]],
+        startSlice: GridSlice
+    ) -> None:
         nextEvent.clear()
         for gridSlice in self._allSlices:
             if not gridSlice.isNoteSlice:
@@ -858,12 +862,14 @@ class HumGrid:
     //
     // HumGrid::addInvisibleRest --
     '''
-    def addInvisibleRest(self,
-            nextEvent: t.List[t.List[GridSlice]],
-            sliceIndex: int,
-            p: int,
-            s: int) -> None:
-        ending: t.Optional[GridSlice] = nextEvent[p][s]
+    def addInvisibleRest(
+        self,
+        nextEvent: list[list[GridSlice]],
+        sliceIndex: int,
+        p: int,
+        s: int
+    ) -> None:
+        ending: GridSlice | None = nextEvent[p][s]
         if ending is None:
             print('Not handling this case yet at end of data.', file=sys.stderr)
             return
@@ -875,11 +881,11 @@ class HumGrid:
             print('missing voice in addInvisibleRest', file=sys.stderr)
             return
 
-        voice0: t.Optional[GridVoice] = starting.parts[p].staves[s].voices[0]
+        voice0: GridVoice | None = starting.parts[p].staves[s].voices[0]
         if voice0 is None:
             print('voice0 is None in addInvisibleRest', file=sys.stderr)
             return
-        token: t.Optional[HumdrumToken] = voice0.token
+        token: HumdrumToken | None = voice0.token
         if token is None:
             print('voice0.token is None in addInvisibleRest', file=sys.stderr)
             return
@@ -947,14 +953,14 @@ class HumGrid:
     '''
     def addMeasureLines(self) -> None:
         for m, measure in enumerate(self.measures):
-            firstSpined: t.Optional[GridSlice] = measure.firstSpinedSlice()
+            firstSpined: GridSlice | None = measure.firstSpinedSlice()
             if firstSpined is None:
                 # no spined slices in this measure?!? no barline for you.
                 continue
 
             timestamp: HumNum = firstSpined.timestamp
-            prevMeasure: t.Optional[GridMeasure] = None
-            prevLastSpined: t.Optional[GridSlice] = None
+            prevMeasure: GridMeasure | None = None
+            prevLastSpined: GridSlice | None = None
             if m > 0:
                 prevMeasure = self.measures[m - 1]
                 if len(prevMeasure.slices) > 0:
@@ -1005,7 +1011,7 @@ class HumGrid:
                         voiceCount = 1
 
                     for _ in range(0, voiceCount):
-                        token: t.Optional[str] = self.createBarToken(measure, staffIndex)
+                        token: str | None = self.createBarToken(measure, staffIndex)
                         if token is None:
                             # Humdrum can't have a mixture of barlines and "no barline", so
                             # instead of "no barline", create an invisible barline.
@@ -1055,7 +1061,7 @@ class HumGrid:
             part = GridPart()
             mslice.parts.append(part)
             for _ in range(0, len(modelPart.staves)):
-                measureStyle: t.Optional[str] = self.getLastBarlineStyle(measure, staffIndex)
+                measureStyle: str | None = self.getLastBarlineStyle(measure, staffIndex)
                 if measureStyle is None:
                     # we can't mix barlines with "no barline", so make an invisible barline
                     measureStyle = '-'
@@ -1071,8 +1077,8 @@ class HumGrid:
     //
     // HumGrid::createBarToken --
     '''
-    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
-        measureStyle: t.Optional[str] = self.getMeasureStyle(measure, staffIndex)
+    def createBarToken(self, measure: GridMeasure, staffIndex: int) -> str | None:
+        measureStyle: str | None = self.getMeasureStyle(measure, staffIndex)
         if measureStyle is None:  # a.k.a. measureStyle == MeasureStyle.NoBarline
             return None
 
@@ -1113,9 +1119,9 @@ class HumGrid:
 #         if mcount == 0:
 #             return []
 #
-#         output: t.List[int] = [None] * mcount
-#         mdur: t.List[HumNum] = [None] * mcount  # actual measure duration
-#         tsdur: t.List[HumNum] = [None] * mcount # time signature duration
+#         output: list[int] = [None] * mcount
+#         mdur: list[HumNum] = [None] * mcount  # actual measure duration
+#         tsdur: list[HumNum] = [None] * mcount # time signature duration
 #
 #         for m, measure in enumerate(self.measures):
 #             mdur[m]  = measure.duration
@@ -1162,8 +1168,8 @@ class HumGrid:
     // HumGrid::getBarStyle --
     '''
     @staticmethod
-    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
-        output: t.Optional[str] = Convert.measureStyleToHumdrumBarlineStyleStr(
+    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str | None:
+        output: str | None = Convert.measureStyleToHumdrumBarlineStyleStr(
             measure.measureStyle(staffIndex)
         )
         if output is None:
@@ -1175,8 +1181,8 @@ class HumGrid:
         return output
 
     @staticmethod
-    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> t.Optional[str]:
-        output: t.Optional[str] = Convert.measureStyleToHumdrumBarlineStyleStr(
+    def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str | None:
+        output: str | None = Convert.measureStyleToHumdrumBarlineStyleStr(
             measure.rightBarlineStyle(staffIndex)
         )
         if output is None:
@@ -1199,7 +1205,7 @@ class HumGrid:
 
     @staticmethod
     def _cleanTempoSlice(tempoSlice: GridSlice) -> None:
-        token: t.Optional[HumdrumToken] = None
+        token: HumdrumToken | None = None
 
         # find first real tempo token
         for part in tempoSlice.parts:
@@ -1232,7 +1238,7 @@ class HumGrid:
         measure: GridMeasure,
         timestamp: HumNumIn,
         voicesPerStaff: int = 1,
-        matchVoicesToSlice: t.Optional[GridSlice] = None
+        matchVoicesToSlice: GridSlice | None = None
     ) -> GridSlice:
         fakeSlice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
 
@@ -1272,8 +1278,8 @@ class HumGrid:
         # ending barline for the last measure. This is so that if we start without a barline
         # (or end without a barline), we'll still split and merge appropriately before the
         # first line of the first measure/after the last line of the last measure.
-        fakeFirstSlice: t.Optional[GridSlice] = None
-        fakeLastSlice: t.Optional[GridSlice] = None
+        fakeFirstSlice: GridSlice | None = None
+        fakeLastSlice: GridSlice | None = None
 
         # check if we need fakeFirstSlice
         for measure in self.measures:
@@ -1304,13 +1310,13 @@ class HumGrid:
             # all done, either way
             break
 
-        manipulator: t.Optional[GridSlice]
-        lastSpinedLine: t.Optional[GridSlice] = None
+        manipulator: GridSlice | None
+        lastSpinedLine: GridSlice | None = None
         output: bool = False
 
         startNextMeasureAtSlice1: bool = False
         if fakeFirstSlice is not None:
-            firstSpinedLine: t.Optional[GridSlice] = self.getNextSpinedLine(slicei=-1, measurei=0)
+            firstSpinedLine: GridSlice | None = self.getNextSpinedLine(slicei=-1, measurei=0)
             manipulator = self.manipulatorCheckTwoSlices(fakeFirstSlice, firstSpinedLine)
             if manipulator is not None:
                 output = True
@@ -1343,7 +1349,7 @@ class HumGrid:
 
                 lastSpinedLine = slice1
 
-                slice2: t.Optional[GridSlice] = self.getNextSpinedLine(slicei=i, measurei=m)
+                slice2: GridSlice | None = self.getNextSpinedLine(slicei=i, measurei=m)
                 if slice2 is not None:
                     lastSpinedLine = slice2
 
@@ -1370,7 +1376,7 @@ class HumGrid:
     //
     // HumGrid::getNextSpinedLine -- Find next spined GridSlice.
     '''
-    def getNextSpinedLine(self, slicei: int, measurei: int) -> t.Optional[GridSlice]:
+    def getNextSpinedLine(self, slicei: int, measurei: int) -> GridSlice | None:
         measure: GridMeasure = self.measures[measurei]
         nextOne: int = slicei + 1
 
@@ -1404,9 +1410,9 @@ class HumGrid:
     //   then add spine manipulator line to Grid between the two lines.
     '''
     def manipulatorCheckTwoSlices(self,
-            ice1: t.Optional[GridSlice],
-            ice2: t.Optional[GridSlice]
-    ) -> t.Optional[GridSlice]:
+        ice1: GridSlice | None,
+        ice2: GridSlice | None
+    ) -> GridSlice | None:
         if ice1 is None:
             return None
 
@@ -1553,8 +1559,8 @@ class HumGrid:
     // HumGrid::cleanupManipulators --
     '''
     def cleanupManipulators(self) -> None:
-        currSlice: t.Optional[GridSlice] = None
-        lastSlice: t.Optional[GridSlice] = None
+        currSlice: GridSlice | None = None
+        lastSlice: GridSlice | None = None
         for measure in self.measures:
             # This is a while loop instead of a for loop because we're
             # carefully inserting into the list we are iterating over,
@@ -1575,7 +1581,7 @@ class HumGrid:
 
                 # check to see if manipulator needs to be split into
                 # multiple lines.
-                newSlices: t.List[GridSlice] = self.cleanManipulator(currSlice)
+                newSlices: list[GridSlice] = self.cleanManipulator(currSlice)
                 if newSlices:
                     # BUGFIX: reversed loop because insert(i) reverses
                     for newSlice in reversed(newSlices):
@@ -1629,11 +1635,11 @@ class HumGrid:
     '''
     @staticmethod
     def createVoice(
-            tok: str,
-            _post: str,
-            _duration: HumNumIn,
-            _partIndex: int,
-            _staffIndex: int
+        tok: str,
+        _post: str,
+        _duration: HumNumIn,
+        _partIndex: int,
+        _staffIndex: int
     ) -> GridVoice:
         token: str = tok
         # token += ':' + _post + ':' + str(_partIndex) + ',' + str(_staffIndex)
@@ -1645,9 +1651,9 @@ class HumGrid:
     //
     // HumGrid::cleanManipulator --
     '''
-    def cleanManipulator(self, currSlice: GridSlice) -> t.List[GridSlice]:
-        newSlices: t.List[GridSlice] = []
-        output: t.Optional[GridSlice] = None
+    def cleanManipulator(self, currSlice: GridSlice) -> list[GridSlice]:
+        newSlices: list[GridSlice] = []
+        output: GridSlice | None = None
 
         # deal with *^ manipulators
         output = self.checkManipulatorExpand(currSlice)
@@ -1669,14 +1675,14 @@ class HumGrid:
     // HumGrid::checkManipulatorExpand -- Check for cases where a spine expands
     //    into sub-spines.
     '''
-    def checkManipulatorExpand(self, currSlice: GridSlice) -> t.Optional[GridSlice]:
+    def checkManipulatorExpand(self, currSlice: GridSlice) -> GridSlice | None:
         needNew: bool = False
         for part in currSlice.parts:
             for staff in part.staves:
                 for voice in staff.voices:
                     if voice is None:
                         continue
-                    token: t.Optional[HumdrumToken] = voice.token
+                    token: HumdrumToken | None = voice.token
                     if token is None:
                         continue
                     if token.text.startswith('*^'):
@@ -1710,8 +1716,13 @@ class HumGrid:
     //   *^ and *^ on the next line, or *^4 into *^ and *^3 on the
     //   next line.  The "newmanip" will be placed before curr, so
     '''
-    def adjustExpansionsInStaff(self, newManip: GridSlice, currSlice: GridSlice,
-                                p: int, s: int) -> None:
+    def adjustExpansionsInStaff(
+        self,
+        newManip: GridSlice,
+        currSlice: GridSlice,
+        p: int,
+        s: int
+    ) -> None:
         newStaff: GridStaff = newManip.parts[p].staves[s]
         curStaff: GridStaff = currSlice.parts[p].staves[s]
 
@@ -1721,7 +1732,7 @@ class HumGrid:
         # of control.
         cv: int = 0
         for _ in range(0, len(curStaff.voices)):  # loops over original range
-            curVoice: t.Optional[GridVoice] = curStaff.voices[cv]
+            curVoice: GridVoice | None = curStaff.voices[cv]
             if curVoice is None:
                 raise HumdrumInternalError('curVoice is None in adjustExpansionsInStaff')
 
@@ -1771,12 +1782,12 @@ class HumGrid:
     //    a new manipulator to add to the file (and the current manipultor
     //    slice will also be modified if the return value is not NULL).
     '''
-    def checkManipulatorContract(self, currSlice: GridSlice) -> t.Optional[GridSlice]:
+    def checkManipulatorContract(self, currSlice: GridSlice) -> GridSlice | None:
         needNew: bool = False
         init: bool = False
-        lastVoice: t.Optional[GridVoice] = None
+        lastVoice: GridVoice | None = None
         staff: GridStaff
-        voice: t.Optional[GridVoice]
+        voice: GridVoice | None
 
         for part in reversed(currSlice.parts):
             for staff in reversed(part.staves):
@@ -1803,7 +1814,7 @@ class HumGrid:
         newManip: GridSlice = GridSlice(currSlice.measure, currSlice.timestamp,
                                         currSlice.sliceType, fromSlice=currSlice)
         lastVoice = None
-        lastStaff: t.Optional[GridStaff] = None
+        lastStaff: GridStaff | None = None
         foundNew: bool = False
         lastp: int = 0
         lasts: int = 0
@@ -1857,13 +1868,15 @@ class HumGrid:
     // new:            *v   *v        *    *
     // old:            *              *v   *v
     '''
-    def transferMerges(self,
-            oldStaff: t.Optional[GridStaff],
-            oldLastStaff: t.Optional[GridStaff],
-            newStaff: GridStaff,
-            newLastStaff: GridStaff,
-            pindex: int,
-            sindex: int) -> None:
+    def transferMerges(
+        self,
+        oldStaff: GridStaff | None,
+        oldLastStaff: GridStaff | None,
+        newStaff: GridStaff,
+        newLastStaff: GridStaff,
+        pindex: int,
+        sindex: int
+    ) -> None:
 
         if oldStaff is None or oldLastStaff is None:
             print('Weird error in HumGrid.transferMerges()', file=sys.stderr)
@@ -2059,7 +2072,7 @@ class HumGrid:
 
         for p in reversed(range(0, len(gridSlice.parts))):
             part = gridSlice.parts[p]
-            staffNums: t.List[int] = []
+            staffNums: list[int] = []
             for s in reversed(range(0, len(part.staves))):
                 staffNums.append(staffCount)
                 text: str = '*staff' + str(staffCount)
@@ -2079,7 +2092,7 @@ class HumGrid:
         line: HumdrumLine,
         p: int,
         s: int,
-        staffNums: t.List[int]  # >1 element if s is negative (i.e. part sides)
+        staffNums: list[int]  # >1 element if s is negative (i.e. part sides)
     ) -> None:
         text: str
         if s < 0:
@@ -2261,7 +2274,7 @@ class HumGrid:
     //		the meter signature.
     def removeRedundantClefChanges(self) -> None:
         # curClef is a list of the current staff on the part:staff.
-        curClef: t.List[t.List[str]] = []
+        curClef: list[list[str]] = []
         hasDuplicate: bool = False
         for measure in self.measures:
             for clefSlice in measure.slices:
@@ -2326,8 +2339,8 @@ class HumGrid:
     //   later do all types of local comments.
     '''
     def expandLocalCommentLayers(self) -> None:
-        dataSlice: t.Optional[GridSlice] = None
-        localSlice: t.Optional[GridSlice] = None
+        dataSlice: GridSlice | None = None
+        localSlice: GridSlice | None = None
         for gridSlice in self._allSlices:
             if gridSlice.isDataSlice:
                 dataSlice = gridSlice

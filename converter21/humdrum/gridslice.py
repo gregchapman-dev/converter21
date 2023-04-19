@@ -8,7 +8,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -46,12 +46,12 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class GridSlice:
     def __init__(
-            self,
-            ownerMeasure,
-            timestamp: HumNumIn,
-            sliceType: SliceType,
-            staffCounts: t.Optional[t.List[int]] = None,
-            fromSlice: t.Optional['GridSlice'] = None
+        self,
+        ownerMeasure,
+        timestamp: HumNumIn,
+        sliceType: SliceType,
+        staffCounts: list[int] | None = None,
+        fromSlice: 'GridSlice' | None = None
     ) -> None:
         from converter21.humdrum import GridMeasure
         from converter21.humdrum import HumGrid
@@ -62,7 +62,7 @@ class GridSlice:
         self._measure: GridMeasure = ownerMeasure           # enclosing measure
         self._ownerGrid: HumGrid = self._measure.ownerGrid  # measure's enclosing grid
 
-        self.parts: t.List[GridPart] = []
+        self.parts: list[GridPart] = []
         if fromSlice is None and staffCounts is None:
             return
 
@@ -137,11 +137,11 @@ class GridSlice:
     //     grow staff or voice array if needed.
     '''
     def addToken(
-            self,
-            tok: t.Union[HumdrumToken, str],
-            parti: int,
-            staffi: int,
-            voicei: int
+        self,
+        tok: HumdrumToken | str,
+        parti: int,
+        staffi: int,
+        voicei: int
     ) -> None:
         if isinstance(tok, str):
             tok = HumdrumToken(tok)
@@ -167,7 +167,7 @@ class GridSlice:
             for _ in range(len(staff.voices), voicei + 1):
                 staff.voices.append(GridVoice())
 
-        voice: t.Optional[GridVoice] = staff.voices[voicei]
+        voice: GridVoice | None = staff.voices[voicei]
         if t.TYPE_CHECKING:
             # because we just filled staff.voices[voicei] in with a GridVoice if necessary
             assert isinstance(voice, GridVoice)
@@ -339,7 +339,7 @@ class GridSlice:
     '''
     def transferTokens(self, outFile: HumdrumFile, recip: bool) -> None:
         line: HumdrumLine = HumdrumLine()
-        voice: t.Optional[GridVoice]
+        voice: GridVoice | None
         emptyStr: str = '.'
 
         if self.isMeasureSlice:
@@ -360,7 +360,7 @@ class GridSlice:
             emptyStr = '???'
 
         if recip:
-            token: t.Optional[HumdrumToken] = None
+            token: HumdrumToken | None = None
 
             if self.isNoteSlice:
                 token = self._createRecipTokenFromDuration(self.duration)
@@ -450,7 +450,7 @@ class GridSlice:
     '''
     def getVerseCount(self, partIndex: int, staffIndex: int = -1) -> int:
         from converter21.humdrum import HumGrid
-        grid: t.Optional[HumGrid] = self.ownerGrid
+        grid: HumGrid | None = self.ownerGrid
         if grid is None:
             return 0
 
@@ -465,7 +465,7 @@ class GridSlice:
     '''
     def getHarmonyCount(self, partIndex: int, staffIndex: int = -1) -> int:
         from converter21.humdrum import HumGrid
-        grid: t.Optional[HumGrid] = self.ownerGrid
+        grid: HumGrid | None = self.ownerGrid
         if grid is None:
             return 0
 
@@ -484,7 +484,7 @@ class GridSlice:
     '''
     def getXmlIdCount(self, partIndex: int, _unusedstaffIndex: int = -1) -> int:
         from converter21.humdrum import HumGrid
-        grid: t.Optional[HumGrid] = self.ownerGrid
+        grid: HumGrid | None = self.ownerGrid
         if grid is None:
             return 0
         # should probably adjust to staffindex later:
@@ -497,7 +497,7 @@ class GridSlice:
     '''
     def getDynamicsCount(self, partIndex: int, staffIndex: int = -1) -> int:
         from converter21.humdrum import HumGrid
-        grid: t.Optional[HumGrid] = self.ownerGrid
+        grid: HumGrid | None = self.ownerGrid
         if grid is None:
             return 0
 
@@ -515,7 +515,7 @@ class GridSlice:
     '''
     def getFiguredBassCount(self, partIndex: int, staffIndex: int = -1) -> int:
         from converter21.humdrum import HumGrid
-        grid: t.Optional[HumGrid] = self.ownerGrid
+        grid: HumGrid | None = self.ownerGrid
         if grid is None:
             return 0
 
@@ -533,14 +533,20 @@ class GridSlice:
 
     # this version is used to transfer Sides from the Part
     @staticmethod
-    def transferSidesFromPart(line: HumdrumLine, part: GridPart, emptyStr: str,
-                              maxhcount: int, maxdcount: int, maxfcount: int) -> None:
+    def transferSidesFromPart(
+        line: HumdrumLine,
+        part: GridPart,
+        emptyStr: str,
+        maxhcount: int,
+        maxdcount: int,
+        maxfcount: int
+    ) -> None:
         sides: GridSide = part.sides
         hcount: int = sides.harmonyCount
 
         # DYNAMICS
         if maxdcount > 0:
-            dynamics: t.Optional[HumdrumToken] = sides.dynamics
+            dynamics: HumdrumToken | None = sides.dynamics
             if dynamics is not None:
                 line.appendToken(dynamics)
             else:
@@ -548,7 +554,7 @@ class GridSlice:
 
         # FIGURED BASS
         if maxfcount > 0:
-            figuredBass: t.Optional[HumdrumToken] = sides.figuredBass
+            figuredBass: HumdrumToken | None = sides.figuredBass
             if figuredBass is not None:
                 line.appendToken(figuredBass)
             else:
@@ -556,7 +562,7 @@ class GridSlice:
 
         # HARMONY
         for _ in range(0, hcount):
-            harmony: t.Optional[HumdrumToken] = sides.harmony
+            harmony: HumdrumToken | None = sides.harmony
             if harmony is not None:
                 line.appendToken(harmony)
             else:
@@ -567,14 +573,19 @@ class GridSlice:
 
     # this version is used to transfer Sides from the Staff
     @staticmethod
-    def transferSidesFromStaff(line: HumdrumLine, staff: GridStaff, emptyStr: str,
-                               maxxcount: int, maxvcount: int) -> None:
+    def transferSidesFromStaff(
+        line: HumdrumLine,
+        staff: GridStaff,
+        emptyStr: str,
+        maxxcount: int,
+        maxvcount: int
+    ) -> None:
         sides: GridSide = staff.sides
         vcount: int = sides.verseCount
 
         # XMLID
         if maxxcount > 0:
-            xmlId: t.Optional[HumdrumToken] = sides.xmlId
+            xmlId: HumdrumToken | None = sides.xmlId
             if xmlId is not None:
                 line.appendToken(xmlId)
             else:
@@ -582,7 +593,7 @@ class GridSlice:
 
         # VERSES
         for i in range(0, vcount):
-            verse: t.Optional[HumdrumToken] = sides.getVerse(i)
+            verse: HumdrumToken | None = sides.getVerse(i)
             if verse is not None:
                 line.appendToken(verse)
             else:
@@ -675,11 +686,11 @@ class GridSlice:
     // GridSlice::setOwner --
     '''
     @property
-    def ownerGrid(self):  # -> HumGrid:
+    def ownerGrid(self) -> 'HumGrid':
         return self._ownerGrid
 
     @ownerGrid.setter
-    def ownerGrid(self, newOwnerGrid) -> None:
+    def ownerGrid(self, newOwnerGrid: 'HumGrid') -> None:
         from converter21.humdrum import HumGrid
         if not isinstance(newOwnerGrid, HumGrid):
             raise HumdrumInternalError('invalid newOwnerGrid')
@@ -691,7 +702,7 @@ class GridSlice:
     // GridSlice::getMeasure --
     '''
     @property
-    def measure(self):  # -> GridMeasure:
+    def measure(self) -> 'GridMeasure':
         return self._measure
 
     '''
@@ -714,7 +725,7 @@ class GridSlice:
     '''
     def reportVerseCount(self, partIndex: int, staffIndex: int, count: int) -> None:
         from converter21.humdrum import HumGrid
-        grid: t.Optional[HumGrid] = self.ownerGrid
+        grid: HumGrid | None = self.ownerGrid
         if not grid:
             return
 

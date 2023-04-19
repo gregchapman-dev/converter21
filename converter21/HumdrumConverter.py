@@ -66,10 +66,12 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         return self.stream
 
     # pylint: disable=arguments-differ
-    def parseFile(self,
-            filePath: str | Path,
-            number: int | None = None,
-            **_keywords) -> stream.Score:
+    def parseFile(
+        self,
+        filePath: str | Path,
+        number: int | None = None,
+        **_keywords
+    ) -> stream.Score:
         '''
         Create HumdrumFile object from a file path, and create a music21 Stream from it.
         Note that normally, implementing parseData is sufficient, but Humdrum files
@@ -82,10 +84,17 @@ class HumdrumConverter(converter.subConverters.SubConverter):
         return self.stream
 
     # pylint: disable=arguments-differ
-    def write(self, obj, fmt, fp=None, subformats=None,
-                    makeNotation=True, addRecipSpine=False,
-                    expandTremolos=True,
-                    **keywords):
+    def write(
+        self,
+        obj,
+        fmt,
+        fp=None,
+        subformats=None,
+        makeNotation=True,
+        addRecipSpine=False,
+        expandTremolos=True,
+        **keywords
+    ):
         if fp is None:
             fp = self.getTemporaryFile()
         else:

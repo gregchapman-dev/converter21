@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import re
@@ -99,7 +99,7 @@ EQUALSVALUEWITHSPACES_PATTERN: str = r'\s*=\s*"?([^"]+)"?'
 
 class HumSignifiers:
     def __init__(self) -> None:
-        self._signifiers: t.List[HumSignifier] = []
+        self._signifiers: list[HumSignifier] = []
 
         # pre-chewed known info
 
@@ -110,8 +110,8 @@ class HumSignifiers:
         self.irestColor: str = ''       # !!!RDF**kern: show invisible rests color=chartreuse
 
         # colored lyrics
-        self.textMarks: t.List[str] = []      # a list of text mark signifiers
-        self.textColors: t.List[str] = []     # a matching list of color strings
+        self.textMarks: list[str] = []      # a list of text mark signifiers
+        self.textColors: list[str] = []     # a matching list of color strings
 
         # colored notes (with optional 'direction' text to print)
         # !!!RDF**kern: i = marked note, color="#553325", text="print this"
@@ -120,9 +120,9 @@ class HumSignifiers:
         # default is red if no color given:
         # !!!RDF**kern: i = matched note, text="print this"
         # !!!RDF**kern: i = marked note
-        self.noteMarks: t.List[str] = []       # a list of note mark signifiers
-        self.noteColors: t.List[str] = []  # a matching list of color strings
-        self.noteDirs: t.List[str] = []    # a matching list of mark "direction" strings
+        self.noteMarks: list[str] = []       # a list of note mark signifiers
+        self.noteColors: list[str] = []  # a matching list of color strings
+        self.noteDirs: list[str] = []    # a matching list of mark "direction" strings
 
         # for **dynam:
         # The signifiers must be < for crescendo and > for decrescendo.
@@ -149,8 +149,8 @@ class HumSignifiers:
         # editorial accidentals
         # !!!RDF**kern: i = editorial accidental
         # !!!RDF**kern: i = editorial accidental, brack[ets]/paren[theses]
-        self.editorialAccidentals: t.List[str] = []       # a list of signifiers
-        self.editorialAccidentalTypes: t.List[str] = []   # a matching list of types (e.g. 'brack')
+        self.editorialAccidentals: list[str] = []       # a list of signifiers
+        self.editorialAccidentalTypes: list[str] = []   # a matching list of types (e.g. 'brack')
 
         # for global styling of phrase markers
         # !!!RDF**kern: <something something phrase something dot something slur> color="blue"
@@ -390,7 +390,7 @@ class HumSignifiers:
     //
     // HumSignifiers::getSignifier --
     '''
-    def __getitem__(self, index: int) -> t.Optional[HumSignifier]:
+    def __getitem__(self, index: int) -> HumSignifier | None:
         if index < 0:
             index += self.signifierCount
 
