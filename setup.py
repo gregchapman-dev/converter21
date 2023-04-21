@@ -10,7 +10,7 @@
 
 import setuptools
 
-converter21version = '2.1.0'
+converter21version = '3.0.0'
 
 if __name__ == '__main__':
     setuptools.setup(
