@@ -7,11 +7,10 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import typing as t
 
 import music21 as m21
 from music21.common import opFrac
@@ -31,13 +30,13 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class EventData:
     def __init__(
-            self,
-            element: m21.base.Music21Object,
-            elementIndex: int,
-            voiceIndex: int,
-            ownerMeasure,
-            offsetInScore: t.Optional[HumNumIn] = None,
-            duration: t.Optional[HumNumIn] = None
+        self,
+        element: m21.base.Music21Object,
+        elementIndex: int,
+        voiceIndex: int,
+        ownerMeasure,
+        offsetInScore: HumNumIn | None = None,
+        duration: HumNumIn | None = None
     ) -> None:
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
@@ -47,15 +46,14 @@ class EventData:
         )
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
-        self._durationTuplets: t.Tuple[m21.duration.Tuplet, ...] = ()
+        self._durationTuplets: tuple[m21.duration.Tuplet, ...] = ()
         self._voiceIndex: int = voiceIndex
         self._elementIndex: int = elementIndex
         self._element: m21.base.Music21Object = element
-        self._elementType: t.Type = type(element)
         self._name: str = ''
-        self._texts: t.List[m21.expressions.TextExpression] = []
-        self._tempos: t.List[m21.tempo.TempoIndication] = []
-        self._dynamics: t.List[t.Union[m21.dynamics.Dynamic, m21.dynamics.DynamicWedge]] = []
+        self._texts: list[m21.expressions.TextExpression] = []
+        self._tempos: list[m21.tempo.TempoIndication] = []
+        self._dynamics: list[m21.dynamics.Dynamic | m21.dynamics.DynamicWedge] = []
         self._myTextsComputed: bool = False
         self._myDynamicsComputed: bool = False
 
@@ -71,10 +69,10 @@ class EventData:
         return self.m21Object.classes[0]  # at least say what type of m21Object it was
 
     def _parseEvent(
-            self,
-            element: m21.base.Music21Object,
-            offsetInScore: t.Optional[HumNumIn],
-            duration: t.Optional[HumNumIn]
+        self,
+        element: m21.base.Music21Object,
+        offsetInScore: HumNumIn | None,
+        duration: HumNumIn | None
     ) -> None:
         if offsetInScore is not None:
             self._startTime = opFrac(offsetInScore)
@@ -191,7 +189,7 @@ class EventData:
         return self._element
 
     @property
-    def texts(self) -> t.List[m21.expressions.TextExpression]:
+    def texts(self) -> list[m21.expressions.TextExpression]:
         if not self._myTextsComputed:
             if isinstance(self.m21Object, m21.note.GeneralNote):
                 self._texts = M21Utilities.getTextExpressionsFromGeneralNote(self.m21Object)
@@ -199,7 +197,7 @@ class EventData:
         return self._texts
 
     @property
-    def tempos(self) -> t.List[m21.tempo.TempoIndication]:
+    def tempos(self) -> list[m21.tempo.TempoIndication]:
         return self._tempos
 
     '''
@@ -209,7 +207,7 @@ class EventData:
         If event is a Chord, we return a space-delimited token string containing all the
         appropriate subtokens, and a list of all the layouts for the chord.
     '''
-    def getNoteKernTokenStringAndLayouts(self) -> t.Tuple[str, t.List[str]]:
+    def getNoteKernTokenStringAndLayouts(self) -> tuple[str, list[str]]:
         # We pass in self to get reports of the existence of editorial accidentals, ornaments,
         # etc. These reports get passed up the EventData.py/MeasureData.py reporting chain up
         # to PartData.py, where they are stored and/or acted upon.

@@ -7,7 +7,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -38,8 +38,8 @@ class SimultaneousEvents:
     def __init__(self) -> None:
         self.startTime: HumNum = opFrac(-1)      # start time of events
         self.duration: HumNum = opFrac(-1)       # max duration of events?
-        self.zeroDur: t.List[EventData] = []     # zero-duration events at this time
-        self.nonZeroDur: t.List[EventData] = []  # non-zero-duration events at this time
+        self.zeroDur: list[EventData] = []     # zero-duration events at this time
+        self.nonZeroDur: list[EventData] = []  # non-zero-duration events at this time
 
 class MeasureData:
     def __init__(
@@ -56,7 +56,7 @@ class MeasureData:
         # inherited from ownerScore, ultimately
         self.spannerBundle: m21.spanner.SpannerBundle = ownerStaff.spannerBundle
 
-        self._prevMeasData: t.Optional[MeasureData] = prevMeasData
+        self._prevMeasData: MeasureData | None = prevMeasData
         self._measureIndex: int = measureIndex
         self._startTime: HumNum = opFrac(-1)
         self._duration: HumNum = opFrac(-1)
@@ -83,8 +83,8 @@ class MeasureData:
         self.repeatBracketName: str = ''
 
         self._measureNumberString: str = ''
-        self.events: t.List[EventData] = []
-        self.sortedEvents: t.List[SimultaneousEvents] = []  # list of startTime-binned events
+        self.events: list[EventData] = []
+        self.sortedEvents: list[SimultaneousEvents] = []  # list of startTime-binned events
 
         self._parseMeasure()  # generates _events and then sortedEvents (also barlines)
 
@@ -256,13 +256,13 @@ class MeasureData:
 
     def _parseEventsIn(
             self,
-            m21Stream: t.Union[m21.stream.Voice, m21.stream.Measure],
+            m21Stream: m21.stream.Voice | m21.stream.Measure,
             voiceIndex: int,
             emptyStartDuration: HumNumIn = 0,
             emptyEndDuration: HumNumIn = 0
     ) -> None:
         event: EventData
-        durations: t.List[HumNum]
+        durations: list[HumNum]
         startTime: HumNum
         if emptyStartDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
@@ -279,7 +279,7 @@ class MeasureData:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
 
-        elementList: t.List[m21.base.Music21Object] = list(
+        elementList: list[m21.base.Music21Object] = list(
             m21Stream.recurse().getElementsNotOfClass(m21.stream.Stream)
         )
         for elementIndex, element in enumerate(elementList):
@@ -290,7 +290,7 @@ class MeasureData:
                 # if possible, so look forward and backward for same-offset notes/chords to
                 # do that with.  Note that we don't do this if the dynamic is centered between
                 # two staves, since that is not really associated with a particular note.
-                noteOrChord: t.Optional[m21.note.NotRest] = (
+                noteOrChord: m21.note.NotRest | None = (
                     self._findAssociatedNoteOrChord(elementIndex, elementList)
                 )
                 if noteOrChord:
@@ -309,7 +309,7 @@ class MeasureData:
                 #       2. So wedge starts/ends will go in their own slice if necessary (e.g.
                 #           if we choose not to export the voice-with-only-invisible-rests we
                 #           may have made to position them correctly.
-                extraEvents: t.List[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
+                extraEvents: list[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
                 if extraEvents:
                     self.events += extraEvents
 
@@ -329,11 +329,11 @@ class MeasureData:
     @staticmethod
     def _findAssociatedNoteOrChord(
         elementIndex: int,
-        elementList: t.List[m21.base.Music21Object]
-    ) -> t.Optional[m21.note.NotRest]:
+        elementList: list[m21.base.Music21Object]
+    ) -> m21.note.NotRest | None:
         # We're looking for a nearby note or chord with the same offset
         # (and not a grace note/chord).
-        output: t.Optional[m21.note.NotRest] = None
+        output: m21.note.NotRest | None = None
 
         wantedOffset = elementList[elementIndex].offset
         proposed: m21.base.Music21Object
@@ -375,11 +375,11 @@ class MeasureData:
 
         return output
 
-    def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> t.List[EventData]:
+    def _parseDynamicWedgesStartedOrStoppedAt(self, event: EventData) -> list[EventData]:
         if t.TYPE_CHECKING:
             assert isinstance(event.m21Object, m21.note.GeneralNote)
-        output: t.List[EventData] = []
-        wedges: t.List[m21.dynamics.DynamicWedge] = (
+        output: list[EventData] = []
+        wedges: list[m21.dynamics.DynamicWedge] = (
             M21Utilities.getDynamicWedgesStartedOrStoppedWithGeneralNote(
                 event.m21Object,
                 self.spannerBundle)
@@ -392,8 +392,8 @@ class MeasureData:
             endNote: m21.note.GeneralNote = wedge.getLast()
             thisEventIsStart: bool = startNote is event.m21Object
             thisEventIsEnd: bool = endNote is event.m21Object
-            wedgeStartTime: t.Optional[HumNum] = None
-            wedgeDuration: t.Optional[HumNum] = None
+            wedgeStartTime: HumNum | None = None
+            wedgeDuration: HumNum | None = None
             wedgeEndTime: HumNum = opFrac(
                 endNote.getOffsetInHierarchy(score) + endNote.duration.quarterLength
             )
@@ -438,7 +438,7 @@ class MeasureData:
                 # add the end event (duration == 0)
                 # but add it to the same measure/voice as the wedge start event
                 # print(f'wedgeStopEvent: {event}', file=sys.stderr)
-                matchingStartEvent: t.Optional[EventData] = (
+                matchingStartEvent: EventData | None = (
                     ownerScore.eventFromM21Object.get(id(wedge), None)
                 )
                 endVoiceIndex: int
@@ -462,7 +462,7 @@ class MeasureData:
     def _parseEventsAtTopLevelOf(
         self,
         m21Stream: m21.stream.Measure,
-        firstBit: t.Optional[bool]  # None -> all of it, True -> first bit, False -> non-first-bit
+        firstBit: bool | None  # None -> all of it, True -> first bit, False -> non-first-bit
     ) -> None:
         skipping: bool = False
         if firstBit is False:
@@ -495,7 +495,7 @@ class MeasureData:
             if event is not None:
                 self.events.append(event)
 
-                extraEvents: t.List[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
+                extraEvents: list[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
                 if extraEvents:
                     self.events += extraEvents
 
@@ -513,7 +513,7 @@ class MeasureData:
     def _sortEvents(self) -> None:
         self.events.sort(key=lambda event: event.startTime)
 
-        times: t.List[HumNum] = []  # will be sorted same as self.events (by startTime)
+        times: list[HumNum] = []  # will be sorted same as self.events (by startTime)
         for event in self.events:
             # don't add duplicated time entries (like a set)
             if not times or event.startTime != times[-1]:
@@ -525,7 +525,7 @@ class MeasureData:
             self.sortedEvents[-1].startTime = val
 
         # setup sorted access:
-        mapping: t.Dict[HumNum, SimultaneousEvents] = {}
+        mapping: dict[HumNum, SimultaneousEvents] = {}
         for sortedEvent in self.sortedEvents:
             mapping[sortedEvent.startTime] = sortedEvent
 

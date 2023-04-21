@@ -4,13 +4,13 @@
 #
 # Authors:       Greg Chapman
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
 import setuptools
 
-converter21version = '2.0.1'
+converter21version = '3.0.0'
 
 if __name__ == '__main__':
     setuptools.setup(
@@ -54,10 +54,10 @@ if __name__ == '__main__':
 
         packages=setuptools.find_packages(),
 
-        python_requires='>=3.9',
+        python_requires='>=3.10',
 
         install_requires=[
-            'music21>=8.1',
+            'music21>=9.1',
         ],
 
         project_urls={

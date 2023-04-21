@@ -9,11 +9,10 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import typing as t
 
 import music21 as m21
 
@@ -47,9 +46,9 @@ class StaffData:
 
         self._staffIndex: int = staffIndex
         self._verseCount: int = 0
-        self.measures: t.List[MeasureData] = []
+        self.measures: list[MeasureData] = []
 
-        prevMeasData: t.Optional[MeasureData] = None
+        prevMeasData: MeasureData | None = None
         for m, measure in enumerate(partStaff.getElementsByClass('Measure')):
             measData: MeasureData = MeasureData(measure, self, m, prevMeasData)
             self.measures.append(measData)

@@ -2,7 +2,6 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
-from typing import List, Tuple
 import music21 as m21
 from music21.base import VERSION_STR
 from music21 import converter

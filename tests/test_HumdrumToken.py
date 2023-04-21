@@ -11,8 +11,6 @@ from tests.Utilities import *
 def test_HumdrumToken_default_init():
     token = HumdrumToken()
     CheckHumdrumToken(token)
-    token1 = HumdrumToken(None)
-    CheckHumdrumToken(token1)
 
 def test_HumdrumToken_exinterp_kern():
     token = HumdrumToken('**kern')

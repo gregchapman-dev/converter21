@@ -7,18 +7,19 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
 import re
 import copy
-import typing as t
 from fractions import Fraction
 
 from music21.common import opFrac
 
 from converter21.humdrum import HumAddress
+from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import HumHash
 from converter21.humdrum import HumParamSet
@@ -83,15 +84,15 @@ class HumdrumToken(HumHash):
     PHRASE: str = '{'
     SLUR: str = '('
 
-    def __init__(self, token: t.Optional[str] = '') -> None:
+    def __init__(self, token: str = '') -> None:
         super().__init__()  # initialize the HumHash fields
 
         '''
             _text: the token's text string
         '''
-        self._text: str = token if token is not None else ''
+        self._text: str = token
 
-        self._subtokens: t.List[str] = []
+        self._subtokens: list[str] = []
         self._subtokensGenerated: bool = False
 
         '''
@@ -122,10 +123,10 @@ class HumdrumToken(HumHash):
         // token is *^, and there will be zero following tokens after a
         // spine terminating token (*-).
         '''
-        self._nextTokens: t.List[HumdrumToken] = []
+        self._nextTokens: list[HumdrumToken] = []
 
         # contains nextToken(0), for speed
-        self._nextToken0: t.Optional[HumdrumToken] = None
+        self._nextToken0: HumdrumToken | None = None
 
         '''
         // previousTokens: Simiar to nextTokens, but for the immediately
@@ -134,22 +135,22 @@ class HumdrumToken(HumHash):
         // line has *v merge tokens for the spine.  Exclusive interpretations
         // have no tokens preceding them.
         '''
-        self._previousTokens: t.List[HumdrumToken] = []
+        self._previousTokens: list[HumdrumToken] = []
 
         # contains previousToken(0), for speed
-        self._previousToken0: t.Optional[HumdrumToken] = None
+        self._previousToken0: HumdrumToken | None = None
 
         '''
         // nextNonNullDataTokens: This is a list of non-null tokens in the spine
         // that follow this one.
         '''
-        self._nextNonNullDataTokens: t.List[HumdrumToken] = []
+        self._nextNonNullDataTokens: list[HumdrumToken] = []
 
         '''
         // previousNonNullDataTokens: This is a list of non-null tokens in the spine
         // that precede this one.
         '''
-        self._previousNonNullDataTokens: t.List[HumdrumToken] = []
+        self._previousNonNullDataTokens: list[HumdrumToken] = []
 
         '''
         // rhycheck: Used to perform HumdrumFileStructure::analyzeRhythm
@@ -168,19 +169,19 @@ class HumdrumToken(HumHash):
         // m_nullresolve: used to point to the token that a null token
         // refers to.
         '''
-        self._nullResolution: t.Optional[HumdrumToken] = None
+        self._nullResolution: HumdrumToken | None = None
 
         '''
         // m_linkedParameterTokens: List of Humdrum tokens which are parameters
         // (mostly only layout parameters at the moment).
         '''
-        self._linkedParameterTokens: t.List[HumdrumToken] = []
+        self._linkedParameterTokens: list[HumdrumToken] = []
 
         '''
         // m_parameterSet: A single parameter encoded in the text of the
         // token.  Was previously called m_linkedParameter.
         '''
-        self._parameterSet: t.Optional[HumParamSet] = None
+        self._parameterSet: HumParamSet | None = None
 
         '''
         // m_rhythm_analyzed: Set to true when HumdrumFile assigned duration
@@ -191,7 +192,7 @@ class HumdrumToken(HumHash):
         // m_strophe: Starting point of a strophe that the token belongs to.
         // NULL means that it is not in a strophe.
         '''
-        self._strophe: t.Optional[HumdrumToken] = None
+        self._strophe: HumdrumToken | None = None
 
         '''
             rscale: the rscale that applies to this token
@@ -216,7 +217,7 @@ class HumdrumToken(HumHash):
 
     # Now the actual HumdrumToken APIs/properties
 
-    cachedTokenTextProperties: t.Set[str] = {
+    cachedTokenTextProperties: set[str] = {
         '_isDataCached',
         '_isInterpretationCached',
         '_isNonNullDataCached',
@@ -245,7 +246,7 @@ class HumdrumToken(HumHash):
         '_isNoteCached'
     }
 
-    cachedDataTypeProperties: t.Set[str] = {
+    cachedDataTypeProperties: set[str] = {
         '_isKernCached',
         '_isRecipCached',
         '_isMensCached',
@@ -305,7 +306,7 @@ class HumdrumToken(HumHash):
         return len(self._previousNonNullDataTokens)
 
     @property
-    def previousNonNullDataTokens(self) -> t.List['HumdrumToken']:
+    def previousNonNullDataTokens(self) -> list['HumdrumToken']:
         return self._previousNonNullDataTokens
 
     '''
@@ -367,7 +368,7 @@ class HumdrumToken(HumHash):
         return len(self._nextNonNullDataTokens)
 
     @property
-    def nextNonNullDataTokens(self) -> t.List['HumdrumToken']:
+    def nextNonNullDataTokens(self) -> list['HumdrumToken']:
         return self._nextNonNullDataTokens
 
     '''
@@ -555,12 +556,12 @@ class HumdrumToken(HumHash):
     // HumdrumToken::getTrack -- Get the track (similar to a staff in MEI).
     '''
     @property
-    def track(self) -> t.Optional[int]:
+    def track(self) -> int | None:
         # trackNum is a data member; cheaper than using the track property
         return self._address.trackNum
 
     @track.setter
-    def track(self, track: t.Optional[int]) -> None:
+    def track(self, track: int | None) -> None:
         # here we set track via address property for the checks
         self._address.track = track
         if self._atLeastOneCachedDataTypePropertyExists:
@@ -605,11 +606,11 @@ class HumdrumToken(HumHash):
     // @SEEALSO: getNextToken
     '''
     @property
-    def nextTokens(self) -> t.List['HumdrumToken']:
+    def nextTokens(self) -> list['HumdrumToken']:
         return self._nextTokens
 
     @nextTokens.setter
-    def nextTokens(self, newNextTokens: t.List['HumdrumToken']) -> None:
+    def nextTokens(self, newNextTokens: list['HumdrumToken']) -> None:
         self._nextTokens = newNextTokens
         self.updateNextToken0()
 
@@ -641,9 +642,6 @@ class HumdrumToken(HumHash):
     // HumdrumToken::addNextNonNullToken --
     '''
     def addNextNonNullDataToken(self, token: 'HumdrumToken') -> None:
-        if token is None:
-            return
-
         if token in self._nextNonNullDataTokens:
             return
 
@@ -682,11 +680,11 @@ class HumdrumToken(HumHash):
     //    tokens in the spine before this token.
     '''
     @property
-    def previousTokens(self) -> t.List['HumdrumToken']:
+    def previousTokens(self) -> list['HumdrumToken']:
         return self._previousTokens
 
     @previousTokens.setter
-    def previousTokens(self, newPreviousTokens: t.List['HumdrumToken']) -> None:
+    def previousTokens(self, newPreviousTokens: list['HumdrumToken']) -> None:
         self._previousTokens = newPreviousTokens
         self.updatePreviousToken0()
 
@@ -1067,9 +1065,9 @@ class HumdrumToken(HumHash):
         return self.text[6:]
 
     @property
-    def staffNums(self) -> t.List[int]:
+    def staffNums(self) -> list[int]:
         staffStr: str = self.staff
-        staffNumList: t.List[int] = []
+        staffNumList: list[int] = []
         for m in re.finditer(r'(\d+)/?', staffStr):
             if m.group(1) is None:
                 break
@@ -1317,7 +1315,7 @@ class HumdrumToken(HumHash):
             return True
 
         # check for 'auto', 'clef' (added by HumdrumFile.py)
-        autoClef: t.Optional[str] = self.getValueString('auto', 'clef')
+        autoClef: str | None = self.getValueString('auto', 'clef')
         if autoClef and autoClef.startswith('*clef'):
             return True
 
@@ -1335,7 +1333,7 @@ class HumdrumToken(HumHash):
             return self.text[5:]
 
         # check for 'auto', 'clef' (added by HumdrumFile.py)
-        autoClef: t.Optional[str] = self.getValueString('auto', 'clef')
+        autoClef: str | None = self.getValueString('auto', 'clef')
         if autoClef:
             return autoClef[5:]
 
@@ -1441,7 +1439,7 @@ class HumdrumToken(HumHash):
         return re.match(KEY_DESIGNATION_PATTERN, self.text) is not None
 
     @property
-    def keyDesignation(self) -> t.Tuple[t.Optional[str], t.Optional[str]]:
+    def keyDesignation(self) -> tuple[str | None, str | None]:
         # *d:dor returns ('d', 'dor'), *A-: returns ('A-', None)
         m = re.match(KEY_DESIGNATION_PATTERN, self.text)
         if m:
@@ -1466,7 +1464,7 @@ class HumdrumToken(HumHash):
         return True
 
     @property
-    def timeSignature(self) -> t.Tuple[t.Optional[int], t.Optional[int]]:
+    def timeSignature(self) -> tuple[int | None, int | None]:
         # returns (top: int, bot: int) or (None, None)
         if not self.isTimeSignature:
             return (None, None)
@@ -1790,7 +1788,7 @@ class HumdrumToken(HumHash):
     //      true
     //      None = undefined;
     '''
-    def hasVisibleAccidental(self, subtokenIndex: int) -> t.Optional[bool]:
+    def hasVisibleAccidental(self, subtokenIndex: int) -> bool | None:
         humLine = self.ownerLine
         if humLine is None:
             return None
@@ -1816,7 +1814,7 @@ class HumdrumToken(HumHash):
     //      true
     //      None = undefined;
     '''
-    def hasCautionaryAccidental(self, subtokenIndex: int) -> t.Optional[bool]:
+    def hasCautionaryAccidental(self, subtokenIndex: int) -> bool | None:
         humLine = self.ownerLine
         if humLine is None:
             return None
@@ -1832,7 +1830,7 @@ class HumdrumToken(HumHash):
 
         return self.getValueBool('auto', str(subtokenIndex), 'cautionaryAccidental')
 
-    def cautionaryAccidental(self, subtokenIndex: int) -> t.Optional[str]:
+    def cautionaryAccidental(self, subtokenIndex: int) -> str | None:
         humLine = self.ownerLine
         if humLine is None:
             return None
@@ -1848,7 +1846,7 @@ class HumdrumToken(HumHash):
 
         return self.getValueString('auto', str(subtokenIndex), 'cautionaryAccidental')
 
-    def hasEditorialAccidental(self, subtokenIndex: int) -> t.Optional[bool]:
+    def hasEditorialAccidental(self, subtokenIndex: int) -> bool | None:
         humLine = self.ownerLine
         if humLine is None:
             return None
@@ -1864,7 +1862,7 @@ class HumdrumToken(HumHash):
 
         return self.getValueBool('auto', str(subtokenIndex), 'editorialAccidental')
 
-    def editorialAccidentalStyle(self, subtokenIndex: int) -> t.Optional[str]:
+    def editorialAccidentalStyle(self, subtokenIndex: int) -> str | None:
         humLine = self.ownerLine
         if humLine is None:
             return None
@@ -1878,7 +1876,7 @@ class HumdrumToken(HumHash):
             if not successful:
                 return None
 
-        editStyle: t.Optional[str] = self.getValueString(
+        editStyle: str | None = self.getValueString(
             'auto', str(subtokenIndex), 'editorialAccidentalStyle'
         )
         if editStyle is None:
@@ -1924,7 +1922,7 @@ class HumdrumToken(HumHash):
     // HumdrumToken::hasStemDirection --
     '''
     @property
-    def getStemDirection(self) -> t.Optional[str]:
+    def getStemDirection(self) -> str | None:
         if not self.isKern:
             return None
         return Convert.getKernStemDirection(self.text)
@@ -2310,7 +2308,7 @@ class HumdrumToken(HumHash):
         if self.ownerLine is None:
             return False
 
-        track: t.Optional[int] = self.track
+        track: int | None = self.track
         if track is None:
             return False
 
@@ -2382,7 +2380,7 @@ class HumdrumToken(HumHash):
     //     default value: separator = " "
     '''
     @property
-    def subtokens(self) -> t.List[str]:
+    def subtokens(self) -> list[str]:
         if not self._subtokensGenerated:
             self._subtokens = self.text.split(' ')
             self._subtokensGenerated = True
@@ -2469,7 +2467,7 @@ class HumdrumToken(HumHash):
     // HumdrumToken::getParameterSet --
     '''
     @property
-    def parameterSet(self) -> t.Optional[HumParamSet]:
+    def parameterSet(self) -> HumParamSet | None:
         return self._parameterSet
 
     '''
@@ -2477,7 +2475,7 @@ class HumdrumToken(HumHash):
     //
     // HumdrumToken::getLinkedParameterSet --
     '''
-    def getLinkedParameterSet(self, index: int) -> t.Optional[HumParamSet]:
+    def getLinkedParameterSet(self, index: int) -> HumParamSet | None:
         if index not in range(0, self.linkedParameterSetCount):
             return None
         return self._linkedParameterTokens[index].parameterSet
@@ -2523,11 +2521,14 @@ class HumdrumToken(HumHash):
     //    owns this token.
     '''
     @property
-    def ownerLine(self):  # returns t.Optional[HumdrumLine]
+    def ownerLine(self):  # -> HumdrumLine | None:
         return self._address.ownerLine
 
     @ownerLine.setter
-    def ownerLine(self, newOwnerLine) -> None:  # newOwnerLine: t.Optional[HumdrumLine]
+    def ownerLine(self, newOwnerLine) -> None:  # newOwnerLine: HumdrumLine | None
+        from converter21.humdrum import HumdrumLine
+        if newOwnerLine is not None and not isinstance(newOwnerLine, HumdrumLine):
+            raise HumdrumInternalError('invalid newOwnerLine')
         self._address.ownerLine = newOwnerLine
         if self._atLeastOneCachedDataTypePropertyExists:
             # some cached properties depend on dataType,
@@ -2721,7 +2722,7 @@ class HumdrumToken(HumHash):
         self._strandIndex = fromToken._strandIndex
 
         # pick up original ownerLine before you overwrite _address
-        originalOwnerLine: t.Optional[HumdrumLine] = self._address.ownerLine
+        originalOwnerLine: HumdrumLine | None = self._address.ownerLine
         self._address = copy.copy(fromToken._address)
 
         # preserve the original ownerLine
@@ -2835,7 +2836,7 @@ class HumdrumToken(HumHash):
     '''
     def layoutParameter(self, category: str, keyName: str, subtokenIndex: int = -1) -> str:
         # First check for any local layout parameter:
-        testOutput: t.Optional[str] = self.getValueString('LO', category, keyName)
+        testOutput: str | None = self.getValueString('LO', category, keyName)
         if testOutput:
             if subtokenIndex >= 0:
                 n: int = self.getValueInt('LO', category, 'n')
@@ -2851,7 +2852,7 @@ class HumdrumToken(HumHash):
 
         nparam: str = ''
         for p in range(0, lcount):
-            hps: t.Optional[HumParamSet] = self.getLinkedParameterSet(p)
+            hps: HumParamSet | None = self.getLinkedParameterSet(p)
             if hps is None:
                 continue
             if hps.namespace1 != 'LO':
@@ -2899,7 +2900,7 @@ class HumdrumToken(HumHash):
     def getBooleanLayoutParameter(self, category: str, key: str) -> bool:
         lcount: int = self.linkedParameterSetCount
         for i in range(0, lcount):
-            hps: t.Optional[HumParamSet] = self.getLinkedParameterSet(i)
+            hps: HumParamSet | None = self.getLinkedParameterSet(i)
             if not hps:
                 continue
             if hps.namespace1 != 'LO':
@@ -2916,7 +2917,7 @@ class HumdrumToken(HumHash):
     def getStringLayoutParameter(self, category: str, key: str) -> str:
         lcount: int = self.linkedParameterSetCount
         for i in range(0, lcount):
-            hps: t.Optional[HumParamSet] = self.getLinkedParameterSet(i)
+            hps: HumParamSet | None = self.getLinkedParameterSet(i)
             if not hps:
                 continue
             if hps.namespace1 != 'LO':

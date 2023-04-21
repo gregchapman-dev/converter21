@@ -6,20 +6,19 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 #
 import argparse
 import os
 import sys
-import typing as t
 
 from music21 import converter
 from music21.base import VERSION_STR
 import converter21
 
-def getInputFormatsList() -> t.List[str]:
+def getInputFormatsList() -> list[str]:
     c = converter.Converter()
     inList = c.subconvertersList('input')
     result = []
@@ -29,7 +28,7 @@ def getInputFormatsList() -> t.List[str]:
                 result.append(form)
     return result
 
-def getInputExtensionsList() -> t.List[str]:
+def getInputExtensionsList() -> list[str]:
     c = converter.Converter()
     inList = c.subconvertersList('input')
     result = []
@@ -38,7 +37,7 @@ def getInputExtensionsList() -> t.List[str]:
             result.append('.' + inputExt)
     return result
 
-def getOutputFormatsList() -> t.List[str]:
+def getOutputFormatsList() -> list[str]:
     c = converter.Converter()
     outList = c.subconvertersList('output')
     result = []
@@ -76,7 +75,7 @@ def getValidOutputExtensionForFormat(form: str) -> str:
                 return '.' + subc.registerOutputExtensions[0]
     return ''
 
-def getOutputExtensionsListForFormat(form: str) -> t.List[str]:
+def getOutputExtensionsListForFormat(form: str) -> list[str]:
     c = converter.Converter()
     outList = c.subconvertersList('output')
     result = []

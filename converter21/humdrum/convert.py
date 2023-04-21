@@ -6,14 +6,13 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
 import sys
 import re
 import math
-import typing as t
 from fractions import Fraction
 
 from music21.common import opFrac
@@ -48,7 +47,7 @@ class Convert:
     // default value: separator = " " (sub-token separator)
     '''
     # key is recip, value is duration
-    _knownRecipDurationCache: t.Dict[str, HumNum] = {}
+    _knownRecipDurationCache: dict[str, HumNum] = {}
 
     @staticmethod
     def recipToDuration(recip: str, scale: HumNumIn = opFrac(4)) -> HumNum:
@@ -396,7 +395,7 @@ class Convert:
         *** Tempo ***
     '''
 
-    namedTempoPatterns: t.Dict[str, int] = {
+    namedTempoPatterns: dict[str, int] = {
         # some of these are actually regular expression patterns
         'larghissimo': 24,
         'adagissimo': 35,
@@ -440,7 +439,7 @@ class Convert:
     // in the input text.
     '''
     @staticmethod
-    def tempoNameToBPM(name: str, timeSig: t.Tuple[int, int]) -> float:
+    def tempoNameToBPM(name: str, timeSig: tuple[int, int]) -> float:
         # timeSig tuple is (top: int, bot: int, ... other stuff)
         top: int = timeSig[0]
         bot: int = timeSig[1]
@@ -484,7 +483,7 @@ class Convert:
 
         return output
 
-    _METRONOME_MARK_PATTERNS: t.List[str] = [
+    _METRONOME_MARK_PATTERNS: list[str] = [
         # the one with parens needs to come first or a string with parens will match the wrong
         # pattern, and instead of 'Allegro', you'll get 'Allegro ('.
         # With parens, e.g. 'Allegro M.M. ([quarter] = 128.0)'
@@ -496,7 +495,7 @@ class Convert:
     @staticmethod
     def getMetronomeMarkInfo(
         text: str
-    ) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optional[str], t.Optional[str]]:
+    ) -> tuple[str | None, str | None, str | None, str | None]:
         # takes strings like
         # "Andante M.M. [quarter] = 88.1"  # PATTERNS[0]
         # or
@@ -641,7 +640,7 @@ class Convert:
     // Convert::getLcm -- Return the Least Common Multiple of a list of numbers.
     '''
     @staticmethod
-    def getLcm(nums: t.List[int]) -> int:
+    def getLcm(nums: list[int]) -> int:
         if len(nums) == 0:
             return 1
 
@@ -819,7 +818,7 @@ class Convert:
         renamed to getKernStemDirection, returns '/' or '\' or None
     '''
     @staticmethod
-    def getKernStemDirection(text: str) -> t.Optional[str]:
+    def getKernStemDirection(text: str) -> str | None:
         for ch in text:
             if ch == '/':
                 return '/'
@@ -1024,7 +1023,7 @@ class Convert:
     // Convert::kernClefToBaseline -- returns the diatonic pitch
     //    of the bottom line on the staff.
     '''
-    CLEF_TO_BASELINE_PITCH: t.Dict[str, str] = {
+    CLEF_TO_BASELINE_PITCH: dict[str, str] = {
         'G2': 'e',      # treble clef
         'F4': 'GG',     # bass clef
         'C3': 'F',      # alto clef
@@ -1423,7 +1422,7 @@ class Convert:
         return False
 
     @staticmethod
-    def computeDurationNoDotsAndNumDots(durWithDots: HumNumIn) -> t.Tuple[HumNum, t.Optional[int]]:
+    def computeDurationNoDotsAndNumDots(durWithDots: HumNumIn) -> tuple[HumNum, int | None]:
         dd: HumNum = opFrac(durWithDots)
         attemptedPowerOfTwo: HumNum = dd
         if Convert.isPowerOfTwo(attemptedPowerOfTwo):
@@ -1449,8 +1448,8 @@ class Convert:
         return (dd, None)
 
     @staticmethod
-    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNumIn) -> t.List[HumNum]:
-        output: t.List[HumNum] = []
+    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: HumNumIn) -> list[HumNum]:
+        output: list[HumNum] = []
         ql: HumNum = opFrac(quarterLength)
 
         if Convert.isPowerOfTwoWithDots(ql):
@@ -1476,7 +1475,7 @@ class Convert:
         return [opFrac(quarterLength)]
 
     @staticmethod
-    def transToDiatonicChromatic(trans: str) -> t.Tuple[t.Optional[int], t.Optional[int]]:
+    def transToDiatonicChromatic(trans: str) -> tuple[int | None, int | None]:
         # This pattern will match *ITrdNcM and *TrdNcM and dNcM
         m = re.search(r'd([+-]?\d+)c([+-]?\d+)', trans)
         if not m:
@@ -1487,7 +1486,7 @@ class Convert:
     def diatonicChromaticToTrans(d: int, c: int) -> str:
         return 'd' + str(d) + 'c' + str(c)
 
-    _humdrumBarlineStyleFromMeasureStyle: t.Dict[MeasureStyle, t.Optional[str]] = {
+    _humdrumBarlineStyleFromMeasureStyle: dict[MeasureStyle, str | None] = {
         MeasureStyle.Double: '||',
         MeasureStyle.HeavyHeavy: '!!',
         MeasureStyle.HeavyLight: '!|',
@@ -1523,11 +1522,11 @@ class Convert:
     }
 
     @staticmethod
-    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> t.Optional[str]:
-        output: t.Optional[str] = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
+    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> str | None:
+        output: str | None = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
         return output
 
-    _humdrumFermataStyleFromFermataStyle: t.Dict[FermataStyle, str] = {
+    _humdrumFermataStyleFromFermataStyle: dict[FermataStyle, str] = {
         FermataStyle.NoFermata: '',
         FermataStyle.Fermata: ';',
         FermataStyle.FermataAbove: ';>',

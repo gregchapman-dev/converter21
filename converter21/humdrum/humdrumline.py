@@ -7,7 +7,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -37,7 +37,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
     It splits at the delimiter, and strips all leading and trailing whitespace
     from the resulting strings.
 '''
-def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> t.Tuple[str, str]:
+def _getKeyAndValue(keyValueStr: str, delimiter: str = ':') -> tuple[str, str]:
     keyAndValueStrList = keyValueStr.split(delimiter, 1)  # ignore any ':' in value
     if len(keyAndValueStrList) == 1:
         return (keyAndValueStrList[0].strip(), '')
@@ -90,7 +90,7 @@ class HumdrumLine(HumHash):
         // The contents of this vector should be deleted when deconstructing
         // a HumdrumLine object.
         '''
-        self._tokens: t.List[HumdrumToken] = []
+        self._tokens: list[HumdrumToken] = []
         if asGlobalToken:
             self._tokens = [HumdrumToken(line)]
 
@@ -99,7 +99,7 @@ class HumdrumLine(HumHash):
         // each token on a line.  This is the number of tabs after the
         // token at the given index (so no tabs before the first token).
         '''
-        self._numTabsAfterToken: t.List[int] = []
+        self._numTabsAfterToken: list[int] = []
         if asGlobalToken:
             self._numTabsAfterToken = [0]
 
@@ -141,7 +141,7 @@ class HumdrumLine(HumHash):
         // m_linkedParameters: List of Humdrum tokens which are parameters
         // (mostly only layout parameters at the moment)
         '''
-        self._linkedParameters: t.List[HumdrumToken] = []
+        self._linkedParameters: list[HumdrumToken] = []
 
         '''
         // m_rhythm_analyzed: True if duration information from HumdrumFile
@@ -173,7 +173,7 @@ class HumdrumLine(HumHash):
 
             Returns None if index is out of bounds.
     '''
-    def __getitem__(self, index) -> t.Optional[HumdrumToken]:
+    def __getitem__(self, index) -> HumdrumToken | None:
         if not isinstance(index, int):
             # if its a slice, out-of-range start/stop won't crash
             return self._tokens[index]
@@ -763,7 +763,7 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getTrackStart --  Returns the starting exclusive interpretation
     //    for the given spine/track.
     '''
-    def trackStart(self, track: t.Optional[int]) -> t.Optional[HumdrumToken]:
+    def trackStart(self, track: int | None) -> HumdrumToken | None:
         if self._ownerFile is None:
             return None
 
@@ -775,7 +775,7 @@ class HumdrumLine(HumHash):
     // HumdrumLine::getTrackEnd --  Returns the ending exclusive interpretation
     //    for the given spine/track.
     '''
-    def trackEnd(self, track: int, subSpine: int) -> t.Optional[HumdrumToken]:
+    def trackEnd(self, track: int, subSpine: int) -> HumdrumToken | None:
         if self._ownerFile is None:
             return None
 
@@ -797,7 +797,7 @@ class HumdrumLine(HumHash):
         we'll call opFrac, so we actually support int, float, or Fraction here. But we
         always return HumNum (a.k.a. float or Fraction).
     '''
-    def beat(self, beatDuration: t.Union[str, HumNumIn] = Fraction(1, 4)) -> HumNum:
+    def beat(self, beatDuration: str | HumNumIn = Fraction(1, 4)) -> HumNum:
         if isinstance(beatDuration, str):  # recip format string, e.g. '4' means 1/4
             beatDuration = Convert.recipToDuration(beatDuration)
         else:
@@ -901,7 +901,7 @@ class HumdrumLine(HumHash):
             self._numTabsAfterToken = [0]
             return 1
 
-        # tokenStrList: t.List[str] = self.text.split('\t')
+        # tokenStrList: list[str] = self.text.split('\t')
         # for tokenStr in tokenStrList:
         #     token = HumdrumToken(tokenStr)
         #     token.ownerLine = self
@@ -968,7 +968,7 @@ class HumdrumLine(HumHash):
     //    HumdrumFileBase::getTrackWidths().  The first indexed value is unused,
     //    since there is no track 0.
     '''
-    def addExtraTabs(self, trackWidths: t.List[int]) -> None:
+    def addExtraTabs(self, trackWidths: list[int]) -> None:
         if not self.hasSpines:
             return
 
@@ -977,8 +977,8 @@ class HumdrumLine(HumHash):
         # start with 1 tab after every token
         self._numTabsAfterToken = [1] * len(self._numTabsAfterToken)
 
-        lastTrack: t.Optional[int] = 0
-        thisTrack: t.Optional[int] = 0
+        lastTrack: int | None = 0
+        thisTrack: int | None = 0
         for j, token in enumerate(self._tokens):
             lastTrack = thisTrack
             thisTrack = token.track
@@ -1041,7 +1041,7 @@ class HumdrumLine(HumHash):
                 subTracks[token.track] += 1
 
         for token in self._tokens:
-            tokenTrack: t.Optional[int] = token.track
+            tokenTrack: int | None = token.track
 
             if tokenTrack is not None and subTracks[tokenTrack] > 1:
                 currSubTrack[tokenTrack] += 1
@@ -1135,7 +1135,7 @@ class HumdrumLine(HumHash):
     '''
     def setParameters(self, pdata: str) -> None:
         # pdata is 'LO:blah:bleah=value' (no leading '!' or '!!')
-        pieces: t.List[str] = pdata.split(':')
+        pieces: list[str] = pdata.split(':')
         if len(pieces) < 3:
             return
 
@@ -1146,7 +1146,7 @@ class HumdrumLine(HumHash):
 
         for i in range(2, len(pieces)):
             piece = re.sub('&colon', ':', pieces[i])
-            keyAndValue: t.List[str] = piece.split('=')
+            keyAndValue: list[str] = piece.split('=')
 
             key = keyAndValue[0]
             if len(keyAndValue) == 1:
@@ -1163,7 +1163,7 @@ class HumdrumLine(HumHash):
 
         Q: shouldn't this also set ownerLine on the token? especially if it was a string
     '''
-    def appendToken(self, token: t.Union[HumdrumToken, str], tabCount: int = 0) -> None:
+    def appendToken(self, token: HumdrumToken | str, tabCount: int = 0) -> None:
         if isinstance(token, str):
             token = HumdrumToken(token)
         self._tokens.append(token)
@@ -1174,7 +1174,7 @@ class HumdrumLine(HumHash):
     //
     // HumdrumLine::insertToken -- Add a token before the given token position.
     '''
-    def insertToken(self, index: int, token: t.Union[HumdrumToken, str], tabCount: int = 0) -> None:
+    def insertToken(self, index: int, token: HumdrumToken | str, tabCount: int = 0) -> None:
         if isinstance(token, str):
             token = HumdrumToken(token)
         self._tokens.insert(index, token)

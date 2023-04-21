@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -14,7 +14,6 @@
 #    look-up tables.
 
 import re
-import typing as t
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
@@ -78,7 +77,7 @@ class M21Utilities:
 
     @staticmethod
     def createNote(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.note.Note:
         note = m21.note.Note()
 
@@ -96,7 +95,7 @@ class M21Utilities:
 
     @staticmethod
     def createUnpitched(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.note.Unpitched:
         unpitched = m21.note.Unpitched()
 
@@ -114,7 +113,7 @@ class M21Utilities:
 
     @staticmethod
     def createChord(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.chord.Chord:
         chord = m21.chord.Chord()
 
@@ -132,7 +131,7 @@ class M21Utilities:
 
     @staticmethod
     def createRest(
-            placeHolder: t.Optional[m21.Music21Object] = None
+        placeHolder: m21.Music21Object | None = None
     ) -> m21.note.Rest:
         rest = m21.note.Rest()
 
@@ -151,8 +150,8 @@ class M21Utilities:
     @staticmethod
     def getTextExpressionsFromGeneralNote(
             gnote: m21.note.GeneralNote
-    ) -> t.List[m21.expressions.TextExpression]:
-        output: t.List[m21.expressions.TextExpression] = []
+    ) -> list[m21.expressions.TextExpression]:
+        output: list[m21.expressions.TextExpression] = []
         for exp in gnote.expressions:
             if isinstance(exp, m21.expressions.TextExpression):
                 output.append(exp)
@@ -166,11 +165,11 @@ class M21Utilities:
     def getAllExpressionsFromGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]]:
-        expressions: t.List[t.Union[m21.expressions.Expression, m21.spanner.Spanner]] = []
+    ) -> list[m21.expressions.Expression | m21.spanner.Spanner]:
+        expressions: list[m21.expressions.Expression | m21.spanner.Spanner] = []
 
         # start with the expression spanners (TrillExtension and TremoloSpanner)
-        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites()
+        spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites()
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -180,9 +179,8 @@ class M21Utilities:
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 expressions.append(spanner)
                 continue
-            if M21Utilities.m21SupportsArpeggioMarks():
-                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):  # type: ignore
-                    expressions.append(spanner)
+            if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                expressions.append(spanner)
 
         # finish up with gnote.expressions
         expressions += gnote.expressions
@@ -192,9 +190,9 @@ class M21Utilities:
     def getDynamicWedgesStartedOrStoppedWithGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.List[m21.dynamics.DynamicWedge]:
-        output: t.List[m21.dynamics.DynamicWedge] = []
-        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+    ) -> list[m21.dynamics.DynamicWedge]:
+        output: list[m21.dynamics.DynamicWedge] = []
+        spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -209,9 +207,9 @@ class M21Utilities:
     def getDynamicWedgesStartedWithGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
-    ) -> t.List[m21.dynamics.DynamicWedge]:
-        output: t.List[m21.dynamics.DynamicWedge] = []
-        spanners: t.List[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
+    ) -> list[m21.dynamics.DynamicWedge]:
+        output: list[m21.dynamics.DynamicWedge] = []
+        spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
             if spanner not in spannerBundle:
                 continue
@@ -229,7 +227,7 @@ class M21Utilities:
 
     @staticmethod
     def isTransposingInstrument(inst: m21.instrument.Instrument) -> bool:
-        trans: t.Optional[m21.interval.Interval] = inst.transposition
+        trans: m21.interval.Interval | None = inst.transposition
         if trans is None:
             return False  # not a transposing instrument
 
@@ -248,7 +246,7 @@ class M21Utilities:
             if rest.duration.type != 'complex':
                 continue
             insertPoint = rest.offset
-            restList: t.Tuple[m21.note.Rest, ...] = M21Utilities.splitComplexRestDuration(rest)
+            restList: tuple[m21.note.Rest, ...] = M21Utilities.splitComplexRestDuration(rest)
             s.replace(rest, restList[0])
             insertPoint += restList[0].quarterLength
             for subsequent in restList[1:]:
@@ -263,19 +261,19 @@ class M21Utilities:
                     sp.replaceSpannedElement(rest, restList[-1])
 
     @staticmethod
-    def splitComplexRestDuration(rest: m21.note.Rest) -> t.Tuple[m21.note.Rest, ...]:
+    def splitComplexRestDuration(rest: m21.note.Rest) -> tuple[m21.note.Rest, ...]:
         atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
-        quarterLengthList: t.List[OffsetQLIn] = [
+        quarterLengthList: list[OffsetQLIn] = [
             float(c.quarterLength * atm) for c in rest.duration.components
         ]
-        splits: t.Tuple[m21.note.Rest, ...] = (
+        splits: tuple[m21.note.Rest, ...] = (
             rest.splitByQuarterLengths(quarterLengthList, addTies=False)  # type: ignore
         )
 
         return splits
 
     @staticmethod
-    def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> t.Tuple[str, str, str]:
+    def splitM21PitchNameIntoNameAccidOctave(m21PitchName: str) -> tuple[str, str, str]:
         patt: str = r'([ABCDEFG])([-#]*)([\d]+)'
         m = re.match(patt, m21PitchName)
         if m:
@@ -285,7 +283,7 @@ class M21Utilities:
             return m.group(1), g2, m.group(3)
         return m21PitchName, 'n', ''
 
-    _STEP_TO_PITCH_CLASS: t.Dict[str, int] = {
+    _STEP_TO_PITCH_CLASS: dict[str, int] = {
         'C': 0,
         'D': 1,
         'E': 2,
@@ -303,17 +301,17 @@ class M21Utilities:
 
     @staticmethod
     def getAltersForKey(
-        m21Key: t.Optional[t.Union[m21.key.Key, m21.key.KeySignature]]
-    ) -> t.List[int]:
+        m21Key: m21.key.Key | m21.key.KeySignature | None
+    ) -> list[int]:
         # returns a list of pitch alterations (number of semitones up or down),
         # indexed by pitch (base7), where index 0 is C0, and index 69 is B9.
-        alters: t.List[int] = [0] * 70
+        alters: list[int] = [0] * 70
         if m21Key is None:
             return alters
 
         STEPNAMES: tuple[StepName, ...] = ('C', 'D', 'E', 'F', 'G', 'A', 'B')
         for pitchClass, pitchName in enumerate(STEPNAMES):
-            accid: t.Optional[m21.pitch.Accidental] = m21Key.accidentalByStep(pitchName)
+            accid: m21.pitch.Accidental | None = m21Key.accidentalByStep(pitchName)
             if accid is None:
                 continue
             alter: int = int(accid.alter)
@@ -322,215 +320,79 @@ class M21Utilities:
 
         return alters
 
-    # to be used if music21 doesn't support spanner fill.
     @staticmethod
-    def fillOttava(
-        ottava: m21.spanner.Ottava,
-        searchStream: m21.stream.Stream,
-        *,
-        includeEndBoundary: bool = False,
-        mustFinishInSpan: bool = False,
-        mustBeginInSpan: bool = True,
-        includeElementsThatEndAtStart: bool = False
-    ):
-        if hasattr(ottava, 'filledStatus') and ottava.filledStatus is True:  # type: ignore
-            # Don't fill twice.
-            return
-
-        if ottava.getFirst() is None:
-            # no spanned elements?  Nothing to fill.
-            return
-
-        endElement: m21.base.Music21Object | None = None
-        if len(ottava) > 1:
-            # Start and end elements are different, we can't just append everything, we need
-            # to save off the end element, remove it, add everything, then add the end element
-            # again.  Note that if there are actually more than 2 elements before we start
-            # filling, the new intermediate elements will come after the existing ones,
-            # regardless of offset.  But first and last will still be the same two elements
-            # as before, which is the most important thing.
-            endElement = ottava.getLast()
-            if t.TYPE_CHECKING:
-                assert endElement is not None
-            ottava.spannerStorage.remove(endElement)
-
-        try:
-            startOffsetInHierarchy: OffsetQL = ottava.getFirst().getOffsetInHierarchy(searchStream)
-        except m21.sites.SitesException:
-            # print('start element not in searchStream')
-            if endElement is not None:
-                ottava.addSpannedElements(endElement)
-            return
-
-        endOffsetInHierarchy: OffsetQL
-        if endElement is not None:
-            try:
-                endOffsetInHierarchy = (
-                    endElement.getOffsetInHierarchy(searchStream) + endElement.quarterLength
-                )
-            except m21.sites.SitesException:
-                # print('end element not in searchStream')
-                ottava.addSpannedElements(endElement)
-                return
-        else:
-            endOffsetInHierarchy = (
-                ottava.getLast().getOffsetInHierarchy(searchStream) + ottava.getLast().quarterLength
-            )
-
-        for foundElement in (searchStream
-                .recurse()
-                .getElementsByOffsetInHierarchy(
-                    startOffsetInHierarchy,
-                    endOffsetInHierarchy,
-                    includeEndBoundary=includeEndBoundary,
-                    mustFinishInSpan=mustFinishInSpan,
-                    mustBeginInSpan=mustBeginInSpan,
-                    includeElementsThatEndAtStart=includeElementsThatEndAtStart)
-                .getElementsByClass(m21.note.NotRest)):
-            if endElement is None or foundElement is not endElement:
-                ottava.addSpannedElements(foundElement)
-
-        if endElement is not None:
-            # add it back in as the end element
-            ottava.addSpannedElements(endElement)
-
-        ottava.filledStatus = True  # type: ignore
-
-    @staticmethod
-    def m21VersionIsAtLeast(neededVersion: t.Tuple[int, int, int, str]) -> bool:
-        # m21.VERSION[0] * 10000 + m21.VERSION[1] * 100 + m21.VERSION[2]
+    def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
         if len(m21.VERSION) == 0:
             raise HumdrumInternalError('music21 version must be set!')
 
-        # compare element 0
-        if m21.VERSION[0] < neededVersion[0]:
+        try:
+            # compare element 0
+            if int(m21.VERSION[0]) < neededVersion[0]:
+                return False
+            if int(m21.VERSION[0]) > neededVersion[0]:
+                return True
+
+            # element 0 is equal... go on to next element
+            if len(m21.VERSION) == 1 or len(neededVersion) == 1:
+                # there is no next element to compare, so we are done.
+                # result is True only if m21 version has >= elements of needed version.
+                # if neededVersion has more elements, then result is False
+                return len(m21.VERSION) >= len(neededVersion)
+
+            # compare element 1
+            if int(m21.VERSION[1]) < neededVersion[1]:
+                return False
+            if int(m21.VERSION[1]) > neededVersion[1]:
+                return True
+
+            # element 1 is equal... go on to next element
+            if len(m21.VERSION) == 2 or len(neededVersion) == 2:
+                # there is no next element to compare, so we are done.
+                # result is True only if m21 version has >= elements of needed version.
+                # if neededVersion has more elements, then result is False
+                return len(m21.VERSION) >= len(neededVersion)
+
+            # compare element 2
+            if int(m21.VERSION[2]) < neededVersion[2]:
+                return False
+            if int(m21.VERSION[2]) > neededVersion[2]:
+                return True
+
+            # element 2 is equal... go on to next element
+            if len(m21.VERSION) == 3 or len(neededVersion) == 3:
+                # there is no next element to compare, so we are done.
+                # result is True only if m21 version has >= elements of needed version.
+                # if neededVersion has more elements, then result is False
+                return len(m21.VERSION) >= len(neededVersion)
+
+            # compare element 3 (probably a string)
+            if m21.VERSION[3] < neededVersion[3]:
+                return False
+            if m21.VERSION[3] > neededVersion[3]:
+                return True
+
+            return True  # four elements equal, that's all we care about
+        except Exception:
             return False
-        if m21.VERSION[0] > neededVersion[0]:
-            return True
 
-        # element 0 is equal... go on to next element
-        if len(m21.VERSION) == 1 or len(neededVersion) == 1:
-            # there is no next element to compare, so we are done.
-            # result is True only if m21 version has >= elements of needed version.
-            # if neededVersion has more elements, then result is False
-            return len(m21.VERSION) >= len(neededVersion)
-
-        # compare element 1
-        if m21.VERSION[1] < neededVersion[1]:
-            return False
-        if m21.VERSION[1] > neededVersion[1]:
-            return True
-
-        # element 1 is equal... go on to next element
-        if len(m21.VERSION) == 2 or len(neededVersion) == 2:
-            # there is no next element to compare, so we are done.
-            # result is True only if m21 version has >= elements of needed version.
-            # if neededVersion has more elements, then result is False
-            return len(m21.VERSION) >= len(neededVersion)
-
-        # compare element 2
-        if m21.VERSION[2] < neededVersion[2]:
-            return False
-        if m21.VERSION[2] > neededVersion[2]:
-            return True
-
-        # element 2 is equal... go on to next element
-        if len(m21.VERSION) == 3 or len(neededVersion) == 3:
-            # there is no next element to compare, so we are done.
-            # result is True only if m21 version has >= elements of needed version.
-            # if neededVersion has more elements, then result is False
-            return len(m21.VERSION) >= len(neededVersion)
-
-        # compare element 3 (probably a string)
-        if m21.VERSION[3] < neededVersion[3]:
-            return False
-        if m21.VERSION[3] > neededVersion[3]:
-            return True
-
-        return True  # four elements equal, that's all we care about
-
-    _cachedM21SupportsDublinCoreMetadata: t.Optional[bool] = None
-    @staticmethod
-    def m21SupportsDublinCoreMetadata() -> bool:
-        if M21Utilities._cachedM21SupportsDublinCoreMetadata is not None:
-            return M21Utilities._cachedM21SupportsDublinCoreMetadata
-
-        if hasattr(m21.metadata.Metadata, 'bestTitle'):
-            M21Utilities._cachedM21SupportsDublinCoreMetadata = True
-            return True
-
-        M21Utilities._cachedM21SupportsDublinCoreMetadata = False
         return False
-
-    _cachedM21SupportsArpeggioMarks: t.Optional[bool] = None
-    @staticmethod
-    def m21SupportsArpeggioMarks() -> bool:
-        if M21Utilities._cachedM21SupportsArpeggioMarks is not None:
-            return M21Utilities._cachedM21SupportsArpeggioMarks
-
-        if hasattr(m21.expressions, 'ArpeggioMark'):
-            M21Utilities._cachedM21SupportsArpeggioMarks = True
-            return True
-
-        M21Utilities._cachedM21SupportsArpeggioMarks = False
-        return False
-
-    _cachedM21SupportsSpannerAnchor: t.Optional[bool] = None
-    @staticmethod
-    def m21SupportsSpannerAnchor() -> bool:
-        if M21Utilities._cachedM21SupportsSpannerAnchor is not None:
-            return M21Utilities._cachedM21SupportsSpannerAnchor
-
-        if hasattr(m21.spanner, 'SpannerAnchor'):
-            M21Utilities._cachedM21SupportsSpannerAnchor = True
-            return True
-
-        M21Utilities._cachedM21SupportsSpannerAnchor = False
-        return False
-
-    _cachedM21SupportsSpannerFill: t.Optional[bool] = None
-    @staticmethod
-    def m21SupportsSpannerFill() -> bool:
-        if M21Utilities._cachedM21SupportsSpannerFill is not None:
-            return M21Utilities._cachedM21SupportsSpannerFill
-
-        if hasattr(m21.spanner.Spanner, 'fill'):
-            M21Utilities._cachedM21SupportsSpannerFill = True
-            return True
-
-        M21Utilities._cachedM21SupportsSpannerFill = False
-        return False
-
-    _cachedM21SupportsDelayedTurns: t.Optional[bool] = None
-    @staticmethod
-    def m21SupportsDelayedTurns() -> bool:
-        if M21Utilities._cachedM21SupportsDelayedTurns is not None:
-            return M21Utilities._cachedM21SupportsDelayedTurns
-
-        if hasattr(m21.expressions.Turn, 'isDelayed'):
-            M21Utilities._cachedM21SupportsDelayedTurns = True
-            return True
-
-        M21Utilities._cachedM21SupportsDelayedTurns = False
-        return False
-
 
 class M21StaffGroupTree:
     def __init__(
             self,
             sg: m21.layout.StaffGroup,
-            staffNumbersByM21Part: t.Dict[m21.stream.Part, int]
+            staffNumbersByM21Part: dict[m21.stream.Part, int]
     ) -> None:
         # about this staff group
         self.staffGroup: m21.layout.StaffGroup = sg
-        self.staffNums: t.Set[int] = set(staffNumbersByM21Part[m21Part]
+        self.staffNums: set[int] = set(staffNumbersByM21Part[m21Part]
                                             for m21Part in
                                                 sg.spannerStorage.elements)
         self.numStaves: int = len(self.staffNums)
         self.lowestStaffNumber: int = min(self.staffNums)
 
         # tree links
-        self.children: t.List[M21StaffGroupTree] = []
+        self.children: list[M21StaffGroupTree] = []
 
 class M21StaffGroupDescriptionTree:
     def __init__(self) -> None:
@@ -540,12 +402,12 @@ class M21StaffGroupDescriptionTree:
         self.barTogether: bool = False  # see m21.layout.StaffGroup.barTogether
         # staves referenced by this group (includes staves in subgroups).
         # staffIndices is in staff order.
-        self.staffIndices: t.List[int] = []
+        self.staffIndices: list[int] = []
         # staves actually in this group (i.e. not in a subgroup).
         # ownedStaffIndices is in staff order.
-        self.ownedStaffIndices: t.List[int] = []
+        self.ownedStaffIndices: list[int] = []
 
         # tree links:
         # children == subgroups, parent = enclosing group (None for top)
-        self.children: t.List[M21StaffGroupDescriptionTree] = []
-        self.parent: t.Optional[M21StaffGroupDescriptionTree] = None
+        self.children: list[M21StaffGroupDescriptionTree] = []
+        self.parent: M21StaffGroupDescriptionTree | None = None

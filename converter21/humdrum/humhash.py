@@ -8,7 +8,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -16,11 +16,12 @@ import typing as t
 
 from music21 import Music21Object
 from music21.common import opFrac
+from music21.common import OffsetQL
 
 from converter21.humdrum import HumdrumInternalError
 
-def getKeyTuple(inKey: str) -> t.Tuple[str, str, str]:
-    keyList: t.List[str] = inKey.split(':')
+def getKeyTuple(inKey: str) -> tuple[str, str, str]:
+    keyList: list[str] = inKey.split(':')
     if len(keyList) == 1:
         return ('', '', keyList[0])
 
@@ -29,11 +30,11 @@ def getKeyTuple(inKey: str) -> t.Tuple[str, str, str]:
 
     return (keyList[0], keyList[1], keyList[2])
 
-def fixupNamespace1Namespace2Key(*ns1ns2key: str) -> t.Tuple[str, str, str]:
+def fixupNamespace1Namespace2Key(*ns1ns2key: str) -> tuple[str, str, str]:
     if len(ns1ns2key) < 1:
-        raise Exception("too few specifiers (need at least a key)")
+        raise ValueError("too few specifiers (need at least a key)")
     if len(ns1ns2key) > 3:
-        raise Exception("too many specifiers (should be at most 3: ns1, ns2, key)")
+        raise ValueError("too many specifiers (should be at most 3: ns1, ns2, key)")
 
     ns1 = ''
     ns2 = ''
@@ -63,9 +64,9 @@ def fixupNamespace1Namespace2Key(*ns1ns2key: str) -> t.Tuple[str, str, str]:
     return (ns1, ns2, key)
 
 def fixupNamespace1Namespace2(
-        ns1: t.Optional[str] = None,
-        ns2: t.Optional[str] = None
-) -> t.Tuple[t.Optional[str], t.Optional[str]]:
+        ns1: str | None = None,
+        ns2: str | None = None
+) -> tuple[str | None, str | None]:
     if ns1 is None and ns2 is not None:
         ns1, ns2 = ns2, ns1  # make ns2 be the one that is None, if one of them is
 
@@ -79,33 +80,37 @@ def fixupNamespace1Namespace2(
     return (ns1, ns2)
 
 class HumParameter:
-    def __init__(self, value: t.Optional[t.Any], origin=None) -> None:
-        # origin: t.Optional[HumdrumToken]
+    def __init__(self, value: t.Any | None, origin=None) -> None:
         # value can be of any type (different from humlib, where it's always a string)
         from converter21.humdrum import HumdrumToken
-        self._value: t.Optional[t.Any] = value
-        self._origin: t.Optional[HumdrumToken] = origin
+        if origin is not None and not isinstance(origin, HumdrumToken):
+            raise HumdrumInternalError('HumParameter origin must be HumdrumToken | None')
+        self._value: t.Any | None = value
+        self._origin: HumdrumToken | None = origin
 
     @property
-    def value(self) -> t.Optional[t.Any]:
+    def value(self) -> t.Any | None:
         return self._value
 
     @value.setter
-    def value(self, newValue: t.Optional[t.Any]) -> None:
+    def value(self, newValue: t.Any | None) -> None:
         self._value = newValue
 
     @property
-    def origin(self):  # -> t.Optional[HumdrumToken]:
+    def origin(self):  # -> HumdrumToken | None:
         return self._origin
 
     @origin.setter
-    def origin(self, newOrigin) -> None:  # newOrigin: t.Optional['HumdrumToken']
+    def origin(self, newOrigin) -> None:  # newOrigin: HumdrumToken | None
+        from converter21.humdrum import HumdrumToken
+        if newOrigin is not None and not isinstance(newOrigin, HumdrumToken):
+            raise HumdrumInternalError('invalid newOrigin')
         self._origin = newOrigin
 
 class HumHash:
     def __init__(self) -> None:
         # {ns1...,{ns2..., {key..., value...}}}
-        self._parameters: t.Optional[t.Dict[str, t.Dict[str, t.Dict[str, HumParameter]]]] = None
+        self._parameters: dict[str, dict[str, dict[str, HumParameter]]] = {}
         self._prefix: str = ''
 
     '''
@@ -146,16 +151,14 @@ class HumHash:
         Q: instead, to avoid circular references?
     '''
     def setValue(self, *ns1ns2keyvalue) -> None:
-        value: t.Optional[t.Any] = ns1ns2keyvalue[-1]       # value is last
+        value: t.Any | None = ns1ns2keyvalue[-1]       # value is last
         ns1ns2key = ns1ns2keyvalue[:-1]  # ns1ns2key is all but last
         ns1: str
         ns2: str
         key: str
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
-        if self._parameters is None:
-            self._parameters = dict([(ns1, dict([(ns2, dict([(key, HumParameter(value))]))]))])
-        elif ns1 not in self._parameters:
+        if ns1 not in self._parameters:
             self._parameters[ns1] = dict([(ns2, dict([(key, HumParameter(value))]))])
         elif ns2 not in self._parameters[ns1]:
             self._parameters[ns1][ns2] = dict([(key, HumParameter(value))])
@@ -175,8 +178,8 @@ class HumHash:
     //    But in these cases colon concatenation of the namespaces and/or key
     //    are not allowed.
     '''
-    def getValue(self, *ns1ns2key) -> t.Optional[t.Any]:
-        if self._parameters is None:
+    def getValue(self, *ns1ns2key) -> t.Any | None:
+        if not self._parameters:
             return None
 
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
@@ -191,37 +194,35 @@ class HumHash:
 
     # getValue variants that convert to requested type (might return None if conversion fails)
 
-    def getValueString(self, *ns1ns2key) -> t.Optional[str]:
-        from converter21.humdrum import HumdrumToken
+    def getValueString(self, *ns1ns2key) -> str | None:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
 
+        from converter21.humdrum import HumdrumToken
         if isinstance(value, HumdrumToken):
             return None
 
         if isinstance(value, Music21Object):
             return None
 
-        # pylint: disable=bare-except
         try:
             return str(value)  # can convert from int, HumNum, Fraction, float, str, etc
-        except:
+        except Exception:
             return None
-        # pylint: enable=bare-except
 
-    def getValueToken(self, *ns1ns2key):  # -> t.Optional[HumdrumToken]:
-        from converter21.humdrum import HumdrumToken
+    def getValueToken(self, *ns1ns2key):  # -> HumdrumToken | None:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
 
+        from converter21.humdrum import HumdrumToken
         if isinstance(value, HumdrumToken):
             return value
 
         return None  # can't convert to anything else
 
-    def getValueM21Object(self, *ns1ns2key) -> t.Optional[Music21Object]:
+    def getValueM21Object(self, *ns1ns2key) -> Music21Object | None:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return None
@@ -232,57 +233,50 @@ class HumHash:
         return None  # can't convert to anything else
 
     def getValueInt(self, *ns1ns2key) -> int:
-        from converter21.humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return 0
 
+        from converter21.humdrum import HumdrumToken
         if isinstance(value, HumdrumToken):
             return 0
 
-        # pylint: disable=bare-except
         try:
             return int(value)  # can convert from int, float, HumNum, Fraction, str
-        except:
+        except Exception:
             return 0
-        # pylint: enable=bare-except
 
-    def getValueHumNum(self, *ns1ns2key):  # -> HumNum:
-        from converter21.humdrum import HumdrumToken
+    def getValueHumNum(self, *ns1ns2key) -> OffsetQL:  # -> HumNum:
         value = self.getValue(*ns1ns2key)
         if value is None:
             return opFrac(0)
 
+        from converter21.humdrum import HumdrumToken
         if isinstance(value, HumdrumToken):
             return opFrac(0)
 
-        # pylint: disable=bare-except
         try:
             return opFrac(value)  # can convert from int, float, Fraction, str
-        except:
+        except Exception:
             return opFrac(0)
-        # pylint: enable=bare-except
 
     def getValueFloat(self, *ns1ns2key) -> float:
-        from converter21.humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return 0.0
 
+        from converter21.humdrum import HumdrumToken
         if isinstance(value, HumdrumToken):
             return 0.0
 
-        # pylint: disable=bare-except
         try:
             return float(value)  # can convert from int, HumNum, Fraction, str
-        except:
+        except Exception:
             return 0.0
-        # pylint: enable=bare-except
 
     def getValueBool(self, *ns1ns2key) -> bool:
         # this one's weird.  We default to True (unless there's some fairly
         # obvious reason to interpret as False, e.g. string == '0', int = 0, etc)
-        from converter21.humdrum import HumdrumToken
         value = self.getValue(*ns1ns2key)
         if value is None:
             return False
@@ -290,6 +284,7 @@ class HumHash:
         if isinstance(value, bool):
             return value
 
+        from converter21.humdrum import HumdrumToken
         if isinstance(value, HumdrumToken):
             return True  # it's not None, so...
 
@@ -300,12 +295,10 @@ class HumHash:
                 return False
             return True
 
-        # pylint: disable=bare-except
         try:
             return int(value) != 0
-        except:
+        except Exception:
             return True  # it's not None, so...
-        # pylint: enable=bare-except
 
     '''
     //////////////////////////////
@@ -316,7 +309,7 @@ class HumHash:
     //    single string argument version.
     '''
     def isDefined(self, *ns1ns2key) -> bool:
-        if self._parameters is None:
+        if not self._parameters:
             return False
 
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
@@ -335,10 +328,10 @@ class HumHash:
     //   "",NS2,key; and one argument version is "","",key.
     '''
     def deleteValue(self, *ns1ns2key) -> None:
-        ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
-
-        if self._parameters is None:
+        if not self._parameters:
             return
+
+        ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
         if ns1 not in self._parameters:
             return
@@ -355,16 +348,16 @@ class HumHash:
     // HumHash::setOrigin -- Set the source token for the parameter.
     '''
     def setOrigin(self, *ns1ns2keyvalue):  # origin: HumdrumToken
-        from converter21.humdrum import HumdrumToken
+        if not self._parameters:
+            return
+
         origin = ns1ns2keyvalue[-1]
         ns1ns2key = ns1ns2keyvalue[:-1]
         ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
+        from converter21.humdrum import HumdrumToken
         if not isinstance(origin, HumdrumToken):
             raise HumdrumInternalError('invalid origin token in HumHash.setOrigin')
-
-        if self._parameters is None:
-            return
 
         if ns1 not in self._parameters:
             return
@@ -383,11 +376,11 @@ class HumHash:
     // HumHash::getOrigin -- Get the source token for the parameter.
     //    Returns NULL if there is no origin.
     '''
-    def getOrigin(self, *ns1ns2key):  # returns HumdrumToken
-        ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
-
-        if self._parameters is None:
+    def getOrigin(self, *ns1ns2key):  # -> HumdrumToken:
+        if not self._parameters:
             return None
+
+        ns1, ns2, key = fixupNamespace1Namespace2Key(*ns1ns2key)
 
         if ns1 not in self._parameters:
             return None
@@ -411,14 +404,13 @@ class HumHash:
     //     then this will be interpreted as "NS1", "NS2" version of the parameters
     //     described above.
     '''
-    def getKeys(self, ns1: t.Optional[str] = None, ns2: t.Optional[str] = None) -> t.List[str]:
-        retKeys: t.List[str] = []
-
-        ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)
-
-        if self._parameters is None:
+    def getKeys(self, ns1: str | None = None, ns2: str | None = None) -> list[str]:
+        retKeys: list[str] = []
+        if not self._parameters:
             # return empty list of keys
             return retKeys
+
+        ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)
 
         if ns1 is None and ns2 is None:
             # return all 'namespace1:namespace2:key's in self._parameters
@@ -453,12 +445,12 @@ class HumHash:
     //     then check if the given NS1 has any parameters, unless there is a
     //     colon in the string which means to check NS1:NS2.
     '''
-    def hasParameters(self, ns1: t.Optional[str] = None, ns2: t.Optional[str] = None) -> bool:
-        ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)
-
-        if self._parameters is None:
+    def hasParameters(self, ns1: str | None = None, ns2: str | None = None) -> bool:
+        if not self._parameters:
             # return empty list of keys
             return False
+
+        ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)
 
         if ns1 is None and ns2 is None:
             # return whether there are any parameters in self._parameters
@@ -494,8 +486,8 @@ class HumHash:
     //     return the parameters in NS1:NS2.
     //
     '''
-    def getParameterCount(self, ns1: t.Optional[str] = None, ns2: t.Optional[str] = None) -> int:
-        if self._parameters is None:
+    def getParameterCount(self, ns1: str | None = None, ns2: str | None = None) -> int:
+        if not self._parameters:
             return 0
 
         ns1, ns2 = fixupNamespace1Namespace2(ns1, ns2)

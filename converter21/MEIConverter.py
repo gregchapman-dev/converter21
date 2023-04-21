@@ -2,14 +2,13 @@
 # Name:          MEIConverter.py
 # Purpose:       A music21 subconverter for MEI files.
 #
-# Authors:      Michael Scott Asato Cuthbert
-#               Christopher Ariza
+# Note:          This was copied verbatim from music21/converter/subConverters.py (by
+#                Michael Scott Asato Cuthbert and Christopher Ariza), and then modified
+#                to live in converter21.
 #
-# Copyright:    Copyright © 2009-2015 Michael Scott Asato Cuthbert and the music21 Project
-# License:      BSD, see license.txt
+# Copyright:     (c) 2021-2023 Greg Chapman
+# License:       MIT, see LICENSE
 #
-# Note:         This was copied verbatim from music21/converter/subConverters.py, and then modified
-#               to live in converter21.  My hope is to eventually re-submit this as a PR to music21.
 # ------------------------------------------------------------------------------
 import typing as t
 import pathlib
@@ -33,8 +32,8 @@ class MEIConverter(SubConverter):
     def parseData(
         self,
         dataString: str,
-        number: t.Optional[int] = None
-    ) -> t.Union[stream.Score, stream.Part, stream.Opus]:
+        number: int | None = None
+    ) -> stream.Score | stream.Part | stream.Opus:
         '''
         Convert a string with an MEI document into its corresponding music21 elements.
 
@@ -61,10 +60,10 @@ class MEIConverter(SubConverter):
 
     def parseFile(
         self,
-        filePath: t.Union[str, pathlib.Path],
-        number: t.Optional[int] = None,
+        filePath: str | pathlib.Path,
+        number: int | None = None,
         **keywords,
-    ) -> stream.Stream:
+    ) -> stream.Score | stream.Part | stream.Opus:
         '''
         Convert a file with an MEI document into its corresponding music21 elements.
 
@@ -90,6 +89,11 @@ class MEIConverter(SubConverter):
                     dataStream = f.read()
 
         self.parseData(dataStream, number)
+
+        if t.TYPE_CHECKING:
+            # self.stream is a property defined in SubConverter, and it's not
+            # type-hinted properly.  But we know what this is.
+            assert isinstance(self.stream, (stream.Score, stream.Part, stream.Opus))
 
         return self.stream
 
