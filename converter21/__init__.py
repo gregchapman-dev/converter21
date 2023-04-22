@@ -37,9 +37,8 @@ def register(
 ):
     import music21 as m21
 
-    # PUT THIS BACK IN ONCE music21 v9.1 is released
-    # if not M21Utilities.m21VersionIsAtLeast((9, 1, 0, '')):
-    #     raise Music21VersionException('music21 version needs to be 9.1 or greater')
+    if not M21Utilities.m21VersionIsAtLeast((9, 0, 0, 'a11')):
+        raise Music21VersionException('music21 version needs to be 9.1 or greater')
 
     # default (if no converterNames passed in) is to register everything we have
     if not converterNames:
