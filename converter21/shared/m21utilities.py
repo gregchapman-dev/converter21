@@ -378,6 +378,7 @@ class M21Utilities:
         return False
 
 class M21StaffGroupTree:
+    # Used during export
     def __init__(
             self,
             sg: m21.layout.StaffGroup,
@@ -395,17 +396,33 @@ class M21StaffGroupTree:
         self.children: list[M21StaffGroupTree] = []
 
 class M21StaffGroupDescriptionTree:
+    # Used during import
     def __init__(self) -> None:
         # about this group description
-        self.groupNum: int = 0
         self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
-        self.barTogether: bool = False  # see m21.layout.StaffGroup.barTogether
+        self.barTogether: bool | str | None = None  # see m21.layout.StaffGroup.barTogether
+
+        # groupName should be set if there is a label for the staff group.
+        # The Humdrum importer doesn't use this field, as it has other ways of
+        # tracking this.
+        self.groupName: str = ''
+
+        # Humdrum importer sets groupNum instead, and then gathers names later
+        # using that groupNum.
+        self.groupNum: int = 0
+
         # staves referenced by this group (includes staves in subgroups).
-        # staffIndices is in staff order.
-        self.staffIndices: list[int] = []
+        # staffIds should be in staff order (on the page, from top to bottom).
+        self.staffIds: list[int | str] = []  # Humdrum likes int, MEI likes str
+
         # staves actually in this group (i.e. not in a subgroup).
-        # ownedStaffIndices is in staff order.
-        self.ownedStaffIndices: list[int] = []
+        # ownedStaffIds should be in staff order (on the page, from top to bottom).
+        self.ownedStaffIds: list[int] = []
+
+        # ownedStaffNames should contain the labels for each owned staff (if there is one).
+        # The Humdrum importer doesn't use this field, as it has other ways of
+        # tracking this.
+        self.ownedStaffNames: list[str] = []
 
         # tree links:
         # children == subgroups, parent = enclosing group (None for top)
