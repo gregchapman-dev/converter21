@@ -2776,7 +2776,7 @@ def scoreDefFromElement(
     spannerBundle: spanner.SpannerBundle,
     otherInfo: dict[str, t.Any],
     allPartNs: tuple[str, ...],
-    staffGrpsExpected: bool = True
+    parseStaffGrps: bool = True
 ) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
     '''
     <scoreDef> Container for score meta-information.
@@ -2814,7 +2814,7 @@ def scoreDefFromElement(
     >>> from converter21.mei.base import scoreDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> scoreDef = ET.fromstring(meiDoc)
-    >>> result = scoreDefFromElement(scoreDef, None, {}, staffGrpsExpected=True)
+    >>> result = scoreDefFromElement(scoreDef, None, {}, parseStaffGrps=True)
     >>> len(result)
     5
     >>> result['1']
@@ -2922,64 +2922,61 @@ def scoreDefFromElement(
     if len(topLevelStaffGrps) == 0:
         return post
 
-    if not staffGrpsExpected:
-        raise MeiElementError(
-            'Unsupported: multiple <scoreDef> that contain <staffGrp> in a single <score>'
-        )
+    if parseStaffGrps:
+        if len(topLevelStaffGrps) > 1:
+            # There is no outer group, so make a fake one.
+            fakeTopLevelGroup = M21StaffGroupDescriptionTree()
+            fakeTopLevelGroup.symbol = 'none'  # no visible bracing
+            fakeTopLevelGroup.barTogether = False  # no barline across the staves
 
-    if len(topLevelStaffGrps) > 1:
-        # There is no outer group, so make a fake one.
-        fakeTopLevelGroup = M21StaffGroupDescriptionTree()
-        fakeTopLevelGroup.symbol = 'none'  # no visible bracing
-        fakeTopLevelGroup.barTogether = False  # no barline across the staves
+        # We process the list of staffGrp elements twice, once to gather up a tree of
+        # staff group descriptions (symbol, barTogether, staff numbers), and once to
+        # gather up a dictionary of staff definition Music21Objects in a dictionary
+        # per staff (intrument, keysig, metersig, etc), keyed by staff number).
 
-    # We process the list of staffGrp elements twice, once to gather up a tree of
-    # staff group descriptions (symbol, barTogether, staff numbers), and once to
-    # gather up a dictionary of staff definition Music21Objects in a dictionary
-    # per staff (intrument, keysig, metersig, etc), keyed by staff number).
-
-    # Gather up the M21StaffGroupDescriptionTree.
-    for eachGrp in topLevelStaffGrps:
-        groupDesc: M21StaffGroupDescriptionTree = (
-            staffGroupDescriptionTreeFromStaffGrp(
-                eachGrp,
-                spannerBundle,
-                otherInfo,
-                fakeTopLevelGroup,  # will be None if len(topLevelStaffGrps) == 1 (usual case)
+        # Gather up the M21StaffGroupDescriptionTree.
+        for eachGrp in topLevelStaffGrps:
+            groupDesc: M21StaffGroupDescriptionTree = (
+                staffGroupDescriptionTreeFromStaffGrp(
+                    eachGrp,
+                    spannerBundle,
+                    otherInfo,
+                    fakeTopLevelGroup,  # will be None if len(topLevelStaffGrps) == 1 (usual case)
+                )
             )
-        )
-        topLevelGroupDescs.append(groupDesc)
+            topLevelGroupDescs.append(groupDesc)
 
     # Gather up the staffDefDict.
     for eachGrp in topLevelStaffGrps:
         post.update(staffGrpFromElement(eachGrp, spannerBundle, otherInfo))
 
-    # process the staffGroup description tree, generating a list of m21 StaffGroup objects.
-    # Put them in post[wholeScore].
-    pws = post[wholeScore]
-    if t.TYPE_CHECKING:
-        assert isinstance(pws, dict)
-    postWholeScore: dict[str, t.Any] = pws
+    if parseStaffGrps:
+        # process the staffGroup description tree, generating a list of m21 StaffGroup objects.
+        # Put them in post[wholeScore].
+        pws = post[wholeScore]
+        if t.TYPE_CHECKING:
+            assert isinstance(pws, dict)
+        postWholeScore: dict[str, t.Any] = pws
 
-    # If we had to make a fake top-level group desc, use that.
-    # Otherwise there is only one top-level group desc in the list, use that.
-    topLevelGroup: M21StaffGroupDescriptionTree = (
-        fakeTopLevelGroup or topLevelGroupDescs[0]
-    )
+        # If we had to make a fake top-level group desc, use that.
+        # Otherwise there is only one top-level group desc in the list, use that.
+        topLevelGroup: M21StaffGroupDescriptionTree = (
+            fakeTopLevelGroup or topLevelGroupDescs[0]
+        )
 
-    staffGroups: list[m21.layout.StaffGroup]
-    parts: list[m21.stream.Part]
-    partNs: list[str]
-    staffGroups, parts, partNs = processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
-    if partNs != list(allPartNs):
-        raise MeiInternalError('processStaffGroupDescriptionTree did not produce allPartNs')
+        staffGroups: list[m21.layout.StaffGroup]
+        parts: list[m21.stream.Part]
+        partNs: list[str]
+        staffGroups, parts, partNs = processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
+        if partNs != list(allPartNs):
+            raise MeiInternalError('processStaffGroupDescriptionTree did not produce allPartNs')
 
-    partsPerN: dict[str, m21.stream.Part] = {}
-    for staffN, part in zip(allPartNs, parts):
-        partsPerN[staffN] = part
+        partsPerN: dict[str, m21.stream.Part] = {}
+        for staffN, part in zip(allPartNs, parts):
+            partsPerN[staffN] = part
 
-    postWholeScore['staff-groups'] = staffGroups
-    postWholeScore['parts'] = partsPerN
+        postWholeScore['staff-groups'] = staffGroups
+        postWholeScore['parts'] = partsPerN
 
     return post
 
@@ -7754,14 +7751,15 @@ def sectionScoreCore(
                 nextMeasureLeft = None
 
         elif scoreDefTag == eachElem.tag:
-            # we only expect staffGrps in the very first <scoreDef> in the <score>
-            staffGrpsExpected: bool = not scoreDefSeen
+            # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups) in the
+            # very first <scoreDef> in the <score>.  After that we just scan them for staffDefs.
+            parseStaffGrps: bool = not scoreDefSeen
             localResult = scoreDefFromElement(
                 eachElem,
                 spannerBundle,
                 otherInfo,
                 allPartNs,
-                staffGrpsExpected=staffGrpsExpected
+                parseStaffGrps=parseStaffGrps
             )
             scoreDefSeen = True
 
