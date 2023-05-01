@@ -417,7 +417,7 @@ class M21StaffGroupDescriptionTree:
 
         # staves actually in this group (i.e. not in a subgroup).
         # ownedStaffIds should be in staff order (on the page, from top to bottom).
-        self.ownedStaffIds: list[int] = []
+        self.ownedStaffIds: list[int | str] = []
 
         # ownedStaffNames should contain the labels for each owned staff (if there is one).
         # The Humdrum importer doesn't use this field, as it has other ways of

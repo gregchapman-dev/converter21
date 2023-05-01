@@ -2775,7 +2775,8 @@ def scoreDefFromElement(
     elem: Element,
     spannerBundle: spanner.SpannerBundle,
     otherInfo: dict[str, t.Any],
-    allPartNs: tuple[str, ...]
+    allPartNs: tuple[str, ...],
+    staffGrpsExpected: bool = True
 ) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
     '''
     <scoreDef> Container for score meta-information.
@@ -2813,7 +2814,7 @@ def scoreDefFromElement(
     >>> from converter21.mei.base import scoreDefFromElement
     >>> from xml.etree import ElementTree as ET
     >>> scoreDef = ET.fromstring(meiDoc)
-    >>> result = scoreDefFromElement(scoreDef, None, {})
+    >>> result = scoreDefFromElement(scoreDef, None, {}, staffGrpsExpected=True)
     >>> len(result)
     5
     >>> result['1']
@@ -2876,7 +2877,7 @@ def scoreDefFromElement(
     post: dict[str, list[Music21Object] | dict[str, Music21Object]] = {
         topPart: [],
         allParts: [],
-        wholeScore: []
+        wholeScore: {}
     }
 
     # 0.) process top-part attributes (none actually get posted yet, but...)
@@ -2921,6 +2922,11 @@ def scoreDefFromElement(
     if len(topLevelStaffGrps) == 0:
         return post
 
+    if not staffGrpsExpected:
+        raise MeiElementError(
+            'Unsupported: multiple <scoreDef> that contain <staffGrp> in a single <score>'
+        )
+
     if len(topLevelStaffGrps) > 1:
         # There is no outer group, so make a fake one.
         fakeTopLevelGroup = M21StaffGroupDescriptionTree()
@@ -2953,7 +2959,7 @@ def scoreDefFromElement(
     pws = post[wholeScore]
     if t.TYPE_CHECKING:
         assert isinstance(pws, dict)
-    postWholeScore: dict[str, Music21Object] = pws
+    postWholeScore: dict[str, t.Any] = pws
 
     # If we had to make a fake top-level group desc, use that.
     # Otherwise there is only one top-level group desc in the list, use that.
@@ -2963,14 +2969,17 @@ def scoreDefFromElement(
 
     staffGroups: list[m21.layout.StaffGroup]
     parts: list[m21.stream.Part]
-    parts, staffGroups = processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
+    partNs: list[str]
+    staffGroups, parts, partNs = processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
+    if partNs != list(allPartNs):
+        raise MeiInternalError('processStaffGroupDescriptionTree did not produce allPartNs')
 
     partsPerN: dict[str, m21.stream.Part] = {}
     for staffN, part in zip(allPartNs, parts):
         partsPerN[staffN] = part
 
     postWholeScore['staff-groups'] = staffGroups
-    postWholeScore['parts'] = parts
+    postWholeScore['parts'] = partsPerN
 
     return post
 
@@ -2986,7 +2995,7 @@ _MEI_STAFFGROUP_SYMBOL_TO_M21: dict[str, str] = {
     'none': 'none'
 }
 
-_MEI_BAR_THRU_TO_M21_BAR_TOGETHER: dict[str, bool | None] = {
+_MEI_BAR_THRU_TO_M21_BAR_TOGETHER: dict[str | None, bool | None] = {
     'false': False,
     'true': True,
     None: None
@@ -3006,7 +3015,10 @@ def staffGroupDescriptionTreeFromStaffGrp(
 
     # Set up a groupDesc for this group (elem), and insert it in parentGroupDesc tree.
     thisGroupDesc: M21StaffGroupDescriptionTree = M21StaffGroupDescriptionTree()
-    thisGroupDesc.symbol = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'))
+    symbol: str | None = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'))
+    if t.TYPE_CHECKING:
+        assert symbol is not None
+    thisGroupDesc.symbol = symbol
     thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', None))
 
     # check for 'Mensurstrich' (barline between staves only, doesn't cross staff)
@@ -3021,7 +3033,7 @@ def staffGroupDescriptionTreeFromStaffGrp(
     groupLabelElements: list[Element] = elem.findall(f'{MEI_NS}label')
     if groupLabelElements:
         # might want to parse like a text element (looking for italics, etc)
-        thisGroupDesc.groupName = groupLabelElements[0].text
+        thisGroupDesc.groupName = groupLabelElements[0].text or ''
 
     if parentGroupDesc is not None:
         parentGroupDesc.children.append(thisGroupDesc)
@@ -3044,7 +3056,7 @@ def staffGroupDescriptionTreeFromStaffGrp(
             staffLabelElements: list[Element] = el.findall(f'{MEI_NS}label')
             if staffLabelElements:
                 # might want to parse like a text element (looking for italics, etc)
-                staffLabel: str = staffLabelElements[0].text
+                staffLabel: str = staffLabelElements[0].text or ''
                 thisGroupDesc.ownedStaffNames.append(staffLabel)
             else:
                 thisGroupDesc.ownedStaffNames.append('')
@@ -3114,21 +3126,22 @@ def processStaffGroupDescriptionTree(
 
     staffGroups: list[m21.layout.StaffGroup] = []
     staves: list[m21.stream.Part] = []
-    staffIds: list[str] = []
+    staffIds: list[int | str] = []
 
     # top-level staffGroup for this groupDescTree
     staffGroups.append(m21.layout.StaffGroup())
 
     # Iterate over each sub-group (check for owned groups of staves between subgroups)
     # Process owned groups here, recurse to process sub-groups
-    staffIdsToProcess: set[str] = set(groupDescTree.staffIds)
+    staffIdsToProcess: set[int | str] = set(groupDescTree.staffIds)
 
     groupOfPartStaffsName: str = _groupShouldContainPartStaffs(groupDescTree)
     if groupOfPartStaffsName:
         staffGroups[0].name = groupOfPartStaffsName
 
+    part: m21.stream.Part | m21.stream.PartStaff
     for subgroup in groupDescTree.children:
-        firstStaffIdInSubgroup: int = subgroup.staffIds[0]
+        firstStaffIdInSubgroup: int | str = subgroup.staffIds[0]
 
         # 1. any owned group just before this subgroup
         # (while loop will not execute if there is no owned group before this subgroup)
@@ -3143,7 +3156,6 @@ def processStaffGroupDescriptionTree(
                 # we already did this one
                 continue
 
-            part: m21.stream.Part | m21.stream.PartStaff
             if groupOfPartStaffsName:
                 part = m21.stream.PartStaff()
             else:
@@ -3191,7 +3203,6 @@ def processStaffGroupDescriptionTree(
                 # we already did this one
                 continue
 
-            part: m21.stream.Part | m21.stream.PartStaff
             if groupOfPartStaffsName:
                 part = m21.stream.PartStaff()
             else:
@@ -3229,7 +3240,8 @@ def processStaffGroupDescriptionTree(
 # 888     #   (2) mark that instrument in the Part(s) as not-to-be-printed
 # 888     self._promoteCommonInstrumentToStaffGroup(sg)
 
-    return (staffGroups, staves, staffIds)
+    returnStaffIds: list[str] = staffIds  # type: ignore
+    return (staffGroups, staves, returnStaffIds)
 
 def staffGrpFromElement(
     elem: Element,
@@ -7660,11 +7672,10 @@ def sectionScoreCore(
         n: [] for n in allPartNs
     }
 
-    # 888 if elem is a <score>, then we also will be creating a list of Part/PartStaffs, in the
-    # same order as allPartNs (because that's the order they exist in the MEI document, and
-    # thus in the score), as well as a list of StaffGroups, which reference the PartStaffs.
-#     parts: list[stream.Part] = []
-#     staffGroups: list[m21.layout.StaffGroup] = []
+    # if elem is a <score> and this is the first scoreDef in that score, then we also will
+    # be creating a dict of Part/PartStaffs, keyed by every 'n' in allPartNs, as well as a list
+    # of StaffGroups, which reference the PartStaffs.
+    scoreDefSeen: bool = False
 
     # hold things that belong in the following "Thing" (either Measure or Section)
     inNextThing: dict[str, list[Music21Object | list[Music21Object]]] = {
@@ -7743,22 +7754,21 @@ def sectionScoreCore(
                 nextMeasureLeft = None
 
         elif scoreDefTag == eachElem.tag:
-            # 888
-            # isMainScoreDef: bool = elem.tag == scoreTag
+            # we only expect staffGrps in the very first <scoreDef> in the <score>
+            staffGrpsExpected: bool = not scoreDefSeen
             localResult = scoreDefFromElement(
                 eachElem,
                 spannerBundle,
                 otherInfo,
                 allPartNs,
+                staffGrpsExpected=staffGrpsExpected
             )
+            scoreDefSeen = True
 
-#             if isMainScoreDef: 888
-#                 wso = localResult['whole-score objects']
-#                 if t.TYPE_CHECKING:
-#                     assert isinstance(wso, dict)
-#                 wholeScoreObjects: dict[str, list[Music21Object]] = wso
-#                 parts = wholeScoreObjects['parts']
-#                 staffGroups = wholeScoreObjects['staffGroups']
+            # copy all the parts and staffGroups from localResult to parsed
+            wholeScoreObjects = localResult.get('whole-score objects')
+            if wholeScoreObjects:
+                parsed['whole-score objects'] = wholeScoreObjects  # type: ignore
 
             for topPartObject in localResult['top-part objects']:
                 if t.TYPE_CHECKING:
@@ -8093,13 +8103,33 @@ def scoreFromElement(
 
     # Convert the dict to a Score
     environLocal.printDebug('*** making the Score')
-    thePartList: list[stream.Part] = [stream.Part() for _ in range(len(allPartNs))]
-    for i, eachN in enumerate(allPartNs):
+
+    wso = parsed.get('whole-score objects')
+    if wso is None:
+        # no parts, return empty score
+        return m21.stream.Score()
+
+    if t.TYPE_CHECKING:
+        assert isinstance(wso, dict)
+    wholeScoreObjects: dict[str, Music21Object] | None = wso
+    parts = wholeScoreObjects['parts']
+    staffGroups = wholeScoreObjects['staff-groups']
+
+    # we create thePartList in the order of allPartNs (since that's document order),
+    # NOT ordered numerically by 'n'.
+    thePartList: list[m21.stream.Part] = []
+    for eachN in allPartNs:
+        thePartList.append(parts[eachN])
         # set "atSoundingPitch" so transposition works
-        thePartList[i].atSoundingPitch = False
+        thePartList[-1].atSoundingPitch = False
         for eachObj in parsed[eachN]:
-            thePartList[i].append(eachObj)
+            thePartList[-1].append(eachObj)
+
     theScore: stream.Score = stream.Score(thePartList)
+
+    # put the staffGroups in the score, too
+    for staffGroup in staffGroups:
+        theScore.insert(0, staffGroup)
 
     # fill in any Ottava spanners
     for sp in spannerBundle:
@@ -8127,7 +8157,8 @@ def scoreFromElement(
             sp.fill(thePartList[partIdx])
 
     # put spanners in the Score
-    theScore.append(list(spannerBundle))
+    for sp in spannerBundle:
+        theScore.insert(0, sp)
 
     return theScore
 

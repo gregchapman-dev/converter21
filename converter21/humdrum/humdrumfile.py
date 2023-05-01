@@ -9977,8 +9977,10 @@ class HumdrumFile(HumdrumFileContent):
         # key is staff num, value is group num
         staffToGroup: dict[int, int] = {}
 
-        # key is index into self._staffStarts, value is group num
-        staffStartIndexToGroup: dict[int, int] = {}
+        # key is index into self._staffStarts, value is group num (but we have to
+        # declare key as int | str, because that's how it is declared in
+        # M21StaffGroupDescriptionTree).
+        staffStartIndexToGroup: dict[int | str, int] = {}
 
         # key is staff num, value is part num
         staffToPart: dict[int, int] = {}
@@ -10198,7 +10200,7 @@ class HumdrumFile(HumdrumFileContent):
             if not pairing:
                 return False
 
-            # figure out which staffIndices etc are grouped.  If groups are nested,
+            # figure out which staffIds etc are grouped.  If groups are nested,
             # higher level groups contain all the staves of their contained (lower
             # level) groups.
 
@@ -10306,8 +10308,8 @@ class HumdrumFile(HumdrumFileContent):
                         ancestor: M21StaffGroupDescriptionTree | None = currentGroup
                         while ancestor is not None:
                             if ancestor is currentGroup:
-                                currentGroup.ownedStaffIndices.append(sstartIndex)
-                            ancestor.staffIndices.append(sstartIndex)
+                                currentGroup.ownedStaffIds.append(sstartIndex)
+                            ancestor.staffIds.append(sstartIndex)
                             ancestor = ancestor.parent
 
                         staffStartIndicesSeen.append(sstartIndex)
@@ -10336,9 +10338,9 @@ class HumdrumFile(HumdrumFileContent):
                 return False
 
             for groupDesc in groupDescs:
-                if groupDesc is not None and groupDesc.staffIndices:
+                if groupDesc is not None and groupDesc.staffIds:
                     # we skip None groupDescs and empty groupDescs (no staves)
-                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
+                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIds[0], 0)
 
             topLevelParent = rootGroupDesc
             if topLevelParent is None:
@@ -10367,29 +10369,29 @@ class HumdrumFile(HumdrumFileContent):
                     newGroup = M21StaffGroupDescriptionTree()
                     newGroup.symbol = 'brace'  # default for undecorated staff groups (e.g. piano)
                     newGroup.barTogether = False
-                    newGroup.ownedStaffIndices = [
+                    newGroup.ownedStaffIds = [
                         staffToStaffStartIndex[staffNum] for staffNum in staves
                     ]
-                    newGroup.staffIndices = newGroup.ownedStaffIndices
+                    newGroup.staffIds = newGroup.ownedStaffIds
                     newGroup.parent = rootGroupDesc
                     rootGroupDesc.children.append(newGroup)
-                    rootGroupDesc.staffIndices += newGroup.staffIndices
+                    rootGroupDesc.staffIds += newGroup.staffIds
                     groupDescs[i] = newGroup
                     numStaffGroups += 1
                 elif len(staves) == 1:
                     # no StaffGroupDescriptionTree for this staff, it's
                     # owned by the top-level staff group
                     snum: int = staffToStaffStartIndex[staves[0]]
-                    rootGroupDesc.ownedStaffIndices.append(snum)
-                    rootGroupDesc.staffIndices.append(snum)
+                    rootGroupDesc.ownedStaffIds.append(snum)
+                    rootGroupDesc.staffIds.append(snum)
 
             for groupDesc in groupDescs:
-                if groupDesc is not None and groupDesc.staffIndices:
+                if groupDesc is not None and groupDesc.staffIds:
                     # we skip None groupDescs and empty groupDescs (no staves)
-                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
+                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIds[0], 0)
 
             if (numStaffGroups == 1
-                    and rootGroupDesc.staffIndices == rootGroupDesc.children[0].staffIndices):
+                    and rootGroupDesc.staffIds == rootGroupDesc.children[0].staffIds):
                 topLevelParent = rootGroupDesc.children[0]  # just that one, please
             elif numStaffGroups > 0:
                 topLevelParent = rootGroupDesc
@@ -10427,17 +10429,17 @@ class HumdrumFile(HumdrumFileContent):
 
     @staticmethod
     def _sortGroupDescriptionTrees(trees: list[M21StaffGroupDescriptionTree]) -> None:
-        # Sort the staffIndices and ownedStaffIndices in every node in the tree.
+        # Sort the staffIds and ownedStaffIds in every node in the tree.
         # Sort every list of children in the tree (including the
         # passed-in trees list itself) by lowest staff index.
         if not trees:
             return
 
         for tree in trees:
-            tree.staffIndices.sort()
-            tree.ownedStaffIndices.sort()
+            tree.staffIds.sort()
+            tree.ownedStaffIds.sort()
 
-        trees.sort(key=lambda tree: tree.staffIndices[0])
+        trees.sort(key=lambda tree: tree.staffIds[0])
 
         for tree in trees:
             HumdrumFile._sortGroupDescriptionTrees(tree.children)
@@ -10454,31 +10456,36 @@ class HumdrumFile(HumdrumFileContent):
     ) -> tuple[list[m21.layout.StaffGroup], list[m21.stream.Part], list[int]]:
         if groupDescTree is None:
             return ([], [], [])
-        if not groupDescTree.staffIndices:
+        if not groupDescTree.staffIds:
             return ([], [], [])
 
         staffGroups: list[m21.layout.StaffGroup] = []
         staves: list[m21.stream.Part] = []
-        staffIndices: list[int] = []
+        staffIds: list[int] = []
 
         # top-level staffGroup for this groupDescTree
         staffGroups.append(m21.layout.StaffGroup())
 
         # Iterate over each sub-group (check for owned groups of staves between subgroups)
         # Process owned groups here, recurse to process sub-groups
-        staffIndicesToProcess: set[int] = set(groupDescTree.staffIndices)
+        staffIdsToProcess: set[int | str] = set(groupDescTree.staffIds)
 
         for subgroup in groupDescTree.children:
-            firstStaffIdxInSubgroup: int = subgroup.staffIndices[0]
+            firstStaffIdxInSubgroup: int | str = subgroup.staffIds[0]
+            if t.TYPE_CHECKING:
+                assert isinstance(firstStaffIdxInSubgroup, int)
 
             # 1. any owned group just before this subgroup
             # (while loop will not execute if there is no owned group before this subgroup)
-            for ownedStaffIdx in groupDescTree.ownedStaffIndices:
+            for ownedStaffIdx in groupDescTree.ownedStaffIds:
+                if t.TYPE_CHECKING:
+                    assert isinstance(ownedStaffIdx, int)
+
                 if ownedStaffIdx >= firstStaffIdxInSubgroup:
                     # we're done with this owned group (there may be another one later)
                     break
 
-                if ownedStaffIdx not in staffIndicesToProcess:
+                if ownedStaffIdx not in staffIdsToProcess:
                     # we already did this one
                     continue
 
@@ -10489,16 +10496,16 @@ class HumdrumFile(HumdrumFileContent):
                     assert ss.m21Part is not None
                 staffGroups[0].addSpannedElements(ss.m21Part)
                 staves.append(ss.m21Part)
-                staffIndices.append(ownedStaffIdx)
+                staffIds.append(ownedStaffIdx)
 
-                staffIndicesToProcess.remove(ownedStaffIdx)
+                staffIdsToProcess.remove(ownedStaffIdx)
 
             # 2. now the subgroup (returns a list of StaffGroups for the subtree)
             newStaffGroups: list[m21.layout.StaffGroup]
             newStaves: list[m21.stream.Part]
-            newIndices: list[int]
+            newIds: list[int]
 
-            newStaffGroups, newStaves, newIndices = (
+            newStaffGroups, newStaves, newIds = (
                 self._processStaffGroupDescriptionTree(subgroup)
             )
 
@@ -10509,22 +10516,25 @@ class HumdrumFile(HumdrumFileContent):
             staves += newStaves
             staffGroups[0].addSpannedElements(newStaves)
 
-            # add newIndices to staffIndices
-            staffIndices += newIndices
+            # add newIds to staffIds
+            staffIds += newIds
 
-            # remove newIndices from staffIndicesToProcess
-            staffIndicesProcessed: set[int] = set(newIndices)  # for speed of "in" checking
-            staffIndicesToProcess = {
-                idx for idx in staffIndicesToProcess if idx not in staffIndicesProcessed
+            # remove newIds from staffIdsToProcess
+            staffIdsProcessed: set[int] = set(newIds)  # for speed of "in" checking
+            staffIdsToProcess = {
+                idx for idx in staffIdsToProcess if idx not in staffIdsProcessed
             }
 
         # done with everything but the very last owned group (if present)
-        if staffIndicesToProcess:
+        if staffIdsToProcess:
             # 3. any unprocessed owned group just after the last subgroup
-            for ownedStaffIdx in groupDescTree.ownedStaffIndices:
-                if ownedStaffIdx not in staffIndicesToProcess:
+            for ownedStaffIdx in groupDescTree.ownedStaffIds:
+                if ownedStaffIdx not in staffIdsToProcess:
                     # we already did this one
                     continue
+
+                if t.TYPE_CHECKING:
+                    assert isinstance(ownedStaffIdx, int)
 
                 ss = self._staffStates[ownedStaffIdx]
                 startTok = self._staffStarts[ownedStaffIdx]
@@ -10533,12 +10543,12 @@ class HumdrumFile(HumdrumFileContent):
                     assert ss.m21Part is not None
                 staffGroups[0].addSpannedElements(ss.m21Part)
                 staves.append(ss.m21Part)
-                staffIndices.append(ownedStaffIdx)
+                staffIds.append(ownedStaffIdx)
 
-                staffIndicesToProcess.remove(ownedStaffIdx)
+                staffIdsToProcess.remove(ownedStaffIdx)
 
         # assert that we are done
-        assert not staffIndicesToProcess
+        assert not staffIdsToProcess
 
         # configure our top-level staffGroup
         sg: m21.layout.StaffGroup = staffGroups[0]
@@ -10561,7 +10571,7 @@ class HumdrumFile(HumdrumFileContent):
             #   (2) mark that instrument in the Part(s) as not-to-be-printed
             self._promoteCommonInstrumentToStaffGroup(sg)
 
-        return (staffGroups, staves, staffIndices)
+        return (staffGroups, staves, staffIds)
 
     @staticmethod
     def _promoteCommonInstrumentToStaffGroup(staffGroup: m21.layout.StaffGroup) -> None:
