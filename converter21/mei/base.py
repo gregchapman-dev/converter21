@@ -7837,6 +7837,7 @@ def sectionScoreCore(
                 allPartNs,
                 nextMeasureLeft,
                 backupMeasureNum)
+
             for eachN, eachList in localParsed.items():
                 # NOTE: "eachList" is a list of objects that will become a music21 Part.
                 #
@@ -7844,6 +7845,9 @@ def sectionScoreCore(
                 #        put those into the first Measure object we encounter in this Part
                 # TODO: this is where the Instruments get added
                 # TODO: I think "eachList" really means "each list that will become a Part"
+                if eachN == 'whole-score objects':
+                    continue
+
                 if inNextThing[eachN]:
                     # we have to put Instrument objects just before the Measure to which they apply
                     theInstr = None
