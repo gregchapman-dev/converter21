@@ -3066,7 +3066,7 @@ def staffGroupDescriptionTreeFromStaffGrp(
 
 
 def _isMultiStaffInstrument(name: str) -> bool:
-    inst: m21.instrument.Instrument | None
+    inst: m21.instrument.Instrument | None = None
     try:
         inst = m21.instrument.fromString(name)
     except m21.instrument.InstrumentException:
