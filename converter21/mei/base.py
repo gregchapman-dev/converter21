@@ -7753,7 +7753,7 @@ def sectionScoreCore(
         elif scoreDefTag == eachElem.tag:
             # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups) in the
             # very first <scoreDef> in the <score>.  After that we just scan them for staffDefs.
-            parseStaffGrps: bool = not scoreDefSeen
+            parseStaffGrps: bool = elem.tag == scoreTag and not scoreDefSeen
             localResult = scoreDefFromElement(
                 eachElem,
                 spannerBundle,
