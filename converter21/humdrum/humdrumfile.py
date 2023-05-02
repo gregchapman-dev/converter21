@@ -10367,8 +10367,16 @@ class HumdrumFile(HumdrumFileContent):
                     # make a StaffGroupDescriptionTree for these staves,
                     # and put it under rootGroupDesc
                     newGroup = M21StaffGroupDescriptionTree()
-                    newGroup.symbol = 'brace'  # default for undecorated staff groups (e.g. piano)
-                    newGroup.barTogether = False
+                    if len(staves) == 2:
+                        # If there are two staves, presume that it is for a grand staff
+                        # and a brace should be displayed.  Barlines should go thru everything.
+                        newGroup.symbol = 'brace'
+                        newGroup.barTogether = True
+                    else:
+                        # If there are more than two staves then
+                        # add a bracket around the staves.  Barlines go thru staves only.
+                        newGroup.symbol = 'bracket'
+                        newGroup.barTogether = False
                     newGroup.ownedStaffIds = [
                         staffToStaffStartIndex[staffNum] for staffNum in staves
                     ]
