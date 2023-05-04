@@ -2991,10 +2991,10 @@ _MEI_STAFFGROUP_SYMBOL_TO_M21: dict[str, str] = {
     'none': 'none'
 }
 
-_MEI_BAR_THRU_TO_M21_BAR_TOGETHER: dict[str | None, bool | None] = {
+_MEI_BAR_THRU_TO_M21_BAR_TOGETHER: dict[str, bool] = {
     'false': False,
     'true': True,
-    None: None
+    '': False,
 }
 
 def staffGroupDescriptionTreeFromStaffGrp(
@@ -3015,7 +3015,7 @@ def staffGroupDescriptionTreeFromStaffGrp(
     if t.TYPE_CHECKING:
         assert symbol is not None
     thisGroupDesc.symbol = symbol
-    thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', None))
+    thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', ''))
 
     # check for 'Mensurstrich' (barline between staves only, doesn't cross staff)
     barMethod: str = elem.get('bar.method', '')
