@@ -2924,48 +2924,6 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         mockFromString.assert_called_once_with(expFromStringArg)
 
-    @mock.patch('converter21.mei.base.instrument')
-    def testUnit3aInstrDef(self, mockInstr):
-        '''instrDefFromElement(): when @midi.instrname is given, and it explodes (AttributeError)'''
-        # For Py3 we have to replace the exception, since it's not okay to catch classes that don't
-        # inherit from BaseException (which a MagicMock obviously doesn't)
-        mockInstr.InstrumentException = instrument.InstrumentException
-        elem = ETree.Element('instrDef', attrib={'midi.instrname': 'Gold-Plated Kazoo'})
-        expFromStringArg = 'Gold-Plated Kazoo'
-        mockInstr.fromString = mock.MagicMock()
-        mockInstr.fromString.side_effect = AttributeError
-        mockInstr.Instrument.return_value = mock.MagicMock()
-        mockInstr.Instrument.return_value.partName = None
-        expected = mockInstr.Instrument.return_value
-
-        actual = base.instrDefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        mockInstr.fromString.assert_called_once_with(expFromStringArg)
-        self.assertEqual(expFromStringArg, actual.partName)
-
-    @mock.patch('converter21.mei.base.instrument')
-    def testUnit3bInstrDef(self, mockInstr):
-        '''instrDefFromElement(): when @midi.instrname is given,
-        and it explodes (InstrumentException)'''
-        # For Py3 we have to replace the exception, since it's not okay to catch classes that don't
-        # inherit from BaseException (which a MagicMock obviously doesn't)
-        mockInstr.InstrumentException = instrument.InstrumentException
-        elem = ETree.Element('instrDef', attrib={'midi.instrname': 'Gold-Plated Kazoo'})
-        expFromStringArg = 'Gold-Plated Kazoo'
-        mockInstr.fromString = mock.MagicMock()
-        mockInstr.fromString.side_effect = instrument.InstrumentException
-        mockInstr.Instrument.return_value = mock.MagicMock()
-        mockInstr.Instrument.return_value.partName = None
-        expected = mockInstr.Instrument.return_value
-
-        actual = base.instrDefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        mockInstr.fromString.assert_called_once_with(expFromStringArg)
-        self.assertEqual(expFromStringArg, actual.partName)
-
-
 # -----------------------------------------------------------------------------
 # class TestMeasureFromElement(unittest.TestCase):
     '''Tests for measureFromElement() and its helper functions.'''

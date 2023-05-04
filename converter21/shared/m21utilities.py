@@ -402,10 +402,10 @@ class M21StaffGroupDescriptionTree:
         self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
         self.barTogether: bool | str | None = None  # see m21.layout.StaffGroup.barTogether
 
-        # groupName should be set if there is a label for the staff group.
+        # instrument should be set if there is an instrument for the staff group.
         # The Humdrum importer doesn't use this field, as it has other ways of
         # tracking this.
-        self.groupName: str = ''
+        self.instrument: m21.instrument.Instrument | None = None
 
         # Humdrum importer sets groupNum instead, and then gathers names later
         # using that groupNum.
@@ -419,10 +419,15 @@ class M21StaffGroupDescriptionTree:
         # ownedStaffIds should be in staff order (on the page, from top to bottom).
         self.ownedStaffIds: list[int | str] = []
 
-        # ownedStaffNames should contain the labels for each owned staff (if there is one).
-        # The Humdrum importer doesn't use this field, as it has other ways of
-        # tracking this.
-        self.ownedStaffNames: list[str] = []
+        # staffInstruments should contain the instrument for each staff (if there
+        # is one). The Humdrum importer doesn't use this field, as it has other
+        # ways of tracking this.
+        self.staffInstruments: list[m21.instrument.Instrument | None] = []
+
+        # ownedStaffInstruments should contain the instrument for each owned staff
+        # (if there is one). The Humdrum importer doesn't use this field, as it has
+        # other ways of tracking this.
+        self.ownedStaffInstruments: list[m21.instrument.Instrument | None] = []
 
         # tree links:
         # children == subgroups, parent = enclosing group (None for top)
