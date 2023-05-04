@@ -10569,15 +10569,17 @@ class HumdrumFile(HumdrumFileContent):
             sg.abbreviation = groupAbbrev
         if groupName:
             sg.name = groupName
-        if not groupName and not groupAbbrev:
-            # Look in the group's Parts to see if they all have the same
-            # instrument e.g. 'Organ' or 'Piano' (it still counts if some
-            # parts have no instrument at all, and the rest have the same
-            # common instrument).
-            # If so,
-            #   (1) set that instrument in the StaffGroup
-            #   (2) mark that instrument in the Part(s) as not-to-be-printed
-            self._promoteCommonInstrumentToStaffGroup(sg)
+
+        # Look in the group's Parts to see if they all have the same
+        # instrument e.g. 'Organ' or 'Piano' (it still counts if some
+        # parts have no instrument at all, and the rest have the same
+        # common instrument).
+        # If so,
+        #   (1) set that instrument in the StaffGroup
+        #   (2) mark that instrument in the Part(s) as not-to-be-printed
+        #
+        # This overrides any groupName or groupAbbrev that has been set on the sg.
+        self._promoteCommonInstrumentToStaffGroup(sg)
 
         return (staffGroups, staves, staffIds)
 
