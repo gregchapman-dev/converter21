@@ -403,7 +403,10 @@ class StaffStateVariables:
         self.isStaffWithFiguredBass: bool = False  # true if staff has figured bass
 
         # instrument info
-        self.instrumentClass: str = ''  # e.g. 'bras' is BrassInstrument
+        self.instrumentClass: str = ''   # e.g. 'bras' is BrassInstrument
+        self.instrumentCode: str = ''    # e.g. 'clars' is Soprano Clarinet
+        self.instrumentName: str = ''    # e.g. 'Piano'
+        self.instrumentAbbrev: str = ''  # e.g. 'Pno.'
 
         # hand-transposition info (we have to undo it as we translate to music21, since
         # there is no way in music21 to mark a staff has having been transposed from the
@@ -9895,13 +9898,13 @@ class HumdrumFile(HumdrumFileContent):
         #                             (2) there are <= 3 staffStarts.
         # (if there are more than 3 staffStarts, we will fake as many parts as there are staves)
         # Returns fakeAllStaves=True if there are any missing *staffN interps.
-        numStaves: int = len(self._staffStarts)
-
         partInterpsUsable: bool = True
         staffInterpsUsable: bool = True
+        sameInstrument: bool = False
         for startTok in self._staffStarts:
             partNum: int = self._getPartNumberLabel(startTok)
             staffNum: int = self._getStaffNumberLabel(startTok)
+
             if partNum <= 0:
                 partInterpsUsable = False
             if staffNum <= 0:
@@ -9911,9 +9914,54 @@ class HumdrumFile(HumdrumFileContent):
                 # we're not going to get any new information, get out
                 break
 
-        fakeOnePart: bool = not partInterpsUsable and numStaves <= 3
+        fakeOnePart: bool = (
+            not partInterpsUsable
+            and self.staffCount in (2, 3)
+            and self.staffIndicesHaveSameMultiStaffInstrument(list(range(0, self.staffCount)))
+        )
         fakeAllStaves: bool = not staffInterpsUsable
         return fakeOnePart, fakeAllStaves
+
+    def staffIndicesHaveSameMultiStaffInstrument(self, staffIndices: list[int]) -> bool:
+        # Note that each staff has to match the first or have no instrument (code, name, abbrev).
+        output: bool = False
+        firstInstrumentCode: str = ''
+        firstInstrumentName: str = ''
+        firstInstrumentAbbrev: str = ''
+        for staffIdx in staffIndices:
+            ss: StaffStateVariables = self._staffStates[staffIdx]
+            if not firstInstrumentCode:
+                firstInstrumentCode = ss.instrumentCode
+                if not self._isMultiStaffInstrumentCode(firstInstrumentCode)
+                    return False
+            if not firstInstrumentName:
+                firstInstrumentName = ss.instrumentName
+                if not self._isMultiStaffInstrumentName(firstInstrumentName)
+                    return False
+            if not instrumentAbbrev:
+                firstInstrumentAbbrev = ss.instrumentAbbrev
+                if not self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev)
+                    return False
+
+            if firstInstrumentCode and ss.instrumentCode:
+                if firstInstrumentCode != ss.instrumentCode:
+                    return False
+            if firstInstrumentName and ss.instrumentName:
+                if firstInstrumentName != ss.instrumentName:
+                    return False
+            if firstInstrumentAbbrev and ss.instrumentAbbrev:
+                if firstInstrumentAbbrev != ss.instrumentAbbrev:
+                    return False
+
+        if not firstInstrumentCode and not firstInstrumentName and not firstInstrumentAbbrev:
+            if len(staffIndices) == 2:
+                # assume completely unmarked two staff scores are piano scores
+                return True
+            # other completely unmarked scores are _not_ assumed to be multi-staff instruments
+            return False
+
+        # we actually matched multi-staff instruments
+        return True
 
     '''
     //////////////////////////////
@@ -10036,14 +10084,17 @@ class HumdrumFile(HumdrumFileContent):
                     partToStaves[partNum] = [staffNum]
                 else:
                     partToStaves[partNum].append(staffNum)
-                    ss.isPartStaff = True
-                    # if this was the 2nd staff in the part, reach back and
-                    # mark the first one as well
-                    if len(partToStaves[partNum]) == 2:
-                        firstStaffNumInPart: int = partToStaves[partNum][0]
-                        firstStaffIdxInPart: int = staffToStaffStartIndex[firstStaffNumInPart]
-                        self._staffStates[firstStaffIdxInPart].isPartStaff = True
                 staffToPart[staffNum] = partNum
+
+        if not partToStaves:
+            # all partNums were 0, which means every stave is its own part
+            for staffNum in staffList:
+                partToStaves[staffNum] = [staffNum]
+
+        for partN, staffList in partToStaves.items():
+            if len(staffList) in (2, 3) and self.staffIndicesHaveSameMultiStaffInstrument(staffList):
+                for staffN in staffList:
+                    self._staffStates[staffToStaffStartIndex[staffN]].isPartStaff = True
 
         # Compute the StaffGroupDescriptionTree, either from the decoration string,
         # or if there is no such string, create a default tree from partToStaves et al.
@@ -10607,8 +10658,8 @@ class HumdrumFile(HumdrumFileContent):
                 commonInstrument = inst
                 partsAndInstruments.append((part, inst))
                 continue
-            if inst.instrumentName == commonInstrument.instrumentName and \
-                    inst.instrumentAbbreviation == commonInstrument.instrumentAbbreviation:
+            if (inst.instrumentName == commonInstrument.instrumentName
+                    and inst.instrumentAbbreviation == commonInstrument.instrumentAbbreviation):
                 partsAndInstruments.append((part, inst))
                 continue
             # found a non-common instrument in the staffGroup, get the heck out
@@ -10727,6 +10778,7 @@ class HumdrumFile(HumdrumFileContent):
                     # Avoid encoding the part abbreviation when there is only one
                     # part in order to suppress the display of the abbreviation.
                     iAbbrev = token.instrumentAbbreviation
+                ss.instrumentAbbrev = iAbbrev
             elif token.isInstrumentGroupName:
                 # group label, e.g. *I""Strings
                 groupName: str = token.instrumentGroupName
@@ -10736,9 +10788,11 @@ class HumdrumFile(HumdrumFileContent):
             elif token.isInstrumentName:
                 # part (instrument) label
                 iName = token.instrumentName
+                ss.instrumentName = iName
             elif token.isInstrumentCode:
                 # instrument code, e.g. *Iclars is Clarinet
                 iCode = token.instrumentCode
+                ss.instrumentCode = iCode
             elif token.isInstrumentClassCode:
                 # instrument class code, e.g. *ICbras is BrassInstrument
                 iClassCode = token.instrumentClassCode
