@@ -22,11 +22,9 @@ from pathlib import Path
 
 import music21 as m21
 from music21.common import opFrac
-if hasattr(m21.common.enums, 'OrnamentDelay'):
-    from music21.common.enums import OrnamentDelay  # type: ignore
 
-# from converter21.humdrum import HumdrumSyntaxError
-from converter21.humdrum import HumdrumInternalError
+from music21.common.enums import OrnamentDelay
+from converter21.humdrum import HumdrumInternalError, HumdrumSyntaxError
 from converter21.humdrum import HumdrumFileContent
 from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumToken
@@ -9811,7 +9809,36 @@ class HumdrumFile(HumdrumFileContent):
                 # freeform key/value, put it in as custom
                 m21Metadata.addCustom(k, v)
 
+    def _prepartPartInstrumentInfo(self, partStartTok: HumdrumToken, staffNum: int) -> None:
+        # staffNum is 1-based, but _staffStates is 0-based
+        ss: StaffStateVariables = self._staffStates[staffNum - 1]
+
+        iName: str | None = None
+        iCode: str | None = None
+        iAbbrev: str | None = None
+
+        token: HumdrumToken | None = partStartTok
+        while token is not None and not token.ownerLine.isData:
+            # just scan the interp/comments before first data
+            if token.isInstrumentAbbreviation:
+                # part (instrument) abbreviation, e.g. *I'Vln.
+                ss.instrumentAbbrev = token.instrumentAbbreviation
+            elif token.isInstrumentName:
+                # part (instrument) label
+                ss.instrumentName = token.instrumentName
+            elif token.isInstrumentCode:
+                # instrument code, e.g. *Iclars is Clarinet
+                ss.instrumentCode = token.instrumentCode
+            elif token.isInstrumentClassCode:
+                # instrument class code, e.g. *ICbras is BrassInstrument
+                ss.instrumentClass = token.instrumentClassCode
+
+            token = token.nextToken0  # stay left if there's a split
+
     def _createStaffGroupsAndParts(self) -> None:
+        for i, startTok in enumerate(self._staffStarts):
+            self._prepartPartInstrumentInfo(startTok, i + 1)
+
         decoration: str = self.getReferenceValueForKey('system-decoration')
         # Don't optimize by not calling _processSystemDecoration for empty/None decoration.
         # _processSystemDecoration also figures out ss.isPartStaff, even if there is
@@ -9942,7 +9969,6 @@ class HumdrumFile(HumdrumFileContent):
 
     def staffIndicesHaveSameMultiStaffInstrument(self, staffIndices: list[int]) -> bool:
         # Note that each staff has to match the first or have no instrument (code, name, abbrev).
-        output: bool = False
         firstInstrumentCode: str = ''
         firstInstrumentName: str = ''
         firstInstrumentAbbrev: str = ''
@@ -10076,6 +10102,9 @@ class HumdrumFile(HumdrumFileContent):
             if fakeOnePart:
                 partNum = 1
 
+            if staffNum in staffList:
+                raise HumdrumSyntaxError('*staffN interpretations have duplicated staff numbers')
+
             staffList.append(staffNum)
             staffToStaffStartIndex[staffNum] = staffStartIndex
 
@@ -10109,14 +10138,14 @@ class HumdrumFile(HumdrumFileContent):
             for staffNum in staffList:
                 partToStaves[staffNum] = [staffNum]
 
-        for partN, staffNs in partToStaves.items():
-            if len(staffNs) in (2, 3):
-                staffIndices: list[int] = []
+        # Check each part's staves to see if they should be PartStaffs.
+        # They should, if there is more than one staff in the part, either
+        # because the Humdrum file was authored that way, or because we
+        # noticed a set of staves that should be a multi-staff part above.
+        for staffNs in partToStaves.values():
+            if len(staffNs) > 1:
                 for staffN in staffNs:
-                    staffIndices.append(staffToStaffStartIndex[staffN])
-                if self.staffIndicesHaveSameMultiStaffInstrument(staffIndices):
-                    for staffN in staffNs:
-                        self._staffStates[staffToStaffStartIndex[staffN]].isPartStaff = True
+                    self._staffStates[staffToStaffStartIndex[staffN]].isPartStaff = True
 
         # Compute the StaffGroupDescriptionTree, either from the decoration string,
         # or if there is no such string, create a default tree from partToStaves et al.
@@ -10474,7 +10503,7 @@ class HumdrumFile(HumdrumFileContent):
                     rootGroupDesc.ownedStaffIds.append(staffIdx)
                     rootGroupDesc.staffIds.append(staffIdx)
 
-            if rootGroupDesc.symbol == 'none':
+            if rootGroupDesc.symbol == 'none' and len(rootGroupDesc.ownedStaffIds) != 1:
                 rootGroupDesc.symbol = 'bracket'  # not sure why verovio does this
 
             for groupDesc in groupDescs:
@@ -10800,7 +10829,6 @@ class HumdrumFile(HumdrumFileContent):
                     # Avoid encoding the part abbreviation when there is only one
                     # part in order to suppress the display of the abbreviation.
                     iAbbrev = token.instrumentAbbreviation
-                ss.instrumentAbbrev = iAbbrev
             elif token.isInstrumentGroupName:
                 # group label, e.g. *I""Strings
                 groupName: str = token.instrumentGroupName
@@ -10810,15 +10838,12 @@ class HumdrumFile(HumdrumFileContent):
             elif token.isInstrumentName:
                 # part (instrument) label
                 iName = token.instrumentName
-                ss.instrumentName = iName
             elif token.isInstrumentCode:
                 # instrument code, e.g. *Iclars is Clarinet
                 iCode = token.instrumentCode
-                ss.instrumentCode = iCode
             elif token.isInstrumentClassCode:
                 # instrument class code, e.g. *ICbras is BrassInstrument
                 iClassCode = token.instrumentClassCode
-                ss.instrumentClass = iClassCode
             elif token.isMensurationSymbol:
                 meterSigTok = token
             elif token.isTimeSignature:

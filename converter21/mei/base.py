@@ -3011,9 +3011,7 @@ def staffGroupDescriptionTreeFromStaffGrp(
 
     # Set up a groupDesc for this group (elem), and insert it in parentGroupDesc tree.
     thisGroupDesc: M21StaffGroupDescriptionTree = M21StaffGroupDescriptionTree()
-    symbol: str | None = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'))
-    if t.TYPE_CHECKING:
-        assert symbol is not None
+    symbol: str = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'))
     thisGroupDesc.symbol = symbol
     thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', ''))
 
