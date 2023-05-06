@@ -10362,36 +10362,47 @@ class HumdrumFile(HumdrumFileContent):
             rootGroupDesc.barTogether = False  # no barline across the staves
 
             numStaffGroups: int = 0
-            for i, staves in enumerate(partToStaves.values()):
-                if len(staves) > 1:
-                    # make a StaffGroupDescriptionTree for these staves,
-                    # and put it under rootGroupDesc
-                    newGroup = M21StaffGroupDescriptionTree()
-                    if len(staves) == 2:
-                        # If there are two staves, presume that it is for a grand staff
-                        # and a brace should be displayed.  Barlines should go thru everything.
-                        newGroup.symbol = 'brace'
-                        newGroup.barTogether = True
-                    else:
-                        # If there are more than two staves then
-                        # add a bracket around the staves.  Barlines go thru staves only.
-                        newGroup.symbol = 'bracket'
-                        newGroup.barTogether = False
-                    newGroup.ownedStaffIds = [
-                        staffToStaffStartIndex[staffNum] for staffNum in staves
-                    ]
-                    newGroup.staffIds = newGroup.ownedStaffIds
-                    newGroup.parent = rootGroupDesc
-                    rootGroupDesc.children.append(newGroup)
-                    rootGroupDesc.staffIds += newGroup.staffIds
-                    groupDescs[i] = newGroup
-                    numStaffGroups += 1
-                elif len(staves) == 1:
-                    # no StaffGroupDescriptionTree for this staff, it's
-                    # owned by the top-level staff group
-                    snum: int = staffToStaffStartIndex[staves[0]]
-                    rootGroupDesc.ownedStaffIds.append(snum)
-                    rootGroupDesc.staffIds.append(snum)
+            if partToStaves:
+                for i, staves in enumerate(partToStaves.values()):
+                    if len(staves) > 1:
+                        # make a StaffGroupDescriptionTree for these staves,
+                        # and put it under rootGroupDesc
+                        newGroup = M21StaffGroupDescriptionTree()
+                        if len(staves) == 2:
+                            # If there are two staves, presume that it is for a grand staff
+                            # and a brace should be displayed.  Barlines should go thru everything.
+                            newGroup.symbol = 'brace'
+                            newGroup.barTogether = True
+                        else:
+                            # If there are more than two staves then
+                            # add a bracket around the staves.  Barlines go thru staves only.
+                            newGroup.symbol = 'bracket'
+                            newGroup.barTogether = False
+                        newGroup.ownedStaffIds = [
+                            staffToStaffStartIndex[staffNum] for staffNum in staves
+                        ]
+                        newGroup.staffIds = newGroup.ownedStaffIds
+                        newGroup.parent = rootGroupDesc
+                        rootGroupDesc.children.append(newGroup)
+                        rootGroupDesc.staffIds += newGroup.staffIds
+                        groupDescs[i] = newGroup
+                        numStaffGroups += 1
+                    elif len(staves) == 1:
+                        # no StaffGroupDescriptionTree for this staff, it's
+                        # owned by the top-level staff group
+                        sidx: int = staffToStaffStartIndex[staves[0]]
+                        rootGroupDesc.ownedStaffIds.append(sidx)
+                        rootGroupDesc.staffIds.append(sidx)
+            else:
+                # no partToStaves, just a staffList, all of which should go in the top-level
+                # staff group
+                for staffNum in staffList:
+                    staffIdx: int = staffNum - 1
+                    rootGroupDesc.ownedStaffIds.append(staffIdx)
+                    rootGroupDesc.staffIds.append(staffIdx)
+
+            if rootGroupDesc.symbol == 'none':
+                rootGroupDesc.symbol = 'bracket'  # not sure why verovio does this
 
             for groupDesc in groupDescs:
                 if groupDesc is not None and groupDesc.staffIds:
@@ -10401,7 +10412,7 @@ class HumdrumFile(HumdrumFileContent):
             if (numStaffGroups == 1
                     and rootGroupDesc.staffIds == rootGroupDesc.children[0].staffIds):
                 topLevelParent = rootGroupDesc.children[0]  # just that one, please
-            elif numStaffGroups > 0:
+            else:
                 topLevelParent = rootGroupDesc
 
         staffGroups: list[m21.layout.StaffGroup] = []
@@ -10447,7 +10458,7 @@ class HumdrumFile(HumdrumFileContent):
             tree.staffIds.sort()
             tree.ownedStaffIds.sort()
 
-        trees.sort(key=lambda tree: tree.staffIds[0])
+        trees.sort(key=lambda tree: tree.staffIds[0] if tree.staffIds else -1)
 
         for tree in trees:
             HumdrumFile._sortGroupDescriptionTrees(tree.children)

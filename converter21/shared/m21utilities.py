@@ -400,7 +400,7 @@ class M21StaffGroupDescriptionTree:
     def __init__(self) -> None:
         # about this group description
         self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
-        self.barTogether: bool | str | None = None  # see m21.layout.StaffGroup.barTogether
+        self.barTogether: bool | str = False  # see m21.layout.StaffGroup.barTogether
 
         # instrument should be set if there is an instrument for the staff group.
         # The Humdrum importer doesn't use this field, as it has other ways of
