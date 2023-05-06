@@ -9900,7 +9900,6 @@ class HumdrumFile(HumdrumFileContent):
         # Returns fakeAllStaves=True if there are any missing *staffN interps.
         partInterpsUsable: bool = True
         staffInterpsUsable: bool = True
-        sameInstrument: bool = False
         for startTok in self._staffStarts:
             partNum: int = self._getPartNumberLabel(startTok)
             staffNum: int = self._getStaffNumberLabel(startTok)
@@ -9949,15 +9948,15 @@ class HumdrumFile(HumdrumFileContent):
         firstInstrumentAbbrev: str = ''
         for staffIdx in staffIndices:
             ss: StaffStateVariables = self._staffStates[staffIdx]
-            if not firstInstrumentCode:
+            if not firstInstrumentCode and ss.instrumentCode:
                 firstInstrumentCode = ss.instrumentCode
                 if not self._isMultiStaffInstrumentCode(firstInstrumentCode):
                     return False
-            if not firstInstrumentName:
+            if not firstInstrumentName and ss.instrumentName:
                 firstInstrumentName = ss.instrumentName
                 if not self._isMultiStaffInstrumentName(firstInstrumentName):
                     return False
-            if not instrumentAbbrev:
+            if not firstInstrumentAbbrev and ss.instrumentAbbrev:
                 firstInstrumentAbbrev = ss.instrumentAbbrev
                 if not self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev):
                     return False
