@@ -9922,6 +9922,25 @@ class HumdrumFile(HumdrumFileContent):
         fakeAllStaves: bool = not staffInterpsUsable
         return fakeOnePart, fakeAllStaves
 
+    def _isMultiStaffInstrumentCode(self, iCode: str) -> bool:
+        iName: str = self.getInstrumentNameFromCode(iCode, None)
+        return self._isMultiStaffInstrumentName(iName)
+
+    def _isMultiStaffInstrumentAbbrev(self, iAbbrev: str) -> bool:
+        return self._isMultiStaffInstrumentName(iAbbrev)
+
+    def _isMultiStaffInstrumentName(self, iName: str) -> bool:
+        m21Inst: m21.instrument.Instrument | None = None
+        try:
+            m21Inst = m21.instrument.fromString(iName)
+        except m21.instrument.InstrumentException:
+            pass  # ignore InstrumentException
+
+        if m21Inst is None:
+            return False
+
+        return isinstance(m21Inst, (m21.instrument.KeyboardInstrument, m21.instrument.Organ))
+
     def staffIndicesHaveSameMultiStaffInstrument(self, staffIndices: list[int]) -> bool:
         # Note that each staff has to match the first or have no instrument (code, name, abbrev).
         output: bool = False
@@ -9932,15 +9951,15 @@ class HumdrumFile(HumdrumFileContent):
             ss: StaffStateVariables = self._staffStates[staffIdx]
             if not firstInstrumentCode:
                 firstInstrumentCode = ss.instrumentCode
-                if not self._isMultiStaffInstrumentCode(firstInstrumentCode)
+                if not self._isMultiStaffInstrumentCode(firstInstrumentCode):
                     return False
             if not firstInstrumentName:
                 firstInstrumentName = ss.instrumentName
-                if not self._isMultiStaffInstrumentName(firstInstrumentName)
+                if not self._isMultiStaffInstrumentName(firstInstrumentName):
                     return False
             if not instrumentAbbrev:
                 firstInstrumentAbbrev = ss.instrumentAbbrev
-                if not self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev)
+                if not self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev):
                     return False
 
             if firstInstrumentCode and ss.instrumentCode:
@@ -10091,10 +10110,14 @@ class HumdrumFile(HumdrumFileContent):
             for staffNum in staffList:
                 partToStaves[staffNum] = [staffNum]
 
-        for partN, staffList in partToStaves.items():
-            if len(staffList) in (2, 3) and self.staffIndicesHaveSameMultiStaffInstrument(staffList):
-                for staffN in staffList:
-                    self._staffStates[staffToStaffStartIndex[staffN]].isPartStaff = True
+        for partN, staffNs in partToStaves.items():
+            if len(staffNs) in (2, 3):
+                staffIndices: list[int] = []
+                for staffN in staffNs:
+                    staffIndices.append(staffToStaffStartIndex[staffN])
+                if self.staffIndicesHaveSameMultiStaffInstrument(staffIndices):
+                    for staffN in staffNs:
+                        self._staffStates[staffToStaffStartIndex[staffN]].isPartStaff = True
 
         # Compute the StaffGroupDescriptionTree, either from the decoration string,
         # or if there is no such string, create a default tree from partToStaves et al.
