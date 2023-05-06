@@ -9813,10 +9813,6 @@ class HumdrumFile(HumdrumFileContent):
         # staffNum is 1-based, but _staffStates is 0-based
         ss: StaffStateVariables = self._staffStates[staffNum - 1]
 
-        iName: str | None = None
-        iCode: str | None = None
-        iAbbrev: str | None = None
-
         token: HumdrumToken | None = partStartTok
         while token is not None and not token.ownerLine.isData:
             # just scan the interp/comments before first data

@@ -3011,9 +3011,9 @@ def staffGroupDescriptionTreeFromStaffGrp(
 
     # Set up a groupDesc for this group (elem), and insert it in parentGroupDesc tree.
     thisGroupDesc: M21StaffGroupDescriptionTree = M21StaffGroupDescriptionTree()
-    symbol: str = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'))
+    symbol: str = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'), 'none')
     thisGroupDesc.symbol = symbol
-    thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', ''))
+    thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', ''), '')
 
     # check for 'Mensurstrich' (barline between staves only, doesn't cross staff)
     barMethod: str = elem.get('bar.method', '')
