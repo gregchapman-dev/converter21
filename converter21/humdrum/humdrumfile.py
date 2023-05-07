@@ -9951,7 +9951,7 @@ class HumdrumFile(HumdrumFileContent):
     def _isMultiStaffInstrumentAbbrev(self, iAbbrev: str) -> bool:
         return self._isMultiStaffInstrumentName(iAbbrev)
 
-    def _isMultiStaffInstrumentName(self, iName: str) -> bool:
+    def _isMultiStaffInstrumentName(self, iName: str) -> bool | None:
         m21Inst: m21.instrument.Instrument | None = None
         try:
             m21Inst = m21.instrument.fromString(iName)
@@ -9959,7 +9959,7 @@ class HumdrumFile(HumdrumFileContent):
             pass  # ignore InstrumentException
 
         if m21Inst is None:
-            return False
+            return None  # just ignore names that don't mean anything
 
         return isinstance(m21Inst, (m21.instrument.KeyboardInstrument, m21.instrument.Organ))
 
@@ -9972,15 +9972,24 @@ class HumdrumFile(HumdrumFileContent):
             ss: StaffStateVariables = self._staffStates[staffIdx]
             if not firstInstrumentCode and ss.instrumentCode:
                 firstInstrumentCode = ss.instrumentCode
-                if not self._isMultiStaffInstrumentCode(firstInstrumentCode):
+                isMultiStaff = self._isMultiStaffInstrumentCode(firstInstrumentCode)
+                if isMultiStaff is None:
+                    firstInstrumentCode = None
+                elif isMultiStaff is False:
                     return False
             if not firstInstrumentName and ss.instrumentName:
                 firstInstrumentName = ss.instrumentName
-                if not self._isMultiStaffInstrumentName(firstInstrumentName):
+                isMultiStaff = self._isMultiStaffInstrumentName(firstInstrumentName)
+                if isMultiStaff is None:
+                    firstInstrumentName = None
+                elif isMultiStaff is False:
                     return False
             if not firstInstrumentAbbrev and ss.instrumentAbbrev:
                 firstInstrumentAbbrev = ss.instrumentAbbrev
-                if not self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev):
+                isMultiStaff = self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev)
+                if isMultiStaff is None:
+                    firstInstrumentAbbrev = None
+                elif isMultiStaff is False:
                     return False
 
             if firstInstrumentCode and ss.instrumentCode:
