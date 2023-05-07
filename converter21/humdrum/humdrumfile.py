@@ -9944,11 +9944,11 @@ class HumdrumFile(HumdrumFileContent):
         fakeAllStaves: bool = not staffInterpsUsable
         return fakeOnePart, fakeAllStaves
 
-    def _isMultiStaffInstrumentCode(self, iCode: str) -> bool:
+    def _isMultiStaffInstrumentCode(self, iCode: str) -> bool | None:
         iName: str = self.getInstrumentNameFromCode(iCode, None)
         return self._isMultiStaffInstrumentName(iName)
 
-    def _isMultiStaffInstrumentAbbrev(self, iAbbrev: str) -> bool:
+    def _isMultiStaffInstrumentAbbrev(self, iAbbrev: str) -> bool | None:
         return self._isMultiStaffInstrumentName(iAbbrev)
 
     def _isMultiStaffInstrumentName(self, iName: str) -> bool | None:
@@ -9968,27 +9968,28 @@ class HumdrumFile(HumdrumFileContent):
         firstInstrumentCode: str = ''
         firstInstrumentName: str = ''
         firstInstrumentAbbrev: str = ''
+        isMultiStaff: bool | None
         for staffIdx in staffIndices:
             ss: StaffStateVariables = self._staffStates[staffIdx]
             if not firstInstrumentCode and ss.instrumentCode:
                 firstInstrumentCode = ss.instrumentCode
                 isMultiStaff = self._isMultiStaffInstrumentCode(firstInstrumentCode)
                 if isMultiStaff is None:
-                    firstInstrumentCode = None
+                    firstInstrumentCode = ''
                 elif isMultiStaff is False:
                     return False
             if not firstInstrumentName and ss.instrumentName:
                 firstInstrumentName = ss.instrumentName
                 isMultiStaff = self._isMultiStaffInstrumentName(firstInstrumentName)
                 if isMultiStaff is None:
-                    firstInstrumentName = None
+                    firstInstrumentName = ''
                 elif isMultiStaff is False:
                     return False
             if not firstInstrumentAbbrev and ss.instrumentAbbrev:
                 firstInstrumentAbbrev = ss.instrumentAbbrev
                 isMultiStaff = self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev)
                 if isMultiStaff is None:
-                    firstInstrumentAbbrev = None
+                    firstInstrumentAbbrev = ''
                 elif isMultiStaff is False:
                     return False
 
