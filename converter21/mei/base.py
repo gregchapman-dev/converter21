@@ -3251,8 +3251,12 @@ def processStaffGroupDescriptionTree(
     sg.symbol = groupDescTree.symbol
     sg.barTogether = groupDescTree.barTogether
 
+    # reverse the staff groups list, because we also do that in HumdrumFile
+    # (read the comment there).
+    returnStaffGroups: list[m21.layout.StaffGroup] = list(reversed(staffGroups))
     returnStaffIds: list[str] = staffIds  # type: ignore
-    return (staffGroups, staves, returnStaffIds)
+
+    return (returnStaffGroups, staves, returnStaffIds)
 
 def staffGrpFromElement(
     elem: Element,
