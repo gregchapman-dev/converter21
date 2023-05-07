@@ -22,11 +22,9 @@ from pathlib import Path
 
 import music21 as m21
 from music21.common import opFrac
-if hasattr(m21.common.enums, 'OrnamentDelay'):
-    from music21.common.enums import OrnamentDelay  # type: ignore
 
-# from converter21.humdrum import HumdrumSyntaxError
-from converter21.humdrum import HumdrumInternalError
+from music21.common.enums import OrnamentDelay
+from converter21.humdrum import HumdrumInternalError, HumdrumSyntaxError
 from converter21.humdrum import HumdrumFileContent
 from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumToken
@@ -403,7 +401,10 @@ class StaffStateVariables:
         self.isStaffWithFiguredBass: bool = False  # true if staff has figured bass
 
         # instrument info
-        self.instrumentClass: str = ''  # e.g. 'bras' is BrassInstrument
+        self.instrumentClass: str = ''   # e.g. 'bras' is BrassInstrument
+        self.instrumentCode: str = ''    # e.g. 'clars' is Soprano Clarinet
+        self.instrumentName: str = ''    # e.g. 'Piano'
+        self.instrumentAbbrev: str = ''  # e.g. 'Pno.'
 
         # hand-transposition info (we have to undo it as we translate to music21, since
         # there is no way in music21 to mark a staff has having been transposed from the
@@ -9808,7 +9809,32 @@ class HumdrumFile(HumdrumFileContent):
                 # freeform key/value, put it in as custom
                 m21Metadata.addCustom(k, v)
 
+    def _prepartPartInstrumentInfo(self, partStartTok: HumdrumToken, staffNum: int) -> None:
+        # staffNum is 1-based, but _staffStates is 0-based
+        ss: StaffStateVariables = self._staffStates[staffNum - 1]
+
+        token: HumdrumToken | None = partStartTok
+        while token is not None and not token.ownerLine.isData:
+            # just scan the interp/comments before first data
+            if token.isInstrumentAbbreviation:
+                # part (instrument) abbreviation, e.g. *I'Vln.
+                ss.instrumentAbbrev = token.instrumentAbbreviation
+            elif token.isInstrumentName:
+                # part (instrument) label
+                ss.instrumentName = token.instrumentName
+            elif token.isInstrumentCode:
+                # instrument code, e.g. *Iclars is Clarinet
+                ss.instrumentCode = token.instrumentCode
+            elif token.isInstrumentClassCode:
+                # instrument class code, e.g. *ICbras is BrassInstrument
+                ss.instrumentClass = token.instrumentClassCode
+
+            token = token.nextToken0  # stay left if there's a split
+
     def _createStaffGroupsAndParts(self) -> None:
+        for i, startTok in enumerate(self._staffStarts):
+            self._prepartPartInstrumentInfo(startTok, i + 1)
+
         decoration: str = self.getReferenceValueForKey('system-decoration')
         # Don't optimize by not calling _processSystemDecoration for empty/None decoration.
         # _processSystemDecoration also figures out ss.isPartStaff, even if there is
@@ -9895,13 +9921,12 @@ class HumdrumFile(HumdrumFileContent):
         #                             (2) there are <= 3 staffStarts.
         # (if there are more than 3 staffStarts, we will fake as many parts as there are staves)
         # Returns fakeAllStaves=True if there are any missing *staffN interps.
-        numStaves: int = len(self._staffStarts)
-
         partInterpsUsable: bool = True
         staffInterpsUsable: bool = True
         for startTok in self._staffStarts:
             partNum: int = self._getPartNumberLabel(startTok)
             staffNum: int = self._getStaffNumberLabel(startTok)
+
             if partNum <= 0:
                 partInterpsUsable = False
             if staffNum <= 0:
@@ -9911,9 +9936,82 @@ class HumdrumFile(HumdrumFileContent):
                 # we're not going to get any new information, get out
                 break
 
-        fakeOnePart: bool = not partInterpsUsable and numStaves <= 3
+        fakeOnePart: bool = (
+            not partInterpsUsable
+            and self.staffCount in (2, 3)
+            and self.staffIndicesHaveSameMultiStaffInstrument(list(range(0, self.staffCount)))
+        )
         fakeAllStaves: bool = not staffInterpsUsable
         return fakeOnePart, fakeAllStaves
+
+    def _isMultiStaffInstrumentCode(self, iCode: str) -> bool | None:
+        iName: str = self.getInstrumentNameFromCode(iCode, None)
+        return self._isMultiStaffInstrumentName(iName)
+
+    def _isMultiStaffInstrumentAbbrev(self, iAbbrev: str) -> bool | None:
+        return self._isMultiStaffInstrumentName(iAbbrev)
+
+    def _isMultiStaffInstrumentName(self, iName: str) -> bool | None:
+        m21Inst: m21.instrument.Instrument | None = None
+        try:
+            m21Inst = m21.instrument.fromString(iName)
+        except m21.instrument.InstrumentException:
+            pass  # ignore InstrumentException
+
+        if m21Inst is None:
+            return None  # just ignore names that don't mean anything
+
+        return isinstance(m21Inst, (m21.instrument.KeyboardInstrument, m21.instrument.Organ))
+
+    def staffIndicesHaveSameMultiStaffInstrument(self, staffIndices: list[int]) -> bool:
+        # Note that each staff has to match the first or have no instrument (code, name, abbrev).
+        firstInstrumentCode: str = ''
+        firstInstrumentName: str = ''
+        firstInstrumentAbbrev: str = ''
+        isMultiStaff: bool | None
+        for staffIdx in staffIndices:
+            ss: StaffStateVariables = self._staffStates[staffIdx]
+            if not firstInstrumentCode and ss.instrumentCode:
+                firstInstrumentCode = ss.instrumentCode
+                isMultiStaff = self._isMultiStaffInstrumentCode(firstInstrumentCode)
+                if isMultiStaff is None:
+                    firstInstrumentCode = ''
+                elif isMultiStaff is False:
+                    return False
+            if not firstInstrumentName and ss.instrumentName:
+                firstInstrumentName = ss.instrumentName
+                isMultiStaff = self._isMultiStaffInstrumentName(firstInstrumentName)
+                if isMultiStaff is None:
+                    firstInstrumentName = ''
+                elif isMultiStaff is False:
+                    return False
+            if not firstInstrumentAbbrev and ss.instrumentAbbrev:
+                firstInstrumentAbbrev = ss.instrumentAbbrev
+                isMultiStaff = self._isMultiStaffInstrumentAbbrev(firstInstrumentAbbrev)
+                if isMultiStaff is None:
+                    firstInstrumentAbbrev = ''
+                elif isMultiStaff is False:
+                    return False
+
+            if firstInstrumentCode and ss.instrumentCode:
+                if firstInstrumentCode != ss.instrumentCode:
+                    return False
+            if firstInstrumentName and ss.instrumentName:
+                if firstInstrumentName != ss.instrumentName:
+                    return False
+            if firstInstrumentAbbrev and ss.instrumentAbbrev:
+                if firstInstrumentAbbrev != ss.instrumentAbbrev:
+                    return False
+
+        if not firstInstrumentCode and not firstInstrumentName and not firstInstrumentAbbrev:
+            if len(staffIndices) == 2:
+                # assume completely unmarked two staff scores are piano scores
+                return True
+            # other completely unmarked scores are _not_ assumed to be multi-staff instruments
+            return False
+
+        # we actually matched multi-staff instruments
+        return True
 
     '''
     //////////////////////////////
@@ -9977,8 +10075,10 @@ class HumdrumFile(HumdrumFileContent):
         # key is staff num, value is group num
         staffToGroup: dict[int, int] = {}
 
-        # key is index into self._staffStarts, value is group num
-        staffStartIndexToGroup: dict[int, int] = {}
+        # key is index into self._staffStarts, value is group num (but we have to
+        # declare key as int | str, because that's how it is declared in
+        # M21StaffGroupDescriptionTree).
+        staffStartIndexToGroup: dict[int | str, int] = {}
 
         # key is staff num, value is part num
         staffToPart: dict[int, int] = {}
@@ -10008,6 +10108,9 @@ class HumdrumFile(HumdrumFileContent):
             if fakeOnePart:
                 partNum = 1
 
+            if staffNum in staffList:
+                raise HumdrumSyntaxError('*staffN interpretations have duplicated staff numbers')
+
             staffList.append(staffNum)
             staffToStaffStartIndex[staffNum] = staffStartIndex
 
@@ -10034,14 +10137,21 @@ class HumdrumFile(HumdrumFileContent):
                     partToStaves[partNum] = [staffNum]
                 else:
                     partToStaves[partNum].append(staffNum)
-                    ss.isPartStaff = True
-                    # if this was the 2nd staff in the part, reach back and
-                    # mark the first one as well
-                    if len(partToStaves[partNum]) == 2:
-                        firstStaffNumInPart: int = partToStaves[partNum][0]
-                        firstStaffIdxInPart: int = staffToStaffStartIndex[firstStaffNumInPart]
-                        self._staffStates[firstStaffIdxInPart].isPartStaff = True
                 staffToPart[staffNum] = partNum
+
+        if not partToStaves:
+            # all partNums were 0, which means every stave is its own part
+            for staffNum in staffList:
+                partToStaves[staffNum] = [staffNum]
+
+        # Check each part's staves to see if they should be PartStaffs.
+        # They should, if there is more than one staff in the part, either
+        # because the Humdrum file was authored that way, or because we
+        # noticed a set of staves that should be a multi-staff part above.
+        for staffNs in partToStaves.values():
+            if len(staffNs) > 1:
+                for staffN in staffNs:
+                    self._staffStates[staffToStaffStartIndex[staffN]].isPartStaff = True
 
         # Compute the StaffGroupDescriptionTree, either from the decoration string,
         # or if there is no such string, create a default tree from partToStaves et al.
@@ -10198,7 +10308,7 @@ class HumdrumFile(HumdrumFileContent):
             if not pairing:
                 return False
 
-            # figure out which staffIndices etc are grouped.  If groups are nested,
+            # figure out which staffIds etc are grouped.  If groups are nested,
             # higher level groups contain all the staves of their contained (lower
             # level) groups.
 
@@ -10306,8 +10416,8 @@ class HumdrumFile(HumdrumFileContent):
                         ancestor: M21StaffGroupDescriptionTree | None = currentGroup
                         while ancestor is not None:
                             if ancestor is currentGroup:
-                                currentGroup.ownedStaffIndices.append(sstartIndex)
-                            ancestor.staffIndices.append(sstartIndex)
+                                currentGroup.ownedStaffIds.append(sstartIndex)
+                            ancestor.staffIds.append(sstartIndex)
                             ancestor = ancestor.parent
 
                         staffStartIndicesSeen.append(sstartIndex)
@@ -10336,9 +10446,9 @@ class HumdrumFile(HumdrumFileContent):
                 return False
 
             for groupDesc in groupDescs:
-                if groupDesc is not None and groupDesc.staffIndices:
+                if groupDesc is not None and groupDesc.staffIds:
                     # we skip None groupDescs and empty groupDescs (no staves)
-                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
+                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIds[0], 0)
 
             topLevelParent = rootGroupDesc
             if topLevelParent is None:
@@ -10360,38 +10470,57 @@ class HumdrumFile(HumdrumFileContent):
             rootGroupDesc.barTogether = False  # no barline across the staves
 
             numStaffGroups: int = 0
-            for i, staves in enumerate(partToStaves.values()):
-                if len(staves) > 1:
-                    # make a StaffGroupDescriptionTree for these staves,
-                    # and put it under rootGroupDesc
-                    newGroup = M21StaffGroupDescriptionTree()
-                    newGroup.symbol = 'brace'  # default for undecorated staff groups (e.g. piano)
-                    newGroup.barTogether = False
-                    newGroup.ownedStaffIndices = [
-                        staffToStaffStartIndex[staffNum] for staffNum in staves
-                    ]
-                    newGroup.staffIndices = newGroup.ownedStaffIndices
-                    newGroup.parent = rootGroupDesc
-                    rootGroupDesc.children.append(newGroup)
-                    rootGroupDesc.staffIndices += newGroup.staffIndices
-                    groupDescs[i] = newGroup
-                    numStaffGroups += 1
-                elif len(staves) == 1:
-                    # no StaffGroupDescriptionTree for this staff, it's
-                    # owned by the top-level staff group
-                    snum: int = staffToStaffStartIndex[staves[0]]
-                    rootGroupDesc.ownedStaffIndices.append(snum)
-                    rootGroupDesc.staffIndices.append(snum)
+            if partToStaves:
+                for i, staves in enumerate(partToStaves.values()):
+                    if len(staves) > 1:
+                        # make a StaffGroupDescriptionTree for these staves,
+                        # and put it under rootGroupDesc
+                        newGroup = M21StaffGroupDescriptionTree()
+                        if len(staves) == 2:
+                            # If there are two staves, presume that it is for a grand staff
+                            # and a brace should be displayed.  Barlines should go thru everything.
+                            newGroup.symbol = 'brace'
+                            newGroup.barTogether = True
+                        else:
+                            # If there are more than two staves then
+                            # add a bracket around the staves.  Barlines go thru staves only.
+                            newGroup.symbol = 'bracket'
+                            newGroup.barTogether = False
+                        newGroup.ownedStaffIds = [
+                            staffToStaffStartIndex[staffNum] for staffNum in staves
+                        ]
+                        newGroup.staffIds = newGroup.ownedStaffIds
+                        newGroup.parent = rootGroupDesc
+                        rootGroupDesc.children.append(newGroup)
+                        rootGroupDesc.staffIds += newGroup.staffIds
+                        groupDescs[i] = newGroup
+                        numStaffGroups += 1
+                    elif len(staves) == 1:
+                        # no StaffGroupDescriptionTree for this staff, it's
+                        # owned by the top-level staff group
+                        sidx: int = staffToStaffStartIndex[staves[0]]
+                        rootGroupDesc.ownedStaffIds.append(sidx)
+                        rootGroupDesc.staffIds.append(sidx)
+            else:
+                # no partToStaves, just a staffList, all of which should go in the top-level
+                # staff group
+                for staffNum in staffList:
+                    staffIdx: int = staffNum - 1
+                    rootGroupDesc.ownedStaffIds.append(staffIdx)
+                    rootGroupDesc.staffIds.append(staffIdx)
+
+            if rootGroupDesc.symbol == 'none' and len(rootGroupDesc.ownedStaffIds) != 1:
+                rootGroupDesc.symbol = 'bracket'  # not sure why verovio does this
 
             for groupDesc in groupDescs:
-                if groupDesc is not None and groupDesc.staffIndices:
+                if groupDesc is not None and groupDesc.staffIds:
                     # we skip None groupDescs and empty groupDescs (no staves)
-                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIndices[0], 0)
+                    groupDesc.groupNum = staffStartIndexToGroup.get(groupDesc.staffIds[0], 0)
 
             if (numStaffGroups == 1
-                    and rootGroupDesc.staffIndices == rootGroupDesc.children[0].staffIndices):
+                    and rootGroupDesc.staffIds == rootGroupDesc.children[0].staffIds):
                 topLevelParent = rootGroupDesc.children[0]  # just that one, please
-            elif numStaffGroups > 0:
+            else:
                 topLevelParent = rootGroupDesc
 
         staffGroups: list[m21.layout.StaffGroup] = []
@@ -10427,17 +10556,17 @@ class HumdrumFile(HumdrumFileContent):
 
     @staticmethod
     def _sortGroupDescriptionTrees(trees: list[M21StaffGroupDescriptionTree]) -> None:
-        # Sort the staffIndices and ownedStaffIndices in every node in the tree.
+        # Sort the staffIds and ownedStaffIds in every node in the tree.
         # Sort every list of children in the tree (including the
         # passed-in trees list itself) by lowest staff index.
         if not trees:
             return
 
         for tree in trees:
-            tree.staffIndices.sort()
-            tree.ownedStaffIndices.sort()
+            tree.staffIds.sort()
+            tree.ownedStaffIds.sort()
 
-        trees.sort(key=lambda tree: tree.staffIndices[0])
+        trees.sort(key=lambda tree: tree.staffIds[0] if tree.staffIds else -1)
 
         for tree in trees:
             HumdrumFile._sortGroupDescriptionTrees(tree.children)
@@ -10454,31 +10583,36 @@ class HumdrumFile(HumdrumFileContent):
     ) -> tuple[list[m21.layout.StaffGroup], list[m21.stream.Part], list[int]]:
         if groupDescTree is None:
             return ([], [], [])
-        if not groupDescTree.staffIndices:
+        if not groupDescTree.staffIds:
             return ([], [], [])
 
         staffGroups: list[m21.layout.StaffGroup] = []
         staves: list[m21.stream.Part] = []
-        staffIndices: list[int] = []
+        staffIds: list[int] = []
 
         # top-level staffGroup for this groupDescTree
         staffGroups.append(m21.layout.StaffGroup())
 
         # Iterate over each sub-group (check for owned groups of staves between subgroups)
         # Process owned groups here, recurse to process sub-groups
-        staffIndicesToProcess: set[int] = set(groupDescTree.staffIndices)
+        staffIdsToProcess: set[int | str] = set(groupDescTree.staffIds)
 
         for subgroup in groupDescTree.children:
-            firstStaffIdxInSubgroup: int = subgroup.staffIndices[0]
+            firstStaffIdxInSubgroup: int | str = subgroup.staffIds[0]
+            if t.TYPE_CHECKING:
+                assert isinstance(firstStaffIdxInSubgroup, int)
 
             # 1. any owned group just before this subgroup
             # (while loop will not execute if there is no owned group before this subgroup)
-            for ownedStaffIdx in groupDescTree.ownedStaffIndices:
+            for ownedStaffIdx in groupDescTree.ownedStaffIds:
+                if t.TYPE_CHECKING:
+                    assert isinstance(ownedStaffIdx, int)
+
                 if ownedStaffIdx >= firstStaffIdxInSubgroup:
                     # we're done with this owned group (there may be another one later)
                     break
 
-                if ownedStaffIdx not in staffIndicesToProcess:
+                if ownedStaffIdx not in staffIdsToProcess:
                     # we already did this one
                     continue
 
@@ -10489,16 +10623,16 @@ class HumdrumFile(HumdrumFileContent):
                     assert ss.m21Part is not None
                 staffGroups[0].addSpannedElements(ss.m21Part)
                 staves.append(ss.m21Part)
-                staffIndices.append(ownedStaffIdx)
+                staffIds.append(ownedStaffIdx)
 
-                staffIndicesToProcess.remove(ownedStaffIdx)
+                staffIdsToProcess.remove(ownedStaffIdx)
 
             # 2. now the subgroup (returns a list of StaffGroups for the subtree)
             newStaffGroups: list[m21.layout.StaffGroup]
             newStaves: list[m21.stream.Part]
-            newIndices: list[int]
+            newIds: list[int]
 
-            newStaffGroups, newStaves, newIndices = (
+            newStaffGroups, newStaves, newIds = (
                 self._processStaffGroupDescriptionTree(subgroup)
             )
 
@@ -10509,22 +10643,25 @@ class HumdrumFile(HumdrumFileContent):
             staves += newStaves
             staffGroups[0].addSpannedElements(newStaves)
 
-            # add newIndices to staffIndices
-            staffIndices += newIndices
+            # add newIds to staffIds
+            staffIds += newIds
 
-            # remove newIndices from staffIndicesToProcess
-            staffIndicesProcessed: set[int] = set(newIndices)  # for speed of "in" checking
-            staffIndicesToProcess = {
-                idx for idx in staffIndicesToProcess if idx not in staffIndicesProcessed
+            # remove newIds from staffIdsToProcess
+            staffIdsProcessed: set[int] = set(newIds)  # for speed of "in" checking
+            staffIdsToProcess = {
+                idx for idx in staffIdsToProcess if idx not in staffIdsProcessed
             }
 
         # done with everything but the very last owned group (if present)
-        if staffIndicesToProcess:
+        if staffIdsToProcess:
             # 3. any unprocessed owned group just after the last subgroup
-            for ownedStaffIdx in groupDescTree.ownedStaffIndices:
-                if ownedStaffIdx not in staffIndicesToProcess:
+            for ownedStaffIdx in groupDescTree.ownedStaffIds:
+                if ownedStaffIdx not in staffIdsToProcess:
                     # we already did this one
                     continue
+
+                if t.TYPE_CHECKING:
+                    assert isinstance(ownedStaffIdx, int)
 
                 ss = self._staffStates[ownedStaffIdx]
                 startTok = self._staffStarts[ownedStaffIdx]
@@ -10533,12 +10670,12 @@ class HumdrumFile(HumdrumFileContent):
                     assert ss.m21Part is not None
                 staffGroups[0].addSpannedElements(ss.m21Part)
                 staves.append(ss.m21Part)
-                staffIndices.append(ownedStaffIdx)
+                staffIds.append(ownedStaffIdx)
 
-                staffIndicesToProcess.remove(ownedStaffIdx)
+                staffIdsToProcess.remove(ownedStaffIdx)
 
         # assert that we are done
-        assert not staffIndicesToProcess
+        assert not staffIdsToProcess
 
         # configure our top-level staffGroup
         sg: m21.layout.StaffGroup = staffGroups[0]
@@ -10551,17 +10688,19 @@ class HumdrumFile(HumdrumFileContent):
             sg.abbreviation = groupAbbrev
         if groupName:
             sg.name = groupName
-        if not groupName and not groupAbbrev:
-            # Look in the group's Parts to see if they all have the same
-            # instrument e.g. 'Organ' or 'Piano' (it still counts if some
-            # parts have no instrument at all, and the rest have the same
-            # common instrument).
-            # If so,
-            #   (1) set that instrument in the StaffGroup
-            #   (2) mark that instrument in the Part(s) as not-to-be-printed
-            self._promoteCommonInstrumentToStaffGroup(sg)
 
-        return (staffGroups, staves, staffIndices)
+        # Look in the group's Parts to see if they all have the same
+        # instrument e.g. 'Organ' or 'Piano' (it still counts if some
+        # parts have no instrument at all, and the rest have the same
+        # common instrument).
+        # If so,
+        #   (1) set that instrument in the StaffGroup
+        #   (2) mark that instrument in the Part(s) as not-to-be-printed
+        #
+        # This overrides any groupName or groupAbbrev that has been set on the sg.
+        self._promoteCommonInstrumentToStaffGroup(sg)
+
+        return (staffGroups, staves, staffIds)
 
     @staticmethod
     def _promoteCommonInstrumentToStaffGroup(staffGroup: m21.layout.StaffGroup) -> None:
@@ -10576,8 +10715,8 @@ class HumdrumFile(HumdrumFileContent):
                 commonInstrument = inst
                 partsAndInstruments.append((part, inst))
                 continue
-            if inst.instrumentName == commonInstrument.instrumentName and \
-                    inst.instrumentAbbreviation == commonInstrument.instrumentAbbreviation:
+            if (inst.instrumentName == commonInstrument.instrumentName
+                    and inst.instrumentAbbreviation == commonInstrument.instrumentAbbreviation):
                 partsAndInstruments.append((part, inst))
                 continue
             # found a non-common instrument in the staffGroup, get the heck out
@@ -10711,7 +10850,6 @@ class HumdrumFile(HumdrumFileContent):
             elif token.isInstrumentClassCode:
                 # instrument class code, e.g. *ICbras is BrassInstrument
                 iClassCode = token.instrumentClassCode
-                ss.instrumentClass = iClassCode
             elif token.isMensurationSymbol:
                 meterSigTok = token
             elif token.isTimeSignature:

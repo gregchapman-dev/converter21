@@ -41,6 +41,7 @@ def oplistSummary(
     counts['articulation'] = 0
     counts['notestyle'] = 0
     counts['stemdirection'] = 0
+    counts['staffgroup'] = 0
 
     for op in op_list:
         # measure
@@ -101,6 +102,16 @@ def oplistSummary(
                         'delarticulation',
                         'editarticulation'):
             counts['articulation'] += 1
+        # staffgroup
+        elif op[0] in ('staffgrpins',
+                        'staffgrpdel',
+                        'staffgrpsub',
+                        'staffgrpnameedit',
+                        'staffgrpabbreviationedit',
+                        'staffgrpsymboledit',
+                        'staffgrpbartogetheredit',
+                        'staffgrppartindicesedit'):
+            counts['staffgroup'] += 1
 
         elif op[0] == 'extradel':
             # op[1] only

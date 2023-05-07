@@ -45,6 +45,7 @@ from music21 import duration
 from music21 import instrument
 from music21 import interval
 from music21 import key
+from music21 import layout
 from music21 import metadata
 from music21 import meter
 from music21 import note
@@ -1977,10 +1978,10 @@ class Test(unittest.TestCase):
         mockKey.return_value = 'mockKey return'
         expected = {'top-part objects': [],
                     'all-part objects': [mockTime.return_value, mockKey.return_value],
-                    'whole-score objects': []}
+                    'whole-score objects': {}}
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {})
+        actual = base.scoreDefFromElement(elem, None, {}, [])
 
         # 3.) check
         self.assertEqual(expected, actual)
@@ -1996,7 +1997,7 @@ class Test(unittest.TestCase):
                                                  'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {})
+        actual = base.scoreDefFromElement(elem, None, {}, [])
 
         # 3.) check
         self.assertIsInstance(actual['all-part objects'][0], meter.TimeSignature)
@@ -2004,38 +2005,6 @@ class Test(unittest.TestCase):
         self.assertEqual('3/8', actual['all-part objects'][0].ratioString)
         self.assertEqual('major', actual['all-part objects'][1].mode)
         self.assertEqual(4, actual['all-part objects'][1].sharps)
-
-    @mock.patch('converter21.mei.base._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.staffGrpFromElement')
-    def testUnit2ScoreDefFromElement(self, mockStaffGrpFE, mockKey, mockTime):
-        '''
-        scoreDefFromElement(): test for a <staffGrp> held within
-        '''
-        # 1.) prepare
-        elem = ETree.Element('staffDef', attrib={'key.sig': '4s', 'key.mode': 'major',
-                                                 'meter.count': '3', 'meter.unit': '8'})
-        staffGrp = ETree.Element(f'{MEI_NS}staffGrp')
-        staffDef = ETree.Element(f'{MEI_NS}staffDef',
-                                 attrib={'n': '1', 'label': 'Clarinet'})
-        staffGrp.append(staffDef)
-        elem.append(staffGrp)
-        mockTime.return_value = 'mockTime return'
-        mockKey.return_value = 'mockKey return'
-        mockStaffGrpFE.return_value = {'1': {'instrument': 'A clarinet'}}
-        expected = {'top-part objects': [],
-                    'all-part objects': [mockTime.return_value, mockKey.return_value],
-                    'whole-score objects': [],
-                    '1': {'instrument': 'A clarinet'}}
-
-        # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {})
-
-        # 3.) check
-        self.assertEqual(expected, actual)
-        mockTime.assert_called_once_with(elem, prefix='meter.')
-        mockKey.assert_called_once_with(elem, prefix='key.')
-        mockStaffGrpFE.assert_called_once_with(staffGrp, None, {})
 
     def testIntegration2ScoreDefFromElement(self):
         '''
@@ -2051,7 +2020,7 @@ class Test(unittest.TestCase):
         elem.append(staffGrp)
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {})
+        actual = base.scoreDefFromElement(elem, None, {}, ['1'])
 
         # 3.) check
         self.assertIsInstance(actual['all-part objects'][0], meter.TimeSignature)
@@ -2062,8 +2031,25 @@ class Test(unittest.TestCase):
         self.assertEqual('1', actual['1']['instrument'].partId)
         self.assertEqual('Clarinet', actual['1']['instrument'].partName)
         self.assertIsInstance(actual['1']['instrument'], instrument.Clarinet)
+        self.assertEqual(1, len(actual['whole-score objects']['parts']))
+        self.assertIsInstance(actual['whole-score objects']['parts']['1'], stream.Part)
+        self.assertTrue(
+            not isinstance(
+                actual['whole-score objects']['parts']['1'],
+                stream.PartStaff)
+        )
+        self.assertEqual(1, len(actual['whole-score objects']['staff-groups']))
+        self.assertIsInstance(
+            actual['whole-score objects']['staff-groups'][0],
+            layout.StaffGroup
+        )
+        self.assertIs(
+            actual['whole-score objects']['staff-groups'][0].getFirst(),
+            actual['whole-score objects']['parts']['1']
+        )
 
-    # -----------------------------------------------------------------------------
+
+        # -----------------------------------------------------------------------------
     # class TestEmbeddedElements(unittest.TestCase):
     # '''Tests for _processesEmbeddedElements()'''
 
@@ -2938,48 +2924,6 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         mockFromString.assert_called_once_with(expFromStringArg)
 
-    @mock.patch('converter21.mei.base.instrument')
-    def testUnit3aInstrDef(self, mockInstr):
-        '''instrDefFromElement(): when @midi.instrname is given, and it explodes (AttributeError)'''
-        # For Py3 we have to replace the exception, since it's not okay to catch classes that don't
-        # inherit from BaseException (which a MagicMock obviously doesn't)
-        mockInstr.InstrumentException = instrument.InstrumentException
-        elem = ETree.Element('instrDef', attrib={'midi.instrname': 'Gold-Plated Kazoo'})
-        expFromStringArg = 'Gold-Plated Kazoo'
-        mockInstr.fromString = mock.MagicMock()
-        mockInstr.fromString.side_effect = AttributeError
-        mockInstr.Instrument.return_value = mock.MagicMock()
-        mockInstr.Instrument.return_value.partName = None
-        expected = mockInstr.Instrument.return_value
-
-        actual = base.instrDefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        mockInstr.fromString.assert_called_once_with(expFromStringArg)
-        self.assertEqual(expFromStringArg, actual.partName)
-
-    @mock.patch('converter21.mei.base.instrument')
-    def testUnit3bInstrDef(self, mockInstr):
-        '''instrDefFromElement(): when @midi.instrname is given,
-        and it explodes (InstrumentException)'''
-        # For Py3 we have to replace the exception, since it's not okay to catch classes that don't
-        # inherit from BaseException (which a MagicMock obviously doesn't)
-        mockInstr.InstrumentException = instrument.InstrumentException
-        elem = ETree.Element('instrDef', attrib={'midi.instrname': 'Gold-Plated Kazoo'})
-        expFromStringArg = 'Gold-Plated Kazoo'
-        mockInstr.fromString = mock.MagicMock()
-        mockInstr.fromString.side_effect = instrument.InstrumentException
-        mockInstr.Instrument.return_value = mock.MagicMock()
-        mockInstr.Instrument.return_value.partName = None
-        expected = mockInstr.Instrument.return_value
-
-        actual = base.instrDefFromElement(elem, None, None, {})
-
-        self.assertEqual(expected, actual)
-        mockInstr.fromString.assert_called_once_with(expFromStringArg)
-        self.assertEqual(expFromStringArg, actual.partName)
-
-
 # -----------------------------------------------------------------------------
 # class TestMeasureFromElement(unittest.TestCase):
     '''Tests for measureFromElement() and its helper functions.'''
@@ -3274,52 +3218,6 @@ class Test(unittest.TestCase):
                                          nextMeasureLeft,
                                          backupMeasureNum)
 
-    @mock.patch('converter21.mei.base.allPartsPresent')
-    @mock.patch('converter21.mei.base.sectionScoreCore')
-    @mock.patch('music21.stream.Part')
-    @mock.patch('music21.stream.Score')
-    def testScoreUnit1(self, mockScore, mockPart, mockCore, mockAllParts):
-        '''
-        scoreFromElement(): unit test with all basic functionality
-
-        It's two parts, each with two things in them.
-
-        Mocks on allPartsPresent(), sectionScoreCore(), stream.Part(), and stream.Score().
-        '''
-        elem = ETree.Element('score')
-        mockAllParts.return_value = (('1', '2'), 1)
-        mockCore.return_value = ({'1': ['1-1', '1-2'], '2': ['2-1', '2-2']},
-                                 'three', 'other', 'things')
-        mockScore.side_effect = lambda x: [x[0], x[1]]
-        # can't just return "x" in this case because it confuses the mocks
-        mockPart1 = mock.MagicMock()
-        mockPart1.append = mock.MagicMock()
-        mockPart2 = mock.MagicMock()
-        mockPart2.append = mock.MagicMock()
-        mockPartReturns = [mockPart1, mockPart2]
-        mockPart.side_effect = lambda: mockPartReturns.pop(0)
-        spannerBundle = mock.MagicMock(spec_set=spanner.SpannerBundle)
-        expected = [mockPart1, mockPart2, []]
-
-        actual = base.scoreFromElement(elem, None, spannerBundle, {})
-
-        self.assertEqual(expected, actual)
-        mockAllParts.assert_called_once_with(elem)
-        mockCore.assert_called_once_with(
-            elem, None, spannerBundle,
-            {'topPartN': int(mockAllParts.return_value[1])},
-            mockAllParts.return_value[0]
-        )
-        mockScore.assert_called_once_with([mockPart1, mockPart2])
-        self.assertEqual(2, mockPart1.append.call_count)
-        self.assertEqual(2, mockPart2.append.call_count)
-        mockPart1.append.assert_any_call('1-1')
-        mockPart1.append.assert_any_call('1-2')
-        mockPart2.append.assert_any_call('2-1')
-        mockPart2.append.assert_any_call('2-2')
-        self.assertFalse(mockPart1.atSoundingPitch)
-        self.assertFalse(mockPart2.atSoundingPitch)
-
     def testScoreIntegration1(self):
         '''
         scoreFromElement(): integration test with all basic functionality
@@ -3357,7 +3255,7 @@ class Test(unittest.TestCase):
         # This is complicated... I'm sorry... but it's a rather detailed test of the whole system,
         # so I hope it's worth it!
         self.assertEqual(2, len(actual.parts))
-        self.assertEqual(3, len(actual))  # parts plus "spannerBundle"
+        self.assertEqual(4, len(actual))  # parts plus staffGroup plus spannerBundle
         self.assertEqual(1, len(actual.parts[0]))  # one Measure in each part
         self.assertEqual(1, len(actual.parts[1]))
         self.assertFalse(actual.parts[0].atSoundingPitch)  # each Part is set as not sounding pitch
@@ -3388,92 +3286,6 @@ class Test(unittest.TestCase):
         self.assertIsInstance(actual.parts[1][0][0], clef.BassClef)  # lower
         self.assertIsInstance(actual.parts[1][0][1], meter.TimeSignature)
         self.assertEqual('8/8', actual.parts[1][0][1].ratioString)
-
-    @mock.patch('converter21.mei.base.measureFromElement')
-    @mock.patch('converter21.mei.base.sectionFromElement')
-    @mock.patch('converter21.mei.base.scoreDefFromElement')
-    @mock.patch('converter21.mei.base.staffDefFromElement')
-    def testCoreUnit1(self, mockStaffDFE, mockScoreDFE, mockSectionFE, mockMeasureFE):
-        '''
-        sectionScoreCore(): everything basic, as called by scoreFromElement()
-            - no keywords
-                - and the <measure> has no @n; it would be set to "1" automatically
-            - one of everything (<section>, <scoreDef>, and <staffDef>)
-            - that the <measure> in here won't be processed (<measure> must be in a <section>)
-            - things in a <section> are appended properly (different for <score> and <section>)
-
-        mocked:
-            - measureFromElement()
-            - sectionFromElement()
-            - scoreDefFromElement()
-            - staffDefFromElement()
-        '''
-        # setup the arguments
-        # NB: there's more MEI here than we need, but it's shared between unit & integration tests
-        elem = '''<score xmlns="http://www.music-encoding.org/ns/mei">
-            <scoreDef meter.count="8" meter.unit="8"/>
-            <staffDef n="1" clef.shape="G" clef.line="2"/>
-            <measure/>
-            <section>
-                <measure>
-                    <staff n="1">
-                        <layer n="1">
-                            <note pname="G" oct="4" dur="1"/>
-                        </layer>
-                    </staff>
-                </measure>
-            </section>
-        </score>'''
-        elem = ETree.fromstring(elem)
-        spannerBundle = mock.MagicMock()
-        allPartNs = ['1']
-        # setup sectionFromElement()
-        expActiveMeter = mock.MagicMock(spec_set=meter.TimeSignature)
-        expMeasureNum = 1
-        expNMLeft = 'barline for the next Measure'
-        expPart1 = [mock.MagicMock(spec_set=stream.Stream)]
-        mockSectionFE.return_value = ({'1': expPart1},
-                                      expActiveMeter, expNMLeft, expMeasureNum)
-        # setup scoreDefFromElement()
-        scoreDefActiveMeter = mock.MagicMock(spec_set=meter.TimeSignature)
-        mockScoreDFE.return_value = {'top-part objects': [],
-                                     'all-part objects': [scoreDefActiveMeter],
-                                     '1': {'whatever': '8/8'}}
-        # setup staffDefFromElement()
-        mockStaffDFE.return_value = {'whatever': 'treble clef'}
-        # prepare the "expected" return
-        expected = {'1': [expPart1]}
-        expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
-
-        actual = base.sectionScoreCore(elem, None, spannerBundle, {},
-                                       allPartNs, None, 0)
-
-        # ensure expected == actual
-        self.assertEqual(expected, actual)
-        # ensure measureFromElement() wasn't called
-        self.assertEqual(0, mockMeasureFE.call_count)
-        # ensure sectionFromElement()
-        mockSectionFE.assert_called_once_with(mock.ANY,
-                                              scoreDefActiveMeter,
-                                              spannerBundle,
-                                              {'pending inNextThing': {'1': []}},
-                                              allPartNs,
-                                              None,
-                                              0)
-        self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
-        # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle,
-            {'pending inNextThing': {'1': []}})
-        self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
-        # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle,
-            {'pending inNextThing': {'1': []}})
-        self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
-        # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Part
-        self.assertEqual(3, expPart1[0].insert.call_count)
-        expPart1[0].insert.assert_any_call(0.0, scoreDefActiveMeter)
-        expPart1[0].insert.assert_any_call(0.0, '8/8')
-        expPart1[0].insert.assert_any_call(0.0, 'treble clef')
 
     def testCoreIntegration1(self):
         '''
@@ -3530,114 +3342,6 @@ class Test(unittest.TestCase):
         self.assertIsInstance(meas[clefIndex], clef.TrebleClef)
         self.assertIsInstance(meas[timeSigIndex], meter.TimeSignature)
         self.assertEqual('8/8', meas[timeSigIndex].ratioString)
-
-    @mock.patch('converter21.mei.base.measureFromElement')
-    @mock.patch('converter21.mei.base.sectionFromElement')
-    @mock.patch('converter21.mei.base.scoreDefFromElement')
-    @mock.patch('converter21.mei.base.staffDefFromElement')
-    def testCoreUnit2(self, mockStaffDFE, mockScoreDFE, mockSectionFE, mockMeasureFE):
-        '''
-        sectionScoreCore(): everything basic, as called by sectionFromElement()
-            - no keywords
-                - but the <measure> elements do have @n so those values should be used
-            - one of most things (<section>, <scoreDef>, and <staffDef>)
-            - two of <measure> (one in a <section>)
-            - things in a <section> are appended properly (different for <score> and <section>)
-
-        This test is roughly equivalent to testCoreUnit1()
-        but with a <section> instead of a <score>.
-        Note that, because the <measure> *should* be processed here, this test is indeed more
-        complicated.
-
-        mocked:
-            - measureFromElement()
-            - sectionFromElement()
-            - scoreDefFromElement()
-            - staffDefFromElement()
-        '''
-        # setup the arguments
-        # NB: there's more MEI here than we need, but it's shared between unit & integration tests
-        elem = '''<section xmlns="http://www.music-encoding.org/ns/mei">
-            <scoreDef meter.count="8" meter.unit="8"/>
-            <staffDef n="1" clef.shape="G" clef.line="2"/>
-            <measure n="400">
-                <staff n="1">
-                    <layer n="1">
-                        <note pname="E" oct="7" dur="1"/>
-                    </layer>
-                </staff>
-            </measure>
-            <section>
-                <measure n="92">
-                    <staff n="1">
-                        <layer n="1">
-                            <note pname="G" oct="4" dur="1"/>
-                        </layer>
-                    </staff>
-                </measure>
-            </section>
-        </section>'''
-        elem = ETree.fromstring(elem)
-        spannerBundle = mock.MagicMock()
-        allPartNs = ['1']
-        # setup measureFromElement()
-        expMeas1 = mock.MagicMock(spec_set=stream.Stream)
-        mockMeasureFE.return_value = {'1': expMeas1}
-        # setup sectionFromElement()
-        expActiveMeter = mock.MagicMock(spec_set=meter.TimeSignature)
-        expMeasureNum = 1
-        expNMLeft = 'barline for the next Measure'
-        expPart1 = [mock.MagicMock(spec_set=stream.Stream)]
-        mockSectionFE.return_value = ({'1': expPart1},
-                                      expActiveMeter, expNMLeft, expMeasureNum)
-        # setup scoreDefFromElement()
-        scoreDefActiveMeter = mock.MagicMock(spec_set=meter.TimeSignature)
-        mockScoreDFE.return_value = {'top-part objects': [],
-                                     'all-part objects': [scoreDefActiveMeter],
-                                     '1': {'whatever': '8/8'}}
-        # setup staffDefFromElement()
-        mockStaffDFE.return_value = {'whatever': 'treble clef'}
-        # prepare the "expected" return
-        expected = {'1': [expMeas1, expPart1[0]]}   # must be [0] b/c expPart1
-        # would be list of Measure
-        expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
-
-        actual = base.sectionScoreCore(elem, None, spannerBundle, {},
-                                       allPartNs, None, 0)
-
-        # ensure expected == actual
-        self.assertEqual(expected, actual)
-        # ensure measureFromElement()
-        mockMeasureFE.assert_called_once_with(mock.ANY,
-                                              scoreDefActiveMeter,
-                                              spannerBundle,
-                                              {},
-                                              1, allPartNs)
-        # ensure sectionFromElement()
-        mockSectionFE.assert_called_once_with(mock.ANY,
-                                              scoreDefActiveMeter,
-                                              spannerBundle,
-                                              {'pending inNextThing': {'1': []}},
-                                              allPartNs,
-                                              None,
-                                              # incremented automatically on finding a <measure>
-                                              1)
-        self.assertEqual(f'{MEI_NS}section', mockSectionFE.call_args_list[0][0][0].tag)
-        # ensure scoreDefFromElement()
-        mockScoreDFE.assert_called_once_with(mock.ANY, spannerBundle,
-            {'pending inNextThing': {'1': []}})
-        self.assertEqual(f'{MEI_NS}scoreDef', mockScoreDFE.call_args_list[0][0][0].tag)
-        # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle,
-            {'pending inNextThing': {'1': []}})
-        self.assertEqual(f'{MEI_NS}staffDef', mockStaffDFE.call_args_list[0][0][0].tag)
-        # ensure the "inNextThing" numbers and mock.TimeSignature were put into the mocked Measure,
-        # and not into the mocked Part
-        self.assertEqual(3, expMeas1.insert.call_count)
-        self.assertEqual(0, expPart1[0].insert.call_count)
-        expMeas1.insert.assert_any_call(0.0, scoreDefActiveMeter)
-        expMeas1.insert.assert_any_call(0.0, '8/8')
-        expMeas1.insert.assert_any_call(0.0, 'treble clef')
 
     def testCoreIntegration2(self):
         '''
@@ -3999,13 +3703,17 @@ class Test(unittest.TestCase):
                 <staffDef n="1" label="tuba"/>
                 <section>
                     <measure n="42">
-                        <staff n="1"><layer n="1"><note pname="C" oct="1" dur="1"/></layer></staff>
+                        <staff n="1">
+                            <layer n="1"><note pname="C" oct="1" dur="1"/></layer>
+                        </staff>
                     </measure>
                 </section>
             </section>
             <section>
                 <measure n="402">
-                    <staff n="1"><layer n="1"><note pname="C" oct="2" dur="1"/></layer></staff>
+                    <staff n="1">
+                        <layer n="1"><note pname="C" oct="2" dur="1"/></layer>
+                    </staff>
                 </measure>
             </section>
         </score>'''
@@ -4022,9 +3730,13 @@ class Test(unittest.TestCase):
         self.assertIsNone(nextMeasureLeft)
         self.assertEqual(2, backupMeasureNum)
         # ensure "parsed" is the right format
-        self.assertEqual(1, len(parsed))
+        self.assertEqual(2, len(parsed))
         self.assertTrue('1' in parsed)
         self.assertEqual(2, len(parsed['1']))  # two <measure>s, each in a <section>
+        self.assertTrue('whole-score objects' in parsed)
+        self.assertTrue('staff-groups' in parsed['whole-score objects'])
+        self.assertTrue('parts' in parsed['whole-score objects'])
+        self.assertTrue('1' in parsed['whole-score objects']['parts'])
         # check the Instrument
         instr = parsed['1'][0][0]
         self.assertIsInstance(instr, instrument.Tuba)  # check out the Instrument

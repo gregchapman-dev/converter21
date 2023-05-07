@@ -31,7 +31,9 @@ def oplistSummary(
     counts['measure'] = 0
     counts['voice'] = 0
     counts['note'] = 0
+    counts['gracenote'] = 0
     counts['beam'] = 0
+    counts['lyric'] = 0
     counts['accidental'] = 0
     counts['tuplet'] = 0
     counts['tie'] = 0
@@ -39,6 +41,7 @@ def oplistSummary(
     counts['articulation'] = 0
     counts['notestyle'] = 0
     counts['stemdirection'] = 0
+    counts['staffgroup'] = 0
 
     for op in op_list:
         # measure
@@ -57,6 +60,12 @@ def oplistSummary(
                         'dotins',
                         'dotdel'):
             counts['note'] += 1
+        elif op[0] in ('graceedit', 'graceslashedit'):
+            counts['gracenote'] += 1
+        elif op[0] in ('inslyric',
+                        'dellyric',
+                        'editlyric'):
+            counts['lyric'] += 1
         elif op[0] in ('editstyle',
                        'editnoteshape',
                        'editnoteheadfill',
@@ -93,6 +102,16 @@ def oplistSummary(
                         'delarticulation',
                         'editarticulation'):
             counts['articulation'] += 1
+        # staffgroup
+        elif op[0] in ('staffgrpins',
+                        'staffgrpdel',
+                        'staffgrpsub',
+                        'staffgrpnameedit',
+                        'staffgrpabbreviationedit',
+                        'staffgrpsymboledit',
+                        'staffgrpbartogetheredit',
+                        'staffgrppartindicesedit'):
+            counts['staffgroup'] += 1
 
         elif op[0] == 'extradel':
             # op[1] only

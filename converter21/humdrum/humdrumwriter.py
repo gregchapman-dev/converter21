@@ -804,7 +804,7 @@ class HumdrumWriter:
         preString: str = ''
         postString: str = ''
         symbol: str = sgtree.staffGroup.symbol
-        barTogether: bool = sgtree.staffGroup.barTogether  # might be 'mensurstrich'
+        barTogether: bool | str = sgtree.staffGroup.barTogether  # might be 'mensurstrich'
 
         if symbol in M21Convert.m21GroupSymbolToHumdrumDecoGroupStyleStart:
             preString += M21Convert.m21GroupSymbolToHumdrumDecoGroupStyleStart[symbol]
