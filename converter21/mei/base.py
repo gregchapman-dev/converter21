@@ -179,7 +179,7 @@ import re
 import html
 
 from collections import defaultdict
-from copy import deepcopy
+from copy import copy, deepcopy
 from fractions import Fraction  # for typing
 from uuid import uuid4
 
@@ -1372,6 +1372,85 @@ def _ppTurns(theConverter: MeiToM21Converter):
             eachTurn.set('ignore_turn_in_turnFromElement', 'true')
 
 
+def _ppDirsTemposDynams(theConverter: MeiToM21Converter):
+    '''
+    '''
+    environLocal.printDebug('*** pre-processing dirs/tempos/dynams')
+    # for readability, we use a single-letter variable
+    c = theConverter
+    elems: list[Element] = c.documentRoot.findall(
+        f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dir'
+    )
+    elems += c.documentRoot.findall(
+        f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tempo'
+    )
+    elems += c.documentRoot.findall(
+        f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dynam'
+    )
+
+    for eachElem in elems:
+        lowerName: str = eachElem.tag
+        name: str = copy(lowerName)
+        name[0] = name[0].toupper()
+
+        startId: str = removeOctothorpe(eachElem.get('startid', ''))
+        if startId:
+            # The turn info gets stashed on the note/chord element referenced by startId
+            place: str = eachElem.get('place', '')
+            staff: str = eachElem.get('staff', '')
+            theType: str = eachElem.get('type', '')
+            # technically not always legal, but I've seen enclose in <dynam>,
+            # so support it here for everyone.
+            enclose: str | None = eachElem.get('enclose')
+            fontStyle: str | None = None
+            fontWeight: str | None = None
+            fontFamily: str | None = None
+            justify: str | None = None
+            text: str
+            styleDict: dict[str, str]
+
+            text, styleDict = textFromElem(eachElem)
+            text = html.unescape(text)
+            text = text.strip()
+            if not text:
+                continue
+
+            if enclose is not None:
+                if enclose == 'paren':
+                    text = '( ' + text + ' )'
+                elif enclose == 'brack':
+                    text = '[ ' + text + ' ]'
+
+            fontStyle = styleDict.get('fontStyle', None)
+            fontWeight = styleDict.get('fontWeight', None)
+            fontFamily = styleDict.get('fontFamily', None)
+            justify = styleDict.get('justify', None)
+
+            c.m21Attr[startId][f'm21{name}'] = text
+            if place:
+                c.m21Attr[startId][f'm21{name}Place'] = place
+            if staff:
+                c.m21Attr[startId][f'm21{name}Staff'] = staff
+            if theType:
+                c.m21Attr[startId][f'm21{name}Type'] = theType
+            if fontStyle:
+                c.m21Attr[startId][f'm21{name}FontStyle'] = fontStyle
+            if fontWeight:
+                c.m21Attr[startId][f'm21{name}FontWeight'] = fontWeight
+            if fontFamily:
+                c.m21Attr[startId][f'm21{name}FontFamily'] = fontFamily
+            if justify:
+                c.m21Attr[startId][f'm21{name}Justify'] = justify
+
+            eachElem.set(f'ignore_{lowerName}_in_{lowerName}FromElement', 'true')
+
+
+def _ppHairpins(theConverter: MeiToM21Converter):
+    '''
+    '''
+    pass
+
+
 _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE: dict[tuple[str, str], str] = {
     ('8', 'above'): '8va',
     ('8', 'below'): '8vb',
@@ -1967,6 +2046,37 @@ def addOttavas(
             completedOttavas.append(ottava)
 
     return completedOttavas
+
+
+def addDirsTemposDynams(
+    elem: Element,
+    obj: note.NotRest,
+    spannerBundle: spanner.SpannerBundle,
+    otherInfo: dict[str, t.Any]
+):
+    staffN: str = otherInfo.get('staffNumberForNotes', '')
+
+    strsToProcess: dict[str, str] = {
+        'm21Dir': elem.get('m21Dir', ''),
+        'm21Tempo': elem.get('m21Tempo', ''),
+        'm21Dynam': elem.get('m21Dynam', '')
+    }
+
+    for prefix, strToProcess in enumerate(strsToProcess):
+        if not strToProcess:
+            # no text, so ignore it
+            continue
+
+        place: str = elem.get('{prefix}Place', '')
+        staff: str = elem.get('{prefix}Staff', '')
+        if not staff:
+            staff = staffN
+        theType: str = elem.get('{prefix}Type', '')
+        fontStyle: str = elem.get('{prefix}FontStyle', '')
+        fontWeight: str = elem.get('{prefix}FontWeight', '')
+        fontFamily: str = elem.get('{prefix}FontFamily', '')
+        justify: str = elem.get('{prefix}Justify', '')
+        # 888 incomplete implementation
 
 
 def addArpeggio(
@@ -4288,6 +4398,7 @@ def noteFromElement(
     addMordent(elem, theNote, spannerBundle, otherInfo)
     addTurn(elem, theNote, spannerBundle, otherInfo)
     addOttavas(elem, theNote, spannerBundle)
+    addDirsTemposDynams(elem, theNote, spannerBundle, otherInfo)
 
     # ties in the @tie attribute
     tieStr: str | None = elem.get('tie')
@@ -4699,6 +4810,7 @@ def chordFromElement(
     addMordent(elem, theChord, spannerBundle, otherInfo)
     addTurn(elem, theChord, spannerBundle, otherInfo)
     addOttavas(elem, theChord, spannerBundle)
+    addDirsTemposDynams(elem, theChord, spannerBundle, otherInfo)
 
     # See if any of the notes within the chord have a trill/mordent/turn,
     # and if so, pull it up to the chord (because music21 doesn't really
@@ -7057,6 +7169,8 @@ def dirFromElement(
     expressions.TextExpression | None
 ]:
     # returns (staffNStr, (offset, None, None), te)
+    if elem.get('ignore_dir_in_dirFromElement'):
+        return '', (-1., None, None), None
 
     # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
     staffNStr = elem.get('staff', '1')
@@ -7070,7 +7184,7 @@ def dirFromElement(
     # @tstamp is required for now, someday we'll be able to derive offsets from @startid
     tstamp: str | None = elem.get('tstamp')
     if tstamp is None:
-        environLocal.warn('missing @tstamp in <dir> element')
+        environLocal.warn('missing @tstamp/@startid in <dir> element')
         return '', (-1., None, None), None
 
     offset = _tstampToOffset(tstamp, activeMeter)
