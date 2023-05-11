@@ -218,8 +218,6 @@ from converter21.shared import M21StaffGroupDescriptionTree
 environLocal = environment.Environment('converter21.mei.base')
 
 
-# Module-Level Constants
-# -----------------------------------------------------------------------------
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
@@ -292,8 +290,6 @@ _EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} 
 _EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
 _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
 
-# Module-level Functions
-# -----------------------------------------------------------------------------
 class MeiToM21Converter:
     '''
     A :class:`MeiToM21Converter` instance manages the conversion of an MEI document into music21
@@ -352,20 +348,20 @@ class MeiToM21Converter:
 
         environLocal.printDebug('*** pre-processing spanning/timestamped elements')
 
-        _ppSlurs(self)
-        _ppTies(self)
-        _ppBeams(self)
-        _ppTuplets(self)
+        self._ppSlurs()
+        self._ppTies()
+        self._ppBeams()
+        self._ppTuplets()
 
-        _ppFermatas(self)
-        _ppArpeggios(self)
-        _ppOctaves(self)
+        self._ppFermatas()
+        self._ppArpeggios()
+        self._ppOctaves()
 
-        _ppTrills(self)
-        _ppMordents(self)
-        _ppTurns(self)
+        self._ppTrills()
+        self._ppMordents()
+        self._ppTurns()
 
-        _ppConclude(self)
+        self._ppConclude()
 
         environLocal.printDebug('*** processing <score> elements')
         scoreElem: Element | None = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}score')
@@ -375,92 +371,19 @@ class MeiToM21Converter:
 
         otherInfo: dict = {}
         activeMeter: meter.TimeSignature | None = None
-        theScore: stream.Score = scoreFromElement(
-            scoreElem, activeMeter, self.spannerBundle, otherInfo
+        theScore: stream.Score = self.scoreFromElement(
+            scoreElem, activeMeter, otherInfo
         )
 
         environLocal.printDebug('*** preparing metadata')
-        theScore.metadata = makeMetadata(self.documentRoot)
+        theScore.metadata = self.makeMetadata()
 
         return theScore
 
 
     # Static Utility Functions
     # -----------------------------------------------------------------------------
-    @staticmethod
-    def safePitch(
-        name: str,
-        accidental: pitch.Accidental | str | None = None,
-        octave: str | int = ''
-    ) -> pitch.Pitch:
-        '''
-        Safely build a :class:`~music21.pitch.Pitch` from a string.
-
-        When :meth:`~music21.pitch.Pitch.__init__` is given an empty string,
-        it raises a :exc:`~music21.pitch.PitchException`. This
-        function instead returns a default :class:`~music21.pitch.Pitch` instance.
-
-        name: Desired name of the :class:`~music21.pitch.Pitch`.
-
-        accidental: (Optional) Symbol for the accidental.
-
-        octave: (Optional) Octave number.
-
-        Returns A :class:`~music21.pitch.Pitch` with the appropriate properties.
-
-        >>> from converter21.mei.base import safePitch  # OMIT_FROM_DOCS
-        >>> safePitch('D#6')
-        <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#', '6')
-        <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#')
-        <music21.pitch.Pitch D#>
-        '''
-        if not name:
-            return pitch.Pitch()
-        if octave and accidental is not None:
-            return pitch.Pitch(name, octave=int(octave), accidental=accidental)
-        if octave:
-            return pitch.Pitch(name, octave=int(octave))
-        if accidental is not None:
-            return pitch.Pitch(name, accidental=accidental)
-        return pitch.Pitch(name)
-
-    @staticmethod
-    def makeDuration(
-        base: float | int | Fraction = 0.0,
-        dots: int = 0
-    ) -> duration.Duration:
-        '''
-        Given a ``base`` duration and a number of ``dots``, create a :class:`~music21.duration.Duration`
-        instance with the
-        appropriate ``quarterLength`` value.
-
-        Returns a :class:`Duration` corresponding to the fully-augmented value.
-
-        **Examples**
-
-        >>> from converter21.mei.base import makeDuration
-        >>> from fractions import Fraction
-        >>> makeDuration(base=2.0, dots=0).quarterLength  # half note, no dots
-        2.0
-        >>> makeDuration(base=2.0, dots=1).quarterLength  # half note, one dot
-        3.0
-        >>> makeDuration(base=2, dots=2).quarterLength  # 'base' can be an int or float
-        3.5
-        >>> makeDuration(2.0, 10).quarterLength  # you want ridiculous dots? Sure...
-        3.998046875
-        >>> makeDuration(0.33333333333333333333, 0).quarterLength  # works with fractions too
-        Fraction(1, 3)
-        >>> makeDuration(Fraction(1, 3), 1).quarterLength
-        0.5
-        '''
-        returnDuration: duration.Duration = duration.Duration(base)
-        returnDuration.dots = dots
-        return returnDuration
-
-    @staticmethod
-    def allPartsPresent(scoreElem: Element) -> tuple[tuple[str, ...], str]:
+    def allPartsPresent(self, scoreElem: Element) -> tuple[tuple[str, ...], str]:
         # noinspection PyShadowingNames
         '''
         Find the @n values for all <staffDef> elements in a <score> element. This assumes that every
@@ -492,9 +415,9 @@ class MeiToM21Converter:
         >>> allPartsPresent(meiDoc)
         (('1', '2'), '1')
 
-        Even though there are three <staffDef> elements in the document, there are only two unique @n
-        attributes. The second appearance of <staffDef> with @n="2" signals a change of clef on that
-        same staff---not that there is a new staff.
+        Even though there are three <staffDef> elements in the document, there are only
+        two unique @n attributes. The second appearance of <staffDef> with @n="2" signals
+        a change of clef on that same staff---not that there is a new staff.
         '''
         # xpathQuery = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}staffDef'
         xpathQuery: str = f'.//{MEI_NS}staffDef'
@@ -651,30 +574,31 @@ class MeiToM21Converter:
 
     # Static One-to-One Translator Functions
     # -----------------------------------------------------------------------------
-    @staticmethod
     def _attrTranslator(
+        self,
         attr: str | None,
         name: str,
         mapping: dict[str | None, t.Any]
     ) -> t.Any:
         '''
-        Helper function for other functions that need to translate the value of an attribute to another
-        known value. :func:`_attrTranslator` tries to return the value of ``attr`` in ``mapping`` and,
-        if ``attr`` isn't in ``mapping``, an exception is raised.
+        Helper function for other functions that need to translate the value of an attribute
+        to another known value. :func:`_attrTranslator` tries to return the value of ``attr``
+        in ``mapping`` and, if ``attr`` isn't in ``mapping``, an exception is raised.
 
         :param str attr: The value of the attribute to look up in ``mapping``.
         :param str name: Name of the attribute, used when raising an exception (read below).
         :param mapping: A mapping type (nominally a dict) with relevant key-value pairs.
 
-        :raises: :exc:`MeiValueError` when ``attr`` is not found in ``mapping``. The error message will
-            be of this format: 'Unexpected value for "name" attribute: attr'.
+        :raises: :exc:`MeiValueError` when ``attr`` is not found in ``mapping``. The error
+            message will be of this format: 'Unexpected value for "name" attribute: attr'.
 
         Examples:
 
-        >>> from converter21.mei.base import _attrTranslator, _ACCID_ATTR_DICT, _DUR_ATTR_DICT
-        >>> _attrTranslator('s', 'accid', _ACCID_ATTR_DICT)
+        >>> from converter21.mei.base import MeiToM21Converter
+        >>> c = MeiToM21Converter()
+        >>> c._attrTranslator('s', 'accid', _ACCID_ATTR_DICT)
         '#'
-        >>> _attrTranslator('9', 'dur', _DUR_ATTR_DICT) == None
+        >>> c._attrTranslator('9', 'dur', _DUR_ATTR_DICT) == None
         True
         '''
         try:
@@ -684,44 +608,44 @@ class MeiToM21Converter:
             environLocal.warn(_UNEXPECTED_ATTR_VALUE.format(name, attr))
             return None
 
-    @staticmethod
-    def _accidentalFromAttr(attr: str | None) -> str | None:
+    def _accidentalFromAttr(self, attr: str | None) -> str | None:
         '''
-        Use :func:`_attrTranslator` to convert the value of an "accid" attribute to its music21 string.
+        Use :func:`_attrTranslator` to convert the value of an "accid" attribute to its
+        music21 string.
 
-        >>> from converter21.mei.base import _accidentalFromAttr
-        >>> _accidentalFromAttr('s')
+        >>> from converter21.mei.base import MeiToM21Converter
+        >>> c = MeiToM21Converter()
+        >>> c._accidentalFromAttr('s')
         '#'
         '''
-        return _attrTranslator(attr, 'accid', _ACCID_ATTR_DICT)
+        return self._attrTranslator(attr, 'accid', self._ACCID_ATTR_DICT)
 
-    @staticmethod
-    def _accidGesFromAttr(attr: str | None) -> str | None:
+    def _accidGesFromAttr(self, attr: str | None) -> str | None:
         '''
         Use :func:`_attrTranslator` to convert the value of an @accid.ges
         attribute to its music21 string.
 
-        >>> from converter21.mei.base import _accidGesFromAttr
-        >>> _accidGesFromAttr('s')
+        >>> from converter21.mei.base import MeiToM21Converter
+        >>> c = MeiToM21Converter()
+        >>> c._accidGesFromAttr('s')
         '#'
         '''
-        return _attrTranslator(attr, 'accid.ges', _ACCID_GES_ATTR_DICT)
+        return self._attrTranslator(attr, 'accid.ges', self._ACCID_GES_ATTR_DICT)
 
-    @staticmethod
-    def _qlDurationFromAttr(attr: str | None) -> float:
+    def _qlDurationFromAttr(self, attr: str | None) -> float:
         '''
         Use :func:`_attrTranslator` to convert an MEI "dur" attribute to a music21 quarterLength.
 
-        >>> from converter21.mei.base import _qlDurationFromAttr
-        >>> _qlDurationFromAttr('4')
+        >>> from converter21.mei.base import MeiToM21Converter
+        >>> c = MeiToM21Converter()
+        >>> c._qlDurationFromAttr('4')
         1.0
 
         .. note:: This function only handles data.DURATION.cmn, not data.DURATION.mensural.
         '''
-        return _attrTranslator(attr, 'dur', _DUR_ATTR_DICT)
+        return self._attrTranslator(attr, 'dur', self._DUR_ATTR_DICT)
 
-    @staticmethod
-    def _articulationFromAttr(attr: str | None) -> tuple[articulations.Articulation, ...]:
+    def _articulationFromAttr(self, attr: str | None) -> tuple[articulations.Articulation, ...]:
         '''
         Use :func:`_attrTranslator` to convert an MEI "artic" attribute to a
         :class:`music21.articulations.Articulation` subclass.
@@ -737,20 +661,19 @@ class MeiToM21Converter:
         elif 'ten-stacc' == attr:
             return (articulations.Tenuto(), articulations.Staccato())
         else:
-            articClass: t.Type = _attrTranslator(attr, 'artic', _ARTIC_ATTR_DICT)
+            articClass: t.Type = self._attrTranslator(attr, 'artic', self._ARTIC_ATTR_DICT)
             if articClass is not None:
                 return (articClass(),)
         return tuple()  # empty tuple
 
-    @staticmethod
-    def _makeArticList(attr: str) -> list[articulations.Articulation]:
+    def _makeArticList(self, attr: str) -> list[articulations.Articulation]:
         '''
         Use :func:`_articulationFromAttr` to convert the actual value of an MEI "artic" attribute
         (including multiple items) into a list suitable for :attr:`GeneralNote.articulations`.
         '''
         articList: list[articulations.Articulation] = []
         for eachArtic in attr.split(' '):
-            articList.extend(_articulationFromAttr(eachArtic))
+            articList.extend(self._articulationFromAttr(eachArtic))
         return articList
 
     @staticmethod
@@ -779,21 +702,23 @@ class MeiToM21Converter:
     @staticmethod
     def _sharpsFromAttr(signature: str | None) -> int:
         '''
-        Use :func:`_sharpsFromAttr` to convert MEI's ``data.KEYSIGNATURE`` datatype to an integer
-        representing the number of sharps, for use with music21's :class:`~music21.key.KeySignature`.
+        Use :func:`_sharpsFromAttr` to convert MEI's ``data.KEYSIGNATURE`` datatype to
+        an integer representing the number of sharps, for use with music21's
+        :class:`~music21.key.KeySignature`.
 
         :param str signature: The @key.sig attribute, or the @sig attribute
         :returns: The number of sharps.
         :rtype: int
 
-        >>> from converter21.mei.base import _sharpsFromAttr
-        >>> _sharpsFromAttr('3s')
+        >>> from converter21.mei.base import MeiToM21Converter
+        >>> c = MeiToM21Converter()
+        >>> c._sharpsFromAttr('3s')
         3
-        >>> _sharpsFromAttr('3f')
+        >>> c._sharpsFromAttr('3f')
         -3
-        >>> _sharpsFromAttr('0')
+        >>> c._sharpsFromAttr('0')
         0
-        >>> _sharpsFromAttr(None)
+        >>> c._sharpsFromAttr(None)
         0
         '''
         if not signature:
@@ -805,9 +730,8 @@ class MeiToM21Converter:
         else:
             return -1 * int(signature[0])
 
-    @staticmethod
-    def _stemDirectionFromAttr(stemDirStr: str) -> str:
-        return _attrTranslator(stemDirStr, 'stem.dir', _STEMDIR_ATTR_DICT)
+    def _stemDirectionFromAttr(self, stemDirStr: str) -> str:
+        return self._attrTranslator(stemDirStr, 'stem.dir', self._STEMDIR_ATTR_DICT)
 
     # "Preprocessing" Functions
     # -----------------------------------------------------------------------------
@@ -816,26 +740,23 @@ class MeiToM21Converter:
         '''
         Pre-processing helper for :func:`convertFromString` that handles slurs specified in <slur>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr`` and ``theConverter.spannerBundle``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        processed. This function reads from ``self.documentRoot`` and writes into
+        ``self.m21Attr`` and ``self.spannerBundle``.
 
         **This Preprocessor**
 
-        The slur preprocessor adds @m21SlurStart and @m21SlurEnd attributes to elements that are at the
-        beginning or end of a slur. The value of these attributes is the ``idLocal`` of a :class:`Slur`
-        in the :attr:`spannerBundle` attribute of ``theConverter``. This attribute is not part of the
-        MEI specification, and must therefore be handled specially.
+        The slur preprocessor adds @m21SlurStart and @m21SlurEnd attributes to elements that
+        are at the beginning or end of a slur. The value of these attributes is the ``idLocal``
+        of a :class:`Slur` in the :attr:`spannerBundle` attribute. This attribute is not part
+        of the MEI specification, and must therefore be handled specially.
 
-        If :func:`noteFromElement` encounters an element like ``<note m21SlurStart="82f87cd7"/>``, the
-        resulting :class:`music21.note.Note` should be set as the starting point of the slur with an
-        ``idLocal`` of ``'82f87cd7'``.
+        If :func:`noteFromElement` encounters an element like ``<note m21SlurStart="82f87cd7"/>``,
+        the resulting :class:`music21.note.Note` should be set as the starting point of the slur
+        with an ``idLocal`` of ``'82f87cd7'``.
 
         **Example of Changes to ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existant keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -858,10 +779,9 @@ class MeiToM21Converter:
         ...     </score></music>
         ... </mei>"""
         >>> from converter21.mei import MeiToM21Converter
-        >>> from converter21.mei.base import _ppSlurs
         >>> theConverter = MeiToM21Converter(meiDoc)
         >>>
-        >>> _ppSlurs(theConverter)
+        >>> theConverter._ppSlurs()
         >>> 'm21SlurStart' in theConverter.m21Attr['1234']
         True
         >>> 'm21SlurEnd' in theConverter.m21Attr['2345']
@@ -885,7 +805,9 @@ class MeiToM21Converter:
         for eachSlur in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
         ):
-            if eachSlur.get('startid') is not None and eachSlur.get('endid') is not None:
+            startId: str | None = self.removeOctothorpe(eachSlur.get('startid'))
+            endId: str | None = self.removeOctothorpe(eachSlur.get('endid'))
+            if startId is not None and endId is not None:
                 thisIdLocal = str(uuid4())
                 thisSlur = spanner.Slur()
                 if t.TYPE_CHECKING:
@@ -894,20 +816,20 @@ class MeiToM21Converter:
                 thisSlur.idLocal = thisIdLocal
                 self.spannerBundle.append(thisSlur)
 
-                self.m21Attr[removeOctothorpe(eachSlur.get('startid'))]['m21SlurStart'] = thisIdLocal
-                self.m21Attr[removeOctothorpe(eachSlur.get('endid'))]['m21SlurEnd'] = thisIdLocal
+
+                self.m21Attr[startId]['m21SlurStart'] = thisIdLocal
+                self.m21Attr[endId]['m21SlurEnd'] = thisIdLocal
             else:
-                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid and @endid'))
+                environLocal.warn(
+                    _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid and @endid')
+                )
 
     def _ppTies(self):
         '''
         Pre-processing helper for :func:`convertFromString` that handles ties specified in <tie>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        processed. This function reads from ``self.documentRoot`` and writes into
+        ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -916,7 +838,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -928,8 +850,8 @@ class MeiToM21Converter:
 
         for eachTie in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
-            startId: str | None = removeOctothorpe(eachTie.get('startid'))
-            endId: str | None = removeOctothorpe(eachTie.get('endid'))
+            startId: str | None = self.removeOctothorpe(eachTie.get('startid'))
+            endId: str | None = self.removeOctothorpe(eachTie.get('endid'))
             if startId is not None and endId is not None:
                 if startId in self.m21Attr and self.m21Attr[startId].get('tie', '') == 't':
                     # the startid note is already a tie end, so now it's both end and start
@@ -943,28 +865,28 @@ class MeiToM21Converter:
                 else:
                     self.m21Attr[endId]['tie'] = 't'
             else:
-                environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<tie>', '@startid and @endid'))
+                environLocal.warn(
+                    _UNIMPLEMENTED_IMPORT_WITHOUT.format('<tie>', '@startid and @endid')
+                )
 
     def _ppBeams(self):
         '''
-        Pre-processing helper for :func:`convertFromString` that handles beams specified in <beamSpan>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        Pre-processing helper for :func:`convertFromString` that handles beams specified
+        in <beamSpan> elements. The input is a :class:`MeiToM21Converter` with data about
+        the file currently being processed. This function reads from ``self.documentRoot``
+        and writes into ``self.m21Attr``.
 
         **This Preprocessor**
 
-        The beam preprocessor works similarly to the slur preprocessor, adding the @m21Beam attribute.
-        The value of this attribute is either ``'start'``, ``'continue'``, or ``'stop'``, indicating
-        the music21 ``type`` of the primary beam attached to this element. This attribute is not
-        part of the MEI specification, and must therefore be handled specially.
+        The beam preprocessor works similarly to the slur preprocessor, adding the @m21Beam
+        attribute. The value of this attribute is either ``'start'``, ``'continue'``, or
+        ``'stop'``, indicating the music21 ``type`` of the primary beam attached to this
+        element. This attribute is not part of the MEI specification, and must therefore be
+        handled specially.
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` argument must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` argument must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -973,8 +895,6 @@ class MeiToM21Converter:
         element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
         '''
         environLocal.printDebug('*** pre-processing beams')
-        # for readability, we use a single-letter variable
-        c = theConverter
 
         # pre-processing for <beamSpan> elements
         for eachBeam in self.documentRoot.iterfind(
@@ -985,15 +905,12 @@ class MeiToM21Converter:
                 )
                 continue
 
-            self.m21Attr[removeOctothorpe(eachBeam.get('startid'))]['m21Beam'] = 'start'
-            self.m21Attr[removeOctothorpe(eachBeam.get('endid'))]['m21Beam'] = 'stop'
+            self.m21Attr[self.removeOctothorpe(eachBeam.get('startid'))]['m21Beam'] = 'start'
+            self.m21Attr[self.removeOctothorpe(eachBeam.get('endid'))]['m21Beam'] = 'stop'
 
             # iterate things in the @plist attribute
             for eachXmlid in eachBeam.get('plist', '').split(' '):
-                eachXmlid = removeOctothorpe(eachXmlid)  # type: ignore
-                # if not eachXmlid:
-                #     # this is either @plist not set or extra spaces around the contained xml:id values
-                #     pass
+                eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
                 if 'm21Beam' not in self.m21Attr[eachXmlid]:
                     # only set to 'continue' if it wasn't previously set to 'start' or 'stop'
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
@@ -1002,24 +919,21 @@ class MeiToM21Converter:
         '''
         Pre-processing helper for :func:`convertFromString` that handles tuplets specified in
         <tupletSpan> elements. The input is a :class:`MeiToM21Converter` with data about the file
-        currently being processed. This function reads from ``theConverter.documentRoot`` and writes
-        into ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        currently being processed. This function reads from ``self.documentRoot`` and writes
+        into ``self.m21Attr``.
 
         **This Preprocessor**
 
         The slur preprocessor works similarly to the slur preprocessor, adding @m21TupletNum and
         @m21TupletNumbase attributes. The value of these attributes corresponds to the @num and
-        @numbase attributes found on a <tuplet> element. This preprocessor also performs a significant
-        amount of guesswork to try to handle <tupletSpan> elements that do not include a @plist
-        attribute. This attribute is not part of the MEI specification, and must therefore be handled
-        specially.
+        @numbase attributes found on a <tuplet> element. This preprocessor also performs a
+        significant amount of guesswork to try to handle <tupletSpan> elements that do not include
+        a @plist attribute. This attribute is not part of the MEI specification, and must therefore
+        be handled specially.
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1040,10 +954,10 @@ class MeiToM21Converter:
                                                                '@startid and @endid, or @plist'))
             elif eachTuplet.get('plist') is not None:
                 # Ideally (for us) <tupletSpan> elements will have a @plist that enumerates the
-                # @xml:id of every affected element. In this case, tupletSpanFromElement() can use the
-                # @plist to add our custom @m21TupletNum and @m21TupletNumbase attributes.
+                # @xml:id of every affected element. In this case, tupletSpanFromElement() can
+                # use the @plist to add our custom @m21TupletNum and @m21TupletNumbase attributes.
                 for eachXmlid in eachTuplet.get('plist', '').split(' '):
-                    eachXmlid = removeOctothorpe(eachXmlid)  # type: ignore
+                    eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
                     if eachXmlid:
                         # protect against extra spaces around the contained xml:id values
                         self.m21Attr[eachXmlid]['m21TupletNum'] = eachTuplet.get('num')
@@ -1065,11 +979,11 @@ class MeiToM21Converter:
                         if tempStr:
                             self.m21Attr[eachXmlid]['m21TupletNumFormat'] = tempStr
             else:
-                # For <tupletSpan> elements that don't give a @plist attribute, we have to do some
-                # guesswork and hope we find all the related elements. Right here, we're only setting
-                # the "flags" that this guesswork must be done later.
-                startid = removeOctothorpe(eachTuplet.get('startid'))
-                endid = removeOctothorpe(eachTuplet.get('endid'))
+                # For <tupletSpan> elements that don't give a @plist attribute, we have to do
+                # some guesswork and hope we find all the related elements. Right here, we're
+                # only setting the "flags" that this guesswork must be done later.
+                startid = self.removeOctothorpe(eachTuplet.get('startid'))
+                endid = self.removeOctothorpe(eachTuplet.get('endid'))
 
                 self.m21Attr[startid]['m21TupletSearch'] = 'start'
                 self.m21Attr[startid]['m21TupletNum'] = eachTuplet.get('num')
@@ -1113,13 +1027,10 @@ class MeiToM21Converter:
 
     def _ppFermatas(self):
         '''
-        Pre-processing helper for :func:`convertFromString` that handles fermats specified in <fermata>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        Pre-processing helper for :func:`convertFromString` that handles fermats specified
+        in <fermata> elements. The input is a :class:`MeiToM21Converter` with data about
+        the file currently being processed. This function reads from ``self.documentRoot``
+        and writes into ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -1131,7 +1042,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1143,7 +1054,7 @@ class MeiToM21Converter:
 
         for eachFermata in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
-            startId: str | None = removeOctothorpe(eachFermata.get('startid'))
+            startId: str | None = self.removeOctothorpe(eachFermata.get('startid'))
             if startId is None:
                 # leave this alone, we'll handle it later in fermataFromElement
                 continue
@@ -1165,11 +1076,8 @@ class MeiToM21Converter:
         '''
         Pre-processing helper for :func:`convertFromString` that handles trills specified in <trill>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        processed. This function reads from ``self.documentRoot`` and writes into
+        ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -1178,7 +1086,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1190,8 +1098,8 @@ class MeiToM21Converter:
 
         for eachTrill in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}trill'):
-            startId: str = removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
-            endId: str = removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
+            startId: str = self.removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
+            endId: str = self.removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
             tstamp2: str = eachTrill.get('tstamp2', '')
             hasExtension: bool = bool(endId) or bool(tstamp2)
             place: str = eachTrill.get('place', 'place_unspecified')
@@ -1246,11 +1154,8 @@ class MeiToM21Converter:
         '''
         Pre-processing helper for :func:`convertFromString` that handles mordents in <mordent>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        processed. This function reads from ``self.documentRoot`` and writes into
+        ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -1259,7 +1164,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1271,14 +1176,16 @@ class MeiToM21Converter:
 
         for eachMordent in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}mordent'):
-            startId: str = removeOctothorpe(eachMordent.get('startid', ''))  # type: ignore
+            startId: str = self.removeOctothorpe(eachMordent.get('startid', ''))  # type: ignore
             place: str = eachMordent.get('place', 'place_unspecified')
             form: str = eachMordent.get('form', '')
             long: str = eachMordent.get('long', '')
 
             if startId:
                 if long == 'true':
-                    environLocal.warn(_UNIMPLEMENTED_IMPORT_WITH.format('<mordent>', '@long="true"'))
+                    environLocal.warn(
+                        _UNIMPLEMENTED_IMPORT_WITH.format('<mordent>', '@long="true"')
+                    )
                     environLocal.warn('@long will be ignored')
 
                 # The mordent info gets stashed on the note/chord referenced by startId
@@ -1299,11 +1206,8 @@ class MeiToM21Converter:
         '''
         Pre-processing helper for :func:`convertFromString` that handles turns in <turn>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        processed. This function reads from ``self.documentRoot`` and writes into
+        ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -1312,7 +1216,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1324,7 +1228,7 @@ class MeiToM21Converter:
 
         for eachTurn in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}turn'):
-            startId: str = removeOctothorpe(eachTurn.get('startid', ''))  # type: ignore
+            startId: str = self.removeOctothorpe(eachTurn.get('startid', ''))  # type: ignore
             place: str = eachTurn.get('place', 'place_unspecified')
             form: str = eachTurn.get('form', '')
             theType: str = eachTurn.get('type', '')
@@ -1360,13 +1264,10 @@ class MeiToM21Converter:
 
     def _ppOctaves(self):
         '''
-        Pre-processing helper for :func:`convertFromString` that handles ottavas specified in <octave>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        Pre-processing helper for :func:`convertFromString` that handles ottavas specified in
+        <octave> elements. The input is a :class:`MeiToM21Converter` with data about the file
+        currently being processed. This function reads from ``self.documentRoot`` and writes
+        into ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -1375,7 +1276,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1387,22 +1288,24 @@ class MeiToM21Converter:
 
         for eachOctave in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}octave'):
-            startId: str = removeOctothorpe(eachOctave.get('startid', ''))  # type: ignore
-            endId: str = removeOctothorpe(eachOctave.get('endid', ''))  # type: ignore
+            startId: str = self.removeOctothorpe(eachOctave.get('startid', ''))  # type: ignore
+            endId: str = self.removeOctothorpe(eachOctave.get('endid', ''))  # type: ignore
             amount: str = eachOctave.get('dis', '')
             direction: str = eachOctave.get('dis.place', '')
             if not amount or not direction:
                 environLocal.warn('<octave> without @dis and/or @dis.place: ignoring')
                 continue
-            if (amount, direction) not in _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE:
+            if (amount, direction) not in self._M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE:
                 environLocal.warn(
                     f'octave@dis ({amount}) or octave@dis.place ({direction}) invalid: ignoring'
                 )
                 continue
 
-            ottavaType: str = _M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE[(amount, direction)]
+            ottavaType: str = self._M21_OTTAVA_TYPE_FROM_DIS_AND_DIS_PLACE[(amount, direction)]
             ottava = spanner.Ottava(type=ottavaType)
-            ottava.transposing = True  # we will use @oct (not @oct.ges) in octave-shifted notes/chords
+
+            # we will use @oct (not @oct.ges) in octave-shifted notes/chords
+            ottava.transposing = True
             if t.TYPE_CHECKING:
                 # work around Spanner.idLocal being incorrectly type-hinted as None
                 assert isinstance(ottava.idLocal, str)
@@ -1438,13 +1341,10 @@ class MeiToM21Converter:
 
     def _ppArpeggios(self):
         '''
-        Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in <arpeg>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
-        processed. This function reads from ``theConverter.documentRoot`` and writes into
-        ``theConverter.m21Attr``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in
+        <arpeg> elements. The input is a :class:`MeiToM21Converter` with data about the file
+        currently being processed. This function reads from ``self.documentRoot`` and writes
+        into ``self.m21Attr``.
 
         **This Preprocessor**
 
@@ -1453,7 +1353,7 @@ class MeiToM21Converter:
 
         **Example of ``m21Attr``**
 
-        The ``theConverter.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
+        The ``self.m21Attr`` attribute must be a defaultdict that returns an empty (regular)
         dict for non-existent keys. The defaultdict stores the @xml:id attribute of an element; the
         dict holds attribute names and their values that should be added to the element with the
         given @xml:id.
@@ -1486,7 +1386,7 @@ class MeiToM21Converter:
             if plist:
                 arrow: str = eachArpeg.get('arrow', '')
                 order: str = eachArpeg.get('order', '')
-                arpeggioType: str = _ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE.get(
+                arpeggioType: str = self._ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE.get(
                     (arrow, order),
                     'normal'
                 )
@@ -1504,10 +1404,10 @@ class MeiToM21Converter:
                     # iterate things in the @plist attribute,  and reference the
                     # ArpeggioMarkSpanner from each of the notes/chords in the plist
                     for eachXmlid in plist:
-                        eachXmlid = removeOctothorpe(eachXmlid)  # type: ignore
+                        eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
                         self.m21Attr[eachXmlid]['m21ArpeggioMarkSpanner'] = thisIdLocal
                 else:
-                    eachXmlid = removeOctothorpe(plist[0])  # type: ignore
+                    eachXmlid = self.removeOctothorpe(plist[0])  # type: ignore
                     self.m21Attr[eachXmlid]['m21ArpeggioMarkType'] = arpeggioType
 
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
@@ -1515,36 +1415,35 @@ class MeiToM21Converter:
 
     def _ppConclude(self):
         '''
-        Pre-processing helper for :func:`convertFromString` that adds attributes from ``m21Attr`` to the
-        appropriate elements in ``documentRoot``. The input is a :class:`MeiToM21Converter` with data
-        about the file currently being processed. This function reads from ``theConverter.m21Attr`` and
-        writes into ``theConverter.documentRoot``.
-
-        :param theConverter: The object responsible for storing data about this import.
-        :type theConverter: :class:`MeiToM21Converter`.
+        Pre-processing helper for :func:`convertFromString` that adds attributes from
+        ``m21Attr`` to the appropriate elements in ``documentRoot``. The input is a
+        :class:`MeiToM21Converter` with data about the file currently being processed.
+        This function reads from ``self.m21Attr`` and writes into ``self.documentRoot``.
 
         **Example of ``m21Attr``**
 
         The ``m21Attr`` argument must be a defaultdict that returns an empty (regular) dict for
-        non-existent keys. The defaultdict stores the @xml:id attribute of an element; the dict holds
-        attribute names and their values that should be added to the element with the given @xml:id.
+        non-existent keys. The defaultdict stores the @xml:id attribute of an element; the dict
+        holds attribute names and their values that should be added to the element with the
+        given @xml:id.
 
         For example, if the value of ``m21Attr['fe93129e']['tie']`` is ``'i'``, then this means the
         element with an @xml:id of ``'fe93129e'`` should have the @tie attribute set to ``'i'``.
 
         **This Preprocessor**
-        The conclude preprocessor adds all attributes from the ``m21Attr`` to the appropriate element in
-        ``documentRoot``. In effect, it finds the element corresponding to each key in ``m21Attr``,
-        then iterates the keys in its dict, *appending* the ``m21Attr``-specified value to any existing
-        value.
+        The conclude preprocessor adds all attributes from the ``m21Attr`` to the appropriate
+        element in ``documentRoot``. In effect, it finds the element corresponding to each key
+        in ``m21Attr``, then iterates the keys in its dict, *appending* the ``m21Attr``-specified
+        value to any existing value.
         '''
         environLocal.printDebug('*** concluding pre-processing')
 
         # conclude pre-processing by adding music21-specific attributes to their respective elements
         for eachObject in self.documentRoot.iterfind('*//*'):
             objXmlId: str | None = eachObject.get(_XMLID)
-            # we have a defaultdict, so this "if" isn't strictly necessary; but without it, every single
-            # element with an @xml:id creates a new, empty dict, which would consume a lot of memory
+            # we have a defaultdict, so this "if" isn't strictly necessary; but without it, every
+            # single element with an @xml:id creates a new, empty dict, which would consume a lot
+            # of memory.
             if objXmlId and objXmlId in self.m21Attr:
                 objAttrs: dict = self.m21Attr[objXmlId]
                 for eachAttr in objAttrs:
@@ -1560,7 +1459,6 @@ class MeiToM21Converter:
         mapping: dict[str, t.Callable[
             [Element,
                 meter.TimeSignature | None,
-                spanner.SpannerBundle,
                 dict[str, str]],
             t.Any]
         ],
@@ -1570,14 +1468,14 @@ class MeiToM21Converter:
     ) -> list[t.Any]:
         # noinspection PyShadowingNames
         '''
-        From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each element
-        to its music21 object (or a tuple containing its music21 object plus some other stuff). This
-        function was designed for use with elements that may contain other elements; the contained
-        elements will be converted as appropriate.
+        From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each
+        element to its music21 object (or a tuple containing its music21 object plus some other
+        stuff). This function was designed for use with elements that may contain other elements;
+        the contained elements will be converted as appropriate.
 
-        If an element itself has embedded elements (i.e., its converter function in ``mapping`` returns
-        a sequence), those elements will appear in the returned sequence in order---there are no
-        hierarchic lists.
+        If an element itself has embedded elements (i.e., its converter function in ``mapping``
+        returns a sequence), those elements will appear in the returned sequence in order ---
+        there are no hierarchic lists.
 
         :param elements: A list of :class:`Element` objects to convert to music21 objects.
         :type elements: iterable of :class:`~xml.etree.ElementTree.Element`
@@ -1587,9 +1485,9 @@ class MeiToM21Converter:
         :param str callerTag: The tag of the element on behalf of which this function is processing
             sub-elements (e.g., 'note' or 'staffDef'). Do not include < and >. This is used in a
             warning message on finding an unprocessed element.
-        :returns: A list of the music21 objects returned by the converter functions, or an empty list
-            if no objects were returned.
-        :rtype: sequence of :class:`~music21.base.Music21Object`
+        :returns: A list of the music21 objects returned by the converter functions, or an empty
+            list if no objects were returned.
+        :rtype: list of :class:`~music21.base.Music21Object`
 
         **Examples:**
 
@@ -1620,7 +1518,7 @@ class MeiToM21Converter:
         for eachElem in elements:
             if eachElem.tag in mapping:
                 result: Music21Object | tuple[Music21Object, ...] | list[Music21Object] | None = (
-                    mapping[eachElem.tag](eachElem, activeMeter, self.spannerBundle, otherInfo)
+                    mapping[eachElem.tag](self, eachElem, activeMeter, otherInfo)
                 )
                 if isinstance(result, list):
                     for eachObject in result:
@@ -1637,8 +1535,8 @@ class MeiToM21Converter:
         '''
         From any tag with @meter.count and @meter.unit attributes, make a :class:`TimeSignature`.
 
-        :param :class:`~xml.etree.ElementTree.Element` elem: An :class:`Element` with @meter.count and
-            @meter.unit attributes.
+        :param :class:`~xml.etree.ElementTree.Element` elem: An :class:`Element` with @meter.count
+            and @meter.unit attributes.
         :returns: The corresponding time signature.
         :rtype: :class:`~music21.meter.TimeSignature`
         '''
@@ -1673,8 +1571,8 @@ class MeiToM21Converter:
 
         return None
 
-    @staticmethod
     def _keySigFromAttrs(
+        self,
         elem: Element,
         prefix: str = ''
     ) -> key.Key | key.KeySignature | None:
@@ -1697,7 +1595,7 @@ class MeiToM21Converter:
         sig: str | None = elem.get(prefix + 'sig')
         form: str | None = elem.get(prefix + 'form')
         if pname is not None and mode is not None:
-            accidental: str | None = _accidentalFromAttr(accid)
+            accidental: str | None = self._accidentalFromAttr(accid)
             tonic: str
             if accidental is None:
                 tonic = pname
@@ -1706,7 +1604,7 @@ class MeiToM21Converter:
             theKey = key.Key(tonic=tonic, mode=mode)
 
         if sig is not None:
-            theKeySig = key.KeySignature(sharps=_sharpsFromAttr(sig))
+            theKeySig = key.KeySignature(sharps=self._sharpsFromAttr(sig))
             if mode:
                 theKeySig = theKeySig.asKey(mode=mode)
 
@@ -1733,11 +1631,11 @@ class MeiToM21Converter:
     @staticmethod
     def _transpositionFromAttrs(elem: Element) -> interval.Interval:
         '''
-        From any element with the @trans.diat and @trans.semi attributes, make an :class:`Interval` that
-        represents the interval of transposition from written to concert pitch.
+        From any element with the @trans.diat and @trans.semi attributes, make an :class:`Interval`
+        that represents the interval of transposition from written to concert pitch.
 
-        :param :class:`~xml.etree.ElementTree.Element` elem: An :class:`Element` with the @trans.diat
-            and @trans.semi attributes.
+        :param :class:`~xml.etree.ElementTree.Element` elem: An :class:`Element` with the
+            @trans.diat and @trans.semi attributes.
         :returns: The interval of transposition from written to concert pitch.
         :rtype: :class:`music21.interval.Interval`
         '''
@@ -1746,9 +1644,10 @@ class MeiToM21Converter:
 
         # If the difference between transSemi and transDiat is greater than five per octave...
         if abs(transSemi - transDiat) > 5 * (abs(transSemi) // 12 + 1):
-            # ... we need to add octaves to transDiat so it's the proper size. Otherwise,
-            #     intervalFromGenericAndChromatic() tries to create things like AAAAAAAAA5. Except it
-            #     actually just fails.
+            # We need to add octaves to transDiat so it's the proper size. Otherwise,
+            # intervalFromGenericAndChromatic() tries to create things like AAAAAAAAA5.
+            # Except it actually just fails.
+
             # NB: we test this against transSemi because transDiat could be 0 when transSemi is a
             #     multiple of 12 *either* greater or less than 0.
             if transSemi < 0:
@@ -1756,10 +1655,10 @@ class MeiToM21Converter:
             elif transSemi > 0:
                 transDiat += 7 * (abs(transSemi) // 12)
 
-        # NB: MEI uses zero-based unison rather than 1-based unison, so for music21 we must make every
-        #     diatonic interval one greater than it was. E.g., '@trans.diat="2"' in MEI means to
-        #     "transpose up two diatonic steps," which music21 would rephrase as "transpose up by a
-        #     diatonic third."
+        # NB: MEI uses zero-based unison rather than 1-based unison, so for music21 we must make
+        # every diatonic interval one greater than it was. E.g., '@trans.diat="2"' in MEI means to
+        # "transpose up two diatonic steps," which music21 would rephrase as "transpose up by a
+        # diatonic third."
         if transDiat < 0:
             transDiat -= 1
         elif transDiat >= 0:
@@ -1770,15 +1669,15 @@ class MeiToM21Converter:
             interval.ChromaticInterval(transSemi)
         )
 
-    @staticmethod
     def _barlineFromAttr(
+        self,
         attr: str | None
     ) -> bar.Barline | bar.Repeat | tuple[bar.Repeat, bar.Repeat]:
         '''
         Use :func:`_attrTranslator` to convert the value of a "left" or "right" attribute to a
-        :class:`Barline` or :class:`Repeat` or occasionally a tuple of :class:`Repeat`. The only time a
-        tuple is returned is when "attr" is ``'rptboth'``, in which case the end and start barlines are
-        both returned.
+        :class:`Barline` or :class:`Repeat` or occasionally a tuple of :class:`Repeat`. The only
+        time a tuple is returned is when "attr" is ``'rptboth'``, in which case the end and start
+        barlines are both returned.
 
         :param str attr: The MEI @left or @right attribute to convert to a barline.
         :returns: The barline.
@@ -1788,8 +1687,8 @@ class MeiToM21Converter:
         #     just assume it's a @right attribute. Not a huge deal if we get this wrong (I hope).
         if attr and attr.startswith('rpt'):
             if 'rptboth' == attr:
-                endingRpt = _barlineFromAttr('rptend')
-                startingRpt = _barlineFromAttr('rptstart')
+                endingRpt = self._barlineFromAttr('rptend')
+                startingRpt = self._barlineFromAttr('rptstart')
                 if t.TYPE_CHECKING:
                     assert isinstance(endingRpt, bar.Repeat)
                     assert isinstance(startingRpt, bar.Repeat)
@@ -1799,7 +1698,7 @@ class MeiToM21Converter:
             else:
                 return bar.Repeat('start')
         else:
-            return bar.Barline(_attrTranslator(attr, 'right', _BAR_ATTR_DICT))
+            return bar.Barline(self._attrTranslator(attr, 'right', self._BAR_ATTR_DICT))
 
     @staticmethod
     def _tieFromAttr(attr: str) -> tie.Tie:
@@ -1851,8 +1750,8 @@ class MeiToM21Converter:
 
         :param elem: The :class:`Element` that caused creation of the ``obj``.
         :type elem: :class:`xml.etree.ElementTree.Element`
-        :param obj: The musical object (:class:`Note`, :class:`Chord`, etc.) created from ``elem``, to
-            which a slur might be attached.
+        :param obj: The musical object (:class:`Note`, :class:`Chord`, etc.) created from ``elem``,
+            to which a slur might be attached.
         :type obj: :class:`music21.base.Music21Object`
         :returns: Whether at least one slur was added.
         :rtype: bool
@@ -1862,15 +1761,15 @@ class MeiToM21Converter:
         Because of how the MEI format specifies slurs, the strategy required for proper import to
         music21 is not obvious. There are two ways to specify a slur:
 
-        #. With a ``@slur`` attribute, in which case :func:`addSlurs` reads the attribute and manages
-           creating a :class:`Slur` object, adding the affected objects to it, and storing the
-           :class:`Slur` in the ``spannerBundle``.
-        #. With a ``<slur>`` element, which requires pre-processing. In this case, :class:`Slur` objects
-           must already exist in the ``spannerBundle``, and special attributes must be added to the
-           affected elements (``@m21SlurStart`` to the element at the start of the slur and
-           ``@m21SlurEnd`` to the element at the end). These attributes hold the ``id`` of a
-           :class:`Slur` in the ``spannerBundle``, allowing :func:`addSlurs` to find the slur and add
-           ``obj`` to it.
+        #. With a ``@slur`` attribute, in which case :func:`addSlurs` reads the attribute and
+            manages creating a :class:`Slur` object, adding the affected objects to it, and
+            storing the :class:`Slur` in the ``spannerBundle``.
+        #. With a ``<slur>`` element, which requires pre-processing. In this case, :class:`Slur`
+            objects must already exist in the ``spannerBundle``, and special attributes must be
+            added to the affected elements (``@m21SlurStart`` to the element at the start of the
+            slur and ``@m21SlurEnd`` to the element at the end). These attributes hold the ``id``
+            of a :class:`Slur` in the ``spannerBundle``, allowing :func:`addSlurs` to find the
+            slur and add ``obj`` to it.
 
         .. caution:: If an ``elem`` has an @m21SlurStart or @m21SlurEnd attribute that refer to an
             object not found in the ``spannerBundle``, the slur is silently dropped.
@@ -1886,9 +1785,9 @@ class MeiToM21Converter:
         startStr: str | None = elem.get('m21SlurStart')
         endStr: str | None = elem.get('m21SlurEnd')
         if startStr is not None:
-            addedSlur = safeAddToSpannerByIdLocal(obj, startStr, self.spannerBundle)
+            addedSlur = self.safeAddToSpannerByIdLocal(obj, startStr, self.spannerBundle)
         if endStr is not None:
-            addedSlur = safeAddToSpannerByIdLocal(obj, endStr, self.spannerBundle)
+            addedSlur = self.safeAddToSpannerByIdLocal(obj, endStr, self.spannerBundle)
 
         slurStr: str | None = elem.get('slur')
         if slurStr is not None:
@@ -1907,7 +1806,7 @@ class MeiToM21Converter:
                     newSlur.addSpannedElements(obj)
                     addedSlur = True
                 elif 't' == slurType:
-                    addedSlur = safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle)
+                    addedSlur = self.safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle)
                 # 'm' is currently ignored; we may need it for cross-staff slurs
 
         return addedSlur
@@ -1921,11 +1820,13 @@ class MeiToM21Converter:
 
         ottavaId: str = elem.get('m21OttavaStart', '')
         if ottavaId:
-            safeAddToSpannerByIdLocal(obj, ottavaId, self.spannerBundle)
+            self.safeAddToSpannerByIdLocal(obj, ottavaId, self.spannerBundle)
 
         ottavaId = elem.get('m21OttavaEnd', '')
         if ottavaId:
-            ottava: spanner.Spanner | None = safeGetSpannerByIdLocal(ottavaId, self.spannerBundle)
+            ottava: spanner.Spanner | None = self.safeGetSpannerByIdLocal(
+                ottavaId, self.spannerBundle
+            )
             if ottava is not None:
                 ottava.addSpannedElements(obj)
                 completedOttavas.append(ottava)
@@ -1943,7 +1844,7 @@ class MeiToM21Converter:
         arpId: str = elem.get('m21ArpeggioMarkSpanner', '')
         if arpId:
             arpSpanner: spanner.Spanner | None = (
-                safeGetSpannerByIdLocal(arpId, self.spannerBundle)
+                self.safeGetSpannerByIdLocal(arpId, self.spannerBundle)
             )
             if arpSpanner is not None:
                 arpSpanner.addSpannedElements(obj)
@@ -1959,11 +1860,10 @@ class MeiToM21Converter:
 
         return completedArpeggioMarkSpanners
 
-    @staticmethod
-    def _m21AccidentalNameFromAccid(accidStr: str) -> str:
+    def _m21AccidentalNameFromAccid(self, accidStr: str) -> str:
         m21AccidName: str = ''
         if accidStr:
-            accidName: str | None = _ACCID_ATTR_DICT.get(accidStr, '')
+            accidName: str | None = self._ACCID_ATTR_DICT.get(accidStr, '')
             if accidName:
                 m21AccidName = accidName
         return m21AccidName
@@ -1979,11 +1879,11 @@ class MeiToM21Converter:
         # if appropriate, add this note/chord to a trillExtension
         trillExtId: str = elem.get('m21TrillExtensionStart', '')
         if trillExtId:
-            safeAddToSpannerByIdLocal(obj, trillExtId, self.spannerBundle)
+            self.safeAddToSpannerByIdLocal(obj, trillExtId, self.spannerBundle)
         trillExtId = elem.get('m21TrillExtensionEnd', '')
         if trillExtId:
             trillExt: spanner.Spanner | None = (
-                safeGetSpannerByIdLocal(trillExtId, self.spannerBundle)
+                self.safeGetSpannerByIdLocal(trillExtId, self.spannerBundle)
             )
             if trillExt is not None:
                 trillExt.addSpannedElements(obj)
@@ -2001,9 +1901,9 @@ class MeiToM21Converter:
         accidLower: str = elem.get('m21TrillAccidLower', '')
         m21AccidName: str = ''
         if accidUpper:
-            m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
+            m21AccidName = self._m21AccidentalNameFromAccid(accidUpper)
         elif accidLower:
-            m21AccidName = _m21AccidentalNameFromAccid(accidLower)
+            m21AccidName = self._m21AccidentalNameFromAccid(accidLower)
         trill = expressions.Trill()
         if m21AccidName:
             m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
@@ -2012,8 +1912,8 @@ class MeiToM21Converter:
 
         if staffN:
             # Now, resolve the Trill's ornamental pitch based on obj
-            trill.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
-            updateAltersFromExpression(
+            trill.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN, otherInfo))
+            self.updateAltersFromExpression(
                 trill, obj, staffN, otherInfo
             )
 
@@ -2046,9 +1946,9 @@ class MeiToM21Converter:
         form: str = elem.get('m21MordentForm', '')
         m21AccidName: str = ''
         if accidUpper:
-            m21AccidName = _m21AccidentalNameFromAccid(accidUpper)
+            m21AccidName = self._m21AccidentalNameFromAccid(accidUpper)
         elif accidLower:
-            m21AccidName = _m21AccidentalNameFromAccid(accidLower)
+            m21AccidName = self._m21AccidentalNameFromAccid(accidLower)
 
         if accidUpper:
             if not form:
@@ -2062,7 +1962,8 @@ class MeiToM21Converter:
             form = 'lower'  # I would prefer upper, but match Verovio
 
         if form == 'upper':
-            # music21 calls an upper mordent (i.e that goes up from the main note) an InvertedMordent
+            # music21 calls an upper mordent (i.e that goes up from the main note)
+            # an InvertedMordent.
             mordent = expressions.InvertedMordent(accidentalName=m21AccidName)
         elif form == 'lower':
             mordent = expressions.Mordent(accidentalName=m21AccidName)
@@ -2074,8 +1975,8 @@ class MeiToM21Converter:
 
         # Now, resolve the mordent's ornamental pitch based on obj
         if staffN:
-            mordent.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
-            updateAltersFromExpression(
+            mordent.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN, otherInfo))
+            self.updateAltersFromExpression(
                 mordent, obj, staffN, otherInfo
             )
 
@@ -2119,9 +2020,9 @@ class MeiToM21Converter:
         m21AccidNameUpper: str = ''
         m21AccidNameLower: str = ''
         if accidUpper:
-            m21AccidNameUpper = _m21AccidentalNameFromAccid(accidUpper)
+            m21AccidNameUpper = self._m21AccidentalNameFromAccid(accidUpper)
         if accidLower:
-            m21AccidNameLower = _m21AccidentalNameFromAccid(accidLower)
+            m21AccidNameLower = self._m21AccidentalNameFromAccid(accidLower)
 
         m21AccidUpper: pitch.Accidental | None = None
         if m21AccidNameUpper:
@@ -2155,8 +2056,8 @@ class MeiToM21Converter:
         # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
         # if obj is a chord with pitches)
         if staffN:
-            turn.resolveOrnamentalPitches(obj, keySig=_currKeyForStaff(staffN, otherInfo))
-            updateAltersFromExpression(
+            turn.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN, otherInfo))
+            self.updateAltersFromExpression(
                 turn, obj, staffN, otherInfo
             )
 
@@ -2183,8 +2084,8 @@ class MeiToM21Converter:
     @staticmethod
     def beamTogether(someThings: list[Music21Object]):
         '''
-        Beam some things together. The function beams every object that has a :attr:`beams` attribute,
-        leaving the other objects unmodified.
+        Beam some things together. The function beams every object that has a :attr:`beams`
+        attribute, leaving the other objects unmodified.
 
         :param someThings: An iterable of things to beam together.
         :type someThings: iterable of :class:`~music21.base.Music21Object`
@@ -2354,35 +2255,33 @@ class MeiToM21Converter:
             return xmlid[1:]
         return xmlid
 
-    @staticmethod
-    def makeMetadata(documentRoot: Element) -> metadata.Metadata:
+    def makeMetadata(self) -> metadata.Metadata:
         '''
         Produce metadata objects for all the metadata stored in the MEI header.
 
-        :param documentRoot: The MEI document's root element.
-        :type documentRoot: :class:`~xml.etree.ElementTree.Element`
         :returns: A :class:`Metadata` object with some of the metadata stored in the MEI document.
         :rtype: :class:`music21.metadata.Metadata`
         '''
         meta = metadata.Metadata()
-        work = documentRoot.find(f'.//{MEI_NS}work')
+        work = self.documentRoot.find(f'.//{MEI_NS}work')
         if work is not None:
             # title, subtitle, and movement name
-            meta = metaSetTitle(work, meta)
+            meta = self.metaSetTitle(work, meta)
             # composer
-            meta = metaSetComposer(work, meta)
+            meta = self.metaSetComposer(work, meta)
             # date
-            meta = metaSetDate(work, meta)
+            meta = self.metaSetDate(work, meta)
 
         return meta
 
     @staticmethod
     def metaSetTitle(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
         '''
-        From a <work> element, find the title, subtitle, and movement name (<tempo> element) and store
-        the values in a :class:`Metadata` object.
+        From a <work> element, find the title, subtitle, and movement name (<tempo> element)
+        and store the values in a :class:`Metadata` object.
 
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want to find.
+        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
+            to find.
         :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
         :return: The ``meta`` argument, having relevant metadata added.
         '''
@@ -2395,8 +2294,8 @@ class MeiToM21Converter:
                 meta.title = title.text
 
         if subtitle:
-            # Since m21.Metadata doesn't actually have a "subtitle" attribute, we'll put the subtitle
-            # in the title
+            # Since m21.Metadata doesn't actually have a "subtitle" attribute, we'll put the
+            # subtitle in the title.
             meta.title = f'{meta.title} ({subtitle})'
 
         tempoEl = work.find(f'./{MEI_NS}tempo')
@@ -2408,9 +2307,11 @@ class MeiToM21Converter:
     @staticmethod
     def metaSetComposer(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
         '''
-        From a <work> element, find the composer(s) and store the values in a :class:`Metadata` object.
+        From a <work> element, find the composer(s) and store the values in a :class:`Metadata`
+        object.
 
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want to find.
+        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
+            to find.
         :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
         :return: The ``meta`` argument, having relevant metadata added.
         '''
@@ -2433,13 +2334,13 @@ class MeiToM21Converter:
 
         return meta
 
-    @staticmethod
-    def metaSetDate(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
+    def metaSetDate(self, work: Element, meta: metadata.Metadata) -> metadata.Metadata:
         '''
         From a <work> element, find the date (range) of composition and store the values in a
         :class:`Metadata` object.
 
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want to find.
+        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
+            to find.
         :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
         :return: The ``meta`` argument, having relevant metadata added.
         '''
@@ -2464,8 +2365,8 @@ class MeiToM21Converter:
                 else:
                     meta.dateCreated = theDate
             else:
-                dateStart = date.get('notbefore') if date.get('notbefore') else date.get('startdate')
-                dateEnd = date.get('notafter') if date.get('notafter') else date.get('enddate')
+                dateStart = date.get('notbefore') or date.get('startdate')
+                dateEnd = date.get('notafter') or date.get('enddate')
                 if dateStart and dateEnd:
                     meta.dateCreated = metadata.DateBetween((dateStart, dateEnd))
 
@@ -2477,17 +2378,18 @@ class MeiToM21Converter:
         elem: Element
     ) -> Music21Object | list[Music21Object]:
         '''
-        Scale the duration of some objects by a ratio indicated by a tuplet. The ``elem`` must have the
-        @m21TupletNum and @m21TupletNumbase attributes set, and optionally the @m21TupletSearch or
-        @m21TupletType attributes.
+        Scale the duration of some objects by a ratio indicated by a tuplet. The ``elem`` must have
+        the @m21TupletNum and @m21TupletNumbase attributes set, and optionally the @m21TupletSearch
+        or @m21TupletType attributes.
 
         The @m21TupletNum and @m21TupletNumbase attributes should be equal to the @num and @numbase
         values of the <tuplet> or <tupletSpan> that indicates this tuplet.
 
-        The @m21TupletSearch attribute, whose value must either be ``'start'`` or ``'end'``, is required
-        when a <tupletSpan> does not include a @plist attribute. It indicates that the importer must
-        "search" for a tuplet near the end of the import process, which involves scaling the durations
-        of all objects discovered between those with the "start" and "end" search values.
+        The @m21TupletSearch attribute, whose value must either be ``'start'`` or ``'end'``, is
+        required when a <tupletSpan> does not include a @plist attribute. It indicates that the
+        importer must "search" for a tuplet near the end of the import process, which involves
+        scaling the durations of all objects discovered between those with the "start" and "end"
+        search values.
 
         The @m21TupletType attribute is set directly as the :attr:`type` attribute of the music21
         object's :class:`Tuplet` object. If @m21TupletType is not set, the @tuplet attribute will be
@@ -2609,20 +2511,19 @@ class MeiToM21Converter:
         else:
             return objs[0]
 
-    @staticmethod
-    def _guessTuplets(theLayer: list[Music21Object]) -> list[Music21Object]:
+    def _guessTuplets(self, theLayer: list[Music21Object]) -> list[Music21Object]:
         # TODO: nested tuplets don't work when they're both specified with <tupletSpan>
-        # TODO: adjust this to work with cross-measure tuplets (i.e., where only the "start" or "end"
-        #       is found in theLayer)
+        # TODO: adjust this to work with cross-measure tuplets (i.e., where only the
+        # TODO: "start" or "end" is found in theLayer)
         '''
         Given a list of music21 objects, possibly containing :attr:`m21TupletSearch`,
         :attr:`m21TupletNum`, and :attr:`m21TupletNumbase` attributes, adjust the durations of the
         objects as specified by those "m21Tuplet" attributes, then remove the attributes.
 
         This function finishes processing for tuplets encoded as a <tupletSpan> where @startid and
-        @endid are indicated, but not @plist. Knowing the starting and ending object in the tuplet, we
-        can guess that all the Note, Rest, and Chord objects between the starting and ending objects
-        in that <layer> are part of the tuplet. (Grace notes retain a 0.0 duration).
+        @endid are indicated, but not @plist. Knowing the starting and ending object in the tuplet,
+        we can guess that all the Note, Rest, and Chord objects between the starting and ending
+        objects in that <layer> are part of the tuplet. (Grace notes retain a 0.0 duration).
 
         .. note:: At the moment, this will likely only work for simple tuplets---not nested tuplets.
 
@@ -2631,8 +2532,8 @@ class MeiToM21Converter:
         :type theScore: list
         :returns: The same list, with durations adjusted to account for tuplets.
         '''
-        # NB: this is a hidden function because it uses the "m21TupletSearch" attribute, which are only
-        #     supposed to be used within the MEI import module
+        # NB: this is a hidden function because it uses the "m21TupletSearch" attribute, which
+        # are only supposed to be used within the MEI import module.
 
         inATuplet: bool = False  # we hit m21TupletSearch=='start' but not 'end' yet
         tupletNum: str | None = None
@@ -2696,7 +2597,7 @@ class MeiToM21Converter:
                 if t.TYPE_CHECKING:
                     assert fakeTupletElem is not None
 
-                scaleToTuplet(eachNote, fakeTupletElem)
+                self.scaleToTuplet(eachNote, fakeTupletElem)
 
                 if (hasattr(eachNote, 'm21TupletSearch')
                         and eachNote.m21TupletSearch == 'end'):  # type: ignore
@@ -2727,16 +2628,16 @@ class MeiToM21Converter:
         In MEI 2013: pg.431 (445 in PDF) (MEI.shared module)
 
         This function returns a dictionary with objects that may relate to the entire score, to all
-        parts at a particular moment, or only to a specific part at a particular moment. The dictionary
-        keys determine the object's scope. If the key is...
+        parts at a particular moment, or only to a specific part at a particular moment. The
+        dictionary keys determine the object's scope. If the key is...
 
         * ``'whole-score objects'``, it applies to the entire score (e.g., page size);
         * ``'all-part objects'``, it applies to all parts at the moment this <scoreDef> appears;
-        * the @n attribute of a part, it applies only to
-          that part at the moment this <scoreDef> appears.
+        * the @n attribute of a part, it applies only to that part at the moment this <scoreDef>
+            appears.
 
-        While the multi-part objects will be held in a list, the single-part objects will be in a dict
-        like that returned by :func:`staffDefFromElement`.
+        While the multi-part objects will be held in a list, the single-part objects will be in a
+        dict like that returned by :func:`staffDefFromElement`.
 
         Note that it is the caller's responsibility to determine the right action if there are
         conflicting objects in the returned dictionary.
@@ -2837,23 +2738,23 @@ class MeiToM21Converter:
 
         # --> time signature
         if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
-            timesig = _timeSigFromAttrs(elem, prefix='meter.')
+            timesig = self._timeSigFromAttrs(elem, prefix='meter.')
             if timesig is not None:
                 postAllParts.append(timesig)
         meterSigElem: Element | None = elem.find(f'{MEI_NS}meterSig')
         if meterSigElem is not None:
-            timesig = _timeSigFromAttrs(meterSigElem)
+            timesig = self._timeSigFromAttrs(meterSigElem)
             if timesig is not None:
                 postAllParts.append(timesig)
 
         # --> key signature
         if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-            keysig = _keySigFromAttrs(elem, prefix='key.')
+            keysig = self._keySigFromAttrs(elem, prefix='key.')
             if keysig is not None:
                 postAllParts.append(keysig)
         keySigElem: Element | None = elem.find(f'{MEI_NS}keySig')
         if keySigElem is not None:
-            keysig = _keySigFromAttrs(keySigElem)
+            keysig = self._keySigFromAttrs(keySigElem)
             if keysig is not None:
                 postAllParts.append(keysig)
 
@@ -2880,18 +2781,17 @@ class MeiToM21Converter:
             # Gather up the M21StaffGroupDescriptionTree.
             for eachGrp in topLevelStaffGrps:
                 groupDesc: M21StaffGroupDescriptionTree = (
-                    staffGroupDescriptionTreeFromStaffGrp(
+                    self.staffGroupDescriptionTreeFromStaffGrp(
                         eachGrp,
-                        self.spannerBundle,
                         otherInfo,
-                        fakeTopLevelGroup,  # will be None if len(topLevelStaffGrps) == 1 (usual case)
+                        fakeTopLevelGroup  # will be None if len(topLevelStaffGrps) == 1
                     )
                 )
                 topLevelGroupDescs.append(groupDesc)
 
         # Gather up the staffDefDict.
         for eachGrp in topLevelStaffGrps:
-            post.update(staffGrpFromElement(eachGrp, self.spannerBundle, otherInfo))
+            post.update(self.staffGrpFromElement(eachGrp, otherInfo))
 
         if parseStaffGrps:
             # process the staffGroup description tree, generating a list of m21 StaffGroup objects.
@@ -2910,9 +2810,13 @@ class MeiToM21Converter:
             staffGroups: list[m21.layout.StaffGroup]
             parts: list[m21.stream.Part]
             partNs: list[str]
-            staffGroups, parts, partNs = processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
+            staffGroups, parts, partNs = (
+                self.processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
+            )
             if partNs != list(allPartNs):
-                raise MeiInternalError('processStaffGroupDescriptionTree did not produce allPartNs')
+                raise MeiInternalError(
+                    'processStaffGroupDescriptionTree did not produce allPartNs'
+                )
 
             partsPerN: dict[str, m21.stream.Part] = {}
             for staffN, part in zip(allPartNs, parts):
@@ -2954,9 +2858,11 @@ class MeiToM21Converter:
 
         # Set up a groupDesc for this group (elem), and insert it in parentGroupDesc tree.
         thisGroupDesc: M21StaffGroupDescriptionTree = M21StaffGroupDescriptionTree()
-        symbol: str = _MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'), 'none')
+        symbol: str = self._MEI_STAFFGROUP_SYMBOL_TO_M21.get(elem.get('symbol', 'none'), 'none')
         thisGroupDesc.symbol = symbol
-        thisGroupDesc.barTogether = _MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', ''), '')
+        thisGroupDesc.barTogether = (
+            self._MEI_BAR_THRU_TO_M21_BAR_TOGETHER.get(elem.get('bar.thru', ''), '')
+        )
 
         # check for 'Mensurstrich' (barline between staves only, doesn't cross staff)
         barMethod: str = elem.get('bar.method', '')
@@ -2968,7 +2874,7 @@ class MeiToM21Converter:
 
         # check for any group label
         inst: m21.instrument.Instrument | None = (
-            _instrumentFromStaffDefOrStaffGrp(elem, self.spannerBundle, otherInfo)
+            self._instrumentFromStaffDefOrStaffGrp(elem, otherInfo)
         )
         if inst is not None:
             # Put inst.name and inst.abbreviation into thisGroupDesc.groupName/.groupAbbrev
@@ -2984,7 +2890,7 @@ class MeiToM21Converter:
             if nStr and (el.tag == staffDefTag):
                 # yes, we already have the instrument computed; simplest to just compute it again
                 staffInst: m21.instrument.Instrument | None = (
-                    _instrumentFromStaffDefOrStaffGrp(el, self.spannerBundle, otherInfo)
+                    self._instrumentFromStaffDefOrStaffGrp(el, otherInfo)
                 )
                 # We put this nStr and staffInst in the current group (noted as 'owned')
                 # and as 'referenced' in current group and all its ancestors.
@@ -2999,17 +2905,11 @@ class MeiToM21Converter:
 
             # recurse if there are groups within this group
             elif el.tag == staffGroupTag:
-                staffGroupDescriptionTreeFromStaffGrp(el, self.spannerBundle, otherInfo, thisGroupDesc)
+                self.staffGroupDescriptionTreeFromStaffGrp(
+                    el, otherInfo, thisGroupDesc
+                )
 
         return thisGroupDesc
-
-    @staticmethod
-    def _isMultiStaffInstrument(inst: m21.instrument.Instrument | None) -> bool:
-        if inst is None:
-            return False
-
-        # Weirdly, music21 doesn't derive Organ from KeyboardInstrument, go figure.  Check both.
-        return isinstance(inst, (m21.instrument.KeyboardInstrument, m21.instrument.Organ))
 
     @staticmethod
     def _groupShouldContainPartStaffs(
@@ -3017,7 +2917,7 @@ class MeiToM21Converter:
     ) -> bool:
         numStaves: int = len(groupDescTree.staffIds)
         if numStaves in (2, 3):
-            if _isMultiStaffInstrument(groupDescTree.instrument):
+            if M21Utilities.isMultiStaffInstrument(groupDescTree.instrument):
                 return True
 
             commonMultiStaffInstrument: m21.instrument.Instrument | None = None
@@ -3025,7 +2925,7 @@ class MeiToM21Converter:
                 if inst is None:
                     continue
 
-                if not _isMultiStaffInstrument(inst):
+                if not M21Utilities.isMultiStaffInstrument(inst):
                     # found a non-multistaff instrument, get the heck out
                     return False
 
@@ -3052,8 +2952,8 @@ class MeiToM21Converter:
 
         return False
 
-    @staticmethod
     def processStaffGroupDescriptionTree(
+        self,
         groupDescTree: M21StaffGroupDescriptionTree,
         allPartNs: tuple[str, ...]
     ) -> tuple[list[m21.layout.StaffGroup], list[m21.stream.Part], list[str]]:
@@ -3079,7 +2979,7 @@ class MeiToM21Converter:
         # Process owned groups here, recurse to process sub-groups
         staffIdsToProcess: set[int | str] = set(groupDescTree.staffIds)
 
-        makePartStaffs: bool = _groupShouldContainPartStaffs(groupDescTree)
+        makePartStaffs: bool = self._groupShouldContainPartStaffs(groupDescTree)
         if makePartStaffs:
             if groupDescTree.instrument:
                 inst: m21.instrument.Instrument = groupDescTree.instrument
@@ -3135,7 +3035,7 @@ class MeiToM21Converter:
             newIds: list[str]
 
             newStaffGroups, newStaves, newIds = (
-                processStaffGroupDescriptionTree(subgroup, allPartNs)
+                self.processStaffGroupDescriptionTree(subgroup, allPartNs)
             )
 
             # add newStaffGroups to staffGroups
@@ -3220,8 +3120,8 @@ class MeiToM21Converter:
 
         :param elem: The ``<staffGrp>`` element to process.
         :type elem: :class:`~xml.etree.ElementTree.Element`
-        :returns: Dictionary where keys are the @n attribute on a contained <staffDef>, and values are
-            the result of calling :func:`staffDefFromElement` with that <staffDef>.
+        :returns: Dictionary where keys are the @n attribute on a contained <staffDef>, and values
+            are the result of calling :func:`staffDefFromElement` with that <staffDef>.
 
         **Attributes/Elements Implemented:**
 
@@ -3258,12 +3158,12 @@ class MeiToM21Converter:
             nStr: str = el.get('n', '')
             if nStr and (el.tag == staffDefTag):
                 otherInfo['staffNumberForDef'] = nStr
-                staffDefDict[nStr] = staffDefFromElement(el, self.spannerBundle, otherInfo)
+                staffDefDict[nStr] = self.staffDefFromElement(el, otherInfo)
                 otherInfo.pop('staffNumberForDef')
 
             # recurse if there are more groups, append to the working staffDefDict
             elif el.tag == staffGroupTag:
-                staffGrpFromElement(el, self.spannerBundle, otherInfo, staffDefDict)
+                self.staffGrpFromElement(el, otherInfo, staffDefDict)
 
         return staffDefDict
 
@@ -3289,7 +3189,7 @@ class MeiToM21Converter:
             labelAbbr = elem.get('label.abbr', '')
 
         if instrDefElem is not None:
-            inst = instrDefFromElement(instrDefElem, None, self.spannerBundle, otherInfo)
+            inst = self.instrDefFromElement(instrDefElem, None, otherInfo)
         else:
             try:
                 inst = m21.instrument.fromString(label)
@@ -3301,7 +3201,7 @@ class MeiToM21Converter:
             if inst is None:
                 # make an instrument, or the transposition will be lost
                 inst = m21.instrument.Instrument()
-            inst.transposition = _transpositionFromAttrs(elem)
+            inst.transposition = self._transpositionFromAttrs(elem)
 
         if (label or labelAbbr) and inst is None:
             # make an instrument, or that staff label/abbrev will be lost
@@ -3325,14 +3225,14 @@ class MeiToM21Converter:
 
         In MEI 2013: pg.445 (459 in PDF) (MEI.shared module)
 
-        :returns: A dict with various types of metadata information, depending on what is specified in
-            this <staffDef> element. Read below for more information.
+        :returns: A dict with various types of metadata information, depending on what is specified
+            in this <staffDef> element. Read below for more information.
         :rtype: dict
 
         **Possible Return Values**
 
-        The contents of the returned dictionary depend on the contents of the <staffDef> element. The
-        dictionary keys correspond to types of information. Possible keys include:
+        The contents of the returned dictionary depend on the contents of the <staffDef> element.
+        The dictionary keys correspond to types of information. Possible keys include:
 
         - ``'instrument'``: for a :class:`music21.instrument.Instrument` subclass
         - ``'clef'``: for a :class:`music21.clef.Clef` subclass
@@ -3428,20 +3328,19 @@ class MeiToM21Converter:
         tagToFunction: dict[str, t.Callable[
             [Element,
                 meter.TimeSignature | None,
-                spanner.SpannerBundle,
                 dict[str, str]],
             t.Any]
         ] = {
-            f'{MEI_NS}clef': clefFromElement,
-            f'{MEI_NS}keySig': keySigFromElementInStaffDef,
-            f'{MEI_NS}meterSig': timeSigFromElement,
+            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}keySig': self.keySigFromElementInStaffDef,
+            f'{MEI_NS}meterSig': self.timeSigFromElement,
         }
 
         post: dict[str, Music21Object] = {}
 
         # first make the Instrument
         inst: m21.instrument.Instrument | None = (
-            _instrumentFromStaffDefOrStaffGrp(elem, otherInfo)
+            self._instrumentFromStaffDefOrStaffGrp(elem, otherInfo)
         )
         if inst is not None:
             post['instrument'] = inst
@@ -3449,14 +3348,14 @@ class MeiToM21Converter:
         # process other staff-specific information
         # --> time signature
         if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
-            timesig = _timeSigFromAttrs(elem, prefix='meter.')
+            timesig = self._timeSigFromAttrs(elem, prefix='meter.')
             if timesig is not None:
                 post['meter'] = timesig
 
         # --> key signature
         updateStaffKeyAndAlters: bool = False
         if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
-            keysig = _keySigFromAttrs(elem, prefix='key.')
+            keysig = self._keySigFromAttrs(elem, prefix='key.')
             if keysig is not None:
                 post['key'] = keysig
                 updateStaffKeyAndAlters = True
@@ -3477,11 +3376,11 @@ class MeiToM21Converter:
             if displace:
                 attribDict['dis.place'] = displace
             el = Element('clef', attribDict)
-            clefObj = clefFromElement(el, None, otherInfo)
+            clefObj = self.clefFromElement(el, None, otherInfo)
             if clefObj is not None:
                 post['clef'] = clefObj
 
-        embeddedItems = _processEmbeddedElements(
+        embeddedItems = self._processEmbeddedElements(
             elem.findall('*'), tagToFunction, elem.tag, None, otherInfo
         )
 
@@ -3503,7 +3402,7 @@ class MeiToM21Converter:
         if updateStaffKeyAndAlters and 'key' in post:
             nStr: str = otherInfo.get('staffNumberForDef', '')
             if nStr:
-                updateStaffKeyAndAltersWithNewKey(
+                self.updateStaffKeyAndAltersWithNewKey(
                     nStr,
                     t.cast(key.KeySignature, post['key']),
                     otherInfo
@@ -3569,14 +3468,14 @@ class MeiToM21Converter:
 
         >>> from xml.etree import ElementTree as ET
         >>> from converter21.mei.base import articFromElement
-        >>> meiSnippet = """<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>"""
+        >>> meiSnippet = '<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> articFromElement(meiSnippet, None, None, {})
         [<music21.articulations.Accent>]
 
         A single <artic> element may indicate many :class:`Articulation` objects.
 
-        >>> meiSnippet = """<artic artic="acc ten" xmlns="http://www.music-encoding.org/ns/mei"/>"""
+        >>> meiSnippet = '<artic artic="acc ten" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> articFromElement(meiSnippet, None, None, {})
         [<music21.articulations.Accent>, <music21.articulations.Tenuto>]
@@ -3609,7 +3508,7 @@ class MeiToM21Converter:
         '''
         articElement = elem.get('artic')
         if articElement is not None:
-            return _makeArticList(articElement)
+            return self._makeArticList(articElement)
         else:
             return []
 
@@ -3631,11 +3530,11 @@ class MeiToM21Converter:
 
         >>> from xml.etree import ElementTree as ET
         >>> from converter21.mei.base import accidFromElement
-        >>> meiSnippet = """<accid accid.ges="s" xmlns="http://www.music-encoding.org/ns/mei"/>"""
+        >>> meiSnippet = '<accid accid.ges="s" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> accidFromElement(meiSnippet, None, None, {})
         <music21.pitch.Accidental sharp>
-        >>> meiSnippet = """<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>"""
+        >>> meiSnippet = '<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> accidFromElement(meiSnippet, None, None, {})
         <music21.pitch.Accidental triple-flat>
@@ -3645,8 +3544,9 @@ class MeiToM21Converter:
         - @accid (from att.accid.log)
         - @accid.ges (from att.accid.ges)
 
-        .. note:: If set, the @accid.ges attribute is always imported as the music21 :class:`Accidental`
-            for this note. We assume it corresponds to the accidental implied by a key signature.
+        .. note:: If set, the @accid.ges attribute is always imported as the music21
+            :class:`Accidental` for this note. We assume it corresponds to the accidental
+            implied by a key signature.
 
         **Attributes/Elements in Testing:** none
 
@@ -3673,10 +3573,10 @@ class MeiToM21Converter:
         accidStr: str | None = None
         displayStatus: bool | None = None
         if elem.get('accid.ges') is not None:
-            accidStr = _accidGesFromAttr(elem.get('accid.ges'))
+            accidStr = self._accidGesFromAttr(elem.get('accid.ges'))
             displayStatus = False
         if elem.get('accid') is not None:
-            accidStr = _accidentalFromAttr(elem.get('accid'))
+            accidStr = self._accidentalFromAttr(elem.get('accid'))
             displayStatus = True
 
         # 2. is it cautionary (display unconditionally in normal position)
@@ -3783,7 +3683,7 @@ class MeiToM21Converter:
         text: str
         styleDict: dict[str, str]
 
-        text, styleDict = textFromElem(elem)
+        text, styleDict = self.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
     #     if 'i' == wordPos:
@@ -3812,7 +3712,7 @@ class MeiToM21Converter:
 
         if fontStyle is not None or fontWeight is not None:
             output.style.fontStyle = (  # type: ignore
-                _m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
+                self._m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
             )
         if fontFamily is not None:
             output.style.fontFamily = fontFamily  # type: ignore
@@ -3866,25 +3766,23 @@ class MeiToM21Converter:
         tagToFunction: dict[str, t.Callable[
             [Element,
                 meter.TimeSignature | None,
-                spanner.SpannerBundle,
                 dict[str, str]],
             t.Any]
         ] = {
-            f'{MEI_NS}label': stringFromElement,
+            f'{MEI_NS}label': self.stringFromElement,
             # music21 doesn't support verse label abbreviations
             # f'{MEI_NS}labelAbbr': labelAbbrFromElement,
-            f'{MEI_NS}syl': sylFromElement
+            f'{MEI_NS}syl': self.sylFromElement
         }
 
         nStr: str | None = elem.get('n')
         label: str | None = None
         syllables: list[note.Lyric] = []
 
-        for subElement in _processEmbeddedElements(elem.findall('*'),
+        for subElement in self._processEmbeddedElements(elem.findall('*'),
                                                    tagToFunction,
                                                    elem.tag,
                                                    activeMeter,
-                                                   spannerBundle,
                                                    otherInfo):
             if isinstance(subElement, str):
                 label = subElement
@@ -3966,16 +3864,16 @@ class MeiToM21Converter:
 
         return fermata
 
-    @staticmethod
     def durationFromAttributes(
+        self,
         elem: Element,
     ) -> duration.Duration:
         durFloat: float | None = None
         durGesFloat: float | None = None
         if elem.get('dur'):
-            durFloat = _qlDurationFromAttr(elem.get('dur'))
+            durFloat = self._qlDurationFromAttr(elem.get('dur'))
         if elem.get('dur.ges'):
-            durGesFloat = _qlDurationFromAttr(elem.get('dur.ges'))
+            durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
 
         numDots: int = int(elem.get('dots', 0))
         numDotsGes: int | None = None
@@ -3988,17 +3886,17 @@ class MeiToM21Converter:
             durGesFloat = None
         if durFloat is None:
             # There's no @dur or @dur.ges, go with that weird default 1/1024th note
-            durFloat = _qlDurationFromAttr(None)
+            durFloat = self._qlDurationFromAttr(None)
 
-        visualDuration: duration.Duration = makeDuration(durFloat, numDots)
+        visualDuration: duration.Duration = M21Utilities.makeDuration(durFloat, numDots)
         if durGesFloat is not None or numDotsGes is not None:
             gesDuration: duration.Duration
             if durGesFloat is not None and numDotsGes is not None:
-                gesDuration = makeDuration(durGesFloat, numDotsGes)
+                gesDuration = M21Utilities.makeDuration(durGesFloat, numDotsGes)
             elif durGesFloat is not None and numDotsGes is None:
-                gesDuration = makeDuration(durGesFloat, numDots)
+                gesDuration = M21Utilities.makeDuration(durGesFloat, numDots)
             elif durGesFloat is None and numDotsGes is not None:
-                gesDuration = makeDuration(durFloat, numDotsGes)
+                gesDuration = M21Utilities.makeDuration(durFloat, numDotsGes)
 
             visualDuration.linked = False
             visualDuration.quarterLength = gesDuration.quarterLength
@@ -4017,12 +3915,13 @@ class MeiToM21Converter:
 
         In MEI 2013: pg.382 (396 in PDF) (MEI.shared module)
 
-        .. note:: If set, the @accid.ges attribute is always imported as the music21 :class:`Accidental`
-            for this note. We assume it corresponds to the accidental implied by a key signature.
+        .. note:: If set, the @accid.ges attribute is always imported as the music21
+            :class:`Accidental` for this note. We assume it corresponds to the accidental
+            implied by a key signature.
 
-        .. note:: If ``elem`` contains both <syl> and <verse> elements as immediate children, the lyrics
-            indicated with <verse> element(s) will always obliterate those given indicated with <syl>
-            elements.
+        .. note:: If ``elem`` contains both <syl> and <verse> elements as immediate children, the
+            lyrics indicated with <verse> element(s) will always obliterate those given indicated
+            with <syl> elements.
 
         **Attributes/Elements Implemented:**
 
@@ -4038,7 +3937,8 @@ class MeiToM21Converter:
         - @slur, (many of "[i|m|t][1-6]")
         - @cue="true" for cue-sized notes
         - @grace, from att.note.ges.cmn: partial implementation (notes marked as grace, but the
-            duration is 0 because we ignore the question of which neighbouring note to borrow time from)
+            duration is 0 because we ignore the question of which neighbouring note to borrow
+            time from)
         - <syl> and <verse>
 
         **Attributes/Elements in Testing:** none
@@ -4093,17 +3993,17 @@ class MeiToM21Converter:
         theNote: note.Note = note.Note()
 
         # set the Note's duration (we will update this if we find any inner <dot> elements)
-        theDuration: duration.Duration = durationFromAttributes(elem)
+        theDuration: duration.Duration = self.durationFromAttributes(elem)
         theNote.duration = theDuration
 
         # get any @accid/@accid.ges from this element.
         # We'll overwrite with any subElements below.
-        theAccid: str | None = _accidentalFromAttr(elem.get('accid'))
-        theAccidGes: str | None = _accidGesFromAttr(elem.get('accid.ges'))
+        theAccid: str | None = self._accidentalFromAttr(elem.get('accid'))
+        theAccidGes: str | None = self._accidGesFromAttr(elem.get('accid.ges'))
         theAccidObj: pitch.Accidental | None = None
 
         # iterate all immediate children
-        for subElement in _processEmbeddedElements(elem.findall('*'),
+        for subElement in self._processEmbeddedElements(elem.findall('*'),
                                                    noteChildrenTagToFunction,
                                                    elem.tag,
                                                    activeMeter,
@@ -4117,7 +4017,8 @@ class MeiToM21Converter:
                     theNote.lyrics = []
                 theNote.lyrics.append(subElement)
 
-        # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
+        # grace note (only mark as accented or unaccented grace note;
+        # don't worry about "time-stealing")
         graceStr: str | None = elem.get('grace')
         if graceStr == 'acc':
             theNote = theNote.getGrace(appoggiatura=True)
@@ -4136,27 +4037,27 @@ class MeiToM21Converter:
         if not octStr:
             octStr = elem.get('oct.ges', '')
         if theAccidObj is not None:
-            theNote.pitch = safePitch(pnameStr, theAccidObj, octStr)
+            theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidObj, octStr)
         elif theAccidGes is not None:
-            theNote.pitch = safePitch(pnameStr, theAccidGes, octStr)
+            theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidGes, octStr)
             if theNote.pitch.accidental is not None:
                 # since the accidental was due to theAccidGes,
                 # the accidental should NOT be displayed.
                 theNote.pitch.accidental.displayStatus = False
         elif theAccid is not None:
-            theNote.pitch = safePitch(pnameStr, theAccid, octStr)
+            theNote.pitch = M21Utilities.safePitch(pnameStr, theAccid, octStr)
             if theNote.pitch.accidental is not None:
                 # since the accidental was due to theAccid,
                 # the accidental should be displayed.
                 theNote.pitch.accidental.displayStatus = True
         else:
-            theNote.pitch = safePitch(pnameStr, None, octStr)
+            theNote.pitch = M21Utilities.safePitch(pnameStr, None, octStr)
 
         nStr: str = otherInfo.get('staffNumberForNotes', '')
         if nStr:
-            updateStaffAltersWithPitches(nStr, theNote.pitches, otherInfo)
+            self.updateStaffAltersWithPitches(nStr, theNote.pitches, otherInfo)
 
-        addSlurs(elem, theNote)
+        self.addSlurs(elem, theNote)
 
         # id in the @xml:id attribute
         xmlId: str | None = elem.get(_XMLID)
@@ -4166,23 +4067,24 @@ class MeiToM21Converter:
         # articulations in the @artic attribute
         articStr: str | None = elem.get('artic')
         if articStr is not None:
-            theNote.articulations.extend(_makeArticList(articStr))
+            theNote.articulations.extend(self._makeArticList(articStr))
 
-        # expressions from element attributes (perhaps fake attributes created during preprocessing)
-        fermata: expressions.Fermata | None = fermataFromNoteChordOrRestElement(elem)
+        # expressions from element attributes (perhaps fake attributes
+        # created during preprocessing)
+        fermata: expressions.Fermata | None = self.fermataFromNoteChordOrRestElement(elem)
         if fermata is not None:
             theNote.expressions.append(fermata)
 
-        addArpeggio(elem, theNote)
-        addTrill(elem, theNote, otherInfo)
-        addMordent(elem, theNote, otherInfo)
-        addTurn(elem, theNote, otherInfo)
-        addOttavas(elem, theNote)
+        self.addArpeggio(elem, theNote)
+        self.addTrill(elem, theNote, otherInfo)
+        self.addMordent(elem, theNote, otherInfo)
+        self.addTurn(elem, theNote, otherInfo)
+        self.addOttavas(elem, theNote)
 
         # ties in the @tie attribute
         tieStr: str | None = elem.get('tie')
         if tieStr is not None:
-            theNote.tie = _tieFromAttr(tieStr)
+            theNote.tie = self._tieFromAttr(tieStr)
 
         if elem.get('cue') == 'true':
             if t.TYPE_CHECKING:
@@ -4221,7 +4123,7 @@ class MeiToM21Converter:
             # We don't pay attention to stem direction if the note
             # is supposed to be in another staff (which we don't yet
             # support).
-            theNote.stemDirection = _stemDirectionFromAttr(stemDirStr)
+            theNote.stemDirection = self._stemDirectionFromAttr(stemDirStr)
 
         stemModStr: str | None = elem.get('stem.mod')
         if stemModStr is not None:
@@ -4255,7 +4157,7 @@ class MeiToM21Converter:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = scaleToTuplet(theNote, elem)
+            obj = self.scaleToTuplet(theNote, elem)
             if t.TYPE_CHECKING:
                 # because scaleToTuplet always returns whatever objs it was passed (modified)
                 assert isinstance(obj, note.Note)
@@ -4318,15 +4220,16 @@ class MeiToM21Converter:
         '''
         # NOTE: keep this in sync with spaceFromElement()
 
-        theDuration: duration.Duration = durationFromAttributes(elem)
+        theDuration: duration.Duration = self.durationFromAttributes(elem)
         theRest = note.Rest(duration=theDuration)
 
         xmlId: str | None = elem.get(_XMLID)
         if xmlId is not None:
             theRest.id = xmlId
 
-        # expressions from element attributes (perhaps fake attributes created during preprocessing)
-        fermata = fermataFromNoteChordOrRestElement(elem)
+        # expressions from element attributes (perhaps fake attributes
+        # created during preprocessing)
+        fermata = self.fermataFromNoteChordOrRestElement(elem)
         if fermata is not None:
             theRest.expressions.append(fermata)
 
@@ -4341,7 +4244,7 @@ class MeiToM21Converter:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = scaleToTuplet(theRest, elem)
+            obj = self.scaleToTuplet(theRest, elem)
             if t.TYPE_CHECKING:
                 # because scaleToTuplet returns whatever it was passed (modified)
                 assert isinstance(obj, note.Rest)
@@ -4372,15 +4275,15 @@ class MeiToM21Converter:
         This is a function wrapper for :func:`restFromElement`.
 
         .. note:: If the <mRest> element does not have a @dur attribute, it will have the default
-            duration of 1.0. This must be fixed later, so the :class:`Rest` object returned from this
-            method is given the :attr:`m21wasMRest` attribute, set to True.
+            duration of 1.0. This must be fixed later, so the :class:`Rest` object returned from
+            this method is given the :attr:`m21wasMRest` attribute, set to True.
         '''
         # NOTE: keep this in sync with mSpaceFromElement()
 
         if elem.get('dur') is not None:
-            return restFromElement(elem, activeMeter, otherInfo)
+            return self.restFromElement(elem, activeMeter, otherInfo)
         else:
-            theRest = restFromElement(elem, activeMeter, otherInfo)
+            theRest = self.restFromElement(elem, activeMeter, otherInfo)
             theRest.m21wasMRest = True  # type: ignore
             return theRest
 
@@ -4391,8 +4294,8 @@ class MeiToM21Converter:
         otherInfo: dict[str, t.Any]
     ) -> note.Rest:
         '''
-        <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that the
-        combined duration of the events equals the number of beats in the measure.
+        <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that
+        the combined duration of the events equals the number of beats in the measure.
 
         Returns a Rest element with hideObjectOnPrint = True
 
@@ -4400,7 +4303,7 @@ class MeiToM21Converter:
         '''
         # NOTE: keep this in sync with restFromElement()
 
-        theDuration: duration.Duration = durationFromAttributes(elem)
+        theDuration: duration.Duration = self.durationFromAttributes(elem)
         theSpace: note.Rest = note.Rest(duration=theDuration)
         theSpace.style.hideObjectOnPrint = True
 
@@ -4410,7 +4313,7 @@ class MeiToM21Converter:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = scaleToTuplet(theSpace, elem)
+            obj = self.scaleToTuplet(theSpace, elem)
             if t.TYPE_CHECKING:
                 # because scaleToTuplet returns the same type it was passed
                 assert isinstance(obj, note.Rest)
@@ -4432,15 +4335,15 @@ class MeiToM21Converter:
         This is a function wrapper for :func:`spaceFromElement`.
 
         .. note:: If the <mSpace> element does not have a @dur attribute, it will have the default
-            duration of 1.0. This must be fixed later, so the :class:`Space` object returned from this
-            method is given the :attr:`m21wasMRest` attribute, set to True.
+            duration of 1.0. This must be fixed later, so the :class:`Space` object returned from
+            this method is given the :attr:`m21wasMRest` attribute, set to True.
         '''
         # NOTE: keep this in sync with mRestFromElement()
 
         if elem.get('dur') is not None:
-            return spaceFromElement(elem, activeMeter, otherInfo)
+            return self.spaceFromElement(elem, activeMeter, otherInfo)
         else:
-            theSpace = spaceFromElement(elem, activeMeter, otherInfo)
+            theSpace = self.spaceFromElement(elem, activeMeter, otherInfo)
             theSpace.m21wasMRest = True  # type: ignore
             return theSpace
 
@@ -4468,7 +4371,8 @@ class MeiToM21Converter:
         - @slur, (many of "[i|m|t][1-6]")
         - @cue="true" for cue-sized chords
         - @grace, from att.note.ges.cmn: partial implementation (notes marked as grace, but the
-            duration is 0 because we ignore the question of which neighbouring note to borrow time from)
+            duration is 0 because we ignore the question of which neighbouring note to borrow
+            time from)
 
         **Attributes/Elements in Testing:** none
 
@@ -4513,7 +4417,7 @@ class MeiToM21Converter:
         theLyricList: list[note.Lyric] = []
         spannersFromNotes: list[tuple[note.Note, list[spanner.Spanner]]] = []
         # iterate all immediate children
-        for subElement in _processEmbeddedElements(elem.findall('*'),
+        for subElement in self._processEmbeddedElements(elem.findall('*'),
                                                    chordChildrenTagToFunction,
                                                    elem.tag,
                                                    activeMeter,
@@ -4539,10 +4443,11 @@ class MeiToM21Converter:
                     eachSpanner.replaceSpannedElement(eachNote, theChord)
 
         # set the Chord's duration
-        theDuration: duration.Duration = durationFromAttributes(elem)
+        theDuration: duration.Duration = self.durationFromAttributes(elem)
         theChord.duration = theDuration
 
-        # grace note (only mark as accented or unaccented grace note; don't worry about "time-stealing")
+        # grace note (only mark as accented or unaccented grace note;
+        # don't worry about "time-stealing")
         graceStr: str | None = elem.get('grace')
         if graceStr == 'acc':
             theChord = theChord.getGrace(appoggiatura=True)
@@ -4557,9 +4462,9 @@ class MeiToM21Converter:
 
         nStr: str = otherInfo.get('staffNumberForNotes', '')
         if nStr:
-            updateStaffAltersWithPitches(nStr, theChord.pitches, otherInfo)
+            self.updateStaffAltersWithPitches(nStr, theChord.pitches, otherInfo)
 
-        addSlurs(elem, theChord)
+        self.addSlurs(elem, theChord)
 
         # id in the @xml:id attribute
         xmlId: str | None = elem.get(_XMLID)
@@ -4569,18 +4474,19 @@ class MeiToM21Converter:
         # articulations in the @artic attribute
         articStr: str | None = elem.get('artic')
         if articStr is not None:
-            theChord.articulations.extend(_makeArticList(articStr))
+            theChord.articulations.extend(self._makeArticList(articStr))
 
-        # expressions from element attributes (perhaps fake attributes created during preprocessing)
-        fermata = fermataFromNoteChordOrRestElement(elem)
+        # expressions from element attributes (perhaps fake attributes
+        # created during preprocessing)
+        fermata = self.fermataFromNoteChordOrRestElement(elem)
         if fermata is not None:
             theChord.expressions.append(fermata)
 
-        addArpeggio(elem, theChord)
-        addTrill(elem, theChord, otherInfo)
-        addMordent(elem, theChord, otherInfo)
-        addTurn(elem, theChord, otherInfo)
-        addOttavas(elem, theChord)
+        self.addArpeggio(elem, theChord)
+        self.addTrill(elem, theChord, otherInfo)
+        self.addMordent(elem, theChord, otherInfo)
+        self.addTurn(elem, theChord, otherInfo)
+        self.addOttavas(elem, theChord)
 
         # See if any of the notes within the chord have a trill/mordent/turn,
         # and if so, pull it up to the chord (because music21 doesn't really
@@ -4602,7 +4508,7 @@ class MeiToM21Converter:
         # ties in the @tie attribute
         tieStr: str | None = elem.get('tie')
         if tieStr is not None:
-            theChord.tie = _tieFromAttr(tieStr)
+            theChord.tie = self._tieFromAttr(tieStr)
 
         if elem.get('cue') == 'true':
             if t.TYPE_CHECKING:
@@ -4618,7 +4524,7 @@ class MeiToM21Converter:
             # We don't pay attention to stem direction if the chord
             # is supposed to be in another staff (which we don't yet
             # support).
-            theChord.stemDirection = _stemDirectionFromAttr(stemDirStr)
+            theChord.stemDirection = self._stemDirectionFromAttr(stemDirStr)
 
         stemModStr: str | None = elem.get('stem.mod')
         if stemModStr is not None:
@@ -4639,7 +4545,7 @@ class MeiToM21Converter:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = scaleToTuplet(theChord, elem)
+            obj = self.scaleToTuplet(theChord, elem)
             if t.TYPE_CHECKING:
                 # because scaleToTuplet returns whatever type it was passed
                 assert isinstance(obj, chord.Chord)
@@ -4726,7 +4632,7 @@ class MeiToM21Converter:
             else:
                 theClef = clef.clefFromString(
                     shapeStr + lineStr,
-                    _getOctaveShift(elem.get('dis'), elem.get('dis.place'))
+                    self._getOctaveShift(elem.get('dis'), elem.get('dis.place'))
                 )
 
         xmlId: str | None = elem.get(_XMLID)
@@ -4756,7 +4662,9 @@ class MeiToM21Converter:
             except Exception:
                 pass
 
-        pageLayout: m21.layout.PageLayout = m21.layout.PageLayout(isNew=True, pageNumber=pageNumber)
+        pageLayout: m21.layout.PageLayout = (
+            m21.layout.PageLayout(isNew=True, pageNumber=pageNumber)
+        )
 
         xmlId: str | None = elem.get(_XMLID)
         if xmlId is not None:
@@ -4790,7 +4698,7 @@ class MeiToM21Converter:
         otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
         newKey: key.Key | key.KeySignature | None = (
-            self._keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
+            self._keySigFromElement(elem, activeMeter, otherInfo)
         )
         nStr: str = otherInfo.get('staffNumberForDef', '')
         if nStr:
@@ -4805,7 +4713,7 @@ class MeiToM21Converter:
         otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
         newKey: key.Key | key.KeySignature | None = (
-            self._keySigFromElement(elem, activeMeter, spannerBundle, otherInfo)
+            self._keySigFromElement(elem, activeMeter, otherInfo)
         )
         nStr: str = otherInfo.get('staffNumberForLayer', '')
         if nStr:
@@ -4813,14 +4721,13 @@ class MeiToM21Converter:
 
         return newKey
 
-    @staticmethod
     def _keySigFromElement(
+        self,
         elem: Element,
         activeMeter: meter.TimeSignature | None,
-        spannerBundle: spanner.SpannerBundle,  # pylint: disable=unused-argument
         otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
-        theKey: key.Key | key.KeySignature | None = _keySigFromAttrs(elem)
+        theKey: key.Key | key.KeySignature | None = self._keySigFromAttrs(elem)
         if theKey is None:
             return None
 
@@ -4836,7 +4743,7 @@ class MeiToM21Converter:
         activeMeter: meter.TimeSignature | None,
         otherInfo: dict[str, t.Any]
     ) -> meter.TimeSignature | None:
-        theTimeSig: meter.TimeSignature | None = _timeSigFromAttrs(elem)
+        theTimeSig: meter.TimeSignature | None = self._timeSigFromAttrs(elem)
         if theTimeSig is None:
             return None
 
@@ -4980,9 +4887,6 @@ class MeiToM21Converter:
         - MEI.mensural: ligature mensur proport
         - MEI.shared: clefGrp custos keySig pad
         '''
-        # NB: The doctest is a sufficient integration test. Since there is no logic, I don't think we
-        #     need to bother with unit testing.
-
         beamedStuff: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
             beamChildrenTagToFunction,
@@ -5059,7 +4963,9 @@ class MeiToM21Converter:
         )
 
         if len(fTremStuff) != 2:
-            raise MeiElementError('<fTrem> without exactly two notes/chords (or one of each) within')
+            raise MeiElementError(
+                '<fTrem> without exactly two notes/chords (or one of each) within'
+            )
 
         firstNoteOrChord: Music21Object = fTremStuff[0]
         secondNoteOrChord: Music21Object = fTremStuff[1]
@@ -5122,15 +5028,15 @@ class MeiToM21Converter:
 
         In MEI 2013: pg.262 (276 in PDF) (MEI.shared module)
 
-        :returns: A :class:`music21.bar.Barline` or :class:`~music21.bar.Repeat`, depending on the
-            value of @rend. If @rend is ``'rptboth'``, a 2-tuplet of :class:`Repeat` objects will be
-            returned, represented an "end" and "start" barline, as specified in the :mod:`music21.bar`
-            documentation.
+        :returns: A :class:`music21.bar.Barline` or :class:`~music21.bar.Repeat`, depending on
+            the value of @rend. If @rend is ``'rptboth'``, a 2-tuplet of :class:`Repeat` objects
+            will be returned, represented an "end" and "start" barline, as specified in the
+            :mod:`music21.bar` documentation.
 
-        .. note:: The music21-to-other converters expect that a :class:`Barline` will be attached to a
-            :class:`Measure`, which it will not be when imported from MEI as a <barLine> element.
-            However, this function does import correctly to a :class:`Barline` that you can access from
-            Python in the :class:`Stream` object as expected.
+        .. note:: The music21-to-other converters expect that a :class:`Barline` will be attached
+            to a :class:`Measure`, which it will not be when imported from MEI as a <barLine>
+            element. However, this function does import correctly to a :class:`Barline` that you
+            can access from Python in the :class:`Stream` object as expected.
 
         **Attributes/Elements Implemented:**
 
@@ -5142,7 +5048,7 @@ class MeiToM21Converter:
 
         - att.common (@label, @n, @xml:base) (att.id (@xml:id))
         - att.facsimile (@facs)
-        - att.pointing (@xlink:actuate, @xlink:role, @xlink:show, @target, @targettype, @xlink:title)
+        - att.pointing (@xlink:*, @target, @targettype)
         - att.barLine.log
 
             - (att.meterconformance.bar (@metcon, @control))
@@ -5220,7 +5126,8 @@ class MeiToM21Converter:
         - MEI.mensural: ligature mensur proport
         - MEI.shared: clefGrp custos keySig pad
         '''
-        # get the @num and @numbase attributes, without which we can't properly calculate the tuplet
+        # get the @num and @numbase attributes, without which we can't properly
+        # calculate the tuplet
         numStr: str | None = elem.get('num')
         numbaseStr: str | None = elem.get('numbase')
         if numStr is None or numbaseStr is None:
@@ -5256,8 +5163,8 @@ class MeiToM21Converter:
         tupletMembers = t.cast(list[Music21Object], self.scaleToTuplet(tupletMembers, newElem))
 
         # Set the Tuplet.type property for the first and final note in a tuplet.
-        # We have to find the first and last duration-having thing, not just the first and last objects
-        # between the <tuplet> tags.
+        # We have to find the first and last duration-having thing, not just the
+        # first and last objects between the <tuplet> tags.
         firstNote = None
         lastNote = None
         for i, eachObj in enumerate(tupletMembers):
@@ -5302,14 +5209,14 @@ class MeiToM21Converter:
 
         In MEI 2013: pg.353 (367 in PDF) (MEI.shared module)
 
-        .. note:: The :class:`Voice` object's :attr:`~music21.stream.Voice.id` attribute must be set
-            properly in order to ensure continuity of voices between measures. If the ``elem`` does not
-            have an @n attribute, you can set one with the ``overrideN`` parameter in this function. If
-            you provide a value for ``overrideN``, it will be used instead of the ``elemn`` object's
-            @n attribute.
+        .. note:: The :class:`Voice` object's :attr:`~music21.stream.Voice.id` attribute must be
+            set properly in order to ensure continuity of voices between measures. If the ``elem``
+            does not have an @n attribute, you can set one with the ``overrideN`` parameter in
+            this function. If you provide a value for ``overrideN``, it will be used instead of
+            the ``elemn`` object's @n attribute.
 
-            Because improperly-set :attr:`~music21.stream.Voice.id` attributes nearly guarantees errors
-            in the imported :class:`Score`, either ``overrideN`` or @n must be specified.
+            Because improperly-set :attr:`~music21.stream.Voice.id` attributes nearly guarantees
+            errors in the imported :class:`Score`, either ``overrideN`` or @n must be specified.
 
         :param elem: The ``<layer>`` element to process.
         :type elem: :class:`~xml.etree.ElementTree.Element`
@@ -5443,7 +5350,6 @@ class MeiToM21Converter:
             layerChildrenTagToFunction,
             elem.tag,
             activeMeter,
-            spannerBundle,
             otherInfo
         )
 
@@ -5524,7 +5430,7 @@ class MeiToM21Converter:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = _processEmbeddedElements(
+        theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
             noteChildrenTagToFunction,
             chosen.tag,
@@ -5760,9 +5666,9 @@ class MeiToM21Converter:
     ) -> list[Music21Object]:
         '''
         <staff> A group of equidistant horizontal lines on which notes are placed in order to
-        represent pitch or a grouping element for individual 'strands' of notes, rests, etc. that may
-        or may not actually be rendered on staff lines; that is, both diastematic and non-diastematic
-        signs.
+        represent pitch or a grouping element for individual 'strands' of notes, rests, etc.
+        that may or may not actually be rendered on staff lines; that is, both diastematic and
+        non-diastematic signs.
 
         In MEI 2013: pg.444 (458 in PDF) (MEI.shared module)
 
@@ -5843,8 +5749,8 @@ class MeiToM21Converter:
                 layers.append(
                     tagToFunction[eachTag.tag](eachTag, activeMeter, otherInfo)
                 )
-            elif eachTag.tag not in self._IGNORE_UNPROCESSED:
-                environLocal.warn(self._UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
+            elif eachTag.tag not in _IGNORE_UNPROCESSED:
+                environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
 
         if nextBreak is not None:
             # return the page/system break as the first element of the list
@@ -5858,14 +5764,15 @@ class MeiToM21Converter:
         targetQL: OffsetQL
     ):
         '''
-        Helper function for measureFromElement(), not intended to be used elsewhere. It's a separate
-        function only (1) to reduce duplication, and (2) to improve testability.
+        Helper function for measureFromElement(), not intended to be used elsewhere. It's a
+        separate function only (1) to reduce duplication, and (2) to improve testability.
 
         Iterate the imported objects of <layer> elements in the <staff> elements in a <measure>,
-        detecting those with the "m21wasMRest" attribute and setting their duration to "targetLength."
+        detecting those with the "m21wasMRest" attribute and setting their duration to
+        "targetLength."
 
-        The "staves" argument should be a dictionary where the values are Measure objects with at least
-        one Voice object inside.
+        The "staves" argument should be a dictionary where the values are Measure objects with
+        at least one Voice object inside.
 
         The "targetQL" argument should be the duration of the measure.
 
@@ -5894,8 +5801,8 @@ class MeiToM21Converter:
                         eachObject.quarterLength = targetQL
                         del eachObject.m21wasMRest
 
-    @staticmethod
     def _makeBarlines(
+        self,
         elem: Element,
         staves: dict[str, stream.Measure | bar.Repeat]
     ) -> dict[str, stream.Measure | bar.Repeat]:
@@ -5903,9 +5810,9 @@ class MeiToM21Converter:
         This is a helper function for :func:`measureFromElement`, made independent only to improve
         that function's ease of testing.
 
-        Given a <measure> element and a dictionary with the :class:`Measure` objects that have already
-        been processed, change the barlines of the :class:`Measure` objects in accordance with the
-        element's @left and @right attributes.
+        Given a <measure> element and a dictionary with the :class:`Measure` objects that have
+        already been processed, change the barlines of the :class:`Measure` objects in accordance
+        with the element's @left and @right attributes.
 
         :param :class:`~xml.etree.ElementTree.Element` elem: The ``<measure>`` tag to process.
         :param dict staves: Dictionary where keys are @n attributes and values are corresponding
@@ -5915,7 +5822,7 @@ class MeiToM21Converter:
         '''
         leftStr: str | None = elem.get('left')
         if leftStr is not None:
-            bars = _barlineFromAttr(leftStr)
+            bars = self._barlineFromAttr(leftStr)
             if isinstance(bars, tuple):
                 # this means @left was "rptboth"
                 bars = bars[1]
@@ -5925,7 +5832,7 @@ class MeiToM21Converter:
                     eachMeasure.leftBarline = deepcopy(bars)
 
         rightStr: str | None = elem.get('right', 'single')
-        bars = _barlineFromAttr(rightStr)
+        bars = self._barlineFromAttr(rightStr)
         if isinstance(bars, tuple):
             # this means @right was "rptboth"
             staves['next @left'] = bars[1]
@@ -5952,7 +5859,7 @@ class MeiToM21Converter:
         clonedExpression: expressions.Expression
 
         for staffNs, offset, expression in tsExpressions:
-            canBeOnRest: bool = _canBeOnRest(expression)
+            canBeOnRest: bool = self._canBeOnRest(expression)
             isDelayedTurn: bool = (
                 isinstance(expression, expressions.Turn)
                 and hasattr(expression, 'delayed')
@@ -6008,7 +5915,7 @@ class MeiToM21Converter:
                                             # based on eachObject
                                             expression.resolveOrnamentalPitches(
                                                 eachObject,
-                                                keySig=_currKeyForStaff(staffN, otherInfo)
+                                                keySig=self._currKeyForStaff(staffN, otherInfo)
                                             )
                                             self.updateAltersFromExpression(
                                                 expression, eachObject, staffN, otherInfo
@@ -6021,7 +5928,7 @@ class MeiToM21Converter:
                                             # based on eachObject
                                             clonedExpression.resolveOrnamentalPitches(
                                                 eachObject,
-                                                keySig=_currKeyForStaff(staffN, otherInfo)
+                                                keySig=self._currKeyForStaff(staffN, otherInfo)
                                             )
                                             self.updateAltersFromExpression(
                                                 clonedExpression, eachObject, staffN, otherInfo
@@ -6039,7 +5946,9 @@ class MeiToM21Converter:
                                     )
                                     if (offsetFromNearestPrevNote is None
                                             or offsetFromNearestPrevNote > offsetFromThisPrevNote):
-                                        offsetFromNearestPrevNote = opFrac(offset - eachObject.offset)
+                                        offsetFromNearestPrevNote = (
+                                            opFrac(offset - eachObject.offset)
+                                        )
                                         nearestPrevNoteInStaff = eachObject
                                         staffForNearestNote = staffN
 
@@ -6063,12 +5972,13 @@ class MeiToM21Converter:
                                 assert isinstance(expression, expressions.Turn)
                             expression.delay = offsetFromNearestPrevNote
 
-                        # Resolve the expression's "other" pitches based on nearestPrevNoteInStaff's
-                        # pitch (or highest pitch if nearestPrevNoteInStaff is a chord with pitches)
+                        # Resolve the expression's "other" pitches based on
+                        # nearestPrevNoteInStaff's pitch (or highest pitch if
+                        # nearestPrevNoteInStaff is a chord with pitches)
                         if isinstance(expression, expressions.Ornament):
                             expression.resolveOrnamentalPitches(
                                 nearestPrevNoteInStaff,
-                                keySig=_currKeyForStaff(staffForNearestNote, otherInfo)
+                                keySig=self._currKeyForStaff(staffForNearestNote, otherInfo)
                             )
 
                             self.updateAltersFromExpression(
@@ -6082,8 +5992,8 @@ class MeiToM21Converter:
                             f'for timestamped {expression.classes[0]}.'
                         )
 
-    @staticmethod
     def _tstampToOffset(
+        self,
         tstamp: str,
         activeMeter: meter.TimeSignature | None
     ) -> OffsetQL:
@@ -6094,7 +6004,7 @@ class MeiToM21Converter:
             # warn about malformed tstamp, assuming 0.0
             return 0.0
 
-        return _beatToOffset(beat, activeMeter)
+        return self._beatToOffset(beat, activeMeter)
 
     @staticmethod
     def _beatToOffset(beat: float, activeMeter: meter.TimeSignature | None) -> OffsetQL:
@@ -6117,8 +6027,8 @@ class MeiToM21Converter:
 
         return opFrac(beat)
 
-    @staticmethod
     def _tstamp2ToMeasSkipAndOffset(
+        self,
         tstamp2: str,
         activeMeter: meter.TimeSignature | None
     ) -> tuple[int, OffsetQL]:
@@ -6147,19 +6057,19 @@ class MeiToM21Converter:
             # warn about malformed tstamp2, assuming '0m+0.000'
             return 0, 0.
 
-        offset = _beatToOffset(beat, activeMeter)
+        offset = self._beatToOffset(beat, activeMeter)
         return measSkip, offset
 
-    @staticmethod
     def _tstampsToOffset1AndMeasSkipAndOffset2(
+        self,
         tstamp: str,
         tstamp2: str,
         activeMeter: meter.TimeSignature | None
     ) -> tuple[OffsetQL, int, OffsetQL]:
-        offset: OffsetQL = _tstampToOffset(tstamp, activeMeter)
+        offset: OffsetQL = self._tstampToOffset(tstamp, activeMeter)
         measSkip: int
         offset2: OffsetQL
-        measSkip, offset2 = _tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
+        measSkip, offset2 = self._tstamp2ToMeasSkipAndOffset(tstamp2, activeMeter)
 
         return offset, measSkip, offset2
 
@@ -6191,8 +6101,8 @@ class MeiToM21Converter:
 
     _METRONOME_MARK_PATTERN: str = r'^((.*?)\s*)([^=\s])\s*=\s*(\d+\.?\d*)[\s]*$'
 
-    @staticmethod
     def _getBPMInfo(
+        self,
         text: str
     ) -> tuple[str | None, str | None, int | None]:
         # takes strings like "Andante M.M. 𝅗𝅥 = 128" and returns
@@ -6817,8 +6727,7 @@ class MeiToM21Converter:
             return ''
         return chr(int(m.group(2), 16))
 
-    @staticmethod
-    def textFromElem(elem: Element) -> tuple[str, dict[str, str]]:
+    def textFromElem(self, elem: Element) -> tuple[str, dict[str, str]]:
         styleDict: dict[str, str] = {}
         text: str = ''
         if elem.text:
@@ -6828,8 +6737,9 @@ class MeiToM21Converter:
         for el in elem.iterfind('*'):
             # do whatever is appropriate given el.tag (<rend> for example)
             if el.tag == f'{MEI_NS}rend':
-                # music21 doesn't currently support changing style in the middle of a TextExpression,
-                # so we just grab the first ones we see and save them off to use.
+                # music21 doesn't currently support changing style in the middle of a
+                # TextExpression, so we just grab the first ones we see and save them
+                # off to use.
                 fontStyle: str = el.get('fontstyle', '')
                 fontWeight: str = el.get('fontweight', '')
                 fontFamily: str = el.get('fontfam', '')
@@ -6843,12 +6753,12 @@ class MeiToM21Converter:
                 if justify:
                     styleDict['justify'] = justify
 
-            elif el.tag in _CHOOSING_EDITORIALS:
+            elif el.tag in self._CHOOSING_EDITORIALS:
                 subEl: Element | None = self.chooseSubElement(el)
                 if subEl is None:
                     continue
                 el = subEl
-            elif el.tag in _PASSTHRU_EDITORIALS:
+            elif el.tag in self._PASSTHRU_EDITORIALS:
                 # for now assume all we care about here is the text/tail of these subElements
                 for subEl in el.iterfind('*'):
                     if subEl.text:
@@ -6916,7 +6826,8 @@ class MeiToM21Converter:
 
         offset = self._tstampToOffset(tstamp, activeMeter)
 
-        # technically not always legal, but I've seen it in <dynam>, so support it here for everyone.
+        # technically not always legal, but I've seen it in <dynam>,
+        # so support it here for everyone.
         enclose: str | None = elem.get('enclose')
 
         fontStyle: str | None = None
@@ -7068,8 +6979,8 @@ class MeiToM21Converter:
         expectedNs: t.Iterable[str]
     ) -> dict[str, stream.Measure | bar.Repeat]:
         '''
-        <measure> Unit of musical time consisting of a fixed number of note-values of a given type, as
-        determined by the prevailing meter, and delimited in musical notation by two bar lines.
+        <measure> Unit of musical time consisting of a fixed number of note-values of a given type,
+        as determined by the prevailing meter, and delimited in musical notation by two bar lines.
 
         In MEI 2013: pg.365 (379 in PDF) (MEI.cmn module)
 
@@ -7077,19 +6988,21 @@ class MeiToM21Converter:
         :type elem: :class:`~xml.etree.ElementTree.Element`
         :param int backupNum: A fallback value for the resulting
             :class:`~music21.stream.Measure` objects' number attribute.
-        :param expectedNs: A list of the expected @n attributes for the <staff> tags in this <measure>.
-            If an expected <staff> isn't in the <measure>, it will be created with a full-measure rest.
+        :param expectedNs: A list of the expected @n attributes for the <staff> tags in this
+            <measure>. If an expected <staff> isn't in the <measure>, it will be created with
+            a full-measure rest.
         :type expectedNs: iterable of str
-        :param activeMeter: The :class:`~music21.meter.TimeSignature` active in this <measure>. This is
-            used to adjust the duration of an <mRest> that was given without a @dur attribute.
+        :param activeMeter: The :class:`~music21.meter.TimeSignature` active in this <measure>.
+            This is used to adjust the duration of an <mRest> that was given without a @dur
+            attribute.
         :returns: A dictionary where keys are the @n attributes for <staff> tags found in this
-            <measure>, and values are :class:`~music21.stream.Measure` objects that should be appended
-            to the :class:`~music21.stream.Part` instance with the value's @n attributes.
+            <measure>, and values are :class:`~music21.stream.Measure` objects that should be
+            appended to the :class:`~music21.stream.Part` instance with the value's @n attributes.
         :rtype: dict of :class:`~music21.stream.Measure`, with one exception.
 
-        .. note:: When the right barline is set to ``'rptboth'`` in MEI, it requires adjusting the left
-            barline of the following <measure>. If this happens, a :class:`Repeat` object is assigned
-            to the ``'next @left'`` key in the returned dictionary.
+        .. note:: When the right barline is set to ``'rptboth'`` in MEI, it requires adjusting the
+            left barline of the following <measure>. If this happens, a :class:`Repeat` object is
+            assigned to the ``'next @left'`` key in the returned dictionary.
 
         **Attributes/Elements Implemented:**
 
@@ -7100,11 +7013,12 @@ class MeiToM21Converter:
         **Attributes Ignored:**
 
         - @xml:id (att.id)
-        - <slur> and <tie> contained within. These spanners will usually be attached to their starting
-          and ending notes with @xml:id attributes, so it's not necessary to process them when
-          encountered in a <measure>. Furthermore, because the possibility exists for cross-measure
-          slurs and ties, we can't guarantee we'll be able to process all spanners until all
-          spanner-attachable objects are processed. So we manage these tags at a higher level.
+        - <slur> and <tie> contained within. These spanners will usually be attached to their
+            starting and ending notes with @xml:id attributes, so it's not necessary to process
+            them when encountered in a <measure>. Furthermore, because the possibility exists for
+            cross-measure slurs and ties, we can't guarantee we'll be able to process all spanners
+            until all spanner-attachable objects are processed. So we manage these tags at a higher
+            level.
 
         **Attributes/Elements in Testing:** none
 
@@ -7114,7 +7028,7 @@ class MeiToM21Converter:
         - att.declaring (@decls)
         - att.facsimile (@facs)
         - att.typed (@type, @subtype)
-        - att.pointing (@xlink:actuate, @xlink:role, @xlink:show, @target, @targettype, @xlink:title)
+        - att.pointing (@xlink:*, @target, @targettype)
         - att.measure.log (att.meterconformance.bar (@metcon, @control))
         - att.measure.vis (all)
         - att.measure.ges (att.timestamp.performed (@tstamp.ges, @tstamp.real))
@@ -7122,16 +7036,11 @@ class MeiToM21Converter:
 
         **Contained Elements not Implemented:**
 
-        - MEI.cmn: arpeg beamSpan bend breath fermata gliss hairpin harpPedal octave ossia pedal reh
-                   tupletSpan
-        - MEI.cmnOrnaments: mordent trill turn
-        - MEI.critapp: app
-        - MEI.edittrans: add choice corr damage del gap handShift orig reg restore sic subst supplied
-                         unclear
+        - MEI.cmn: beamSpan bend breath gliss harpPedal ossia pedal reh tupletSpan
+        - MEI.edittrans: gap handShift
         - MEI.harmony: harm
-        - MEI.lyrics: lyrics
         - MEI.midi: midi
-        - MEI.shared: annot dir dynam pb phrase sb tempo
+        - MEI.shared: annot phrase
         - MEI.text: div
         - MEI.usersymbols: anchoredText curve line symbol
         '''
@@ -7218,7 +7127,7 @@ class MeiToM21Converter:
                     raise MeiElementError(_STAFF_MUST_HAVE_N)
 
                 otherInfo['staffNumberForNotes'] = nStr
-                measureList = self.staffFromElement(eachElem, activeMeter, spannerBundle, otherInfo)
+                measureList = self.staffFromElement(eachElem, activeMeter, otherInfo)
                 meas: stream.Measure = stream.Measure(number=measureNum)
 
                 # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
@@ -7244,7 +7153,7 @@ class MeiToM21Converter:
                 else:
                     otherInfo['staffNumberForDef'] = nStr
                     stavesWaitingFromStaffDef[nStr] = self.staffDefFromElement(
-                        eachElem, spannerBundle, otherInfo
+                        eachElem, otherInfo
                     )
                     otherInfo.pop('staffNumberForDef')
 
@@ -7257,7 +7166,7 @@ class MeiToM21Converter:
                     Music21Object
                 ]
                 triple = staffItemsTagToFunction[eachElem.tag](
-                    eachElem, activeMeter, spannerBundle, otherInfo
+                    eachElem, activeMeter, otherInfo
                 )
 
                 # Sometimes staffItemsTagToFunction actually returns a _list_ of
@@ -7288,10 +7197,14 @@ class MeiToM21Converter:
                             needsStartAnchor: bool = False
                             needsEndAnchor: bool = False
                             if hasattr(m21Obj, 'mei_needs_start_anchor'):
-                                needsStartAnchor = spannerObj.mei_needs_start_anchor  # type: ignore
+                                needsStartAnchor = (
+                                    spannerObj.mei_needs_start_anchor  # type: ignore
+                                )
                                 del spannerObj.mei_needs_start_anchor  # type: ignore
                             if hasattr(m21Obj, 'mei_needs_end_anchor'):
-                                needsEndAnchor = spannerObj.mei_needs_end_anchor  # type: ignore
+                                needsEndAnchor = (
+                                    spannerObj.mei_needs_end_anchor  # type: ignore
+                                )
                                 del spannerObj.mei_needs_end_anchor  # type: ignore
 
                             if needsStartAnchor:
@@ -7325,8 +7238,8 @@ class MeiToM21Converter:
                 environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
         # Process objects from a <staffDef>...
-        # We must process them now because, if we did it in the loop above, the respective <staff> may
-        # not be processed before the <staffDef>.
+        # We must process them now because, if we did it in the loop above,
+        # the respective <staff> may not be processed before the <staffDef>.
         for whichN, eachDict in stavesWaitingFromStaffDef.items():
             for eachObj in eachDict.values():
                 # We must insert() these objects because a <staffDef> signals its changes for the
@@ -7348,7 +7261,7 @@ class MeiToM21Converter:
                 staffNs: list[str] = re.findall(r'[\d]+', whichStaff)
                 if not staffNs:
                     raise MeiAttributeError(
-                        self._STAFFITEM_MUST_HAVE_VALID_STAFF.format(
+                        _STAFFITEM_MUST_HAVE_VALID_STAFF.format(
                             eachObj.classes[0], whichStaff
                         )
                     )
@@ -7431,10 +7344,10 @@ class MeiToM21Converter:
                 restVoice[0].m21wasMRest = True
                 staves[eachN] = stream.Measure([restVoice], number=measureNum)
 
-        # First search for Rest objects created by an <mRest> element that didn't have @dur set. This
-        # will only work in cases where not all of the parts are resting. However, it avoids a more
-        # time-consuming search later.
-        if (maxBarDuration == _DUR_ATTR_DICT[None]
+        # First search for Rest objects created by an <mRest> element that didn't have @dur set.
+        # This will only work in cases where not all of the parts are resting. However, it avoids
+        # a more time-consuming search later.
+        if (maxBarDuration == self._DUR_ATTR_DICT[None]
                 and activeMeter is not None
                 and maxBarDuration != activeMeter.barDuration.quarterLength):
             # In this case, all the staves have <mRest> elements without a @dur.
@@ -7467,58 +7380,60 @@ class MeiToM21Converter:
             bar.Repeat | None,
             int]:
         '''
-        This function is the "core" of both :func:`sectionFromElement` and :func:`scoreFromElement`,
-        since both elements are treated quite similarly (though not identically). It is also used to
-        process 'ending' elements (which are a sort of section, I guess).  It's a separate and
-        shared function to reduce code duplication and increase ease of testing. It's a "public"
-        function to help spread the burden of API documentation complexity: while the parameters and
-        return values are described in this function, the compliance with the MEI Guidelines is
-        described in both :func:`sectionFromElement` and :func:`scoreFromElement`, as expected.
+        This function is the "core" of both :func:`sectionFromElement` and
+        :func:`scoreFromElement`, since both elements are treated quite similarly (though not
+        identically). It is also used to process 'ending' elements (which are a sort of section,
+        I guess).  It's a separate and shared function to reduce code duplication and increase
+        ease of testing. It's a "public" function to help spread the burden of API documentation
+        complexity: while the parameters and return values are described in this function, the
+        compliance with the MEI Guidelines is described in both :func:`sectionFromElement` and
+        :func:`scoreFromElement`, as expected.
 
         **Required Parameters**
 
         :param elem: The <section> or <score> element to process.
         :type elem: :class:`xml.etree.ElementTree.Element`
         :param allPartNs: A tuple of the expected @n attributes for the <staff> tags in this
-            <section>. This tells the function how many parts there are and what @n values they use.
+            <section>. This tells the function how many parts there are and what @n values
+            they use.
         :type allPartNs: tuple of str
 
         **Optional Keyword Parameters**
 
-        The following parameters are all optional, and must be specified as a keyword argument (i.e.,
-        you specify the parameter name before its value).
+        The following parameters are all optional, and must be specified as a keyword argument
+        (i.e. you specify the parameter name before its value).
 
         :param activeMeter: The :class:`~music21.meter.TimeSignature` active at the start of this
             <section> or <score>. This is updated automatically as the music is processed, and the
             :class:`TimeSignature` active at the end of the element is returned.
         :type activeMeter: :class:`music21.meter.TimeSignature`
-        :param nextMeasureLeft: The @left attribute to use for the next <measure> element encountered.
-            This is used for situations where one <measure> element specified a @right attribute that
-            must be imported by music21 as *both* the right barline of one measure and the left barline
-            of the following; at the moment this is only @rptboth, which requires a :class:`Repeat` in
-            both cases.
+        :param nextMeasureLeft: The @left attribute to use for the next <measure> element
+            encountered. This is used for situations where one <measure> element specified a
+            @right attribute that must be imported by music21 as *both* the right barline of one
+            measure and the left barline of the following; at the moment this is only @rptboth,
+            which requires a :class:`Repeat` in both cases.
         :type nextMeasureLeft: :class:`music21.bar.Barline` or :class:`music21.bar.Repeat`
         :param backupMeasureNum: In case a <measure> element is missing its @n attribute,
             :func:`measureFromElement` will use this automatically-incremented number instead. The
-            ``backupMeasureNum`` corresponding to the final <measure> in this <score> or <section> is
-            returned from this function.
+            ``backupMeasureNum`` corresponding to the final <measure> in this <score> or <section>
+            is returned from this function.
         :type backupMeasureNum: int
-        :returns: Four-tuple with a dictionary of results, the new value of ``activeMeter``, the new
-            value of ``nextMeasureLeft``, and the new value of ``backupMeasureNum``.
+        :returns: Four-tuple with a dictionary of results, the new value of ``activeMeter``, the
+            new value of ``nextMeasureLeft``, and the new value of ``backupMeasureNum``.
         :rtype: (dict, :class:`~music21.meter.TimeSignature`, :class:`~music21.bar.Barline`, int)
 
         **Return Value**
 
         In short, it's ``parsed``, ``activeMeter``, ``nextMeasureLeft``, ``backupMeasureNum``.
 
-        - ``'parsed'`` is a dictionary where the keys are the values in ``allPartNs`` and the values are
-            a list of all the :class:`Measure` objects in that part, as found in this <section> or
-            <score>.
-        - ``'activeMeter'`` is the :class:`~music21.meter.TimeSignature` in effect at the end of this
+        - ``'parsed'`` is a dictionary where the keys are the values in ``allPartNs`` and the
+            values are a list of all the :class:`Measure` objects in that part, as found in this
             <section> or <score>.
-        - ``'nextMeasureLeft'`` is the value that should be
-            assigned to the :attr:`leftBarline` attribute
-            of the first :class:`Measure` found in the next <section>. This will almost always be None.
+        - ``'activeMeter'`` is the :class:`~music21.meter.TimeSignature` in effect at the end of
+            this <section> or <score>.
+        - ``'nextMeasureLeft'`` is the value that should be assigned to the :attr:`leftBarline`
+            attribute of the first :class:`Measure` found in the next <section>. This will almost
+            always be None.
         - ``'backupMeasureNum'`` is equal to the ``backupMeasureNum`` argument plus the number of
             <measure> elements found in this <score> or <section>.
         '''
@@ -7527,9 +7442,9 @@ class MeiToM21Converter:
 
         # TODO: replace the returned 4-tuple with a namedtuple
 
-        # NOTE: "activeMeter" holds the TimeSignature object that's currently active; it's used in the
-        # loop below to help determine the proper duration of a full-measure rest. It must persist
-        # between <section> elements, so it's a parameter for this function.
+        # NOTE: "activeMeter" holds the TimeSignature object that's currently active; it's used
+        # in the loop below to help determine the proper duration of a full-measure rest. It must
+        # persist between <section> elements, so it's a parameter for this function.
 
         scoreTag: str = f'{MEI_NS}score'
         sectionTag: str = f'{MEI_NS}section'
@@ -7627,12 +7542,12 @@ class MeiToM21Converter:
                     nextMeasureLeft = None
 
             elif scoreDefTag == eachElem.tag:
-                # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups) in the
-                # very first <scoreDef> in the <score>.  After that we just scan them for staffDefs.
+                # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups)
+                # in the very first <scoreDef> in the <score>.  After that we just scan them
+                # for staffDefs.
                 parseStaffGrps: bool = elem.tag == scoreTag and not scoreDefSeen
                 localResult = self.scoreDefFromElement(
                     eachElem,
-                    spannerBundle,
                     otherInfo,
                     allPartNs,
                     parseStaffGrps=parseStaffGrps
@@ -7688,41 +7603,44 @@ class MeiToM21Converter:
                 nStr: str | None = eachElem.get('n')
                 if nStr is not None:
                     otherInfo['staffNumberForDef'] = nStr
-                    for eachObj in staffDefFromElement(
-                        eachElem, spannerBundle, otherInfo
+                    for eachObj in self.staffDefFromElement(
+                        eachElem, otherInfo
                     ).values():
                         if isinstance(eachObj, meter.TimeSignature):
                             activeMeter = eachObj
                         inNextThing[nStr].append(eachObj)
                     otherInfo.pop('staffNumberForDef')
                 else:
-                    # At the moment, to process this here, we need an @n on the <staffDef>. A document
-                    # may have a still-valid <staffDef> if the <staffDef> has an @xml:id with which
-                    # <staff> elements may refer to it.
-                    environLocal.warn(self._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
+                    # At the moment, to process this here, we need an @n on the <staffDef>. A
+                    # document may have a still-valid <staffDef> if the <staffDef> has an @xml:id
+                    # with which <staff> elements may refer to it.
+                    environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
 
             elif eachElem.tag in (sectionTag, endingTag):
                 # NOTE: same as scoreFE() (except the name of "inNextThing")
-                localParsed, activeMeter, nextMeasureLeft, backupMeasureNum = self.sectionFromElement(
-                    eachElem,
-                    activeMeter,
-                    otherInfo,
-                    allPartNs,
-                    nextMeasureLeft,
-                    backupMeasureNum)
+                localParsed, activeMeter, nextMeasureLeft, backupMeasureNum = (
+                    self.sectionFromElement(
+                        eachElem,
+                        activeMeter,
+                        otherInfo,
+                        allPartNs,
+                        nextMeasureLeft,
+                        backupMeasureNum)
+                )
 
                 for eachN, eachList in localParsed.items():
                     # NOTE: "eachList" is a list of objects that will become a music21 Part.
                     #
-                    # first: if there were objects from a previous <scoreDef> or <staffDef>, we need to
-                    #        put those into the first Measure object we encounter in this Part
+                    # first: if there were objects from a previous <scoreDef> or <staffDef>, we
+                    # need to put those into the first Measure object we encounter in this Part.
                     # TODO: this is where the Instruments get added
                     # TODO: I think "eachList" really means "each list that will become a Part"
                     if eachN == 'whole-score objects':
                         continue
 
                     if inNextThing[eachN]:
-                        # we have to put Instrument objects just before the Measure to which they apply
+                        # we have to put Instrument objects just before the Measure
+                        # to which they apply
                         theInstr = None
                         theInstrI = None
                         for i, eachInsertion in enumerate(inNextThing[eachN]):
@@ -7731,8 +7649,8 @@ class MeiToM21Converter:
                                 theInstrI = i
                                 break
 
-                        # Put the Instrument right in front, then remove it from "inNextThing" so it
-                        # doesn't show up twice.
+                        # Put the Instrument right in front, then remove it from "inNextThing"
+                        # so it doesn't show up twice.
                         if theInstr:
                             if t.TYPE_CHECKING:
                                 assert theInstrI is not None
@@ -7743,14 +7661,15 @@ class MeiToM21Converter:
                             # NOTE: "eachMeasure" is one of the things that will be in the Part,
                             # which are probably but not necessarily Measures
                             if isinstance(eachMeasure, stream.Stream):
-                                # NOTE: ... but now eachMeasure is virtually guaranteed to be a Measure
+                                # NOTE: ... but now eachMeasure is virtually guaranteed to
+                                # be a Measure
                                 for eachInsertion in inNextThing[eachN]:
                                     eachMeasure.insert(0.0, eachInsertion)
                                 break
                         inNextThing[eachN] = []
 
-                    # Then we can append the objects in this Part to the dict of all parsed objects, but
-                    # NOTE that this is different for <section> and <score>.
+                    # Then we can append the objects in this Part to the dict of all parsed
+                    # objects, but NOTE that this is different for <section> and <score>.
                     if elem.tag in (sectionTag, endingTag):
                         # First make a RepeatBracket if this is an <ending>.
                         rb: spanner.RepeatBracket | None = None
@@ -7780,8 +7699,8 @@ class MeiToM21Converter:
                             parsed[eachN].append(rb)
 
                     elif scoreTag == elem.tag:
-                        # If this is a <score>, we can just append the result of each <section> to the
-                        # list that will become the Part.
+                        # If this is a <score>, we can just append the result of each <section>
+                        # to the list that will become the Part.
 
                         # we know eachList is not a list of lists, it's just a list or an object,
                         # so disable mypy checking the type.
@@ -7792,7 +7711,6 @@ class MeiToM21Converter:
                     pageBreak: m21.layout.PageLayout | None = self.pageBreakFromElement(
                         eachElem,
                         activeMeter,
-                        spannerBundle,
                         otherInfo
                     )
                     if pageBreak is not None:
@@ -7803,7 +7721,6 @@ class MeiToM21Converter:
                     systemBreak: m21.layout.SystemLayout | None = self.systemBreakFromElement(
                         eachElem,
                         activeMeter,
-                        spannerBundle,
                         otherInfo
                     )
                     # if we see both breaks, ignore the system break and use the page break
@@ -7817,10 +7734,10 @@ class MeiToM21Converter:
                 # because there isn't anything interesting there, and verovio's humdrum -> MEI
                 # conversion puts this in <section> all the time.
                 if not self._isExpansionChoice(eachElem):
-                    environLocal.warn(self._UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
+                    environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
-            elif eachElem.tag not in self._IGNORE_UNPROCESSED:
-                environLocal.warn(self._UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
+            elif eachElem.tag not in _IGNORE_UNPROCESSED:
+                environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, elem.tag))
 
         # TODO: write the <section @label=""> part
 
@@ -7863,9 +7780,9 @@ class MeiToM21Converter:
 
         In MEI 2013: pg.432 (446 in PDF) (MEI.shared module)
 
-        .. note:: The parameters and return values are exactly the same for :func:`sectionFromElement`
-            and :func:`sectionScoreCore`, so refer to the latter function's documentation for more
-            information.
+        .. note:: The parameters and return values are exactly the same for
+            :func:`sectionFromElement` and :func:`sectionScoreCore`, so refer to the latter
+            function's documentation for more information.
 
         **Attributes/Elements Implemented:**
 
@@ -7882,22 +7799,20 @@ class MeiToM21Converter:
         - att.declaring (@decls)
         - att.facsimile (@facs)
         - att.typed (@type, @subtype)
-        - att.pointing (@xlink:actuate, @xlink:role, @xlink:show, @target, @targettype, @xlink:title)
+        - att.pointing (@xlink:*, @target, @targettype)
         - att.section.vis (@restart)
         - att.section.anl (att.common.anl (@copyof, @corresp, @next, @prev, @sameas, @synch)
                                           (att.alignment (@when)))
 
         **Contained Elements not Implemented:**
 
-        - MEI.critapp: app
-        - MEI.edittrans: add choice corr damage del gap handShift orig reg
-                         restore sic subst supplied unclear
-        - MEI.shared: annot ending expansion pb sb section staff
+        - MEI.edittrans: gap handShift
+        - MEI.shared: annot expansion
         - MEI.text: div
         - MEI.usersymbols: anchoredText curve line symbol
         '''
         environLocal.printDebug('*** processing a <section>')
-        return sectionScoreCore(
+        return self.sectionScoreCore(
             elem,
             activeMeter,
             otherInfo,
@@ -8028,267 +7943,258 @@ class MeiToM21Converter:
 
         return theScore
 
-    layerChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceLayerChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceLayerChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}mRest': mRestFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}bTrem': bTremFromElement,
-        f'{MEI_NS}fTrem': fTremFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}mSpace': mSpaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-        f'{MEI_NS}meterSig': timeSigFromElement,
-        f'{MEI_NS}keySig': keySigFromElementInLayer,
-    }
+# -----------------------------------------------------------------------------
+_DOC_ORDER = [
+    MeiToM21Converter.accidFromElement,
+    MeiToM21Converter.articFromElement,
+    MeiToM21Converter.beamFromElement,
+    MeiToM21Converter.chordFromElement,
+    MeiToM21Converter.clefFromElement,
+    MeiToM21Converter.instrDefFromElement,
+    MeiToM21Converter.layerFromElement,
+    MeiToM21Converter.measureFromElement,
+    MeiToM21Converter.noteFromElement,
+    MeiToM21Converter.spaceFromElement,
+    MeiToM21Converter.mSpaceFromElement,
+    MeiToM21Converter.restFromElement,
+    MeiToM21Converter.mRestFromElement,
+    MeiToM21Converter.scoreFromElement,
+    MeiToM21Converter.sectionFromElement,
+    MeiToM21Converter.scoreDefFromElement,
+    MeiToM21Converter.staffFromElement,
+    MeiToM21Converter.staffDefFromElement,
+    MeiToM21Converter.staffGrpFromElement,
+    MeiToM21Converter.tupletFromElement,
+]
 
-    staffItemsTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceStaffItemsFromElement,
-        f'{MEI_NS}choice': appChoiceStaffItemsFromElement,
-        f'{MEI_NS}add': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}corr': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}damage': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}expan': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}orig': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}reg': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}sic': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}subst': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}supplied': passThruEditorialStaffItemsFromElement,
-        f'{MEI_NS}unclear': passThruEditorialStaffItemsFromElement,
-        #         f'{MEI_NS}anchoredText': anchoredTextFromElement,
-        f'{MEI_NS}arpeg': arpegFromElement,
-        #         f'{MEI_NS}bracketSpan': bracketSpanFromElement,
-        #         f'{MEI_NS}breath': breathFromElement,
-        #         f'{MEI_NS}caesura': caesuraFromElement,
-        f'{MEI_NS}dir': dirFromElement,
-        f'{MEI_NS}dynam': dynamFromElement,
-        f'{MEI_NS}fermata': fermataFromElement,
-        #         f'{MEI_NS}fing': fingFromElement,
-        #         f'{MEI_NS}gliss': glissFromElement,
-        f'{MEI_NS}hairpin': hairpinFromElement,
-        #         f'{MEI_NS}harm': harmFromElement,
-        #         f'{MEI_NS}lv': lvFromElement,
-        #        f'{MEI_NS}mNum': mNumFromElement,
-        f'{MEI_NS}mordent': mordentFromElement,
-        f'{MEI_NS}octave': octaveFromElement,
-        #         f'{MEI_NS}pedal': pedalFromElement,
-        #         f'{MEI_NS}phrase': phraseFromElement,
-        #         f'{MEI_NS}pitchInflection': pitchInflectionFromElement,
-        #         f'{MEI_NS}reh': rehFromElement,
-        f'{MEI_NS}tempo': tempoFromElement,
-        f'{MEI_NS}trill': trillFromElement,
-        f'{MEI_NS}turn': turnFromElement,
-    }
+layerChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceLayerChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceLayerChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}clef': MeiToM21Converter.clefFromElement,
+    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
+    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
+    f'{MEI_NS}rest': MeiToM21Converter.restFromElement,
+    f'{MEI_NS}mRest': MeiToM21Converter.mRestFromElement,
+    f'{MEI_NS}beam': MeiToM21Converter.beamFromElement,
+    f'{MEI_NS}tuplet': MeiToM21Converter.tupletFromElement,
+    f'{MEI_NS}bTrem': MeiToM21Converter.bTremFromElement,
+    f'{MEI_NS}fTrem': MeiToM21Converter.fTremFromElement,
+    f'{MEI_NS}space': MeiToM21Converter.spaceFromElement,
+    f'{MEI_NS}mSpace': MeiToM21Converter.mSpaceFromElement,
+    f'{MEI_NS}barLine': MeiToM21Converter.barLineFromElement,
+    f'{MEI_NS}meterSig': MeiToM21Converter.timeSigFromElement,
+    f'{MEI_NS}keySig': MeiToM21Converter.keySigFromElementInLayer,
+}
 
-    noteChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceNoteChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceNoteChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialNoteChildrenFromElement,
-        f'{MEI_NS}artic': articFromElement,
-        f'{MEI_NS}accid': accidFromElement,
-        f'{MEI_NS}verse': verseFromElement,
-        f'{MEI_NS}syl': sylFromElement
-    }
+staffItemsTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceStaffItemsFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceStaffItemsFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
+    #         f'{MEI_NS}anchoredText': MeiToM21Converter.anchoredTextFromElement,
+    f'{MEI_NS}arpeg': MeiToM21Converter.arpegFromElement,
+    #         f'{MEI_NS}bracketSpan': MeiToM21Converter.bracketSpanFromElement,
+    #         f'{MEI_NS}breath': MeiToM21Converter.breathFromElement,
+    #         f'{MEI_NS}caesura': MeiToM21Converter.caesuraFromElement,
+    f'{MEI_NS}dir': MeiToM21Converter.dirFromElement,
+    f'{MEI_NS}dynam': MeiToM21Converter.dynamFromElement,
+    f'{MEI_NS}fermata': MeiToM21Converter.fermataFromElement,
+    #         f'{MEI_NS}fing': MeiToM21Converter.fingFromElement,
+    #         f'{MEI_NS}gliss': MeiToM21Converter.glissFromElement,
+    f'{MEI_NS}hairpin': MeiToM21Converter.hairpinFromElement,
+    #         f'{MEI_NS}harm': MeiToM21Converter.harmFromElement,
+    #         f'{MEI_NS}lv': MeiToM21Converter.lvFromElement,
+    #        f'{MEI_NS}mNum': MeiToM21Converter.mNumFromElement,
+    f'{MEI_NS}mordent': MeiToM21Converter.mordentFromElement,
+    f'{MEI_NS}octave': MeiToM21Converter.octaveFromElement,
+    #         f'{MEI_NS}pedal': MeiToM21Converter.pedalFromElement,
+    #         f'{MEI_NS}phrase': MeiToM21Converter.phraseFromElement,
+    #         f'{MEI_NS}pitchInflection': MeiToM21Converter.pitchInflectionFromElement,
+    #         f'{MEI_NS}reh': MeiToM21Converter.rehFromElement,
+    f'{MEI_NS}tempo': MeiToM21Converter.tempoFromElement,
+    f'{MEI_NS}trill': MeiToM21Converter.trillFromElement,
+    f'{MEI_NS}turn': MeiToM21Converter.turnFromElement,
+}
 
-    chordChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceChordChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceChordChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialChordChildrenFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}artic': articFromElement,
-        f'{MEI_NS}verse': verseFromElement,
-        f'{MEI_NS}syl': sylFromElement,
-    }
+noteChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceNoteChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceNoteChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
+    f'{MEI_NS}artic': MeiToM21Converter.articFromElement,
+    f'{MEI_NS}accid': MeiToM21Converter.accidFromElement,
+    f'{MEI_NS}verse': MeiToM21Converter.verseFromElement,
+    f'{MEI_NS}syl': MeiToM21Converter.sylFromElement
+}
 
-    beamChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceBeamChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceBeamChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialBeamChildrenFromElement,
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}bTrem': bTremFromElement,
-        f'{MEI_NS}fTrem': fTremFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-    }
+chordChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceChordChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceChordChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
+    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
+    f'{MEI_NS}artic': MeiToM21Converter.articFromElement,
+    f'{MEI_NS}verse': MeiToM21Converter.verseFromElement,
+    f'{MEI_NS}syl': MeiToM21Converter.sylFromElement,
+}
 
-    tupletChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceTupletChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceTupletChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialTupletChildrenFromElement,
-        f'{MEI_NS}tuplet': tupletFromElement,
-        f'{MEI_NS}beam': beamFromElement,
-        f'{MEI_NS}bTrem': bTremFromElement,
-        f'{MEI_NS}fTrem': fTremFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}rest': restFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-        f'{MEI_NS}clef': clefFromElement,
-        f'{MEI_NS}space': spaceFromElement,
-        f'{MEI_NS}barLine': barLineFromElement,
-    }
+beamChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceBeamChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceBeamChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
+    f'{MEI_NS}clef': MeiToM21Converter.clefFromElement,
+    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
+    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
+    f'{MEI_NS}rest': MeiToM21Converter.restFromElement,
+    f'{MEI_NS}tuplet': MeiToM21Converter.tupletFromElement,
+    f'{MEI_NS}beam': MeiToM21Converter.beamFromElement,
+    f'{MEI_NS}bTrem': MeiToM21Converter.bTremFromElement,
+    f'{MEI_NS}fTrem': MeiToM21Converter.fTremFromElement,
+    f'{MEI_NS}space': MeiToM21Converter.spaceFromElement,
+    f'{MEI_NS}barLine': MeiToM21Converter.barLineFromElement,
+}
 
-    bTremChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceBTremChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceBTremChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialBTremChildrenFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-    }
+tupletChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceTupletChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceTupletChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
+    f'{MEI_NS}tuplet': MeiToM21Converter.tupletFromElement,
+    f'{MEI_NS}beam': MeiToM21Converter.beamFromElement,
+    f'{MEI_NS}bTrem': MeiToM21Converter.bTremFromElement,
+    f'{MEI_NS}fTrem': MeiToM21Converter.fTremFromElement,
+    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
+    f'{MEI_NS}rest': MeiToM21Converter.restFromElement,
+    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
+    f'{MEI_NS}clef': MeiToM21Converter.clefFromElement,
+    f'{MEI_NS}space': MeiToM21Converter.spaceFromElement,
+    f'{MEI_NS}barLine': MeiToM21Converter.barLineFromElement,
+}
 
-    fTremChildrenTagToFunction: dict[str, t.Callable[
-        [Element,
-            meter.TimeSignature | None,
-            spanner.SpannerBundle,
-            dict[str, str]],
-        t.Any]
-    ] = {
-        f'{MEI_NS}app': appChoiceFTremChildrenFromElement,
-        f'{MEI_NS}choice': appChoiceFTremChildrenFromElement,
-        f'{MEI_NS}add': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}corr': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}damage': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}expan': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}orig': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}reg': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}sic': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}subst': passThruEditorialLayerChildrenFromElement,
-        f'{MEI_NS}supplied': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}unclear': passThruEditorialFTremChildrenFromElement,
-        f'{MEI_NS}note': noteFromElement,
-        f'{MEI_NS}chord': chordFromElement,
-    }
+bTremChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceBTremChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceBTremChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
+    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
+    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
+}
 
-
-    # -----------------------------------------------------------------------------
-    _DOC_ORDER = [
-        accidFromElement,
-        articFromElement,
-        beamFromElement,
-        chordFromElement,
-        clefFromElement,
-        instrDefFromElement,
-        layerFromElement,
-        measureFromElement,
-        noteFromElement,
-        spaceFromElement,
-        mSpaceFromElement,
-        restFromElement,
-        mRestFromElement,
-        scoreFromElement,
-        sectionFromElement,
-        scoreDefFromElement,
-        staffFromElement,
-        staffDefFromElement,
-        staffGrpFromElement,
-        tupletFromElement,
-    ]
+fTremChildrenTagToFunction: dict[str, t.Callable[
+    [Element,
+        meter.TimeSignature | None,
+        dict[str, str]],
+    t.Any]
+] = {
+    f'{MEI_NS}app': MeiToM21Converter.appChoiceFTremChildrenFromElement,
+    f'{MEI_NS}choice': MeiToM21Converter.appChoiceFTremChildrenFromElement,
+    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
+    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
+    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
+    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
+}
 
 if __name__ == '__main__':
     m21.mainTest()

@@ -237,6 +237,46 @@ class M21Utilities:
         return True
 
     @staticmethod
+    def isMultiStaffInstrument(inst: m21.instrument.Instrument | None) -> bool:
+        if inst is None:
+            return False
+
+        # Weirdly, music21 doesn't derive Organ from KeyboardInstrument, go figure.  Check both.
+        return isinstance(inst, (m21.instrument.KeyboardInstrument, m21.instrument.Organ))
+
+    @staticmethod
+    def makeDuration(
+        base: OffsetQLIn = 0.0,
+        dots: int = 0
+    ) -> m21.duration.Duration:
+        '''
+        Given a base duration and a number of dots, create a :class:`~music21.duration.Duration`
+        instance with the appropriate ``quarterLength`` value.
+
+        Returns a :class:`Duration` corresponding to the fully-augmented value.
+
+        **Examples**
+
+        >>> from converter21 import M21Utilities
+        >>> from fractions import Fraction
+        >>> M21Utilities.makeDuration(base=2.0, dots=0).quarterLength  # half note, no dots
+        2.0
+        >>> M21Utilities.makeDuration(base=2.0, dots=1).quarterLength  # half note, one dot
+        3.0
+        >>> M21Utilities.makeDuration(base=2, dots=2).quarterLength  # 'base' can be an int or float
+        3.5
+        >>> M21Utilities.makeDuration(2.0, 10).quarterLength  # crazy dots
+        3.998046875
+        >>> M21Utilities.makeDuration(0.33333333333333333333, 0).quarterLength  # fractions too
+        Fraction(1, 3)
+        >>> M21Utilities.makeDuration(Fraction(1, 3), 1).quarterLength
+        0.5
+        '''
+        output: m21.duration.Duration = m21.duration.Duration(base)
+        output.dots = dots
+        return output
+
+    @staticmethod
     def splitComplexRestDurations(s: m21.stream.Stream) -> None:
         # only handles rests that are in s directly (does not recurse)
         # always in-place, never adds ties (because they're rests)
@@ -298,6 +338,47 @@ class M21Utilities:
         pc: int = M21Utilities._STEP_TO_PITCH_CLASS[m21Pitch.step]
         octave: int = m21Pitch.implicitOctave  # implicit means return default (4) if None
         return pc + (7 * octave)
+
+    @staticmethod
+    def safePitch(
+        name: str,
+        accidental: m21.pitch.Accidental | str | None = None,
+        octave: str | int = ''
+    ) -> m21.pitch.Pitch:
+        '''
+        Safely build a :class:`~music21.pitch.Pitch` from a string.
+
+        When :meth:`~music21.pitch.Pitch.__init__` is given an empty string,
+        it raises a :exc:`~music21.pitch.PitchException`. This
+        function instead returns a default :class:`~music21.pitch.Pitch` instance.
+
+        name: Desired name of the :class:`~music21.pitch.Pitch`.
+
+        accidental: (Optional) Symbol for the accidental.
+
+        octave: (Optional) Octave number.
+
+        Returns A :class:`~music21.pitch.Pitch` with the appropriate properties.
+
+        >>> from converter21.M21Utilities import safePitch
+        >>> safePitch('D#6')
+        <music21.pitch.Pitch D#6>
+        >>> safePitch('D', '#', '6')
+        <music21.pitch.Pitch D#6>
+        >>> safePitch('D', '#', 6)
+        <music21.pitch.Pitch D#6>
+        >>> safePitch('D', '#')
+        <music21.pitch.Pitch D#>
+        '''
+        if not name:
+            return m21.pitch.Pitch()
+        if (octave or octave == 0) and accidental is not None:
+            return m21.pitch.Pitch(name, octave=int(octave), accidental=accidental)
+        if octave or octave == 0:
+            return m21.pitch.Pitch(name, octave=int(octave))
+        if accidental is not None:
+            return m21.pitch.Pitch(name, accidental=accidental)
+        return m21.pitch.Pitch(name)
 
     @staticmethod
     def getAltersForKey(
