@@ -309,6 +309,8 @@ class MeiToM21Converter:
         #  so I put it at class level.
         environLocal.printDebug('*** initializing MeiToM21Converter')
 
+        self.initializeTagToFunctionTables()
+
         self.documentRoot: Element
 
         if theDocument is None:
@@ -735,7 +737,7 @@ class MeiToM21Converter:
 
     # "Preprocessing" Functions
     # -----------------------------------------------------------------------------
-    def _ppSlurs(self):
+    def _ppSlurs(self) -> None:
         # noinspection PyShadowingNames
         '''
         Pre-processing helper for :func:`convertFromString` that handles slurs specified in <slur>
@@ -824,7 +826,7 @@ class MeiToM21Converter:
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid and @endid')
                 )
 
-    def _ppTies(self):
+    def _ppTies(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles ties specified in <tie>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
@@ -869,7 +871,7 @@ class MeiToM21Converter:
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<tie>', '@startid and @endid')
                 )
 
-    def _ppBeams(self):
+    def _ppBeams(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles beams specified
         in <beamSpan> elements. The input is a :class:`MeiToM21Converter` with data about
@@ -915,7 +917,7 @@ class MeiToM21Converter:
                     # only set to 'continue' if it wasn't previously set to 'start' or 'stop'
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
 
-    def _ppTuplets(self):
+    def _ppTuplets(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles tuplets specified in
         <tupletSpan> elements. The input is a :class:`MeiToM21Converter` with data about the file
@@ -1025,7 +1027,7 @@ class MeiToM21Converter:
                 if tempStr:
                     self.m21Attr[endid]['m21TupletNumFormat'] = tempStr
 
-    def _ppFermatas(self):
+    def _ppFermatas(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles fermats specified
         in <fermata> elements. The input is a :class:`MeiToM21Converter` with data about
@@ -1072,7 +1074,7 @@ class MeiToM21Converter:
             if shape:
                 self.m21Attr[startId]['fermata_shape'] = shape
 
-    def _ppTrills(self):
+    def _ppTrills(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles trills specified in <trill>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
@@ -1150,7 +1152,7 @@ class MeiToM21Converter:
                 # we have to finish in trillFromElement, tell him about our TrillExtension
                 eachTrill.set('m21TrillExtension', thisIdLocal)
 
-    def _ppMordents(self):
+    def _ppMordents(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles mordents in <mordent>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
@@ -1202,7 +1204,7 @@ class MeiToM21Converter:
 
                 eachMordent.set('ignore_mordent_in_mordentFromElement', 'true')
 
-    def _ppTurns(self):
+    def _ppTurns(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles turns in <turn>
         elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
@@ -1262,7 +1264,7 @@ class MeiToM21Converter:
         ('22', 'below'): '22db',
     }
 
-    def _ppOctaves(self):
+    def _ppOctaves(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles ottavas specified in
         <octave> elements. The input is a :class:`MeiToM21Converter` with data about the file
@@ -1339,7 +1341,7 @@ class MeiToM21Converter:
         ('true', 'nonarp'): 'non-arpeggio',   # arrow is ignored
     }
 
-    def _ppArpeggios(self):
+    def _ppArpeggios(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in
         <arpeg> elements. The input is a :class:`MeiToM21Converter` with data about the file
@@ -1413,7 +1415,7 @@ class MeiToM21Converter:
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
                 eachArpeg.set('ignore_in_arpegFromElement', 'true')
 
-    def _ppConclude(self):
+    def _ppConclude(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that adds attributes from
         ``m21Attr`` to the appropriate elements in ``documentRoot``. The input is a
@@ -1518,7 +1520,7 @@ class MeiToM21Converter:
         for eachElem in elements:
             if eachElem.tag in mapping:
                 result: Music21Object | tuple[Music21Object, ...] | list[Music21Object] | None = (
-                    mapping[eachElem.tag](self, eachElem, activeMeter, otherInfo)
+                    mapping[eachElem.tag](eachElem, activeMeter, otherInfo)
                 )
                 if isinstance(result, list):
                     for eachObject in result:
@@ -4004,7 +4006,7 @@ class MeiToM21Converter:
 
         # iterate all immediate children
         for subElement in self._processEmbeddedElements(elem.findall('*'),
-                                                   noteChildrenTagToFunction,
+                                                   self.noteChildrenTagToFunction,
                                                    elem.tag,
                                                    activeMeter,
                                                    otherInfo):
@@ -4418,7 +4420,7 @@ class MeiToM21Converter:
         spannersFromNotes: list[tuple[note.Note, list[spanner.Spanner]]] = []
         # iterate all immediate children
         for subElement in self._processEmbeddedElements(elem.findall('*'),
-                                                   chordChildrenTagToFunction,
+                                                   self.chordChildrenTagToFunction,
                                                    elem.tag,
                                                    activeMeter,
                                                    otherInfo):
@@ -4889,7 +4891,7 @@ class MeiToM21Converter:
         '''
         beamedStuff: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
-            beamChildrenTagToFunction,
+            self.beamChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -4912,7 +4914,7 @@ class MeiToM21Converter:
         '''
         bTremStuff: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
-            bTremChildrenTagToFunction,
+            self.bTremChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -4956,7 +4958,7 @@ class MeiToM21Converter:
         '''
         fTremStuff: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
-            fTremChildrenTagToFunction,
+            self.fTremChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5141,7 +5143,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         tupletMembers: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
-            tupletChildrenTagToFunction,
+            self.tupletChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5269,7 +5271,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theLayer: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            layerChildrenTagToFunction,
+            self.layerChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5330,7 +5332,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            layerChildrenTagToFunction,
+            self.layerChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5347,7 +5349,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            layerChildrenTagToFunction,
+            self.layerChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5381,7 +5383,7 @@ class MeiToM21Converter:
         ] = (
             self._processEmbeddedElements(
                 chosen.iterfind('*'),
-                staffItemsTagToFunction,
+                self.staffItemsTagToFunction,
                 chosen.tag,
                 activeMeter,
                 otherInfo)
@@ -5411,7 +5413,7 @@ class MeiToM21Converter:
         ] = (
             self._processEmbeddedElements(
                 elem.iterfind('*'),
-                staffItemsTagToFunction,
+                self.staffItemsTagToFunction,
                 elem.tag,
                 activeMeter,
                 otherInfo)
@@ -5432,7 +5434,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            noteChildrenTagToFunction,
+            self.noteChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5449,7 +5451,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            noteChildrenTagToFunction,
+            self.noteChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5470,7 +5472,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            chordChildrenTagToFunction,
+            self.chordChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5487,7 +5489,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            chordChildrenTagToFunction,
+            self.chordChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5508,7 +5510,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            beamChildrenTagToFunction,
+            self.beamChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5525,7 +5527,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            beamChildrenTagToFunction,
+            self.beamChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5546,7 +5548,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            tupletChildrenTagToFunction,
+            self.tupletChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5563,7 +5565,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            tupletChildrenTagToFunction,
+            self.tupletChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5584,7 +5586,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            bTremChildrenTagToFunction,
+            self.bTremChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5601,7 +5603,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            bTremChildrenTagToFunction,
+            self.bTremChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -5622,7 +5624,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             chosen.iterfind('*'),
-            fTremChildrenTagToFunction,
+            self.fTremChildrenTagToFunction,
             chosen.tag,
             activeMeter,
             otherInfo
@@ -5639,7 +5641,7 @@ class MeiToM21Converter:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
-            fTremChildrenTagToFunction,
+            self.fTremChildrenTagToFunction,
             elem.tag,
             activeMeter,
             otherInfo
@@ -7157,7 +7159,7 @@ class MeiToM21Converter:
                     )
                     otherInfo.pop('staffNumberForDef')
 
-            elif eachElem.tag in staffItemsTagToFunction:
+            elif eachElem.tag in self.staffItemsTagToFunction:
                 offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
                 m21Obj: Music21Object | None
                 triple: tuple[
@@ -7165,7 +7167,7 @@ class MeiToM21Converter:
                     tuple[OffsetQL | None, int | None, OffsetQL | None],
                     Music21Object
                 ]
-                triple = staffItemsTagToFunction[eachElem.tag](
+                triple = self.staffItemsTagToFunction[eachElem.tag](
                     eachElem, activeMeter, otherInfo
                 )
 
@@ -7943,6 +7945,237 @@ class MeiToM21Converter:
 
         return theScore
 
+    def initializeTagToFunctionTables(self) -> None:
+        self.layerChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceLayerChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceLayerChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}chord': self.chordFromElement,
+            f'{MEI_NS}note': self.noteFromElement,
+            f'{MEI_NS}rest': self.restFromElement,
+            f'{MEI_NS}mRest': self.mRestFromElement,
+            f'{MEI_NS}beam': self.beamFromElement,
+            f'{MEI_NS}tuplet': self.tupletFromElement,
+            f'{MEI_NS}bTrem': self.bTremFromElement,
+            f'{MEI_NS}fTrem': self.fTremFromElement,
+            f'{MEI_NS}space': self.spaceFromElement,
+            f'{MEI_NS}mSpace': self.mSpaceFromElement,
+            f'{MEI_NS}barLine': self.barLineFromElement,
+            f'{MEI_NS}meterSig': self.timeSigFromElement,
+            f'{MEI_NS}keySig': self.keySigFromElementInLayer,
+        }
+
+        self.staffItemsTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceStaffItemsFromElement,
+            f'{MEI_NS}choice': self.appChoiceStaffItemsFromElement,
+            f'{MEI_NS}add': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialStaffItemsFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialStaffItemsFromElement,
+            #         f'{MEI_NS}anchoredText': self.anchoredTextFromElement,
+            f'{MEI_NS}arpeg': self.arpegFromElement,
+            #         f'{MEI_NS}bracketSpan': self.bracketSpanFromElement,
+            #         f'{MEI_NS}breath': self.breathFromElement,
+            #         f'{MEI_NS}caesura': self.caesuraFromElement,
+            f'{MEI_NS}dir': self.dirFromElement,
+            f'{MEI_NS}dynam': self.dynamFromElement,
+            f'{MEI_NS}fermata': self.fermataFromElement,
+            #         f'{MEI_NS}fing': self.fingFromElement,
+            #         f'{MEI_NS}gliss': self.glissFromElement,
+            f'{MEI_NS}hairpin': self.hairpinFromElement,
+            #         f'{MEI_NS}harm': self.harmFromElement,
+            #         f'{MEI_NS}lv': self.lvFromElement,
+            #        f'{MEI_NS}mNum': self.mNumFromElement,
+            f'{MEI_NS}mordent': self.mordentFromElement,
+            f'{MEI_NS}octave': self.octaveFromElement,
+            #         f'{MEI_NS}pedal': self.pedalFromElement,
+            #         f'{MEI_NS}phrase': self.phraseFromElement,
+            #         f'{MEI_NS}pitchInflection': self.pitchInflectionFromElement,
+            #         f'{MEI_NS}reh': self.rehFromElement,
+            f'{MEI_NS}tempo': self.tempoFromElement,
+            f'{MEI_NS}trill': self.trillFromElement,
+            f'{MEI_NS}turn': self.turnFromElement,
+        }
+
+        self.noteChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceNoteChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceNoteChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}artic': self.articFromElement,
+            f'{MEI_NS}accid': self.accidFromElement,
+            f'{MEI_NS}verse': self.verseFromElement,
+            f'{MEI_NS}syl': self.sylFromElement
+        }
+
+        self.chordChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceChordChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceChordChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialChordChildrenFromElement,
+            f'{MEI_NS}note': self.noteFromElement,
+            f'{MEI_NS}artic': self.articFromElement,
+            f'{MEI_NS}verse': self.verseFromElement,
+            f'{MEI_NS}syl': self.sylFromElement,
+        }
+
+        self.beamChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceBeamChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceBeamChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialBeamChildrenFromElement,
+            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}chord': self.chordFromElement,
+            f'{MEI_NS}note': self.noteFromElement,
+            f'{MEI_NS}rest': self.restFromElement,
+            f'{MEI_NS}tuplet': self.tupletFromElement,
+            f'{MEI_NS}beam': self.beamFromElement,
+            f'{MEI_NS}bTrem': self.bTremFromElement,
+            f'{MEI_NS}fTrem': self.fTremFromElement,
+            f'{MEI_NS}space': self.spaceFromElement,
+            f'{MEI_NS}barLine': self.barLineFromElement,
+        }
+
+        self.tupletChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceTupletChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceTupletChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialTupletChildrenFromElement,
+            f'{MEI_NS}tuplet': self.tupletFromElement,
+            f'{MEI_NS}beam': self.beamFromElement,
+            f'{MEI_NS}bTrem': self.bTremFromElement,
+            f'{MEI_NS}fTrem': self.fTremFromElement,
+            f'{MEI_NS}note': self.noteFromElement,
+            f'{MEI_NS}rest': self.restFromElement,
+            f'{MEI_NS}chord': self.chordFromElement,
+            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}space': self.spaceFromElement,
+            f'{MEI_NS}barLine': self.barLineFromElement,
+        }
+
+        self.bTremChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceBTremChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceBTremChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialBTremChildrenFromElement,
+            f'{MEI_NS}note': self.noteFromElement,
+            f'{MEI_NS}chord': self.chordFromElement,
+        }
+
+        self.fTremChildrenTagToFunction: dict[str, t.Callable[
+            [Element,
+                meter.TimeSignature | None,
+                dict[str, str]],
+            t.Any]
+        ] = {
+            f'{MEI_NS}app': self.appChoiceFTremChildrenFromElement,
+            f'{MEI_NS}choice': self.appChoiceFTremChildrenFromElement,
+            f'{MEI_NS}add': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}corr': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}damage': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}expan': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}orig': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}reg': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}sic': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}supplied': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}unclear': self.passThruEditorialFTremChildrenFromElement,
+            f'{MEI_NS}note': self.noteFromElement,
+            f'{MEI_NS}chord': self.chordFromElement,
+        }
+
+
 # -----------------------------------------------------------------------------
 _DOC_ORDER = [
     MeiToM21Converter.accidFromElement,
@@ -7966,235 +8199,6 @@ _DOC_ORDER = [
     MeiToM21Converter.staffGrpFromElement,
     MeiToM21Converter.tupletFromElement,
 ]
-
-layerChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceLayerChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceLayerChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}clef': MeiToM21Converter.clefFromElement,
-    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
-    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
-    f'{MEI_NS}rest': MeiToM21Converter.restFromElement,
-    f'{MEI_NS}mRest': MeiToM21Converter.mRestFromElement,
-    f'{MEI_NS}beam': MeiToM21Converter.beamFromElement,
-    f'{MEI_NS}tuplet': MeiToM21Converter.tupletFromElement,
-    f'{MEI_NS}bTrem': MeiToM21Converter.bTremFromElement,
-    f'{MEI_NS}fTrem': MeiToM21Converter.fTremFromElement,
-    f'{MEI_NS}space': MeiToM21Converter.spaceFromElement,
-    f'{MEI_NS}mSpace': MeiToM21Converter.mSpaceFromElement,
-    f'{MEI_NS}barLine': MeiToM21Converter.barLineFromElement,
-    f'{MEI_NS}meterSig': MeiToM21Converter.timeSigFromElement,
-    f'{MEI_NS}keySig': MeiToM21Converter.keySigFromElementInLayer,
-}
-
-staffItemsTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceStaffItemsFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceStaffItemsFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialStaffItemsFromElement,
-    #         f'{MEI_NS}anchoredText': MeiToM21Converter.anchoredTextFromElement,
-    f'{MEI_NS}arpeg': MeiToM21Converter.arpegFromElement,
-    #         f'{MEI_NS}bracketSpan': MeiToM21Converter.bracketSpanFromElement,
-    #         f'{MEI_NS}breath': MeiToM21Converter.breathFromElement,
-    #         f'{MEI_NS}caesura': MeiToM21Converter.caesuraFromElement,
-    f'{MEI_NS}dir': MeiToM21Converter.dirFromElement,
-    f'{MEI_NS}dynam': MeiToM21Converter.dynamFromElement,
-    f'{MEI_NS}fermata': MeiToM21Converter.fermataFromElement,
-    #         f'{MEI_NS}fing': MeiToM21Converter.fingFromElement,
-    #         f'{MEI_NS}gliss': MeiToM21Converter.glissFromElement,
-    f'{MEI_NS}hairpin': MeiToM21Converter.hairpinFromElement,
-    #         f'{MEI_NS}harm': MeiToM21Converter.harmFromElement,
-    #         f'{MEI_NS}lv': MeiToM21Converter.lvFromElement,
-    #        f'{MEI_NS}mNum': MeiToM21Converter.mNumFromElement,
-    f'{MEI_NS}mordent': MeiToM21Converter.mordentFromElement,
-    f'{MEI_NS}octave': MeiToM21Converter.octaveFromElement,
-    #         f'{MEI_NS}pedal': MeiToM21Converter.pedalFromElement,
-    #         f'{MEI_NS}phrase': MeiToM21Converter.phraseFromElement,
-    #         f'{MEI_NS}pitchInflection': MeiToM21Converter.pitchInflectionFromElement,
-    #         f'{MEI_NS}reh': MeiToM21Converter.rehFromElement,
-    f'{MEI_NS}tempo': MeiToM21Converter.tempoFromElement,
-    f'{MEI_NS}trill': MeiToM21Converter.trillFromElement,
-    f'{MEI_NS}turn': MeiToM21Converter.turnFromElement,
-}
-
-noteChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceNoteChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceNoteChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialNoteChildrenFromElement,
-    f'{MEI_NS}artic': MeiToM21Converter.articFromElement,
-    f'{MEI_NS}accid': MeiToM21Converter.accidFromElement,
-    f'{MEI_NS}verse': MeiToM21Converter.verseFromElement,
-    f'{MEI_NS}syl': MeiToM21Converter.sylFromElement
-}
-
-chordChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceChordChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceChordChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialChordChildrenFromElement,
-    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
-    f'{MEI_NS}artic': MeiToM21Converter.articFromElement,
-    f'{MEI_NS}verse': MeiToM21Converter.verseFromElement,
-    f'{MEI_NS}syl': MeiToM21Converter.sylFromElement,
-}
-
-beamChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceBeamChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceBeamChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialBeamChildrenFromElement,
-    f'{MEI_NS}clef': MeiToM21Converter.clefFromElement,
-    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
-    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
-    f'{MEI_NS}rest': MeiToM21Converter.restFromElement,
-    f'{MEI_NS}tuplet': MeiToM21Converter.tupletFromElement,
-    f'{MEI_NS}beam': MeiToM21Converter.beamFromElement,
-    f'{MEI_NS}bTrem': MeiToM21Converter.bTremFromElement,
-    f'{MEI_NS}fTrem': MeiToM21Converter.fTremFromElement,
-    f'{MEI_NS}space': MeiToM21Converter.spaceFromElement,
-    f'{MEI_NS}barLine': MeiToM21Converter.barLineFromElement,
-}
-
-tupletChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceTupletChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceTupletChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialTupletChildrenFromElement,
-    f'{MEI_NS}tuplet': MeiToM21Converter.tupletFromElement,
-    f'{MEI_NS}beam': MeiToM21Converter.beamFromElement,
-    f'{MEI_NS}bTrem': MeiToM21Converter.bTremFromElement,
-    f'{MEI_NS}fTrem': MeiToM21Converter.fTremFromElement,
-    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
-    f'{MEI_NS}rest': MeiToM21Converter.restFromElement,
-    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
-    f'{MEI_NS}clef': MeiToM21Converter.clefFromElement,
-    f'{MEI_NS}space': MeiToM21Converter.spaceFromElement,
-    f'{MEI_NS}barLine': MeiToM21Converter.barLineFromElement,
-}
-
-bTremChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceBTremChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceBTremChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialBTremChildrenFromElement,
-    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
-    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
-}
-
-fTremChildrenTagToFunction: dict[str, t.Callable[
-    [Element,
-        meter.TimeSignature | None,
-        dict[str, str]],
-    t.Any]
-] = {
-    f'{MEI_NS}app': MeiToM21Converter.appChoiceFTremChildrenFromElement,
-    f'{MEI_NS}choice': MeiToM21Converter.appChoiceFTremChildrenFromElement,
-    f'{MEI_NS}add': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}corr': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}damage': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}expan': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}orig': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}reg': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}sic': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}subst': MeiToM21Converter.passThruEditorialLayerChildrenFromElement,
-    f'{MEI_NS}supplied': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}unclear': MeiToM21Converter.passThruEditorialFTremChildrenFromElement,
-    f'{MEI_NS}note': MeiToM21Converter.noteFromElement,
-    f'{MEI_NS}chord': MeiToM21Converter.chordFromElement,
-}
 
 if __name__ == '__main__':
     m21.mainTest()
