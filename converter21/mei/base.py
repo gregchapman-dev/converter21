@@ -413,9 +413,10 @@ class MeiToM21Converter:
         ...     </section>
         ... </score>"""
         >>> import xml.etree.ElementTree as ETree
-        >>> from converter21.mei.base import allPartsPresent
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> meiDoc = ETree.fromstring(meiDoc)
-        >>> allPartsPresent(meiDoc)
+        >>> c = MeiToM21Converter()
+        >>> c.allPartsPresent(meiDoc)
         (('1', '2'), '1')
 
         Even though there are three <staffDef> elements in the document, there are only
@@ -599,9 +600,9 @@ class MeiToM21Converter:
 
         >>> from converter21.mei.base import MeiToM21Converter
         >>> c = MeiToM21Converter()
-        >>> c._attrTranslator('s', 'accid', _ACCID_ATTR_DICT)
+        >>> c._attrTranslator('s', 'accid', MeiToM21Converter._ACCID_ATTR_DICT)
         '#'
-        >>> c._attrTranslator('9', 'dur', _DUR_ATTR_DICT) == None
+        >>> c._attrTranslator('9', 'dur', MeiToM21Converter._DUR_ATTR_DICT) == None
         True
         '''
         try:
@@ -1498,10 +1499,11 @@ class MeiToM21Converter:
 
         >>> from xml.etree.ElementTree import Element
         >>> from music21 import note
-        >>> from converter21.mei.base import _processEmbeddedElements
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> elements = [Element('note'), Element('rest'), Element('note')]
-        >>> mapping = {'note': lambda w, x, y, z: note.Note('D2')}
-        >>> _processEmbeddedElements(elements, mapping, 'doctest1', None, None, {})
+        >>> mapping = {'note': lambda w, x, y: note.Note('D2')}
+        >>> c = MeiToM21Converter()
+        >>> c._processEmbeddedElements(elements, mapping, 'doctest1', None, {})
         [<music21.note.Note D>, <music21.note.Note D>]
 
         If debugging is enabled for the previous example, this warning would be displayed:
@@ -1511,9 +1513,9 @@ class MeiToM21Converter:
         The "beam" element holds "note" elements. All elements appear in a single level of the list:
 
         >>> elements = [Element('note'), Element('beam'), Element('note')]
-        >>> mapping = {'note': lambda w, x, y, z: note.Note('D2'),
-        ...            'beam': lambda w, x, y, z: [note.Note('E2') for _ in range(2)]}
-        >>> _processEmbeddedElements(elements, mapping, 'doctest2', None, None, {})
+        >>> mapping = {'note': lambda w, x, y: note.Note('D2'),
+        ...            'beam': lambda w, x, y: [note.Note('E2') for _ in range(2)]}
+        >>> c._processEmbeddedElements(elements, mapping, 'doctest2', None, {})
         [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
         '''
         processed: list[t.Any] = []
@@ -2248,10 +2250,11 @@ class MeiToM21Converter:
         '''
         Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
 
-        >>> from converter21.mei.base import removeOctothorpe
-        >>> removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
+        >>> from converter21.mei.base import MeiToM21Converter
+        >>> c = MeiToM21Converter()
+        >>> c.removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
         '110a923d-a13a-4a2e-b85c-e1d438e4c5d6'
-        >>> removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
+        >>> c.removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
         'e46cbe82-95fc-4522-9f7a-700e41a40c8e'
         '''
         if xmlid and xmlid.startswith('#'):
@@ -2658,20 +2661,27 @@ class MeiToM21Converter:
         ...     </staffGrp>
         ... </scoreDef>
         ... """
-        >>> from converter21.mei.base import scoreDefFromElement
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> from xml.etree import ElementTree as ET
+        >>> c = MeiToM21Converter()
         >>> scoreDef = ET.fromstring(meiDoc)
-        >>> result = scoreDefFromElement(scoreDef, None, {}, parseStaffGrps=True)
+        >>> result = c.scoreDefFromElement(scoreDef, {}, ['1','2','3'], parseStaffGrps=True)
         >>> len(result)
-        5
+        6
         >>> result['1']
         {'instrument': <music21.instrument.Clarinet '1: Clarinet: Clarinet'>}
+        >>> result['2']
+        {'instrument': <music21.instrument.Flute '2: Flute: Flute'>}
         >>> result['3']
         {'instrument': <music21.instrument.Violin '3: Violin: Violin'>}
         >>> result['all-part objects']
         [<music21.meter.TimeSignature 3/4>]
-        >>> result['whole-score objects']
-        []
+        >>> result['whole-score objects'].keys()
+        dict_keys(['staff-groups', 'parts'])
+        >>> len(result['whole-score objects']['staff-groups'])
+        2
+        >>> len(result['whole-score objects']['parts'])
+        3
 
         :param elem: The ``<scoreDef>`` element to process.
         :type elem: :class:`~xml.etree.ElementTree.Element`
@@ -3249,10 +3259,11 @@ class MeiToM21Converter:
         >>> meiDoc = """<?xml version="1.0" encoding="UTF-8"?>
         ... <staffDef n="1" label="Clarinet" xmlns="http://www.music-encoding.org/ns/mei"/>
         ... """
-        >>> from converter21.mei.base import staffDefFromElement
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> from xml.etree import ElementTree as ET
+        >>> c = MeiToM21Converter()
         >>> staffDef = ET.fromstring(meiDoc)
-        >>> result = staffDefFromElement(staffDef, None, {})
+        >>> result = c.staffDefFromElement(staffDef, {})
         >>> len(result)
         1
         >>> result
@@ -3270,10 +3281,9 @@ class MeiToM21Converter:
         ...     <clef shape="F" line="4"/>
         ... </staffDef>
         ... """
-        >>> from converter21.mei.base import staffDefFromElement
         >>> from xml.etree import ElementTree as ET
         >>> staffDef = ET.fromstring(meiDoc)
-        >>> result = staffDefFromElement(staffDef, None, {})
+        >>> result = c.staffDefFromElement(staffDef, {})
         >>> len(result)
         3
         >>> result['instrument']
@@ -3502,17 +3512,18 @@ class MeiToM21Converter:
         :attr:`~music21.note.GeneralNote.articulations` attribute.
 
         >>> from xml.etree import ElementTree as ET
-        >>> from converter21.mei.base import articFromElement
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> meiSnippet = '<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> articFromElement(meiSnippet, None, None, {})
+        >>> c = MeiToM21Converter()
+        >>> c.articFromElement(meiSnippet, None, {})
         [<music21.articulations.Accent>]
 
         A single <artic> element may indicate many :class:`Articulation` objects.
 
         >>> meiSnippet = '<artic artic="acc ten" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> articFromElement(meiSnippet, None, None, {})
+        >>> c. articFromElement(meiSnippet, None, {})
         [<music21.articulations.Accent>, <music21.articulations.Tenuto>]
 
         **Attributes Implemented:**
@@ -3564,14 +3575,15 @@ class MeiToM21Converter:
         **Examples**
 
         >>> from xml.etree import ElementTree as ET
-        >>> from converter21.mei.base import accidFromElement
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> meiSnippet = '<accid accid.ges="s" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> accidFromElement(meiSnippet, None, None, {})
+        >>> c = MeiToM21Converter()
+        >>> c.accidFromElement(meiSnippet, None, {})
         <music21.pitch.Accidental sharp>
         >>> meiSnippet = '<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> accidFromElement(meiSnippet, None, None, {})
+        >>> c.accidFromElement(meiSnippet, None, {})
         <music21.pitch.Accidental triple-flat>
 
         **Attributes/Elements Implemented:**
@@ -4877,14 +4889,15 @@ class MeiToM21Converter:
         a list of three objects, none of which is a :class:`Beam` or similar.
 
         >>> from xml.etree import ElementTree as ET
-        >>> from converter21.mei.base import beamFromElement
+        >>> from converter21.mei.base import MeiToM21Converter
         >>> meiSnippet = """<beam xmlns="http://www.music-encoding.org/ns/mei">
         ...     <note pname='A' oct='7' dur='8'/>
         ...     <note pname='B' oct='7' dur='8'/>
         ...     <note pname='C' oct='6' dur='8'/>
         ... </beam>"""
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> result = beamFromElement(meiSnippet, None, None, {})
+        >>> c = MeiToM21Converter()
+        >>> result = c.beamFromElement(meiSnippet, None, {})
         >>> isinstance(result, list)
         True
         >>> len(result)
