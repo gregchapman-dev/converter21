@@ -55,8 +55,10 @@ from music21 import stream
 from music21 import tie
 
 from converter21.mei import base
+from converter21.mei.base import MeiToM21Converter
 from converter21.mei.base import _XMLID
 from converter21.mei.base import MEI_NS
+from converter21.shared import M21Utilities
 
 # pylint: disable=pointless-string-statement
 
@@ -67,7 +69,7 @@ class Test(unittest.TestCase):
 
     def testInit1(self):
         '''__init__(): no argument gives an "empty" MeiToM21Converter instance'''
-        actual = base.MeiToM21Converter()
+        actual = MeiToM21Converter()
         self.assertIsNotNone(actual.documentRoot)
         self.assertIsInstance(actual.m21Attr, defaultdict)
         self.assertIsInstance(actual.spannerBundle, spanner.SpannerBundle)
@@ -77,7 +79,7 @@ class Test(unittest.TestCase):
         inputFile = '''<?xml version="1.0" encoding="UTF-8"?>
                        <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="2013">
                        <music><score></score></music></mei>'''
-        actual = base.MeiToM21Converter(inputFile)
+        actual = MeiToM21Converter(inputFile)
         # NB: at first I did this:
         # self.assertIsInstance(actual.documentRoot, ETree.Element)
         # ... but that doesn't work since it might be a C-Element instead
@@ -89,9 +91,9 @@ class Test(unittest.TestCase):
     def testInit3(self):
         '''__init__(): an invalid XML file causes an MeiValidityError'''
         inputFile = 'this is not an XML file'
-        self.assertRaises(base.MeiValidityError, base.MeiToM21Converter, inputFile)
+        self.assertRaises(base.MeiValidityError, MeiToM21Converter, inputFile)
         try:
-            base.MeiToM21Converter(inputFile)
+            MeiToM21Converter(inputFile)
         except base.MeiValidityError as theError:
             self.assertEqual(base._INVALID_XML_DOC, theError.args[0])
 
@@ -101,43 +103,11 @@ class Test(unittest.TestCase):
                        <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
                                                        "http://www.musicxml.org/dtds/partwise.dtd">
                        <score-partwise></score-partwise>'''
-        self.assertRaises(base.MeiElementError, base.MeiToM21Converter, inputFile)
+        self.assertRaises(base.MeiElementError, MeiToM21Converter, inputFile)
         try:
-            base.MeiToM21Converter(inputFile)
+            MeiToM21Converter(inputFile)
         except base.MeiElementError as theError:
             self.assertEqual(base._WRONG_ROOT_ELEMENT.format('score-partwise'), theError.args[0])
-
-    @mock.patch('converter21.mei.base._ppSlurs')
-    @mock.patch('converter21.mei.base._ppTies')
-    @mock.patch('converter21.mei.base._ppBeams')
-    @mock.patch('converter21.mei.base._ppTuplets')
-    @mock.patch('converter21.mei.base._ppConclude')
-    @mock.patch('converter21.mei.base.scoreFromElement')
-    @mock.patch('converter21.mei.base.makeMetadata')
-    def testRun1(self, mockMeta, mockScoreFE, mockConclude,
-                 mockTuplet, mockBeams, mockTies, mockSlurs):
-        '''
-        MeiToM21Converter.run(): that it works
-        '''
-        # ha... "test run"... get it?
-        testConv = base.MeiToM21Converter()
-        testConv.documentRoot = mock.MagicMock(spec_set=ETree.Element)
-        testConv.documentRoot.find.return_value = 5
-        expScore = mock.MagicMock(spec_set=stream.Stream)
-        mockScoreFE.return_value = expScore
-        expDocRootQuery = f'.//{MEI_NS}music//{MEI_NS}score'
-
-        actual = testConv.run()
-
-        self.assertIs(expScore, actual)
-        mockTuplet.assert_called_once_with(testConv)
-        mockBeams.assert_called_once_with(testConv)
-        mockTies.assert_called_once_with(testConv)
-        mockSlurs.assert_called_once_with(testConv)
-        mockConclude.assert_called_once_with(testConv)
-        testConv.documentRoot.find.assert_called_once_with(expDocRootQuery)
-        mockScoreFE.assert_called_once_with(5, None, testConv.spannerBundle, {})
-        mockMeta.assert_called_once_with(testConv.documentRoot)
 
     # -----------------------------------------------------------------------------
     # class TestThings(unittest.TestCase):
@@ -147,7 +117,7 @@ class Test(unittest.TestCase):
         '''safePitch(): when ``name`` is a valid pitch name'''
         name = 'D#6'
         expected = pitch.Pitch('D#6')
-        actual = base.safePitch(name)
+        actual = M21Utilities.safePitch(name)
         self.assertEqual(expected.name, actual.name)
         self.assertEqual(expected.accidental, actual.accidental)
         self.assertEqual(expected.octave, actual.octave)
@@ -156,7 +126,7 @@ class Test(unittest.TestCase):
         '''safePitch(): when ``name`` is not a valid pitch name'''
         name = ''
         expected = pitch.Pitch()
-        actual = base.safePitch(name)
+        actual = M21Utilities.safePitch(name)
         self.assertEqual(expected.name, actual.name)
         self.assertEqual(expected.accidental, actual.accidental)
         self.assertEqual(expected.octave, actual.octave)
@@ -164,7 +134,7 @@ class Test(unittest.TestCase):
     def testSafePitch3(self):
         '''safePitch(): when ``name`` is not given, but there are various **keywords'''
         expected = pitch.Pitch('D#6')
-        actual = base.safePitch(name='D', accidental='#', octave='6')
+        actual = M21Utilities.safePitch(name='D', accidental='#', octave='6')
         self.assertEqual(expected.name, actual.name)
         self.assertEqual(expected.accidental, actual.accidental)
         self.assertEqual(expected.octave, actual.octave)
@@ -172,7 +142,7 @@ class Test(unittest.TestCase):
     def testSafePitch4(self):
         '''safePitch(): when 2nd argument is None'''
         expected = pitch.Pitch('D6')
-        actual = base.safePitch(name='D', accidental=None, octave='6')
+        actual = M21Utilities.safePitch(name='D', accidental=None, octave='6')
         self.assertEqual(expected.name, actual.name)
         self.assertEqual(expected.accidental, actual.accidental)
         self.assertEqual(expected.octave, actual.octave)
@@ -184,7 +154,8 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
         expected = (('1',), '1')
-        actual = base.allPartsPresent(elem)
+        c = MeiToM21Converter()
+        actual = c.allPartsPresent(elem)
         self.assertEqual(expected, actual)
 
     def testAllPartsPresent2(self):
@@ -195,7 +166,8 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
         expected = (('1', '2', '3', '4'), '1')
-        actual = base.allPartsPresent(elem)
+        c = MeiToM21Converter()
+        actual = c.allPartsPresent(elem)
         self.assertEqual(expected, actual)
 
     def testAllPartsPresent3(self):
@@ -206,15 +178,17 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
         expected = (('1', '2', '3', '4'), '1')
-        actual = base.allPartsPresent(elem)
+        c = MeiToM21Converter()
+        actual = c.allPartsPresent(elem)
         self.assertEqual(expected, actual)
 
     def testAllPartsPresent4(self):
         '''allPartsPresent(): error: no <staffDef>s'''
         elem = mock.MagicMock(spec_set=ETree.Element)
-        self.assertRaises(base.MeiValidityError, base.allPartsPresent, elem)
+        c = MeiToM21Converter()
+        self.assertRaises(base.MeiValidityError, c.allPartsPresent, elem)
         try:
-            base.allPartsPresent(elem)
+            c.allPartsPresent(elem)
         except base.MeiValidityError as mvErr:
             self.assertEqual(base._SEEMINGLY_NO_PARTS, mvErr.args[0])
 
@@ -222,7 +196,7 @@ class Test(unittest.TestCase):
         '''_timeSigFromAttrs(): that it works (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'meter.count': '3', 'meter.unit': '8'})
         expectedRatioString = '3/8'
-        actual = base._timeSigFromAttrs(elem, prefix='meter.')
+        actual = MeiToM21Converter._timeSigFromAttrs(elem, prefix='meter.')
         self.assertEqual(expectedRatioString, actual.ratioString)
 
     def testKeySigFromAttrs1(self):
@@ -230,7 +204,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('{mei}staffDef', attrib={'key.pname': 'B', 'key.accid': 'f',
                                                       'key.mode': 'minor'})
         expectedTPNWC = 'b-'
-        actual = base._keySigFromAttrs(elem, prefix='key.')
+        c = MeiToM21Converter()
+        actual = c._keySigFromAttrs(elem, prefix='key.')
         self.assertIsInstance(actual, key.Key)
         self.assertEqual(expectedTPNWC, actual.tonicPitchNameWithCase)
 
@@ -239,7 +214,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('{mei}staffDef', attrib={'key.sig': '6s', 'key.mode': 'minor'})
         expectedSharps = 6
         expectedMode = 'minor'
-        actual = base._keySigFromAttrs(elem, prefix='key.')
+        c = MeiToM21Converter()
+        actual = c._keySigFromAttrs(elem, prefix='key.')
         self.assertIsInstance(actual, key.KeySignature)
         self.assertEqual(expectedSharps, actual.sharps)
         self.assertEqual(expectedMode, actual.mode)
@@ -248,7 +224,8 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): descending transposition (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '-3', 'trans.diat': '-2'})
         expectedName = 'm-3'
-        actual = base._transpositionFromAttrs(elem)
+        c = MeiToM21Converter()
+        actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
 
@@ -256,7 +233,8 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): ascending transposition (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '7', 'trans.diat': '4'})
         expectedName = 'P5'
-        actual = base._transpositionFromAttrs(elem)
+        c = MeiToM21Converter()
+        actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
 
@@ -264,7 +242,8 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): large ascending interval (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '19', 'trans.diat': '11'})
         expectedName = 'P12'
-        actual = base._transpositionFromAttrs(elem)
+        c = MeiToM21Converter()
+        actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
 
@@ -272,7 +251,8 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): alternate octave spec (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '12', 'trans.diat': '0'})
         expectedName = 'P8'
-        actual = base._transpositionFromAttrs(elem)
+        c = MeiToM21Converter()
+        actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
 
@@ -280,7 +260,8 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): alternate large descending interval (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '-19', 'trans.diat': '-4'})
         expectedName = 'P-12'
-        actual = base._transpositionFromAttrs(elem)
+        c = MeiToM21Converter()
+        actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
 
@@ -288,7 +269,8 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): alternate ascending sixteenth interval (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '26', 'trans.diat': '1'})
         expectedName = 'M16'
-        actual = base._transpositionFromAttrs(elem)
+        c = MeiToM21Converter()
+        actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
 
@@ -296,61 +278,42 @@ class Test(unittest.TestCase):
         '''removeOctothorpe(): when there's an octothorpe'''
         xmlid = '#14ccdc11-8090-49f4-b094-5935f534131a'
         expected = '14ccdc11-8090-49f4-b094-5935f534131a'
-        actual = base.removeOctothorpe(xmlid)
+        c = MeiToM21Converter()
+        actual = c.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
     def testRemoveOctothorpe2(self):
         '''removeOctothorpe(): when there's not an octothorpe'''
         xmlid = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
         expected = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
-        actual = base.removeOctothorpe(xmlid)
+        c = MeiToM21Converter()
+        actual = c.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base._makeArticList')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._makeArticList')
     def testArticFromElement(self, mockMakeList):
         '''articFromElement(): very straight-forward test'''
         elem = ETree.Element('artic', attrib={'artic': 'yes'})
         mockMakeList.return_value = 5
-        actual = base.articFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.articFromElement(elem, None, {})
         self.assertEqual(5, actual)
         mockMakeList.assert_called_once_with('yes')
 
     def testAccidFromElement(self):
         '''accidFromElement(): very straight-forward test'''
         elem = ETree.Element('accid', attrib={'accid': 's'})
-        actual = base.accidFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.accidFromElement(elem, None, {})
         self.assertEqual(pitch.Accidental('#'), actual)
-
-#     def testGetVoiceId1(self):
-#         '''getVoiceId(): usual case'''
-#         theVoice = stream.Voice()
-#         theVoice.id = 42
-#         fromThese = [None, theVoice, stream.Stream(), stream.Part(), 900]
-#         expected = 42
-#         actual = base.getVoiceId(fromThese)
-#         self.assertEqual(expected, actual)
-#
-#     def testGetVoiceId2(self):
-#         '''getVoiceId(): no Voice objects causes RuntimeError'''
-#         fromThese = [None, stream.Stream(), stream.Part(), 900]
-#         self.assertRaises(RuntimeError, base.getVoiceId, fromThese)
-#
-#     def testGetVoiceId3(self):
-#         '''getVoiceId(): three Voice objects causes RuntimeError'''
-#         firstVoice = stream.Voice()
-#         firstVoice.id = 42
-#         otherVoice = stream.Voice()
-#         otherVoice.id = 24
-#         fromThese = [None, firstVoice, stream.Stream(), stream.Part(), otherVoice, 900]
-#         self.assertRaises(RuntimeError, base.getVoiceId, fromThese)
 
     # -----------------------------------------------------------------------------
     # class TestMetadata(unittest.TestCase):
     # '''Tests for the metadata-fetching functions.'''
 
-    @mock.patch('converter21.mei.base.metaSetTitle')
-    @mock.patch('converter21.mei.base.metaSetComposer')
-    @mock.patch('converter21.mei.base.metaSetDate')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetTitle')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetComposer')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetDate')
     def testMakeMeta1(self, mockDate, mockComposer, mockTitle):
         '''
         makeMetadata() when there is no <work> element.
@@ -358,7 +321,9 @@ class Test(unittest.TestCase):
         documentRoot = mock.MagicMock(spec_set=ETree.Element)
         documentRoot.find.return_value = None
 
-        actual = base.makeMetadata(documentRoot)
+        c = MeiToM21Converter()
+        c.documentRoot = documentRoot
+        actual = c.makeMetadata()
 
         self.assertIsInstance(actual, metadata.Metadata)
         documentRoot.find.assert_called_once_with(f'.//{MEI_NS}work')
@@ -366,9 +331,9 @@ class Test(unittest.TestCase):
         self.assertEqual(0, mockComposer.call_count)
         self.assertEqual(0, mockTitle.call_count)
 
-    @mock.patch('converter21.mei.base.metaSetTitle')
-    @mock.patch('converter21.mei.base.metaSetComposer')
-    @mock.patch('converter21.mei.base.metaSetDate')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetTitle')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetComposer')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetDate')
     def testMakeMeta2(self, mockDate, mockComposer, mockTitle):
         '''
         makeMetadata() when there is a <work> element.
@@ -380,7 +345,9 @@ class Test(unittest.TestCase):
         mockComposer.side_effect = lambda unused, y: y
         mockTitle.side_effect = lambda unused, y: y
 
-        actual = base.makeMetadata(documentRoot)
+        c = MeiToM21Converter()
+        c.documentRoot = documentRoot
+        actual = c.makeMetadata()
 
         self.assertIsInstance(actual, metadata.Metadata)
         documentRoot.find.assert_called_once_with(f'.//{MEI_NS}work')
@@ -403,7 +370,8 @@ class Test(unittest.TestCase):
         expMovementName = 'Adagio'
         meta = metadata.Metadata()
 
-        actual = base.metaSetTitle(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetTitle(work, meta)
 
         self.assertIs(meta, actual)
         self.assertFalse(hasattr(meta, 'subtitle'))
@@ -424,7 +392,8 @@ class Test(unittest.TestCase):
         expTitle = 'Symphony No. 7 (in one movement)'
         meta = metadata.Metadata()
 
-        actual = base.metaSetTitle(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetTitle(work, meta)
 
         self.assertIs(meta, actual)
         self.assertFalse(hasattr(meta, 'subtitle'))
@@ -439,7 +408,8 @@ class Test(unittest.TestCase):
         work = ETree.fromstring(work)
         meta = metadata.Metadata()
 
-        actual = base.metaSetComposer(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
         self.assertIsNone(actual.composer)
@@ -459,7 +429,8 @@ class Test(unittest.TestCase):
         expComposer = 'Jean Sibelius'
         meta = metadata.Metadata()
 
-        actual = base.metaSetComposer(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expComposer, actual.composer)
@@ -477,7 +448,8 @@ class Test(unittest.TestCase):
         expComposer = 'Jean Sibelius'
         meta = metadata.Metadata()
 
-        actual = base.metaSetComposer(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expComposer, actual.composer)
@@ -499,7 +471,8 @@ class Test(unittest.TestCase):
         expComposers2 = ('Sibelius, Jean', 'Jean Sibelius')
         meta = metadata.Metadata()
 
-        actual = base.metaSetComposer(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
         if actual.composers not in (expComposers1, expComposers2):
@@ -514,7 +487,8 @@ class Test(unittest.TestCase):
         expDate = None
         meta = metadata.Metadata()
 
-        actual = base.metaSetDate(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
@@ -534,7 +508,8 @@ class Test(unittest.TestCase):
         expDate = '1924/03/02'
         meta = metadata.Metadata()
 
-        actual = base.metaSetDate(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
@@ -554,7 +529,8 @@ class Test(unittest.TestCase):
         expDate = '1924/03/02'
         meta = metadata.Metadata()
 
-        actual = base.metaSetDate(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
@@ -576,7 +552,8 @@ class Test(unittest.TestCase):
         expWarn = base._MISSED_DATE.format('2 March 1924')
         meta = metadata.Metadata()
 
-        actual = base.metaSetDate(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
@@ -597,7 +574,8 @@ class Test(unittest.TestCase):
         expDate = '1915/--/-- to 1924/--/--'
         meta = metadata.Metadata()
 
-        actual = base.metaSetDate(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
@@ -617,7 +595,8 @@ class Test(unittest.TestCase):
         expDate = '1915/--/-- to 1924/--/--'
         meta = metadata.Metadata()
 
-        actual = base.metaSetDate(work, meta)
+        c = MeiToM21Converter()
+        actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
@@ -632,7 +611,8 @@ class Test(unittest.TestCase):
         name = 'numbers'
         mapping = {'one': 1, 'two': 2, 'three': 3}
         expected = 2
-        actual = base._attrTranslator(attr, name, mapping)
+        c = MeiToM21Converter()
+        actual = c._attrTranslator(attr, name, mapping)
         self.assertEqual(expected, actual)
 
     def testAttrTranslator2(self):
@@ -640,106 +620,117 @@ class Test(unittest.TestCase):
         attr = 'four'
         name = 'numbers'
         mapping = {'one': 1, 'two': 2, 'three': 3}
+        c = MeiToM21Converter()
         try:
-            base._attrTranslator(attr, name, mapping)
+            c._attrTranslator(attr, name, mapping)
         except base.MeiValueError:
             self.fail('MeiValueError incorrectly raised when attr isn\'t found')
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testAccidental(self, mockTrans):
         '''_accidentalFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 's'
-        base._accidentalFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'accid', base._ACCID_ATTR_DICT)
+        c = MeiToM21Converter()
+        c._accidentalFromAttr(attr)
+        mockTrans.assert_called_once_with(attr, 'accid', MeiToM21Converter._ACCID_ATTR_DICT)
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testAccidGes(self, mockTrans):
         '''_accidGesFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 's'
-        base._accidGesFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'accid.ges', base._ACCID_GES_ATTR_DICT)
+        c = MeiToM21Converter()
+        c._accidGesFromAttr(attr)
+        mockTrans.assert_called_once_with(attr, 'accid.ges', MeiToM21Converter._ACCID_GES_ATTR_DICT)
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testDuration(self, mockTrans):
         '''_qlDurationFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 's'
-        base._qlDurationFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'dur', base._DUR_ATTR_DICT)
+        c = MeiToM21Converter()
+        c._qlDurationFromAttr(attr)
+        mockTrans.assert_called_once_with(attr, 'dur', MeiToM21Converter._DUR_ATTR_DICT)
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testArticulation1(self, mockTrans):
         '''_articulationFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 'marc'
         mockTrans.return_value = mock.MagicMock(name='asdf', return_value=5)
         expected = (5,)
-        actual = base._articulationFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'artic', base._ARTIC_ATTR_DICT)
+        c = MeiToM21Converter()
+        actual = c._articulationFromAttr(attr)
+        mockTrans.assert_called_once_with(attr, 'artic', MeiToM21Converter._ARTIC_ATTR_DICT)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testArticulation2(self, mockTrans):
         '''_articulationFromAttr(): proper handling of "marc-stacc"'''
         attr = 'marc-stacc'
         expected = (articulations.StrongAccent, articulations.Staccato)
-        actual = base._articulationFromAttr(attr)
+        c = MeiToM21Converter()
+        actual = c._articulationFromAttr(attr)
         self.assertEqual(0, mockTrans.call_count)
         for i in range(len(expected)):
             actualHere = actual[i]
             expectedHere = expected[i]
             self.assertIsInstance(actualHere, expectedHere)
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testArticulation3(self, mockTrans):
         '''_articulationFromAttr(): proper handling of "ten-stacc"'''
         attr = 'ten-stacc'
         expected = (articulations.Tenuto, articulations.Staccato)
-        actual = base._articulationFromAttr(attr)
+        c = MeiToM21Converter()
+        actual = c._articulationFromAttr(attr)
         self.assertEqual(0, mockTrans.call_count)
         for i in range(len(expected)):
             actualHere = actual[i]
             expectedHere = expected[i]
             self.assertIsInstance(actualHere, expectedHere)
 
-    @mock.patch('converter21.mei.base._attrTranslator')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
     def testArticulation4(self, mockTrans):
         '''_articulationFromAttr(): proper handling of not-found'''
         attr = 'garbage'
         expected = 'error message'
         mockTrans.side_effect = base.MeiValueError(expected)
-        self.assertRaises(base.MeiValueError, base._articulationFromAttr, attr)
-        mockTrans.assert_called_once_with(attr, 'artic', base._ARTIC_ATTR_DICT)
+        c = MeiToM21Converter()
+        self.assertRaises(base.MeiValueError, c._articulationFromAttr, attr)
+        mockTrans.assert_called_once_with(attr, 'artic', MeiToM21Converter._ARTIC_ATTR_DICT)
         try:
-            base._articulationFromAttr(attr)
+            c._articulationFromAttr(attr)
         except base.MeiValueError as mvErr:
             self.assertEqual(expected, mvErr.args[0])
 
-    @mock.patch('converter21.mei.base._articulationFromAttr')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._articulationFromAttr')
     def testArticList1(self, mockArtic):
         '''_makeArticList(): properly handles single-articulation lists'''
         attr = 'acc'
         mockArtic.return_value = ['accent']
         expected = ['accent']
-        actual = base._makeArticList(attr)
+        c = MeiToM21Converter()
+        actual = c._makeArticList(attr)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base._articulationFromAttr')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._articulationFromAttr')
     def testArticList2(self, mockArtic):
         '''_makeArticList(): properly handles multi-articulation lists'''
         attr = 'acc stacc marc'
         mockReturns = [['accent'], ['staccato'], ['marcato']]
         mockArtic.side_effect = lambda unused: mockReturns.pop(0)
         expected = ['accent', 'staccato', 'marcato']
-        actual = base._makeArticList(attr)
+        c = MeiToM21Converter()
+        actual = c._makeArticList(attr)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base._articulationFromAttr')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._articulationFromAttr')
     def testArticList3(self, mockArtic):
         '''_makeArticList(): properly handles the compound articulations'''
         attr = 'acc marc-stacc marc'
         mockReturns = [['accent'], ['marcato', 'staccato'], ['marcato']]
         mockArtic.side_effect = lambda *unused: mockReturns.pop(0)
         expected = ['accent', 'marcato', 'staccato', 'marcato']
-        actual = base._makeArticList(attr)
+        c = MeiToM21Converter()
+        actual = c._makeArticList(attr)
         self.assertEqual(expected, actual)
 
     def testOctaveShift1(self):
@@ -747,7 +738,8 @@ class Test(unittest.TestCase):
         dis = '15'
         disPlace = 'above'
         expected = 2
-        actual = base._getOctaveShift(dis, disPlace)
+        c = MeiToM21Converter()
+        actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
     def testOctaveShift2(self):
@@ -755,7 +747,8 @@ class Test(unittest.TestCase):
         dis = '22'
         disPlace = 'below'
         expected = -3
-        actual = base._getOctaveShift(dis, disPlace)
+        c = MeiToM21Converter()
+        actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
     def testOctaveShift3(self):
@@ -763,7 +756,8 @@ class Test(unittest.TestCase):
         dis = '8'
         disPlace = None
         expected = 1
-        actual = base._getOctaveShift(dis, disPlace)
+        c = MeiToM21Converter()
+        actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
     def testOctaveShift4(self):
@@ -771,14 +765,16 @@ class Test(unittest.TestCase):
         dis = None
         disPlace = None
         expected = 0
-        actual = base._getOctaveShift(dis, disPlace)
+        c = MeiToM21Converter()
+        actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
     def testBarlineFromAttr1(self):
         '''_barlineFromAttr(): rptboth'''
         right = 'rptboth'
         expected = (bar.Repeat('end', times=2), bar.Repeat('start'))
-        actual = base._barlineFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected[0]), type(actual[0]))
         self.assertEqual(type(expected[1]), type(actual[1]))
 
@@ -786,7 +782,8 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): rptend'''
         right = 'rptend'
         expected = bar.Repeat('end', times=2)
-        actual = base._barlineFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.direction, expected.direction)
         self.assertEqual(expected.times, expected.times)
@@ -795,7 +792,8 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): rptstart'''
         right = 'rptstart'
         expected = bar.Repeat('start')
-        actual = base._barlineFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.direction, expected.direction)
         self.assertEqual(expected.times, expected.times)
@@ -804,7 +802,8 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): end (--> final)'''
         right = 'end'
         expected = bar.Barline('final')
-        actual = base._barlineFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
 
@@ -812,7 +811,8 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "i"'''
         right = ''
         expected = tie.Tie('start')
-        actual = base._tieFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
 
@@ -820,7 +820,8 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "ti"'''
         right = ''
         expected = tie.Tie('continue')
-        actual = base._tieFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
 
@@ -828,7 +829,8 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "m"'''
         right = ''
         expected = tie.Tie('continue')
-        actual = base._tieFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
 
@@ -836,7 +838,8 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "t"'''
         right = ''
         expected = tie.Tie('stop')
-        actual = base._tieFromAttr(right)
+        c = MeiToM21Converter()
+        actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
 
@@ -851,7 +854,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 'i', 'con': 's'})
         elem.text = 'Chri'
 
-        actual = base.sylFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.sylFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
@@ -864,7 +868,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 'm', 'con': 't'})
         elem.text = 'sto'
 
-        actual = base.sylFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.sylFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('middle', actual.syllabic)
@@ -877,7 +882,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 't', 'con': 'd'})
         elem.text = 'pher'
 
-        actual = base.sylFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.sylFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('end', actual.syllabic)
@@ -890,7 +896,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl')
         elem.text = 'shoe'
 
-        actual = base.sylFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.sylFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('single', actual.syllabic)
@@ -905,7 +912,8 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.verseFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
@@ -927,7 +935,8 @@ class Test(unittest.TestCase):
         syl.text = '-mith'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.verseFromElement(elem, None, {})
 
         self.assertEqual(3, len(actual.components))
         for eachSyl in actual.components:
@@ -950,7 +959,8 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.verseFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
@@ -968,7 +978,8 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        actual = base.verseFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.verseFromElement(elem, None, {})
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
@@ -991,7 +1002,8 @@ class Test(unittest.TestCase):
         '''
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 's', 'oct': '2', 'dur': '4',
                                              'dots': '1'})
-        actual = base.noteFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(1.5, actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
@@ -1003,7 +1015,8 @@ class Test(unittest.TestCase):
         (this has different arguments than testIntegration1a())
         '''
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 'n', 'oct': '2', 'dur': '4'})
-        actual = base.noteFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
         self.assertEqual('D2', actual.nameWithOctave)
         self.assertEqual(1.0, actual.quarterLength)
         self.assertEqual(0, actual.duration.dots)
@@ -1018,7 +1031,8 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}artic', attrib={'artic': 'stacc'}))
         elem.append(ETree.Element(f'{MEI_NS}accid', attrib={'accid': 's'}))
 
-        actual = base.noteFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(3.0, actual.quarterLength)
@@ -1034,9 +1048,9 @@ class Test(unittest.TestCase):
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid.ges': 's', 'oct': '2', 'dur': '4',
                                              'dots': '1', _XMLID: 'asdf1234', 'artic': 'stacc',
                                              'tie': 'i1'})
-        spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, None, spannerBundle, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(False, actual.pitch.accidental.displayStatus)  # because @accid.ges
@@ -1056,9 +1070,9 @@ class Test(unittest.TestCase):
                                              'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                              'm21TupletSearch': 'start',
                                              'accid': 's', 'm21Beam': 'start'})
-        spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, None, spannerBundle, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
 
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(True, actual.pitch.accidental.displayStatus)  # because @accid
@@ -1079,9 +1093,9 @@ class Test(unittest.TestCase):
         sylElem = ETree.Element(f'{MEI_NS}syl')
         sylElem.text = 'words!'
         elem.append(sylElem)
-        spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, None, spannerBundle, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
 
         self.assertEqual('D2', actual.nameWithOctave)
         self.assertEqual(0.0, actual.quarterLength)
@@ -1109,9 +1123,9 @@ class Test(unittest.TestCase):
         </note>
         '''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
 
-        actual = base.noteFromElement(elem, None, spannerBundle, {})
+        c = MeiToM21Converter()
+        actual = c.noteFromElement(elem, None, {})
 
         self.assertEqual(2, len(actual.lyrics))
         self.assertEqual(1, actual.lyrics[0].number)
@@ -1127,8 +1141,8 @@ class Test(unittest.TestCase):
     # '''Tests for restFromElement() and spaceFromElement()'''
 
     @mock.patch('music21.note.Rest')
-    @mock.patch('converter21.mei.base.makeDuration')
-    @mock.patch('converter21.mei.base.scaleToTuplet')
+    @mock.patch('converter21.shared.M21Utilities.makeDuration')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
     def testUnit1TestRestFromElement(self, mockTuplet, mockMakeDur, mockRest):
         '''
         restFromElement(): test @dur, @dots, @xml:id, and tuplet-related attributes
@@ -1142,7 +1156,8 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = 'tupletized'
         expected = mockTuplet.return_value
 
-        actual = base.restFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.restFromElement(elem, None, {})
 
         self.assertEqual(expected, actual)
         mockRest.assert_called_once_with(duration=mockMakeDur.return_value)
@@ -1160,7 +1175,8 @@ class Test(unittest.TestCase):
                                              'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                              'm21TupletType': 'start'})
 
-        actual = base.restFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.restFromElement(elem, None, {})
 
         self.assertEqual(Fraction(6, 5), actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
@@ -1178,7 +1194,8 @@ class Test(unittest.TestCase):
                                              'm21TupletNumbase': '4',
                                              'm21TupletType': 'start',
                                              })
-        actual = base.spaceFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.spaceFromElement(elem, None, {})
         self.assertIsInstance(actual, note.Rest)
         self.assertTrue(actual.style.hideObjectOnPrint)
         self.assertEqual('the id', actual.id)
@@ -1193,14 +1210,15 @@ class Test(unittest.TestCase):
                                               'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                               'm21TupletType': 'start'})
 
-        actual = base.spaceFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.spaceFromElement(elem, None, {})
 
         self.assertEqual(Fraction(6, 5), actual.quarterLength)
         self.assertEqual(1, actual.duration.dots)
         self.assertEqual('the id', actual.id)
         self.assertEqual('start', actual.duration.tuplets[0].type)
 
-    @mock.patch('converter21.mei.base.restFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.restFromElement')
     def testUnit3TestRestFromElement(self, mockRestFromElement):
         '''
         mRestFromElement(): reacts properly to an Element with the @dur attribute
@@ -1208,12 +1226,13 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mRest', attrib={'dur': '2'})
         mockRestFromElement.return_value = 'the rest'
 
-        actual = base.mRestFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.mRestFromElement(elem, None, {})
 
         self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem, None, None, {})
+        mockRestFromElement.assert_called_once_with(elem, None, {})
 
-    @mock.patch('converter21.mei.base.restFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.restFromElement')
     def testUnit4TestRestFromElement(self, mockRestFromElement):
         '''
         mRestFromElement(): reacts properly to an Element without the @dur attribute
@@ -1221,13 +1240,14 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mRest')
         mockRestFromElement.return_value = mock.MagicMock()
 
-        actual = base.mRestFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.mRestFromElement(elem, None, {})
 
         self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem, None, None, {})
+        mockRestFromElement.assert_called_once_with(elem, None, {})
         self.assertTrue(actual.m21wasMRest)
 
-    @mock.patch('converter21.mei.base.spaceFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.spaceFromElement')
     def testUnit5TestRestFromElement(self, mockSpace):
         '''
         mSpaceFromElement(): reacts properly to an Element with the @dur attribute
@@ -1235,12 +1255,13 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mSpace', attrib={'dur': '2'})
         mockSpace.return_value = 'the spacer'
 
-        actual = base.mSpaceFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.mSpaceFromElement(elem, None, {})
 
         self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem, None, None, {})
+        mockSpace.assert_called_once_with(elem, None, {})
 
-    @mock.patch('converter21.mei.base.spaceFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.spaceFromElement')
     def testUnit6TestRestFromElement(self, mockSpace):
         '''
         mSpaceFromElement(): reacts properly to an Element without the @dur attribute
@@ -1248,10 +1269,11 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mSpace')
         mockSpace.return_value = mock.MagicMock()
 
-        actual = base.mSpaceFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.mSpaceFromElement(elem, None, {})
 
         self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem, None, None, {})
+        mockSpace.assert_called_once_with(elem, None, {})
         self.assertTrue(actual.m21wasMRest)
 
     # -----------------------------------------------------------------------------
@@ -1281,7 +1303,8 @@ class Test(unittest.TestCase):
             elem.append(eachElement)
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        actual = base.chordFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.chordFromElement(elem, None, {})
         self.assertEqual(expectedName, actual.fullName)
 
     def testIntegration2ChordFromElement(self):
@@ -1298,7 +1321,8 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}artic', artic='stacc'))
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        actual = base.chordFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.chordFromElement(elem, None, {})
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
@@ -1317,7 +1341,8 @@ class Test(unittest.TestCase):
             elem.append(eachElement)
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        actual = base.chordFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.chordFromElement(elem, None, {})
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
@@ -1340,7 +1365,8 @@ class Test(unittest.TestCase):
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Quarter')
 
-        actual = base.chordFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.chordFromElement(elem, None, {})
 
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual('5', actual.m21TupletNum)
@@ -1361,7 +1387,8 @@ class Test(unittest.TestCase):
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} 16th')
 
-        actual = base.chordFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.chordFromElement(elem, None, {})
 
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(0.0, actual.quarterLength)
@@ -1390,7 +1417,8 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.Treble8vaClef
 
-        actual = base.clefFromElement(clefElem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.clefFromElement(clefElem, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1406,7 +1434,8 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.PercussionClef
 
-        actual = base.clefFromElement(clefElem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.clefFromElement(clefElem, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1422,7 +1451,8 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.TabClef
 
-        actual = base.clefFromElement(clefElem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.clefFromElement(clefElem, None, {})
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1444,7 +1474,8 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        actual = base.layerFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.layerFromElement(elem, None, {})
 
         self.assertEqual(2, len(actual))
         self.assertEqual('so voice ID', actual.id)
@@ -1466,7 +1497,8 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        actual = base.layerFromElement(elem, None, None, {}, overrideN='so voice ID')
+        c = MeiToM21Converter()
+        actual = c.layerFromElement(elem, None, {}, overrideN='so voice ID')
 
         self.assertEqual(2, len(actual))
         self.assertEqual('so voice ID', actual.id)
@@ -1488,10 +1520,11 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        self.assertRaises(base.MeiAttributeError, base.layerFromElement, elem, None, None, {})
+        c = MeiToM21Converter()
+        self.assertRaises(base.MeiAttributeError, c.layerFromElement, elem, None, {})
 
         try:
-            base.layerFromElement(elem, None, None, {})
+            c.layerFromElement(elem, None, {})
         except base.MeiAttributeError as maError:
             self.assertEqual(base._MISSING_VOICE_ID, maError.args[0])
 
@@ -1499,7 +1532,7 @@ class Test(unittest.TestCase):
     # class TestStaffFromElement(unittest.TestCase):
     # '''Tests for staffFromElement()'''
 
-    @mock.patch('converter21.mei.base.layerFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.layerFromElement')
     def testUnit1StaffFromElement(self, mockLayerFromElement):
         '''
         staffFromElement(): basic functionality (i.e., that layerFromElement() is called with the
@@ -1516,15 +1549,16 @@ class Test(unittest.TestCase):
         elem.iterfind = mock.MagicMock(return_value=findallReturn)
         # "mockLFE" is "mockLayerFromElement"
         expectedMLFEOrder = [
-            mock.call(findallReturn[i], None, None, {}, overrideN=str(i + 1))
+            mock.call(findallReturn[i], None, {}, overrideN=str(i + 1))
             for i in range(len(findallReturn))
         ]
         mockLFEReturns = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
         mockLayerFromElement.side_effect = (
-            lambda x, activeMeter, spannerBundle, otherInfo, overrideN: mockLFEReturns.pop(0))
+            lambda x, activeMeter, otherInfo, overrideN: mockLFEReturns.pop(0))
         expected = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
 
-        actual = base.staffFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffFromElement(elem, None, {})
 
         elem.iterfind.assert_called_once_with('*')
         self.assertEqual(expected, actual)
@@ -1549,7 +1583,8 @@ class Test(unittest.TestCase):
                       </staff>'''
         elem = ETree.fromstring(inputXML)
 
-        actual = base.staffFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffFromElement(elem, None, {})
 
         self.assertEqual(3, len(actual))
         # common to each part
@@ -1572,11 +1607,11 @@ class Test(unittest.TestCase):
     # '''Tests for staffDefFromElement()'''
 
     # noinspection SpellCheckingInspection
-    @mock.patch('converter21.mei.base.instrDefFromElement')
-    @mock.patch('converter21.mei.base._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.clefFromElement')
-    @mock.patch('converter21.mei.base._transpositionFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
     def testUnit1StaffFromElementStaffDefFromElement(self, mockTrans,
                                                      mockClef, mockKey, mockTime, mockInstr):
         '''
@@ -1613,11 +1648,12 @@ class Test(unittest.TestCase):
                          ('transposition', mockTrans.return_value)]
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
-        mockInstr.assert_called_once_with(theInstrDef, None, None, {})
+        mockInstr.assert_called_once_with(theInstrDef, None, {})
         mockTime.assert_called_once_with(elem, prefix='meter.')
         mockKey.assert_called_once_with(elem, prefix='key.')
         # mockClef is more difficult because it's given an Element
@@ -1626,7 +1662,7 @@ class Test(unittest.TestCase):
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY, None, None, {})
+        mockClef.assert_called_once_with(mock.ANY, None, {})
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -1650,7 +1686,8 @@ class Test(unittest.TestCase):
         elem.append(theInstrDef)
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Clarinet)
@@ -1679,7 +1716,8 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}clef', attrib={'shape': 'G', 'line': '2'}))
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Clarinet)
@@ -1692,11 +1730,11 @@ class Test(unittest.TestCase):
         self.assertEqual(0, actual['key'].sharps)
 
     @mock.patch('music21.instrument.fromString')
-    @mock.patch('converter21.mei.base.instrDefFromElement')
-    @mock.patch('converter21.mei.base._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.clefFromElement')
-    @mock.patch('converter21.mei.base._transpositionFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
     def testUnit2StaffFromElement(self, mockTrans, mockClef,
                                   mockKey, mockTime, mockInstr, mockFromString):
         '''
@@ -1727,7 +1765,8 @@ class Test(unittest.TestCase):
                          ('transposition', mockTrans.return_value)]
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
@@ -1740,7 +1779,7 @@ class Test(unittest.TestCase):
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY, None, None, {})
+        mockClef.assert_called_once_with(mock.ANY, None, {})
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -1760,7 +1799,8 @@ class Test(unittest.TestCase):
                                      'meter.count': '3', 'meter.unit': '8', 'label': 'clarinet'})
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Clarinet)
@@ -1774,11 +1814,11 @@ class Test(unittest.TestCase):
 
     @mock.patch('music21.instrument.Instrument')
     @mock.patch('music21.instrument.fromString')
-    @mock.patch('converter21.mei.base.instrDefFromElement')
-    @mock.patch('converter21.mei.base._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.clefFromElement')
-    @mock.patch('converter21.mei.base._transpositionFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
     def testUnit3StaffFromElement(self, mockTrans, mockClef, mockKey, mockTime,
                                   mockInstr, mockFromString, mockInstrInit):
         '''
@@ -1810,7 +1850,8 @@ class Test(unittest.TestCase):
         expectedAttrs = [('transposition', mockTrans.return_value)]  # D3
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
@@ -1823,7 +1864,7 @@ class Test(unittest.TestCase):
         for attrName, attrValue in expectedAttrs:
             self.assertEqual(getattr(theMockInstrument, attrName), attrValue)
         # now mockClef, which got an Element
-        mockClef.assert_called_once_with(mock.ANY, None, None, {})
+        mockClef.assert_called_once_with(mock.ANY, None, {})
         mockClefArg = mockClef.call_args_list[0][0][0]
         self.assertEqual('clef', mockClefArg.tag)
         self.assertEqual('F', mockClefArg.get('shape'))
@@ -1843,7 +1884,8 @@ class Test(unittest.TestCase):
                                      'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertIsInstance(actual['instrument'], instrument.Instrument)
@@ -1857,11 +1899,11 @@ class Test(unittest.TestCase):
 
     @mock.patch('music21.instrument.Instrument')
     @mock.patch('music21.instrument.fromString')
-    @mock.patch('converter21.mei.base.instrDefFromElement')
-    @mock.patch('converter21.mei.base._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.clefFromElement')
-    @mock.patch('converter21.mei.base._transpositionFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
     def testUnit4StaffFromElement(self, mockTrans, mockClef, mockKey, mockTime,
                                   mockInstr, mockFromString, mockInstrInit):
         '''
@@ -1876,7 +1918,8 @@ class Test(unittest.TestCase):
         expected = {'meter': mockTime.return_value}
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertDictEqual(expected, actual)
@@ -1890,13 +1933,14 @@ class Test(unittest.TestCase):
                                                                   'meter.unit': '3'})
 
         # 2.) run
-        actual = base.staffDefFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffDefFromElement(elem, {})
 
         # 3.) check
         self.assertIsInstance(actual['meter'], meter.TimeSignature)
         self.assertEqual('1/3', actual['meter'].ratioString)
 
-    @mock.patch('converter21.mei.base.staffDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.staffDefFromElement')
     def testStaffGrpUnit1StaffFromElement(self, mockStaffDefFE):
         '''
         staffGrpFromElement(): it's not a very complicated function!
@@ -1906,15 +1950,16 @@ class Test(unittest.TestCase):
                                                                     for n in range(4)]
         for eachElem in innerElems:
             elem.append(eachElem)
-        mockStaffDefFE.side_effect = lambda x, unused_y, unused_z: f"processed {x.get('n')}"
+        mockStaffDefFE.side_effect = lambda x, unused_y: f"processed {x.get('n')}"
         expected = {str(n): f'processed {n}' for n in range(4)}
 
-        actual = base.staffGrpFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffGrpFromElement(elem, {})
 
         self.assertEqual(expected, actual)
         self.assertEqual(len(innerElems), mockStaffDefFE.call_count)
         for eachElem in innerElems:
-            mockStaffDefFE.assert_any_call(eachElem, None, {})
+            mockStaffDefFE.assert_any_call(eachElem, {})
 
     def testStaffGrpInt1StaffFromElement(self):
         '''
@@ -1932,7 +1977,8 @@ class Test(unittest.TestCase):
                     '3': {'key': key.Key('E-')},
                     '4': {'key': key.Key('A-')}}
 
-        actual = base.staffGrpFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffGrpFromElement(elem, {})
 
         self.assertDictEqual(expected, actual)
 
@@ -1954,7 +2000,8 @@ class Test(unittest.TestCase):
                     '3': {'key': key.Key('E-')},
                     '4': {'key': key.Key('A-')}}
 
-        actual = base.staffGrpFromElement(elem, None, {})
+        c = MeiToM21Converter()
+        actual = c.staffGrpFromElement(elem, {})
 
         self.assertDictEqual(expected, actual)
 
@@ -1962,8 +2009,8 @@ class Test(unittest.TestCase):
     # class TestScoreDefFromElement(unittest.TestCase):
     # '''Tests for scoreDefFromElement()'''
 
-    @mock.patch('converter21.mei.base._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base._keySigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
     def testUnit1ScoreDefFromElement(self, mockKey, mockTime):
         '''
         scoreDefFromElement(): proper handling of the following attributes (see function docstring
@@ -1981,7 +2028,8 @@ class Test(unittest.TestCase):
                     'whole-score objects': {}}
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {}, [])
+        c = MeiToM21Converter()
+        actual = c.scoreDefFromElement(elem, None, {}, [])
 
         # 3.) check
         self.assertEqual(expected, actual)
@@ -1997,7 +2045,8 @@ class Test(unittest.TestCase):
                                                  'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {}, [])
+        c = MeiToM21Converter()
+        actual = c.scoreDefFromElement(elem, None, {}, [])
 
         # 3.) check
         self.assertIsInstance(actual['all-part objects'][0], meter.TimeSignature)
@@ -2020,7 +2069,8 @@ class Test(unittest.TestCase):
         elem.append(staffGrp)
 
         # 2.) run
-        actual = base.scoreDefFromElement(elem, None, {}, ['1'])
+        c = MeiToM21Converter()
+        actual = c.scoreDefFromElement(elem, {}, ['1'])
 
         # 3.) check
         self.assertIsInstance(actual['all-part objects'][0], meter.TimeSignature)
@@ -2062,11 +2112,12 @@ class Test(unittest.TestCase):
         mapping = {'note': mockTranslator}
         expected = ['translator return', 'translator return']
         expectedCalls = [
-            mock.call(elements[0], None, None, {}),
-            mock.call(elements[1], None, None, {})
+            mock.call(elements[0], None, {}),
+            mock.call(elements[1], None, {})
         ]
 
-        actual = base._processEmbeddedElements(elements, mapping, 'tag', None, None, {})
+        c = MeiToM21Converter()
+        actual = c._processEmbeddedElements(elements, mapping, 'tag', None, {})
 
         self.assertSequenceEqual(expected, actual)
         self.assertSequenceEqual(expectedCalls, mockTranslator.call_args_list)
@@ -2081,11 +2132,12 @@ class Test(unittest.TestCase):
         mapping = {'note': mockTranslator, 'beam': mockBeamTranslator}
         expected = ['translator return', 'embedded 1', 'embedded 2']
 
-        actual = base._processEmbeddedElements(elements, mapping, 'tag', None, None, {})
+        c = MeiToM21Converter()
+        actual = c._processEmbeddedElements(elements, mapping, 'tag', None, {})
 
         self.assertSequenceEqual(expected, actual)
-        mockTranslator.assert_called_once_with(elements[0], None, None, {})
-        mockBeamTranslator.assert_called_once_with(elements[1], None, None, {})
+        mockTranslator.assert_called_once_with(elements[0], None, {})
+        mockBeamTranslator.assert_called_once_with(elements[1], None, {})
 
     @mock.patch('converter21.mei.base.environLocal')
     def testUnit3EmbeddedElements(self, mockEnviron):
@@ -2099,10 +2151,11 @@ class Test(unittest.TestCase):
         expected = ['translator return']
         expErr = base._UNPROCESSED_SUBELEMENT.format(elements[1].tag, callerName)
 
-        actual = base._processEmbeddedElements(elements, mapping, callerName, None, None, {})
+        c = MeiToM21Converter()
+        actual = c._processEmbeddedElements(elements, mapping, callerName, None, {})
 
         self.assertSequenceEqual(expected, actual)
-        mockTranslator.assert_called_once_with(elements[0], None, None, {})
+        mockTranslator.assert_called_once_with(elements[0], None, {})
         mockEnviron.warn.assert_called_once_with(expErr)
 
 
@@ -2125,7 +2178,9 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = True
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        c.spannerBundle = spannerBundle
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
         spannerBundle.getByIdLocal.assert_called_once_with(theUUID)
@@ -2146,7 +2201,9 @@ class Test(unittest.TestCase):
         obj = note.Note('E-7', quarterLength=2.0)
         expected = True
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        c.spannerBundle = spannerBundle
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
         self.assertSequenceEqual([theSlur], list(spannerBundle))
@@ -2167,7 +2224,9 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = True
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        c.spannerBundle = spannerBundle
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
         spannerBundle.getByIdLocal.assert_called_once_with(theUUID)
@@ -2193,7 +2252,9 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = True
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        c.spannerBundle = spannerBundle
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
         spannerBundle.append.assert_called_once_with(mockSlur.return_value)
@@ -2215,7 +2276,9 @@ class Test(unittest.TestCase):
         obj = note.Note('E-7', quarterLength=2.0)
         expected = True
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        c.spannerBundle = spannerBundle
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
         self.assertSequenceEqual([theSlur, mock.ANY], list(spannerBundle))
@@ -2230,11 +2293,11 @@ class Test(unittest.TestCase):
         elem = ETree.Element('note', attrib={'m21SlurStart': None,
                                              'm21SlurEnd': None,
                                              'slur': None})
-        spannerBundle = mock.MagicMock('slur bundle')
         obj = mock.MagicMock('object')
         expected = False
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
 
@@ -2245,11 +2308,11 @@ class Test(unittest.TestCase):
         elem = ETree.Element('note', attrib={'m21SlurStart': None,
                                              'm21SlurEnd': None,
                                              'slur': 'm1 m2'})
-        spannerBundle = mock.MagicMock('slur bundle')
         obj = mock.MagicMock('object')
         expected = False
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
 
@@ -2268,7 +2331,9 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = False
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        c.spannerBundle = spannerBundle
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
 
@@ -2282,426 +2347,14 @@ class Test(unittest.TestCase):
                              attrib={'m21SlurStart': '07f5513a-436a-4247-8a5d-85c10c661920',
                                      'm21SlurEnd': None,
                                      'slur': None})
-        spannerBundle = spanner.SpannerBundle()
         obj = note.Note('E-7', quarterLength=2.0)
         expected = False
 
-        actual = base.addSlurs(elem, obj, spannerBundle)
+        c = MeiToM21Converter()
+        actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
-        self.assertSequenceEqual([], list(spannerBundle))
-
-
-# -----------------------------------------------------------------------------
-# class TestBeams(unittest.TestCase):
-    '''Tests for beams in all their guises.'''
-
-    # def testBeamTogether1(self):
-    #     '''
-    #     beamTogether(): with three mock objects, that their "beams" attributes are set properly
-    #     '''
-    #     someThings = [mock.MagicMock() for _ in range(3)]
-    #     for i in range(len(someThings)):
-    #         someThings[i].beams = mock.MagicMock(f'thing {i} beams')
-    #         someThings[i].beams.__len__.return_value = 0
-    #         someThings[i].beams.fill = mock.MagicMock()
-    #         someThings[i].beams.setAll = mock.MagicMock()
-    #         someThings[i].beams.getByNumber = mock.MagicMock()
-    #         someThings[i].duration.type = '16th'
-    #     expectedTypes = ['start', 'continue', 'continue']
-    #     # first call with "continue"; corrected later in function
-    #
-    #     base.beamTogether(someThings)
-    #
-    #     for i in range(len(someThings)):
-    #         # someThings[i].beams.__len__.assert_called_once_with()
-    #         someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
-    #     someThings[2].beams.setAll.assert_called_once_with('stop')
-    #
-    # def testBeamTogether2(self):
-    #     '''
-    #     beamTogether(): with four mock objects, the middle two of which already have "beams" set
-    #     '''
-    #     someThings = [mock.MagicMock() for _ in range(4)]
-    #     for i in range(len(someThings)):
-    #         someThings[i].beams = mock.MagicMock(f'thing {i} beams')
-    #         someThings[i].beams.__len__.return_value = 0
-    #         someThings[i].beams.fill = mock.MagicMock()
-    #         someThings[i].beams.setAll = mock.MagicMock()
-    #         someThings[i].beams.getByNumber = mock.MagicMock()
-    #         someThings[i].duration.type = '16th'
-    #     expectedTypes = ['start', None, None, 'continue']
-    #     # first call with "continue"; corrected later in function
-    #
-    #     # modifications for test 2
-    #     someThings[1].beams.__len__.return_value = 2
-    #     someThings[2].beams.__len__.return_value = 2
-    #
-    #     base.beamTogether(someThings)
-    #
-    #     for i in [0, 3]:
-    #         # someThings[i].beams.__len__.assert_called_once_with()
-    #         someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
-    #     someThings[3].beams.setAll.assert_called_once_with('stop')
-    #     for i in [1, 2]:
-    #         self.assertEqual(0, someThings[i].beams.fill.call_count)
-    #         self.assertEqual(0, someThings[i].beams.setAll.call_count)
-    #
-    # def testBeamTogether3(self):
-    #     '''
-    #     beamTogether(): with four mock objects, one of which doesn't have a "beams" attribute
-    #     '''
-    #     someThings = [mock.MagicMock() for _ in range(4)]
-    #     someThings[2] = 5  # this will cause failure if the function tries to set "beams"
-    #     for i in [0, 1, 3]:
-    #         someThings[i].beams = mock.MagicMock(f'thing {i} beams')
-    #         someThings[i].beams.__len__.return_value = 0
-    #         someThings[i].beams.fill = mock.MagicMock()
-    #         someThings[i].beams.setAll = mock.MagicMock()
-    #         someThings[i].beams.getByNumber = mock.MagicMock()
-    #         someThings[i].duration.type = '16th'
-    #     expectedTypes = ['start', 'continue', None, 'continue']
-    #     # first call with "continue"; corrected later in function
-    #
-    #     base.beamTogether(someThings)
-    #
-    #     for i in [0, 1, 3]:
-    #         # someThings[i].beams.__len__.assert_called_once_with()
-    #         someThings[i].beams.fill.assert_called_once_with('16th', expectedTypes[i])
-    #     someThings[3].beams.setAll.assert_called_once_with('stop')
-
-
-# -----------------------------------------------------------------------------
-# class TestPreprocessors(unittest.TestCase):
-    '''Tests for the pre-processing helper functions for convertFromString().'''
-
-    # noinspection SpellCheckingInspection
-    def testUnitTies1(self):
-        '''
-        _ppTies(): that three ties are specified correctly in the m21Attr
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'
-        iterfindReturn = []
-        for i in range(3):
-            iterfindReturn.append(ETree.Element('tie', attrib={'startid': f'start {i}',
-                                                               'endid': f'end {i}'}))
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppTies(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        for i in range(3):
-            self.assertEqual('i', mockConverter.m21Attr[f'start {i}']['tie'])
-            self.assertEqual('t', mockConverter.m21Attr[f'end {i}']['tie'])
-
-    # noinspection SpellCheckingInspection
-    @mock.patch('converter21.mei.base.environLocal')
-    def testUnitTies2(self, mockEnviron):
-        '''
-        _ppTies(): <tie> without @startid and @endid is properly announced as failing
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'
-        iterfindReturn = [ETree.Element('tie', attrib={'tstamp': '4.1', 'tstamp2': '4.2'})]
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppTies(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        self.assertEqual(0, len(mockConverter.m21Attr))
-        mockEnviron.warn.assert_called_once_with(
-            'Importing <tie> without @startid and @endid is not yet supported.')
-
-    # noinspection SpellCheckingInspection
-    @mock.patch('music21.spanner.Slur')
-    def testUnitSlurs1(self, mockSlur):
-        '''
-        _ppSlurs(): that three slurs are specified correctly in the m21Attr,
-        and put in the spannerBundle
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
-        iterfindReturn = []
-        for i in range(3):
-            iterfindReturn.append(ETree.Element('slur',
-                                                attrib={'startid': f'start {i}',
-                                                        'endid': f'end {i}'}))
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-        mockSlur.side_effect = lambda: mock.MagicMock('a fake Slur')
-        # the "spannerBundle" only needs to support append(), so this can serve as our mock object
-        mockConverter.spannerBundle = []
-
-        base._ppSlurs(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check things in the spannerBundle
-        expectedIdLocal = []
-        self.assertEqual(3, len(mockConverter.spannerBundle))
-        for eachSlur in mockConverter.spannerBundle:
-            self.assertIsInstance(eachSlur, mock.MagicMock)
-            self.assertEqual(36, len(eachSlur.idLocal))
-            expectedIdLocal.append(eachSlur.idLocal)
-        # check all the right values were added to the m21Attr dict
-        for i in range(3):
-            self.assertTrue(mockConverter.m21Attr[f'start {i}']['m21SlurStart']
-                            in expectedIdLocal)
-            self.assertTrue(mockConverter.m21Attr[f'end {i}']['m21SlurEnd']
-                            in expectedIdLocal)
-
-    # noinspection SpellCheckingInspection
-    @mock.patch('music21.spanner.Slur')
-    @mock.patch('converter21.mei.base.environLocal')
-    def testUnitSlurs2(self, mockEnviron, mockSlur):
-        '''
-        _ppSlurs(): <slur> without @startid and @endid is properly announced as failing
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
-        iterfindReturn = [ETree.Element('slur', attrib={'tstamp': '4.1', 'tstamp2': '4.3'})]
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-        mockSlur.side_effect = lambda: mock.MagicMock('a fake Slur')
-        # the "spannerBundle" only needs to support append(), so this can serve as our mock object
-        mockConverter.spannerBundle = []
-
-        base._ppSlurs(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check things in the spannerBundle
-        self.assertEqual(0, len(mockConverter.spannerBundle))
-        # check all the right values were added to the m21Attr dict
-        self.assertEqual(0, len(mockConverter.m21Attr))
-        mockEnviron.warn.assert_called_once_with(
-            'Importing <slur> without @startid and @endid is not yet supported.')
-
-    # noinspection SpellCheckingInspection
-    def testUnitBeams1(self):
-        '''
-        _ppBeams(): that three beamed notes are specified correctly in the m21Attr
-
-        with @plist
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'
-        iterfindReturn = []
-        for i in range(3):
-            iterfindReturn.append(
-                ETree.Element('beamSpan',
-                              attrib={'startid': f'start-{i}',
-                                      'endid': f'end-{i}',
-                                      'plist': f'#start-{i} #mid-{i} #end-{i}',
-                                      }
-                              )
-            )
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppBeams(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        for i in range(3):
-            self.assertEqual('start', mockConverter.m21Attr[f'start-{i}']['m21Beam'])
-            self.assertEqual('continue', mockConverter.m21Attr[f'mid-{i}']['m21Beam'])
-            self.assertEqual('stop', mockConverter.m21Attr[f'end-{i}']['m21Beam'])
-
-    # noinspection SpellCheckingInspection
-    def testUnitBeams2(self):
-        '''
-        _ppBeams(): that three beamed notes are specified correctly in the m21Attr
-
-        without @plist
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'
-        iterfindReturn = []
-        for i in range(3):
-            iterfindReturn.append(ETree.Element('beamSpan',
-                                                attrib={'startid': f'#start-{i}',
-                                                        'endid': f'#end-{i}'}))
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppBeams(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        for i in range(3):
-            self.assertEqual('start', mockConverter.m21Attr[f'start-{i}']['m21Beam'])
-            self.assertEqual('stop', mockConverter.m21Attr[f'end-{i}']['m21Beam'])
-
-    @mock.patch('converter21.mei.base.environLocal')
-    def testUnitBeams3(self, mockEnviron):
-        '''
-        _ppBeams(): <beamSpan> without @startid and @endid is properly announced as failing
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'
-        iterfindReturn = [ETree.Element('beamSpan', attrib={'tstamp': '12.4', 'tstamp2': '13.1'})]
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppBeams(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        self.assertEqual(0, len(mockConverter.m21Attr))
-        mockEnviron.warn.assert_called_once_with(
-            'Importing <beamSpan> without @startid and @endid is not yet supported.')
-
-    # noinspection SpellCheckingInspection
-    def testUnitTuplets1(self):
-        '''
-        _ppTuplets(): that three notes in a tuplet are specified correctly in the m21Attr
-
-        with @plist
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tupletSpan'
-        theNum = 42
-        theNumbase = 900
-        iterfindReturn = []
-        for i in range(3):
-            iterfindReturn.append(ETree.Element(
-                'tupletSpan',
-                attrib={'plist': f'#start-{i} #mid-{i} #end-{i}',
-                        'num': theNum,
-                        'numbase': theNumbase}))
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppTuplets(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        for i in range(3):
-            self.assertEqual(theNum, mockConverter.m21Attr[f'start-{i}']['m21TupletNum'])
-            self.assertEqual(theNumbase,
-                             mockConverter.m21Attr[f'start-{i}']['m21TupletNumbase'])
-            self.assertEqual(theNum, mockConverter.m21Attr[f'mid-{i}']['m21TupletNum'])
-            self.assertEqual(theNumbase,
-                             mockConverter.m21Attr[f'mid-{i}']['m21TupletNumbase'])
-            self.assertEqual(theNum, mockConverter.m21Attr[f'end-{i}']['m21TupletNum'])
-            self.assertEqual(theNumbase,
-                             mockConverter.m21Attr[f'end-{i}']['m21TupletNumbase'])
-
-    # noinspection SpellCheckingInspection
-    @mock.patch('converter21.mei.base.environLocal')
-    def testUnitTuplets2(self, mockEnviron):
-        '''
-        _ppTuplets(): <tupletSpan> without (@startid and @endid) or
-        @plist is properly announced as failing
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tupletSpan'
-        theNum = 42
-        theNumbase = 900
-        iterfindReturn = [ETree.Element('tupletSpan',
-                                        attrib={'num': theNum, 'numbase': theNumbase})]
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-        expWarning = ('Importing <tupletSpan> without @startid and '
-                      + '@endid, or @plist is not yet supported.')
-
-        base._ppTuplets(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        self.assertEqual(0, len(mockConverter.m21Attr))
-        mockEnviron.warn.assert_called_once_with(expWarning)
-
-    # noinspection SpellCheckingInspection
-    def testUnitTuplets3(self):
-        '''
-        _ppTuplets(): that three notes in a tuplet are specified correctly in the m21Attr
-
-        without @plist (this should set @m21TupletSearch attributes)
-        '''
-        # NB: I'm mocking out the documentRoot because setting up an element tree for a unit test
-        #     is much more work than it's worth
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.documentRoot = mock.MagicMock()
-        expectedIterfind = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tupletSpan'
-        theNum = 42
-        theNumbase = 900
-        iterfindReturn = []
-        for i in range(3):
-            iterfindReturn.append(ETree.Element('tupletSpan',
-                                                attrib={'startid': f'#start-{i}',
-                                                        'endid': f'#end-{i}',
-                                                        'num': theNum,
-                                                        'numbase': theNumbase}))
-        mockConverter.documentRoot.iterfind = mock.MagicMock(return_value=iterfindReturn)
-
-        base._ppTuplets(mockConverter)
-
-        mockConverter.documentRoot.iterfind.assert_called_once_with(expectedIterfind)
-        # check all the right values were added to the m21Attr dict
-        for i in (0, 2):
-            self.assertEqual(theNum, mockConverter.m21Attr[f'start-{i}']['m21TupletNum'])
-            self.assertEqual(theNumbase,
-                             mockConverter.m21Attr[f'start-{i}']['m21TupletNumbase'])
-            self.assertEqual('start',
-                             mockConverter.m21Attr[f'start-{i}']['m21TupletSearch'])
-            self.assertEqual(theNum, mockConverter.m21Attr[f'end-{i}']['m21TupletNum'])
-            self.assertEqual(theNumbase,
-                             mockConverter.m21Attr[f'end-{i}']['m21TupletNumbase'])
-            self.assertEqual('end', mockConverter.m21Attr[f'end-{i}']['m21TupletSearch'])
-
-    def testUnitConclude1(self):
-        '''
-        _ppConclude(): that it works
-        '''
-        theDocument = '''<mei><music><note xml:id="one"/><note xml:id="two"/></music></mei>'''
-        mockConverter = mock.MagicMock(spec_set=base.MeiToM21Converter())
-        mockConverter.documentRoot = ETree.fromstring(theDocument)
-        mockConverter.m21Attr = defaultdict(lambda: {})
-        mockConverter.m21Attr['one']['new'] = '14'
-        mockConverter.m21Attr['one']['other'] = '42'
-        expNoteOneAttrib = {_XMLID: 'one', 'new': '14', 'other': '42'}
-        expNoteTwoAttrib = {_XMLID: 'two'}
-
-        base._ppConclude(mockConverter)
-
-        noteOne = mockConverter.documentRoot.find(f'*//*[@{_XMLID}="one"]')
-        noteTwo = mockConverter.documentRoot.find(f'*//*[@{_XMLID}="two"]')
-        self.assertEqual(expNoteOneAttrib, noteOne.attrib)
-        self.assertEqual(expNoteTwoAttrib, noteTwo.attrib)
-
+        self.assertSequenceEqual([], list(c.spannerBundle))
 
 # -----------------------------------------------------------------------------
 # class TestTuplets(unittest.TestCase):
@@ -2718,7 +2371,8 @@ class Test(unittest.TestCase):
                                      'm21TupletNumbase': '400',
                                      'm21TupletSearch': 'the forest'})
 
-        base.scaleToTuplet(objs, elem)
+        c = MeiToM21Converter()
+        c.scaleToTuplet(objs, elem)
 
         for obj in objs:
             self.assertEqual('12', obj.m21TupletNum)
@@ -2732,22 +2386,23 @@ class Test(unittest.TestCase):
         '''
         # missing @numbase
         elem = ETree.Element('tuplet', attrib={'num': '3'})
-        self.assertRaises(base.MeiAttributeError, base.tupletFromElement, elem, None, None, {})
+        c = MeiToM21Converter()
+        self.assertRaises(base.MeiAttributeError, c.tupletFromElement, elem, None, {})
         try:
-            base.tupletFromElement(elem, None, None, {})
+            c.tupletFromElement(elem, None, {})
         except base.MeiAttributeError as err:
             self.assertEqual(base._MISSING_TUPLET_DATA, err.args[0])
         # missing @num
         elem = ETree.Element('tuplet', attrib={'numbase': '2'})
-        self.assertRaises(base.MeiAttributeError, base.tupletFromElement, elem, None, None, {})
+        self.assertRaises(base.MeiAttributeError, c.tupletFromElement, elem, None, {})
         try:
-            base.tupletFromElement(elem, None, None, {})
+            c.tupletFromElement(elem, None, {})
         except base.MeiAttributeError as err:
             self.assertEqual(base._MISSING_TUPLET_DATA, err.args[0])
 
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('converter21.mei.base.applyBreaksecs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._processEmbeddedElements')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.applyBreaksecs')
     def testTuplets7(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; no extraneous elements
@@ -2759,16 +2414,17 @@ class Test(unittest.TestCase):
             obj.duration.tuplets[0].type = 'default'
         mockTuplet.return_value = mockNotes
 
-        actual = base.tupletFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.tupletFromElement(elem, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
         self.assertEqual('start', mockNotes[0].duration.tuplets[0].type)
         self.assertEqual('default', mockNotes[1].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[2].duration.tuplets[0].type)
 
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('converter21.mei.base.applyBreaksecs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._processEmbeddedElements')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.applyBreaksecs')
     def testTuplets8(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed
@@ -2783,16 +2439,17 @@ class Test(unittest.TestCase):
             mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
         mockTuplet.return_value = mockNotes
 
-        actual = base.tupletFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.tupletFromElement(elem, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
         self.assertEqual('start', mockNotes[0].duration.tuplets[0].type)
         self.assertEqual('default', mockNotes[3].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[5].duration.tuplets[0].type)
 
-    @mock.patch('converter21.mei.base._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.scaleToTuplet')
-    @mock.patch('converter21.mei.base.applyBreaksecs')
+    @mock.patch('converter21.mei.base.MeiToM21Converter._processEmbeddedElements')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.applyBreaksecs')
     def testTuplets9(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed,
@@ -2808,7 +2465,8 @@ class Test(unittest.TestCase):
             mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
         mockTuplet.return_value = mockNotes
 
-        actual = base.tupletFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.tupletFromElement(elem, None, {})
 
         self.assertSequenceEqual(mockNotes, actual)
         self.assertEqual('start', mockNotes[1].duration.tuplets[0].type)
@@ -2822,7 +2480,8 @@ class Test(unittest.TestCase):
         theLayer = [note.Note(quarterLength=1.0) for _ in range(5)]
         expectedDurs = [1.0 for _ in range(5)]
 
-        actual = base._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c = MeiToM21Converter()
+        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
             self.assertEqual(expectedDurs[i], actual[i].quarterLength)
@@ -2840,7 +2499,8 @@ class Test(unittest.TestCase):
         theLayer[2].m21TupletNumbase = '2'
         expectedDurs = [Fraction(2, 3), Fraction(2, 3), Fraction(2, 3), 1.0, 1.0]
 
-        actual = base._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c = MeiToM21Converter()
+        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
             self.assertEqual(expectedDurs[i], actual[i].quarterLength)
@@ -2862,7 +2522,8 @@ class Test(unittest.TestCase):
         theLayer[3].m21TupletNumbase = '2'
         expectedDurs = [1.0, Fraction(2, 3), Fraction(2, 3), Fraction(2, 3), 1.0]
 
-        actual = base._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c = MeiToM21Converter()
+        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
             self.assertEqual(expectedDurs[i], actual[i].quarterLength)
@@ -2884,7 +2545,8 @@ class Test(unittest.TestCase):
         theLayer[4].m21TupletNumbase = '2'
         expectedDurs = [1.0, 1.0, Fraction(2, 3), Fraction(2, 3), Fraction(2, 3)]
 
-        actual = base._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c = MeiToM21Converter()
+        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
             self.assertEqual(expectedDurs[i], actual[i].quarterLength)
@@ -2906,7 +2568,8 @@ class Test(unittest.TestCase):
         mockFromProg.return_value = 'Guess Which Instrument'
         expected = mockFromProg.return_value
 
-        actual = base.instrDefFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.instrDefFromElement(elem, None, {})
 
         self.assertEqual(expected, actual)
         mockFromProg.assert_called_once_with(expFromProgArg)
@@ -2919,7 +2582,8 @@ class Test(unittest.TestCase):
         mockFromString.return_value = "That's right: tuba"
         expected = mockFromString.return_value
 
-        actual = base.instrDefFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.instrDefFromElement(elem, None, {})
 
         self.assertEqual(expected, actual)
         mockFromString.assert_called_once_with(expFromStringArg)
@@ -2936,7 +2600,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('measure')
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
 
-        staves = base._makeBarlines(elem, staves)
+        c = MeiToM21Converter()
+        staves = c._makeBarlines(elem, staves)
 
         for i in ('1', '2', '3'):
             self.assertIsNone(staves[i].leftBarline)
@@ -2950,7 +2615,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('measure', attrib={'left': 'dbl', 'right': 'dbl'})
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
 
-        staves = base._makeBarlines(elem, staves)
+        c = MeiToM21Converter()
+        staves = c._makeBarlines(elem, staves)
 
         for i in ('1', '2', '3'):
             self.assertIsInstance(staves[i].leftBarline, bar.Barline)
@@ -2966,7 +2632,8 @@ class Test(unittest.TestCase):
         elem = ETree.Element('measure', attrib={'left': 'rptboth', 'right': 'rptboth'})
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
 
-        staves = base._makeBarlines(elem, staves)
+        c = MeiToM21Converter()
+        staves = c._makeBarlines(elem, staves)
 
         for i in ('1', '2', '3'):
             self.assertIsInstance(staves[i].leftBarline, bar.Repeat)
@@ -2983,7 +2650,8 @@ class Test(unittest.TestCase):
         '''
         staves = {'1': stream.Measure([stream.Voice([note.Rest(), note.Rest()])]),
                   '2': stream.Measure([stream.Voice([note.Rest(), note.Rest()])])}
-        base._correctMRestDurs(staves, 2.0)
+        c = MeiToM21Converter()
+        c._correctMRestDurs(staves, 2.0)
         self.assertEqual(1.0, staves['1'].voices[0][0].quarterLength)
         self.assertEqual(1.0, staves['1'].voices[0][1].quarterLength)
         self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
@@ -2998,7 +2666,8 @@ class Test(unittest.TestCase):
         staves = {'1': stream.Measure([stream.Voice([note.Rest()])]),
                   '2': stream.Measure([stream.Voice([note.Rest(), note.Rest()])])}
         staves['1'][0][0].m21wasMRest = True
-        base._correctMRestDurs(staves, 2.0)
+        c = MeiToM21Converter()
+        c._correctMRestDurs(staves, 2.0)
         self.assertEqual(2.0, staves['1'].voices[0][0].quarterLength)
         self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
         self.assertEqual(1.0, staves['2'].voices[0][1].quarterLength)
@@ -3015,7 +2684,8 @@ class Test(unittest.TestCase):
                   '2': stream.Measure([meter.TimeSignature('4/4'), stream.Voice([note.Note()])])}
         staves['1'][0][0].m21wasMRest = True
         staves['1'][1][0].m21wasMRest = True
-        base._correctMRestDurs(staves, 2.0)
+        c = MeiToM21Converter()
+        c._correctMRestDurs(staves, 2.0)
         self.assertEqual(2.0, staves['1'].voices[0][0].quarterLength)
         self.assertEqual(2.0, staves['1'].voices[1][0].quarterLength)
         self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
@@ -3048,11 +2718,11 @@ class Test(unittest.TestCase):
         # @n="4" is in "expectedNs" but we're leaving it out as part of the test
         backupNum = 900  # should be ignored by measureFromElement()
         expectedNs = ['1', '2', '3', '4']
-        spannerBundle = spanner.SpannerBundle()
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        actual = base.measureFromElement(
-            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        c = MeiToM21Converter()
+        actual = c.measureFromElement(
+            elem, activeMeter, {}, backupNum, expectedNs
         )
 
         # ensure the right number and @n of parts
@@ -3106,11 +2776,11 @@ class Test(unittest.TestCase):
         # @n="4" is in "expectedNs" but we're leaving it out as part of the test
         backupNum = 900  # should be used by measureFromElement()
         expectedNs = ['1', '2', '3', '4']
-        spannerBundle = spanner.SpannerBundle()
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        actual = base.measureFromElement(
-            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        c = MeiToM21Converter()
+        actual = c.measureFromElement(
+            elem, activeMeter, {}, backupNum, expectedNs
         )
 
         # ensure the right number and @n of parts (we expect one additional key, for the "rptboth")
@@ -3159,11 +2829,11 @@ class Test(unittest.TestCase):
         elem.append(innerStaff)
         backupNum = 900  # should be used by measureFromElement()
         expectedNs = ['1']
-        spannerBundle = spanner.SpannerBundle()
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        actual = base.measureFromElement(
-            elem, activeMeter, spannerBundle, {}, backupNum, expectedNs
+        c = MeiToM21Converter()
+        actual = c.measureFromElement(
+            elem, activeMeter, {}, backupNum, expectedNs
         )
 
         # ensure the right number and @n of parts
@@ -3192,7 +2862,7 @@ class Test(unittest.TestCase):
     '''Tests for scoreFromElement(), sectionFromElement(), and
     their helper function sectionScoreCore().'''
 
-    @mock.patch('converter21.mei.base.sectionScoreCore')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.sectionScoreCore')
     def testSection1(self, mockCore):
         '''
         Mock sectionScoreCore(). This is very straight-forward.
@@ -3203,16 +2873,15 @@ class Test(unittest.TestCase):
         activeMeter = meter.TimeSignature('12/8')
         nextMeasureLeft = bar.Repeat()
         backupMeasureNum = 42
-        spannerBundle = spanner.SpannerBundle()
         expected = mockCore.return_value
 
-        actual = base.sectionFromElement(elem, activeMeter, spannerBundle, {},
+        c = MeiToM21Converter()
+        actual = c.sectionFromElement(elem, activeMeter, {},
                                          allPartNs, nextMeasureLeft, backupMeasureNum)
 
         self.assertEqual(expected, actual)
         mockCore.assert_called_once_with(elem,
                                          activeMeter,
-                                         spannerBundle,
                                          {},
                                          allPartNs,
                                          nextMeasureLeft,
@@ -3248,9 +2917,9 @@ class Test(unittest.TestCase):
             </section>
         </score>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
 
-        actual = base.scoreFromElement(elem, None, spannerBundle, {})
+        c = MeiToM21Converter()
+        actual = c.scoreFromElement(elem, None, {})
 
         # This is complicated... I'm sorry... but it's a rather detailed test of the whole system,
         # so I hope it's worth it!
@@ -3312,11 +2981,11 @@ class Test(unittest.TestCase):
             </section>
         </score>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, None, spannerBundle, {}, allPartNs
+        c = MeiToM21Converter()
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+            elem, None, {}, allPartNs
         )
 
         # ensure simple returns are okay
@@ -3374,11 +3043,11 @@ class Test(unittest.TestCase):
             </section>
         </section>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, None, spannerBundle, {}, allPartNs
+        c = MeiToM21Converter()
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+            elem, None, {}, allPartNs
         )
 
         # ensure simple returns are okay
@@ -3420,10 +3089,10 @@ class Test(unittest.TestCase):
         self.assertIsInstance(meas[0][0], note.Note)
         self.assertEqual('G4', meas[0][0].nameWithOctave)
 
-    @mock.patch('converter21.mei.base.measureFromElement')
-    @mock.patch('converter21.mei.base.sectionFromElement')
-    @mock.patch('converter21.mei.base.scoreDefFromElement')
-    @mock.patch('converter21.mei.base.staffDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.measureFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.sectionFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.scoreDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.staffDefFromElement')
     def testCoreUnit3(self, mockStaffDFE, mockScoreDFE, mockSectionFE, mockMeasureFE):
         '''
         sectionScoreCore(): everything basic, as called by sectionFromElement()
@@ -3451,7 +3120,6 @@ class Test(unittest.TestCase):
             </measure>
         </section>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = mock.MagicMock()
         allPartNs = ['1']
         activeMeter = mock.MagicMock(spec_set=meter.TimeSignature)
         nextMeasureLeft = 'next left measure'
@@ -3466,7 +3134,8 @@ class Test(unittest.TestCase):
         expected = {'1': [expMeas1]}
         expected = (expected, expActiveMeter, expNMLeft, expMeasureNum)
 
-        actual = base.sectionScoreCore(elem, activeMeter, spannerBundle, {},
+        c = MeiToM21Converter()
+        actual = c.sectionScoreCore(elem, activeMeter, {},
                                        allPartNs,
                                        nextMeasureLeft,
                                        backupMeasureNum)
@@ -3476,7 +3145,6 @@ class Test(unittest.TestCase):
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
                                               activeMeter,
-                                              spannerBundle,
                                               {},
                                               backupMeasureNum + 1,
                                               allPartNs)
@@ -3509,16 +3177,15 @@ class Test(unittest.TestCase):
             </measure>
         </section>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
         activeMeter = meter.TimeSignature('8/8')
         nextMeasureLeft = bar.Repeat('start')
         backupMeasureNum = 900
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
+        c = MeiToM21Converter()
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
             elem,
             activeMeter,
-            spannerBundle,
             {},
             allPartNs,
             nextMeasureLeft=nextMeasureLeft,
@@ -3549,10 +3216,10 @@ class Test(unittest.TestCase):
         self.assertIs(meas[repeatIndex], meas.leftBarline)
 
     @mock.patch('converter21.mei.base.environLocal')
-    @mock.patch('converter21.mei.base.measureFromElement')
-    @mock.patch('converter21.mei.base.sectionFromElement')
-    @mock.patch('converter21.mei.base.scoreDefFromElement')
-    @mock.patch('converter21.mei.base.staffDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.measureFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.sectionFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.scoreDefFromElement')
+    @mock.patch('converter21.mei.base.MeiToM21Converter.staffDefFromElement')
     def testCoreUnit4(self, mockStaffDFE, mockScoreDFE, mockSectionFE, mockMeasureFE, mockEnviron):
         '''
         sectionScoreCore(): as called by sectionFromElement()
@@ -3579,7 +3246,6 @@ class Test(unittest.TestCase):
             </measure>
         </section>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = mock.MagicMock()
         allPartNs = ['1']
         # setup measureFromElement()
         # return a Mock with the right measure number
@@ -3598,7 +3264,8 @@ class Test(unittest.TestCase):
         # prepare expected environLocal message
         expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
         expWarn2 = base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
-        actual = base.sectionScoreCore(elem, None, spannerBundle, {}, allPartNs)
+        c = MeiToM21Converter()
+        actual = c.sectionScoreCore(elem, None, {}, allPartNs)
 
         # ensure expected == actual
         self.assertEqual(expected, actual)
@@ -3610,7 +3277,6 @@ class Test(unittest.TestCase):
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
                                               expActiveMeter,
-                                              spannerBundle,
                                               {},
                                               1,
                                               allPartNs)
@@ -3619,7 +3285,7 @@ class Test(unittest.TestCase):
         # ensure scoreDefFromElement()
         self.assertEqual(0, mockScoreDFE.call_count)
         # ensure staffDefFromElement()
-        mockStaffDFE.assert_called_once_with(mock.ANY, spannerBundle,
+        mockStaffDFE.assert_called_once_with(mock.ANY,
             {'pending inNextThing': {'1': []}})
 
     @mock.patch('converter21.mei.base.environLocal')
@@ -3641,11 +3307,11 @@ class Test(unittest.TestCase):
             </measure>
         </section>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, None, spannerBundle, {}, allPartNs
+        c = MeiToM21Converter()
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+            elem, None, {}, allPartNs
         )
 
         expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
@@ -3718,11 +3384,11 @@ class Test(unittest.TestCase):
             </section>
         </score>'''
         elem = ETree.fromstring(elem)
-        spannerBundle = spanner.SpannerBundle()
         allPartNs = ['1']
 
-        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = base.sectionScoreCore(
-            elem, None, spannerBundle, {}, allPartNs
+        c = MeiToM21Converter()
+        parsed, activeMeter, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+            elem, None, {}, allPartNs
         )
 
         # ensure simple returns are okay
@@ -3780,7 +3446,8 @@ class Test(unittest.TestCase):
         barLineFromElement(): <barLine rend="dbl"/>
         '''
         elem = ETree.Element('barLine', attrib={'rend': 'dbl'})
-        actual = base.barLineFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.barLineFromElement(elem, None, {})
         self.assertIsInstance(actual, bar.Barline)
         self.assertEqual('double', actual.type)
 
@@ -3789,7 +3456,8 @@ class Test(unittest.TestCase):
         barLineFromElement(): <barLine/>
         '''
         elem = ETree.Element('barLine')
-        actual = base.barLineFromElement(elem, None, None, {})
+        c = MeiToM21Converter()
+        actual = c.barLineFromElement(elem, None, {})
         self.assertIsInstance(actual, bar.Barline)
         self.assertEqual('regular', actual.type)
 
@@ -3829,7 +3497,7 @@ class Test(unittest.TestCase):
                 </section>
             </score></music></mei>
         '''
-        testConv = base.MeiToM21Converter(meiSource)
+        testConv = MeiToM21Converter(meiSource)
 
         actual = testConv.run()
 

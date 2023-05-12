@@ -139,6 +139,7 @@ Alphabetical list of the elements currently supported by this module:
 * :func:`beamFromElement`
 * :func:`chordFromElement`
 * :func:`clefFromElement`
+* :func:`dotFromElement`
 * :func:`instrDefFromElement`
 * :func:`layerFromElement`
 * :func:`measureFromElement`
@@ -3449,6 +3450,38 @@ class MeiToM21Converter:
                 alter = int(thePitch.accidental.alter)
             otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx] = int(alter)
 
+    def dotFromElement(
+        self,
+        elem: Element,  # pylint: disable=unused-argument
+        activeMeter: meter.TimeSignature | None,
+        otherInfo: dict[str, t.Any]  # pylint: disable=unused-argument
+    ) -> int:
+        '''
+        Returns ``1`` no matter what is passed in.
+
+        <dot> Dot of augmentation or division.
+
+        In MEI 2013: pg.304 (318 in PDF) (MEI.shared module)
+
+        :returns: 1
+        :rtype: int
+
+        **Attributes/Elements Implemented:** none
+
+        **Attributes/Elements in Testing:** none
+
+        **Attributes not Implemented:**
+
+        - att.common (@label, @n, @xml:base) (att.id (@xml:id))
+        - att.facsimile (@facs)
+        - att.dot.log (all)
+        - att.dot.vis (all)
+        - att.dot.gesatt.dot.anl (all)
+
+        **Elements not Implemented:** none
+        '''
+        return 1
+
     def articFromElement(
         self,
         elem: Element,
@@ -4032,7 +4065,7 @@ class MeiToM21Converter:
         # dots from inner <dot> elements are an alternate to @dots.
         # If both are present use the <dot> elements.  Shouldn't ever happen.
         if dotElements > 0:
-            theDuration = durationFromAttributes(elem, dotElements)
+            theDuration = self.durationFromAttributes(elem, dotElements)
             theNote.duration = theDuration
 
         # grace note (only mark as accented or unaccented grace note;
@@ -8057,6 +8090,7 @@ class MeiToM21Converter:
             f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialNoteChildrenFromElement,
+            f'{MEI_NS}dot': self.dotFromElement,
             f'{MEI_NS}artic': self.articFromElement,
             f'{MEI_NS}accid': self.accidFromElement,
             f'{MEI_NS}verse': self.verseFromElement,
@@ -8199,6 +8233,7 @@ _DOC_ORDER = [
     MeiToM21Converter.beamFromElement,
     MeiToM21Converter.chordFromElement,
     MeiToM21Converter.clefFromElement,
+    MeiToM21Converter.dotFromElement,
     MeiToM21Converter.instrDefFromElement,
     MeiToM21Converter.layerFromElement,
     MeiToM21Converter.measureFromElement,
