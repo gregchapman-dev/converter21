@@ -3869,7 +3869,8 @@ class MeiToM21Converter:
     def durationFromAttributes(
         self,
         elem: Element,
-    ) -> duration.Duration:
+        optionalDots: int | None = None
+   ) -> duration.Duration:
         durFloat: float | None = None
         durGesFloat: float | None = None
         if elem.get('dur'):
@@ -3877,7 +3878,12 @@ class MeiToM21Converter:
         if elem.get('dur.ges'):
             durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
 
-        numDots: int = int(elem.get('dots', 0))
+        numDots: int
+        if optionalDots is not None:
+            numDots = optionalDots
+        else:
+            numDots = int(elem.get('dots', 0))
+
         numDotsGes: int | None = None
         dotsGesStr: str = elem.get('dots.ges', '')
         if dotsGesStr:
@@ -4004,13 +4010,17 @@ class MeiToM21Converter:
         theAccidGes: str | None = self._accidGesFromAttr(elem.get('accid.ges'))
         theAccidObj: pitch.Accidental | None = None
 
-        # iterate all immediate children
-        for subElement in self._processEmbeddedElements(elem.findall('*'),
-                                                   self.noteChildrenTagToFunction,
-                                                   elem.tag,
-                                                   activeMeter,
-                                                   otherInfo):
-            if isinstance(subElement, articulations.Articulation):
+        dotElements: int = 0  # count the number of <dot> elements
+        for subElement in self._processEmbeddedElements(
+            elem.findall('*'),
+            self.noteChildrenTagToFunction,
+            elem.tag,
+            activeMeter,
+            otherInfo
+        ):
+            if isinstance(subElement, int):
+                dotElements += subElement
+            elif isinstance(subElement, articulations.Articulation):
                 theNote.articulations.append(subElement)
             elif isinstance(subElement, pitch.Accidental):
                 theAccidObj = subElement
@@ -4018,6 +4028,12 @@ class MeiToM21Converter:
                 if theNote.lyrics is None:
                     theNote.lyrics = []
                 theNote.lyrics.append(subElement)
+
+        # dots from inner <dot> elements are an alternate to @dots.
+        # If both are present use the <dot> elements.  Shouldn't ever happen.
+        if dotElements > 0:
+            theDuration = durationFromAttributes(elem, dotElements)
+            theNote.duration = theDuration
 
         # grace note (only mark as accented or unaccented grace note;
         # don't worry about "time-stealing")
