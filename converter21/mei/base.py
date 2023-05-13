@@ -1476,15 +1476,25 @@ class MeiToM21Converter:
             f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dir'
         )
         elems += self.documentRoot.findall(
-            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tempo'
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dynam'
         )
         elems += self.documentRoot.findall(
-            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dynam'
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tempo'
         )
 
         for eachElem in elems:
-            lowerName: str = eachElem.tag
-            name = lowerName[0].upper() + lowerName[1:]
+            if eachElem.tag.endswith('dir'):
+                lowerName = 'dir'
+                name = 'Dir'
+            elif eachElem.tag.endswith('dynam'):
+                lowerName = 'dynam'
+                name = 'Dynam'
+            elif eachElem.tag.endswith('tempo'):
+                lowerName = 'tempo'
+                name = 'Dynam'
+            else:
+                # shouldn't ever get here
+                continue
 
             if lowerName == 'dir':
                 theType: str = eachElem.get('type', '')
@@ -1979,19 +1989,19 @@ class MeiToM21Converter:
             m21.expressions.TextExpression | m21.dynamics.Dynamic | m21.tempo.TempoIndication
         ] = []
 
-        for prefix, text in enumerate(textsToProcess):
+        for prefix, text in textsToProcess.items():
             if not text:
                 # no text in element, so ignore it
                 continue
 
-            place: str = elem.get('{prefix}Place', '')
-            staff: str = elem.get('{prefix}Staff', '')
+            place: str = elem.get(f'{prefix}Place', '')
+            staff: str = elem.get(f'{prefix}Staff', '')
             if not staff:
                 staff = self.staffNumberForNotes
-            fontStyle: str = elem.get('{prefix}FontStyle', '')
-            fontWeight: str = elem.get('{prefix}FontWeight', '')
-            fontFamily: str = elem.get('{prefix}FontFamily', '')
-            justify: str = elem.get('{prefix}Justify', '')
+            fontStyle: str = elem.get(f'{prefix}FontStyle', '')
+            fontWeight: str = elem.get(f'{prefix}FontWeight', '')
+            fontFamily: str = elem.get(f'{prefix}FontFamily', '')
+            justify: str = elem.get(f'{prefix}Justify', '')
 
             # make the appropriate m21 object (TextExpression, Dynamic, TempoIndication)
             # and put it in a custom list in obj: obj.mei_dir_dynam_tempo_list
@@ -2015,7 +2025,7 @@ class MeiToM21Converter:
                 continue
 
             if prefix == 'm21Tempo':
-                midiBPM: str = elem.get('{prefix}MidiBPM', '')
+                midiBPM: str = elem.get(f'{prefix}MidiBPM', '')
                 mm: m21.tempo.MetronomeMark = (
                     self._metronomeMarkFromTextExpressionAndMidiBPMStr(te, midiBPM)
                 )
