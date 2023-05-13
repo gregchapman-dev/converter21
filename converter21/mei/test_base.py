@@ -3282,8 +3282,7 @@ class Test(unittest.TestCase):
         # ensure staffDefFromElement()
         mockStaffDFE.assert_called_once_with(mock.ANY)
         self.assertEqual(
-            c.otherInfo,
-            {'pending inNextThing': {'1': []}}
+            c.pendingInNextThing, {'1': []}
         )
 
     @mock.patch('converter21.mei.base.environLocal')
