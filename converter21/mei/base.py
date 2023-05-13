@@ -346,6 +346,9 @@ class MeiToM21Converter:
         # It is used in various places, but mostly to compute what a @tstamp means.
         self.activeMeter: meter.TimeSignature | None = None
 
+        self.otherInfo: dict[str, t.Any] = {}
+
+
     def run(self) -> stream.Score | stream.Part | stream.Opus:
         '''
         Run conversion of the internal MEI document to produce a music21 object.
@@ -378,10 +381,7 @@ class MeiToM21Converter:
             # no <score> found, return an empty Score
             return stream.Score()
 
-        otherInfo: dict = {}
-        theScore: stream.Score = self.scoreFromElement(
-            scoreElem, otherInfo
-        )
+        theScore: stream.Score = self.scoreFromElement(scoreElem)
 
         environLocal.printDebug('*** preparing metadata')
         theScore.metadata = self.makeMetadata()
@@ -1466,12 +1466,10 @@ class MeiToM21Converter:
         self,
         elements: t.Iterable[Element],
         mapping: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ],
         callerTag: str,
-        otherInfo: dict[str, t.Any]
     ) -> list[t.Any]:
         # noinspection PyShadowingNames
         '''
@@ -1504,9 +1502,9 @@ class MeiToM21Converter:
         >>> from music21 import note
         >>> from converter21.mei.base import MeiToM21Converter
         >>> elements = [Element('note'), Element('rest'), Element('note')]
-        >>> mapping = {'note': lambda w, x: note.Note('D2')}
+        >>> mapping = {'note': lambda w: note.Note('D2')}
         >>> c = MeiToM21Converter()
-        >>> c._processEmbeddedElements(elements, mapping, 'doctest1', {})
+        >>> c._processEmbeddedElements(elements, mapping, 'doctest1')
         [<music21.note.Note D>, <music21.note.Note D>]
 
         If debugging is enabled for the previous example, this warning would be displayed:
@@ -1516,9 +1514,9 @@ class MeiToM21Converter:
         The "beam" element holds "note" elements. All elements appear in a single level of the list:
 
         >>> elements = [Element('note'), Element('beam'), Element('note')]
-        >>> mapping = {'note': lambda w, x: note.Note('D2'),
-        ...            'beam': lambda w, x: [note.Note('E2') for _ in range(2)]}
-        >>> c._processEmbeddedElements(elements, mapping, 'doctest2', {})
+        >>> mapping = {'note': lambda w: note.Note('D2'),
+        ...            'beam': lambda w: [note.Note('E2') for _ in range(2)]}
+        >>> c._processEmbeddedElements(elements, mapping, 'doctest2')
         [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
         '''
         processed: list[t.Any] = []
@@ -1526,7 +1524,7 @@ class MeiToM21Converter:
         for eachElem in elements:
             if eachElem.tag in mapping:
                 result: Music21Object | tuple[Music21Object, ...] | list[Music21Object] | None = (
-                    mapping[eachElem.tag](eachElem, otherInfo)
+                    mapping[eachElem.tag](eachElem)
                 )
                 if isinstance(result, list):
                     for eachObject in result:
@@ -1880,9 +1878,8 @@ class MeiToM21Converter:
         self,
         elem: Element,
         obj: note.NotRest,
-        otherInfo: dict[str, t.Any]
     ) -> list[spanner.Spanner]:
-        staffN: str = otherInfo.get('staffNumberForNotes', '')
+        staffN: str = self.otherInfo.get('staffNumberForNotes', '')
         completedTrillExtensions: list[spanner.Spanner] = []
         # if appropriate, add this note/chord to a trillExtension
         trillExtId: str = elem.get('m21TrillExtensionStart', '')
@@ -1920,9 +1917,9 @@ class MeiToM21Converter:
 
         if staffN:
             # Now, resolve the Trill's ornamental pitch based on obj
-            trill.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN, otherInfo))
+            trill.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN))
             self.updateAltersFromExpression(
-                trill, obj, staffN, otherInfo
+                trill, obj, staffN
             )
 
         if place and place != 'place_unspecified':
@@ -1938,7 +1935,6 @@ class MeiToM21Converter:
         self,
         elem: Element,
         obj: note.NotRest,
-        otherInfo: dict[str, t.Any]
     ):
         # Check to see if this note/chord needs a mordent, and if so,
         # make the Mordent and append it to the note/chord's expressions.
@@ -1947,7 +1943,7 @@ class MeiToM21Converter:
         if not place:
             return
 
-        staffN: str = otherInfo.get('staffNumberForNotes', '')
+        staffN: str = self.otherInfo.get('staffNumberForNotes', '')
 
         accidUpper: str = elem.get('m21MordentAccidUpper', '')
         accidLower: str = elem.get('m21MordentAccidLower', '')
@@ -1983,9 +1979,9 @@ class MeiToM21Converter:
 
         # Now, resolve the mordent's ornamental pitch based on obj
         if staffN:
-            mordent.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN, otherInfo))
+            mordent.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN))
             self.updateAltersFromExpression(
-                mordent, obj, staffN, otherInfo
+                mordent, obj, staffN
             )
 
 
@@ -2002,7 +1998,6 @@ class MeiToM21Converter:
         self,
         elem: Element,
         obj: note.NotRest,
-        otherInfo: dict[str, t.Any]
     ):
         # Check to see if this note/chord needs a turn, and if so,
         # make the Turn and append it to the note/chord's expressions.
@@ -2011,7 +2006,7 @@ class MeiToM21Converter:
         if not place:
             return
 
-        staffN: str = otherInfo.get('staffNumberForNotes', '')
+        staffN: str = self.otherInfo.get('staffNumberForNotes', '')
 
         accidUpper: str = elem.get('m21TurnAccidUpper', '')
         accidLower: str = elem.get('m21TurnAccidLower', '')
@@ -2064,9 +2059,9 @@ class MeiToM21Converter:
         # Now, resolve the turn's "other" pitch based on obj's pitch (or highest pitch
         # if obj is a chord with pitches)
         if staffN:
-            turn.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN, otherInfo))
+            turn.resolveOrnamentalPitches(obj, keySig=self._currKeyForStaff(staffN))
             self.updateAltersFromExpression(
-                turn, obj, staffN, otherInfo
+                turn, obj, staffN
             )
 
         if place and place != 'place_unspecified':
@@ -2081,12 +2076,11 @@ class MeiToM21Converter:
         expr: expressions.Expression,
         obj: note.GeneralNote,
         staffNStr: str,
-        otherInfo: dict[str, t.Any]
     ):
         if not isinstance(expr, (expressions.Trill, expressions.GeneralMordent, expressions.Turn)):
             return
 
-        self.updateStaffAltersWithPitches(staffNStr, list(expr.ornamentalPitches), otherInfo)
+        self.updateStaffAltersWithPitches(staffNStr, list(expr.ornamentalPitches))
         return
 
     @staticmethod
@@ -2627,7 +2621,6 @@ class MeiToM21Converter:
     def scoreDefFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         allPartNs: tuple[str, ...],
         parseStaffGrps: bool = True
     ) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
@@ -2668,7 +2661,7 @@ class MeiToM21Converter:
         >>> from xml.etree import ElementTree as ET
         >>> c = MeiToM21Converter()
         >>> scoreDef = ET.fromstring(meiDoc)
-        >>> result = c.scoreDefFromElement(scoreDef, {}, ['1','2','3'], parseStaffGrps=True)
+        >>> result = c.scoreDefFromElement(scoreDef, ['1','2','3'], parseStaffGrps=True)
         >>> len(result)
         6
         >>> result['1']
@@ -2744,7 +2737,7 @@ class MeiToM21Converter:
         bpmStr: str = elem.get('midi.bpm', '')
         if bpmStr:
             # stick it in other info, for the very first MetronomeMark to use (if necessary)
-            otherInfo['pending scoredef@midi.bpm'] = bpmStr
+            self.otherInfo['pending scoredef@midi.bpm'] = bpmStr
 
         # 1.) process all-part attributes
         pap = post[allParts]
@@ -2799,7 +2792,6 @@ class MeiToM21Converter:
                 groupDesc: M21StaffGroupDescriptionTree = (
                     self.staffGroupDescriptionTreeFromStaffGrp(
                         eachGrp,
-                        otherInfo,
                         fakeTopLevelGroup  # will be None if len(topLevelStaffGrps) == 1
                     )
                 )
@@ -2807,7 +2799,7 @@ class MeiToM21Converter:
 
         # Gather up the staffDefDict.
         for eachGrp in topLevelStaffGrps:
-            post.update(self.staffGrpFromElement(eachGrp, otherInfo))
+            post.update(self.staffGrpFromElement(eachGrp))
 
         if parseStaffGrps:
             # process the staffGroup description tree, generating a list of m21 StaffGroup objects.
@@ -2863,7 +2855,6 @@ class MeiToM21Converter:
     def staffGroupDescriptionTreeFromStaffGrp(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         parentGroupDesc: M21StaffGroupDescriptionTree | None
     ) -> M21StaffGroupDescriptionTree:
         staffGroupTag: str = f'{MEI_NS}staffGrp'
@@ -2890,7 +2881,7 @@ class MeiToM21Converter:
 
         # check for any group label
         inst: m21.instrument.Instrument | None = (
-            self._instrumentFromStaffDefOrStaffGrp(elem, otherInfo)
+            self._instrumentFromStaffDefOrStaffGrp(elem)
         )
         if inst is not None:
             # Put inst.name and inst.abbreviation into thisGroupDesc.groupName/.groupAbbrev
@@ -2906,7 +2897,7 @@ class MeiToM21Converter:
             if nStr and (el.tag == staffDefTag):
                 # yes, we already have the instrument computed; simplest to just compute it again
                 staffInst: m21.instrument.Instrument | None = (
-                    self._instrumentFromStaffDefOrStaffGrp(el, otherInfo)
+                    self._instrumentFromStaffDefOrStaffGrp(el)
                 )
                 # We put this nStr and staffInst in the current group (noted as 'owned')
                 # and as 'referenced' in current group and all its ancestors.
@@ -2922,7 +2913,7 @@ class MeiToM21Converter:
             # recurse if there are groups within this group
             elif el.tag == staffGroupTag:
                 self.staffGroupDescriptionTreeFromStaffGrp(
-                    el, otherInfo, thisGroupDesc
+                    el, thisGroupDesc
                 )
 
         return thisGroupDesc
@@ -3120,7 +3111,6 @@ class MeiToM21Converter:
     def staffGrpFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         staffDefDict: dict[str, list[Music21Object] | dict[str, Music21Object]] | None = None,
     ) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
         '''
@@ -3173,20 +3163,19 @@ class MeiToM21Converter:
             # return all staff defs in this staff group
             nStr: str = el.get('n', '')
             if nStr and (el.tag == staffDefTag):
-                otherInfo['staffNumberForDef'] = nStr
-                staffDefDict[nStr] = self.staffDefFromElement(el, otherInfo)
-                otherInfo.pop('staffNumberForDef')
+                self.otherInfo['staffNumberForDef'] = nStr
+                staffDefDict[nStr] = self.staffDefFromElement(el)
+                self.otherInfo.pop('staffNumberForDef')
 
             # recurse if there are more groups, append to the working staffDefDict
             elif el.tag == staffGroupTag:
-                self.staffGrpFromElement(el, otherInfo, staffDefDict)
+                self.staffGrpFromElement(el, staffDefDict)
 
         return staffDefDict
 
     def _instrumentFromStaffDefOrStaffGrp(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> m21.instrument.Instrument | None:
         inst: m21.instrument.Instrument | None = None
 
@@ -3205,7 +3194,7 @@ class MeiToM21Converter:
             labelAbbr = elem.get('label.abbr', '')
 
         if instrDefElem is not None:
-            inst = self.instrDefFromElement(instrDefElem, otherInfo)
+            inst = self.instrDefFromElement(instrDefElem)
         else:
             try:
                 inst = m21.instrument.fromString(label)
@@ -3234,7 +3223,6 @@ class MeiToM21Converter:
     def staffDefFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> dict[str, Music21Object]:
         '''
         <staffDef> Container for staff meta-information.
@@ -3266,7 +3254,7 @@ class MeiToM21Converter:
         >>> from xml.etree import ElementTree as ET
         >>> c = MeiToM21Converter()
         >>> staffDef = ET.fromstring(meiDoc)
-        >>> result = c.staffDefFromElement(staffDef, {})
+        >>> result = c.staffDefFromElement(staffDef)
         >>> len(result)
         1
         >>> result
@@ -3286,7 +3274,7 @@ class MeiToM21Converter:
         ... """
         >>> from xml.etree import ElementTree as ET
         >>> staffDef = ET.fromstring(meiDoc)
-        >>> result = c.staffDefFromElement(staffDef, {})
+        >>> result = c.staffDefFromElement(staffDef)
         >>> len(result)
         3
         >>> result['instrument']
@@ -3342,8 +3330,7 @@ class MeiToM21Converter:
         '''
         # mapping from tag name to our converter function
         tagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}clef': self.clefFromElement,
@@ -3355,7 +3342,7 @@ class MeiToM21Converter:
 
         # first make the Instrument
         inst: m21.instrument.Instrument | None = (
-            self._instrumentFromStaffDefOrStaffGrp(elem, otherInfo)
+            self._instrumentFromStaffDefOrStaffGrp(elem)
         )
         if inst is not None:
             post['instrument'] = inst
@@ -3391,12 +3378,12 @@ class MeiToM21Converter:
             if displace:
                 attribDict['dis.place'] = displace
             el = Element('clef', attribDict)
-            clefObj = self.clefFromElement(el, otherInfo)
+            clefObj = self.clefFromElement(el)
             if clefObj is not None:
                 post['clef'] = clefObj
 
         embeddedItems = self._processEmbeddedElements(
-            elem.findall('*'), tagToFunction, elem.tag, otherInfo
+            elem.findall('*'), tagToFunction, elem.tag
         )
 
         for eachItem in embeddedItems:
@@ -3415,12 +3402,11 @@ class MeiToM21Converter:
                 post['meter'] = eachItem
 
         if updateStaffKeyAndAlters and 'key' in post:
-            nStr: str = otherInfo.get('staffNumberForDef', '')
+            nStr: str = self.otherInfo.get('staffNumberForDef', '')
             if nStr:
                 self.updateStaffKeyAndAltersWithNewKey(
                     nStr,
                     t.cast(key.KeySignature, post['key']),
-                    otherInfo
                 )
 
         return post
@@ -3430,42 +3416,39 @@ class MeiToM21Converter:
         self,
         staffNStr: str,
         newKey: key.Key | key.KeySignature | None,
-        otherInfo: dict[str, t.Any]
     ):
-        if otherInfo.get('currKeyPerStaff', None) is None:
-            otherInfo['currKeyPerStaff'] = {}
-        otherInfo['currKeyPerStaff'][staffNStr] = newKey
+        if self.otherInfo.get('currKeyPerStaff', None) is None:
+            self.otherInfo['currKeyPerStaff'] = {}
+        self.otherInfo['currKeyPerStaff'][staffNStr] = newKey
 
         keyAltersForStaff: list[int] = M21Utilities.getAltersForKey(newKey)
 
-        if otherInfo.get('currentImpliedAltersPerStaff', None) is None:
-            otherInfo['currentImpliedAltersPerStaff'] = {}
-        otherInfo['currentImpliedAltersPerStaff'][staffNStr] = keyAltersForStaff
+        if self.otherInfo.get('currentImpliedAltersPerStaff', None) is None:
+            self.otherInfo['currentImpliedAltersPerStaff'] = {}
+        self.otherInfo['currentImpliedAltersPerStaff'][staffNStr] = keyAltersForStaff
 
     def updateStaffAltersWithPitches(
         self,
         staffNStr: str,
         pitches: t.Sequence[pitch.Pitch],
-        otherInfo: dict[str, t.Any]
     ):
         # every note and chord (and Trill/Mordent/Turn) flows through this routine
-        if otherInfo.get('currentImpliedAltersPerStaff', None) is None:
-            otherInfo['currentImpliedAltersPerStaff'] = {}
-        if otherInfo['currentImpliedAltersPerStaff'].get(staffNStr, None) is None:
+        if self.otherInfo.get('currentImpliedAltersPerStaff', None) is None:
+            self.otherInfo['currentImpliedAltersPerStaff'] = {}
+        if self.otherInfo['currentImpliedAltersPerStaff'].get(staffNStr, None) is None:
             # should never happen, but...
-            otherInfo['currentImpliedAltersPerStaff'][staffNStr] = [0] * 70
+            self.otherInfo['currentImpliedAltersPerStaff'][staffNStr] = [0] * 70
 
         for thePitch in pitches:
             alterIdx: int = M21Utilities.pitchToBase7(thePitch)
             alter: int = 0
             if thePitch.accidental is not None:
                 alter = int(thePitch.accidental.alter)
-            otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx] = int(alter)
+            self.otherInfo['currentImpliedAltersPerStaff'][staffNStr][alterIdx] = int(alter)
 
     def dotFromElement(
         self,
         elem: Element,  # pylint: disable=unused-argument
-        otherInfo: dict[str, t.Any]  # pylint: disable=unused-argument
     ) -> int:
         '''
         Returns ``1`` no matter what is passed in.
@@ -3496,7 +3479,6 @@ class MeiToM21Converter:
     def articFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[articulations.Articulation]:
         '''
         <artic> An indication of how to play a note or chord.
@@ -3516,14 +3498,14 @@ class MeiToM21Converter:
         >>> meiSnippet = '<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> c = MeiToM21Converter()
-        >>> c.articFromElement(meiSnippet, {})
+        >>> c.articFromElement(meiSnippet)
         [<music21.articulations.Accent>]
 
         A single <artic> element may indicate many :class:`Articulation` objects.
 
         >>> meiSnippet = '<artic artic="acc ten" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> c. articFromElement(meiSnippet, {})
+        >>> c. articFromElement(meiSnippet)
         [<music21.articulations.Accent>, <music21.articulations.Tenuto>]
 
         **Attributes Implemented:**
@@ -3562,7 +3544,6 @@ class MeiToM21Converter:
     def accidFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> pitch.Accidental | None:
         '''
         <accid> Records a temporary alteration to the pitch of a note.
@@ -3578,11 +3559,11 @@ class MeiToM21Converter:
         >>> meiSnippet = '<accid accid.ges="s" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> c = MeiToM21Converter()
-        >>> c.accidFromElement(meiSnippet, {})
+        >>> c.accidFromElement(meiSnippet)
         <music21.pitch.Accidental sharp>
         >>> meiSnippet = '<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> c.accidFromElement(meiSnippet, {})
+        >>> c.accidFromElement(meiSnippet)
         <music21.pitch.Accidental triple-flat>
 
         **Attributes/Elements Implemented:**
@@ -3662,7 +3643,6 @@ class MeiToM21Converter:
     def sylFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Lyric:
         '''
         <syl> Individual lyric syllable.
@@ -3769,7 +3749,6 @@ class MeiToM21Converter:
     def verseFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Lyric:
         '''
         <verse> Lyric verse.
@@ -3808,8 +3787,7 @@ class MeiToM21Converter:
         - MEI.shared: dir dynam lb space tempo
         '''
         tagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}label': self.stringFromElement,
@@ -3822,10 +3800,11 @@ class MeiToM21Converter:
         label: str | None = None
         syllables: list[note.Lyric] = []
 
-        for subElement in self._processEmbeddedElements(elem.findall('*'),
-                                                   tagToFunction,
-                                                   elem.tag,
-                                                   otherInfo):
+        for subElement in self._processEmbeddedElements(
+            elem.findall('*'),
+            tagToFunction,
+            elem.tag
+        ):
             if isinstance(subElement, str):
                 label = subElement
             elif isinstance(subElement, note.Lyric):
@@ -3856,7 +3835,6 @@ class MeiToM21Converter:
     def stringFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> str:
         # 888 should we use more of textFromElem here?
         text: str = ''
@@ -3953,7 +3931,6 @@ class MeiToM21Converter:
     def noteFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Note:
         # NOTE: this function should stay in sync with chordFromElement() where sensible
         '''
@@ -4053,7 +4030,6 @@ class MeiToM21Converter:
             elem.findall('*'),
             self.noteChildrenTagToFunction,
             elem.tag,
-            otherInfo
         ):
             if isinstance(subElement, int):
                 dotElements += subElement
@@ -4108,9 +4084,9 @@ class MeiToM21Converter:
         else:
             theNote.pitch = M21Utilities.safePitch(pnameStr, None, octStr)
 
-        nStr: str = otherInfo.get('staffNumberForNotes', '')
+        nStr: str = self.otherInfo.get('staffNumberForNotes', '')
         if nStr:
-            self.updateStaffAltersWithPitches(nStr, theNote.pitches, otherInfo)
+            self.updateStaffAltersWithPitches(nStr, theNote.pitches)
 
         self.addSlurs(elem, theNote)
 
@@ -4131,9 +4107,9 @@ class MeiToM21Converter:
             theNote.expressions.append(fermata)
 
         self.addArpeggio(elem, theNote)
-        self.addTrill(elem, theNote, otherInfo)
-        self.addMordent(elem, theNote, otherInfo)
-        self.addTurn(elem, theNote, otherInfo)
+        self.addTrill(elem, theNote)
+        self.addMordent(elem, theNote)
+        self.addTurn(elem, theNote)
         self.addOttavas(elem, theNote)
 
         # ties in the @tie attribute
@@ -4223,7 +4199,7 @@ class MeiToM21Converter:
             theNote.style.hideObjectOnPrint = True
 
         # stash the staffNum in theNote.mei_staff (in case a spanner needs to know)
-        staffNumStr: str = otherInfo.get('staffNumberForNotes', '')
+        staffNumStr: str = self.otherInfo.get('staffNumberForNotes', '')
         if staffNumStr:
             theNote.mei_staff = staffNumStr  # type: ignore
 
@@ -4232,7 +4208,6 @@ class MeiToM21Converter:
     def restFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Rest:
         '''
         <rest/> is a non-sounding event found in the source being transcribed
@@ -4309,7 +4284,7 @@ class MeiToM21Converter:
             theRest.style.hideObjectOnPrint = True
 
         # stash the staffNum in theRest.mei_staff (in case a spanner needs to know)
-        staffNumStr: str = otherInfo.get('staffNumberForNotes', '')
+        staffNumStr: str = self.otherInfo.get('staffNumberForNotes', '')
         if staffNumStr:
             theRest.mei_staff = staffNumStr  # type: ignore
 
@@ -4318,7 +4293,6 @@ class MeiToM21Converter:
     def mRestFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Rest:
         '''
         <mRest/> Complete measure rest in any meter.
@@ -4334,16 +4308,15 @@ class MeiToM21Converter:
         # NOTE: keep this in sync with mSpaceFromElement()
 
         if elem.get('dur') is not None:
-            return self.restFromElement(elem, otherInfo)
+            return self.restFromElement(elem)
         else:
-            theRest = self.restFromElement(elem, otherInfo)
+            theRest = self.restFromElement(elem)
             theRest.m21wasMRest = True  # type: ignore
             return theRest
 
     def spaceFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Rest:
         '''
         <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that
@@ -4376,7 +4349,6 @@ class MeiToM21Converter:
     def mSpaceFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> note.Rest:
         '''
         <mSpace/> A measure containing only empty space in any meter.
@@ -4392,16 +4364,15 @@ class MeiToM21Converter:
         # NOTE: keep this in sync with mRestFromElement()
 
         if elem.get('dur') is not None:
-            return self.spaceFromElement(elem, otherInfo)
+            return self.spaceFromElement(elem)
         else:
-            theSpace = self.spaceFromElement(elem, otherInfo)
+            theSpace = self.spaceFromElement(elem)
             theSpace.m21wasMRest = True  # type: ignore
             return theSpace
 
     def chordFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> chord.Chord:
         # NOTE: this function should stay in sync with noteFromElement() where sensible
         '''
@@ -4467,10 +4438,11 @@ class MeiToM21Converter:
         theLyricList: list[note.Lyric] = []
         spannersFromNotes: list[tuple[note.Note, list[spanner.Spanner]]] = []
         # iterate all immediate children
-        for subElement in self._processEmbeddedElements(elem.findall('*'),
-                                                   self.chordChildrenTagToFunction,
-                                                   elem.tag,
-                                                   otherInfo):
+        for subElement in self._processEmbeddedElements(
+            elem.findall('*'),
+            self.chordChildrenTagToFunction,
+            elem.tag,
+        ):
             if isinstance(subElement, note.Note):
                 theNoteList.append(subElement)
                 spannersFromThisNote: list[spanner.Spanner] = subElement.getSpannerSites()
@@ -4509,9 +4481,9 @@ class MeiToM21Converter:
             theChord = theChord.getGrace(appoggiatura=False)
             theChord.duration.slash = True  # type: ignore
 
-        nStr: str = otherInfo.get('staffNumberForNotes', '')
+        nStr: str = self.otherInfo.get('staffNumberForNotes', '')
         if nStr:
-            self.updateStaffAltersWithPitches(nStr, theChord.pitches, otherInfo)
+            self.updateStaffAltersWithPitches(nStr, theChord.pitches)
 
         self.addSlurs(elem, theChord)
 
@@ -4532,9 +4504,9 @@ class MeiToM21Converter:
             theChord.expressions.append(fermata)
 
         self.addArpeggio(elem, theChord)
-        self.addTrill(elem, theChord, otherInfo)
-        self.addMordent(elem, theChord, otherInfo)
-        self.addTurn(elem, theChord, otherInfo)
+        self.addTrill(elem, theChord)
+        self.addMordent(elem, theChord)
+        self.addTurn(elem, theChord)
         self.addOttavas(elem, theChord)
 
         # See if any of the notes within the chord have a trill/mordent/turn,
@@ -4605,7 +4577,7 @@ class MeiToM21Converter:
             theChord.style.hideObjectOnPrint = True
 
         # stash the staffNum in theChord.mei_staff (in case a spanner needs to know)
-        staffNumStr: str = otherInfo.get('staffNumberForNotes', '')
+        staffNumStr: str = self.otherInfo.get('staffNumberForNotes', '')
         if staffNumStr:
             theChord.mei_staff = staffNumStr  # type: ignore
 
@@ -4615,7 +4587,6 @@ class MeiToM21Converter:
     def clefFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> clef.Clef | None:
         '''
         <clef> Indication of the exact location of a particular note on the staff and, therefore,
@@ -4692,7 +4663,6 @@ class MeiToM21Converter:
     def pageBreakFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> m21.layout.PageLayout | None:
         pbType: str = elem.get('type', '')
         if pbType.startswith('original'):  # startswith because sometimes there are '\t*'s after
@@ -4723,7 +4693,6 @@ class MeiToM21Converter:
     def systemBreakFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> m21.layout.SystemLayout | None:
         sbType: str = elem.get('type', '')
         if sbType.startswith('original'):  # startswith because sometimes there are '\t*'s after
@@ -4740,35 +4709,32 @@ class MeiToM21Converter:
     def keySigFromElementInStaffDef(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
         newKey: key.Key | key.KeySignature | None = (
-            self._keySigFromElement(elem, otherInfo)
+            self._keySigFromElement(elem)
         )
-        nStr: str = otherInfo.get('staffNumberForDef', '')
+        nStr: str = self.otherInfo.get('staffNumberForDef', '')
         if nStr:
-            self.updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
+            self.updateStaffKeyAndAltersWithNewKey(nStr, newKey)
 
         return newKey
 
     def keySigFromElementInLayer(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
         newKey: key.Key | key.KeySignature | None = (
-            self._keySigFromElement(elem, otherInfo)
+            self._keySigFromElement(elem)
         )
-        nStr: str = otherInfo.get('staffNumberForLayer', '')
+        nStr: str = self.otherInfo.get('staffNumberForLayer', '')
         if nStr:
-            self.updateStaffKeyAndAltersWithNewKey(nStr, newKey, otherInfo)
+            self.updateStaffKeyAndAltersWithNewKey(nStr, newKey)
 
         return newKey
 
     def _keySigFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
         theKey: key.Key | key.KeySignature | None = self._keySigFromAttrs(elem)
         if theKey is None:
@@ -4783,7 +4749,6 @@ class MeiToM21Converter:
     def timeSigFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> meter.TimeSignature | None:
         theTimeSig: meter.TimeSignature | None = self._timeSigFromAttrs(elem)
         if theTimeSig is None:
@@ -4798,7 +4763,6 @@ class MeiToM21Converter:
     def instrDefFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> m21.instrument.Instrument:
         '''
         <instrDef> (instrument definition)---MIDI instrument declaration.
@@ -4847,7 +4811,6 @@ class MeiToM21Converter:
     def beamFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> t.Sequence[Music21Object]:
         '''
         <beam> A container for a series of explicitly beamed events that begins and ends entirely
@@ -4874,7 +4837,7 @@ class MeiToM21Converter:
         ... </beam>"""
         >>> meiSnippet = ET.fromstring(meiSnippet)
         >>> c = MeiToM21Converter()
-        >>> result = c.beamFromElement(meiSnippet, {})
+        >>> result = c.beamFromElement(meiSnippet)
         >>> isinstance(result, list)
         True
         >>> len(result)
@@ -4932,7 +4895,6 @@ class MeiToM21Converter:
             elem.findall('*'),
             self.beamChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         self.beamTogether(beamedStuff)
@@ -4943,7 +4905,6 @@ class MeiToM21Converter:
     def bTremFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         '''
         <bTrem> contains one <note> or <chord> (or editorial elements that resolve to a single
@@ -4953,7 +4914,6 @@ class MeiToM21Converter:
             elem.findall('*'),
             self.bTremChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         if len(bTremStuff) != 1:
@@ -4985,7 +4945,6 @@ class MeiToM21Converter:
     def fTremFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         '''
         <fTrem> contains two <note>s or two <chord>s or one of each (or editorial elements that
@@ -4995,7 +4954,6 @@ class MeiToM21Converter:
             elem.findall('*'),
             self.fTremChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         if len(fTremStuff) != 2:
@@ -5055,7 +5013,6 @@ class MeiToM21Converter:
     def barLineFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> bar.Barline | bar.Repeat | tuple[bar.Repeat, bar.Repeat]:
         '''
         <barLine> Vertical line drawn through one or more staves that divides musical notation into
@@ -5110,7 +5067,6 @@ class MeiToM21Converter:
     def tupletFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         '''
         <tuplet> A group of notes with "irregular" (sometimes called "irrational") rhythmic values,
@@ -5177,7 +5133,6 @@ class MeiToM21Converter:
             elem.findall('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         # "tuplet-ify" the duration of everything held within
@@ -5233,7 +5188,6 @@ class MeiToM21Converter:
     def layerFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         overrideN: str | None = None
     ) -> stream.Voice:
         '''
@@ -5303,7 +5257,6 @@ class MeiToM21Converter:
             elem.iterfind('*'),
             self.layerChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         # adjust the <layer>'s elements for possible tuplets
@@ -5351,7 +5304,6 @@ class MeiToM21Converter:
     def appChoiceLayerChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5362,7 +5314,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.layerChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5370,14 +5321,12 @@ class MeiToM21Converter:
     def passThruEditorialLayerChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.layerChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5385,7 +5334,6 @@ class MeiToM21Converter:
     def appChoiceStaffItemsFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[
         tuple[
             str,
@@ -5408,8 +5356,7 @@ class MeiToM21Converter:
             self._processEmbeddedElements(
                 chosen.iterfind('*'),
                 self.staffItemsTagToFunction,
-                chosen.tag,
-                otherInfo)
+                chosen.tag)
         )
 
         return theList
@@ -5417,7 +5364,6 @@ class MeiToM21Converter:
     def passThruEditorialStaffItemsFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[
         tuple[
             str,
@@ -5436,8 +5382,8 @@ class MeiToM21Converter:
             self._processEmbeddedElements(
                 elem.iterfind('*'),
                 self.staffItemsTagToFunction,
-                elem.tag,
-                otherInfo)
+                elem.tag
+            )
         )
 
         return theList
@@ -5445,7 +5391,6 @@ class MeiToM21Converter:
     def appChoiceNoteChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5456,7 +5401,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.noteChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5464,14 +5408,12 @@ class MeiToM21Converter:
     def passThruEditorialNoteChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.noteChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5479,7 +5421,6 @@ class MeiToM21Converter:
     def appChoiceChordChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5490,7 +5431,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.chordChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5498,14 +5438,12 @@ class MeiToM21Converter:
     def passThruEditorialChordChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.chordChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5513,7 +5451,6 @@ class MeiToM21Converter:
     def appChoiceBeamChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5524,7 +5461,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.beamChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5532,14 +5468,12 @@ class MeiToM21Converter:
     def passThruEditorialBeamChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.beamChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5547,7 +5481,6 @@ class MeiToM21Converter:
     def appChoiceTupletChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5558,7 +5491,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.tupletChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5566,14 +5498,12 @@ class MeiToM21Converter:
     def passThruEditorialTupletChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5581,7 +5511,6 @@ class MeiToM21Converter:
     def appChoiceBTremChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5592,7 +5521,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.bTremChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5600,14 +5528,12 @@ class MeiToM21Converter:
     def passThruEditorialBTremChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.bTremChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5615,7 +5541,6 @@ class MeiToM21Converter:
     def appChoiceFTremChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         chosen: Element | None = self.chooseSubElement(elem)
         if chosen is None:
@@ -5626,7 +5551,6 @@ class MeiToM21Converter:
             chosen.iterfind('*'),
             self.fTremChildrenTagToFunction,
             chosen.tag,
-            otherInfo
         )
 
         return theList
@@ -5634,14 +5558,12 @@ class MeiToM21Converter:
     def passThruEditorialFTremChildrenFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         # iterate all immediate children
         theList: list[Music21Object] = self._processEmbeddedElements(
             elem.iterfind('*'),
             self.fTremChildrenTagToFunction,
             elem.tag,
-            otherInfo
         )
 
         return theList
@@ -5649,9 +5571,8 @@ class MeiToM21Converter:
     def _currKeyForStaff(
         self,
         staffNStr: str,
-        otherInfo: dict[str, t.Any]
     ) -> key.Key | key.KeySignature | None:
-        currKeyPerStaff: dict = otherInfo.get('currKeyPerStaff', {})
+        currKeyPerStaff: dict = self.otherInfo.get('currKeyPerStaff', {})
         currentKey: key.Key | key.KeySignature | None = (
             currKeyPerStaff.get(staffNStr, None)
         )
@@ -5660,7 +5581,6 @@ class MeiToM21Converter:
     def staffFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> list[Music21Object]:
         '''
         <staff> A group of equidistant horizontal lines on which notes are placed in order to
@@ -5706,28 +5626,27 @@ class MeiToM21Converter:
         # mapping from tag name to our converter function (currently empty)
         layerTagName: str = f'{MEI_NS}layer'
         tagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
         }
 
         nextBreak: Music21Object | None = None
 
-        staffNStr: str = otherInfo.get('staffNumberForNotes', '')
+        staffNStr: str = self.otherInfo.get('staffNumberForNotes', '')
         if staffNStr:
             # Initialize otherInfo['currentImpliedAltersPerStaff'] from the keysig for this staff.
             # This staff's currentImpliedAlters will be updated as notes/ornaments with visual
             # accidentals are seen in this layer.
             currentKey: key.Key | key.KeySignature | None = (
-                self._currKeyForStaff(staffNStr, otherInfo)
+                self._currKeyForStaff(staffNStr)
             )
-            self.updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey, otherInfo)
+            self.updateStaffKeyAndAltersWithNewKey(staffNStr, currentKey)
 
-            if staffNStr == otherInfo.get('topPartN'):
+            if staffNStr == self.otherInfo.get('topPartN'):
                 # this is the top Part; in music21 page breaks/system breaks go
                 # at the start of the measure in the topmost Part.
-                nextBreak = otherInfo.pop('nextBreak', None)
+                nextBreak = self.otherInfo.pop('nextBreak', None)
 
         layers: list[Music21Object] = []
 
@@ -5738,13 +5657,13 @@ class MeiToM21Converter:
         for eachTag in elem.iterfind('*'):
             if layerTagName == eachTag.tag:
                 layers.append(self.layerFromElement(
-                    eachTag, otherInfo, overrideN=currentNValue
+                    eachTag, overrideN=currentNValue
                 ))
                 currentNValue = f'{int(currentNValue) + 1}'  # inefficient, but we need a string
             elif eachTag.tag in tagToFunction:
                 # NB: this won't be tested until there's something in tagToFunction
                 layers.append(
-                    tagToFunction[eachTag.tag](eachTag, otherInfo)
+                    tagToFunction[eachTag.tag](eachTag)
                 )
             elif eachTag.tag not in _IGNORE_UNPROCESSED:
                 environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachTag.tag, elem.tag))
@@ -5851,7 +5770,6 @@ class MeiToM21Converter:
         self,
         staves: dict[str, stream.Measure | bar.Repeat],
         tsExpressions: list[tuple[list[str], OffsetQL, expressions.Expression]],
-        otherInfo: dict[str, t.Any]
     ):
         clonedExpression: expressions.Expression
 
@@ -5912,10 +5830,10 @@ class MeiToM21Converter:
                                             # based on eachObject
                                             expression.resolveOrnamentalPitches(
                                                 eachObject,
-                                                keySig=self._currKeyForStaff(staffN, otherInfo)
+                                                keySig=self._currKeyForStaff(staffN)
                                             )
                                             self.updateAltersFromExpression(
-                                                expression, eachObject, staffN, otherInfo
+                                                expression, eachObject, staffN
                                             )
                                         eachObject.expressions.append(expression)
                                     else:
@@ -5925,10 +5843,10 @@ class MeiToM21Converter:
                                             # based on eachObject
                                             clonedExpression.resolveOrnamentalPitches(
                                                 eachObject,
-                                                keySig=self._currKeyForStaff(staffN, otherInfo)
+                                                keySig=self._currKeyForStaff(staffN)
                                             )
                                             self.updateAltersFromExpression(
-                                                clonedExpression, eachObject, staffN, otherInfo
+                                                clonedExpression, eachObject, staffN
                                             )
                                         eachObject.expressions.append(clonedExpression)
 
@@ -5975,11 +5893,11 @@ class MeiToM21Converter:
                         if isinstance(expression, expressions.Ornament):
                             expression.resolveOrnamentalPitches(
                                 nearestPrevNoteInStaff,
-                                keySig=self._currKeyForStaff(staffForNearestNote, otherInfo)
+                                keySig=self._currKeyForStaff(staffForNearestNote)
                             )
 
                             self.updateAltersFromExpression(
-                                expression, nearestPrevNoteInStaff, staffForNearestNote, otherInfo
+                                expression, nearestPrevNoteInStaff, staffForNearestNote
                             )
 
                         nearestPrevNoteInStaff.expressions.append(expression)
@@ -6191,7 +6109,6 @@ class MeiToM21Converter:
     def octaveFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6248,7 +6165,6 @@ class MeiToM21Converter:
     def arpegFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6279,7 +6195,6 @@ class MeiToM21Converter:
     def trillFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> list[
         tuple[
             str,
@@ -6379,7 +6294,6 @@ class MeiToM21Converter:
     def mordentFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> list[
         tuple[
             str,
@@ -6450,7 +6364,6 @@ class MeiToM21Converter:
     def turnFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> list[
         tuple[
             str,
@@ -6541,7 +6454,6 @@ class MeiToM21Converter:
     def hairpinFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6593,7 +6505,6 @@ class MeiToM21Converter:
     def dynamFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6607,7 +6518,7 @@ class MeiToM21Converter:
         # then try to derive dynamic info from that.
         teWithStyle: expressions.TextExpression | None
         staffNStr, offsets, teWithStyle = (
-            self.dirFromElement(elem, otherInfo)
+            self.dirFromElement(elem)
         )
         if teWithStyle is None:
             return '', (-1., None, None), None
@@ -6632,7 +6543,6 @@ class MeiToM21Converter:
     def tempoFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6646,7 +6556,7 @@ class MeiToM21Converter:
         offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
         teWithStyle: expressions.TextExpression | None
         staffNStr, offsets, teWithStyle = (
-            self.dirFromElement(elem, otherInfo)
+            self.dirFromElement(elem)
         )
         if teWithStyle is None:
             return '', (-1., None, None), None
@@ -6664,7 +6574,7 @@ class MeiToM21Converter:
         elif teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None:
             teWithStyle.style.fontStyle = 'bold'
 
-        pendingMidiBPMStr: str = otherInfo.pop('pending scoredef@midi.bpm', '')
+        pendingMidiBPMStr: str = self.otherInfo.pop('pending scoredef@midi.bpm', '')
         midiBPMStr: str = elem.get('midi.bpm', '')
         if not midiBPMStr:
             # only use the pending one if it's useful.  We pop it out of otherInfo either way.
@@ -6786,7 +6696,6 @@ class MeiToM21Converter:
     def dirFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6871,7 +6780,6 @@ class MeiToM21Converter:
     def fermataFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -6957,7 +6865,6 @@ class MeiToM21Converter:
     def measureFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         backupNum: int,
         expectedNs: t.Iterable[str]
     ) -> dict[str, stream.Measure | bar.Repeat]:
@@ -7045,7 +6952,7 @@ class MeiToM21Converter:
 
         # spanner end GeneralNotes we are waiting to insert in the correct measure
         pendingSpannerEnds: list[tuple[str, spanner.Spanner, int, OffsetQL]] | None = (
-            otherInfo.pop('pendingSpannerEnds', None)
+            self.otherInfo.pop('pendingSpannerEnds', None)
         )
 
         # spanner end GeneralNotes we are STILL waiting to insert after processing this measure
@@ -7088,7 +6995,7 @@ class MeiToM21Converter:
                         (staffNStr, spannerObj, measSkip, offset)
                     )
             if newPendingSpannerEnds:
-                otherInfo['pendingSpannerEnds'] = newPendingSpannerEnds
+                self.otherInfo['pendingSpannerEnds'] = newPendingSpannerEnds
 
         # mapping from tag name to our converter function
         staffTag: str = f'{MEI_NS}staff'
@@ -7106,8 +7013,8 @@ class MeiToM21Converter:
                 if nStr is None:
                     raise MeiElementError(_STAFF_MUST_HAVE_N)
 
-                otherInfo['staffNumberForNotes'] = nStr
-                measureList = self.staffFromElement(eachElem, otherInfo)
+                self.otherInfo['staffNumberForNotes'] = nStr
+                measureList = self.staffFromElement(eachElem)
                 meas: stream.Measure = stream.Measure(number=measureNum)
 
                 # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
@@ -7125,17 +7032,17 @@ class MeiToM21Converter:
                 thisBarDuration: OffsetQL = staves[nStr].duration.quarterLength
                 if maxBarDuration is None or maxBarDuration < thisBarDuration:
                     maxBarDuration = thisBarDuration
-                otherInfo.pop('staffNumberForNotes')
+                self.otherInfo.pop('staffNumberForNotes')
 
             elif staffDefTag == eachElem.tag:
                 if nStr is None:
                     environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n'))
                 else:
-                    otherInfo['staffNumberForDef'] = nStr
+                    self.otherInfo['staffNumberForDef'] = nStr
                     stavesWaitingFromStaffDef[nStr] = self.staffDefFromElement(
-                        eachElem, otherInfo
+                        eachElem
                     )
-                    otherInfo.pop('staffNumberForDef')
+                    self.otherInfo.pop('staffNumberForDef')
 
             elif eachElem.tag in self.staffItemsTagToFunction:
                 offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
@@ -7146,7 +7053,7 @@ class MeiToM21Converter:
                     Music21Object
                 ]
                 triple = self.staffItemsTagToFunction[eachElem.tag](
-                    eachElem, otherInfo
+                    eachElem
                 )
 
                 # Sometimes staffItemsTagToFunction actually returns a _list_ of
@@ -7203,9 +7110,9 @@ class MeiToM21Converter:
                                     )
                                 else:
                                     # endNote has to wait for a subsequent measure
-                                    if otherInfo.get('pendingSpannerEnds', None) is None:
-                                        otherInfo['pendingSpannerEnds'] = []
-                                    otherInfo['pendingSpannerEnds'].append(
+                                    if self.otherInfo.get('pendingSpannerEnds', None) is None:
+                                        self.otherInfo['pendingSpannerEnds'] = []
+                                    self.otherInfo['pendingSpannerEnds'].append(
                                         (staffNStr, spannerObj, measSkip2, offset2)
                                     )
                         else:
@@ -7342,14 +7249,13 @@ class MeiToM21Converter:
         staves = self._makeBarlines(elem, staves)
 
         # take the timestamped fermatas, etc, and find notes/barlines to put them on
-        self._addTimestampedExpressions(staves, tsExpressions, otherInfo)
+        self._addTimestampedExpressions(staves, tsExpressions)
 
         return staves
 
     def sectionScoreCore(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         allPartNs: tuple[str, ...],
         nextMeasureLeft: bar.Repeat | None = None,
         backupMeasureNum: int = 0
@@ -7437,11 +7343,11 @@ class MeiToM21Converter:
         inNextThing: dict[str, list[Music21Object | list[Music21Object]]] = {
             n: [] for n in allPartNs
         }
-        pendingInNextThing = otherInfo.pop('pending inNextThing', None)
+        pendingInNextThing = self.otherInfo.pop('pending inNextThing', None)
         if pendingInNextThing is not None:
             inNextThing.update(pendingInNextThing)
 
-        topPartN: str = otherInfo.get('topPartN', '')
+        topPartN: str = self.otherInfo.get('topPartN', '')
         if not topPartN:
             topPartN = allPartNs[0]
 
@@ -7461,30 +7367,35 @@ class MeiToM21Converter:
                 haveSeenMeasure = True
                 backupMeasureNum += 1
 
-                # Make a new measureInfo to pass in for each measure.
-                # It will contain the current otherInfo contents, but
-                # any measure-specific info will be cleared here.
-                measureInfo: dict[str, t.Any] = {}
-                measureInfo.update(otherInfo)
+                # Copy off the existing otherInfo in savedInfo to restore after
+                # measure processing, to toss any measure-specific info.
+                savedInfo: dict[str, t.Any] = {}
+                savedInfo.update(self.otherInfo)
 
                 # process all the stuff in the <measure>
                 measureResult = self.measureFromElement(
-                    eachElem, measureInfo, backupMeasureNum, allPartNs
+                    eachElem, backupMeasureNum, allPartNs
                 )
 
-                # we toss measureInfo to clear the measure-specific stuff, BUT we don't want
+                # Stash off the measure-specific info (we'll want to keep some of it below)
+                measureInfo: dict[str, t.Any] = self.otherInfo
+
+                # restore otherInfo back the way it was before this measure was processed.
+                self.otherInfo = savedInfo
+
+                # we restored otherInfo to clear the measure-specific stuff, BUT we don't want
                 # to clear info['pendingSpannerEnds'] because they need to keep getting passed
                 # around until all spanners have ended. So we put it in otherInfo here.
                 pendingSpannerEnds = measureInfo.get('pendingSpannerEnds', None)
                 if pendingSpannerEnds:
-                    otherInfo['pendingSpannerEnds'] = pendingSpannerEnds
+                    self.otherInfo['pendingSpannerEnds'] = pendingSpannerEnds
                 else:
-                    otherInfo.pop('pendingSpannerEnds', None)
+                    self.otherInfo.pop('pendingSpannerEnds', None)
 
                 # Also, we don't want to re-introduce info['nextBreak'] if measureFromElement
                 # consumed it.
                 if measureInfo.get('nextBreak', None) is None:
-                    otherInfo.pop('nextBreak', None)
+                    self.otherInfo.pop('nextBreak', None)
 
                 # process and append each part's stuff to the staff
                 for eachN in allPartNs:
@@ -7516,7 +7427,6 @@ class MeiToM21Converter:
                 parseStaffGrps: bool = elem.tag == scoreTag and not scoreDefSeen
                 localResult = self.scoreDefFromElement(
                     eachElem,
-                    otherInfo,
                     allPartNs,
                     parseStaffGrps=parseStaffGrps
                 )
@@ -7554,7 +7464,7 @@ class MeiToM21Converter:
                         inNextThing[eachN].append(to_insert)
 
                         if newKey is not None:
-                            self.updateStaffKeyAndAltersWithNewKey(eachN, newKey, otherInfo)
+                            self.updateStaffKeyAndAltersWithNewKey(eachN, newKey)
 
                 for eachN in allPartNs:
                     if eachN in localResult:
@@ -7570,14 +7480,12 @@ class MeiToM21Converter:
             elif staffDefTag == eachElem.tag:
                 nStr: str | None = eachElem.get('n')
                 if nStr is not None:
-                    otherInfo['staffNumberForDef'] = nStr
-                    for eachObj in self.staffDefFromElement(
-                        eachElem, otherInfo
-                    ).values():
+                    self.otherInfo['staffNumberForDef'] = nStr
+                    for eachObj in self.staffDefFromElement(eachElem).values():
                         if isinstance(eachObj, meter.TimeSignature):
                             self.activeMeter = eachObj
                         inNextThing[nStr].append(eachObj)
-                    otherInfo.pop('staffNumberForDef')
+                    self.otherInfo.pop('staffNumberForDef')
                 else:
                     # At the moment, to process this here, we need an @n on the <staffDef>. A
                     # document may have a still-valid <staffDef> if the <staffDef> has an @xml:id
@@ -7589,7 +7497,6 @@ class MeiToM21Converter:
                 localParsed, nextMeasureLeft, backupMeasureNum = (
                     self.sectionFromElement(
                         eachElem,
-                        otherInfo,
                         allPartNs,
                         nextMeasureLeft,
                         backupMeasureNum)
@@ -7677,21 +7584,19 @@ class MeiToM21Converter:
                 if haveSeenMeasure:
                     pageBreak: m21.layout.PageLayout | None = self.pageBreakFromElement(
                         eachElem,
-                        otherInfo
                     )
                     if pageBreak is not None:
-                        otherInfo['nextBreak'] = pageBreak
+                        self.otherInfo['nextBreak'] = pageBreak
 
             elif eachElem.tag == sbTag:
                 if haveSeenMeasure:
                     systemBreak: m21.layout.SystemLayout | None = self.systemBreakFromElement(
                         eachElem,
-                        otherInfo
                     )
                     # if we see both breaks, ignore the system break and use the page break
                     if systemBreak is not None:
-                        if not isinstance(otherInfo.get('nextBreak'), m21.layout.PageLayout):
-                            otherInfo['nextBreak'] = systemBreak
+                        if not isinstance(self.otherInfo.get('nextBreak'), m21.layout.PageLayout):
+                            self.otherInfo['nextBreak'] = systemBreak
 
             elif eachElem.tag == f'{MEI_NS}choice':
                 # ignore <choice> in <section> silently if contents are:
@@ -7707,7 +7612,7 @@ class MeiToM21Converter:
         # TODO: write the <section @label=""> part
 
         # if there's anything left in "inNextThing", stash it off for the _next_ measure or section
-        otherInfo['pending inNextThing'] = inNextThing
+        self.otherInfo['pending inNextThing'] = inNextThing
 
         return parsed, nextMeasureLeft, backupMeasureNum
 
@@ -7730,7 +7635,6 @@ class MeiToM21Converter:
     def sectionFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any],
         allPartNs: tuple[str, ...],
         nextMeasureLeft: bar.Repeat | None,
         backupMeasureNum: int
@@ -7777,7 +7681,6 @@ class MeiToM21Converter:
         environLocal.printDebug('*** processing a <section>')
         return self.sectionScoreCore(
             elem,
-            otherInfo,
             allPartNs,
             nextMeasureLeft,
             backupMeasureNum
@@ -7786,7 +7689,6 @@ class MeiToM21Converter:
     def scoreFromElement(
         self,
         elem: Element,
-        otherInfo: dict[str, t.Any]
     ) -> stream.Score:
         '''
         <score> Full score view of the musical content.
@@ -7828,7 +7730,7 @@ class MeiToM21Converter:
         allPartNs: tuple[str, ...]
         topPartN: str
         allPartNs, topPartN = self.allPartsPresent(elem)
-        otherInfo['topPartN'] = topPartN
+        self.otherInfo['topPartN'] = topPartN
 
         # This is the actual processing.
         parsed: dict[str, list[Music21Object | list[Music21Object]]] = (
@@ -7838,7 +7740,6 @@ class MeiToM21Converter:
             # use sectionScoreCore(...)[0].
             self.sectionScoreCore(
                 elem,
-                otherInfo,
                 allPartNs)[0]
         )
 
@@ -7905,8 +7806,7 @@ class MeiToM21Converter:
 
     def initializeTagToFunctionTables(self) -> None:
         self.layerChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceLayerChildrenFromElement,
@@ -7938,8 +7838,7 @@ class MeiToM21Converter:
         }
 
         self.staffItemsTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceStaffItemsFromElement,
@@ -7980,8 +7879,7 @@ class MeiToM21Converter:
         }
 
         self.noteChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceNoteChildrenFromElement,
@@ -8004,8 +7902,7 @@ class MeiToM21Converter:
         }
 
         self.chordChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceChordChildrenFromElement,
@@ -8027,8 +7924,7 @@ class MeiToM21Converter:
         }
 
         self.beamChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceBeamChildrenFromElement,
@@ -8056,8 +7952,7 @@ class MeiToM21Converter:
         }
 
         self.tupletChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceTupletChildrenFromElement,
@@ -8085,8 +7980,7 @@ class MeiToM21Converter:
         }
 
         self.bTremChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceBTremChildrenFromElement,
@@ -8106,8 +8000,7 @@ class MeiToM21Converter:
         }
 
         self.fTremChildrenTagToFunction: dict[str, t.Callable[
-            [Element,
-                dict[str, str]],
+            [Element],
             t.Any]
         ] = {
             f'{MEI_NS}app': self.appChoiceFTremChildrenFromElement,
