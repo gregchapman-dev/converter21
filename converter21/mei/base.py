@@ -403,6 +403,7 @@ class MeiToM21Converter:
         self._ppTies()
         self._ppBeams()
         self._ppTuplets()
+        self._ppHairpins()
 
         self._ppFermatas()
         self._ppArpeggios()
@@ -411,6 +412,8 @@ class MeiToM21Converter:
         self._ppTrills()
         self._ppMordents()
         self._ppTurns()
+
+        self._ppDirsDynamsTempos()
 
         self._ppConclude()
 
@@ -1075,6 +1078,9 @@ class MeiToM21Converter:
                 if tempStr:
                     self.m21Attr[endid]['m21TupletNumFormat'] = tempStr
 
+    def _ppHairpins(self) -> None:
+        return
+
     def _ppFermatas(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles fermats specified
@@ -1462,6 +1468,94 @@ class MeiToM21Converter:
 
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
                 eachArpeg.set('ignore_in_arpegFromElement', 'true')
+
+    def _ppDirsDynamsTempos(self) -> None:
+        environLocal.printDebug('*** pre-processing dirs/dynams/tempos')
+
+        elems: list[Element] = self.documentRoot.findall(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dir'
+        )
+        elems += self.documentRoot.findall(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dynam'
+        )
+        elems += self.documentRoot.findall(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tempo'
+        )
+
+        for eachElem in elems:
+            if eachElem.tag.endswith('dir'):
+                lowerName = 'dir'
+                name = 'Dir'
+            elif eachElem.tag.endswith('dynam'):
+                lowerName = 'dynam'
+                name = 'Dynam'
+            elif eachElem.tag.endswith('tempo'):
+                lowerName = 'tempo'
+                name = 'Dynam'
+            else:
+                # shouldn't ever get here
+                continue
+
+            if lowerName == 'dir':
+                theType: str = eachElem.get('type', '')
+                if theType == 'fingering':
+                    continue
+
+            startId: str | None = self.removeOctothorpe(eachElem.get('startid'))
+            if not startId:
+                continue
+
+            # All the info gets stashed on the note/chord element referenced by startId
+            place: str = eachElem.get('place', '')
+            staff: str = eachElem.get('staff', '')
+            # technically not always legal, but I've seen enclose in <dynam>,
+            # so support it here for everyone.
+            enclose: str | None = eachElem.get('enclose')
+            # @midi.bpm is only expected for tempo.
+            midiBPM: str = ''
+            if lowerName == 'tempo':
+                midiBPM = eachElem.get('midi.bpm', '')
+            fontStyle: str | None = None
+            fontWeight: str | None = None
+            fontFamily: str | None = None
+            justify: str | None = None
+            text: str
+            styleDict: dict[str, str]
+
+            text, styleDict = self.textFromElem(eachElem)
+            text = html.unescape(text)
+            text = text.strip()
+            if not text:
+                continue
+
+            if enclose is not None:
+                if enclose == 'paren':
+                    text = '( ' + text + ' )'
+                elif enclose == 'brack':
+                    text = '[ ' + text + ' ]'
+
+            fontStyle = styleDict.get('fontStyle', None)
+            fontWeight = styleDict.get('fontWeight', None)
+            fontFamily = styleDict.get('fontFamily', None)
+            justify = styleDict.get('justify', None)
+
+            self.m21Attr[startId][f'm21{name}'] = text
+            if place:
+                self.m21Attr[startId][f'm21{name}Place'] = place
+            if staff:
+                self.m21Attr[startId][f'm21{name}Staff'] = staff
+            if midiBPM:
+                self.m21Attr[startId][f'm21{name}MidiBPM'] = midiBPM
+            if fontStyle:
+                self.m21Attr[startId][f'm21{name}FontStyle'] = fontStyle
+            if fontWeight:
+                self.m21Attr[startId][f'm21{name}FontWeight'] = fontWeight
+            if fontFamily:
+                self.m21Attr[startId][f'm21{name}FontFamily'] = fontFamily
+            if justify:
+                self.m21Attr[startId][f'm21{name}Justify'] = justify
+
+            eachElem.set(f'ignore_in_{lowerName}FromElement', 'true')
 
     def _ppConclude(self) -> None:
         '''
@@ -1879,6 +1973,66 @@ class MeiToM21Converter:
                 completedOttavas.append(ottava)
 
         return completedOttavas
+
+    def addDirsDynamsTempos(
+        self,
+        elem: Element,
+        obj: note.GeneralNote
+    ):
+        textsToProcess: dict[str, str] = {
+            'm21Dir': elem.get('m21Dir', ''),
+            'm21Dynam': elem.get('m21Dynam', ''),
+            'm21Tempo': elem.get('m21Tempo', ''),
+        }
+
+        outputList: list[
+            m21.expressions.TextExpression | m21.dynamics.Dynamic | m21.tempo.TempoIndication
+        ] = []
+
+        for prefix, text in textsToProcess.items():
+            if not text:
+                # no text in element, so ignore it
+                continue
+
+            place: str = elem.get(f'{prefix}Place', '')
+            staff: str = elem.get(f'{prefix}Staff', '')
+            if not staff:
+                staff = self.staffNumberForNotes
+            fontStyle: str = elem.get(f'{prefix}FontStyle', '')
+            fontWeight: str = elem.get(f'{prefix}FontWeight', '')
+            fontFamily: str = elem.get(f'{prefix}FontFamily', '')
+            justify: str = elem.get(f'{prefix}Justify', '')
+
+            # make the appropriate m21 object (TextExpression, Dynamic, TempoIndication)
+            # and put it in a custom list in obj: obj.mei_dir_dynam_tempo_list
+            te: m21.expressions.TextExpression = (
+                self._textExpressionFromPieces(
+                    text,
+                    fontStyle,
+                    fontWeight,
+                    fontFamily,
+                    justify,
+                    place)
+            )
+
+            if prefix == 'm21Dir':
+                outputList.append(te)
+                continue
+
+            if prefix == 'm21Dynam':
+                dynam: m21.dynamics.Dynamic = self._dynamFromTextExpression(te)
+                outputList.append(dynam)
+                continue
+
+            if prefix == 'm21Tempo':
+                midiBPM: str = elem.get(f'{prefix}MidiBPM', '')
+                mm: m21.tempo.MetronomeMark = (
+                    self._metronomeMarkFromTextExpressionAndMidiBPMStr(te, midiBPM)
+                )
+                outputList.append(mm)
+
+        if outputList:
+            obj.mei_dir_dynam_tempo_list = outputList  # type: ignore
 
     def addArpeggio(
         self,
@@ -4156,6 +4310,7 @@ class MeiToM21Converter:
         self.addMordent(elem, theNote)
         self.addTurn(elem, theNote)
         self.addOttavas(elem, theNote)
+        self.addDirsDynamsTempos(elem, theNote)
 
         # ties in the @tie attribute
         tieStr: str | None = elem.get('tie')
@@ -4305,6 +4460,8 @@ class MeiToM21Converter:
         fermata = self.fermataFromNoteChordOrRestElement(elem)
         if fermata is not None:
             theRest.expressions.append(fermata)
+
+        self.addDirsDynamsTempos(elem, theRest)
 
         if elem.get('cue') == 'true':
             if t.TYPE_CHECKING:
@@ -4550,6 +4707,7 @@ class MeiToM21Converter:
         self.addMordent(elem, theChord)
         self.addTurn(elem, theChord)
         self.addOttavas(elem, theChord)
+        self.addDirsDynamsTempos(elem, theChord)
 
         # See if any of the notes within the chord have a trill/mordent/turn,
         # and if so, pull it up to the chord (because music21 doesn't really
@@ -5323,8 +5481,21 @@ class MeiToM21Converter:
 
         # make the Voice
         theVoice: stream.Voice = stream.Voice()
-        for each in theLayer:
-            theVoice.coreAppend(each)
+        for obj in theLayer:
+            # Check for dir/dynam/tempo attached to the obj.
+            # If there, append them first, then the obj, so
+            # they all get the same offset (since dir/dynam/tempo
+            # have zero duration).
+            if hasattr(obj, 'mei_dir_dynam_tempo_list'):
+                dirDynamTempoList: list[
+                    m21.expressions.TextExpression
+                    | m21.dynamics.Dynamic
+                    | m21.tempo.TempoIndication
+                ] = obj.mei_dir_dynam_tempo_list  # type: ignore
+                if dirDynamTempoList:
+                    for each in dirDynamTempoList:
+                        theVoice.coreAppend(each)
+            theVoice.coreAppend(obj)
         theVoice.coreElementsChanged()
 
         # try to set the Voice's "id" attribute
@@ -6548,6 +6719,9 @@ class MeiToM21Converter:
         tuple[OffsetQL | None, int | None, OffsetQL | None],
         dynamics.Dynamic | None
     ]:
+        if elem.get('ignore_in_dynamFromElement') == 'true':
+            return '', (-1., None, None), None
+
         staffNStr: str
         offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
         dynamObj: dynamics.Dynamic
@@ -6564,19 +6738,23 @@ class MeiToM21Converter:
         if t.TYPE_CHECKING:
             assert isinstance(teWithStyle.style, style.TextStyle)
 
-        text: str = teWithStyle.content
-        dynamObj = dynamics.Dynamic(text)
-        if teWithStyle.hasStyleInformation:
-            dynamObj.style = teWithStyle.style
+        dynamObj = self._dynamFromTextExpression(teWithStyle)
+        return staffNStr, offsets, dynamObj
+
+    @staticmethod
+    def _dynamFromTextExpression(te: m21.expressions.TextExpression) -> m21.dynamics.Dynamic:
+        dynamObj = dynamics.Dynamic(te.content)
+        if te.hasStyleInformation:
+            dynamObj.style = te.style
         else:
             # Undo music21's default Dynamic absolute positioning
             dynamObj.style.absoluteX = None
             dynamObj.style.absoluteY = None
 
-        if teWithStyle.placement is not None:
-            dynamObj.placement = teWithStyle.placement
+        if te.placement is not None:
+            dynamObj.placement = te.placement
 
-        return staffNStr, offsets, dynamObj
+        return dynamObj
 
     def tempoFromElement(
         self,
@@ -6586,7 +6764,8 @@ class MeiToM21Converter:
         tuple[OffsetQL | None, int | None, OffsetQL | None],
         tempo.TempoIndication | None
     ]:
-        tempoObj: tempo.TempoIndication  # either TempoText or MetronomeMark
+        if elem.get('ignore_in_tempoFromElement') == 'true':
+            return '', (-1., None, None), None
 
         # first parse as a <dir> giving a TextExpression with style,
         # then try to derive tempo info from that.
@@ -6599,19 +6778,6 @@ class MeiToM21Converter:
         if teWithStyle is None:
             return '', (-1., None, None), None
 
-        # default tempo placement should be above
-        if teWithStyle.placement is None:
-            teWithStyle.placement = 'above'
-
-        if t.TYPE_CHECKING:
-            assert isinstance(teWithStyle.style, style.TextStyle)
-
-        # default tempo text style should be bold
-        if not teWithStyle.hasStyleInformation:
-            teWithStyle.style.fontStyle = 'bold'
-        elif teWithStyle.style.fontWeight is None and teWithStyle.style.fontStyle is None:
-            teWithStyle.style.fontStyle = 'bold'
-
         midiBPMStr: str = elem.get('midi.bpm', '')
         if not midiBPMStr:
             # only use the pending one if it's useful.
@@ -6620,6 +6786,17 @@ class MeiToM21Converter:
         # for the first <tempo> so we clear it here.
         self.pendingMIDIBPM = ''
 
+        tempoObj: m21.tempo.MetronomeMark = (
+            self._metronomeMarkFromTextExpressionAndMidiBPMStr(teWithStyle, midiBPMStr)
+        )
+
+        return staffNStr, offsets, tempoObj
+
+    def _metronomeMarkFromTextExpressionAndMidiBPMStr(
+        self,
+        te: m21.expressions.TextExpression,
+        midiBPMStr: str
+    ) -> m21.tempo.MetronomeMark:
         midiBPM: int | None = None
         if midiBPMStr:
             try:
@@ -6627,12 +6804,26 @@ class MeiToM21Converter:
             except (TypeError, ValueError):
                 pass
 
-        # Note that we have to make a TempoText from teWithStyle first, since
-        # MetronomeMark won't take text=TextExpression.
-        tempoObj = tempo.TempoText()
-        tempoObj.setTextExpression(teWithStyle)
+        # default tempo placement should be above
+        if te.placement is None:
+            te.placement = 'above'
 
-        tempoObj = tempo.MetronomeMark(
+        if t.TYPE_CHECKING:
+            assert isinstance(te.style, style.TextStyle)
+
+        # default tempo text style should be bold
+        if not te.hasStyleInformation:
+            te.style.fontStyle = 'bold'
+        elif te.style.fontWeight is None and te.style.fontStyle is None:
+            te.style.fontStyle = 'bold'
+
+        # Note that we have to make a TempoText from te first, since
+        # MetronomeMark won't take text=TextExpression.
+        tempoObj: m21.tempo.TempoIndication
+        tempoObj = m21.tempo.TempoText()
+        tempoObj.setTextExpression(te)
+
+        tempoObj = m21.tempo.MetronomeMark(
             text=tempoObj,
             number=midiBPM,
             referent=None  # implies quarter note
@@ -6643,12 +6834,12 @@ class MeiToM21Converter:
 
         # work around bug in MetronomeMark.text setter where style is not linked
         # when text is a TempoText
-        tempoObj.style = teWithStyle.style
+        tempoObj.style = te.style
 
         # transfer placement to the metronome mark
-        tempoObj.placement = teWithStyle.placement
+        tempoObj.placement = te.placement
 
-        return staffNStr, offsets, tempoObj
+        return tempoObj
 
     @staticmethod
     def _glyphNameToUnicodeChar(name: str) -> str:
@@ -6743,6 +6934,8 @@ class MeiToM21Converter:
         expressions.TextExpression | None
     ]:
         # returns (staffNStr, (offset, None, None), te)
+        if elem.get('ignore_in_dirFromElement') == 'true':
+            return '', (-1., None, None), None
 
         # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
         staffNStr = elem.get('staff', '1')
@@ -6761,51 +6954,66 @@ class MeiToM21Converter:
 
         offset = self._tstampToOffset(tstamp)
 
-        # technically not always legal, but I've seen it in <dynam>,
+        # @enclose is technically not always legal, but I've seen it in <dynam>,
         # so support it here for everyone.
         enclose: str | None = elem.get('enclose')
-
-        fontStyle: str | None = None
-        fontWeight: str | None = None
-        fontFamily: str | None = None
-        justify: str | None = None
+        place: str | None = elem.get('place')
         text: str
         styleDict: dict[str, str]
 
         text, styleDict = self.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
-
-        fontStyle = styleDict.get('fontStyle', None)
-        fontWeight = styleDict.get('fontWeight', None)
-        fontFamily = styleDict.get('fontFamily', None)
-        justify = styleDict.get('justify', None)
-
         if enclose is not None:
             if enclose == 'paren':
                 text = '( ' + text + ' )'
             elif enclose == 'brack':
                 text = '[ ' + text + ' ]'
 
-        te = expressions.TextExpression(text)
+        fontStyle: str | None = styleDict.get('fontStyle', None)
+        fontWeight: str | None = styleDict.get('fontWeight', None)
+        fontFamily: str | None = styleDict.get('fontFamily', None)
+        justify: str | None = styleDict.get('justify', None)
+
+        te = self._textExpressionFromPieces(
+            text,
+            fontStyle,
+            fontWeight,
+            fontFamily,
+            justify,
+            place
+        )
+
+        return staffNStr, (offset, None, None), te
+
+    def _textExpressionFromPieces(
+        self,
+        text: str,
+        fontStyle: str | None,
+        fontWeight: str | None,
+        fontFamily: str | None,
+        justify: str | None,
+        place: str | None
+    ) -> m21.expressions.TextExpression:
+        te = m21.expressions.TextExpression(text)
 
         if t.TYPE_CHECKING:
-            assert isinstance(te.style, style.TextStyle)
+            assert isinstance(te.style, m21.style.TextStyle)
 
     #     if elem.tag == f'{MEI_NS}dir':
     #         # Match Verovio's default: <dir> with no fontStyle should be italic
     #         if fontStyle is None:
     #             fontStyle = 'italic'
-        if fontStyle is not None or fontWeight is not None:
+
+        if fontStyle or fontWeight:
             te.style.fontStyle = (
                 self._m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
             )
-        if fontFamily is not None:
+        if fontFamily:
             te.style.fontFamily = fontFamily
-        if justify is not None:
+        if justify:
             te.style.justify = justify
 
-        place: str | None = elem.get('place')
         if place:
             if place == 'above':
                 te.placement = 'above'
@@ -6815,8 +7023,9 @@ class MeiToM21Converter:
                 te.placement = 'below'
                 te.style.alignVertical = 'middle'
             else:
-                environLocal.warn(f'invalid @place = "{place}" in <dir>')
-        return staffNStr, (offset, None, None), te
+                environLocal.warn(f'invalid @place="{place}"')
+
+        return te
 
     def fermataFromElement(
         self,
@@ -6873,9 +7082,9 @@ class MeiToM21Converter:
         meiFontStyle: str | None,
         meiFontWeight: str | None
     ) -> str | None:
-        if meiFontStyle is None:
+        if not meiFontStyle:
             meiFontStyle = 'normal'
-        if meiFontWeight is None:
+        if not meiFontWeight:
             meiFontWeight = 'normal'
 
         if meiFontStyle == 'oblique':
