@@ -1555,7 +1555,7 @@ class MeiToM21Converter:
             if justify:
                 self.m21Attr[startId][f'm21{name}Justify'] = justify
 
-            eachElem.set(f'ignore_{lowerName}_in_{lowerName}FromElement', 'true')
+            eachElem.set(f'ignore_in_{lowerName}FromElement', 'true')
 
     def _ppConclude(self) -> None:
         '''
@@ -7082,9 +7082,9 @@ class MeiToM21Converter:
         meiFontStyle: str | None,
         meiFontWeight: str | None
     ) -> str | None:
-        if meiFontStyle is None:
+        if not meiFontStyle:
             meiFontStyle = 'normal'
-        if meiFontWeight is None:
+        if not meiFontWeight:
             meiFontWeight = 'normal'
 
         if meiFontStyle == 'oblique':
