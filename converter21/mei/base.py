@@ -1079,7 +1079,56 @@ class MeiToM21Converter:
                     self.m21Attr[endid]['m21TupletNumFormat'] = tempStr
 
     def _ppHairpins(self) -> None:
-        return
+        # Hairpins can have any of @startid/@endid, @tstamp/@tstamp2,
+        # @startid/@tstamp2, or @tstamp/@endid.  We process all of them
+        # here, to create the DynamicWedge, put it in the spannerBundle,
+        # and set up any @startid and @endid notes for insertion into a
+        # hairpin spanner, and then all of them again in hairpinFromElement,
+        # to possibly set up SpannerAnchors as needed for @tstamp and
+        # @tstamp2.
+        environLocal.printDebug('*** pre-processing hairpins')
+
+        for eachElem in self.documentRoot.iterfind(
+                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}hairpin'):
+            startId: str = self.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
+            endId: str = self.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
+            form: str = eachElem.get('form', '')
+            if form == 'cres':
+                dw = dynamics.Crescendo()
+            elif form == 'dim':
+                dw = dynamics.Diminuendo()
+            else:
+                environLocal.warn(f'invalid @form = "{form}" in <hairpin>')
+                continue
+
+            place: str | None = eachElem.get('place')
+            if place:
+                if place == 'above':
+                    dw.placement = 'above'
+                elif place == 'below':
+                    dw.placement = 'below'
+                elif place == 'between':
+                    dw.placement = 'below'
+                    dw.style.alignVertical = 'middle'  # type: ignore
+                else:
+                    environLocal.warn(f'invalid @place = "{place}" in <hairpin>')
+
+            if t.TYPE_CHECKING:
+                # work around Spanner.idLocal being incorrectly type-hinted as None
+                assert isinstance(dw.idLocal, str)
+            thisIdLocal: str = str(uuid4())
+            dw.idLocal = thisIdLocal
+            self.spannerBundle.append(dw)
+
+            eachElem.set('m21Hairpin', thisIdLocal)
+            if startId:
+                self.m21Attr[startId]['m21HairpinStart'] = thisIdLocal
+            if endId:
+                self.m21Attr[endId]['m21HairpinEnd'] = thisIdLocal
+
+            staffNStr: str = eachElem.get('staff', '')
+            if staffNStr:
+                dw.mei_staff = staffNStr  # type: ignore
 
     def _ppFermatas(self) -> None:
         '''
@@ -1973,6 +2022,23 @@ class MeiToM21Converter:
                 completedOttavas.append(ottava)
 
         return completedOttavas
+
+    def addHairpins(
+        self,
+        elem: Element,
+        obj: note.NotRest,
+    ) :
+        hairpinId: str = elem.get('m21HairpinStart', '')
+        if hairpinId:
+            self.safeAddToSpannerByIdLocal(obj, hairpinId, self.spannerBundle)
+
+        hairpinId = elem.get('m21HairpinEnd', '')
+        if hairpinId:
+            hairpin: spanner.Spanner | None = self.safeGetSpannerByIdLocal(
+                hairpinId, self.spannerBundle
+            )
+            if hairpin is not None:
+                hairpin.addSpannedElements(obj)
 
     def addDirsDynamsTempos(
         self,
@@ -4310,6 +4376,7 @@ class MeiToM21Converter:
         self.addMordent(elem, theNote)
         self.addTurn(elem, theNote)
         self.addOttavas(elem, theNote)
+        self.addHairpins(elem, theNote)
         self.addDirsDynamsTempos(elem, theNote)
 
         # ties in the @tie attribute
@@ -4461,6 +4528,7 @@ class MeiToM21Converter:
         if fermata is not None:
             theRest.expressions.append(fermata)
 
+        self.addHairpins(elem, theRest)
         self.addDirsDynamsTempos(elem, theRest)
 
         if elem.get('cue') == 'true':
@@ -4707,6 +4775,7 @@ class MeiToM21Converter:
         self.addMordent(elem, theChord)
         self.addTurn(elem, theChord)
         self.addOttavas(elem, theChord)
+        self.addHairpins(elem, theChord)
         self.addDirsDynamsTempos(elem, theChord)
 
         # See if any of the notes within the chord have a trill/mordent/turn,
@@ -6666,50 +6735,54 @@ class MeiToM21Converter:
     ) -> tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
-            dynamics.DynamicWedge | None
+            m21.dynamics.DynamicWedge | None
     ]:
-        # If no @staff, presume it is staff 1
-        staffNStr = elem.get('staff', '1')
-        offsets: tuple[OffsetQL, int, OffsetQL]
-        dw: dynamics.DynamicWedge
+        offset: OffsetQL = -1.
+        measSkip: int | None = None
+        offset2: OffsetQL | None = None
 
-        # @tstamp/@tstamp2 only for the moment.
-        tstamp: str | None = elem.get('tstamp')
-        if tstamp is None:
-            environLocal.warn('missing @tstamp in <hairpin> element')
-            return '', (-1., None, None), None
-        tstamp2: str | None = elem.get('tstamp2')
-        if tstamp2 is None:
-            environLocal.warn('missing @tstamp2 in <hairpin> element')
-            return '', (-1., None, None), None
+        hairpinLocalId = elem.get('m21Hairpin', '')
+        if not hairpinLocalId:
+            environLocal.warn('no Hairpin created in hairpin preprocessing')
+            return ('', (-1., None, None), None)
+        hairpin: m21.spanner.Spanner | None = (
+            self.safeGetSpannerByIdLocal(hairpinLocalId, self.spannerBundle)
+        )
+        if hairpin is None:
+            environLocal.warn('no Hairpin found from hairpin preprocessing')
+            return ('', (-1., None, None), None)
 
-        offsets = self._tstampsToOffset1AndMeasSkipAndOffset2(tstamp, tstamp2)
+        if t.TYPE_CHECKING:
+            assert isinstance(hairpin, m21.dynamics.DynamicWedge)
 
-        form: str = elem.get('form', '')
-        if form == 'cres':
-            dw = dynamics.Crescendo()
-        elif form == 'dim':
-            dw = dynamics.Diminuendo()
-        else:
-            environLocal.warn(f'invalid @form = "{form}" in <hairpin>')
-            return '', (-1., None, None), None
+        staffNStr: str = elem.get('staff', '')
+        if not staffNStr:
+            # get it from hairpin
+            if hasattr(hairpin, 'mei_staff'):
+                staffNStr = hairpin.mei_staff  # type: ignore
+        if not staffNStr:
+            staffNStr = '1'  # best we can do, hope it's ok
 
-        place: str | None = elem.get('place')
-        if place:
-            if place == 'above':
-                dw.placement = 'above'
-            elif place == 'below':
-                dw.placement = 'below'
-            elif place == 'between':
-                dw.placement = 'below'
-                dw.style.alignVertical = 'middle'  # type: ignore
-            else:
-                environLocal.warn(f'invalid @place = "{place}" in <hairpin>')
+        startId: str = elem.get('startid', '')
+        tstamp: str = elem.get('tstamp', '')
+        endId: str = elem.get('endid', '')
+        tstamp2: str = elem.get('tstamp2', '')
+        if not tstamp2 and not endId:
+            environLocal.warn('missing @tstamp2/@endid in <octave> element')
+            return ('', (-1., None, None), None)
+        if not tstamp and not startId:
+            environLocal.warn('missing @tstamp/@startid in <octave> element')
+            return ('', (-1., None, None), None)
+        if not startId:
+            hairpin.mei_needs_start_anchor = True  # type: ignore
+        if not endId:
+            hairpin.mei_needs_end_anchor = True  # type: ignore
+        if tstamp:
+            offset = self._tstampToOffset(tstamp)
+        if tstamp2:
+            measSkip, offset2 = self._tstamp2ToMeasSkipAndOffset(tstamp2)
 
-        dw.mei_needs_start_anchor = True  # type: ignore
-        dw.mei_needs_end_anchor = True  # type: ignore
-        self.spannerBundle.append(dw)
-        return staffNStr, offsets, dw
+        return staffNStr, (offset, measSkip, offset2), hairpin
 
     def dynamFromElement(
         self,
