@@ -8745,6 +8745,8 @@ class HumdrumFile(HumdrumFileContent):
         justification: int = 0
         if token.isDefined('LO', 'TX', 'rj'):
             justification = 1
+        if token.isDefined('LO', 'TX', 'cj'):
+            justification = 2
 
         zparam: bool = token.isDefined('LO', 'TX', 'Z')
         yparam: bool = token.isDefined('LO', 'TX', 'Y')
@@ -8868,6 +8870,7 @@ class HumdrumFile(HumdrumFileContent):
         # maybe add center justification as an option later
         # justification == 0 means no explicit justification (mostly left justified)
         # justification == 1 means right justified
+        # justification == 2 means center justified
         justification: int = 0
 
 # NOPE: merge new iohumdrum.cpp changes --gregc 01July2021
@@ -9046,8 +9049,10 @@ class HumdrumFile(HumdrumFileContent):
         elif bold:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
-        if justification:
+        if justification == 1:
             tempoOrDirection.style.justify = 'right'
+        elif justification == 2:
+            tempoOrDirection.style.justify = 'center'
 
         tempoOrDirectionOffsetInMeasure: HumNum = token.durationFromBarline
         tempoOrDirectionOffsetInVoice: HumNum = opFrac(
@@ -9165,8 +9170,10 @@ class HumdrumFile(HumdrumFileContent):
         elif bold:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
-        if justification:
+        if justification == 1:
             tempoOrDirection.style.justify = 'right'
+        elif justification == 2:
+            tempoOrDirection.style.justify = 'center'
 
         tempoOrDirectionOffsetInMeasure: HumNum = token.durationFromBarline
         tempoOrDirectionOffsetInVoice: HumNum = opFrac(
