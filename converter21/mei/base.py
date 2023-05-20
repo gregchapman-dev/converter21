@@ -1093,6 +1093,7 @@ class MeiToM21Converter:
             startId: str = self.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
             endId: str = self.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
             form: str = eachElem.get('form', '')
+            dw: m21.dynamics.DynamicWedge
             if form == 'cres':
                 dw = dynamics.Crescendo()
             elif form == 'dim':
@@ -2026,8 +2027,8 @@ class MeiToM21Converter:
     def addHairpins(
         self,
         elem: Element,
-        obj: note.NotRest,
-    ) :
+        obj: note.GeneralNote,
+    ):
         hairpinId: str = elem.get('m21HairpinStart', '')
         if hairpinId:
             self.safeAddToSpannerByIdLocal(obj, hairpinId, self.spannerBundle)
