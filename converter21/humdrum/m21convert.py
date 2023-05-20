@@ -1633,6 +1633,8 @@ class M21Convert:
 
             if style.justify == 'right':
                 justString = ':rj'
+            elif style.justify == 'center':
+                justString = ':cj'
 
             if style.color:
                 colorString = f':color={style.color}'
@@ -2022,8 +2024,11 @@ class M21Convert:
                 output += ':b' + staffStr
 
         # right justification
-        if textStyle is not None and textStyle.justify == 'right':
-            output += ':rj'
+        if textStyle is not None:
+            if textStyle.justify == 'right':
+                output += ':rj'
+            elif textStyle.justify == 'center':
+                output += ':cj'
 
         if dynString != dynamic.value:
             # check first for surrounding brackets, parens, curlies or angles.
@@ -2065,8 +2070,11 @@ class M21Convert:
             textStyle = dynamic.style
 
         # right justification
-        if textStyle is not None and textStyle.justify == 'right':
-            output += ':rj'
+        if textStyle is not None:
+            if textStyle.justify == 'right':
+                output += ':rj'
+            elif textStyle.justify == 'center':
+                output += ':cj'
 
         if dynString != dynamic.value:
             # check first for surrounding brackets, parens, curlies or angles.
