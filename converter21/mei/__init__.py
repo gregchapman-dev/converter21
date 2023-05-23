@@ -20,7 +20,8 @@ from .meiexceptions import MeiExportError
 from .meiexceptions import MeiInternalError
 
 from .meireader import MeiReader
-from .meiwriter import MeiWriter
-from .meiscore import MeiScore
-from .meimeasure import MeiMeasure
+
 from .meistaff import MeiStaff
+from .meimeasure import MeiMeasure
+from .meiscore import MeiScore
+from .meiwriter import MeiWriter

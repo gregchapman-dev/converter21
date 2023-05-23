@@ -82,6 +82,66 @@ def setDebugReprInternal(self, method) -> None:
 
 # pylint: disable=protected-access
 
+
+class M21StaffGroupTree:
+    # Used during export
+    def __init__(
+            self,
+            sg: m21.layout.StaffGroup,
+            staffNumbersByM21Part: dict[m21.stream.Part, int]
+    ) -> None:
+        # about this staff group
+        self.staffGroup: m21.layout.StaffGroup = sg
+        self.staffNums: set[int] = set(staffNumbersByM21Part[m21Part]
+                                            for m21Part in
+                                                sg.spannerStorage.elements)
+        self.numStaves: int = len(self.staffNums)
+        self.lowestStaffNumber: int = min(self.staffNums)
+
+        # tree links
+        self.children: list[M21StaffGroupTree] = []
+
+
+class M21StaffGroupDescriptionTree:
+    # Used during import
+    def __init__(self) -> None:
+        # about this group description
+        self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
+        self.barTogether: bool | str = False  # see m21.layout.StaffGroup.barTogether
+
+        # instrument should be set if there is an instrument for the staff group.
+        # The Humdrum importer doesn't use this field, as it has other ways of
+        # tracking this.
+        self.instrument: m21.instrument.Instrument | None = None
+
+        # Humdrum importer sets groupNum instead, and then gathers names later
+        # using that groupNum.
+        self.groupNum: int = 0
+
+        # staves referenced by this group (includes staves in subgroups).
+        # staffIds should be in staff order (on the page, from top to bottom).
+        self.staffIds: list[int | str] = []  # Humdrum likes int, MEI likes str
+
+        # staves actually in this group (i.e. not in a subgroup).
+        # ownedStaffIds should be in staff order (on the page, from top to bottom).
+        self.ownedStaffIds: list[int | str] = []
+
+        # staffInstruments should contain the instrument for each staff (if there
+        # is one). The Humdrum importer doesn't use this field, as it has other
+        # ways of tracking this.
+        self.staffInstruments: list[m21.instrument.Instrument | None] = []
+
+        # ownedStaffInstruments should contain the instrument for each owned staff
+        # (if there is one). The Humdrum importer doesn't use this field, as it has
+        # other ways of tracking this.
+        self.ownedStaffInstruments: list[m21.instrument.Instrument | None] = []
+
+        # tree links:
+        # children == subgroups, parent = enclosing group (None for top)
+        self.children: list[M21StaffGroupDescriptionTree] = []
+        self.parent: M21StaffGroupDescriptionTree | None = None
+
+
 class M21Utilities:
 
     @staticmethod
@@ -766,62 +826,3 @@ class M21Utilities:
         trees.sort(key=lambda tree: tree.lowestStaffNumber)
         for tree in trees:
             M21Utilities._sortStaffGroupTrees(tree.children)
-
-
-
-class M21StaffGroupTree:
-    # Used during export
-    def __init__(
-            self,
-            sg: m21.layout.StaffGroup,
-            staffNumbersByM21Part: dict[m21.stream.Part, int]
-    ) -> None:
-        # about this staff group
-        self.staffGroup: m21.layout.StaffGroup = sg
-        self.staffNums: set[int] = set(staffNumbersByM21Part[m21Part]
-                                            for m21Part in
-                                                sg.spannerStorage.elements)
-        self.numStaves: int = len(self.staffNums)
-        self.lowestStaffNumber: int = min(self.staffNums)
-
-        # tree links
-        self.children: list[M21StaffGroupTree] = []
-
-class M21StaffGroupDescriptionTree:
-    # Used during import
-    def __init__(self) -> None:
-        # about this group description
-        self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
-        self.barTogether: bool | str = False  # see m21.layout.StaffGroup.barTogether
-
-        # instrument should be set if there is an instrument for the staff group.
-        # The Humdrum importer doesn't use this field, as it has other ways of
-        # tracking this.
-        self.instrument: m21.instrument.Instrument | None = None
-
-        # Humdrum importer sets groupNum instead, and then gathers names later
-        # using that groupNum.
-        self.groupNum: int = 0
-
-        # staves referenced by this group (includes staves in subgroups).
-        # staffIds should be in staff order (on the page, from top to bottom).
-        self.staffIds: list[int | str] = []  # Humdrum likes int, MEI likes str
-
-        # staves actually in this group (i.e. not in a subgroup).
-        # ownedStaffIds should be in staff order (on the page, from top to bottom).
-        self.ownedStaffIds: list[int | str] = []
-
-        # staffInstruments should contain the instrument for each staff (if there
-        # is one). The Humdrum importer doesn't use this field, as it has other
-        # ways of tracking this.
-        self.staffInstruments: list[m21.instrument.Instrument | None] = []
-
-        # ownedStaffInstruments should contain the instrument for each owned staff
-        # (if there is one). The Humdrum importer doesn't use this field, as it has
-        # other ways of tracking this.
-        self.ownedStaffInstruments: list[m21.instrument.Instrument | None] = []
-
-        # tree links:
-        # children == subgroups, parent = enclosing group (None for top)
-        self.children: list[M21StaffGroupDescriptionTree] = []
-        self.parent: M21StaffGroupDescriptionTree | None = None
