@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Name:          base.py
+# Name:          meireader.py
 # Purpose:       MEI parser
 #
 # Authors:       Greg Chapman <gregc@mac.com>
@@ -14,14 +14,14 @@
 These are the public interfaces for the MEI module by Christopher Antila
 
 To convert a string with MEI markup into music21 objects,
-use :meth:`~converter21.mei.MeiToM21Converter.convertFromString`.
+use :meth:`~converter21.mei.MeiReader.convertFromString`.
 
 In the future, most of the functions in this module should be moved to a separate, import-only
 module, so that functions for writing music21-to-MEI will fit nicely.
 
 **Simple "How-To"**
 
-Use :class:`MeiToM21Converter` to convert a string to a set of music21 objects. In the future, the
+Use :class:`MeiReader` to convert a string to a set of music21 objects. In the future, the
 :class:`M21ToMeiConverter` class will convert a set of music21 objects into a string with a MEI
 document.
 
@@ -56,8 +56,8 @@ document.
 ...     </music>
 ... </mei>
 ... """
->>> from converter21.mei.base import MeiToM21Converter
->>> conv = MeiToM21Converter(meiString)
+>>> from converter21.mei.meireader import MeiReader
+>>> conv = MeiReader(meiString)
 >>> result = conv.run()
 >>> result
 <music21.stream.Score 0x10ee474f0>
@@ -106,7 +106,7 @@ to convert a <clef> into a :class:`Clef`
 with no loss of information. Because we cannot provide a simple one-to-one conversion for  slurs,
 ties, and tuplets, we have kept their conversion functions "private,"
 to emphasize the fact that you
-must use the :class:`MeiToM21Converter` to process them properly.
+must use the :class:`MeiReader` to process them properly.
 
 **Guidelines for Encoders**
 
@@ -198,7 +198,6 @@ from music21 import clef
 from music21 import duration
 from music21 import dynamics
 from music21 import environment
-from music21 import exceptions21
 from music21 import expressions
 from music21 import interval
 from music21 import key
@@ -212,11 +211,17 @@ from music21 import style
 from music21 import tempo
 from music21 import tie
 
+from converter21.mei import MeiValidityError
+# from converter21.mei import MeiValueError
+from converter21.mei import MeiAttributeError
+from converter21.mei import MeiElementError
+from converter21.mei import MeiInternalError
+
 from converter21.shared import SharedConstants
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupDescriptionTree
 
-environLocal = environment.Environment('converter21.mei.base')
+environLocal = environment.Environment('converter21.mei.meireader')
 
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
@@ -239,32 +244,6 @@ _IGNORE_UNPROCESSED = (
     f'{MEI_NS}labelAbbr',    # instrument; handled separately by staffDefFromElement()
     f'{MEI_NS}measure',      # measure; handled separately by {score,section}FromElement()
 )
-
-
-# Exceptions
-# -----------------------------------------------------------------------------
-class MeiValidityError(exceptions21.Music21Exception):
-    '''When there is an otherwise-unspecified validity error that prevents parsing.'''
-    pass
-
-
-class MeiValueError(exceptions21.Music21Exception):
-    '''When an attribute has an invalid value.'''
-    pass
-
-
-class MeiAttributeError(exceptions21.Music21Exception):
-    '''When an element has an invalid attribute.'''
-    pass
-
-
-class MeiElementError(exceptions21.Music21Exception):
-    '''When an element itself is invalid.'''
-    pass
-
-class MeiInternalError(exceptions21.Music21Exception):
-    '''When an internal assumption is broken.'''
-    pass
 
 
 # Text Strings for Error Conditions
@@ -291,9 +270,9 @@ _EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} 
 _EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
 _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
 
-class MeiToM21Converter:
+class MeiReader:
     '''
-    A :class:`MeiToM21Converter` instance manages the conversion of a MEI document into music21
+    A :class:`MeiReader` instance manages the conversion of a MEI document into music21
     objects.
 
     If ``theDocument`` does not have <mei> as the root element, the class raises an
@@ -308,7 +287,7 @@ class MeiToM21Converter:
     def __init__(self, theDocument: str | None = None) -> None:
         #  The __init__() documentation doesn't isn't processed by Sphinx,
         #  so I put it at class level.
-        environLocal.printDebug('*** initializing MeiToM21Converter')
+        environLocal.printDebug('*** initializing MeiReader')
 
         self.initializeTagToFunctionTables()
 
@@ -462,9 +441,9 @@ class MeiToM21Converter:
         ...     </section>
         ... </score>"""
         >>> import xml.etree.ElementTree as ETree
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> meiDoc = ETree.fromstring(meiDoc)
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> c.allPartsPresent(meiDoc)
         (('1', '2'), '1')
 
@@ -642,16 +621,13 @@ class MeiToM21Converter:
         :param str name: Name of the attribute, used when raising an exception (read below).
         :param mapping: A mapping type (nominally a dict) with relevant key-value pairs.
 
-        :raises: :exc:`MeiValueError` when ``attr`` is not found in ``mapping``. The error
-            message will be of this format: 'Unexpected value for "name" attribute: attr'.
-
         Examples:
 
-        >>> from converter21.mei.base import MeiToM21Converter
-        >>> c = MeiToM21Converter()
-        >>> c._attrTranslator('s', 'accid', MeiToM21Converter._ACCID_ATTR_DICT)
+        >>> from converter21.mei import MeiReader
+        >>> c = MeiReader()
+        >>> c._attrTranslator('s', 'accid', MeiReader._ACCID_ATTR_DICT)
         '#'
-        >>> c._attrTranslator('9', 'dur', MeiToM21Converter._DUR_ATTR_DICT) == None
+        >>> c._attrTranslator('9', 'dur', MeiReader._DUR_ATTR_DICT) == None
         True
         '''
         try:
@@ -666,8 +642,8 @@ class MeiToM21Converter:
         Use :func:`_attrTranslator` to convert the value of an "accid" attribute to its
         music21 string.
 
-        >>> from converter21.mei.base import MeiToM21Converter
-        >>> c = MeiToM21Converter()
+        >>> from converter21.mei import MeiReader
+        >>> c = MeiReader()
         >>> c._accidentalFromAttr('s')
         '#'
         '''
@@ -678,8 +654,8 @@ class MeiToM21Converter:
         Use :func:`_attrTranslator` to convert the value of an @accid.ges
         attribute to its music21 string.
 
-        >>> from converter21.mei.base import MeiToM21Converter
-        >>> c = MeiToM21Converter()
+        >>> from converter21.mei import MeiReader
+        >>> c = MeiReader()
         >>> c._accidGesFromAttr('s')
         '#'
         '''
@@ -689,8 +665,8 @@ class MeiToM21Converter:
         '''
         Use :func:`_attrTranslator` to convert a MEI "dur" attribute to a music21 quarterLength.
 
-        >>> from converter21.mei.base import MeiToM21Converter
-        >>> c = MeiToM21Converter()
+        >>> from converter21.mei import MeiReader
+        >>> c = MeiReader()
         >>> c._qlDurationFromAttr('4')
         1.0
 
@@ -763,8 +739,8 @@ class MeiToM21Converter:
         :returns: The number of sharps.
         :rtype: int
 
-        >>> from converter21.mei.base import MeiToM21Converter
-        >>> c = MeiToM21Converter()
+        >>> from converter21.mei import MeiReader
+        >>> c = MeiReader()
         >>> c._sharpsFromAttr('3s')
         3
         >>> c._sharpsFromAttr('3f')
@@ -792,7 +768,7 @@ class MeiToM21Converter:
         # noinspection PyShadowingNames
         '''
         Pre-processing helper for :func:`convertFromString` that handles slurs specified in <slur>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+        elements. The input is a :class:`MeiReader` with data about the file currently being
         processed. This function reads from ``self.documentRoot`` and writes into
         ``self.m21Attr`` and ``self.spannerBundle``.
 
@@ -831,8 +807,8 @@ class MeiToM21Converter:
         ...     </section>
         ...     </score></music>
         ... </mei>"""
-        >>> from converter21.mei import MeiToM21Converter
-        >>> theConverter = MeiToM21Converter(meiDoc)
+        >>> from converter21.mei import MeiReader
+        >>> theConverter = MeiReader(meiDoc)
         >>>
         >>> theConverter._ppSlurs()
         >>> 'm21SlurStart' in theConverter.m21Attr['1234']
@@ -880,7 +856,7 @@ class MeiToM21Converter:
     def _ppTies(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles ties specified in <tie>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+        elements. The input is a :class:`MeiReader` with data about the file currently being
         processed. This function reads from ``self.documentRoot`` and writes into
         ``self.m21Attr``.
 
@@ -925,7 +901,7 @@ class MeiToM21Converter:
     def _ppBeams(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles beams specified
-        in <beamSpan> elements. The input is a :class:`MeiToM21Converter` with data about
+        in <beamSpan> elements. The input is a :class:`MeiReader` with data about
         the file currently being processed. This function reads from ``self.documentRoot``
         and writes into ``self.m21Attr``.
 
@@ -971,7 +947,7 @@ class MeiToM21Converter:
     def _ppTuplets(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles tuplets specified in
-        <tupletSpan> elements. The input is a :class:`MeiToM21Converter` with data about the file
+        <tupletSpan> elements. The input is a :class:`MeiReader` with data about the file
         currently being processed. This function reads from ``self.documentRoot`` and writes
         into ``self.m21Attr``.
 
@@ -1134,7 +1110,7 @@ class MeiToM21Converter:
     def _ppFermatas(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles fermats specified
-        in <fermata> elements. The input is a :class:`MeiToM21Converter` with data about
+        in <fermata> elements. The input is a :class:`MeiReader` with data about
         the file currently being processed. This function reads from ``self.documentRoot``
         and writes into ``self.m21Attr``.
 
@@ -1181,7 +1157,7 @@ class MeiToM21Converter:
     def _ppTrills(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles trills specified in <trill>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+        elements. The input is a :class:`MeiReader` with data about the file currently being
         processed. This function reads from ``self.documentRoot`` and writes into
         ``self.m21Attr``.
 
@@ -1259,7 +1235,7 @@ class MeiToM21Converter:
     def _ppMordents(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles mordents in <mordent>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+        elements. The input is a :class:`MeiReader` with data about the file currently being
         processed. This function reads from ``self.documentRoot`` and writes into
         ``self.m21Attr``.
 
@@ -1311,7 +1287,7 @@ class MeiToM21Converter:
     def _ppTurns(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles turns in <turn>
-        elements. The input is a :class:`MeiToM21Converter` with data about the file currently being
+        elements. The input is a :class:`MeiReader` with data about the file currently being
         processed. This function reads from ``self.documentRoot`` and writes into
         ``self.m21Attr``.
 
@@ -1371,7 +1347,7 @@ class MeiToM21Converter:
     def _ppOctaves(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles ottavas specified in
-        <octave> elements. The input is a :class:`MeiToM21Converter` with data about the file
+        <octave> elements. The input is a :class:`MeiReader` with data about the file
         currently being processed. This function reads from ``self.documentRoot`` and writes
         into ``self.m21Attr``.
 
@@ -1448,7 +1424,7 @@ class MeiToM21Converter:
     def _ppArpeggios(self) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in
-        <arpeg> elements. The input is a :class:`MeiToM21Converter` with data about the file
+        <arpeg> elements. The input is a :class:`MeiReader` with data about the file
         currently being processed. This function reads from ``self.documentRoot`` and writes
         into ``self.m21Attr``.
 
@@ -1611,7 +1587,7 @@ class MeiToM21Converter:
         '''
         Pre-processing helper for :func:`convertFromString` that adds attributes from
         ``m21Attr`` to the appropriate elements in ``documentRoot``. The input is a
-        :class:`MeiToM21Converter` with data about the file currently being processed.
+        :class:`MeiReader` with data about the file currently being processed.
         This function reads from ``self.m21Attr`` and writes into ``self.documentRoot``.
 
         **Example of ``m21Attr``**
@@ -1685,16 +1661,16 @@ class MeiToM21Converter:
 
         >>> from xml.etree.ElementTree import Element
         >>> from music21 import note
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> elements = [Element('note'), Element('rest'), Element('note')]
         >>> mapping = {'note': lambda w: note.Note('D2')}
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> c._processEmbeddedElements(elements, mapping, 'doctest1')
         [<music21.note.Note D>, <music21.note.Note D>]
 
         If debugging is enabled for the previous example, this warning would be displayed:
 
-        ``mei.base: Found an unprocessed <rest> element in a <doctest1>.
+        ``mei.meireader: Found an unprocessed <rest> element in a <doctest1>.
 
         The "beam" element holds "note" elements. All elements appear in a single level of the list:
 
@@ -2513,8 +2489,8 @@ class MeiToM21Converter:
         '''
         Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
 
-        >>> from converter21.mei.base import MeiToM21Converter
-        >>> c = MeiToM21Converter()
+        >>> from converter21.mei import MeiReader
+        >>> c = MeiReader()
         >>> c.removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
         '110a923d-a13a-4a2e-b85c-e1d438e4c5d6'
         >>> c.removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
@@ -2923,9 +2899,9 @@ class MeiToM21Converter:
         ...     </staffGrp>
         ... </scoreDef>
         ... """
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> from xml.etree import ElementTree as ET
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> scoreDef = ET.fromstring(meiDoc)
         >>> result = c.scoreDefFromElement(scoreDef, ['1','2','3'], parseStaffGrps=True)
         >>> len(result)
@@ -3516,9 +3492,9 @@ class MeiToM21Converter:
         >>> meiDoc = """<?xml version="1.0" encoding="UTF-8"?>
         ... <staffDef n="1" label="Clarinet" xmlns="http://www.music-encoding.org/ns/mei"/>
         ... """
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> from xml.etree import ElementTree as ET
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> staffDef = ET.fromstring(meiDoc)
         >>> result = c.staffDefFromElement(staffDef)
         >>> len(result)
@@ -3761,10 +3737,10 @@ class MeiToM21Converter:
         :attr:`~music21.note.GeneralNote.articulations` attribute.
 
         >>> from xml.etree import ElementTree as ET
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> meiSnippet = '<artic artic="acc" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> c.articFromElement(meiSnippet)
         [<music21.articulations.Accent>]
 
@@ -3822,10 +3798,10 @@ class MeiToM21Converter:
         **Examples**
 
         >>> from xml.etree import ElementTree as ET
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> meiSnippet = '<accid accid.ges="s" xmlns="http://www.music-encoding.org/ns/mei"/>'
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> c.accidFromElement(meiSnippet)
         <music21.pitch.Accidental sharp>
         >>> meiSnippet = '<accid accid="tf" xmlns="http://www.music-encoding.org/ns/mei"/>'
@@ -5096,14 +5072,14 @@ class MeiToM21Converter:
         a list of three objects, none of which is a :class:`Beam` or similar.
 
         >>> from xml.etree import ElementTree as ET
-        >>> from converter21.mei.base import MeiToM21Converter
+        >>> from converter21.mei import MeiReader
         >>> meiSnippet = """<beam xmlns="http://www.music-encoding.org/ns/mei">
         ...     <note pname='A' oct='7' dur='8'/>
         ...     <note pname='B' oct='7' dur='8'/>
         ...     <note pname='C' oct='6' dur='8'/>
         ... </beam>"""
         >>> meiSnippet = ET.fromstring(meiSnippet)
-        >>> c = MeiToM21Converter()
+        >>> c = MeiReader()
         >>> result = c.beamFromElement(meiSnippet)
         >>> isinstance(result, list)
         True
@@ -8326,27 +8302,27 @@ class MeiToM21Converter:
 
 # -----------------------------------------------------------------------------
 _DOC_ORDER = [
-    MeiToM21Converter.accidFromElement,
-    MeiToM21Converter.articFromElement,
-    MeiToM21Converter.beamFromElement,
-    MeiToM21Converter.chordFromElement,
-    MeiToM21Converter.clefFromElement,
-    MeiToM21Converter.dotFromElement,
-    MeiToM21Converter.instrDefFromElement,
-    MeiToM21Converter.layerFromElement,
-    MeiToM21Converter.measureFromElement,
-    MeiToM21Converter.noteFromElement,
-    MeiToM21Converter.spaceFromElement,
-    MeiToM21Converter.mSpaceFromElement,
-    MeiToM21Converter.restFromElement,
-    MeiToM21Converter.mRestFromElement,
-    MeiToM21Converter.scoreFromElement,
-    MeiToM21Converter.sectionFromElement,
-    MeiToM21Converter.scoreDefFromElement,
-    MeiToM21Converter.staffFromElement,
-    MeiToM21Converter.staffDefFromElement,
-    MeiToM21Converter.staffGrpFromElement,
-    MeiToM21Converter.tupletFromElement,
+    MeiReader.accidFromElement,
+    MeiReader.articFromElement,
+    MeiReader.beamFromElement,
+    MeiReader.chordFromElement,
+    MeiReader.clefFromElement,
+    MeiReader.dotFromElement,
+    MeiReader.instrDefFromElement,
+    MeiReader.layerFromElement,
+    MeiReader.measureFromElement,
+    MeiReader.noteFromElement,
+    MeiReader.spaceFromElement,
+    MeiReader.mSpaceFromElement,
+    MeiReader.restFromElement,
+    MeiReader.mRestFromElement,
+    MeiReader.scoreFromElement,
+    MeiReader.sectionFromElement,
+    MeiReader.scoreDefFromElement,
+    MeiReader.staffFromElement,
+    MeiReader.staffDefFromElement,
+    MeiReader.staffGrpFromElement,
+    MeiReader.tupletFromElement,
 ]
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Name:          test_base.py
+# Name:          test_meireader.py
 # Purpose:       Tests for MEI parser
 #
 # Authors:       Greg Chapman <gregc@mac.com>
@@ -11,7 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 '''
-Tests for :mod:`converter21.mei.base`.
+Tests for :mod:`converter21.mei.meireader`.
 '''
 # part of the whole point is to test protect things too
 # pylint: disable=protected-access
@@ -54,22 +54,21 @@ from music21 import spanner
 from music21 import stream
 from music21 import tie
 
-from converter21.mei import base
-from converter21.mei.base import MeiToM21Converter
-from converter21.mei.base import _XMLID
-from converter21.mei.base import MEI_NS
+from converter21.mei import meireader
+from converter21.mei import MeiReader
 from converter21.shared import M21Utilities
 
-# pylint: disable=pointless-string-statement
+_XMLID = '{http://www.w3.org/XML/1998/namespace}id'
+MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 
 
 class Test(unittest.TestCase):
     # class TestMeiToM21Class(unittest.TestCase):
-    # '''Tests for the MeiToM21Converter class.'''
+    # '''Tests for the MeiReader class.'''
 
     def testInit1(self):
-        '''__init__(): no argument gives an "empty" MeiToM21Converter instance'''
-        actual = MeiToM21Converter()
+        '''__init__(): no argument gives an "empty" MeiReader instance'''
+        actual = MeiReader()
         self.assertIsNotNone(actual.documentRoot)
         self.assertIsInstance(actual.m21Attr, defaultdict)
         self.assertIsInstance(actual.spannerBundle, spanner.SpannerBundle)
@@ -79,7 +78,7 @@ class Test(unittest.TestCase):
         inputFile = '''<?xml version="1.0" encoding="UTF-8"?>
                        <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="2013">
                        <music><score></score></music></mei>'''
-        actual = MeiToM21Converter(inputFile)
+        actual = MeiReader(inputFile)
         # NB: at first I did this:
         # self.assertIsInstance(actual.documentRoot, ETree.Element)
         # ... but that doesn't work since it might be a C-Element instead
@@ -91,11 +90,11 @@ class Test(unittest.TestCase):
     def testInit3(self):
         '''__init__(): an invalid XML file causes an MeiValidityError'''
         inputFile = 'this is not an XML file'
-        self.assertRaises(base.MeiValidityError, MeiToM21Converter, inputFile)
+        self.assertRaises(meireader.MeiValidityError, MeiReader, inputFile)
         try:
-            MeiToM21Converter(inputFile)
-        except base.MeiValidityError as theError:
-            self.assertEqual(base._INVALID_XML_DOC, theError.args[0])
+            MeiReader(inputFile)
+        except meireader.MeiValidityError as theError:
+            self.assertEqual(meireader._INVALID_XML_DOC, theError.args[0])
 
     def testInit4(self):
         '''__init__(): a MusicXML file causes an MeiElementError'''
@@ -103,11 +102,14 @@ class Test(unittest.TestCase):
                        <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
                                                        "http://www.musicxml.org/dtds/partwise.dtd">
                        <score-partwise></score-partwise>'''
-        self.assertRaises(base.MeiElementError, MeiToM21Converter, inputFile)
+        self.assertRaises(meireader.MeiElementError, MeiReader, inputFile)
         try:
-            MeiToM21Converter(inputFile)
-        except base.MeiElementError as theError:
-            self.assertEqual(base._WRONG_ROOT_ELEMENT.format('score-partwise'), theError.args[0])
+            MeiReader(inputFile)
+        except meireader.MeiElementError as theError:
+            self.assertEqual(
+                meireader._WRONG_ROOT_ELEMENT.format('score-partwise'),
+                theError.args[0]
+            )
 
     # -----------------------------------------------------------------------------
     # class TestThings(unittest.TestCase):
@@ -154,7 +156,7 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
         expected = (('1',), '1')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.allPartsPresent(elem)
         self.assertEqual(expected, actual)
 
@@ -166,7 +168,7 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
         expected = (('1', '2', '3', '4'), '1')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.allPartsPresent(elem)
         self.assertEqual(expected, actual)
 
@@ -178,25 +180,25 @@ class Test(unittest.TestCase):
         elem = mock.MagicMock(spec_set=ETree.Element)
         elem.findall = mock.MagicMock(return_value=staffDefs)
         expected = (('1', '2', '3', '4'), '1')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.allPartsPresent(elem)
         self.assertEqual(expected, actual)
 
     def testAllPartsPresent4(self):
         '''allPartsPresent(): error: no <staffDef>s'''
         elem = mock.MagicMock(spec_set=ETree.Element)
-        c = MeiToM21Converter()
-        self.assertRaises(base.MeiValidityError, c.allPartsPresent, elem)
+        c = MeiReader()
+        self.assertRaises(meireader.MeiValidityError, c.allPartsPresent, elem)
         try:
             c.allPartsPresent(elem)
-        except base.MeiValidityError as mvErr:
-            self.assertEqual(base._SEEMINGLY_NO_PARTS, mvErr.args[0])
+        except meireader.MeiValidityError as mvErr:
+            self.assertEqual(meireader._SEEMINGLY_NO_PARTS, mvErr.args[0])
 
     def testTimeSigFromAttrs(self):
         '''_timeSigFromAttrs(): that it works (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'meter.count': '3', 'meter.unit': '8'})
         expectedRatioString = '3/8'
-        actual = MeiToM21Converter._timeSigFromAttrs(elem, prefix='meter.')
+        actual = MeiReader._timeSigFromAttrs(elem, prefix='meter.')
         self.assertEqual(expectedRatioString, actual.ratioString)
 
     def testKeySigFromAttrs1(self):
@@ -204,7 +206,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('{mei}staffDef', attrib={'key.pname': 'B', 'key.accid': 'f',
                                                       'key.mode': 'minor'})
         expectedTPNWC = 'b-'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._keySigFromAttrs(elem, prefix='key.')
         self.assertIsInstance(actual, key.Key)
         self.assertEqual(expectedTPNWC, actual.tonicPitchNameWithCase)
@@ -214,7 +216,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('{mei}staffDef', attrib={'key.sig': '6s', 'key.mode': 'minor'})
         expectedSharps = 6
         expectedMode = 'minor'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._keySigFromAttrs(elem, prefix='key.')
         self.assertIsInstance(actual, key.KeySignature)
         self.assertEqual(expectedSharps, actual.sharps)
@@ -224,7 +226,7 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): descending transposition (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '-3', 'trans.diat': '-2'})
         expectedName = 'm-3'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
@@ -233,7 +235,7 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): ascending transposition (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '7', 'trans.diat': '4'})
         expectedName = 'P5'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
@@ -242,7 +244,7 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): large ascending interval (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '19', 'trans.diat': '11'})
         expectedName = 'P12'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
@@ -251,7 +253,7 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): alternate octave spec (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '12', 'trans.diat': '0'})
         expectedName = 'P8'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
@@ -260,7 +262,7 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): alternate large descending interval (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '-19', 'trans.diat': '-4'})
         expectedName = 'P-12'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
@@ -269,7 +271,7 @@ class Test(unittest.TestCase):
         '''_transpositionFromAttrs(): alternate ascending sixteenth interval (integration test)'''
         elem = ETree.Element('{mei}staffDef', attrib={'trans.semi': '26', 'trans.diat': '1'})
         expectedName = 'M16'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._transpositionFromAttrs(elem)
         self.assertIsInstance(actual, interval.Interval)
         self.assertEqual(expectedName, actual.directedName)
@@ -278,7 +280,7 @@ class Test(unittest.TestCase):
         '''removeOctothorpe(): when there's an octothorpe'''
         xmlid = '#14ccdc11-8090-49f4-b094-5935f534131a'
         expected = '14ccdc11-8090-49f4-b094-5935f534131a'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
@@ -286,16 +288,16 @@ class Test(unittest.TestCase):
         '''removeOctothorpe(): when there's not an octothorpe'''
         xmlid = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
         expected = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._makeArticList')
+    @mock.patch('converter21.mei.meireader.MeiReader._makeArticList')
     def testArticFromElement(self, mockMakeList):
         '''articFromElement(): very straight-forward test'''
         elem = ETree.Element('artic', attrib={'artic': 'yes'})
         mockMakeList.return_value = 5
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.articFromElement(elem)
         self.assertEqual(5, actual)
         mockMakeList.assert_called_once_with('yes')
@@ -303,7 +305,7 @@ class Test(unittest.TestCase):
     def testAccidFromElement(self):
         '''accidFromElement(): very straight-forward test'''
         elem = ETree.Element('accid', attrib={'accid': 's'})
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.accidFromElement(elem)
         self.assertEqual(pitch.Accidental('#'), actual)
 
@@ -311,9 +313,9 @@ class Test(unittest.TestCase):
     # class TestMetadata(unittest.TestCase):
     # '''Tests for the metadata-fetching functions.'''
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetTitle')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetComposer')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetDate')
+    @mock.patch('converter21.mei.meireader.MeiReader.metaSetTitle')
+    @mock.patch('converter21.mei.meireader.MeiReader.metaSetComposer')
+    @mock.patch('converter21.mei.meireader.MeiReader.metaSetDate')
     def testMakeMeta1(self, mockDate, mockComposer, mockTitle):
         '''
         makeMetadata() when there is no <work> element.
@@ -321,7 +323,7 @@ class Test(unittest.TestCase):
         documentRoot = mock.MagicMock(spec_set=ETree.Element)
         documentRoot.find.return_value = None
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.documentRoot = documentRoot
         actual = c.makeMetadata()
 
@@ -331,9 +333,9 @@ class Test(unittest.TestCase):
         self.assertEqual(0, mockComposer.call_count)
         self.assertEqual(0, mockTitle.call_count)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetTitle')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetComposer')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.metaSetDate')
+    @mock.patch('converter21.mei.meireader.MeiReader.metaSetTitle')
+    @mock.patch('converter21.mei.meireader.MeiReader.metaSetComposer')
+    @mock.patch('converter21.mei.meireader.MeiReader.metaSetDate')
     def testMakeMeta2(self, mockDate, mockComposer, mockTitle):
         '''
         makeMetadata() when there is a <work> element.
@@ -345,7 +347,7 @@ class Test(unittest.TestCase):
         mockComposer.side_effect = lambda unused, y: y
         mockTitle.side_effect = lambda unused, y: y
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.documentRoot = documentRoot
         actual = c.makeMetadata()
 
@@ -370,7 +372,7 @@ class Test(unittest.TestCase):
         expMovementName = 'Adagio'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetTitle(work, meta)
 
         self.assertIs(meta, actual)
@@ -392,7 +394,7 @@ class Test(unittest.TestCase):
         expTitle = 'Symphony No. 7 (in one movement)'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetTitle(work, meta)
 
         self.assertIs(meta, actual)
@@ -408,7 +410,7 @@ class Test(unittest.TestCase):
         work = ETree.fromstring(work)
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
@@ -429,7 +431,7 @@ class Test(unittest.TestCase):
         expComposer = 'Jean Sibelius'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
@@ -448,7 +450,7 @@ class Test(unittest.TestCase):
         expComposer = 'Jean Sibelius'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
@@ -471,7 +473,7 @@ class Test(unittest.TestCase):
         expComposers2 = ('Sibelius, Jean', 'Jean Sibelius')
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetComposer(work, meta)
 
         self.assertIs(meta, actual)
@@ -487,7 +489,7 @@ class Test(unittest.TestCase):
         expDate = None
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
@@ -508,7 +510,7 @@ class Test(unittest.TestCase):
         expDate = '1924/03/02'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
@@ -529,13 +531,13 @@ class Test(unittest.TestCase):
         expDate = '1924/03/02'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
         self.assertEqual(expDate, actual.dateCreated)
 
-    @mock.patch('converter21.mei.base.environLocal')
+    @mock.patch('converter21.mei.meireader.environLocal')
     def testMetaDate4(self, mockEnviron):
         '''
         metaSetDate() with text that fails
@@ -549,10 +551,10 @@ class Test(unittest.TestCase):
         </work>'''
         work = ETree.fromstring(work)
         expDate = None
-        expWarn = base._MISSED_DATE.format('2 March 1924')
+        expWarn = meireader._MISSED_DATE.format('2 March 1924')
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
@@ -574,7 +576,7 @@ class Test(unittest.TestCase):
         expDate = '1915/--/-- to 1924/--/--'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
@@ -595,7 +597,7 @@ class Test(unittest.TestCase):
         expDate = '1915/--/-- to 1924/--/--'
         meta = metadata.Metadata()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.metaSetDate(work, meta)
 
         self.assertIs(meta, actual)
@@ -611,7 +613,7 @@ class Test(unittest.TestCase):
         name = 'numbers'
         mapping = {'one': 1, 'two': 2, 'three': 3}
         expected = 2
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._attrTranslator(attr, name, mapping)
         self.assertEqual(expected, actual)
 
@@ -620,53 +622,53 @@ class Test(unittest.TestCase):
         attr = 'four'
         name = 'numbers'
         mapping = {'one': 1, 'two': 2, 'three': 3}
-        c = MeiToM21Converter()
+        c = MeiReader()
         try:
             c._attrTranslator(attr, name, mapping)
-        except base.MeiValueError:
+        except meireader.MeiValueError:
             self.fail('MeiValueError incorrectly raised when attr isn\'t found')
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testAccidental(self, mockTrans):
         '''_accidentalFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 's'
-        c = MeiToM21Converter()
+        c = MeiReader()
         c._accidentalFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'accid', MeiToM21Converter._ACCID_ATTR_DICT)
+        mockTrans.assert_called_once_with(attr, 'accid', MeiReader._ACCID_ATTR_DICT)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testAccidGes(self, mockTrans):
         '''_accidGesFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 's'
-        c = MeiToM21Converter()
+        c = MeiReader()
         c._accidGesFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'accid.ges', MeiToM21Converter._ACCID_GES_ATTR_DICT)
+        mockTrans.assert_called_once_with(attr, 'accid.ges', MeiReader._ACCID_GES_ATTR_DICT)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testDuration(self, mockTrans):
         '''_qlDurationFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 's'
-        c = MeiToM21Converter()
+        c = MeiReader()
         c._qlDurationFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'dur', MeiToM21Converter._DUR_ATTR_DICT)
+        mockTrans.assert_called_once_with(attr, 'dur', MeiReader._DUR_ATTR_DICT)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testArticulation1(self, mockTrans):
         '''_articulationFromAttr(): ensure proper arguments to _attrTranslator'''
         attr = 'marc'
         mockTrans.return_value = mock.MagicMock(name='asdf', return_value=5)
         expected = (5,)
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._articulationFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'artic', MeiToM21Converter._ARTIC_ATTR_DICT)
+        mockTrans.assert_called_once_with(attr, 'artic', MeiReader._ARTIC_ATTR_DICT)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testArticulation2(self, mockTrans):
         '''_articulationFromAttr(): proper handling of "marc-stacc"'''
         attr = 'marc-stacc'
         expected = (articulations.StrongAccent, articulations.Staccato)
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._articulationFromAttr(attr)
         self.assertEqual(0, mockTrans.call_count)
         for i in range(len(expected)):
@@ -674,12 +676,12 @@ class Test(unittest.TestCase):
             expectedHere = expected[i]
             self.assertIsInstance(actualHere, expectedHere)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testArticulation3(self, mockTrans):
         '''_articulationFromAttr(): proper handling of "ten-stacc"'''
         attr = 'ten-stacc'
         expected = (articulations.Tenuto, articulations.Staccato)
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._articulationFromAttr(attr)
         self.assertEqual(0, mockTrans.call_count)
         for i in range(len(expected)):
@@ -687,49 +689,49 @@ class Test(unittest.TestCase):
             expectedHere = expected[i]
             self.assertIsInstance(actualHere, expectedHere)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._attrTranslator')
+    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
     def testArticulation4(self, mockTrans):
         '''_articulationFromAttr(): proper handling of not-found'''
         attr = 'garbage'
         expected = 'error message'
-        mockTrans.side_effect = base.MeiValueError(expected)
-        c = MeiToM21Converter()
-        self.assertRaises(base.MeiValueError, c._articulationFromAttr, attr)
-        mockTrans.assert_called_once_with(attr, 'artic', MeiToM21Converter._ARTIC_ATTR_DICT)
+        mockTrans.side_effect = meireader.MeiValueError(expected)
+        c = MeiReader()
+        self.assertRaises(meireader.MeiValueError, c._articulationFromAttr, attr)
+        mockTrans.assert_called_once_with(attr, 'artic', MeiReader._ARTIC_ATTR_DICT)
         try:
             c._articulationFromAttr(attr)
-        except base.MeiValueError as mvErr:
+        except meireader.MeiValueError as mvErr:
             self.assertEqual(expected, mvErr.args[0])
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._articulationFromAttr')
+    @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
     def testArticList1(self, mockArtic):
         '''_makeArticList(): properly handles single-articulation lists'''
         attr = 'acc'
         mockArtic.return_value = ['accent']
         expected = ['accent']
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._makeArticList(attr)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._articulationFromAttr')
+    @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
     def testArticList2(self, mockArtic):
         '''_makeArticList(): properly handles multi-articulation lists'''
         attr = 'acc stacc marc'
         mockReturns = [['accent'], ['staccato'], ['marcato']]
         mockArtic.side_effect = lambda unused: mockReturns.pop(0)
         expected = ['accent', 'staccato', 'marcato']
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._makeArticList(attr)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._articulationFromAttr')
+    @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
     def testArticList3(self, mockArtic):
         '''_makeArticList(): properly handles the compound articulations'''
         attr = 'acc marc-stacc marc'
         mockReturns = [['accent'], ['marcato', 'staccato'], ['marcato']]
         mockArtic.side_effect = lambda *unused: mockReturns.pop(0)
         expected = ['accent', 'marcato', 'staccato', 'marcato']
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._makeArticList(attr)
         self.assertEqual(expected, actual)
 
@@ -738,7 +740,7 @@ class Test(unittest.TestCase):
         dis = '15'
         disPlace = 'above'
         expected = 2
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
@@ -747,7 +749,7 @@ class Test(unittest.TestCase):
         dis = '22'
         disPlace = 'below'
         expected = -3
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
@@ -756,7 +758,7 @@ class Test(unittest.TestCase):
         dis = '8'
         disPlace = None
         expected = 1
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
@@ -765,7 +767,7 @@ class Test(unittest.TestCase):
         dis = None
         disPlace = None
         expected = 0
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._getOctaveShift(dis, disPlace)
         self.assertEqual(expected, actual)
 
@@ -773,7 +775,7 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): rptboth'''
         right = 'rptboth'
         expected = (bar.Repeat('end', times=2), bar.Repeat('start'))
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected[0]), type(actual[0]))
         self.assertEqual(type(expected[1]), type(actual[1]))
@@ -782,7 +784,7 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): rptend'''
         right = 'rptend'
         expected = bar.Repeat('end', times=2)
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.direction, expected.direction)
@@ -792,7 +794,7 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): rptstart'''
         right = 'rptstart'
         expected = bar.Repeat('start')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.direction, expected.direction)
@@ -802,7 +804,7 @@ class Test(unittest.TestCase):
         '''_barlineFromAttr(): end (--> final)'''
         right = 'end'
         expected = bar.Barline('final')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._barlineFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
@@ -811,7 +813,7 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "i"'''
         right = ''
         expected = tie.Tie('start')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
@@ -820,7 +822,7 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "ti"'''
         right = ''
         expected = tie.Tie('continue')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
@@ -829,7 +831,7 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "m"'''
         right = ''
         expected = tie.Tie('continue')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
@@ -838,7 +840,7 @@ class Test(unittest.TestCase):
         '''_tieFromAttr(): "t"'''
         right = ''
         expected = tie.Tie('stop')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._tieFromAttr(right)
         self.assertEqual(type(expected), type(actual))
         self.assertEqual(expected.type, expected.type)
@@ -854,7 +856,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 'i', 'con': 's'})
         elem.text = 'Chri'
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.sylFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
@@ -868,7 +870,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 'm', 'con': 't'})
         elem.text = 'sto'
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.sylFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
@@ -882,7 +884,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl', attrib={'wordpos': 't', 'con': 'd'})
         elem.text = 'pher'
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.sylFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
@@ -896,7 +898,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('syl')
         elem.text = 'shoe'
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.sylFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
@@ -912,7 +914,7 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.verseFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
@@ -935,7 +937,7 @@ class Test(unittest.TestCase):
         syl.text = '-mith'
         elem.append(syl)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.verseFromElement(elem)
 
         self.assertEqual(3, len(actual.components))
@@ -949,7 +951,7 @@ class Test(unittest.TestCase):
         self.assertEqual('end', actual.components[2].syllabic)
         self.assertEqual('mith', actual.components[2].text)
 
-    @mock.patch('converter21.mei.base.environLocal')
+    @mock.patch('converter21.mei.meireader.environLocal')
     def testVerse3(self, mockEnviron):
         '''
         verseFromElement() with one <syl> and invalid @n
@@ -959,16 +961,16 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.verseFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
         self.assertEqual('begin', actual.syllabic)
         self.assertEqual('Hin', actual.text)
         self.assertEqual(1, actual.number)
-        mockEnviron.warn.assert_called_once_with(base._BAD_VERSE_NUMBER.format('mistake'))
+        mockEnviron.warn.assert_called_once_with(meireader._BAD_VERSE_NUMBER.format('mistake'))
 
-    @mock.patch('converter21.mei.base.environLocal')
+    @mock.patch('converter21.mei.meireader.environLocal')
     def testVerse4(self, mockEnviron):
         '''
         verseFromElement() with one <syl> and no @n
@@ -978,7 +980,7 @@ class Test(unittest.TestCase):
         syl.text = 'Hin-'
         elem.append(syl)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.verseFromElement(elem)
 
         self.assertIsInstance(actual, note.Lyric)
@@ -1002,7 +1004,7 @@ class Test(unittest.TestCase):
         '''
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 's', 'oct': '2', 'dur': '4',
                                              'dots': '1'})
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
         self.assertEqual('D#2', actual.nameWithOctave)
         self.assertEqual(1.5, actual.quarterLength)
@@ -1015,7 +1017,7 @@ class Test(unittest.TestCase):
         (this has different arguments than testIntegration1a())
         '''
         elem = ETree.Element('note', attrib={'pname': 'D', 'accid': 'n', 'oct': '2', 'dur': '4'})
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
         self.assertEqual('D2', actual.nameWithOctave)
         self.assertEqual(1.0, actual.quarterLength)
@@ -1031,7 +1033,7 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}artic', attrib={'artic': 'stacc'}))
         elem.append(ETree.Element(f'{MEI_NS}accid', attrib={'accid': 's'}))
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
 
         self.assertEqual('D#2', actual.nameWithOctave)
@@ -1049,7 +1051,7 @@ class Test(unittest.TestCase):
                                              'dots': '1', _XMLID: 'asdf1234', 'artic': 'stacc',
                                              'tie': 'i1'})
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
 
         self.assertEqual('D#2', actual.nameWithOctave)
@@ -1071,7 +1073,7 @@ class Test(unittest.TestCase):
                                              'm21TupletSearch': 'start',
                                              'accid': 's', 'm21Beam': 'start'})
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
 
         self.assertEqual('D#2', actual.nameWithOctave)
@@ -1094,7 +1096,7 @@ class Test(unittest.TestCase):
         sylElem.text = 'words!'
         elem.append(sylElem)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
 
         self.assertEqual('D2', actual.nameWithOctave)
@@ -1124,7 +1126,7 @@ class Test(unittest.TestCase):
         '''
         elem = ETree.fromstring(elem)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.noteFromElement(elem)
 
         self.assertEqual(2, len(actual.lyrics))
@@ -1142,7 +1144,7 @@ class Test(unittest.TestCase):
 
     @mock.patch('music21.note.Rest')
     @mock.patch('converter21.shared.M21Utilities.makeDuration')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
+    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
     def testUnit1TestRestFromElement(self, mockTuplet, mockMakeDur, mockRest):
         '''
         restFromElement(): test @dur, @dots, @xml:id, and tuplet-related attributes
@@ -1156,7 +1158,7 @@ class Test(unittest.TestCase):
         mockTuplet.return_value = 'tupletized'
         expected = mockTuplet.return_value
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.restFromElement(elem)
 
         self.assertEqual(expected, actual)
@@ -1175,7 +1177,7 @@ class Test(unittest.TestCase):
                                              'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                              'm21TupletType': 'start'})
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.restFromElement(elem)
 
         self.assertEqual(Fraction(6, 5), actual.quarterLength)
@@ -1194,7 +1196,7 @@ class Test(unittest.TestCase):
                                              'm21TupletNumbase': '4',
                                              'm21TupletType': 'start',
                                              })
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.spaceFromElement(elem)
         self.assertIsInstance(actual, note.Rest)
         self.assertTrue(actual.style.hideObjectOnPrint)
@@ -1210,7 +1212,7 @@ class Test(unittest.TestCase):
                                               'm21TupletNum': '5', 'm21TupletNumbase': '4',
                                               'm21TupletType': 'start'})
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.spaceFromElement(elem)
 
         self.assertEqual(Fraction(6, 5), actual.quarterLength)
@@ -1218,7 +1220,7 @@ class Test(unittest.TestCase):
         self.assertEqual('the id', actual.id)
         self.assertEqual('start', actual.duration.tuplets[0].type)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.restFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.restFromElement')
     def testUnit3TestRestFromElement(self, mockRestFromElement):
         '''
         mRestFromElement(): reacts properly to an Element with the @dur attribute
@@ -1226,13 +1228,13 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mRest', attrib={'dur': '2'})
         mockRestFromElement.return_value = 'the rest'
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.mRestFromElement(elem)
 
         self.assertEqual(mockRestFromElement.return_value, actual)
         mockRestFromElement.assert_called_once_with(elem)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.restFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.restFromElement')
     def testUnit4TestRestFromElement(self, mockRestFromElement):
         '''
         mRestFromElement(): reacts properly to an Element without the @dur attribute
@@ -1240,14 +1242,14 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mRest')
         mockRestFromElement.return_value = mock.MagicMock()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.mRestFromElement(elem)
 
         self.assertEqual(mockRestFromElement.return_value, actual)
         mockRestFromElement.assert_called_once_with(elem)
         self.assertTrue(actual.m21wasMRest)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.spaceFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.spaceFromElement')
     def testUnit5TestRestFromElement(self, mockSpace):
         '''
         mSpaceFromElement(): reacts properly to an Element with the @dur attribute
@@ -1255,13 +1257,13 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mSpace', attrib={'dur': '2'})
         mockSpace.return_value = 'the spacer'
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.mSpaceFromElement(elem)
 
         self.assertEqual(mockSpace.return_value, actual)
         mockSpace.assert_called_once_with(elem)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.spaceFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.spaceFromElement')
     def testUnit6TestRestFromElement(self, mockSpace):
         '''
         mSpaceFromElement(): reacts properly to an Element without the @dur attribute
@@ -1269,7 +1271,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('mSpace')
         mockSpace.return_value = mock.MagicMock()
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.mSpaceFromElement(elem)
 
         self.assertEqual(mockSpace.return_value, actual)
@@ -1303,7 +1305,7 @@ class Test(unittest.TestCase):
             elem.append(eachElement)
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.chordFromElement(elem)
         self.assertEqual(expectedName, actual.fullName)
 
@@ -1321,7 +1323,7 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}artic', artic='stacc'))
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.chordFromElement(elem)
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
@@ -1341,7 +1343,7 @@ class Test(unittest.TestCase):
             elem.append(eachElement)
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.chordFromElement(elem)
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
@@ -1365,7 +1367,7 @@ class Test(unittest.TestCase):
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Quarter')
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.chordFromElement(elem)
 
         self.assertEqual(expectedName, actual.fullName)
@@ -1387,7 +1389,7 @@ class Test(unittest.TestCase):
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} 16th')
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.chordFromElement(elem)
 
         self.assertEqual(expectedName, actual.fullName)
@@ -1417,7 +1419,7 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.Treble8vaClef
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.clefFromElement(clefElem)
 
         self.assertEqual(expectedClass, actual.__class__)
@@ -1434,7 +1436,7 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.PercussionClef
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.clefFromElement(clefElem)
 
         self.assertEqual(expectedClass, actual.__class__)
@@ -1451,7 +1453,7 @@ class Test(unittest.TestCase):
             clefElem.set(eachKey, clefAttribs[eachKey])
         expectedClass = clef.TabClef
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.clefFromElement(clefElem)
 
         self.assertEqual(expectedClass, actual.__class__)
@@ -1474,7 +1476,7 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.layerFromElement(elem)
 
         self.assertEqual(2, len(actual))
@@ -1497,7 +1499,7 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.layerFromElement(elem, overrideN='so voice ID')
 
         self.assertEqual(2, len(actual))
@@ -1520,19 +1522,19 @@ class Test(unittest.TestCase):
                       </layer>'''
         elem = ETree.fromstring(inputXML)
 
-        c = MeiToM21Converter()
-        self.assertRaises(base.MeiAttributeError, c.layerFromElement, elem)
+        c = MeiReader()
+        self.assertRaises(meireader.MeiAttributeError, c.layerFromElement, elem)
 
         try:
             c.layerFromElement(elem)
-        except base.MeiAttributeError as maError:
-            self.assertEqual(base._MISSING_VOICE_ID, maError.args[0])
+        except meireader.MeiAttributeError as maError:
+            self.assertEqual(meireader._MISSING_VOICE_ID, maError.args[0])
 
     # -----------------------------------------------------------------------------
     # class TestStaffFromElement(unittest.TestCase):
     # '''Tests for staffFromElement()'''
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.layerFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.layerFromElement')
     def testUnit1StaffFromElement(self, mockLayerFromElement):
         '''
         staffFromElement(): basic functionality (i.e., that layerFromElement() is called with the
@@ -1543,9 +1545,9 @@ class Test(unittest.TestCase):
         findallReturn = [mock.MagicMock(name='layer1'),
                          mock.MagicMock(name='layer2'),
                          mock.MagicMock(name='layer3')]
-        findallReturn[0].tag = f'{base.MEI_NS}layer'
-        findallReturn[1].tag = f'{base.MEI_NS}layer'
-        findallReturn[2].tag = f'{base.MEI_NS}layer'
+        findallReturn[0].tag = f'{MEI_NS}layer'
+        findallReturn[1].tag = f'{MEI_NS}layer'
+        findallReturn[2].tag = f'{MEI_NS}layer'
         elem.iterfind = mock.MagicMock(return_value=findallReturn)
         # "mockLFE" is "mockLayerFromElement"
         expectedMLFEOrder = [
@@ -1557,7 +1559,7 @@ class Test(unittest.TestCase):
             lambda x, overrideN: mockLFEReturns.pop(0))
         expected = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffFromElement(elem)
 
         elem.iterfind.assert_called_once_with('*')
@@ -1583,7 +1585,7 @@ class Test(unittest.TestCase):
                       </staff>'''
         elem = ETree.fromstring(inputXML)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffFromElement(elem)
 
         self.assertEqual(3, len(actual))
@@ -1607,11 +1609,11 @@ class Test(unittest.TestCase):
     # '''Tests for staffDefFromElement()'''
 
     # noinspection SpellCheckingInspection
-    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit1StaffFromElementStaffDefFromElement(self, mockTrans,
                                                      mockClef, mockKey, mockTime, mockInstr):
         '''
@@ -1648,7 +1650,7 @@ class Test(unittest.TestCase):
                          ('transposition', mockTrans.return_value)]
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1686,7 +1688,7 @@ class Test(unittest.TestCase):
         elem.append(theInstrDef)
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1716,7 +1718,7 @@ class Test(unittest.TestCase):
         elem.append(ETree.Element(f'{MEI_NS}clef', attrib={'shape': 'G', 'line': '2'}))
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1730,11 +1732,11 @@ class Test(unittest.TestCase):
         self.assertEqual(0, actual['key'].sharps)
 
     @mock.patch('music21.instrument.fromString')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit2StaffFromElement(self, mockTrans, mockClef,
                                   mockKey, mockTime, mockInstr, mockFromString):
         '''
@@ -1765,7 +1767,7 @@ class Test(unittest.TestCase):
                          ('transposition', mockTrans.return_value)]
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1799,7 +1801,7 @@ class Test(unittest.TestCase):
                                      'meter.count': '3', 'meter.unit': '8', 'label': 'clarinet'})
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1814,11 +1816,11 @@ class Test(unittest.TestCase):
 
     @mock.patch('music21.instrument.Instrument')
     @mock.patch('music21.instrument.fromString')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit3StaffFromElement(self, mockTrans, mockClef, mockKey, mockTime,
                                   mockInstr, mockFromString, mockInstrInit):
         '''
@@ -1850,7 +1852,7 @@ class Test(unittest.TestCase):
         expectedAttrs = [('transposition', mockTrans.return_value)]  # D3
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1884,7 +1886,7 @@ class Test(unittest.TestCase):
                                      'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1899,11 +1901,11 @@ class Test(unittest.TestCase):
 
     @mock.patch('music21.instrument.Instrument')
     @mock.patch('music21.instrument.fromString')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.instrDefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.clefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._transpositionFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit4StaffFromElement(self, mockTrans, mockClef, mockKey, mockTime,
                                   mockInstr, mockFromString, mockInstrInit):
         '''
@@ -1918,7 +1920,7 @@ class Test(unittest.TestCase):
         expected = {'meter': mockTime.return_value}
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
@@ -1933,14 +1935,14 @@ class Test(unittest.TestCase):
                                                                   'meter.unit': '3'})
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffDefFromElement(elem)
 
         # 3.) check
         self.assertIsInstance(actual['meter'], meter.TimeSignature)
         self.assertEqual('1/3', actual['meter'].ratioString)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.staffDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.staffDefFromElement')
     def testStaffGrpUnit1StaffFromElement(self, mockStaffDefFE):
         '''
         staffGrpFromElement(): it's not a very complicated function!
@@ -1953,7 +1955,7 @@ class Test(unittest.TestCase):
         mockStaffDefFE.side_effect = lambda x: f"processed {x.get('n')}"
         expected = {str(n): f'processed {n}' for n in range(4)}
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffGrpFromElement(elem)
 
         self.assertEqual(expected, actual)
@@ -1977,7 +1979,7 @@ class Test(unittest.TestCase):
                     '3': {'key': key.Key('E-')},
                     '4': {'key': key.Key('A-')}}
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffGrpFromElement(elem)
 
         self.assertDictEqual(expected, actual)
@@ -2000,7 +2002,7 @@ class Test(unittest.TestCase):
                     '3': {'key': key.Key('E-')},
                     '4': {'key': key.Key('A-')}}
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.staffGrpFromElement(elem)
 
         self.assertDictEqual(expected, actual)
@@ -2009,8 +2011,8 @@ class Test(unittest.TestCase):
     # class TestScoreDefFromElement(unittest.TestCase):
     # '''Tests for scoreDefFromElement()'''
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._timeSigFromAttrs')
-    @mock.patch('converter21.mei.base.MeiToM21Converter._keySigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
+    @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
     def testUnit1ScoreDefFromElement(self, mockKey, mockTime):
         '''
         scoreDefFromElement(): proper handling of the following attributes (see function docstring
@@ -2028,7 +2030,7 @@ class Test(unittest.TestCase):
                     'whole-score objects': {}}
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.scoreDefFromElement(elem, [])
 
         # 3.) check
@@ -2045,7 +2047,7 @@ class Test(unittest.TestCase):
                                                  'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.scoreDefFromElement(elem, [])
 
         # 3.) check
@@ -2069,7 +2071,7 @@ class Test(unittest.TestCase):
         elem.append(staffGrp)
 
         # 2.) run
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.scoreDefFromElement(elem, ['1'])
 
         # 3.) check
@@ -2116,7 +2118,7 @@ class Test(unittest.TestCase):
             mock.call(elements[1])
         ]
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._processEmbeddedElements(elements, mapping, 'tag')
 
         self.assertSequenceEqual(expected, actual)
@@ -2132,14 +2134,14 @@ class Test(unittest.TestCase):
         mapping = {'note': mockTranslator, 'beam': mockBeamTranslator}
         expected = ['translator return', 'embedded 1', 'embedded 2']
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._processEmbeddedElements(elements, mapping, 'tag')
 
         self.assertSequenceEqual(expected, actual)
         mockTranslator.assert_called_once_with(elements[0])
         mockBeamTranslator.assert_called_once_with(elements[1])
 
-    @mock.patch('converter21.mei.base.environLocal')
+    @mock.patch('converter21.mei.meireader.environLocal')
     def testUnit3EmbeddedElements(self, mockEnviron):
         '''
         _processesEmbeddedElements(): that un-translated elements are reported properly
@@ -2149,9 +2151,9 @@ class Test(unittest.TestCase):
         mapping = {'note': mockTranslator}
         callerName = 'ocean'
         expected = ['translator return']
-        expErr = base._UNPROCESSED_SUBELEMENT.format(elements[1].tag, callerName)
+        expErr = meireader._UNPROCESSED_SUBELEMENT.format(elements[1].tag, callerName)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._processEmbeddedElements(elements, mapping, callerName)
 
         self.assertSequenceEqual(expected, actual)
@@ -2178,7 +2180,7 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = True
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.spannerBundle = spannerBundle
         actual = c.addSlurs(elem, obj)
 
@@ -2201,7 +2203,7 @@ class Test(unittest.TestCase):
         obj = note.Note('E-7', quarterLength=2.0)
         expected = True
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.spannerBundle = spannerBundle
         actual = c.addSlurs(elem, obj)
 
@@ -2224,7 +2226,7 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = True
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.spannerBundle = spannerBundle
         actual = c.addSlurs(elem, obj)
 
@@ -2252,7 +2254,7 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = True
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.spannerBundle = spannerBundle
         actual = c.addSlurs(elem, obj)
 
@@ -2276,7 +2278,7 @@ class Test(unittest.TestCase):
         obj = note.Note('E-7', quarterLength=2.0)
         expected = True
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.spannerBundle = spannerBundle
         actual = c.addSlurs(elem, obj)
 
@@ -2296,7 +2298,7 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = False
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
@@ -2311,7 +2313,7 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = False
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
@@ -2331,7 +2333,7 @@ class Test(unittest.TestCase):
         obj = mock.MagicMock('object')
         expected = False
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.spannerBundle = spannerBundle
         actual = c.addSlurs(elem, obj)
 
@@ -2350,7 +2352,7 @@ class Test(unittest.TestCase):
         obj = note.Note('E-7', quarterLength=2.0)
         expected = False
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.addSlurs(elem, obj)
 
         self.assertEqual(expected, actual)
@@ -2371,7 +2373,7 @@ class Test(unittest.TestCase):
                                      'm21TupletNumbase': '400',
                                      'm21TupletSearch': 'the forest'})
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.scaleToTuplet(objs, elem)
 
         for obj in objs:
@@ -2386,23 +2388,23 @@ class Test(unittest.TestCase):
         '''
         # missing @numbase
         elem = ETree.Element('tuplet', attrib={'num': '3'})
-        c = MeiToM21Converter()
-        self.assertRaises(base.MeiAttributeError, c.tupletFromElement, elem)
+        c = MeiReader()
+        self.assertRaises(meireader.MeiAttributeError, c.tupletFromElement, elem)
         try:
             c.tupletFromElement(elem)
-        except base.MeiAttributeError as err:
-            self.assertEqual(base._MISSING_TUPLET_DATA, err.args[0])
+        except meireader.MeiAttributeError as err:
+            self.assertEqual(meireader._MISSING_TUPLET_DATA, err.args[0])
         # missing @num
         elem = ETree.Element('tuplet', attrib={'numbase': '2'})
-        self.assertRaises(base.MeiAttributeError, c.tupletFromElement, elem)
+        self.assertRaises(meireader.MeiAttributeError, c.tupletFromElement, elem)
         try:
             c.tupletFromElement(elem)
-        except base.MeiAttributeError as err:
-            self.assertEqual(base._MISSING_TUPLET_DATA, err.args[0])
+        except meireader.MeiAttributeError as err:
+            self.assertEqual(meireader._MISSING_TUPLET_DATA, err.args[0])
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.applyBreaksecs')
+    @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
+    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
+    @mock.patch('converter21.mei.meireader.MeiReader.applyBreaksecs')
     def testTuplets7(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; no extraneous elements
@@ -2414,7 +2416,7 @@ class Test(unittest.TestCase):
             obj.duration.tuplets[0].type = 'default'
         mockTuplet.return_value = mockNotes
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.tupletFromElement(elem)
 
         self.assertSequenceEqual(mockNotes, actual)
@@ -2422,9 +2424,9 @@ class Test(unittest.TestCase):
         self.assertEqual('default', mockNotes[1].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[2].duration.tuplets[0].type)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.applyBreaksecs')
+    @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
+    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
+    @mock.patch('converter21.mei.meireader.MeiReader.applyBreaksecs')
     def testTuplets8(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed
@@ -2439,7 +2441,7 @@ class Test(unittest.TestCase):
             mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
         mockTuplet.return_value = mockNotes
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.tupletFromElement(elem)
 
         self.assertSequenceEqual(mockNotes, actual)
@@ -2447,9 +2449,9 @@ class Test(unittest.TestCase):
         self.assertEqual('default', mockNotes[3].duration.tuplets[0].type)
         self.assertEqual('stop', mockNotes[5].duration.tuplets[0].type)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter._processEmbeddedElements')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.scaleToTuplet')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.applyBreaksecs')
+    @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
+    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
+    @mock.patch('converter21.mei.meireader.MeiReader.applyBreaksecs')
     def testTuplets9(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
         '''
         tupletFromElement(): everything set properly in a triplet; extraneous elements interposed,
@@ -2465,7 +2467,7 @@ class Test(unittest.TestCase):
             mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
         mockTuplet.return_value = mockNotes
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.tupletFromElement(elem)
 
         self.assertSequenceEqual(mockNotes, actual)
@@ -2480,7 +2482,7 @@ class Test(unittest.TestCase):
         theLayer = [note.Note(quarterLength=1.0) for _ in range(5)]
         expectedDurs = [1.0 for _ in range(5)]
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
@@ -2499,7 +2501,7 @@ class Test(unittest.TestCase):
         theLayer[2].m21TupletNumbase = '2'
         expectedDurs = [Fraction(2, 3), Fraction(2, 3), Fraction(2, 3), 1.0, 1.0]
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
@@ -2522,7 +2524,7 @@ class Test(unittest.TestCase):
         theLayer[3].m21TupletNumbase = '2'
         expectedDurs = [1.0, Fraction(2, 3), Fraction(2, 3), Fraction(2, 3), 1.0]
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
@@ -2545,7 +2547,7 @@ class Test(unittest.TestCase):
         theLayer[4].m21TupletNumbase = '2'
         expectedDurs = [1.0, 1.0, Fraction(2, 3), Fraction(2, 3), Fraction(2, 3)]
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
@@ -2568,7 +2570,7 @@ class Test(unittest.TestCase):
         mockFromProg.return_value = 'Guess Which Instrument'
         expected = mockFromProg.return_value
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.instrDefFromElement(elem)
 
         self.assertEqual(expected, actual)
@@ -2582,7 +2584,7 @@ class Test(unittest.TestCase):
         mockFromString.return_value = "That's right: tuba"
         expected = mockFromString.return_value
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.instrDefFromElement(elem)
 
         self.assertEqual(expected, actual)
@@ -2600,7 +2602,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('measure')
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         staves = c._makeBarlines(elem, staves)
 
         for i in ('1', '2', '3'):
@@ -2615,7 +2617,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('measure', attrib={'left': 'dbl', 'right': 'dbl'})
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         staves = c._makeBarlines(elem, staves)
 
         for i in ('1', '2', '3'):
@@ -2632,7 +2634,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('measure', attrib={'left': 'rptboth', 'right': 'rptboth'})
         staves = {'1': stream.Measure(), '2': stream.Measure(), '3': stream.Measure(), '4': 4}
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         staves = c._makeBarlines(elem, staves)
 
         for i in ('1', '2', '3'):
@@ -2650,7 +2652,7 @@ class Test(unittest.TestCase):
         '''
         staves = {'1': stream.Measure([stream.Voice([note.Rest(), note.Rest()])]),
                   '2': stream.Measure([stream.Voice([note.Rest(), note.Rest()])])}
-        c = MeiToM21Converter()
+        c = MeiReader()
         c._correctMRestDurs(staves, 2.0)
         self.assertEqual(1.0, staves['1'].voices[0][0].quarterLength)
         self.assertEqual(1.0, staves['1'].voices[0][1].quarterLength)
@@ -2666,7 +2668,7 @@ class Test(unittest.TestCase):
         staves = {'1': stream.Measure([stream.Voice([note.Rest()])]),
                   '2': stream.Measure([stream.Voice([note.Rest(), note.Rest()])])}
         staves['1'][0][0].m21wasMRest = True
-        c = MeiToM21Converter()
+        c = MeiReader()
         c._correctMRestDurs(staves, 2.0)
         self.assertEqual(2.0, staves['1'].voices[0][0].quarterLength)
         self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
@@ -2684,7 +2686,7 @@ class Test(unittest.TestCase):
                   '2': stream.Measure([meter.TimeSignature('4/4'), stream.Voice([note.Note()])])}
         staves['1'][0][0].m21wasMRest = True
         staves['1'][1][0].m21wasMRest = True
-        c = MeiToM21Converter()
+        c = MeiReader()
         c._correctMRestDurs(staves, 2.0)
         self.assertEqual(2.0, staves['1'].voices[0][0].quarterLength)
         self.assertEqual(2.0, staves['1'].voices[1][0].quarterLength)
@@ -2720,7 +2722,7 @@ class Test(unittest.TestCase):
         expectedNs = ['1', '2', '3', '4']
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.measureFromElement(
             elem, backupNum, expectedNs
@@ -2779,7 +2781,7 @@ class Test(unittest.TestCase):
         expectedNs = ['1', '2', '3', '4']
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.measureFromElement(
             elem, backupNum, expectedNs
@@ -2833,7 +2835,7 @@ class Test(unittest.TestCase):
         expectedNs = ['1']
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.measureFromElement(
             elem, backupNum, expectedNs
@@ -2865,7 +2867,7 @@ class Test(unittest.TestCase):
     '''Tests for scoreFromElement(), sectionFromElement(), and
     their helper function sectionScoreCore().'''
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.sectionScoreCore')
+    @mock.patch('converter21.mei.meireader.MeiReader.sectionScoreCore')
     def testSection1(self, mockCore):
         '''
         Mock sectionScoreCore(). This is very straight-forward.
@@ -2878,7 +2880,7 @@ class Test(unittest.TestCase):
         backupMeasureNum = 42
         expected = mockCore.return_value
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.sectionFromElement(elem, allPartNs, nextMeasureLeft, backupMeasureNum)
 
@@ -2919,7 +2921,7 @@ class Test(unittest.TestCase):
         </score>'''
         elem = ETree.fromstring(elem)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.scoreFromElement(elem)
 
         # This is complicated... I'm sorry... but it's a rather detailed test of the whole system,
@@ -2984,7 +2986,7 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(elem)
         allPartNs = ['1']
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(elem, allPartNs)
 
         # ensure simple returns are okay
@@ -3044,7 +3046,7 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(elem)
         allPartNs = ['1']
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(elem, allPartNs)
 
         # ensure simple returns are okay
@@ -3086,10 +3088,10 @@ class Test(unittest.TestCase):
         self.assertIsInstance(meas[0][0], note.Note)
         self.assertEqual('G4', meas[0][0].nameWithOctave)
 
-    @mock.patch('converter21.mei.base.MeiToM21Converter.measureFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.sectionFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.scoreDefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.staffDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.measureFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.sectionFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.scoreDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.staffDefFromElement')
     def testCoreUnit3(self, mockStaffDFE, mockScoreDFE, mockSectionFE, mockMeasureFE):
         '''
         sectionScoreCore(): everything basic, as called by sectionFromElement()
@@ -3130,7 +3132,7 @@ class Test(unittest.TestCase):
         expected = {'1': [expMeas1]}
         expected = (expected, expNMLeft, expMeasureNum)
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.sectionScoreCore(elem,
                                        allPartNs,
@@ -3178,7 +3180,7 @@ class Test(unittest.TestCase):
         nextMeasureLeft = bar.Repeat('start')
         backupMeasureNum = 900
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         c.activeMeter = activeMeter
         parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
             elem,
@@ -3210,11 +3212,11 @@ class Test(unittest.TestCase):
         self.assertEqual('start', meas[repeatIndex].direction)
         self.assertIs(meas[repeatIndex], meas.leftBarline)
 
-    @mock.patch('converter21.mei.base.environLocal')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.measureFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.sectionFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.scoreDefFromElement')
-    @mock.patch('converter21.mei.base.MeiToM21Converter.staffDefFromElement')
+    @mock.patch('converter21.mei.meireader.environLocal')
+    @mock.patch('converter21.mei.meireader.MeiReader.measureFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.sectionFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.scoreDefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader.staffDefFromElement')
     def testCoreUnit4(self, mockStaffDFE, mockScoreDFE, mockSectionFE, mockMeasureFE, mockEnviron):
         '''
         sectionScoreCore(): as called by sectionFromElement()
@@ -3257,9 +3259,9 @@ class Test(unittest.TestCase):
         expected = {'1': [expMeas1]}
         expected = (expected, expNMLeft, expMeasureNum)
         # prepare expected environLocal message
-        expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
-        expWarn2 = base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
-        c = MeiToM21Converter()
+        expWarn1 = meireader._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
+        expWarn2 = meireader._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
+        c = MeiReader()
         c.activeMeter = expMeter
         actual = c.sectionScoreCore(elem, allPartNs)
         self.assertEqual(expActiveMeter, c.activeMeter)
@@ -3285,7 +3287,7 @@ class Test(unittest.TestCase):
             c.pendingInNextThing, {'1': []}
         )
 
-    @mock.patch('converter21.mei.base.environLocal')
+    @mock.patch('converter21.mei.meireader.environLocal')
     def testCoreIntegration4(self, mockEnviron):
         '''
         sectionScoreCore(): as called by sectionFromElement()
@@ -3306,13 +3308,13 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(elem)
         allPartNs = ['1']
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
             elem, allPartNs
         )
 
-        expWarn1 = base._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
-        expWarn2 = base._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
+        expWarn1 = meireader._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
+        expWarn2 = meireader._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
 
         mockEnviron.warn.assert_any_call(expWarn1)
         mockEnviron.warn.assert_any_call(expWarn2)
@@ -3383,7 +3385,7 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(elem)
         allPartNs = ['1']
 
-        c = MeiToM21Converter()
+        c = MeiReader()
         parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
             elem, allPartNs
         )
@@ -3443,7 +3445,7 @@ class Test(unittest.TestCase):
         barLineFromElement(): <barLine rend="dbl"/>
         '''
         elem = ETree.Element('barLine', attrib={'rend': 'dbl'})
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.barLineFromElement(elem)
         self.assertIsInstance(actual, bar.Barline)
         self.assertEqual('double', actual.type)
@@ -3453,7 +3455,7 @@ class Test(unittest.TestCase):
         barLineFromElement(): <barLine/>
         '''
         elem = ETree.Element('barLine')
-        c = MeiToM21Converter()
+        c = MeiReader()
         actual = c.barLineFromElement(elem)
         self.assertIsInstance(actual, bar.Barline)
         self.assertEqual('regular', actual.type)
@@ -3494,7 +3496,7 @@ class Test(unittest.TestCase):
                 </section>
             </score></music></mei>
         '''
-        testConv = MeiToM21Converter(meiSource)
+        testConv = MeiReader(meiSource)
 
         actual = testConv.run()
 

@@ -11,14 +11,14 @@
 # ------------------------------------------------------------------------------
 from pathlib import Path
 
-from music21 import converter
 from music21 import common
 from music21 import stream
+from music21.converter.subConverters import SubConverter
 
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
 
-class HumdrumConverter(converter.subConverters.SubConverter):
+class HumdrumConverter(SubConverter):
     '''
     Simple class wrapper for parsing Humdrum data provided in a file or in a string.
     '''
@@ -33,29 +33,8 @@ class HumdrumConverter(converter.subConverters.SubConverter):
     # --------------------------------------------------------------------------
 
     def parseData(self, dataString, number=None) -> stream.Score:
-        '''Create HumdrumFile object from a string, and create a music21 Stream from it.
-
-        >>> humData = ('**kern\\n*M2/4\\n=1\\n24r\\n24g#\\n24f#\\n24e\\n24c#\\n' +
-        ...     '24f\\n24r\\n24dn\\n24e-\\n24gn\\n24e-\\n24dn\\n*-')
-        >>> c = converter.subConverters.HumdrumConverter()
-        >>> s = c.parseData(humData)
-        >>> c.stream.show('text')
-        {0.0} <music21.metadata.Metadata object at 0x7f33545027b8>
-        {0.0} <music21.stream.Part spine_0>
-            {0.0} <music21.stream.Measure 1 offset=0.0>
-                {0.0} <music21.meter.TimeSignature 2/4>
-                {0.0} <music21.note.Rest rest>
-                {0.1667} <music21.note.Note G#>
-                {0.3333} <music21.note.Note F#>
-                {0.5} <music21.note.Note E>
-                {0.6667} <music21.note.Note C#>
-                {0.8333} <music21.note.Note F>
-                {1.0} <music21.note.Rest rest>
-                {1.1667} <music21.note.Note D>
-                {1.3333} <music21.note.Note E->
-                {1.5} <music21.note.Note G>
-                {1.6667} <music21.note.Note E->
-                {1.8333} <music21.note.Note D>
+        '''
+        Create HumdrumFile object from a string, and create a music21 Stream from it.
         '''
         # print("parsing krn string", file=sys.stderr)
         hf = HumdrumFile()
