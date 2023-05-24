@@ -108,6 +108,112 @@ class M21ObjectConvert:
         tb.start('note', noteAttr)
         tb.end('note')
 
+    _M21_OCTAVE_CHANGE_TO_MEI_DIS_AND_DISPLACE: dict[int, tuple[str, str]] = {
+        1: ('8', 'above'),
+        -1: ('8', 'below'),
+        2: ('15', 'above'),
+        -2: ('15', 'below'),
+        3: ('22', 'above'),
+        -3: ('22', 'below')
+    }
+
+    @staticmethod
+    def m21ClefToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(obj, m21.clef.Clef)
+        if obj.sign is None or obj.sign == 'none':
+            # no clef, nothing to see here
+            return
+
+        clefAttr: dict[str, str] = {'shape': obj.sign, 'line': str(obj.line)}
+        if obj.octaveChange:
+            dis: str
+            disPlace: str
+            dis, disPlace = (
+                M21ObjectConvert._M21_OCTAVE_CHANGE_TO_MEI_DIS_AND_DISPLACE.get(
+                    obj.octaveChange,
+                    ('', '')
+                )
+            )
+            if dis and disPlace:
+                clefAttr['dis'] = dis
+                clefAttr['dis.place'] = disPlace
+        tb.start('clef', clefAttr)
+        tb.end('clef')
+
+    _M21_SHARPS_TO_MEI_SIG: dict[int, str] = {
+        0: '0',
+        1: '1s',
+        2: '2s',
+        3: '3s',
+        4: '4s',
+        5: '5s',
+        6: '6s',
+        7: '7s',
+        8: '8s',
+        9: '9s',
+        10: '10s',
+        11: '11s',
+        12: '12s',
+        -1: '1f',
+        -2: '2f',
+        -3: '3f',
+        -4: '4f',
+        -5: '5f',
+        -6: '6f',
+        -7: '7f',
+        -8: '8f',
+        -9: '9f',
+        -10: '10f',
+        -11: '11f',
+        -12: '12f',
+    }
+
+    @staticmethod
+    def m21KeySigToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(obj, m21.key.KeySignature)
+
+        keySigAttr: dict[str, str] = {
+            'sig': M21ObjectConvert._M21_SHARPS_TO_MEI_SIG.get(obj.sharps, '0')
+        }
+
+        if isinstance(obj, m21.key.Key):
+            # we know tonic (aka pname) and mode
+            m21Tonic: m21.pitch.Pitch = obj.tonic
+            mode: str = obj.mode
+            pname: str = str(m21Tonic.step)
+            if m21Tonic.accidental is not None:
+                pname += M21ObjectConvert.m21AccidToMeiAccid(m21Tonic.accidental.modifier)
+
+            if pname and mode:
+                keySigAttr['pname'] = pname
+                keySigAttr['mode'] = mode
+
+        tb.start('keySig', keySigAttr)
+        tb.end('keySig')
+
+    @staticmethod
+    def m21TimeSigToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(obj, m21.meter.TimeSignature)
+
+        meterSigAttr: dict[str, str] = {}
+
+        # This is a weird attribute order, but it matches what Verovio does,
+        # which makes bbdiff comparisons work better.
+        meterSigAttr['count'] = str(obj.numerator)
+
+        if obj.symbol:
+            # 'cut' or 'common' (both music21 and MEI use these terms)
+            meterSigAttr['sym'] = obj.symbol
+
+        meterSigAttr['unit'] = str(obj.denominator)
+
+        tb.start('meterSig', meterSigAttr)
+        tb.end('meterSig')
+
+
     _M21_DUR_TYPE_TO_MEI_DUR: dict[str, str] = {
         'maxima': 'maxima',
         'longa': 'long',
@@ -249,4 +355,7 @@ _M21_OBJECT_CONVERTER: dict[str, t.Callable[
     'Note': M21ObjectConvert.m21NoteToMei,
     'Chord': M21ObjectConvert.m21ChordToMei,
     'Rest': M21ObjectConvert.m21RestToMei,
+    'Clef': M21ObjectConvert.m21ClefToMei,
+    'KeySignature': M21ObjectConvert.m21KeySigToMei,
+    'TimeSignature': M21ObjectConvert.m21TimeSigToMei,
 }

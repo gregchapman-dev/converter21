@@ -129,7 +129,6 @@ class MeiScore:
                 staffLines = initialStaffLayout.staffLines
 
             tb.start('staffDef', {
-                'xml:id': str(part.id),
                 'n': str(staffN),
                 'lines': str(staffLines)
             })
@@ -142,32 +141,11 @@ class MeiScore:
                 )
                 if clefs:
                     clef = clefs[0]
-            if (clef is not None
-                    and clef.sign is not None
-                    and clef.sign != 'none'
-                    and clef.line is not None):
-                clefAttr: dict[str, str] = {'shape': clef.sign, 'line': str(clef.line)}
-                if clef.octaveChange:
-                    OCTAVE_CHANGE_TO_DISPLACEMENT_AND_DIRECTION: dict[int, tuple[str, str]] = {
-                        1: ('8', 'above'),
-                        -1: ('8', 'below'),
-                        2: ('15', 'above'),
-                        -2: ('15', 'below'),
-                        3: ('22', 'above'),
-                        -3: ('22', 'below'),
-                    }
-                    displacement: str
-                    direction: str
-                    displacement, direction = (
-                        OCTAVE_CHANGE_TO_DISPLACEMENT_AND_DIRECTION.get(clef.octaveChange, ('', ''))
-                    )
-                    if displacement and direction:
-                        clefAttr['dis'] = displacement
-                        clefAttr['dis.place'] = direction
-                tb.start('clef', clefAttr)
-                tb.end('clef')
+            if clef is not None:
+                M21ObjectConvert.m21ClefToMei(clef, tb)
 
-            # keySig
+
+            # key signature
             keySig: m21.key.KeySignature | None = part.keySignature
             if keySig is None:
                 keySigs: list[m21.key.KeySignature] = list(
@@ -178,50 +156,9 @@ class MeiScore:
                 if keySigs:
                     keySig = keySigs[0]
             if keySig is not None:
-                SHARPS_TO_SIG: dict[int, str] = {
-                    0: '0',
-                    1: '1s',
-                    2: '2s',
-                    3: '3s',
-                    4: '4s',
-                    5: '5s',
-                    6: '6s',
-                    7: '7s',
-                    8: '8s',
-                    9: '9s',
-                    10: '10s',
-                    11: '11s',
-                    12: '12s',
-                    -1: '1f',
-                    -2: '2f',
-                    -3: '3f',
-                    -4: '4f',
-                    -5: '5f',
-                    -6: '6f',
-                    -7: '7f',
-                    -8: '8f',
-                    -9: '9f',
-                    -10: '10f',
-                    -11: '11f',
-                    -12: '12f',
-                }
-                keySigAttr: dict[str, str] = {'sig': SHARPS_TO_SIG.get(keySig.sharps, '0')}
-                if isinstance(keySig, m21.key.Key):
-                    # we know tonic (aka pname) and mode
-                    m21Tonic: m21.pitch.Pitch = keySig.tonic
-                    mode: str = keySig.mode
-                    pname: str = str(m21Tonic.step)
-                    if m21Tonic.accidental is not None:
-                        pname += M21ObjectConvert.m21AccidToMeiAccid(m21Tonic.accidental.modifier)
+                M21ObjectConvert.m21KeySigToMei(keySig, tb)
 
-                    if pname and mode:
-                        keySigAttr['pname'] = pname
-                        keySigAttr['mode'] = mode
-
-                tb.start('keySig', keySigAttr)
-                tb.end('keySig')
-
-            # meterSig
+            # time signature
             meterSig: m21.meter.TimeSignature | None = part.timeSignature
             if meterSig is None:
                 meterSigs: list[m21.meter.TimeSignature] = list(
@@ -232,15 +169,7 @@ class MeiScore:
                 if meterSigs:
                     meterSig = meterSigs[0]
             if meterSig is not None:
-                meterSigAttr: dict[str, str] = {
-                    'count': str(meterSig.numerator),
-                    'unit': str(meterSig.denominator)
-                }
-                if meterSig.symbol:
-                    # 'cut' or 'common'
-                    meterSigAttr['sym'] = meterSig.symbol
-                tb.start('meterSig', meterSigAttr)
-                tb.end('meterSig')
+                M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
 
             tb.end('staffDef')
         tb.end('staffGrp')
