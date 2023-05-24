@@ -20,6 +20,7 @@ import music21 as m21
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 # from converter21.shared import M21Utilities
+from converter21.mei import M21ObjectConvert
 
 
 # For debug or unit test print, a simple way to get a string which is the current function name
@@ -79,4 +80,6 @@ class MeiLayer:
         if layerNStr:
             layerAttr['n'] = layerNStr
         tb.start('layer', {'n': layerNStr})
+        for el in self.m21Voice:
+            M21ObjectConvert.convertM21ObjectToMei(el, tb)
         tb.end('layer')
