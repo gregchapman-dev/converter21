@@ -18,6 +18,7 @@ import music21 as m21
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 from converter21.mei import MeiMeasure
+from converter21.mei import M21ObjectConvert
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
 
@@ -207,19 +208,11 @@ class MeiScore:
                 keySigAttr: dict[str, str] = {'sig': SHARPS_TO_SIG.get(keySig.sharps, '0')}
                 if isinstance(keySig, m21.key.Key):
                     # we know tonic (aka pname) and mode
-                    M21_KEY_ACCID_TO_MEI_KEY_ACCID: dict[str, str] = {
-                        '#': 's',
-                        '-': 'f',
-                        '##': 'ss',
-                        '--': 'ff'
-                    }
                     m21Tonic: m21.pitch.Pitch = keySig.tonic
                     mode: str = keySig.mode
                     pname: str = str(m21Tonic.step)
                     if m21Tonic.accidental is not None:
-                        pname += (
-                            M21_KEY_ACCID_TO_MEI_KEY_ACCID.get(m21Tonic.accidental.modifier, '')
-                        )
+                        pname += M21ObjectConvert.m21AccidToMeiAccid(m21Tonic.accidental.modifier)
 
                     if pname and mode:
                         keySigAttr['pname'] = pname

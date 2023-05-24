@@ -62,7 +62,7 @@ def runTheFullTest(krnPath: Path):
     assert score2 is not None
     assert score2.isWellFormedNotation()
 
-    meiw: MeiWriter = MeiWriter(score1)
+    meiw: MeiWriter = MeiWriter(score2)
     meiw.makeNotation = False
 
     success: bool = True
