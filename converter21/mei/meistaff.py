@@ -9,6 +9,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+from xml.etree.ElementTree import TreeBuilder
 # import typing as t
 
 import music21 as m21
@@ -39,3 +40,8 @@ class MeiStaff:
         self.staffNStr: str = staffNStr
         self.m21Measure = m21Measure
         self.m21Part = m21Part
+
+    def makeRootElement(self, tb: TreeBuilder):
+        tb.start('staff', {'n': self.staffNStr})
+        # notes etc go here
+        tb.end('staffs')

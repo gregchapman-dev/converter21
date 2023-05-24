@@ -9,6 +9,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+from xml.etree.ElementTree import TreeBuilder
 # import typing as t
 
 import music21 as m21
@@ -40,7 +41,7 @@ class MeiMeasure:
             m21Measures: a list of simultaneous measures, one per staff
             staffNumbersForM21Parts: a dictionary of staff numbers, keyed by Part/PartStaff
         '''
-        self.staffNumbersForM21Parts = staffNumbersForM21Parts
+        # self.staffNumbersForM21Parts = staffNumbersForM21Parts
         self.staves: list[MeiStaff] = []
         self.measureNumStr: str = ''
         for m in m21Measures:
@@ -64,3 +65,9 @@ class MeiMeasure:
             if p in measure.sites:
                 return p
         return None
+
+    def makeRootElement(self, tb: TreeBuilder):
+        tb.start('measure', {'n': self.measureNumStr})
+        for staff in self.staves:
+            staff.makeRootElement(tb)
+        tb.end('measure')

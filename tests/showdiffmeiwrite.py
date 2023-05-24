@@ -67,9 +67,9 @@ def runTheFullTest(krnPath: Path):
 
     success: bool = True
     meiwPath = Path(tempfile.gettempdir())
-    meiwPath /= krnPath.name + '_Written'
-    meiwPath = meiPath.with_suffix('.mei')
-    with open(meiwPath, 'w', encoding='utf-8') as f:
+    meiwPath /= (krnPath.stem + '_Written')
+    meiwPath = meiwPath.with_suffix('.mei')
+    with open(meiwPath, 'wb') as f:
         success = meiw.write(f)
 
 #     if not success:

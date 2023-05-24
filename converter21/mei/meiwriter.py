@@ -10,7 +10,7 @@
 # ------------------------------------------------------------------------------
 import sys
 # import typing as t
-from xml.etree.ElementTree import ElementTree
+from xml.etree.ElementTree import Element, ElementTree, indent
 
 import music21 as m21
 # from music21.common import opFrac
@@ -63,10 +63,23 @@ class MeiWriter:
         #   but MEI scores are {Measure1{Staff1, Staff2} .. MeasureN{Staff1, Staff2}}.
         meiScore: MeiScore = MeiScore(self._m21Score)
 
-        # Here we convert the MeiScore to an Element tree (in-memory parsed XML)
-        meiElementTree: ElementTree = meiScore.makeElementTree()
+        # Here we convert the MeiScore to an in-memory tree of Elements
+        meiElement: Element = meiScore.makeRootElement()
+        indent(meiElement, space='   ', level=0)
 
         # Write to the output MEI XML file
-        meiElementTree.write(fp)
+        # pylint: disable=line-too-long
+        prefixBytes: bytes = bytes(
+            '''<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/dev/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/dev/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+''',
+            encoding='utf-8',
+        )
+        # pylint: enable=line-too-long
+
+        fp.write(prefixBytes)
+        ElementTree(meiElement).write(fp)
+        fp.write(b'\n')
 
         return True

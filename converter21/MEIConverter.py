@@ -121,7 +121,8 @@ class MEIConverter(SubConverter):
         meiw = MeiWriter(obj)
         meiw.makeNotation = makeNotation
 
-        with open(fp, 'w', encoding='utf8') as f:
+        # MeiWriter always writes as binary because xml.etree likes it that way.
+        with open(fp, 'wb', encoding='utf-8') as f:
             meiw.write(f)
 
         return fp
