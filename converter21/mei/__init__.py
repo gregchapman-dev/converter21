@@ -21,6 +21,7 @@ from .meiexceptions import MeiInternalError
 
 from .meireader import MeiReader
 
+from .meilayer import MeiLayer
 from .meistaff import MeiStaff
 from .meimeasure import MeiMeasure
 from .meiscore import MeiScore

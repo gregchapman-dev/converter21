@@ -70,4 +70,7 @@ class MeiMeasure:
         tb.start('measure', {'n': self.measureNumStr})
         for staff in self.staves:
             staff.makeRootElement(tb)
+        for staff in self.staves:
+            staff.makePostStavesElements(tb)
         tb.end('measure')
+

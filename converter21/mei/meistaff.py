@@ -18,6 +18,7 @@ import music21 as m21
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 # from converter21.shared import M21Utilities
+from converter21.mei import MeiLayer
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -40,8 +41,28 @@ class MeiStaff:
         self.staffNStr: str = staffNStr
         self.m21Measure = m21Measure
         self.m21Part = m21Part
+        self.nextFreeVoiceNumber = 1
+        self.layers: list[MeiLayer] = []
+
+        voices: list[m21.stream.Voice | m21.stream.Measure]
+        if m21Measure.voices:
+            voices = list(m21Measure.voices)
+        else:
+            voices = [m21Measure]
+
+        for voice in voices:
+            self.layers.append(MeiLayer(voice, self))
+
+
 
     def makeRootElement(self, tb: TreeBuilder):
+        self.nextFreeVoiceNumber = 1
         tb.start('staff', {'n': self.staffNStr})
-        # notes etc go here
+        for layer in self.layers:
+            layer.makeRootElement(tb)
         tb.end('staffs')
+
+    def makePostStavesElements(self, tb: TreeBuilder):
+        # for el in self.m21Measure.recurse():
+        #   blah blah blah
+        return
