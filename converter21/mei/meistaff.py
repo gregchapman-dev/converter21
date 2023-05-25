@@ -18,6 +18,7 @@ import music21 as m21
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 # from converter21.shared import M21Utilities
+from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiLayer
 
 # For debug or unit test print, a simple way to get a string which is the current function name
@@ -43,26 +44,45 @@ class MeiStaff:
         self.m21Part = m21Part
         self.nextFreeVoiceNumber = 1
         self.layers: list[MeiLayer] = []
+        self.theOneLayerIsTheMeasureItself = False
 
         voices: list[m21.stream.Voice | m21.stream.Measure]
         if m21Measure.voices:
             voices = list(m21Measure.voices)
         else:
             voices = [m21Measure]
+            self.theOneLayerIsTheMeasureItself = True
 
         for voice in voices:
             self.layers.append(MeiLayer(voice, self))
 
-
-
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
         tb.start('staff', {'n': self.staffNStr})
+        if not self.theOneLayerIsTheMeasureItself and self.m21Measure.offset != 0:
+            # Process any clef/timesig/keysig at offset 0 in enclosing measure.
+            # But only if the m21Measure itself is not the first measure in the m21Part.
+            # These are separate because we'll have to make <staffdef> around them.
+            staffDefDone: bool = False
+            for el in self.m21Measure:
+                if el.offset == 0:
+                    if isinstance(el, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
+                        if not staffDefDone:
+                            tb.start('staffDef', {'n': self.staffNStr})
+                            staffDefDone = True
+                        M21ObjectConvert.convertM21ObjectToMei(el, tb)
+            if staffDefDone:
+                tb.end('staffDef')
+
         for layer in self.layers:
             layer.makeRootElement(tb)
+
+        # 888 process any final barline in the Measure (MeiStaff)
+
         tb.end('staffs')
 
     def makePostStavesElements(self, tb: TreeBuilder):
         # for el in self.m21Measure.recurse():
+        #   make sure you get the stuff in the top-level measure
         #   blah blah blah
         return
