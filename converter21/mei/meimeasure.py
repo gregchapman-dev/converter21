@@ -35,13 +35,17 @@ class MeiMeasure:
     def __init__(
         self,
         m21Measures: list[m21.stream.Measure],
-        staffNumbersForM21Parts: dict[m21.stream.Part, int]
+        staffNumbersForM21Parts: dict[m21.stream.Part, int],
+        spannerBundle: m21.spanner.SpannerBundle,
+        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> None:
         '''
             m21Measures: a list of simultaneous measures, one per staff
             staffNumbersForM21Parts: a dictionary of staff numbers, keyed by Part/PartStaff
         '''
         # self.staffNumbersForM21Parts = staffNumbersForM21Parts
+        self.spannerBundle = spannerBundle
+        self.scoreMeterStream = scoreMeterStream
         self.staves: list[MeiStaff] = []
         self.measureNumStr: str = ''
         for m in m21Measures:
@@ -53,7 +57,7 @@ class MeiMeasure:
             if part is None:
                 raise MeiInternalError('Found a Measure that\'s not in a Part.')
             nStr: str = str(staffNumbersForM21Parts[part])
-            staff = MeiStaff(nStr, m, part)
+            staff = MeiStaff(nStr, m, part, spannerBundle, scoreMeterStream)
             self.staves.append(staff)
 
     @staticmethod

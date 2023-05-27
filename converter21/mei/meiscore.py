@@ -36,8 +36,17 @@ class MeiScore:
 
     def __init__(self, m21Score: m21.stream.Score) -> None:
         self.m21Score: m21.stream.Score = m21Score
+        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
+        self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
+            self.m21Score.getTimeSignatures(
+                returnDefault=True,
+                searchContext=False,
+                sortByCreationTime=False
+            )
+        )
+
         self.staffNumbersForM21Parts: dict[m21.stream.Part, int] = (
-            self._getStaffNumbersForM21Parts(m21Score)
+            self._getStaffNumbersForM21Parts()
         )
         self.staffGroupTrees: list[M21StaffGroupTree] = (
             M21Utilities.getStaffGroupTrees(
@@ -46,29 +55,32 @@ class MeiScore:
             )
         )
 
-        self.measures: list[MeiMeasure] = self._getMeiMeasures(m21Score)
+        self.measures: list[MeiMeasure] = self._getMeiMeasures()
 
-    @staticmethod
-    def _getStaffNumbersForM21Parts(score: m21.stream.Score) -> dict[m21.stream.Part, int]:
+    def _getStaffNumbersForM21Parts(self) -> dict[m21.stream.Part, int]:
         output: dict[m21.stream.Part, int] = {}
-        for staffIdx, part in enumerate(score.parts):
+        for staffIdx, part in enumerate(self.m21Score.parts):
             output[part] = staffIdx + 1  # staff numbers are 1-based
         return output
 
-    def _getMeiMeasures(self, m21Score: m21.stream.Score) -> list[MeiMeasure]:
+    def _getMeiMeasures(self) -> list[MeiMeasure]:
         output: list[MeiMeasure] = []
 
         # OffsetIterator is not recursive, so we have to recursively pull all the measures
         # into one single stream, before we can use OffsetIterator to generate the "stacks"
         # of Measures that all occur at the same offset (moment) in the score.
         measuresStream: m21.stream.Stream[m21.stream.Measure] = (
-            m21Score.recurse().getElementsByClass(m21.stream.Measure).stream()
+            self.m21Score.recurse().getElementsByClass(m21.stream.Measure).stream()
         )
         offsetIterator: m21.stream.iterator.OffsetIterator[m21.stream.Measure] = (
             m21.stream.iterator.OffsetIterator(measuresStream)
         )
         for measureStack in offsetIterator:
-            meiMeas = MeiMeasure(measureStack, self.staffNumbersForM21Parts)
+            meiMeas = MeiMeasure(
+                measureStack,
+                self.staffNumbersForM21Parts,
+                self.spannerBundle,
+                self.scoreMeterStream)
             output.append(meiMeas)
 
         return output

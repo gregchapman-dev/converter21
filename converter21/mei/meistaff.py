@@ -37,11 +37,15 @@ class MeiStaff:
         self,
         staffNStr: str,
         m21Measure: m21.stream.Measure,
-        m21Part: m21.stream.Part
+        m21Part: m21.stream.Part,
+        spannerBundle: m21.spanner.SpannerBundle,
+        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> None:
         self.staffNStr: str = staffNStr
         self.m21Measure = m21Measure
         self.m21Part = m21Part
+        self.spannerBundle = spannerBundle
+        self.scoreMeterStream = scoreMeterStream
         self.nextFreeVoiceNumber = 1
         self.layers: list[MeiLayer] = []
         self.theOneLayerIsTheMeasureItself = False
@@ -54,24 +58,30 @@ class MeiStaff:
             self.theOneLayerIsTheMeasureItself = True
 
         for voice in voices:
-            self.layers.append(MeiLayer(voice, self))
+            self.layers.append(MeiLayer(voice, self, spannerBundle, scoreMeterStream))
 
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
         tb.start('staff', {'n': self.staffNStr})
         if not self.theOneLayerIsTheMeasureItself and self.m21Measure.offset != 0:
-            # Process any clef/timesig/keysig at offset 0 in enclosing measure.
-            # But only if the m21Measure itself is not the first measure in the m21Part.
-            # These are separate because we'll have to make <staffdef> around them.
-            staffDefDone: bool = False
+            # Process any clef/timesig/keysig at offset 0 in enclosing measure (but
+            # only if the m21Measure itself is not the first measure in the m21Part,
+            # since those initial ones are handled in the original <scoredef>).
+            # We assume that any clef/timesig/keysig at non-zero measure offset will
+            # be sitting alongside the notes (e.g. in a Voice), and can just be emitted
+            # like a note, without this <staffdef> wrapper.
+            staffDefEmitted: bool = False
             for el in self.m21Measure:
                 if el.offset == 0:
-                    if isinstance(el, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
-                        if not staffDefDone:
+                    if isinstance(
+                        el,
+                        (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)
+                    ):
+                        if not staffDefEmitted:
                             tb.start('staffDef', {'n': self.staffNStr})
-                            staffDefDone = True
+                            staffDefEmitted = True
                         M21ObjectConvert.convertM21ObjectToMei(el, tb)
-            if staffDefDone:
+            if staffDefEmitted:
                 tb.end('staffDef')
 
         for layer in self.layers:
@@ -82,7 +92,13 @@ class MeiStaff:
         tb.end('staffs')
 
     def makePostStavesElements(self, tb: TreeBuilder):
-        # for el in self.m21Measure.recurse():
-        #   make sure you get the stuff in the top-level measure
-        #   blah blah blah
-        return
+        for layer in self.layers:
+            layer.makePostStavesElements(tb)
+
+        # The top-level measure (if not treated as the one layer) might have some
+        # post-staves elements, too (e.g. Dynamic, TextExpression, TempoIndication).
+        # This is a small subset of what can be emitted in layer.makePostStavesElements.
+        if not self.theOneLayerIsTheMeasureItself:
+            for obj in self.m21Measure:
+                if M21ObjectConvert.streamElementBelongsInPostStaves(obj):
+                    M21ObjectConvert.convertM21ObjectToMei(obj, tb)

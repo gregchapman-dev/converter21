@@ -40,35 +40,45 @@ class MeiLayer:
     def __init__(
         self,
         m21Voice: m21.stream.Voice | m21.stream.Measure,
-        meiParent  # MeiStaff
+        meiParent,  # MeiStaff
+        spannerBundle: m21.spanner.SpannerBundle,
+        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> None:
         from converter21.mei import MeiStaff
         self.m21Voice: m21.stream.Voice | m21.stream.Measure = m21Voice
         self.meiParent: MeiStaff = meiParent
+        self.spannerBundle: m21.spanner.SpannerBundle = spannerBundle
+        self.scoreMeterStream = scoreMeterStream
 
     def makeRootElement(self, tb: TreeBuilder):
-        # The following voice id fix-up code patterned after similar code in music21's
-        # MusicXML writer.  The idea is to handle three cases (any or all of which
-        # may be in play within any given measure):
-        # 1. Someone has assigned integer voice.id values with great care (for cross-staff
-        #       voices, for example).
-        # 2. voice.id values have been left as default (mem address of voice). We need
-        #       to fix them up to be reasonable low integers, unique within the parent
-        #       MeiStaff.
-        # 3. Someone has assigned string voice.id values with great care for some other
-        #       reason, and we should simply use them.
+        # The following voice id fix-up code is patterned after similar code
+        # in music21's MusicXML writer.  The idea is to handle three cases
+        # (any or all of which may be in play within any given measure):
+        #
+        # 1. Someone has assigned integer voice.id values with great care (for
+        #       cross-staff voices, for example).  Leave them alone, and dance
+        #       around them.
+        #
+        # 2. voice.id values have been left as default (mem address of voice).
+        #       We need to fix them up to be reasonable low integers, unique
+        #       within the parent MeiStaff (dancing around assigned low integer
+        #       voice.id values, as stated above).
+        #
+        # 3. Someone has assigned string voice.id values with great care for
+        #       some other reason, and we should simply use them.
         layerNStr: str = ''
         if isinstance(self.m21Voice, m21.stream.Voice):
             if (isinstance(self.m21Voice.id, int)
                     and self.m21Voice.id < m21.defaults.minIdNumberToConsiderMemoryLocation):
                 # Someone assigned this voice id on purpose (tracking voice ids across
                 # measures, for instance).  Use it, and set nextFreeVoiceNumber to use
-                # the next available number (in case there are mem location ids later).
+                # the next higher integer (so we will dance around this id).
                 layerNStr = str(self.m21Voice.id)
                 self.meiParent.nextFreeVoiceNumber = self.m21Voice.id + 1
             elif isinstance(self.m21Voice.id, int):
                 # This voice id is actually a memory location, so we need to change it
-                # to a low number so it can be used in MEI.
+                # to a low number so it can be used in MEI.  Dance around any previously
+                # assigned low int voice ids by using nextFreeVoiceNumber.
                 layerNStr = str(self.meiParent.nextFreeVoiceNumber)
                 self.meiParent.nextFreeVoiceNumber += 1
             elif isinstance(self.m21Voice.id, str):
@@ -80,6 +90,85 @@ class MeiLayer:
         if layerNStr:
             layerAttr['n'] = layerNStr
         tb.start('layer', {'n': layerNStr})
-        for el in self.m21Voice:
-            M21ObjectConvert.convertM21ObjectToMei(el, tb)
+        for obj in self.m21Voice:
+            if M21ObjectConvert.streamElementBelongsInLayer(obj):
+                M21ObjectConvert.convertM21ObjectToMei(obj, tb)
         tb.end('layer')
+
+    def makePostStavesElements(self, tb: TreeBuilder):
+        m21Part: m21.stream.Part = self.meiParent.m21Part
+        m21Measure: m21.stream.Measure = self.meiParent.m21Measure
+        staffNStr: str = self.meiParent.staffNStr
+        for obj in self.m21Voice:
+            # Lots of stuff from a MeiLayer goes in the post-staves elements:
+            # 1. Some elements in this voice (e.g. Dynamic, TextExpression, TempoIndication)
+            if M21ObjectConvert.streamElementBelongsInPostStaves(obj):
+                M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+
+            # 2. Spanners (Slurs, DynamicWedges, TrillExtensions, etc) whose first
+            # element is in this voice.
+            for spanner in self.spannerBundle.getBySpannedElement(obj):
+                if spanner.isFirst(obj):
+                    print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
+                    if isinstance(spanner, (
+                        m21.spanner.Slur,
+                        m21.dynamics.DynamicWedge,
+                        m21.expressions.TrillExtension)
+                    ):
+                        M21ObjectConvert.postStavesSpannerToMei(
+                            spanner,
+                            staffNStr,
+                            m21Part,
+                            m21Measure,
+                            self.scoreMeterStream,
+                            tb
+                        )
+
+
+            # 3. Turns/Trills/Mordents on notes/chords in this voice.
+            #       We count on any TrillExtension being handled before
+            #       now, in the spanner loop above. If that changes, all
+            #       'mei_trill_already_handled' processing will need to
+            #       change, too.
+            if isinstance(obj, m21.note.GeneralNote):
+                for expr in obj.expressions:  # type: ignore
+                    if isinstance(expr, m21.expressions.Trill):
+                        if (hasattr(expr, 'mei_trill_already_handled')
+                                and expr.mei_trill_already_handled):
+                            continue
+                        M21ObjectConvert.trillToMei(
+                            obj,
+                            expr,
+                            staffNStr,
+                            m21Part,
+                            m21Measure,
+                            self.scoreMeterStream,
+                            tb
+                        )
+                        continue
+
+                    if isinstance(expr, m21.expressions.Turn):
+                        M21ObjectConvert.turnToMei(
+                            obj,
+                            expr,
+                            staffNStr,
+                            m21Part,
+                            m21Measure,
+                            self.scoreMeterStream,
+                            tb
+                        )
+                        continue
+
+                    if isinstance(expr, m21.expressions.GeneralMordent):
+                        M21ObjectConvert.mordentToMei(
+                            obj,
+                            expr,
+                            staffNStr,
+                            m21Part,
+                            m21Measure,
+                            self.scoreMeterStream,
+                            tb
+                        )
+                        continue
+
+            # 4. Ties on notes (including notes within chords) in this voice.
