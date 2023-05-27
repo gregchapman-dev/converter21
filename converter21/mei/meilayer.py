@@ -15,13 +15,13 @@ from xml.etree.ElementTree import TreeBuilder
 # import typing as t
 
 import music21 as m21
-# from music21.common import opFrac
+# from music21.common import OffsetQL, OffsetQLIn, opFrac
 
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 # from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
-
+from converter21.mei import MeiBeamSpanner
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -92,8 +92,47 @@ class MeiLayer:
         tb.start('layer', {'n': layerNStr})
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
+                # check for beam
+                endTheBeam: bool = self.processBeamState(obj, tb)
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+                if endTheBeam:
+                    tb.end('beam')
         tb.end('layer')
+
+    def processBeamState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
+        # starts a beam if necessary before this obj.
+        # returns whether or not the current beam should be ended after this obj.
+        endTheBeam: bool = False
+        for spanner in self.spannerBundle.getBySpannedElement(obj):
+            if isinstance(spanner, MeiBeamSpanner):
+                if spanner.isFirst(obj):
+                    # start a <beam>, but only if all the spanned elements are in
+                    # this m21Measure.
+                    if self.allSpannedElementsAreWithinMeasure(
+                        spanner, self.meiParent.m21Measure
+                    ):
+                        tb.start('beam', {})
+                        # Mark this spanner as having been emitted as <beam>
+                        # (so we don't also emit it as <beamSpan> later, in
+                        # makePostStavesElements).
+                        spanner.mei_beam = True  # type: ignore
+                if spanner.isLast(obj):
+                    if hasattr(spanner, 'mei_beam'):
+                        endTheBeam = True
+
+        return endTheBeam
+
+    def allSpannedElementsAreWithinMeasure(
+        self,
+        spanner: m21.spanner.Spanner,
+        measure: m21.stream.Measure
+    ) -> bool:
+        for el in spanner.getSpannedElements():
+            try:
+                el.getOffsetInHierarchy(measure)
+            except m21.sites.SitesException:
+                return False
+        return True
 
     def makePostStavesElements(self, tb: TreeBuilder):
         m21Part: m21.stream.Part = self.meiParent.m21Part
@@ -110,20 +149,14 @@ class MeiLayer:
             for spanner in self.spannerBundle.getBySpannedElement(obj):
                 if spanner.isFirst(obj):
                     print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
-                    if isinstance(spanner, (
-                        m21.spanner.Slur,
-                        m21.dynamics.DynamicWedge,
-                        m21.expressions.TrillExtension)
-                    ):
-                        M21ObjectConvert.postStavesSpannerToMei(
-                            spanner,
-                            staffNStr,
-                            m21Part,
-                            m21Measure,
-                            self.scoreMeterStream,
-                            tb
-                        )
-
+                    M21ObjectConvert.postStavesSpannerToMei(
+                        spanner,
+                        staffNStr,
+                        m21Part,
+                        m21Measure,
+                        self.scoreMeterStream,
+                        tb
+                    )
 
             # 3. Turns/Trills/Mordents on notes/chords in this voice.
             #       We count on any TrillExtension being handled before

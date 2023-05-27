@@ -940,8 +940,8 @@ class MeiReader:
             # iterate things in the @plist attribute
             for eachXmlid in eachBeam.get('plist', '').split(' '):
                 eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                # only set to 'continue' if it wasn't previously set (to 'start' or 'stop')
                 if 'm21Beam' not in self.m21Attr[eachXmlid]:
-                    # only set to 'continue' if it wasn't previously set to 'start' or 'stop'
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
 
     def _ppTuplets(self) -> None:

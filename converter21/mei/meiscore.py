@@ -19,6 +19,7 @@ import music21 as m21
 # from converter21.mei import MeiInternalError
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
+from converter21.mei import MeiBeamSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
 
@@ -36,6 +37,16 @@ class MeiScore:
 
     def __init__(self, m21Score: m21.stream.Score) -> None:
         self.m21Score: m21.stream.Score = m21Score
+
+        # Scan the m21Score, and put in some annotations for our own use (making things that
+        # look MEI-ish to represent music21 things that are very not MEI-ish; for example,
+        # translate all noteOrChord.beams into our own MeiBeamSpanner objects and some sort
+        # of noteOrChord.mei_breaksec attribute).  These annotations will disappear as we
+        # finish exporting from each one in makeRootElement().
+        self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
+        self.currentBeamSpanner: MeiBeamSpanner | None = None
+        self.annotateScore()
+
         self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             self.m21Score.getTimeSignatures(
@@ -186,3 +197,81 @@ class MeiScore:
             tb.end('staffDef')
         tb.end('staffGrp')
         tb.end('scoreDef')
+
+    def annotateScore(self) -> None:
+        for part in self.m21Score[m21.stream.Part]:
+            for measure in part[m21.stream.Measure]:
+                voices: list[m21.stream.Voice | m21.stream.Measure] = (
+                    list(measure[m21.stream.Voice])
+                )
+                if not voices:
+                    voices = [measure]
+                for voice in voices:
+                    for obj in voice:
+                        self.annotateBeams(obj)
+
+    def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
+        def stopsBeam(beam: m21.beam.Beam) -> bool:
+            if beam.type == 'stop':
+                return True
+            if beam.type == 'partial' and beam.direction == 'left':
+                return True
+            return False
+
+        def startsBeam(beam: m21.beam.Beam) -> bool:
+            if beam.type == 'start':
+                return True
+            if beam.type == 'partial' and beam.direction == 'right':
+                return True
+            return False
+
+        def allStop(beams: m21.beam.Beams) -> bool:
+            for beamObj in beams:
+                if stopsBeam(beamObj):
+                    return True
+            return False
+
+        def computeBreakSec(prevBeams: m21.beam.Beams, currBeams: m21.beam.Beams) -> int:
+            # returns the number of beams that should be seen during the break
+            # returns 0 if no breaksec seen
+            numBeams: int = len(currBeams)
+            if len(prevBeams) != numBeams:
+                return 0
+
+            numStartStops: int = 0
+            for prevBeam, currBeam in zip(prevBeams, currBeams):
+                if stopsBeam(prevBeam) and startsBeam(currBeam):
+                    numStartStops += 1
+
+            if numStartStops == 0:
+                return 0
+
+            return numBeams - numStartStops
+
+        if not isinstance(noteOrChord, m21.note.NotRest):
+            return
+
+        if not noteOrChord.beams.beamsList:
+            self.previousBeamedNoteOrChord = None
+            return
+
+        if self.currentBeamSpanner is None:
+            self.currentBeamSpanner = MeiBeamSpanner()
+
+        self.currentBeamSpanner.addSpannedElements(noteOrChord)
+
+        if allStop(noteOrChord.beams):
+            # done with this <beam> or <beamSpan>.  Put the spanner in the score,
+            # and clear out any state variables.
+            self.m21Score.append(self.currentBeamSpanner)
+            self.currentBeamSpanner = None
+            self.previousBeamedNoteOrChord = None
+            return
+
+        # annotate any breaksec ending at this noteOrChord (set it on the previous noteOrChord)
+        if self.previousBeamedNoteOrChord is not None:
+            breakSec: int = computeBreakSec(self.previousBeamedNoteOrChord.beams, noteOrChord.beams)
+            if breakSec > 0:
+                self.previousBeamedNoteOrChord.mei_breaksec = breakSec  # type: ignore
+
+        self.previousBeamedNoteOrChord = noteOrChord

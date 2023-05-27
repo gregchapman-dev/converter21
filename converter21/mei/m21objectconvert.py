@@ -401,6 +401,11 @@ class M21ObjectConvert:
         tag: str = ''
         attr: dict[str, str] = {}
 
+        if isinstance(spanner, MeiBeamSpanner):
+            if hasattr(spanner, 'mei_beam'):
+                # already emitted as <beam> within <layer>
+                return
+
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             first,
@@ -419,6 +424,11 @@ class M21ObjectConvert:
                 attr['form'] = 'cres'
             else:
                 attr['form'] = 'dim'
+        elif isinstance(spanner, MeiBeamSpanner):
+            tag = 'beamSpan'
+            # set up plist for every spanned element (yes, even the ones that are already
+            # in attr as 'startid' and 'endid')
+            attr['plist'] = f'#{el.id for el in spanner.getSpannedElements()}'
         elif isinstance(spanner, m21.expressions.TrillExtension):
             tag = 'trill'
             if isinstance(first, m21.note.GeneralNote):
@@ -604,6 +614,10 @@ class M21ObjectConvert:
                 return False
 
         return True
+
+
+class MeiBeamSpanner(m21.spanner.Spanner):
+    pass
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[
