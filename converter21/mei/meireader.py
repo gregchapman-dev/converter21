@@ -2206,9 +2206,9 @@ class MeiReader:
         if form == 'upper':
             # music21 calls an upper mordent (i.e that goes up from the main note)
             # an InvertedMordent.
-            mordent = expressions.InvertedMordent(accidentalName=m21AccidName)
+            mordent = expressions.InvertedMordent()
         elif form == 'lower':
-            mordent = expressions.Mordent(accidentalName=m21AccidName)
+            mordent = expressions.Mordent()
 
         if m21AccidName:
             m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
@@ -6482,7 +6482,11 @@ class MeiReader:
             elif accidLower:
                 m21AccidName = self._m21AccidentalNameFromAccid(accidLower)
 
-            trill = expressions.Trill(accidentalName=m21AccidName)
+            trill = expressions.Trill()
+            if m21AccidName:
+                m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+                m21Accid.displayStatus = True
+                trill.accidental = m21Accid
 
             if place and place != 'place_unspecified':
                 trill.placement = place
@@ -6598,9 +6602,14 @@ class MeiReader:
             if form == 'upper':
                 # music21 calls an upper mordent (i.e that goes up from the main note)
                 # an InvertedMordent
-                mordent = expressions.InvertedMordent(accidentalName=m21AccidName)
+                mordent = expressions.InvertedMordent()
             else:
-                mordent = expressions.Mordent(accidentalName=m21AccidName)
+                mordent = expressions.Mordent()
+
+            if m21AccidName:
+                m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+                m21Accid.displayStatus = True
+                mordent.accidental = m21Accid
 
             # m21 mordents might not have placement... sigh...
             # But if I set it, it _will_ get exported to MusicXML (ha!).
@@ -6680,17 +6689,18 @@ class MeiReader:
                 delay = OrnamentDelay.DEFAULT_DELAY
 
             if form == 'upper':
-                turn = expressions.Turn(
-                    delay=delay,
-                    upperAccidentalName=m21AccidUpper,
-                    lowerAccidentalName=m21AccidLower
-                )
+                turn = expressions.Turn(delay=delay)
             else:
-                turn = expressions.InvertedTurn(
-                    delay=delay,
-                    upperAccidentalName=m21AccidUpper,
-                    lowerAccidentalName=m21AccidLower
-                )
+                turn = expressions.InvertedTurn(delay=delay)
+
+            if m21AccidUpper:
+                m21UpperAccidental: pitch.Accidental = pitch.Accidental(m21AccidUpper)
+                m21UpperAccidental.displayStatus = True
+                turn.upperAccidental = m21UpperAccidental
+            if m21AccidLower:
+                m21LowerAccidental: pitch.Accidental = pitch.Accidental(m21AccidLower)
+                m21LowerAccidental.displayStatus = True
+                turn.lowerAccidental = m21LowerAccidental
 
             if place and place != 'place_unspecified':
                 turn.placement = place
