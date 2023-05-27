@@ -57,6 +57,7 @@ class M21ObjectConvert:
         if grace:
             chordAttr['grace'] = grace
         tb.start('chord', chordAttr)
+        M21ObjectConvert.m21ArticulationsToMei(obj.articulations, tb)
         for note in obj.notes:
             M21ObjectConvert._noteToMei(note, tb, withDuration=False)
         tb.end('chord')
@@ -105,7 +106,48 @@ class M21ObjectConvert:
                 )
 
         tb.start('note', noteAttr)
+        M21ObjectConvert.m21ArticulationsToMei(note.articulations, tb)
         tb.end('note')
+
+    _M21_ARTICULATION_NAME_TO_MEI_ARTIC_NAME: dict[str, str] = {
+        'accent': 'acc',
+        'staccato': 'stacc',
+        'tenuto': 'ten',
+        'staccatissimo': 'stacciss',
+        'spiccato': 'spicc',
+        'down bow': 'dnbow',
+        'up bow': 'upbow',
+        'harmonic': 'harm',
+        'snap pizzicato': 'snap',
+        'strong accent': 'marc',
+        'doit': 'doit',
+        'plop': 'plop',
+        'falloff': 'fall',
+        'stopped': 'stop',
+        'open string': 'open',
+        'double tongue': 'dbltongue',
+        'triple tongue': 'trpltongue',
+        'organ toe': 'toe',
+        'organ heel': 'heel',
+    }
+
+    @staticmethod
+    def m21ArticulationsToMei(
+        articulations: list[m21.articulations.Articulation],
+        tb
+    ):
+        for artic in articulations:
+            tag: str = (
+                M21ObjectConvert._M21_ARTICULATION_NAME_TO_MEI_ARTIC_NAME.get(
+                    artic.name,
+                    ''
+                )
+            )
+            attr: dict[str, str] = {}  # above/below, etc
+            if tag:
+                tb.start(tag, attr)
+                tb.end(tag)
+
 
     _M21_OCTAVE_CHANGE_TO_MEI_DIS_AND_DISPLACE: dict[int, tuple[str, str]] = {
         1: ('8', 'above'),
