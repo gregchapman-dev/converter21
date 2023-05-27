@@ -677,14 +677,14 @@ class M21Utilities:
 
         Returns A :class:`~music21.pitch.Pitch` with the appropriate properties.
 
-        >>> from converter21.M21Utilities import safePitch
-        >>> safePitch('D#6')
+        >>> from converter21.shared import M21Utilities
+        >>> M21Utilities.safePitch('D#6')
         <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#', '6')
+        >>> M21Utilities.safePitch('D', '#', '6')
         <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#', 6)
+        >>> M21Utilities.safePitch('D', '#', 6)
         <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#')
+        >>> M21Utilities.safePitch('D', '#')
         <music21.pitch.Pitch D#>
         '''
         if not name:

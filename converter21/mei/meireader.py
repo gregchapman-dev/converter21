@@ -60,7 +60,7 @@ document.
 >>> conv = MeiReader(meiString)
 >>> result = conv.run()
 >>> result
-<music21.stream.Score 0x10ee474f0>
+<music21.stream.Score ...>
 
 **Terminology**
 
