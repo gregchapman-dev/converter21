@@ -148,7 +148,7 @@ class MeiLayer:
             # element is in this voice.
             for spanner in self.spannerBundle.getBySpannedElement(obj):
                 if spanner.isFirst(obj):
-                    print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
+                    # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
                     M21ObjectConvert.postStavesSpannerToMei(
                         spanner,
                         staffNStr,
