@@ -572,18 +572,6 @@ class MeiReader:
         'toe': articulations.OrganToe,
         'trpltongue': articulations.TripleTongue,
         'heel': articulations.OrganHeel,
-        # TODO: these aren't implemented in music21, so I'll make new ones
-        'tap': articulations.Articulation,
-        'lhpizz': articulations.Articulation,
-        'dot': articulations.Articulation,
-        'stroke': articulations.Articulation,
-        'rip': articulations.Articulation,
-        'bend': articulations.Articulation,
-        'flip': articulations.Articulation,
-        'smear': articulations.Articulation,
-        'fingernail': articulations.Articulation,  # (u1D1B3)
-        'damp': articulations.Articulation,
-        'dampall': articulations.Articulation,
     }
 
     # for _barlineFromAttr()

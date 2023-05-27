@@ -137,16 +137,17 @@ class M21ObjectConvert:
         tb
     ):
         for artic in articulations:
-            tag: str = (
+            name: str = (
                 M21ObjectConvert._M21_ARTICULATION_NAME_TO_MEI_ARTIC_NAME.get(
                     artic.name,
                     ''
                 )
             )
             attr: dict[str, str] = {}  # above/below, etc
-            if tag:
-                tb.start(tag, attr)
-                tb.end(tag)
+            if name:
+                attr['artic'] = name
+                tb.start('artic', attr)
+                tb.end('artic')
 
 
     _M21_OCTAVE_CHANGE_TO_MEI_DIS_AND_DISPLACE: dict[int, tuple[str, str]] = {
