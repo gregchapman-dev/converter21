@@ -54,6 +54,7 @@ from music21 import spanner
 from music21 import stream
 from music21 import tie
 
+from converter21.mei import meiexceptions
 from converter21.mei import meireader
 from converter21.mei import MeiReader
 from converter21.shared import M21Utilities
@@ -90,10 +91,10 @@ class Test(unittest.TestCase):
     def testInit3(self):
         '''__init__(): an invalid XML file causes an MeiValidityError'''
         inputFile = 'this is not an XML file'
-        self.assertRaises(meireader.MeiValidityError, MeiReader, inputFile)
+        self.assertRaises(meiexceptions.MeiValidityError, MeiReader, inputFile)
         try:
             MeiReader(inputFile)
-        except meireader.MeiValidityError as theError:
+        except meiexceptions.MeiValidityError as theError:
             self.assertEqual(meireader._INVALID_XML_DOC, theError.args[0])
 
     def testInit4(self):
@@ -102,10 +103,10 @@ class Test(unittest.TestCase):
                        <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
                                                        "http://www.musicxml.org/dtds/partwise.dtd">
                        <score-partwise></score-partwise>'''
-        self.assertRaises(meireader.MeiElementError, MeiReader, inputFile)
+        self.assertRaises(meiexceptions.MeiElementError, MeiReader, inputFile)
         try:
             MeiReader(inputFile)
-        except meireader.MeiElementError as theError:
+        except meiexceptions.MeiElementError as theError:
             self.assertEqual(
                 meireader._WRONG_ROOT_ELEMENT.format('score-partwise'),
                 theError.args[0]
@@ -188,10 +189,10 @@ class Test(unittest.TestCase):
         '''allPartsPresent(): error: no <staffDef>s'''
         elem = mock.MagicMock(spec_set=ETree.Element)
         c = MeiReader()
-        self.assertRaises(meireader.MeiValidityError, c.allPartsPresent, elem)
+        self.assertRaises(meiexceptions.MeiValidityError, c.allPartsPresent, elem)
         try:
             c.allPartsPresent(elem)
-        except meireader.MeiValidityError as mvErr:
+        except meiexceptions.MeiValidityError as mvErr:
             self.assertEqual(meireader._SEEMINGLY_NO_PARTS, mvErr.args[0])
 
     def testTimeSigFromAttrs(self):
@@ -625,7 +626,7 @@ class Test(unittest.TestCase):
         c = MeiReader()
         try:
             c._attrTranslator(attr, name, mapping)
-        except meireader.MeiValueError:
+        except meiexceptions.MeiValueError:
             self.fail('MeiValueError incorrectly raised when attr isn\'t found')
 
     @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
@@ -694,13 +695,13 @@ class Test(unittest.TestCase):
         '''_articulationFromAttr(): proper handling of not-found'''
         attr = 'garbage'
         expected = 'error message'
-        mockTrans.side_effect = meireader.MeiValueError(expected)
+        mockTrans.side_effect = meiexceptions.MeiValueError(expected)
         c = MeiReader()
-        self.assertRaises(meireader.MeiValueError, c._articulationFromAttr, attr)
+        self.assertRaises(meiexceptions.MeiValueError, c._articulationFromAttr, attr)
         mockTrans.assert_called_once_with(attr, 'artic', MeiReader._ARTIC_ATTR_DICT)
         try:
             c._articulationFromAttr(attr)
-        except meireader.MeiValueError as mvErr:
+        except meiexceptions.MeiValueError as mvErr:
             self.assertEqual(expected, mvErr.args[0])
 
     @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
@@ -1523,11 +1524,11 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(inputXML)
 
         c = MeiReader()
-        self.assertRaises(meireader.MeiAttributeError, c.layerFromElement, elem)
+        self.assertRaises(meiexceptions.MeiAttributeError, c.layerFromElement, elem)
 
         try:
             c.layerFromElement(elem)
-        except meireader.MeiAttributeError as maError:
+        except meiexceptions.MeiAttributeError as maError:
             self.assertEqual(meireader._MISSING_VOICE_ID, maError.args[0])
 
     # -----------------------------------------------------------------------------
@@ -2389,17 +2390,17 @@ class Test(unittest.TestCase):
         # missing @numbase
         elem = ETree.Element('tuplet', attrib={'num': '3'})
         c = MeiReader()
-        self.assertRaises(meireader.MeiAttributeError, c.tupletFromElement, elem)
+        self.assertRaises(meiexceptions.MeiAttributeError, c.tupletFromElement, elem)
         try:
             c.tupletFromElement(elem)
-        except meireader.MeiAttributeError as err:
+        except meiexceptions.MeiAttributeError as err:
             self.assertEqual(meireader._MISSING_TUPLET_DATA, err.args[0])
         # missing @num
         elem = ETree.Element('tuplet', attrib={'numbase': '2'})
-        self.assertRaises(meireader.MeiAttributeError, c.tupletFromElement, elem)
+        self.assertRaises(meiexceptions.MeiAttributeError, c.tupletFromElement, elem)
         try:
             c.tupletFromElement(elem)
-        except meireader.MeiAttributeError as err:
+        except meiexceptions.MeiAttributeError as err:
             self.assertEqual(meireader._MISSING_TUPLET_DATA, err.args[0])
 
     @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
