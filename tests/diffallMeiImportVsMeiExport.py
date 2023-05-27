@@ -11,6 +11,7 @@ from musicdiff import Comparison
 from musicdiff import DetailLevel
 
 # The things we're testing
+import converter21
 from converter21.mei import MeiWriter
 
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
@@ -289,6 +290,8 @@ parser.add_argument(
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
+
+converter21.register()
 
 listPath: Path = Path(args.list_file)
 goodPath: Path = Path(str(listPath.parent) + '/' + str(listPath.stem)
