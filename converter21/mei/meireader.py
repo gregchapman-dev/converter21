@@ -549,9 +549,9 @@ class MeiReader:
         '9slash': 9  # not actually supported, but might happen
     }
 
-    # for _articulationFromAttr()
+    # for _articulationsFromAttr()
     # NOTE: 'marc-stacc' and 'ten-stacc' require multiple music21 events, so they are handled
-    #       separately in _articulationFromAttr().
+    #       separately in _articulationsFromAttr().
     _ARTIC_ATTR_DICT: dict[str | None, t.Type] = {
         'acc': articulations.Accent,
         'stacc': articulations.Staccato,
@@ -662,7 +662,11 @@ class MeiReader:
         '''
         return self._attrTranslator(attr, 'dur', self._DUR_ATTR_DICT)
 
-    def _articulationFromAttr(self, attr: str | None) -> tuple[articulations.Articulation, ...]:
+    def _articulationsFromAttr(
+        self,
+        attr: str | None,
+        articElem: Element | None
+    ) -> tuple[articulations.Articulation, ...]:
         '''
         Use :func:`_attrTranslator` to convert a MEI "artic" attribute to a
         :class:`music21.articulations.Articulation` subclass.
@@ -673,24 +677,40 @@ class MeiReader:
             ``'ten-stacc'``. These return ``(StrongAccent, Staccato)`` and ``(Tenuto, Staccato)``,
             respectively.
         '''
+        artics: tuple[articulations.Articulation, ...] = tuple()
         if 'marc-stacc' == attr:
-            return (articulations.StrongAccent(), articulations.Staccato())
+            artics = (articulations.StrongAccent(), articulations.Staccato())
         elif 'ten-stacc' == attr:
-            return (articulations.Tenuto(), articulations.Staccato())
+            artics = (articulations.Tenuto(), articulations.Staccato())
         else:
             articClass: t.Type = self._attrTranslator(attr, 'artic', self._ARTIC_ATTR_DICT)
             if articClass is not None:
-                return (articClass(),)
-        return tuple()  # empty tuple
+                artics = (articClass(),)
 
-    def _makeArticList(self, attr: str) -> list[articulations.Articulation]:
+        if articElem is None:
+            return artics
+
+        # We have an articElem; we can do any stylistic things that are in
+        # attributes of articElem. For now, just placement = 'above' or 'below'.
+        place: str = articElem.get('place', '')
+        for artic in artics:
+            if place in ('above', 'below'):
+                artic.placement = place  # type: ignore
+
+        return artics
+
+    def _makeArticList(
+        self,
+        attr: str,
+        articElem: Element | None = None
+    ) -> list[articulations.Articulation]:
         '''
-        Use :func:`_articulationFromAttr` to convert the actual value of a MEI "artic" attribute
+        Use :func:`_articulationsFromAttr` to convert the actual value of a MEI "artic" attribute
         (including multiple items) into a list suitable for :attr:`GeneralNote.articulations`.
         '''
         articList: list[articulations.Articulation] = []
         for eachArtic in attr.split(' '):
-            articList.extend(self._articulationFromAttr(eachArtic))
+            articList.extend(self._articulationsFromAttr(eachArtic, articElem))
         return articList
 
     @staticmethod
@@ -3765,9 +3785,9 @@ class MeiReader:
 
         **Contained Elements not Implemented:** none
         '''
-        articElement = elem.get('artic')
-        if articElement is not None:
-            return self._makeArticList(articElement)
+        articName = elem.get('artic')
+        if articName is not None:
+            return self._makeArticList(articName, elem)
         else:
             return []
 
