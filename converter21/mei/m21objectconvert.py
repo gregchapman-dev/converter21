@@ -841,6 +841,114 @@ class M21ObjectConvert:
 
         return output
 
+    _M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE: dict[str, str] = {
+        'regular': '',  # or 'normal'? (but update meiMeasureBarlineAttrCombine if you do that)
+        'dotted': 'dotted',
+        'dashed': 'dashed',
+        'double': 'dbl',
+        'final': 'end',
+        'none': 'invis',
+        'start': 'rptstart',
+        'end': 'rptend'
+    }
+
+    @staticmethod
+    def m21BarlineToMeiMeasureBarlineAttr(
+        barline: m21.bar.Barline | None
+    ) -> str:
+        if barline is None:
+            return ''
+        if isinstance(barline, m21.bar.Repeat):
+            # ignore barline.type, and just use barline.direction ('start' or 'end')
+            output = (
+                M21ObjectConvert._M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE[
+                    barline.direction
+                ]
+            )
+            return output
+
+        # not a repeat, use barline.type
+        output = (
+            M21ObjectConvert._M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE[
+                barline.type
+            ]
+        )
+        return output
+
+    @staticmethod
+    def m21BarlinesToMeiMeasureBarlineAttr(
+        barline1: m21.bar.Barline | None,
+        barline2: m21.bar.Barline | None
+    ) -> str:
+        # barline1 and barline2 are simultaneous, and need to be combined.
+        # For example, barline1 may be the right barline of one measure, and barline2
+        # may be the left barline of the immediately following measure.
+        if barline1 is None and barline2 is None:
+            return ''
+
+        attr1: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline1)
+        attr2: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline2)
+
+        output: str = M21ObjectConvert.meiMeasureBarlineAttrCombine(attr1, attr2)
+        return output
+
+    @staticmethod
+    def meiMeasureBarlineAttrCombine(
+        attr1: str,
+        attr2: str
+    ) -> str:
+        # if they are the same, the answer is obvious
+        if attr1 == attr2:
+            return attr1
+
+        # '' loses to anything else
+        if not attr1:
+            return attr2
+        if not attr2:
+            return attr1
+
+        # invisibility beats everything
+        if attr1 == 'invis' or attr2 == 'invis':
+            return 'invis'
+
+        # check for the obvious repeat combinations
+        if attr1 == 'rptstart' and attr2 == 'rptend':
+            return 'rptboth'
+        if attr1 == 'rptend' and attr2 == 'rptstart':
+            return 'rptboth'
+
+        # any repeat is the next highest priority (rptboth wins)
+        if attr1 == 'rptboth':
+            return attr1
+        if attr2 == 'rptboth':
+            return attr2
+        if attr1.startswith('rpt'):
+            return attr1
+        if attr2.startswith('rpt'):
+            return attr2
+
+        # remaining possibilities are 'end', 'dbl', 'dashed', 'dotted'
+        # in that (fairly arbitrary) order of priority
+        if attr1 == 'end':
+            return attr1
+        if attr2 == 'end':
+            return attr2
+        if attr1 == 'dbl':
+            return attr1
+        if attr2 == 'dbl':
+            return attr2
+        if attr1 == 'dashed':
+            return attr1
+        if attr2 == 'dashed':
+            return attr2
+        if attr1 == 'dotted':
+            return attr1
+        if attr2 == 'dotted':
+            return attr2
+
+        # we shouldn't get here, but if we do, we didn't recognize either one.
+        return ''
+
     @staticmethod
     def _getM21ObjectConverter(
         obj: m21.base.Music21Object

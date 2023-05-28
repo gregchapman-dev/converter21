@@ -86,9 +86,12 @@ class MeiScore:
         offsetIterator: m21.stream.iterator.OffsetIterator[m21.stream.Measure] = (
             m21.stream.iterator.OffsetIterator(measuresStream)
         )
+        meiMeas: MeiMeasure | None = None
         for measureStack in offsetIterator:
+            prevMeiMeasure: MeiMeasure | None = meiMeas
             meiMeas = MeiMeasure(
                 measureStack,
+                prevMeiMeasure,
                 self.staffNumbersForM21Parts,
                 self.spannerBundle,
                 self.scoreMeterStream)

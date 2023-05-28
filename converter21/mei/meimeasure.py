@@ -16,6 +16,7 @@ import music21 as m21
 # from music21.common import opFrac
 
 from converter21.mei import MeiStaff
+from converter21.mei import M21ObjectConvert
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
 # from converter21.shared import M21Utilities
@@ -35,6 +36,7 @@ class MeiMeasure:
     def __init__(
         self,
         m21Measures: list[m21.stream.Measure],
+        prevMeiMeasure,  # MeiMeasure | None
         staffNumbersForM21Parts: dict[m21.stream.Part, int],
         spannerBundle: m21.spanner.SpannerBundle,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
@@ -43,6 +45,11 @@ class MeiMeasure:
             m21Measures: a list of simultaneous measures, one per staff
             staffNumbersForM21Parts: a dictionary of staff numbers, keyed by Part/PartStaff
         '''
+        self.nextMeiMeasure: MeiMeasure | None = None
+        self.prevMeiMeasure: MeiMeasure | None = prevMeiMeasure
+        if prevMeiMeasure is not None:
+            prevMeiMeasure.nextMeiMeasure = self
+
         # self.staffNumbersForM21Parts = staffNumbersForM21Parts
         self.spannerBundle = spannerBundle
         self.scoreMeterStream = scoreMeterStream
@@ -71,10 +78,43 @@ class MeiMeasure:
         return None
 
     def makeRootElement(self, tb: TreeBuilder):
-        tb.start('measure', {'n': self.measureNumStr})
+        attr: dict[str, str] = {}
+        self._fillInMeasureAttributes(attr)
+
+        tb.start('measure', attr)
         for staff in self.staves:
             staff.makeRootElement(tb)
         for staff in self.staves:
             staff.makePostStavesElements(tb)
         tb.end('measure')
 
+    def _fillInMeasureAttributes(self, attr: dict[str, str]):
+        attr['n'] = self.measureNumStr
+
+        if len(self.staves) == 0:
+            return
+
+        meiStaff = self.staves[0]
+        if self.prevMeiMeasure is None:
+            # This is the very first measure.  We need to emit 'left' attribute
+            # instead of assuming the previous measure combined it into their
+            # 'right' attribute.
+            myLeftBarline: m21.bar.Barline | None = meiStaff.m21Measure.leftBarline
+            left: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(myLeftBarline)
+            if left:
+                attr['left'] = left
+
+        # Our left is already handled, either in the code above or in the previous measure.
+        # Now we have to handle our right + next measure's left (if there is a next measure).
+
+        myRightBarline: m21.bar.Barline | None = meiStaff.m21Measure.rightBarline
+        nextLeftBarline: m21.bar.Barline | None = None
+        if self.nextMeiMeasure is not None and len(self.nextMeiMeasure.staves) > 0:
+            nextLeftBarline = self.nextMeiMeasure.staves[0].m21Measure.leftBarline
+
+        right: str = M21ObjectConvert.m21BarlinesToMeiMeasureBarlineAttr(
+            myRightBarline,
+            nextLeftBarline
+        )
+        if right:
+            attr['right'] = right
