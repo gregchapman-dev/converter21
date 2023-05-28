@@ -262,12 +262,15 @@ class M21ObjectConvert:
             m21Tonic: m21.pitch.Pitch = obj.tonic
             mode: str = obj.mode
             pname: str = str(m21Tonic.step).lower()
+            accid: str = ''
             if m21Tonic.accidental is not None:
-                pname += M21ObjectConvert.m21AccidToMeiAccid(m21Tonic.accidental.modifier)
+                accid = M21ObjectConvert.m21AccidToMeiAccid(m21Tonic.accidental.modifier)
 
             if pname and mode:
                 attr['pname'] = pname
                 attr['mode'] = mode
+                if accid:
+                    attr['accid'] = accid
 
         attr['sig'] = M21ObjectConvert._M21_SHARPS_TO_MEI_SIG.get(obj.sharps, '0')
         M21ObjectConvert._addStylisticAttributes(obj, attr)
