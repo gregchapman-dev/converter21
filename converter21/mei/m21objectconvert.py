@@ -20,7 +20,7 @@ from music21.common import OffsetQLIn  # , opFrac
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
-# from converter21.shared import M21Utilities
+from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -610,16 +610,100 @@ class M21ObjectConvert:
         tb.end('mordent')
 
     @staticmethod
-    def m21DynamicToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
-        print('Dynamic not yet implemented', file=sys.stderr)
+    def convertPostStaveStreamElement(
+        obj: m21.base.Music21Object,
+        staffNStr: str,
+        m21Part: m21.stream.Part,
+        m21Measure: m21.stream.Measure,
+        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        tb: TreeBuilder,
+    ):
+        attr: dict[str, str] = {}
+        M21ObjectConvert._fillInStandardPostStavesAttributes(
+            attr,
+            obj,
+            None,
+            staffNStr,
+            m21Part,
+            m21Measure,
+            scoreMeterStream
+        )
+        tag: str = M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG.get(obj.classes[0], '')
+        if tag == 'dynam':
+            if t.TYPE_CHECKING:
+                assert isinstance(obj, m21.dynamics.Dynamic)
+            tb.start(tag, attr)
+            tb.data(obj.value)
+            tb.end(tag)
+            return
+
+        if tag == 'dir':
+            if t.TYPE_CHECKING:
+                assert isinstance(obj, m21.expressions.TextExpression)
+            tb.start(tag, attr)
+            tb.data(obj.content)
+            tb.end(tag)
+            return
+
+        if tag == 'tempo':
+            if isinstance(obj, m21.tempo.MetricModulation):
+                obj = obj.newMetronome
+
+            if isinstance(obj, m21.tempo.TempoText):
+                tb.start(tag, attr)
+                tb.data(obj.text)
+                tb.end(tag)
+                return
+
+            if isinstance(obj, m21.tempo.MetronomeMark):
+                if not obj.numberImplicit:
+                    # figure out @midi.bpm from obj.number, converting from referent
+                    # to quarter note (e.g. referent might be half note)
+                    attr['midi.bpm'] = obj.number * obj.referent.quarterLength
+                tb.start(tag, attr)
+
+                # also construct "blah=128" or whatever, using SMUFL for noteheads, and
+                # append it to the text before calling tb.data().  It will need a <rend>
+                # element in the middle of the text (thus it's mixed text and elements)
+                M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
+                tb.end(tag)
 
     @staticmethod
-    def m21TextExpressionToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
-        print('TextExpression not yet implemented', file=sys.stderr)
+    def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):
+        tb.data(mm.text)
+        if not mm.numberImplicit:
+            tb.data(' ')
+            tb.start('rend', {'fontfam': 'smufl'})
+            noteHead: str = M21ObjectConvert._getNoteHeadSMUFLUnicodeForReferent(mm.referent)
+            tb.data(noteHead)
+            tb.data(f' = {int(mm.number)}')
 
+    _M21_DURATION_TYPE_TO_SMUFL_MM_NOTE_HEAD: dict[str, str] = {
+        'breve': 'metNoteDoubleWhole',
+        'whole': 'metNoteWhole',
+        'half': 'metNoteHalfUp',
+        'quarter': 'metNoteQuarterUp',
+        'eighth': 'metNote8thUp',
+        '16th': 'metNote16thUp',
+        '32nd': 'metNote32thUp',
+        '64th': 'metNote64thUp',
+        '128th': 'metNote128thUp',
+        '256th': 'metNote256thUp',
+        '512th': 'metNote512thUp',
+        '1024th': 'metNote1024thUp',
+    }
     @staticmethod
-    def m21TempoIndicationToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
-        print('TempoIndication not yet implemented', file=sys.stderr)
+    def _getNoteHeadSMUFLUnicodeForReferent(referent: m21.duration.Duration) -> str:
+        noteHeadSMUFLName: str = M21ObjectConvert._M21_DURATION_TYPE_TO_SMUFL_MM_NOTE_HEAD.get(
+            referent.type, 'metNoteQuarterUp'
+        )
+        output: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR[noteHeadSMUFLName]
+
+        if referent.dots:
+            dotUnicode: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot']
+            output += dotUnicode * referent.dots
+
+        return output
 
     @staticmethod
     def _getM21ObjectConverter(
@@ -642,7 +726,7 @@ class M21ObjectConvert:
             return False
 
         for className in obj.classes:
-            if className in M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES:
+            if className in M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG:
                 return True
 
         return False
@@ -653,7 +737,7 @@ class M21ObjectConvert:
             return False
 
         for className in obj.classes:
-            if className in M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES:
+            if className in M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG:
                 return False
 
         return True
@@ -673,18 +757,15 @@ _M21_OBJECT_CONVERTER: dict[str, t.Callable[
     'Clef': M21ObjectConvert.m21ClefToMei,
     'KeySignature': M21ObjectConvert.m21KeySigToMei,
     'TimeSignature': M21ObjectConvert.m21TimeSigToMei,
-    'Dynamic': M21ObjectConvert.m21DynamicToMei,
-    'TextExpression': M21ObjectConvert.m21TextExpressionToMei,
-    'TempoIndication': M21ObjectConvert.m21TempoIndicationToMei,
 }
 
-M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES: list[str] = [
+M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG: dict[str, str] = {
     # This does not include spanners, since spanners are handled separately.
     # This does not include ornaments, since ornaments are handled separately.
     # This only includes single objects that might be found directly in a Voice,
     # and that should not be emitted in the Voice's associated <layer>, but rather
     # saved for the post-staves elements.
-    'Dynamic',
-    'TextExpression',
-    'TempoIndication',
-]
+    'Dynamic': 'dynam',
+    'TextExpression': 'dir',
+    'TempoIndication': 'tempo',
+}

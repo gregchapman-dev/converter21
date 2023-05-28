@@ -142,7 +142,14 @@ class MeiLayer:
             # Lots of stuff from a MeiLayer goes in the post-staves elements:
             # 1. Some elements in this voice (e.g. Dynamic, TextExpression, TempoIndication)
             if M21ObjectConvert.streamElementBelongsInPostStaves(obj):
-                M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+                M21ObjectConvert.convertPostStaveStreamElement(
+                    obj,
+                    staffNStr,
+                    m21Part,
+                    m21Measure,
+                    self.scoreMeterStream,
+                    tb
+                )
 
             # 2. Spanners (Slurs, DynamicWedges, TrillExtensions, etc) whose first
             # element is in this voice.
