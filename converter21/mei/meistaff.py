@@ -101,4 +101,11 @@ class MeiStaff:
         if not self.theOneLayerIsTheMeasureItself:
             for obj in self.m21Measure:
                 if M21ObjectConvert.streamElementBelongsInPostStaves(obj):
-                    M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+                    M21ObjectConvert.convertPostStaveStreamElement(
+                        obj,
+                        self.staffNStr,
+                        self.m21Part,
+                        self.m21Measure,
+                        self.scoreMeterStream,
+                        tb
+                    )

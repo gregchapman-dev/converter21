@@ -19,7 +19,7 @@ import music21 as m21
 
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
-# from converter21.shared import M21Utilities
+from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
 
@@ -108,7 +108,7 @@ class MeiLayer:
                 if spanner.isFirst(obj):
                     # start a <beam>, but only if all the spanned elements are in
                     # this m21Measure.
-                    if self.allSpannedElementsAreWithinMeasure(
+                    if M21Utilities.allSpannedElementsAreInHierarchy(
                         spanner, self.meiParent.m21Measure
                     ):
                         tb.start('beam', {})
@@ -121,18 +121,6 @@ class MeiLayer:
                         endTheBeam = True
 
         return endTheBeam
-
-    def allSpannedElementsAreWithinMeasure(
-        self,
-        spanner: m21.spanner.Spanner,
-        measure: m21.stream.Measure
-    ) -> bool:
-        for el in spanner.getSpannedElements():
-            try:
-                el.getOffsetInHierarchy(measure)
-            except m21.sites.SitesException:
-                return False
-        return True
 
     def makePostStavesElements(self, tb: TreeBuilder):
         m21Part: m21.stream.Part = self.meiParent.m21Part

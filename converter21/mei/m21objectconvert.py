@@ -16,10 +16,12 @@ from xml.etree.ElementTree import TreeBuilder
 from copy import deepcopy
 
 import music21 as m21
-from music21.common import OffsetQLIn  # , opFrac
+from music21.common import OffsetQLIn, OffsetQL
+from music21.common.numberTools import opFrac
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
+from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
@@ -49,14 +51,54 @@ class M21ObjectConvert:
         M21ObjectConvert._noteToMei(obj, tb, withDuration=True)
 
     @staticmethod
+    def _addStylisticAttributes(obj: m21.base.Music21Object, attr: dict[str, str]):
+        if isinstance(obj, m21.note.NotRest):
+            if obj.stemDirection == 'noStem':
+                attr['stem.visible'] = 'false'
+            elif obj.stemDirection in ('up', 'down'):
+                attr['stem.dir'] = obj.stemDirection
+
+        # placement (we pass obj because placement might be in obj or obj.style)
+        place: str | None = M21ObjectConvert.m21PlacementToMei(obj)
+        if place:
+            attr['place'] = place
+
+        if obj.hasStyleInformation:
+            pass  # a bunch of other stuff, like color, etc
+
+    @staticmethod
+    def m21PlacementToMei(obj: m21.base.Music21Object) -> str | None:
+        style: m21.style.Style | None = None
+        if obj.hasStyleInformation:
+            style = obj.style
+        alignVertical: str = ''
+        if style is not None and hasattr(style, 'alignVertical'):
+            alignVertical = getattr(style, 'alignVertical')
+
+        placement: str | None = None
+        if hasattr(obj, 'placement'):
+            placement = getattr(obj, 'placement')
+        elif style is not None and hasattr(style, 'placement'):
+            placement = getattr(style, 'placement')
+
+        if placement is None:
+            return None
+
+        if placement == 'below' and alignVertical == 'middle':
+            return 'between'
+        if placement in ('above', 'below'):
+            return placement
+
+        return None
+
+    @staticmethod
     def m21ChordToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
-        chordAttr: dict[str, str] = {'xml:id': str(obj.id)}
-        grace: str = M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, chordAttr)
-        if grace:
-            chordAttr['grace'] = grace
-        tb.start('chord', chordAttr)
+        attr: dict[str, str] = {'xml:id': str(obj.id)}
+        M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
+        M21ObjectConvert._addStylisticAttributes(obj, attr)
+        tb.start('chord', attr)
         M21ObjectConvert.m21ArticulationsToMei(obj.articulations, tb)
         for note in obj.notes:
             M21ObjectConvert._noteToMei(note, tb, withDuration=False)
@@ -66,46 +108,41 @@ class M21ObjectConvert:
     def m21RestToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.note.Rest)
-        restAttr: dict[str, str] = {'xml:id': str(obj.id)}
-        grace = M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, restAttr)
-        if grace:
-            restAttr['grace'] = grace
+        attr: dict[str, str] = {'xml:id': str(obj.id)}
+        M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
+        M21ObjectConvert._addStylisticAttributes(obj, attr)
         if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
-            tb.start('space', restAttr)
+            tb.start('space', attr)
             tb.end('space')
         else:
-            tb.start('rest', restAttr)
+            tb.start('rest', attr)
             tb.end('rest')
 
     @staticmethod
     def _noteToMei(note: m21.note.Note, tb: TreeBuilder, withDuration: bool) -> None:
-        noteAttr: dict[str, str] = {'xml:id': str(note.id)}
-        grace: str = ''
-        if withDuration:
-            # @dur, @dots, etc
-            grace = M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, noteAttr)
-
+        attr: dict[str, str] = {'xml:id': str(note.id)}
         # @pname, @oct, @accid/@accid.ges
-        noteAttr['oct'] = str(note.pitch.octave)
-        noteAttr['pname'] = note.pitch.step.lower()
+        attr['oct'] = str(note.pitch.octave)
+        attr['pname'] = note.pitch.step.lower()
 
-        if grace:
-            noteAttr['grace'] = grace
+        if withDuration:
+            M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
+        M21ObjectConvert._addStylisticAttributes(note, attr)
 
         if note.pitch.accidental is None:
             # not strictly necessary, but verovio does it, so...
-            noteAttr['accid.ges'] = 'n'
+            attr['accid.ges'] = 'n'
         else:
             if note.pitch.accidental.displayStatus:
-                noteAttr['accid'] = (
+                attr['accid'] = (
                     M21ObjectConvert.m21AccidToMeiAccid(note.pitch.accidental.name)
                 )
             else:
-                noteAttr['accid.ges'] = (
+                attr['accid.ges'] = (
                     M21ObjectConvert.m21AccidToMeiAccidGes(note.pitch.accidental.name)
                 )
 
-        tb.start('note', noteAttr)
+        tb.start('note', attr)
         M21ObjectConvert.m21ArticulationsToMei(note.articulations, tb)
         tb.end('note')
 
@@ -146,6 +183,7 @@ class M21ObjectConvert:
             attr: dict[str, str] = {}  # above/below, etc
             if name:
                 attr['artic'] = name
+                M21ObjectConvert._addStylisticAttributes(artic, attr)
                 tb.start('artic', attr)
                 tb.end('artic')
 
@@ -167,7 +205,7 @@ class M21ObjectConvert:
             # no clef, nothing to see here
             return
 
-        clefAttr: dict[str, str] = {'shape': obj.sign, 'line': str(obj.line)}
+        attr: dict[str, str] = {'shape': obj.sign, 'line': str(obj.line)}
         if obj.octaveChange:
             dis: str
             disPlace: str
@@ -178,9 +216,10 @@ class M21ObjectConvert:
                 )
             )
             if dis and disPlace:
-                clefAttr['dis'] = dis
-                clefAttr['dis.place'] = disPlace
-        tb.start('clef', clefAttr)
+                attr['dis'] = dis
+                attr['dis.place'] = disPlace
+        M21ObjectConvert._addStylisticAttributes(obj, attr)
+        tb.start('clef', attr)
         tb.end('clef')
 
     _M21_SHARPS_TO_MEI_SIG: dict[int, str] = {
@@ -216,7 +255,7 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.key.KeySignature)
 
-        keySigAttr: dict[str, str] = {}
+        attr: dict[str, str] = {}
 
         if isinstance(obj, m21.key.Key):
             # we know tonic (aka pname) and mode
@@ -227,11 +266,12 @@ class M21ObjectConvert:
                 pname += M21ObjectConvert.m21AccidToMeiAccid(m21Tonic.accidental.modifier)
 
             if pname and mode:
-                keySigAttr['pname'] = pname
-                keySigAttr['mode'] = mode
+                attr['pname'] = pname
+                attr['mode'] = mode
 
-        keySigAttr['sig'] = M21ObjectConvert._M21_SHARPS_TO_MEI_SIG.get(obj.sharps, '0')
-        tb.start('keySig', keySigAttr)
+        attr['sig'] = M21ObjectConvert._M21_SHARPS_TO_MEI_SIG.get(obj.sharps, '0')
+        M21ObjectConvert._addStylisticAttributes(obj, attr)
+        tb.start('keySig', attr)
         tb.end('keySig')
 
     @staticmethod
@@ -239,19 +279,20 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.meter.TimeSignature)
 
-        meterSigAttr: dict[str, str] = {}
+        attr: dict[str, str] = {}
 
         # This is a weird attribute order, but it matches what Verovio does,
         # which makes bbdiff comparisons work better.
-        meterSigAttr['count'] = str(obj.numerator)
+        attr['count'] = str(obj.numerator)
 
         if obj.symbol:
             # 'cut' or 'common' (both music21 and MEI use these terms)
-            meterSigAttr['sym'] = obj.symbol
+            attr['sym'] = obj.symbol
 
-        meterSigAttr['unit'] = str(obj.denominator)
+        attr['unit'] = str(obj.denominator)
 
-        tb.start('meterSig', meterSigAttr)
+        M21ObjectConvert._addStylisticAttributes(obj, attr)
+        tb.start('meterSig', attr)
         tb.end('meterSig')
 
 
@@ -277,8 +318,7 @@ class M21ObjectConvert:
     def m21DurationToMeiDurDotsGrace(
         duration: m21.duration.Duration,
         attr: dict[str, str]
-    ) -> str:
-        # returns grace instead of putting it in attr
+    ):
         # Note that the returned values ignore any tuplets (that's the way MEI likes it)
         dur: str = ''
         dots: str = ''
@@ -324,8 +364,8 @@ class M21ObjectConvert:
             attr['dots.ges'] = dotsGes
         if durGes:
             attr['dur.ges'] = durGes
-
-        return grace
+        if grace:
+            attr['grace'] = grace
 
     _M21_ACCID_TO_MEI_ACCID: dict[str, str] = {
         'natural': 'n',
@@ -374,21 +414,107 @@ class M21ObjectConvert:
         return output
 
     @staticmethod
-    def offsetToTstamp(
+    def floatToStringWithDecimalPlacesMinMax(
+        f: float,
+        minDecimals: int,
+        maxDecimals: int
+    ) -> str:
+        formatStr: str
+
+        if f == round(f, minDecimals):
+            # if you need minDecimals or less...
+            # use exactly minDecimals, no less.
+            formatStr = f':.{minDecimals}f'
+        else:
+            # if you need more than minDecimals...
+            # use as many as you need, up to maxDecimals.
+            formatStr = f':.{maxDecimals}g'
+
+        formatStr = '{' + formatStr + '}'
+        output: str = formatStr.format(f)
+        return output
+
+    @staticmethod
+    def makeTstamp(
         offsetInScore: OffsetQLIn,
         offsetInMeasure: OffsetQLIn,
         meterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> str:
-        raise MeiInternalError
+        beat: float = M21ObjectConvert._offsetToBeat(
+            opFrac(offsetInMeasure),
+            M21Utilities.getActiveTimeSigFromMeterStream(offsetInScore, meterStream)
+        )
+
+        beatStr: str = M21ObjectConvert.floatToStringWithDecimalPlacesMinMax(beat, 1, 6)
+        return beatStr
 
     @staticmethod
-    def offsetsToTstamp2(
-        offset1InScore: OffsetQLIn,
-        offset1InMeasure: OffsetQLIn,
-        offset2InScore: OffsetQLIn,
+    def _offsetToBeat(
+        offset: OffsetQL,
+        currTimeSig: m21.meter.TimeSignature | None
+    ) -> float:
+        # convert from quarter notes to whole notes
+        beat: float = float(offset) / 4.0
+
+        # convert to beats (if there is no current time signature,
+        # assume beats are quarter notes).
+        currTimeSigDenom: int = 4
+        if currTimeSig is not None:
+            currTimeSigDenom = currTimeSig.denominator
+        beat *= float(currTimeSigDenom)
+
+        # make it 1-based
+        return beat + 1.0
+
+    @staticmethod
+    def makeTstamp2(
+        endObject: m21.base.Music21Object,
+        m21StartMeasure: m21.stream.Measure,
+        m21Part: m21.stream.Part,
         meterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> str:
-        raise MeiInternalError
+        # count steps from m21StartMeasure to measure containing endObject in m21Part
+        measureStepCount: int = -1
+        endOffsetInMeasure: OffsetQL | None = None
+        counting: bool = False
+        endOffsetInScore: OffsetQL | None = (
+            M21Utilities.safeGetOffsetInHierarchy(endObject, m21Part)
+        )
+        if endOffsetInScore is None:
+            raise MeiInternalError('makeTstamp2: failed to find endObject in m21Part')
+
+        for meas in m21Part:
+            if meas is m21StartMeasure:
+                # We found the start measure! Start counting steps.
+                measureStepCount = 0
+                counting = True
+
+            if counting:
+                endOffsetInMeasure = M21Utilities.safeGetOffsetInHierarchy(endObject, meas)
+                if endOffsetInMeasure is not None:
+                    # We found the end measure!
+                    break
+
+            if counting:
+                measureStepCount += 1
+
+        if measureStepCount == -1:
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Part')
+
+        if endOffsetInMeasure is None:
+            raise MeiInternalError(
+                'makeTstamp2: failed to find endObject in or after m21StartMeasure in m21Part'
+            )
+
+        # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
+        beat: float = M21ObjectConvert._offsetToBeat(
+            opFrac(endOffsetInMeasure),
+            M21Utilities.getActiveTimeSigFromMeterStream(endOffsetInScore, meterStream)
+        )
+
+        # use as many decimal places as you need, between min of 1 and max of 6
+        beatStr: str = M21ObjectConvert.floatToStringWithDecimalPlacesMinMax(beat, 1, 6)
+        return f'{measureStepCount}m+{beatStr}'
 
     @staticmethod
     def _fillInStandardPostStavesAttributes(
@@ -406,8 +532,8 @@ class M21ObjectConvert:
             # we're done
             return
 
-        if isinstance(first, m21.spanner.SpannerAnchor):
-            attr['tstamp'] = M21ObjectConvert.offsetToTstamp(
+        if not isinstance(first, m21.note.GeneralNote):
+            attr['tstamp'] = M21ObjectConvert.makeTstamp(
                 offsetInScore=first.getOffsetInHierarchy(m21Part),
                 offsetInMeasure=first.getOffsetInHierarchy(m21Measure),
                 meterStream=scoreMeterStream
@@ -420,11 +546,11 @@ class M21ObjectConvert:
             return
 
         # unique last element, we need @tstamp2 or @endid
-        if isinstance(last, m21.spanner.SpannerAnchor):
-            attr['tstamp2'] = M21ObjectConvert.offsetsToTstamp2(
-                offset1InScore=first.getOffsetInHierarchy(m21Part),
-                offset1InMeasure=first.getOffsetInHierarchy(m21Measure),
-                offset2InScore=last.getOffsetInHierarchy(m21Part),
+        if not isinstance(first, m21.note.GeneralNote):
+            attr['tstamp2'] = M21ObjectConvert.makeTstamp2(
+                endObject=last,
+                m21StartMeasure=m21Measure,
+                m21Part=m21Part,
                 meterStream=scoreMeterStream
             )
         else:
@@ -496,6 +622,7 @@ class M21ObjectConvert:
                         break
 
         if tag:
+            M21ObjectConvert._addStylisticAttributes(spanner, attr)
             tb.start(tag, attr)
             tb.end(tag)
 
@@ -538,6 +665,7 @@ class M21ObjectConvert:
                 attr['accidupper'] = accid
             else:
                 attr['accidlower'] = accid
+            M21ObjectConvert._addStylisticAttributes(trill, attr)
 
         if tb is not None:
             # do the full job
@@ -575,6 +703,7 @@ class M21ObjectConvert:
         if turn.isDelayed:
             print('delayed turn not yet implemented: emitting non-delayed turn')
 
+        M21ObjectConvert._addStylisticAttributes(turn, attr)
         tb.start('turn', attr)
         tb.end('turn')
 
@@ -606,6 +735,7 @@ class M21ObjectConvert:
             else:
                 attr['accidlower'] = accid
 
+        M21ObjectConvert._addStylisticAttributes(mordent, attr)
         tb.start('mordent', attr)
         tb.end('mordent')
 
@@ -628,6 +758,9 @@ class M21ObjectConvert:
             m21Measure,
             scoreMeterStream
         )
+
+        M21ObjectConvert._addStylisticAttributes(obj, attr)
+
         tag: str = M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG.get(obj.classes[0], '')
         if tag == 'dynam':
             if t.TYPE_CHECKING:

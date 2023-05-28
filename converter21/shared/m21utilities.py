@@ -20,6 +20,7 @@ import typing as t
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
+from music21.common.numberTools import opFrac
 
 class CannotMakeScoreFromObjectError(Exception):
     pass
@@ -717,6 +718,48 @@ class M21Utilities:
                 alters[pitchClass + (octave * 7)] = alter
 
         return alters
+
+    @staticmethod
+    def safeGetOffsetInHierarchy(
+        obj: m21.base.Music21Object,
+        stream: m21.stream.Stream
+    ) -> OffsetQL | None:
+        try:
+            return obj.getOffsetInHierarchy(stream)
+        except m21.sites.SitesException:
+            return None
+
+    @staticmethod
+    def objectIsInHierarchy(
+        obj: m21.base.Music21Object,
+        stream: m21.stream.Stream
+    ) -> bool:
+        offset = M21Utilities.safeGetOffsetInHierarchy(obj, stream)
+        if offset is None:
+            return False
+        return True
+
+    @staticmethod
+    def allSpannedElementsAreInHierarchy(
+        spanner: m21.spanner.Spanner,
+        stream: m21.stream.Stream
+    ) -> bool:
+        for obj in spanner.getSpannedElements():
+            if not M21Utilities.objectIsInHierarchy(obj, stream):
+                return False
+        return True
+
+    @staticmethod
+    def getActiveTimeSigFromMeterStream(
+        offset: OffsetQL,
+        meterStream: m21.stream.Stream[m21.meter.TimeSignature]
+    ) -> m21.meter.TimeSignature | None:
+        timeSig: m21.base.Music21Object | None = (
+            meterStream.getElementAtOrBefore(opFrac(offset))
+        )
+        if t.TYPE_CHECKING:
+            assert timeSig is None or isinstance(timeSig, (m21.meter.TimeSignature))
+        return timeSig
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
