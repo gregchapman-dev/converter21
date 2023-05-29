@@ -3071,7 +3071,7 @@ class MeiReader:
             staffGroups, parts, partNs = (
                 self.processStaffGroupDescriptionTree(topLevelGroup, allPartNs)
             )
-            if partNs != list(allPartNs):
+            if sorted(partNs) != sorted(list(allPartNs)):
                 raise MeiInternalError(
                     'processStaffGroupDescriptionTree did not produce allPartNs'
                 )
