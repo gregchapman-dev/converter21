@@ -197,6 +197,10 @@ class M21ObjectConvert:
         -3: ('22', 'below')
     }
 
+    _M21_CLEF_SIGN_TO_MEI_CLEF_SHAPE: dict[str, str] = {
+        'percussion': 'perc'
+    }
+
     @staticmethod
     def m21ClefToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
@@ -205,7 +209,16 @@ class M21ObjectConvert:
             # no clef, nothing to see here
             return
 
-        attr: dict[str, str] = {'shape': obj.sign, 'line': str(obj.line)}
+        attr: dict[str, str] = {}
+
+        # default to shape == sign
+        shape: str = M21ObjectConvert._M21_CLEF_SIGN_TO_MEI_CLEF_SHAPE.get(obj.sign, obj.sign)
+        if shape:
+            attr['shape'] = shape
+
+        if obj.line is not None:
+            attr['line'] = str(obj.line)
+
         if obj.octaveChange:
             dis: str
             disPlace: str
@@ -218,6 +231,7 @@ class M21ObjectConvert:
             if dis and disPlace:
                 attr['dis'] = dis
                 attr['dis.place'] = disPlace
+
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         tb.start('clef', attr)
         tb.end('clef')

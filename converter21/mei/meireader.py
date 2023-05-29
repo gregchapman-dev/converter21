@@ -3598,6 +3598,19 @@ class MeiReader:
             post['instrument'] = inst
 
         # process other staff-specific information
+        # --> lines
+        linesStr: str = elem.get('lines', '')
+        lines: int = 5
+        try:
+            lines = int(linesStr)
+        except Exception:
+            pass
+        if lines != 5:
+            # make a StaffLayout so we can set staffLines to something other than 5
+            staffLayout: m21.layout.StaffLayout = m21.layout.StaffLayout()
+            staffLayout.staffLines = lines
+            post['staffLayout'] = staffLayout
+
         # --> time signature
         if elem.get('meter.count') is not None or elem.get('meter.sym') is not None:
             timesig = self._timeSigFromAttrs(elem, prefix='meter.')
@@ -4182,7 +4195,7 @@ class MeiReader:
     def noteFromElement(
         self,
         elem: Element,
-    ) -> note.Note:
+    ) -> note.Note | note.Unpitched:
         # NOTE: this function should stay in sync with chordFromElement() where sensible
         '''
         <note> is a single pitched event.
@@ -4264,17 +4277,27 @@ class MeiReader:
         - MEI.edittrans: (all)
         '''
         # make the note (no pitch yet, that has to wait until we have parsed the subelements)
-        theNote: note.Note = note.Note()
+        isUnpitched: bool = False
+        theNote: note.Note | note.Unpitched
+        pnameStr: str = elem.get('pname', '')
+        if pnameStr is None:
+            isUnpitched = True
+
+        if isUnpitched:
+            theNote = note.Unpitched()
+        else:
+            theNote = note.Note()
 
         # set the Note's duration (we will update this if we find any inner <dot> elements)
         theDuration: duration.Duration = self.durationFromAttributes(elem)
         theNote.duration = theDuration
 
-        # get any @accid/@accid.ges from this element.
-        # We'll overwrite with any subElements below.
-        theAccid: str | None = self._accidentalFromAttr(elem.get('accid'))
-        theAccidGes: str | None = self._accidGesFromAttr(elem.get('accid.ges'))
         theAccidObj: pitch.Accidental | None = None
+        if not isUnpitched:
+            # get any @accid/@accid.ges from this element.
+            # We'll overwrite with any subElements below.
+            theAccid: str | None = self._accidentalFromAttr(elem.get('accid'))
+            theAccidGes: str | None = self._accidGesFromAttr(elem.get('accid.ges'))
 
         dotElements: int = 0  # count the number of <dot> elements
         for subElement in self._processEmbeddedElements(
@@ -4313,30 +4336,31 @@ class MeiReader:
             theNote = theNote.getGrace(appoggiatura=False)
             theNote.duration.slash = True  # type: ignore
 
-        pnameStr: str = elem.get('pname', '')
+        if not isUnpitched:
+            if t.TYPE_CHECKING:
+                assert isinstance(theNote, note.Note)
+            octStr: str = elem.get('oct', '')
+            if not octStr:
+                octStr = elem.get('oct.ges', '')
+            if theAccidObj is not None:
+                theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidObj, octStr)
+            elif theAccidGes is not None:
+                theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidGes, octStr)
+                if theNote.pitch.accidental is not None:
+                    # since the accidental was due to theAccidGes,
+                    # the accidental should NOT be displayed.
+                    theNote.pitch.accidental.displayStatus = False
+            elif theAccid is not None:
+                theNote.pitch = M21Utilities.safePitch(pnameStr, theAccid, octStr)
+                if theNote.pitch.accidental is not None:
+                    # since the accidental was due to theAccid,
+                    # the accidental should be displayed.
+                    theNote.pitch.accidental.displayStatus = True
+            else:
+                theNote.pitch = M21Utilities.safePitch(pnameStr, None, octStr)
 
-        octStr: str = elem.get('oct', '')
-        if not octStr:
-            octStr = elem.get('oct.ges', '')
-        if theAccidObj is not None:
-            theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidObj, octStr)
-        elif theAccidGes is not None:
-            theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidGes, octStr)
-            if theNote.pitch.accidental is not None:
-                # since the accidental was due to theAccidGes,
-                # the accidental should NOT be displayed.
-                theNote.pitch.accidental.displayStatus = False
-        elif theAccid is not None:
-            theNote.pitch = M21Utilities.safePitch(pnameStr, theAccid, octStr)
-            if theNote.pitch.accidental is not None:
-                # since the accidental was due to theAccid,
-                # the accidental should be displayed.
-                theNote.pitch.accidental.displayStatus = True
-        else:
-            theNote.pitch = M21Utilities.safePitch(pnameStr, None, octStr)
-
-        if self.staffNumberForNotes:
-            self.updateStaffAltersWithPitches(self.staffNumberForNotes, theNote.pitches)
+            if self.staffNumberForNotes:
+                self.updateStaffAltersWithPitches(self.staffNumberForNotes, theNote.pitches)
 
         self.addSlurs(elem, theNote)
 

@@ -147,7 +147,7 @@ class MeiScore:
             staffLines: int = 5
             initialStaffLayout: m21.layout.StaffLayout | None = None
             initialStaffLayouts = list(
-                part.getElementsByClass(m21.layout.StaffLayout).getElementsByOffset(0.0)
+                part.recurse().getElementsByClass(m21.layout.StaffLayout).getElementsByOffset(0.0)
             )
             if initialStaffLayouts:
                 initialStaffLayout = initialStaffLayouts[0]
