@@ -19,10 +19,10 @@ from .meiexceptions import MeiElementError
 from .meiexceptions import MeiExportError
 from .meiexceptions import MeiInternalError
 
-from .meireader import MeiReader
-
 from .m21objectconvert import M21ObjectConvert
 from .m21objectconvert import MeiBeamSpanner
+
+from .meireader import MeiReader
 
 from .meilayer import MeiLayer
 from .meistaff import MeiStaff

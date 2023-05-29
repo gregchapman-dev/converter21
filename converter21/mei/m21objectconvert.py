@@ -47,7 +47,7 @@ class M21ObjectConvert:
     @staticmethod
     def m21NoteToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
-            assert isinstance(obj, m21.note.Note)
+            assert isinstance(obj, (m21.note.Note, m21.note.Unpitched))
         M21ObjectConvert._noteToMei(obj, tb, withDuration=True)
 
     @staticmethod
@@ -119,28 +119,68 @@ class M21ObjectConvert:
             tb.end('rest')
 
     @staticmethod
-    def _noteToMei(note: m21.note.Note, tb: TreeBuilder, withDuration: bool) -> None:
+    def meiLocToM21DisplayName(
+        locStr: str
+    ) -> str:
+        loc: int = 0
+        if locStr:
+            try:
+                loc = int(locStr)
+            except Exception:
+                pass
+
+        # loc=0 is bottom line of treble clef (E4); -1 = D4, +1 = F4, etc
+
+        # Convert to base7 (so 0 is C0).
+        loc += 30  # add 4 base7 octaves (4*7) plus distance from C to E (2) so 0 is C0
+
+        # now we can easily get the display name
+        displayName: str = M21Utilities.base7ToDisplayName(loc)
+        return displayName
+
+    @staticmethod
+    def m21DisplayPitchToMeiLoc(
+        m21Pitch: m21.pitch.Pitch
+    ) -> str:
+        base7: int = M21Utilities.pitchToBase7(m21Pitch)
+
+        # base7 == 0 is C0
+        # loc == 0 is E4
+        # Conversion from base7 to loc is simple subtraction:
+        #   subtract 4 base7 octaves (4*7) and distance from C to E (2)
+        loc: int = base7 - 30
+        return str(loc)
+
+    @staticmethod
+    def _noteToMei(note: m21.note.Note | m21.note.Unpitched, tb: TreeBuilder, withDuration: bool) -> None:
         attr: dict[str, str] = {'xml:id': str(note.id)}
-        # @pname, @oct, @accid/@accid.ges
-        attr['oct'] = str(note.pitch.octave)
-        attr['pname'] = note.pitch.step.lower()
+        isUnpitched: bool = isinstance(note, m21.note.Unpitched)
+
+        if isUnpitched:
+            loc: str = M21ObjectConvert.m21DisplayPitchToMeiLoc(note.displayPitch())
+            attr['loc'] = loc
+        else:
+            # @pname, @oct, @accid/@accid.ges
+            attr['oct'] = str(note.pitch.octave)
+            attr['pname'] = note.pitch.step.lower()
 
         if withDuration:
             M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
         M21ObjectConvert._addStylisticAttributes(note, attr)
 
-        if note.pitch.accidental is None:
-            # not strictly necessary, but verovio does it, so...
-            attr['accid.ges'] = 'n'
-        else:
-            if note.pitch.accidental.displayStatus:
-                attr['accid'] = (
-                    M21ObjectConvert.m21AccidToMeiAccid(note.pitch.accidental.name)
-                )
+        if not isUnpitched:
+            if note.pitch.accidental is None:
+                # not strictly necessary, but verovio does it, so...
+                attr['accid.ges'] = 'n'
             else:
-                attr['accid.ges'] = (
-                    M21ObjectConvert.m21AccidToMeiAccidGes(note.pitch.accidental.name)
-                )
+                if note.pitch.accidental.displayStatus:
+                    attr['accid'] = (
+                        M21ObjectConvert.m21AccidToMeiAccid(note.pitch.accidental.name)
+                    )
+                else:
+                    attr['accid.ges'] = (
+                        M21ObjectConvert.m21AccidToMeiAccidGes(note.pitch.accidental.name)
+                    )
 
         tb.start('note', attr)
         M21ObjectConvert.m21ArticulationsToMei(note.articulations, tb)
@@ -1010,6 +1050,7 @@ _M21_OBJECT_CONVERTER: dict[str, t.Callable[
     None]
 ] = {
     'Note': M21ObjectConvert.m21NoteToMei,
+    'Unpitched': M21ObjectConvert.m21NoteToMei,
     'Chord': M21ObjectConvert.m21ChordToMei,
     'Rest': M21ObjectConvert.m21RestToMei,
     'Clef': M21ObjectConvert.m21ClefToMei,

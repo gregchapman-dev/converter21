@@ -651,11 +651,29 @@ class M21Utilities:
         'B': 6
     }
 
+    _PITCH_CLASS_TO_STEP: dict[str, int] = {
+        0: 'C',
+        1: 'D',
+        2: 'E',
+        3: 'F',
+        4: 'G',
+        5: 'A',
+        6: 'B'
+    }
+
     @staticmethod
     def pitchToBase7(m21Pitch: m21.pitch.Pitch) -> int:
         pc: int = M21Utilities._STEP_TO_PITCH_CLASS[m21Pitch.step]
         octave: int = m21Pitch.implicitOctave  # implicit means return default (4) if None
         return pc + (7 * octave)
+
+    @staticmethod
+    def base7ToDisplayName(base7: int) -> str:
+        pc: int = base7 % 7
+        octave: int = base7 // 7
+        name: str = M21Utilities._PITCH_CLASS_TO_STEP[pc]
+        name += str(octave)
+        return name
 
     @staticmethod
     def safePitch(

@@ -216,6 +216,7 @@ from converter21.mei import MeiValidityError
 from converter21.mei import MeiAttributeError
 from converter21.mei import MeiElementError
 from converter21.mei import MeiInternalError
+from converter21.mei import M21ObjectConvert
 
 from converter21.shared import SharedConstants
 from converter21.shared import M21Utilities
@@ -2673,7 +2674,7 @@ class MeiReader:
             numPlace: str | None = None
             numFormat: str | None = None
 
-            if not isinstance(obj, (note.Note, note.Rest, chord.Chord)):
+            if not isinstance(obj, (note.Note, note.Unpitched, note.Rest, chord.Chord)):
                 # silently skip objects that don't have a duration
                 continue
     #         if isinstance(obj, note.Note) and isinstance(obj.duration, duration.GraceDuration):
@@ -4279,12 +4280,17 @@ class MeiReader:
         # make the note (no pitch yet, that has to wait until we have parsed the subelements)
         isUnpitched: bool = False
         theNote: note.Note | note.Unpitched
-        pnameStr: str = elem.get('pname', '')
-        if pnameStr is None:
+        pnameStr: str = elem.get('pname', '')  # use only for Note
+        octStr: str = elem.get('oct', '')      # use only for Note
+        locStr: str = elem.get('loc', '')    # use only for Unpitched
+
+        if not pnameStr:
             isUnpitched = True
 
         if isUnpitched:
-            theNote = note.Unpitched()
+            # what pitch would loc represent in the treble clef?
+            displayName: str = M21ObjectConvert.meiLocToM21DisplayName(locStr)
+            theNote = note.Unpitched(displayName=displayName)
         else:
             theNote = note.Note()
 
