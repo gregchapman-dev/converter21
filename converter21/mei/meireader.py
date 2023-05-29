@@ -4286,7 +4286,7 @@ class MeiReader:
             octStr = elem.get('oct.ges', '')
         locStr: str = elem.get('loc', '')    # use only for Unpitched
 
-        if locStr:
+        if locStr or not pnameStr:
             isUnpitched = True
 
         if isUnpitched:
