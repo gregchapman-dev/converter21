@@ -2682,7 +2682,7 @@ class MeiReader:
     #             continue
     # THIS CAUSED TEST FAILURE
 
-            elif elem.get('m21TupletSearch') is not None:
+            if elem.get('m21TupletSearch') is not None:
                 obj.m21TupletSearch = elem.get('m21TupletSearch')  # type: ignore
                 obj.m21TupletNum = elem.get('m21TupletNum')  # type: ignore
                 obj.m21TupletNumbase = elem.get('m21TupletNumbase')  # type: ignore
@@ -2801,7 +2801,7 @@ class MeiReader:
 
         for eachNote in theLayer:
             # we'll skip objects that don't have a duration
-            if not isinstance(eachNote, (note.Note, note.Rest, chord.Chord)):
+            if not isinstance(eachNote, (note.Note, note.Unpitched, note.Rest, chord.Chord)):
                 continue
 
             if (hasattr(eachNote, 'm21TupletSearch')
