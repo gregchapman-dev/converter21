@@ -15,11 +15,12 @@ from xml.etree.ElementTree import Element, TreeBuilder
 import music21 as m21
 # from music21.common import opFrac
 
-# from converter21.mei import MeiExportError
+from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
+from converter21.mei import MeiTupletSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
 
@@ -45,6 +46,7 @@ class MeiScore:
         # finish exporting from each one in makeRootElement().
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanner: MeiBeamSpanner | None = None
+        self.currentTupletSpanners: list[MeiTupletSpanner] = []
         self.annotateScore()
 
         self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
@@ -212,6 +214,7 @@ class MeiScore:
                 for voice in voices:
                     for obj in voice:
                         self.annotateBeams(obj)
+                        self.annotateTuplets(obj)
 
     def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
         def stopsBeam(beam: m21.beam.Beam) -> bool:
@@ -278,3 +281,45 @@ class MeiScore:
                 self.previousBeamedNoteOrChord.mei_breaksec = breakSec  # type: ignore
 
         self.previousBeamedNoteOrChord = noteOrChord
+
+    def annotateTuplets(self, noteOrChord: m21.base.Music21Object) -> None:
+        def stopsTuplet(tuplet: m21.duration.Tuplet) -> bool:
+            if tuplet.type in ('stop', 'startStop'):
+                return True
+            return False
+
+        def startsTuplet(tuplet: m21.duration.Tuplet) -> bool:
+            if tuplet.type in ('start', 'startStop'):
+                return True
+            return False
+
+        def numStarts(tuplets: tuple[m21.duration.Tuplet, ...]) -> int:
+            output: int = 0
+            for tupletObj in tuplets:
+                if startsTuplet(tupletObj):
+                    output += 1
+            return output
+
+        if not isinstance(noteOrChord, m21.note.GeneralNote):
+            return
+
+        starts: int = numStarts(noteOrChord.duration.tuplets)
+        if len(noteOrChord.duration.tuplets) - starts != len(self.currentTupletSpanners):
+            raise MeiExportError('malformed music21 nested tuplets')
+            # I guess we could try to figure it out
+
+        # start any new tuplet spanners
+        for tuplet in noteOrChord.duration.tuplets:
+            if startsTuplet(tuplet):
+                newTupletSpanner = MeiTupletSpanner(tuplet)
+                self.currentTupletSpanners.append(newTupletSpanner)
+
+        # put this note in all the tuplet spanners
+        for spanner in self.currentTupletSpanners:
+            spanner.addSpannedElements(noteOrChord)
+
+        # stop any old tuplet spanners
+        for tuplet in noteOrChord.duration.tuplets:
+            if stopsTuplet(tuplet):
+                self.m21Score.append(self.currentTupletSpanners[-1])
+                self.currentTupletSpanners = self.currentTupletSpanners[:-1]

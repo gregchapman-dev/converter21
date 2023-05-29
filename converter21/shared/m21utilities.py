@@ -651,7 +651,7 @@ class M21Utilities:
         'B': 6
     }
 
-    _PITCH_CLASS_TO_STEP: dict[str, int] = {
+    _PITCH_CLASS_TO_STEP: dict[int, str] = {
         0: 'C',
         1: 'D',
         2: 'E',

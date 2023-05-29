@@ -5448,7 +5448,7 @@ class MeiReader:
         tupletMembers[firstNote].duration.tuplets[-1].type = 'start'
         if lastNote is None:
             # when there is only one object in the tuplet
-            tupletMembers[firstNote].duration.tuplets[-1].type = 'stop'
+            tupletMembers[firstNote].duration.tuplets[-1].type = 'startStop'
         else:
             tupletMembers[lastNote].duration.tuplets[-1].type = 'stop'
 

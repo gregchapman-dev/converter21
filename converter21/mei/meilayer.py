@@ -22,6 +22,7 @@ import music21 as m21
 from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
+from converter21.mei import MeiTupletSpanner
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -90,13 +91,20 @@ class MeiLayer:
         if layerNStr:
             layerAttr['n'] = layerNStr
         tb.start('layer', {'n': layerNStr})
+
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 # check for beam
-                endTheBeam: bool = self.processBeamState(obj, tb)
+                endBeamNeeded: bool = self.processBeamState(obj, tb)
+                endTupletNeeded: bool = self.processTupletState(obj, tb)
+
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
-                if endTheBeam:
+
+                if endTupletNeeded:
+                    tb.end('tuplet')
+                if endBeamNeeded:
                     tb.end('beam')
+
         tb.end('layer')
 
     def processBeamState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
@@ -121,6 +129,31 @@ class MeiLayer:
                         endTheBeam = True
 
         return endTheBeam
+
+    def processTupletState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
+        # starts a tuplet if necessary before this obj.
+        # returns whether or not the current tuplet should be ended after this obj.
+        endTheTuplet: bool = False
+        for spanner in self.spannerBundle.getBySpannedElement(obj):
+            if isinstance(spanner, MeiTupletSpanner):
+                if spanner.isFirst(obj):
+                    # start a <beam>, but only if all the spanned elements are in
+                    # this m21Measure.
+                    if M21Utilities.allSpannedElementsAreInHierarchy(
+                        spanner, self.meiParent.m21Measure
+                    ):
+                        attr: dict[str, str] = {}
+                        M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
+                        tb.start('tuplet', attr)
+                        # Mark this spanner as having been emitted as <tuplet>
+                        # (so we don't also emit it as <tupletSpan> later, in
+                        # makePostStavesElements).
+                        spanner.mei_tuplet = True  # type: ignore
+                if spanner.isLast(obj):
+                    if hasattr(spanner, 'mei_tuplet'):
+                        endTheTuplet = True
+
+        return endTheTuplet
 
     def makePostStavesElements(self, tb: TreeBuilder):
         m21Part: m21.stream.Part = self.meiParent.m21Part

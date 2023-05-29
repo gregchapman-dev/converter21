@@ -152,14 +152,17 @@ class M21ObjectConvert:
         return str(loc)
 
     @staticmethod
-    def _noteToMei(note: m21.note.Note | m21.note.Unpitched, tb: TreeBuilder, withDuration: bool) -> None:
+    def _noteToMei(
+        note: m21.note.Note | m21.note.Unpitched,
+        tb: TreeBuilder,
+        withDuration: bool
+    ) -> None:
         attr: dict[str, str] = {'xml:id': str(note.id)}
-        isUnpitched: bool = isinstance(note, m21.note.Unpitched)
 
         if withDuration:
             M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
 
-        if isUnpitched:
+        if isinstance(note, m21.note.Unpitched):
             loc: str = M21ObjectConvert.m21DisplayPitchToMeiLoc(note.displayPitch())
             attr['loc'] = loc
         else:
@@ -169,7 +172,7 @@ class M21ObjectConvert:
 
         M21ObjectConvert._addStylisticAttributes(note, attr)
 
-        if not isUnpitched:
+        if isinstance(note, m21.note.Note):
             if note.pitch.accidental is None:
                 # not strictly necessary, but verovio does it, so...
                 attr['accid.ges'] = 'n'
@@ -633,6 +636,11 @@ class M21ObjectConvert:
                 # already emitted as <beam> within <layer>
                 return
 
+        if isinstance(spanner, MeiTupletSpanner):
+            if hasattr(spanner, 'mei_tuplet'):
+                # already emitted as <tuplet> within <layer>
+                return
+
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             first,
@@ -653,6 +661,12 @@ class M21ObjectConvert:
                 attr['form'] = 'dim'
         elif isinstance(spanner, MeiBeamSpanner):
             tag = 'beamSpan'
+            # set up plist for every spanned element (yes, even the ones that are already
+            # in attr as 'startid' and 'endid')
+            attr['plist'] = f'#{el.id for el in spanner.getSpannedElements()}'
+        elif isinstance(spanner, MeiTupletSpanner):
+            tag = 'tupletSpan'
+            M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
             attr['plist'] = f'#{el.id for el in spanner.getSpannedElements()}'
@@ -683,6 +697,35 @@ class M21ObjectConvert:
             M21ObjectConvert._addStylisticAttributes(spanner, attr)
             tb.start(tag, attr)
             tb.end(tag)
+
+    @staticmethod
+    def fillInTupletAttributes(startTuplet: m21.duration.Tuplet, attr: dict[str, str]):
+        attr['num'] = str(startTuplet.numberNotesActual)
+        attr['numbase'] = str(startTuplet.numberNotesNormal)
+
+        # bracket visibility
+        if startTuplet.bracket:  # True or 'slur'
+            attr['bracket.visible'] = 'true'
+        else:  # False
+            attr['bracket.visible'] = 'false'
+
+        # number visibility and format
+        if startTuplet.tupletActualShow is None and startTuplet.tupletNormalShow is None:
+            attr['num.visible'] = 'false'
+        else:
+            attr['num.visible'] = 'true'
+            if startTuplet.tupletActualShow == 'number':
+                if startTuplet.tupletNormalShow == 'number':
+                    attr['num.format'] = 'ratio'
+                elif startTuplet.tupletNormalShow is None:
+                    attr['num.format'] = 'count'
+
+        # placement (MEI has two: num and bracket placement, but music21 only has one)
+        if startTuplet.placement is not None:
+            if attr['bracket.visible'] == 'true':
+                attr['bracket.place'] = startTuplet.placement
+            if attr['num.visible'] == 'true':
+                attr['num.place'] = startTuplet.placement
 
     @staticmethod
     def trillToMei(
@@ -1044,6 +1087,12 @@ class M21ObjectConvert:
 
 class MeiBeamSpanner(m21.spanner.Spanner):
     pass
+
+
+class MeiTupletSpanner(m21.spanner.Spanner):
+    def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
+        super().__init__()
+        self.startTuplet: m21.duration.Tuplet = startTuplet
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[
