@@ -156,6 +156,9 @@ class M21ObjectConvert:
         attr: dict[str, str] = {'xml:id': str(note.id)}
         isUnpitched: bool = isinstance(note, m21.note.Unpitched)
 
+        if withDuration:
+            M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
+
         if isUnpitched:
             loc: str = M21ObjectConvert.m21DisplayPitchToMeiLoc(note.displayPitch())
             attr['loc'] = loc
@@ -164,8 +167,6 @@ class M21ObjectConvert:
             attr['oct'] = str(note.pitch.octave)
             attr['pname'] = note.pitch.step.lower()
 
-        if withDuration:
-            M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
         M21ObjectConvert._addStylisticAttributes(note, attr)
 
         if not isUnpitched:

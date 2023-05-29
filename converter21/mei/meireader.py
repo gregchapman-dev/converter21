@@ -4282,9 +4282,11 @@ class MeiReader:
         theNote: note.Note | note.Unpitched
         pnameStr: str = elem.get('pname', '')  # use only for Note
         octStr: str = elem.get('oct', '')      # use only for Note
+        if not octStr:
+            octStr = elem.get('oct.ges', '')
         locStr: str = elem.get('loc', '')    # use only for Unpitched
 
-        if not pnameStr:
+        if locStr:
             isUnpitched = True
 
         if isUnpitched:
@@ -4345,9 +4347,6 @@ class MeiReader:
         if not isUnpitched:
             if t.TYPE_CHECKING:
                 assert isinstance(theNote, note.Note)
-            octStr: str = elem.get('oct', '')
-            if not octStr:
-                octStr = elem.get('oct.ges', '')
             if theAccidObj is not None:
                 theNote.pitch = M21Utilities.safePitch(pnameStr, theAccidObj, octStr)
             elif theAccidGes is not None:
