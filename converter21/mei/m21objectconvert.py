@@ -91,11 +91,52 @@ class M21ObjectConvert:
 
         return None
 
+    # Edit this list of characters as desired (but be careful about 'xml:id' value rules)
+    _XMLID_BASE_ALPHABET = tuple(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    )
+    # _XMLID_BASE_DICT = dict((c, v) for v, c in enumerate(_XMLID_BASE_ALPHABET))
+    _XMLID_BASE_LEN = len(_XMLID_BASE_ALPHABET)
+#     def alphabet_decode(encodedStr: str) -> int:
+#         num: int = 0
+#         for char in encodedStr:
+#             num = num * M21ObjectConvert._XMLID_BASE_LEN + M21ObjectConvert._XMLID_BASE_DICT[char]
+#         return num
+
+
+    @staticmethod
+    def makeXmlId(objId: int | str) -> str:
+        def alphabet_encode(numToEncode: int) -> str:
+            if numToEncode == 0:
+                return M21ObjectConvert._XMLID_BASE_ALPHABET[0]
+
+            encoded: str = ''
+            while numToEncode:
+                numToEncode, remainder = divmod(numToEncode, M21ObjectConvert._XMLID_BASE_LEN)
+                encoded = M21ObjectConvert._XMLID_BASE_ALPHABET[remainder] + encoded
+            return encoded
+
+        if isinstance(objId, str):
+            return objId
+
+        if (isinstance(objId, int)
+                and objId < m21.defaults.minIdNumberToConsiderMemoryLocation):
+            # Nice low integer
+            return str(objId)
+
+        if isinstance(objId, int):
+            # Actually a memory location, so make it a nice short ASCII string
+            # (that starts with an alpha char).
+            return 'X' + alphabet_encode(objId)
+
+        return str(objId)  # hope for the best
+
     @staticmethod
     def m21ChordToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
-        attr: dict[str, str] = {'xml:id': str(obj.id)}
+        attr: dict[str, str] = {}
+        attr['xml:id'] = M21ObjectConvert.makeXmlId(obj.id)
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         tb.start('chord', attr)
@@ -108,7 +149,8 @@ class M21ObjectConvert:
     def m21RestToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.note.Rest)
-        attr: dict[str, str] = {'xml:id': str(obj.id)}
+        attr: dict[str, str] = {}
+        attr['xml:id'] = M21ObjectConvert.makeXmlId(obj.id)
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
@@ -157,7 +199,8 @@ class M21ObjectConvert:
         tb: TreeBuilder,
         withDuration: bool
     ) -> None:
-        attr: dict[str, str] = {'xml:id': str(note.id)}
+        attr: dict[str, str] = {}
+        attr['xml:id'] = M21ObjectConvert.makeXmlId(note.id)
 
         if withDuration:
             M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
