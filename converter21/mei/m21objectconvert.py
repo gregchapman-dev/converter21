@@ -703,28 +703,31 @@ class M21ObjectConvert:
         attr['num'] = str(startTuplet.numberNotesActual)
         attr['numbase'] = str(startTuplet.numberNotesNormal)
 
-        # bracket visibility
-        if startTuplet.bracket:  # True or 'slur'
-            attr['bracket.visible'] = 'true'
-        else:  # False
+        # bracket visibility (MEI default is 'true', so we don't set that)
+        bracketIsVisible: bool = bool(startTuplet.bracket)  # False, True, or 'slur'
+        if not bracketIsVisible:
             attr['bracket.visible'] = 'false'
 
         # number visibility and format
-        if startTuplet.tupletActualShow is None and startTuplet.tupletNormalShow is None:
-            attr['num.visible'] = 'false'
-        else:
-            attr['num.visible'] = 'true'
+        numIsVisible: bool = (
+            startTuplet.tupletActualShow is not None or startTuplet.tupletNormalShow is not None
+        )
+        if numIsVisible:
+            # MEI default for @num.visible is 'true', so we don't set that
+            # But we do set the format as appropriate.
             if startTuplet.tupletActualShow == 'number':
                 if startTuplet.tupletNormalShow == 'number':
                     attr['num.format'] = 'ratio'
                 elif startTuplet.tupletNormalShow is None:
                     attr['num.format'] = 'count'
+        else:
+            attr['num.visible'] = 'false'
 
         # placement (MEI has two: num and bracket placement, but music21 only has one)
         if startTuplet.placement is not None:
-            if attr['bracket.visible'] == 'true':
+            if bracketIsVisible:
                 attr['bracket.place'] = startTuplet.placement
-            if attr['num.visible'] == 'true':
+            if numIsVisible:
                 attr['num.place'] = startTuplet.placement
 
     @staticmethod
