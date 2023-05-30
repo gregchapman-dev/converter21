@@ -663,13 +663,13 @@ class M21ObjectConvert:
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
-            attr['plist'] = f'#{el.id for el in spanner.getSpannedElements()}'
+            attr['plist'] = f'#{[el.id for el in spanner.getSpannedElements()]}'
         elif isinstance(spanner, MeiTupletSpanner):
             tag = 'tupletSpan'
             M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
-            attr['plist'] = f'#{el.id for el in spanner.getSpannedElements()}'
+            attr['plist'] = f'#{[el.id for el in spanner.getSpannedElements()]}'
         elif isinstance(spanner, m21.expressions.TrillExtension):
             tag = 'trill'
             if isinstance(first, m21.note.GeneralNote):
