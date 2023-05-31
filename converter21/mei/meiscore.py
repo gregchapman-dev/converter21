@@ -102,7 +102,7 @@ class MeiScore:
         tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
         tb.start('mei', {
             'xmlns': 'http://www.music-encoding.org/ns/mei',
-            'meiversion': '4.0.1'
+            'meiversion': '4.0.0'
         })
 
         self.makeMeiHead(tb)
