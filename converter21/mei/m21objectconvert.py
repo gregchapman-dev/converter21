@@ -673,7 +673,7 @@ class M21ObjectConvert:
             return
 
         # unique last element, we need @tstamp2 or @endid
-        if not isinstance(first, m21.note.GeneralNote):
+        if not isinstance(last, m21.note.GeneralNote):
             attr['tstamp2'] = M21ObjectConvert.makeTstamp2(
                 endObject=last,
                 m21StartMeasure=m21Measure,
