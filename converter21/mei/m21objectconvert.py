@@ -92,9 +92,7 @@ class M21ObjectConvert:
         return None
 
     # Edit this list of characters as desired (but be careful about 'xml:id' value rules)
-    _XMLID_BASE_ALPHABET = tuple(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    )
+    _XMLID_BASE_ALPHABET = tuple("abcdefghijklmnopqrstuvwxyz")
     # _XMLID_BASE_DICT = dict((c, v) for v, c in enumerate(_XMLID_BASE_ALPHABET))
     _XMLID_BASE_LEN = len(_XMLID_BASE_ALPHABET)
 #     def alphabet_decode(encodedStr: str) -> int:
@@ -126,8 +124,7 @@ class M21ObjectConvert:
 
         if isinstance(objId, int):
             # Actually a memory location, so make it a nice short ASCII string
-            # (that starts with an alpha char).
-            return 'X' + alphabet_encode(objId)
+            return alphabet_encode(objId)
 
         return str(objId)  # hope for the best
 
