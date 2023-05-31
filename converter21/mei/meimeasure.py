@@ -89,7 +89,9 @@ class MeiMeasure:
         tb.end('measure')
 
     def _fillInMeasureAttributes(self, attr: dict[str, str]):
-        attr['n'] = self.measureNumStr
+        nStr: str = self.measureNumStr
+        if nStr and nStr != '0':
+            attr['n'] = self.measureNumStr
 
         if len(self.staves) == 0:
             return

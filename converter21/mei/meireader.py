@@ -7347,7 +7347,7 @@ class MeiReader:
         staffTag: str = f'{MEI_NS}staff'
         staffDefTag: str = f'{MEI_NS}staffDef'
 
-        measureNum: str | int = elem.get('n', backupNum)
+        measureNum: str = elem.get('n', '')
 
         # track the bar's duration
         maxBarDuration: OffsetQL | None = None
@@ -7363,7 +7363,11 @@ class MeiReader:
                 measureList = self.staffFromElement(eachElem)
                 self.staffNumberForNotes = ''
 
-                meas: stream.Measure = stream.Measure(number=measureNum)
+                meas: stream.Measure
+                if measureNum:
+                    meas = stream.Measure(number=measureNum)
+                else:
+                    meas = stream.Measure()
 
                 # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
                 # if it starts with obj, Measure() will get confused and append everything,

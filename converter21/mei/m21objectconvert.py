@@ -213,18 +213,17 @@ class M21ObjectConvert:
         M21ObjectConvert._addStylisticAttributes(note, attr)
 
         if isinstance(note, m21.note.Note):
-            if note.pitch.accidental is None:
-                # not strictly necessary, but verovio does it, so...
-                attr['accid.ges'] = 'n'
-            else:
+            if note.pitch.accidental is not None:
                 if note.pitch.accidental.displayStatus:
                     attr['accid'] = (
                         M21ObjectConvert.m21AccidToMeiAccid(note.pitch.accidental.name)
                     )
                 else:
-                    attr['accid.ges'] = (
+                    accidGes: str = (
                         M21ObjectConvert.m21AccidToMeiAccidGes(note.pitch.accidental.name)
                     )
+                    if accidGes and accidGes != 'n':
+                        attr['accid.ges'] = accidGes
 
         tb.start('note', attr)
         M21ObjectConvert.m21ArticulationsToMei(note.articulations, tb)
