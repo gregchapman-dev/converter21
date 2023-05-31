@@ -39,17 +39,14 @@ class MeiScore:
     def __init__(self, m21Score: m21.stream.Score) -> None:
         self.m21Score: m21.stream.Score = m21Score
 
-        # Scan the m21Score, and put in some annotations for our own use (making things that
-        # look MEI-ish to represent music21 things that are very not MEI-ish; for example,
-        # translate all noteOrChord.beams into our own MeiBeamSpanner objects and some sort
-        # of noteOrChord.mei_breaksec attribute).  These annotations will disappear as we
-        # finish exporting from each one in makeRootElement().
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanner: MeiBeamSpanner | None = None
         self.currentTupletSpanners: list[MeiTupletSpanner] = []
+        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
+
+        # pre-scan of m21Score to set up some things
         self.annotateScore()
 
-        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             self.m21Score.getTimeSignatures(
                 returnDefault=True,
@@ -216,7 +213,50 @@ class MeiScore:
                         self.annotateBeams(obj)
                         self.annotateTuplets(obj)
 
+                # once annotated, check to see if any of these objects
+                # need xml:id.
+                self.makeXmlIds(measure)
+
+    def makeXmlIds(self, measure: m21.stream.Measure):
+        for obj in measure.recurse().getElementsByClass(m21.note.GeneralNote):
+            objXmlIdAssured: bool = False
+
+            # check expressions for turn/trill/mordent; if any present, obj needs xmlId
+            for expr in obj.expressions:
+                if isinstance(expr, (
+                    m21.expressions.Turn,
+                    m21.expressions.Trill,
+                    m21.expressions.GeneralMordent
+                )):
+                    M21ObjectConvert.assureXmlId(obj)
+                    objXmlIdAssured = True
+                    break
+
+            # check for spanners (all spanners for now, might get too many xmlIds?)
+            for spanner in self.spannerBundle.getBySpannedElement(obj):
+                # Beam spanners and tuplet spanners only need xmlIds if they
+                # span multiple measures.  Note that we won't know this until
+                # we encounter a later object in such a spanner, so when we
+                # do, we reach back and assure xmlIds for everything in the
+                # spanner.  Note that assureXmlId returns immediately if
+                # the xml id is already in place.
+                if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
+                    if not M21Utilities.allSpannedElementsAreInHierarchy(spanner, measure):
+                        for el in spanner.getSpannedElements():
+                            M21ObjectConvert.assureXmlId(el)
+                            if el is obj:
+                                objXmlIdAssured = True
+                    continue
+
+                # Any other spanner implies that obj needs an xmlId.
+                if not objXmlIdAssured:
+                    M21ObjectConvert.assureXmlId(obj)
+                    objXmlIdAssured = True
+
     def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
+        if not isinstance(noteOrChord, m21.note.NotRest):
+            return
+
         def stopsBeam(beam: m21.beam.Beam) -> bool:
             if beam.type == 'stop':
                 return True
@@ -254,9 +294,6 @@ class MeiScore:
 
             return numBeams - numStartStops
 
-        if not isinstance(noteOrChord, m21.note.NotRest):
-            return
-
         if not noteOrChord.beams.beamsList:
             self.previousBeamedNoteOrChord = None
             return
@@ -282,7 +319,10 @@ class MeiScore:
 
         self.previousBeamedNoteOrChord = noteOrChord
 
-    def annotateTuplets(self, noteOrChord: m21.base.Music21Object) -> None:
+    def annotateTuplets(self, gnote: m21.base.Music21Object) -> None:
+        if not isinstance(gnote, m21.note.GeneralNote):
+            return
+
         def stopsTuplet(tuplet: m21.duration.Tuplet) -> bool:
             if tuplet.type in ('stop', 'startStop'):
                 return True
@@ -300,26 +340,23 @@ class MeiScore:
                     output += 1
             return output
 
-        if not isinstance(noteOrChord, m21.note.GeneralNote):
-            return
-
-        starts: int = numStarts(noteOrChord.duration.tuplets)
-        if len(noteOrChord.duration.tuplets) - starts != len(self.currentTupletSpanners):
+        starts: int = numStarts(gnote.duration.tuplets)
+        if len(gnote.duration.tuplets) - starts != len(self.currentTupletSpanners):
             raise MeiExportError('malformed music21 nested tuplets')
             # I guess we could try to figure it out
 
         # start any new tuplet spanners
-        for tuplet in noteOrChord.duration.tuplets:
+        for tuplet in gnote.duration.tuplets:
             if startsTuplet(tuplet):
                 newTupletSpanner = MeiTupletSpanner(tuplet)
                 self.currentTupletSpanners.append(newTupletSpanner)
 
         # put this note in all the tuplet spanners
         for spanner in self.currentTupletSpanners:
-            spanner.addSpannedElements(noteOrChord)
+            spanner.addSpannedElements(gnote)
 
         # stop any old tuplet spanners
-        for tuplet in noteOrChord.duration.tuplets:
+        for tuplet in gnote.duration.tuplets:
             if stopsTuplet(tuplet):
                 self.m21Score.append(self.currentTupletSpanners[-1])
                 self.currentTupletSpanners = self.currentTupletSpanners[:-1]

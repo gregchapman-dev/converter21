@@ -103,7 +103,11 @@ class M21ObjectConvert:
 
 
     @staticmethod
-    def makeXmlId(objId: int | str) -> str:
+    def assureXmlId(obj: m21.base.Music21Object):
+        # if xml id has already been set, leave it as is
+        if hasattr(obj, 'mei_xml_id'):
+            return
+
         def alphabet_encode(numToEncode: int) -> str:
             if numToEncode == 0:
                 return M21ObjectConvert._XMLID_BASE_ALPHABET[0]
@@ -114,26 +118,45 @@ class M21ObjectConvert:
                 encoded = M21ObjectConvert._XMLID_BASE_ALPHABET[remainder] + encoded
             return encoded
 
-        if isinstance(objId, str):
-            return objId
+        if isinstance(obj.id, str):
+            # str, use as is
+            obj.mei_xml_id = obj.id  # type: ignore
+            return
 
-        if (isinstance(objId, int)
-                and objId < m21.defaults.minIdNumberToConsiderMemoryLocation):
-            # Nice low integer
-            return str(objId)
+        if (isinstance(obj.id, int)
+                and obj.id < m21.defaults.minIdNumberToConsiderMemoryLocation):
+            # Nice low integer, use as is (converted to str)
+            obj.mei_xml_id = str(obj.id)  # type: ignore
+            return
 
-        if isinstance(objId, int):
-            # Actually a memory location, so make it a nice short ASCII string
-            return alphabet_encode(objId)
+        if isinstance(obj.id, int):
+            # Actually a memory location, so make it a nice short ASCII string,
+            # with lower-case class name prefix.
+            obj.mei_xml_id = (  # type: ignore
+                obj.classes[0].lower() + '-' + alphabet_encode(obj.id)
+            )
+            return
 
-        return str(objId)  # hope for the best
+        # hope for the best...
+        obj.mei_xml_id = str(obj.id)  # type: ignore
+
+    @staticmethod
+    def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
+        # only returns something if assureXmlId has been called already on this object
+        if hasattr(obj, 'mei_xml_id'):
+            return obj.mei_xml_id  # type: ignore
+        if required:
+            raise MeiInternalError('required xml:id ismissing')
+        return ''
 
     @staticmethod
     def m21ChordToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
         attr: dict[str, str] = {}
-        attr['xml:id'] = M21ObjectConvert.makeXmlId(obj.id)
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         tb.start('chord', attr)
@@ -147,7 +170,9 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.note.Rest)
         attr: dict[str, str] = {}
-        attr['xml:id'] = M21ObjectConvert.makeXmlId(obj.id)
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
@@ -197,7 +222,9 @@ class M21ObjectConvert:
         withDuration: bool
     ) -> None:
         attr: dict[str, str] = {}
-        attr['xml:id'] = M21ObjectConvert.makeXmlId(note.id)
+        xmlId: str = M21ObjectConvert.getXmlId(note)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         if withDuration:
             M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
@@ -639,7 +666,7 @@ class M21ObjectConvert:
                 meterStream=scoreMeterStream
             )
         else:
-            attr['startid'] = f'#{first.id}'
+            attr['startid'] = f'#{M21ObjectConvert.getXmlId(first, required=True)}'
 
         if last is None or last is first:
             # no unique last element, we're done
@@ -654,7 +681,7 @@ class M21ObjectConvert:
                 meterStream=scoreMeterStream
             )
         else:
-            attr['endid'] = f'#{last.id}'
+            attr['endid'] = f'#{M21ObjectConvert.getXmlId(last, required=True)}'
 
     @staticmethod
     def postStavesSpannerToMei(
@@ -702,13 +729,23 @@ class M21ObjectConvert:
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
-            attr['plist'] = f'#{[el.id for el in spanner.getSpannedElements()]}'
+            plistStr = ''
+            for el in spanner.getSpannedElements():
+                if plistStr:
+                    plistStr += ' '
+                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+            attr['plist'] = plistStr
         elif isinstance(spanner, MeiTupletSpanner):
             tag = 'tupletSpan'
             M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
-            attr['plist'] = f'#{[el.id for el in spanner.getSpannedElements()]}'
+            plistStr = ''
+            for el in spanner.getSpannedElements():
+                if plistStr:
+                    plistStr += ' '
+                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+            attr['plist'] = plistStr
         elif isinstance(spanner, m21.expressions.TrillExtension):
             tag = 'trill'
             if isinstance(first, m21.note.GeneralNote):
