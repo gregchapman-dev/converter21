@@ -42,11 +42,11 @@ class MeiScore:
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanner: MeiBeamSpanner | None = None
         self.currentTupletSpanners: list[MeiTupletSpanner] = []
-        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
 
         # pre-scan of m21Score to set up some things
         self.annotateScore()
 
+        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             self.m21Score.getTimeSignatures(
                 returnDefault=True,
@@ -233,7 +233,7 @@ class MeiScore:
                     break
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
-            for spanner in self.spannerBundle.getBySpannedElement(obj):
+            for spanner in self.m21Score.spannerBundle.getBySpannedElement(obj):
                 # Beam spanners and tuplet spanners only need xmlIds if they
                 # span multiple measures.  Note that we won't know this until
                 # we encounter a later object in such a spanner, so when we
@@ -300,13 +300,13 @@ class MeiScore:
 
         if self.currentBeamSpanner is None:
             self.currentBeamSpanner = MeiBeamSpanner()
+            self.m21Score.append(self.currentBeamSpanner)
 
         self.currentBeamSpanner.addSpannedElements(noteOrChord)
 
         if allStop(noteOrChord.beams):
             # done with this <beam> or <beamSpan>.  Put the spanner in the score,
             # and clear out any state variables.
-            self.m21Score.append(self.currentBeamSpanner)
             self.currentBeamSpanner = None
             self.previousBeamedNoteOrChord = None
             return
@@ -349,6 +349,7 @@ class MeiScore:
         for tuplet in gnote.duration.tuplets:
             if startsTuplet(tuplet):
                 newTupletSpanner = MeiTupletSpanner(tuplet)
+                self.m21Score.append(newTupletSpanner)
                 self.currentTupletSpanners.append(newTupletSpanner)
 
         # put this note in all the tuplet spanners
@@ -358,5 +359,4 @@ class MeiScore:
         # stop any old tuplet spanners
         for tuplet in gnote.duration.tuplets:
             if stopsTuplet(tuplet):
-                self.m21Score.append(self.currentTupletSpanners[-1])
                 self.currentTupletSpanners = self.currentTupletSpanners[:-1]
