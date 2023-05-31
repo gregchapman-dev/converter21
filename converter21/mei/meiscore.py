@@ -248,10 +248,19 @@ class MeiScore:
                                 objXmlIdAssured = True
                     continue
 
-                # Any other spanner implies that obj needs an xmlId.
+                # Some spanners need xmlIds for all their elements:
+                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                    if not objXmlIdAssured:
+                        M21ObjectConvert.assureXmlId(obj)
+                        objXmlIdAssured = True
+                        continue
+
+                # All other spanners need xmlIds only for start and end elements
                 if not objXmlIdAssured:
-                    M21ObjectConvert.assureXmlId(obj)
-                    objXmlIdAssured = True
+                    if spanner.isFirst(obj) or spanner.isLast(obj):
+                        M21ObjectConvert.assureXmlId(obj)
+                        objXmlIdAssured = True
+                        continue
 
     def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
         if not isinstance(noteOrChord, m21.note.NotRest):
