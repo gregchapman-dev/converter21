@@ -217,6 +217,24 @@ class MeiScore:
                 # need xml:id.
                 self.makeXmlIds(measure)
 
+    def deannotateScore(self) -> None:
+        from converter21.mei import MeiTemporarySpanner
+        annotationSpanners: list[MeiTemporarySpanner] = (
+            list(self.m21Score.getElementsByClass(MeiTemporarySpanner))
+        )
+        for sp in self.m21Score.getElementsByClass(MeiTemporarySpanner):
+            if isinstance(sp, MeiBeamSpanner):
+                for el in sp.getSpannedElements():
+                    if hasattr(el, 'mei_beam'):
+                        delattr(el, 'mei_beam')
+                    if hasattr(el, 'mei_breaksec'):
+                        delattr(el, 'mei_breaksec')
+            self.m21Score.remove(sp)
+
+        for obj in self.m21Score[m21.note.GeneralNote]:
+            if hasattr(obj, 'mei_xml_id'):
+                delattr(obj, 'mei_xml_id')
+
     def makeXmlIds(self, measure: m21.stream.Measure):
         for obj in measure.recurse().getElementsByClass(m21.note.GeneralNote):
             objXmlIdAssured: bool = False

@@ -82,4 +82,7 @@ class MeiWriter:
         ElementTree(meiElement).write(fp)
         fp.write(b'\n')
 
+        # clean up all the notes-to-self MeiScore wrote in the score.
+        meiScore.deannotateScore()
+
         return True

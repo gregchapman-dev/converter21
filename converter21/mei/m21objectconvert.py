@@ -1164,11 +1164,15 @@ class M21ObjectConvert:
         return True
 
 
-class MeiBeamSpanner(m21.spanner.Spanner):
+class MeiTemporarySpanner(m21.spanner.Spanner):
     pass
 
 
-class MeiTupletSpanner(m21.spanner.Spanner):
+class MeiBeamSpanner(MeiTemporarySpanner):
+    pass
+
+
+class MeiTupletSpanner(MeiTemporarySpanner):
     def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
         super().__init__()
         self.startTuplet: m21.duration.Tuplet = startTuplet
