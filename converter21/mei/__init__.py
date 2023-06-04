@@ -23,6 +23,7 @@ from .m21objectconvert import M21ObjectConvert
 from .m21objectconvert import MeiTemporarySpanner
 from .m21objectconvert import MeiBeamSpanner
 from .m21objectconvert import MeiTupletSpanner
+from .m21objectconvert import MeiTieSpanner
 
 from .meireader import MeiReader
 

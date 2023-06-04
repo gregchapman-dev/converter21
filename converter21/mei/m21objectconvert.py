@@ -755,6 +755,12 @@ class M21ObjectConvert:
                     plistStr += ' '
                 plistStr += M21ObjectConvert.getXmlId(el, required=True)
             attr['plist'] = plistStr
+        elif isinstance(spanner, MeiTieSpanner):
+            if spanner.startTie.style != 'hidden':
+                tag = 'tie'
+                M21ObjectConvert.fillInTieAttributes(spanner.startTie, attr)
+                # startid/endid only, which are already handled
+
         elif isinstance(spanner, m21.expressions.TrillExtension):
             tag = 'trill'
             if isinstance(first, m21.note.GeneralNote):
@@ -814,6 +820,13 @@ class M21ObjectConvert:
                 attr['bracket.place'] = startTuplet.placement
             if numIsVisible:
                 attr['num.place'] = startTuplet.placement
+
+    @staticmethod
+    def fillInTieAttributes(startTie: m21.tie.Tie, attr: dict[str, str]):
+        if startTie.placement in ('above', 'below'):
+            attr['curvedir'] = startTie.placement
+        if startTie.style in ('dotted', 'dashed'):
+            attr['lform'] = startTie.style
 
     @staticmethod
     def trillToMei(
@@ -1185,6 +1198,12 @@ class MeiTupletSpanner(MeiTemporarySpanner):
     def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
         super().__init__()
         self.startTuplet: m21.duration.Tuplet = startTuplet
+
+
+class MeiTieSpanner(MeiTemporarySpanner):
+    def __init__(self, startTie: m21.tie.Tie) -> None:
+        super().__init__()
+        self.startTie: m21.tie.Tie = startTie
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[

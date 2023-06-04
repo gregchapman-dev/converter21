@@ -10,7 +10,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from xml.etree.ElementTree import Element, TreeBuilder
-# import typing as t
+import typing as t
 
 import music21 as m21
 # from music21.common import opFrac
@@ -21,6 +21,7 @@ from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
 from converter21.mei import MeiTupletSpanner
+from converter21.mei import MeiTieSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
 
@@ -42,6 +43,9 @@ class MeiScore:
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanner: MeiBeamSpanner | None = None
         self.currentTupletSpanners: list[MeiTupletSpanner] = []
+        self.currentTieSpanners: dict[m21.stream.Part, list[MeiTieSpanner]] = {}
+        for part in self.m21Score.parts:
+            self.currentTieSpanners[part] = []
 
         # pre-scan of m21Score to set up some things
         self.annotateScore()
@@ -212,10 +216,13 @@ class MeiScore:
                     for obj in voice:
                         self.annotateBeams(obj)
                         self.annotateTuplets(obj)
+                        self.annotateTies(obj, part)
 
                 # once annotated, check to see if any of these objects
                 # need xml:id.
                 self.makeXmlIds(measure)
+
+        # print('done annotating score')
 
     def deannotateScore(self) -> None:
         from converter21.mei import MeiTemporarySpanner
@@ -384,3 +391,72 @@ class MeiScore:
         for tuplet in gnote.duration.tuplets:
             if stopsTuplet(tuplet):
                 self.currentTupletSpanners = self.currentTupletSpanners[:-1]
+
+    def annotateTies(
+        self,
+        noteOrChord: m21.base.Music21Object,
+        part: m21.stream.Part
+    ) -> None:
+        if not isinstance(noteOrChord, (m21.note.Note, m21.chord.Chord)):
+            # Note that we reject Unpitched and PercussionChord here, since
+            # they have no pitches.
+            return
+
+        def startsTie(noteOrChord: m21.note.NotRest) -> bool:
+            if noteOrChord.tie is None:
+                return False
+            if noteOrChord.tie.type in ('start', 'continue'):
+                return True
+            return False
+
+        def stopsTieInWhichSpanner(
+            noteOrChord: m21.note.NotRest,
+            partTieSpanners: list[MeiTieSpanner]
+        ) -> MeiTieSpanner | None:
+            # look at all the partTieSpanners and see if this noteOrChord has the
+            # same (exact) pitches as the start noteOrChord of that spanner.
+            for sp in partTieSpanners:
+                startNoteOrChord: m21.note.NotRest = sp.getFirst()
+                if noteOrChord is startNoteOrChord:
+                    continue
+
+                if len(startNoteOrChord.pitches) != len(noteOrChord.pitches):
+                    continue
+
+                foundMismatchedPitch: bool = False
+                for pStart, pEnd in zip(startNoteOrChord.pitches, noteOrChord.pitches):
+                    if pStart != pEnd:
+                        foundMismatchedPitch = True
+                        break
+
+                if foundMismatchedPitch:
+                    # give up on this tie spanner
+                    continue
+
+                # we found a spanner whose startNoteOrChord has the same pitches as
+                # noteOrChord, so return that spanner.  noteOrChord stops the tie
+                # represented by that spanner.
+                return sp
+
+            return None
+
+        partTieSpanners: list[MeiTieSpanner] = self.currentTieSpanners[part]
+
+        if startsTie(noteOrChord):
+            if t.TYPE_CHECKING:
+                assert noteOrChord.tie is not None
+            newTieSpanner = MeiTieSpanner(noteOrChord.tie)
+            newTieSpanner.addSpannedElements(noteOrChord)
+            self.m21Score.append(newTieSpanner)
+            partTieSpanners.append(newTieSpanner)
+
+        sp: MeiTieSpanner | None = stopsTieInWhichSpanner(noteOrChord, partTieSpanners)
+        if sp is not None:
+            sp.addSpannedElements(noteOrChord)
+            return
+
+        if isinstance(noteOrChord, m21.chord.Chord):
+            # the chord itself does not stop a tie; perhaps one or more of the chord's
+            # individual notes does.
+            for note in noteOrChord.notes:
+                self.annotateTies(note, part)

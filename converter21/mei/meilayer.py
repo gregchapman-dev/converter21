@@ -94,7 +94,7 @@ class MeiLayer:
 
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                # check for beam
+                # check for beam, tuplet
                 endBeamNeeded: bool = self.processBeamState(obj, tb)
                 endTupletNeeded: bool = self.processTupletState(obj, tb)
 
