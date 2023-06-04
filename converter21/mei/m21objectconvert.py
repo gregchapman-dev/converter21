@@ -153,7 +153,7 @@ class M21ObjectConvert:
         if hasattr(obj, 'mei_xml_id'):
             return obj.mei_xml_id  # type: ignore
         if required:
-            raise MeiInternalError('required xml:id ismissing')
+            raise MeiInternalError('required xml:id is missing')
         return ''
 
     @staticmethod

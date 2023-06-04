@@ -19,6 +19,7 @@ from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
+from converter21.mei import MeiTemporarySpanner
 from converter21.mei import MeiBeamSpanner
 from converter21.mei import MeiTupletSpanner
 from converter21.mei import MeiTieSpanner
@@ -225,7 +226,6 @@ class MeiScore:
         # print('done annotating score')
 
     def deannotateScore(self) -> None:
-        from converter21.mei import MeiTemporarySpanner
         for sp in self.m21Score.getElementsByClass(MeiTemporarySpanner):
             if isinstance(sp, MeiBeamSpanner):
                 for el in sp.getSpannedElements():
@@ -250,7 +250,11 @@ class MeiScore:
                 )):
                     M21ObjectConvert.assureXmlId(obj)
                     objXmlIdAssured = True
-                    break
+                    break  # skip the rest of the expressions
+
+            if objXmlIdAssured:
+                # move to next obj
+                continue
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
             for spanner in self.m21Score.spannerBundle.getBySpannedElement(obj):
@@ -266,21 +270,32 @@ class MeiScore:
                             M21ObjectConvert.assureXmlId(el)
                             if el is obj:
                                 objXmlIdAssured = True
-                    continue
 
-                # Some spanners need xmlIds for all their elements:
-                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
-                    if not objXmlIdAssured:
-                        M21ObjectConvert.assureXmlId(obj)
-                        objXmlIdAssured = True
-                        continue
+                        if objXmlIdAssured:
+                            # skip the rest of the spanners
+                            break
 
-                # All other spanners need xmlIds only for start and end elements
-                if not objXmlIdAssured:
+                    continue  # to next spanner
+
+                if isinstance(spanner, MeiTieSpanner):
                     if spanner.isFirst(obj) or spanner.isLast(obj):
                         M21ObjectConvert.assureXmlId(obj)
                         objXmlIdAssured = True
-                        continue
+                        break
+
+                    continue  # to next spanner
+
+                # Some spanners need xmlIds for all their elements:
+                if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+                    M21ObjectConvert.assureXmlId(obj)
+                    objXmlIdAssured = True
+                    break  # skip the rest of the spanners
+
+                # All other spanners need xmlIds only for start and end elements
+                if spanner.isFirst(obj) or spanner.isLast(obj):
+                    M21ObjectConvert.assureXmlId(obj)
+                    objXmlIdAssured = True
+                    break  # skip the rest of the spanners
 
     def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
         if not isinstance(noteOrChord, m21.note.NotRest):
@@ -453,6 +468,7 @@ class MeiScore:
         sp: MeiTieSpanner | None = stopsTieInWhichSpanner(noteOrChord, partTieSpanners)
         if sp is not None:
             sp.addSpannedElements(noteOrChord)
+            partTieSpanners.remove(sp)
             return
 
         if isinstance(noteOrChord, m21.chord.Chord):
