@@ -29,7 +29,7 @@ def runTheFullTest(krnPath: Path):
         capture_output=True
     )
 
-    print(f'Parsing MEI file: {meiPath}')
+    print(f'Parsing Verovio-produced MEI file: {meiPath}')
     score1 = m21.converter.parse(meiPath, format='mei', forceSource=True)
 
     assert score1 is not None
@@ -49,6 +49,8 @@ def runTheFullTest(krnPath: Path):
 
     # compare with bbdiff:
     subprocess.run(['bbdiff', str(meiPath), str(meiwPath)], check=False)
+
+    print(f'Parsing converter21-produced MEI file: {meiwPath}')
 
     score2 = m21.converter.parse(meiwPath, format='mei', forceSource=True)
 

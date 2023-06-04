@@ -13,7 +13,8 @@ from xml.etree.ElementTree import Element, TreeBuilder
 import typing as t
 
 import music21 as m21
-# from music21.common import opFrac
+from music21.common import opFrac
+from music21.common import OffsetQL
 
 from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
@@ -206,8 +207,10 @@ class MeiScore:
         tb.end('scoreDef')
 
     def annotateScore(self) -> None:
-        for part in self.m21Score[m21.stream.Part]:
-            for measure in part[m21.stream.Measure]:
+        for part in self.m21Score.parts:
+            for measure in part:
+                if not isinstance(measure, m21.stream.Measure):
+                    continue
                 voices: list[m21.stream.Voice | m21.stream.Measure] = (
                     list(measure[m21.stream.Voice])
                 )
@@ -239,7 +242,16 @@ class MeiScore:
 
     def makeXmlIds(self, measure: m21.stream.Measure):
         for obj in measure.recurse().getElementsByClass(m21.note.GeneralNote):
-            objXmlIdAssured: bool = False
+            if isinstance(obj, m21.chord.Chord):
+                # MeiTieSpanner might contain notes that are inside chords (this
+                # is not actually valid for real spanners, but it's ok for us).
+                # Handle this as a special case.
+                for note in obj.notes:
+                    for spanner in self.m21Score.spannerBundle.getBySpannedElement(note):
+                        if isinstance(spanner, MeiTieSpanner):
+                            M21ObjectConvert.assureXmlId(spanner.getFirst())
+                            if spanner.getLast() is not spanner.getFirst():
+                                M21ObjectConvert.assureXmlId(spanner.getLast())
 
             # check expressions for turn/trill/mordent; if any present, obj needs xmlId
             for expr in obj.expressions:
@@ -249,53 +261,35 @@ class MeiScore:
                     m21.expressions.GeneralMordent
                 )):
                     M21ObjectConvert.assureXmlId(obj)
-                    objXmlIdAssured = True
                     break  # skip the rest of the expressions
-
-            if objXmlIdAssured:
-                # move to next obj
-                continue
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
             for spanner in self.m21Score.spannerBundle.getBySpannedElement(obj):
-                # Beam spanners and tuplet spanners only need xmlIds if they
-                # span multiple measures.  Note that we won't know this until
-                # we encounter a later object in such a spanner, so when we
-                # do, we reach back and assure xmlIds for everything in the
-                # spanner.  Note that assureXmlId returns immediately if
-                # the xml id is already in place.
                 if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
+                    # Beam spanners and tuplet spanners only need xmlIds if they
+                    # span multiple measures.  Note that we won't know this until
+                    # we encounter a later object in such a spanner, so when we
+                    # do, we reach back and assure xmlIds for everything in the
+                    # spanner.  Note that assureXmlId returns immediately if
+                    # the xml id is already in place.
                     if not M21Utilities.allSpannedElementsAreInHierarchy(spanner, measure):
                         for el in spanner.getSpannedElements():
                             M21ObjectConvert.assureXmlId(el)
-                            if el is obj:
-                                objXmlIdAssured = True
-
-                        if objXmlIdAssured:
-                            # skip the rest of the spanners
-                            break
-
                     continue  # to next spanner
 
                 if isinstance(spanner, MeiTieSpanner):
-                    if spanner.isFirst(obj) or spanner.isLast(obj):
-                        M21ObjectConvert.assureXmlId(obj)
-                        objXmlIdAssured = True
-                        break
-
+                    M21ObjectConvert.assureXmlId(spanner.getFirst())
+                    if spanner.getLast() is not spanner.getFirst():
+                        M21ObjectConvert.assureXmlId(spanner.getLast())
                     continue  # to next spanner
 
                 # Some spanners need xmlIds for all their elements:
                 if isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
                     M21ObjectConvert.assureXmlId(obj)
-                    objXmlIdAssured = True
-                    break  # skip the rest of the spanners
 
                 # All other spanners need xmlIds only for start and end elements
                 if spanner.isFirst(obj) or spanner.isLast(obj):
                     M21ObjectConvert.assureXmlId(obj)
-                    objXmlIdAssured = True
-                    break  # skip the rest of the spanners
 
     def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
         if not isinstance(noteOrChord, m21.note.NotRest):
@@ -410,7 +404,8 @@ class MeiScore:
     def annotateTies(
         self,
         noteOrChord: m21.base.Music21Object,
-        part: m21.stream.Part
+        part: m21.stream.Part,
+        parentChord: m21.chord.Chord | None = None
     ) -> None:
         if not isinstance(noteOrChord, (m21.note.Note, m21.chord.Chord)):
             # Note that we reject Unpitched and PercussionChord here, since
@@ -426,7 +421,9 @@ class MeiScore:
 
         def stopsTieInWhichSpanner(
             noteOrChord: m21.note.NotRest,
-            partTieSpanners: list[MeiTieSpanner]
+            part: m21.stream.Part,
+            partTieSpanners: list[MeiTieSpanner],
+            noteIsInChord: bool = False
         ) -> MeiTieSpanner | None:
             # look at all the partTieSpanners and see if this noteOrChord has the
             # same (exact) pitches as the start noteOrChord of that spanner.
@@ -437,6 +434,31 @@ class MeiScore:
 
                 if len(startNoteOrChord.pitches) != len(noteOrChord.pitches):
                     continue
+
+                # to stop a tie, you have to start at the end of the tie's start note
+                # But get the duration/offset from the right object (notes within chords
+                # don't have them.)
+                startParentChord: m21.chord.Chord | None = sp.startParentChord
+                requiredPartOffset: OffsetQL
+                actualPartOffset: OffsetQL
+                if startParentChord is not None:
+                    requiredPartOffset = opFrac(
+                        startParentChord.getOffsetInHierarchy(part)
+                        + startParentChord.quarterLength
+                    )
+                else:
+                    requiredPartOffset = opFrac(
+                        startNoteOrChord.getOffsetInHierarchy(part)
+                        + startNoteOrChord.quarterLength
+                    )
+
+                if parentChord is not None:
+                    actualPartOffset = parentChord.getOffsetInHierarchy(part)
+                else:
+                    actualPartOffset = noteOrChord.getOffsetInHierarchy(part)
+
+                if (actualPartOffset != requiredPartOffset):
+                        continue
 
                 foundMismatchedPitch: bool = False
                 for pStart, pEnd in zip(startNoteOrChord.pitches, noteOrChord.pitches):
@@ -460,12 +482,12 @@ class MeiScore:
         if startsTie(noteOrChord):
             if t.TYPE_CHECKING:
                 assert noteOrChord.tie is not None
-            newTieSpanner = MeiTieSpanner(noteOrChord.tie)
+            newTieSpanner = MeiTieSpanner(noteOrChord.tie, startParentChord=parentChord)
             newTieSpanner.addSpannedElements(noteOrChord)
             self.m21Score.append(newTieSpanner)
             partTieSpanners.append(newTieSpanner)
 
-        sp: MeiTieSpanner | None = stopsTieInWhichSpanner(noteOrChord, partTieSpanners)
+        sp: MeiTieSpanner | None = stopsTieInWhichSpanner(noteOrChord, part, partTieSpanners)
         if sp is not None:
             sp.addSpannedElements(noteOrChord)
             partTieSpanners.remove(sp)
@@ -475,4 +497,4 @@ class MeiScore:
             # the chord itself does not stop a tie; perhaps one or more of the chord's
             # individual notes does.
             for note in noteOrChord.notes:
-                self.annotateTies(note, part)
+                self.annotateTies(note, part, parentChord=noteOrChord)

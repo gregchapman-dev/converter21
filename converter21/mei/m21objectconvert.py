@@ -1201,9 +1201,14 @@ class MeiTupletSpanner(MeiTemporarySpanner):
 
 
 class MeiTieSpanner(MeiTemporarySpanner):
-    def __init__(self, startTie: m21.tie.Tie) -> None:
+    def __init__(
+        self,
+        startTie: m21.tie.Tie,
+        startParentChord: m21.chord.Chord | None
+    ) -> None:
         super().__init__()
         self.startTie: m21.tie.Tie = startTie
+        self.startParentChord: m21.chord.Chord | None = startParentChord
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[
