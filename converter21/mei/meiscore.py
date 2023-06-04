@@ -219,14 +219,9 @@ class MeiScore:
 
     def deannotateScore(self) -> None:
         from converter21.mei import MeiTemporarySpanner
-        annotationSpanners: list[MeiTemporarySpanner] = (
-            list(self.m21Score.getElementsByClass(MeiTemporarySpanner))
-        )
         for sp in self.m21Score.getElementsByClass(MeiTemporarySpanner):
             if isinstance(sp, MeiBeamSpanner):
                 for el in sp.getSpannedElements():
-                    if hasattr(el, 'mei_beam'):
-                        delattr(el, 'mei_beam')
                     if hasattr(el, 'mei_breaksec'):
                         delattr(el, 'mei_breaksec')
             self.m21Score.remove(sp)
@@ -299,10 +294,12 @@ class MeiScore:
             return False
 
         def allStop(beams: m21.beam.Beams) -> bool:
+            if len(beams.beamsList) == 0:
+                return False
             for beamObj in beams:
-                if stopsBeam(beamObj):
-                    return True
-            return False
+                if not stopsBeam(beamObj):
+                    return False
+            return True
 
         def computeBreakSec(prevBeams: m21.beam.Beams, currBeams: m21.beam.Beams) -> int:
             # returns the number of beams that should be seen during the break

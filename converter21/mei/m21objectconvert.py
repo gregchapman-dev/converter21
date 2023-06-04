@@ -51,6 +51,13 @@ class M21ObjectConvert:
         M21ObjectConvert._noteToMei(obj, tb, withDuration=True)
 
     @staticmethod
+    def _addBreakSec(obj: m21.note.NotRest, attr: dict[str, str]):
+        if hasattr(obj, 'mei_breaksec'):
+            num: int = getattr(obj, 'mei_breaksec')
+            if num > 0:
+                attr['breaksec'] = str(num)
+
+    @staticmethod
     def _addStylisticAttributes(obj: m21.base.Music21Object, attr: dict[str, str]):
         if isinstance(obj, m21.note.NotRest):
             if obj.stemDirection == 'noStem':
@@ -158,6 +165,7 @@ class M21ObjectConvert:
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
+        M21ObjectConvert._addBreakSec(obj, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         tb.start('chord', attr)
         M21ObjectConvert.m21ArticulationsToMei(obj.articulations, tb)
@@ -237,6 +245,7 @@ class M21ObjectConvert:
             attr['oct'] = str(note.pitch.octave)
             attr['pname'] = note.pitch.step.lower()
 
+        M21ObjectConvert._addBreakSec(note, attr)
         M21ObjectConvert._addStylisticAttributes(note, attr)
 
         if isinstance(note, m21.note.Note):
