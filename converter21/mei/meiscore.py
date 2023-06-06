@@ -458,7 +458,7 @@ class MeiScore:
                     actualPartOffset = noteOrChord.getOffsetInHierarchy(part)
 
                 if (actualPartOffset != requiredPartOffset):
-                        continue
+                    continue
 
                 foundMismatchedPitch: bool = False
                 for pStart, pEnd in zip(startNoteOrChord.pitches, noteOrChord.pitches):

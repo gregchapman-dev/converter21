@@ -7212,7 +7212,6 @@ class MeiReader:
     def measureFromElement(
         self,
         elem: Element,
-        backupNum: int,
         expectedNs: t.Iterable[str]
     ) -> dict[str, stream.Measure | bar.Repeat]:
         '''
@@ -7223,8 +7222,6 @@ class MeiReader:
 
         :param elem: The ``<measure>`` element to process.
         :type elem: :class:`~xml.etree.ElementTree.Element`
-        :param int backupNum: A fallback value for the resulting
-            :class:`~music21.stream.Measure` objects' number attribute.
         :param expectedNs: A list of the expected @n attributes for the <staff> tags in this
             <measure>. If an expected <staff> isn't in the <measure>, it will be created with
             a full-measure rest.
@@ -7364,10 +7361,7 @@ class MeiReader:
                 self.staffNumberForNotes = ''
 
                 meas: stream.Measure
-                if measureNum:
-                    meas = stream.Measure(number=measureNum)
-                else:
-                    meas = stream.Measure()
+                meas = stream.Measure(number=measureNum or 0)
 
                 # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
                 # if it starts with obj, Measure() will get confused and append everything,
@@ -7582,7 +7576,7 @@ class MeiReader:
                 restVoice.id = '1'
                 # just in case (e.g., when all the other voices are <mRest>)
                 restVoice[0].m21wasMRest = True
-                staves[eachN] = stream.Measure([restVoice], number=measureNum)
+                staves[eachN] = stream.Measure([restVoice], number=measureNum or 0)
 
         # First search for Rest objects created by an <mRest> element that didn't have @dur set.
         # This will only work in cases where not all of the parts are resting. However, it avoids
@@ -7611,11 +7605,9 @@ class MeiReader:
         elem: Element,
         allPartNs: tuple[str, ...],
         nextMeasureLeft: bar.Repeat | None = None,
-        backupMeasureNum: int = 0
     ) -> tuple[
             dict[str, list[Music21Object | list[Music21Object]]],
-            bar.Repeat | None,
-            int]:
+            bar.Repeat | None]:
         '''
         This function is the "core" of both :func:`sectionFromElement` and
         :func:`scoreFromElement`, since both elements are treated quite similarly (though not
@@ -7645,19 +7637,14 @@ class MeiReader:
             @right attribute that must be imported by music21 as *both* the right barline of one
             measure and the left barline of the following; at the moment this is only @rptboth,
             which requires a :class:`Repeat` in both cases.
-        :type nextMeasureLeft: :class:`music21.bar.Barline` or :class:`music21.bar.Repeat`
-        :param backupMeasureNum: In case a <measure> element is missing its @n attribute,
-            :func:`measureFromElement` will use this automatically-incremented number instead. The
-            ``backupMeasureNum`` corresponding to the final <measure> in this <score> or <section>
-            is returned from this function.
-        :type backupMeasureNum: int
-        :returns: Three-tuple with a dictionary of results, the new value of ``nextMeasureLeft``,
-            and the new value of ``backupMeasureNum``.
-        :rtype: (dict, :class:`~music21.bar.Barline`, int)
+        :type nextMeasureLeft: :class:`music21.bar.Repeat`
+        :returns: Two-tuple with a dictionary of results, and the new value of
+            ``nextMeasureLeft``.
+        :rtype: (dict, :class:`~music21.bar.Repeat`)
 
         **Return Value**
 
-        In short, it's ``parsed``, ``nextMeasureLeft``, ``backupMeasureNum``.
+        In short, it's ``parsed`` and ``nextMeasureLeft``.
 
         - ``'parsed'`` is a dictionary where the keys are the values in ``allPartNs`` and the
             values are a list of all the :class:`Measure` objects in that part, as found in this
@@ -7665,8 +7652,6 @@ class MeiReader:
         - ``'nextMeasureLeft'`` is the value that should be assigned to the :attr:`leftBarline`
             attribute of the first :class:`Measure` found in the next <section>. This will almost
             always be None.
-        - ``'backupMeasureNum'`` is equal to the ``backupMeasureNum`` argument plus the number of
-            <measure> elements found in this <score> or <section>.
         '''
         # pylint: disable=too-many-nested-blocks
         # ^^^ -- was not required at time of contribution
@@ -7719,7 +7704,6 @@ class MeiReader:
             # only process <measure> elements if this is a <section> or <ending>
             if measureTag == eachElem.tag and elem.tag in (sectionTag, endingTag):
                 haveSeenMeasure = True
-                backupMeasureNum += 1
 
                 # start of new measure, clear accidentals from all staff alter lists
                 for eachN in allPartNs:
@@ -7727,7 +7711,7 @@ class MeiReader:
 
                 # process all the stuff in the <measure>
                 measureResult = self.measureFromElement(
-                    eachElem, backupMeasureNum, allPartNs
+                    eachElem, allPartNs
                 )
 
                 # process and append each part's stuff to the staff
@@ -7827,12 +7811,11 @@ class MeiReader:
 
             elif eachElem.tag in (sectionTag, endingTag):
                 # NOTE: same as scoreFE() (except the name of "inNextThing")
-                localParsed, nextMeasureLeft, backupMeasureNum = (
+                localParsed, nextMeasureLeft = (
                     self.sectionFromElement(
                         eachElem,
                         allPartNs,
-                        nextMeasureLeft,
-                        backupMeasureNum)
+                        nextMeasureLeft)
                 )
 
                 for eachN, eachList in localParsed.items():
@@ -7947,7 +7930,7 @@ class MeiReader:
         # if there's anything left in "inNextThing", stash it off for the _next_ measure or section
         self.pendingInNextThing = inNextThing
 
-        return parsed, nextMeasureLeft, backupMeasureNum
+        return parsed, nextMeasureLeft
 
     @staticmethod
     def _isExpansionChoice(elem: Element) -> bool:
@@ -7970,11 +7953,9 @@ class MeiReader:
         elem: Element,
         allPartNs: tuple[str, ...],
         nextMeasureLeft: bar.Repeat | None,
-        backupMeasureNum: int
     ) -> tuple[
             dict[str, list[Music21Object | list[Music21Object]]],
-            bar.Repeat | None,
-            int]:
+            bar.Repeat | None]:
         '''
         <section> Segment of music data.
 
@@ -8015,8 +7996,7 @@ class MeiReader:
         return self.sectionScoreCore(
             elem,
             allPartNs,
-            nextMeasureLeft,
-            backupMeasureNum
+            nextMeasureLeft
         )
 
     def scoreFromElement(

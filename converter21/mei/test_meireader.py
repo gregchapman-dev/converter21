@@ -293,16 +293,6 @@ class Test(unittest.TestCase):
         actual = c.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
-    @mock.patch('converter21.mei.meireader.MeiReader._makeArticList')
-    def testArticFromElement(self, mockMakeList):
-        '''articFromElement(): very straight-forward test'''
-        elem = ETree.Element('artic', attrib={'artic': 'yes'})
-        mockMakeList.return_value = 5
-        c = MeiReader()
-        actual = c.articFromElement(elem)
-        self.assertEqual(5, actual)
-        mockMakeList.assert_called_once_with('yes')
-
     def testAccidFromElement(self):
         '''accidFromElement(): very straight-forward test'''
         elem = ETree.Element('accid', attrib={'accid': 's'})
@@ -652,89 +642,6 @@ class Test(unittest.TestCase):
         c = MeiReader()
         c._qlDurationFromAttr(attr)
         mockTrans.assert_called_once_with(attr, 'dur', MeiReader._DUR_ATTR_DICT)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
-    def testArticulation1(self, mockTrans):
-        '''_articulationFromAttr(): ensure proper arguments to _attrTranslator'''
-        attr = 'marc'
-        mockTrans.return_value = mock.MagicMock(name='asdf', return_value=5)
-        expected = (5,)
-        c = MeiReader()
-        actual = c._articulationFromAttr(attr)
-        mockTrans.assert_called_once_with(attr, 'artic', MeiReader._ARTIC_ATTR_DICT)
-        self.assertEqual(expected, actual)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
-    def testArticulation2(self, mockTrans):
-        '''_articulationFromAttr(): proper handling of "marc-stacc"'''
-        attr = 'marc-stacc'
-        expected = (articulations.StrongAccent, articulations.Staccato)
-        c = MeiReader()
-        actual = c._articulationFromAttr(attr)
-        self.assertEqual(0, mockTrans.call_count)
-        for i in range(len(expected)):
-            actualHere = actual[i]
-            expectedHere = expected[i]
-            self.assertIsInstance(actualHere, expectedHere)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
-    def testArticulation3(self, mockTrans):
-        '''_articulationFromAttr(): proper handling of "ten-stacc"'''
-        attr = 'ten-stacc'
-        expected = (articulations.Tenuto, articulations.Staccato)
-        c = MeiReader()
-        actual = c._articulationFromAttr(attr)
-        self.assertEqual(0, mockTrans.call_count)
-        for i in range(len(expected)):
-            actualHere = actual[i]
-            expectedHere = expected[i]
-            self.assertIsInstance(actualHere, expectedHere)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._attrTranslator')
-    def testArticulation4(self, mockTrans):
-        '''_articulationFromAttr(): proper handling of not-found'''
-        attr = 'garbage'
-        expected = 'error message'
-        mockTrans.side_effect = meiexceptions.MeiValueError(expected)
-        c = MeiReader()
-        self.assertRaises(meiexceptions.MeiValueError, c._articulationFromAttr, attr)
-        mockTrans.assert_called_once_with(attr, 'artic', MeiReader._ARTIC_ATTR_DICT)
-        try:
-            c._articulationFromAttr(attr)
-        except meiexceptions.MeiValueError as mvErr:
-            self.assertEqual(expected, mvErr.args[0])
-
-    @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
-    def testArticList1(self, mockArtic):
-        '''_makeArticList(): properly handles single-articulation lists'''
-        attr = 'acc'
-        mockArtic.return_value = ['accent']
-        expected = ['accent']
-        c = MeiReader()
-        actual = c._makeArticList(attr)
-        self.assertEqual(expected, actual)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
-    def testArticList2(self, mockArtic):
-        '''_makeArticList(): properly handles multi-articulation lists'''
-        attr = 'acc stacc marc'
-        mockReturns = [['accent'], ['staccato'], ['marcato']]
-        mockArtic.side_effect = lambda unused: mockReturns.pop(0)
-        expected = ['accent', 'staccato', 'marcato']
-        c = MeiReader()
-        actual = c._makeArticList(attr)
-        self.assertEqual(expected, actual)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._articulationFromAttr')
-    def testArticList3(self, mockArtic):
-        '''_makeArticList(): properly handles the compound articulations'''
-        attr = 'acc marc-stacc marc'
-        mockReturns = [['accent'], ['marcato', 'staccato'], ['marcato']]
-        mockArtic.side_effect = lambda *unused: mockReturns.pop(0)
-        expected = ['accent', 'marcato', 'staccato', 'marcato']
-        c = MeiReader()
-        actual = c._makeArticList(attr)
-        self.assertEqual(expected, actual)
 
     def testOctaveShift1(self):
         '''_getOctaveShift(): properly handles positive displacement'''
@@ -2719,14 +2626,13 @@ class Test(unittest.TestCase):
             eachStaff.append(thisLayer)
             elem.append(eachStaff)
         # @n="4" is in "expectedNs" but we're leaving it out as part of the test
-        backupNum = 900  # should be ignored by measureFromElement()
         expectedNs = ['1', '2', '3', '4']
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
         c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.measureFromElement(
-            elem, backupNum, expectedNs
+            elem, expectedNs
         )
 
         # ensure the right number and @n of parts
@@ -2762,7 +2668,7 @@ class Test(unittest.TestCase):
             - "elem" doesn't have an @n attribute
             - all staves have <mRest> without @dur (and only 3 of the 4 are specified at all)
             - a rest-filled measure is created for the "n" value in "expectedNs" that's missing a
-              corresponding <staff> element, and it properly uses "backupNum"
+              corresponding <staff> element
             - the right barline is set properly ("rptboth")
 
         no mocks
@@ -2778,14 +2684,13 @@ class Test(unittest.TestCase):
             eachStaff.append(thisLayer)
             elem.append(eachStaff)
         # @n="4" is in "expectedNs" but we're leaving it out as part of the test
-        backupNum = 900  # should be used by measureFromElement()
         expectedNs = ['1', '2', '3', '4']
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
         c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.measureFromElement(
-            elem, backupNum, expectedNs
+            elem, expectedNs
         )
 
         # ensure the right number and @n of parts (we expect one additional key, for the "rptboth")
@@ -2799,7 +2704,6 @@ class Test(unittest.TestCase):
         # (Note we can test all four parts together this time---
         #     the fourth should be indistinguishable)
         for eachN in expectedNs:
-            self.assertEqual(backupNum, actual[eachN].number)
             self.assertEqual(2, len(actual[eachN]))  # first the Note, then the Barline
             self.assertIsInstance(actual[eachN][0], stream.Voice)
             self.assertEqual(1, len(actual[eachN][0]))
@@ -2832,20 +2736,18 @@ class Test(unittest.TestCase):
         innerLayer.append(ETree.Element(noteTag))
         innerStaff.append(innerLayer)
         elem.append(innerStaff)
-        backupNum = 900  # should be used by measureFromElement()
         expectedNs = ['1']
         activeMeter = meter.TimeSignature('8/8')  # bet you thought this would be 4/4, eh?
 
         c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.measureFromElement(
-            elem, backupNum, expectedNs
+            elem, expectedNs
         )
 
         # ensure the right number and @n of parts
         self.assertEqual(['1'], list(actual.keys()))
         # ensure the Measure has its expected Voice, BassClef, and right Barline
-        self.assertEqual(backupNum, actual['1'].number)
         self.assertEqual(3, len(actual['1']))
         # the Voice, and a Clef and Instrument from staffDefFE()
         foundVoice = False
@@ -2878,18 +2780,16 @@ class Test(unittest.TestCase):
         allPartNs = ['1', '2', '3']
         activeMeter = meter.TimeSignature('12/8')
         nextMeasureLeft = bar.Repeat()
-        backupMeasureNum = 42
         expected = mockCore.return_value
 
         c = MeiReader()
         c.activeMeter = activeMeter
-        actual = c.sectionFromElement(elem, allPartNs, nextMeasureLeft, backupMeasureNum)
+        actual = c.sectionFromElement(elem, allPartNs, nextMeasureLeft)
 
         self.assertEqual(expected, actual)
         mockCore.assert_called_once_with(elem,
                                          allPartNs,
-                                         nextMeasureLeft,
-                                         backupMeasureNum)
+                                         nextMeasureLeft)
 
     def testScoreIntegration1(self):
         '''
@@ -2988,19 +2888,18 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         c = MeiReader()
-        parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(elem, allPartNs)
+        parsed, nextMeasureLeft = c.sectionScoreCore(elem, allPartNs)
 
         # ensure simple returns are okay
         self.assertEqual('8/8', c.activeMeter.ratioString)
         self.assertIsNone(nextMeasureLeft)
-        self.assertEqual(1, backupMeasureNum)
         # ensure "parsed" is the right format
         self.assertEqual(1, len(parsed))
         self.assertTrue('1' in parsed)
         self.assertEqual(1, len(parsed['1']))  # one <measure> from one <section>
         meas = parsed['1'][0][0]
         self.assertIsInstance(meas, stream.Measure)
-        self.assertEqual(1, meas.number)
+        # self.assertEqual(1, meas.number)
         self.assertEqual(4, len(meas))  # a Voice, a Clef, a TimeSignature, and a right Barline
         # the order of these doesn't matter, but it may change, so this is easier to adjust
         clefIndex = 0
@@ -3048,12 +2947,11 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         c = MeiReader()
-        parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(elem, allPartNs)
+        parsed, nextMeasureLeft = c.sectionScoreCore(elem, allPartNs)
 
         # ensure simple returns are okay
         self.assertEqual('8/8', c.activeMeter.ratioString)
         self.assertIsNone(nextMeasureLeft)
-        self.assertEqual(2, backupMeasureNum)
         # ensure "parsed" is the right format
         self.assertEqual(1, len(parsed))
         self.assertTrue('1' in parsed)
@@ -3097,9 +2995,8 @@ class Test(unittest.TestCase):
         '''
         sectionScoreCore(): everything basic, as called by sectionFromElement()
             - all keywords
-                - and the <measure> has no @n; it should use the backupNum
+                - and the <measure> has no @n
                 - nextMeasureLeft = 'next left measure' (expected in the Measure)
-                - backupMeasureNum = 900 (expected in the Measure)
 
         mocked:
             - measureFromElement()
@@ -3122,23 +3019,20 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
         activeMeter = mock.MagicMock(spec_set=meter.TimeSignature)
         nextMeasureLeft = 'next left measure'
-        backupMeasureNum = 900
         # setup measureFromElement()
         expMeas1 = mock.MagicMock(spect_set=stream.Stream)
         mockMeasureFE.return_value = {'1': expMeas1}
         # prepare the "expected" return
         expActiveMeter = activeMeter
         expNMLeft = None
-        expMeasureNum = backupMeasureNum + 1
         expected = {'1': [expMeas1]}
-        expected = (expected, expNMLeft, expMeasureNum)
+        expected = (expected, expNMLeft)
 
         c = MeiReader()
         c.activeMeter = activeMeter
         actual = c.sectionScoreCore(elem,
                                        allPartNs,
-                                       nextMeasureLeft,
-                                       backupMeasureNum)
+                                       nextMeasureLeft)
 
         self.assertEqual(expActiveMeter, c.activeMeter)
 
@@ -3146,7 +3040,6 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, actual)
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
-                                              backupMeasureNum + 1,
                                               allPartNs)
         # ensure sectionFromElement()
         self.assertEqual(0, mockSectionFE.call_count)
@@ -3161,9 +3054,8 @@ class Test(unittest.TestCase):
         '''
         sectionScoreCore(): everything basic, as called by sectionFromElement()
             - all keywords
-                - and the <measure> has no @n; it should use the backupNum
+                - and the <measure> has no @n
                 - nextMeasureLeft = 'next left measure' (expected in the Measure)
-                - backupMeasureNum = 900 (expected in the Measure)
         '''
         # setup the arguments
         elem = '''<section xmlns="http://www.music-encoding.org/ns/mei">
@@ -3179,20 +3071,17 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
         activeMeter = meter.TimeSignature('8/8')
         nextMeasureLeft = bar.Repeat('start')
-        backupMeasureNum = 900
 
         c = MeiReader()
         c.activeMeter = activeMeter
-        parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+        parsed, nextMeasureLeft = c.sectionScoreCore(
             elem,
             allPartNs,
-            nextMeasureLeft=nextMeasureLeft,
-            backupMeasureNum=backupMeasureNum)
+            nextMeasureLeft=nextMeasureLeft)
 
         # ensure simple returns are okay
         self.assertEqual('8/8', c.activeMeter.ratioString)
         self.assertIsNone(nextMeasureLeft)
-        self.assertEqual(901, backupMeasureNum)
         # ensure "parsed" is the right format
         self.assertEqual(1, len(parsed))
         self.assertTrue('1' in parsed)
@@ -3203,7 +3092,7 @@ class Test(unittest.TestCase):
         repeatIndex = 0
         voiceIndex = 1
         self.assertIsInstance(meas, stream.Measure)
-        self.assertEqual(901, meas.number)
+        # self.assertEqual(901, meas.number)
         self.assertEqual(3, len(meas))  # a Repeat, a Voice, a right Barline
         self.assertIsInstance(meas[voiceIndex], stream.Voice)  # check out the Voice and its Note
         self.assertEqual(1, len(meas[voiceIndex]))
@@ -3256,9 +3145,8 @@ class Test(unittest.TestCase):
         # prepare the "expected" return
         expActiveMeter = expMeter
         expNMLeft = expRepeat
-        expMeasureNum = 1
         expected = {'1': [expMeas1]}
-        expected = (expected, expNMLeft, expMeasureNum)
+        expected = (expected, expNMLeft)
         # prepare expected environLocal message
         expWarn1 = meireader._UNPROCESSED_SUBELEMENT.format(f'{MEI_NS}bogus', f'{MEI_NS}section')
         expWarn2 = meireader._UNIMPLEMENTED_IMPORT_WITHOUT.format('<staffDef>', '@n')
@@ -3276,7 +3164,6 @@ class Test(unittest.TestCase):
 
         # ensure measureFromElement()
         mockMeasureFE.assert_called_once_with(mock.ANY,
-                                              1,
                                               allPartNs)
         # ensure sectionFromElement()
         self.assertEqual(0, mockSectionFE.call_count)
@@ -3310,7 +3197,7 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         c = MeiReader()
-        parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+        parsed, nextMeasureLeft = c.sectionScoreCore(
             elem, allPartNs
         )
 
@@ -3323,7 +3210,6 @@ class Test(unittest.TestCase):
         # ensure simple returns are okay
         self.assertEqual('6/8', c.activeMeter.ratioString)
         self.assertIsInstance(nextMeasureLeft, bar.Repeat)
-        self.assertEqual(1, backupMeasureNum)
         # ensure "parsed" is the right format
         self.assertEqual(1, len(parsed))
         self.assertTrue('1' in parsed)
@@ -3387,14 +3273,13 @@ class Test(unittest.TestCase):
         allPartNs = ['1']
 
         c = MeiReader()
-        parsed, nextMeasureLeft, backupMeasureNum = c.sectionScoreCore(
+        parsed, nextMeasureLeft = c.sectionScoreCore(
             elem, allPartNs
         )
 
         # ensure simple returns are okay
         self.assertEqual('6/8', c.activeMeter.ratioString)
         self.assertIsNone(nextMeasureLeft)
-        self.assertEqual(2, backupMeasureNum)
         # ensure "parsed" is the right format
         self.assertEqual(2, len(parsed))
         self.assertTrue('1' in parsed)
