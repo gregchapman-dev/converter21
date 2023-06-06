@@ -1385,7 +1385,7 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(inputXML)
 
         c = MeiReader()
-        actual = c.layerFromElement(elem)
+        actual = c.layerFromElement(elem, '1')
 
         self.assertEqual(2, len(actual))
         self.assertEqual('so voice ID', actual.id)
@@ -1431,10 +1431,10 @@ class Test(unittest.TestCase):
         elem = ETree.fromstring(inputXML)
 
         c = MeiReader()
-        self.assertRaises(meiexceptions.MeiAttributeError, c.layerFromElement, elem)
+        self.assertRaises(meiexceptions.MeiAttributeError, c.layerFromElement, elem, '')
 
         try:
-            c.layerFromElement(elem)
+            c.layerFromElement(elem, '')
         except meiexceptions.MeiAttributeError as maError:
             self.assertEqual(meireader._MISSING_VOICE_ID, maError.args[0])
 

@@ -340,6 +340,30 @@ class MeiReader:
         # key = staffNStr, value = current Key/KeySignature
         self.currKeyPerStaff: dict[str, key.Key | key.KeySignature | None] = {}
 
+        # The voice.id we are currently importing notes/chords/rests into.
+        self.currVoiceId: str = ''
+
+        # MEI chord ties are weird.  If the chord is tied, it means that any note in the
+        # chord that is the same as the very next note (or a note in the very next chord)
+        # in the layer, is tied to said note.  This is tricky to implement: We stash off
+        # any tied chord we see in the self.pendingTiedChord dictionary (keyed by voice.id).
+        # The very next note/chord in that Voice/layer is the only object we will consider
+        # as the end of the tie(s).  If the next object in the Voice is a rest or a space,
+        # we will give up on tying any of the pending chord's notes.
+        # 888 NOTE WELL THIS IS WRONG. A tie can be tied to any note (in the layer) at any
+        # offset in either the measure containing the tie start, or the measure immediately
+        # following.  This needs to change in MEI export as well (sigh...)
+
+        # The dictionary values are three-tuples:
+        #   The first element of the tuple is the pending tied chord itself.
+        #   The second element of the tuple is the chord@tie value.
+        #   The third element says whether the very next element is a chord.
+        #     (it's None until we start processing that next element).
+        self.pendingTiedChord: dict[
+            str,
+            tuple[m21.chord.Chord, str, bool | None]
+        ] = {}
+
         # The list of implied alters is implied by the current key, modified by
         # any prior accidentals in the current measure.  These lists are updated
         # any time an accidental is seen (including any above or below an ornament).
@@ -4364,6 +4388,36 @@ class MeiReader:
             else:
                 theNote.pitch = M21Utilities.safePitch(pnameStr, None, octStr)
 
+            # Reach back to any immediately previous tied chord and using theNote.pitch,
+            # figure out which of the previous chord's notes are actually tied to theNote.
+            pendingTiedChord: m21.chord.Chord | None = None
+            pendingTieStr: str = ''
+            nextObjIsChord: bool | None = None
+            pendingTiedChord, pendingTieStr, nextObjIsChord = (
+                self.pendingTiedChord.get(self.currVoiceId, (None, '', None))
+            )
+            if pendingTiedChord is not None:
+                if nextObjIsChord is None:
+                    # we're it
+                    nextObjIsChord = False
+                    self.pendingTiedChord[self.currVoiceId] = (
+                        pendingTiedChord, pendingTieStr, nextObjIsChord
+                    )
+
+                # This note doesn't do this processing if nextObjIsChord.
+                # The enclosing chord will do it.
+                if not nextObjIsChord:
+                    for n in pendingTiedChord.notes:
+                        if n.tie is not None:
+                            # already tied? Don't override.
+                            print('noteFromElement: n.tie already set in pendingTiedChord')
+                            continue
+                        if n.pitch == theNote.pitch:
+                            n.tie = self._tieFromAttr(pendingTieStr)
+                            break  # we found the one pitch that matched ours
+
+                    self.pendingTiedChord.pop(self.currVoiceId, None)
+
             if self.staffNumberForNotes:
                 self.updateStaffAltersWithPitches(self.staffNumberForNotes, theNote.pitches)
 
@@ -4529,6 +4583,10 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with spaceFromElement()
 
+        # Reach back to any immediately previous tied chord and tell it to give up,
+        # it will get no ties to this rest.
+        self.pendingTiedChord.pop(self.currVoiceId, None)
+
         theDuration: duration.Duration = self.durationFromAttributes(elem)
         theRest = note.Rest(duration=theDuration)
 
@@ -4609,6 +4667,10 @@ class MeiReader:
         In MEI 2013: pg.440 (455 in PDF) (MEI.shared module)
         '''
         # NOTE: keep this in sync with restFromElement()
+
+        # Reach back to any immediately previous tied chord and tell it to give up,
+        # it will get no ties to this space.
+        self.pendingTiedChord.pop(self.currVoiceId, None)
 
         theDuration: duration.Duration = self.durationFromAttributes(elem)
         theSpace: note.Rest = note.Rest(duration=theDuration)
@@ -4715,6 +4777,23 @@ class MeiReader:
 
         - MEI.edittrans: (all)
         '''
+        # Reach back to any immediately previous tied chord and using theChord.pitches,
+        # figure out which of the previous chord's notes are actually tied to theChord.
+        pendingTiedChord: m21.chord.Chord | None = None
+        pendingTieStr: str = ''
+        nextObjIsChord: bool | None = None
+        pendingTiedChord, pendingTieStr, nextObjIsChord = (
+            self.pendingTiedChord.get(self.currVoiceId, (None, '', None))
+        )
+        if pendingTiedChord is not None:
+            if nextObjIsChord is None:
+                # we're it, make it so, so nested noteFromElement calls will leave
+                # deleting the processed pendingTiedChord to us.
+                nextObjIsChord = True
+                self.pendingTiedChord[self.currVoiceId] = (
+                    pendingTiedChord, pendingTieStr, nextObjIsChord
+                )
+
         theNoteList: list[note.Note] = []
         theArticList: list[articulations.Articulation] = []
         theLyricList: list[note.Lyric] = []
@@ -4735,7 +4814,20 @@ class MeiReader:
             elif isinstance(subElement, note.Lyric):
                 theLyricList.append(subElement)
 
-        theChord: chord.Chord = chord.Chord(notes=theNoteList)
+        theChord: chord.Chord = m21.chord.Chord(notes=theNoteList)
+
+        if pendingTiedChord is not None:
+            for n1 in pendingTiedChord.notes:
+                if n1.tie is not None:
+                    # already set?  Don't override it?
+                    print('chordFromElement: n1.tie already set in pendingTiedChord')
+                    continue
+                for n2 in theChord.notes:
+                    if n1.pitch == n2.pitch:
+                        n1.tie = self._tieFromAttr(pendingTieStr)
+                        break  # we found n1 in theChord, go on to next n1
+            self.pendingTiedChord.pop(self.currVoiceId, None)
+
         if theArticList:
             theChord.articulations = theArticList
         if theLyricList:
@@ -4812,7 +4904,19 @@ class MeiReader:
         # ties in the @tie attribute
         tieStr: str | None = elem.get('tie')
         if tieStr is not None:
-            theChord.tie = self._tieFromAttr(tieStr)
+            if tieStr == 't':
+                # we just ignore chord tie stops, since music21 doesn't need tie stops,
+                # and it's way too hard to figure out what it means in terms of
+                # individual note tie stops.
+                pass
+            else:
+                # Here we actually need to look ahead and see which of the notes
+                # in this chord are repeated in the next chord/note, and put the
+                # _tieFromAttr result on only those notes (call it for each note).
+                # Since there is no way to look ahead, we make a note-to-self, and
+                # we will look back at the next note/chord/rest in this layer (a rest
+                # is considered like a non-matching note).
+                self.pendingTiedChord[self.currVoiceId] = (theChord, tieStr, None)
 
         if elem.get('cue') == 'true':
             if t.TYPE_CHECKING:
@@ -5468,7 +5572,7 @@ class MeiReader:
     def layerFromElement(
         self,
         elem: Element,
-        overrideN: str | None = None
+        overrideN: str
     ) -> stream.Voice:
         '''
         <layer> An independent stream of events on a staff.
@@ -5478,16 +5582,15 @@ class MeiReader:
         .. note:: The :class:`Voice` object's :attr:`~music21.stream.Voice.id` attribute must be
             set properly in order to ensure continuity of voices between measures. If the ``elem``
             does not have an @n attribute, you can set one with the ``overrideN`` parameter in
-            this function. If you provide a value for ``overrideN``, it will be used instead of
-            the ``elemn`` object's @n attribute.
-
-            Because improperly-set :attr:`~music21.stream.Voice.id` attributes nearly guarantees
-            errors in the imported :class:`Score`, either ``overrideN`` or @n must be specified.
+            this function. ``overrideN`` must always be provided; it will be used if the
+            ``elem`` object's @n attribute is missing. This is necessary because improperly-set
+            :attr:`~music21.stream.Voice.id` attributes nearly guarantees errors in the imported
+            :class:`Score`.
 
         :param elem: The ``<layer>`` element to process.
         :type elem: :class:`~xml.etree.ElementTree.Element`
         :param str overrideN: The value to be set as the ``id``
-            attribute in the outputted :class:`Voice`.
+            attribute in the outputted :class:`Voice`, if layer@n is missing.
         :returns: A :class:`Voice` with the objects found in the provided :class:`Element`.
         :rtype: :class:`music21.stream.Voice`
         :raises: :exc:`MeiAttributeError` if neither ``overrideN`` nor @n are specified.
@@ -5531,6 +5634,21 @@ class MeiReader:
         - MEI.text: div
         - MEI.usersymbols: anchoredText curve line symbol
         '''
+        # make the Voice
+        theVoice: stream.Voice = stream.Voice()
+
+        # try to set the Voice's "id" attribute
+        nStr: str = elem.get('n', '')
+        if nStr:
+            theVoice.id = nStr
+        else:
+            if not overrideN:
+                raise MeiAttributeError(_MISSING_VOICE_ID)
+            theVoice.id = overrideN
+
+        # Some (nested) processing needs to know what voice we are in
+        # We will clear this before returning from layerFromElement.
+        self.currVoiceId = theVoice.id
 
         # iterate all immediate children
         theLayer: list[Music21Object] = self._processEmbeddedElements(
@@ -5562,8 +5680,6 @@ class MeiReader:
             if removeThisOne is not None:
                 theLayer.pop(removeThisOne)
 
-        # make the Voice
-        theVoice: stream.Voice = stream.Voice()
         for obj in theLayer:
             # Check for dir/dynam/tempo attached to the obj.
             # If there, append them first, then the obj, so
@@ -5581,16 +5697,7 @@ class MeiReader:
             theVoice.coreAppend(obj)
         theVoice.coreElementsChanged()
 
-        # try to set the Voice's "id" attribute
-
-        if overrideN:
-            theVoice.id = overrideN
-        else:
-            nStr: str | None = elem.get('n')
-            if nStr is not None:
-                theVoice.id = nStr
-            else:
-                raise MeiAttributeError(_MISSING_VOICE_ID)
+        self.currVoiceId = ''
 
         return theVoice
 
@@ -5951,7 +6058,7 @@ class MeiReader:
                 layers.append(self.layerFromElement(
                     eachTag, overrideN=currentNValue
                 ))
-                currentNValue = f'{int(currentNValue) + 1}'  # inefficient, but we need a string
+                currentNValue = f'{int(layers[-1].id) + 1}'  # inefficient, but we need a string
             elif eachTag.tag in tagToFunction:
                 # NB: this won't be tested until there's something in tagToFunction
                 layers.append(
