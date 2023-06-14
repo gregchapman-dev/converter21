@@ -1922,7 +1922,7 @@ class MeiReader:
         spannerBundle: spanner.SpannerBundle
     ) -> spanner.Spanner | None:
         try:
-            return spannerBundle.getByIdLocal(theId)[0]
+            return spannerBundle.getByIdLocal(theId)[0]  # type: ignore
         except IndexError:
             return None
 
@@ -1934,7 +1934,7 @@ class MeiReader:
     ) -> bool:
         '''Avoid crashing when getByIdLocal() doesn't find the spanner'''
         try:
-            spannerBundle.getByIdLocal(theId)[0].addSpannedElements(theObj)
+            spannerBundle.getByIdLocal(theId)[0].addSpannedElements(theObj)  # type: ignore
             return True
         except IndexError:
             # when getByIdLocal() couldn't find the Slur
@@ -7028,7 +7028,7 @@ class MeiReader:
         tempoObj.setTextExpression(te)
 
         tempoObj = m21.tempo.MetronomeMark(
-            text=tempoObj,
+            text=tempoObj,  # type: ignore
             number=midiBPM,
             referent=None  # implies quarter note
         )

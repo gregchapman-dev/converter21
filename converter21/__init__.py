@@ -45,8 +45,8 @@ def register(
         converterNames = (ConverterName.HUMDRUM, ConverterName.MEI)
 
     if ConverterName.HUMDRUM in converterNames:
-        m21.converter.unregisterSubconverter(m21.converter.subConverters.ConverterHumdrum)
-        m21.converter.registerSubconverter(HumdrumConverter)
+        m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterHumdrum)
+        m21.converter.registerSubConverter(HumdrumConverter)
     if ConverterName.MEI in converterNames:
-        m21.converter.unregisterSubconverter(m21.converter.subConverters.ConverterMEI)
-        m21.converter.registerSubconverter(MEIConverter)
+        m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterMEI)
+        m21.converter.registerSubConverter(MEIConverter)

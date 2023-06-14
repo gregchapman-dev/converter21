@@ -1808,8 +1808,9 @@ class M21Convert:
             # even if the number is implicit, go ahead and generate a *MM for it.
             # Note that we always round to integer to emit *MM (we round to integer
             # when we parse it, too).
-            quarterBPM: float = tempo.getQuarterBPM()
-            mmTokenStr = '*MM' + M21Convert._floatOrIntString(int(quarterBPM + 0.5))
+            quarterBPM: float | None = tempo.getQuarterBPM()
+            if quarterBPM is not None:
+                mmTokenStr = '*MM' + M21Convert._floatOrIntString(int(quarterBPM + 0.5))
 
         return (mmTokenStr, tempoOMD)
 

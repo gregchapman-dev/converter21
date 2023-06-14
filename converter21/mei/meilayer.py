@@ -111,7 +111,7 @@ class MeiLayer:
         # starts a beam if necessary before this obj.
         # returns whether or not the current beam should be ended after this obj.
         endTheBeam: bool = False
-        for spanner in self.spannerBundle.getBySpannedElement(obj):
+        for spanner in self.spannerBundle.getBySpannedElement(obj):  # type: ignore
             if isinstance(spanner, MeiBeamSpanner):
                 if spanner.isFirst(obj):
                     # start a <beam>, but only if all the spanned elements are in
@@ -134,7 +134,7 @@ class MeiLayer:
         # starts a tuplet if necessary before this obj.
         # returns whether or not the current tuplet should be ended after this obj.
         endTheTuplet: bool = False
-        for spanner in self.spannerBundle.getBySpannedElement(obj):
+        for spanner in self.spannerBundle.getBySpannedElement(obj):  # type: ignore
             if isinstance(spanner, MeiTupletSpanner):
                 if spanner.isFirst(obj):
                     # start a <beam>, but only if all the spanned elements are in

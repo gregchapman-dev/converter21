@@ -2516,7 +2516,7 @@ class HumdrumFile(HumdrumFileContent):
                 assert isinstance(tempo.style, m21.style.TextStyle)
             tempo.style.fontStyle = 'bold'
             if hasattr(tempo, 'placement'):
-                tempo.placement = 'above'
+                tempo.placement = 'above'  # type: ignore
             else:
                 tempo.style.absoluteY = 'above'
 
@@ -9033,7 +9033,7 @@ class HumdrumFile(HumdrumFileContent):
                 direction.placement = placement
             elif tempo:
                 if placement in ('above', 'below'):
-                    tempo.placement = placement
+                    tempo.placement = placement  # type: ignore
 
         if color:
             tempoOrDirection.style.color = color
@@ -9154,7 +9154,7 @@ class HumdrumFile(HumdrumFileContent):
                 direction.placement = placement
             elif tempo:
                 if placement in ('above', 'below'):
-                    tempo.placement = placement
+                    tempo.placement = placement  # type: ignore
 
         if color:
             tempoOrDirection.style.color = color
@@ -9556,7 +9556,7 @@ class HumdrumFile(HumdrumFileContent):
                 assert isinstance(tempo.style, m21.style.TextStyle)
             tempo.style.fontStyle = 'bold'
             if hasattr(tempo, 'placement'):
-                tempo.placement = 'above'
+                tempo.placement = 'above'  # type: ignore
             else:
                 tempo.style.absoluteY = 'above'
 
