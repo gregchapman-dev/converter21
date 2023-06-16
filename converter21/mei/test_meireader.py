@@ -1249,15 +1249,25 @@ class Test(unittest.TestCase):
                         for x in ('c', 'e', 'g')]
         for eachElement in noteElements:
             elem.append(eachElement)
+
+        nextElem = ETree.Element('chord', attrib={'dur': '4', 'dots': '1', 'artic': 'stacc',
+                                              _XMLID: 'asdf1235', 'tie': 't1'})
+        nextNoteElements = [Test.makeNoteElemsChordFromElement(x, 'n', '4', '8', '0')
+                            for x in ('c', 'e', 'g')]
+        for eachElement in nextNoteElements:
+            nextElem.append(eachElement)
+
         expectedName = ('Chord {C-natural in octave 4 | E-natural in octave 4 | '
                         + 'G-natural in octave 4} Dotted Quarter')
         c = MeiReader()
         actual = c.chordFromElement(elem)
+        c.chordFromElement(nextElem)  # necessary to finish off the ties in actual
         self.assertEqual(expectedName, actual.fullName)
         self.assertEqual(1, len(actual.articulations))
         self.assertIsInstance(actual.articulations[0], articulations.Staccato)
         self.assertEqual('asdf1234', actual.id)
-        self.assertEqual(tie.Tie('start'), actual.tie)
+        for n in actual.notes:
+            self.assertEqual(tie.Tie('start'), n.tie)
 
     def testIntegration4ChordFromElement(self):
         '''
@@ -1441,38 +1451,6 @@ class Test(unittest.TestCase):
     # -----------------------------------------------------------------------------
     # class TestStaffFromElement(unittest.TestCase):
     # '''Tests for staffFromElement()'''
-
-    @mock.patch('converter21.mei.meireader.MeiReader.layerFromElement')
-    def testUnit1StaffFromElement(self, mockLayerFromElement):
-        '''
-        staffFromElement(): basic functionality (i.e., that layerFromElement() is called with the
-                            right arguments, and with properly-incrementing "id" attributes
-        (mostly-unit test; only mock noteFromElement and the ElementTree.Element)
-        '''
-        elem = mock.MagicMock()
-        findallReturn = [mock.MagicMock(name='layer1'),
-                         mock.MagicMock(name='layer2'),
-                         mock.MagicMock(name='layer3')]
-        findallReturn[0].tag = f'{MEI_NS}layer'
-        findallReturn[1].tag = f'{MEI_NS}layer'
-        findallReturn[2].tag = f'{MEI_NS}layer'
-        elem.iterfind = mock.MagicMock(return_value=findallReturn)
-        # "mockLFE" is "mockLayerFromElement"
-        expectedMLFEOrder = [
-            mock.call(findallReturn[i], overrideN=str(i + 1))
-            for i in range(len(findallReturn))
-        ]
-        mockLFEReturns = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
-        mockLayerFromElement.side_effect = (
-            lambda x, overrideN: mockLFEReturns.pop(0))
-        expected = ['mockLayerFromElement return %i' for i in range(len(findallReturn))]
-
-        c = MeiReader()
-        actual = c.staffFromElement(elem)
-
-        elem.iterfind.assert_called_once_with('*')
-        self.assertEqual(expected, actual)
-        self.assertSequenceEqual(expectedMLFEOrder, mockLayerFromElement.call_args_list)
 
     def testIntegration1StaffFromElement(self):
         '''
