@@ -185,6 +185,19 @@ class MeiLayer:
                         self.scoreMeterStream,
                         tb
                     )
+            if isinstance(obj, m21.chord.Chord):
+                # check every note in the chord
+                for note in obj.notes:
+                    for spanner in self.spannerBundle.getBySpannedElement(note):  # type: ignore
+                        if spanner.isFirst(note):
+                            M21ObjectConvert.postStavesSpannerToMei(
+                                spanner,
+                                staffNStr,
+                                m21Part,
+                                m21Measure,
+                                self.scoreMeterStream,
+                                tb
+                            )
 
             # 3. Turns/Trills/Mordents on notes/chords in this voice.
             #       We count on any TrillExtension being handled before

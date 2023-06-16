@@ -10,6 +10,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from xml.etree.ElementTree import Element, TreeBuilder
+from copy import deepcopy
 import typing as t
 
 import music21 as m21
@@ -17,7 +18,7 @@ from music21.common import opFrac
 from music21.common import OffsetQL
 
 from converter21.mei import MeiExportError
-# from converter21.mei import MeiInternalError
+from converter21.mei import MeiInternalError
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiTemporarySpanner
@@ -45,7 +46,7 @@ class MeiScore:
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanner: MeiBeamSpanner | None = None
         self.currentTupletSpanners: list[MeiTupletSpanner] = []
-        self.currentTieSpanners: dict[m21.stream.Part, list[MeiTieSpanner]] = {}
+        self.currentTieSpanners: dict[m21.stream.Part, list[tuple[MeiTieSpanner, int]]] = {}
         for part in self.m21Score.parts:
             self.currentTieSpanners[part] = []
 
@@ -208,9 +209,21 @@ class MeiScore:
 
     def annotateScore(self) -> None:
         for part in self.m21Score.parts:
+            partTieSpanners: list[tuple[MeiTieSpanner, int]] = self.currentTieSpanners[part]
             for measure in part:
                 if not isinstance(measure, m21.stream.Measure):
                     continue
+
+                # check/increment numMeasuresSearched in all part tie spanners
+                defunctTieSpanners: list[tuple[MeiTieSpanner, int]] = []
+                for i, (sp, numMeasuresSearched) in enumerate(partTieSpanners):
+                    if numMeasuresSearched >= 2:
+                        defunctTieSpanners.append((sp, numMeasuresSearched))
+                    else:
+                        partTieSpanners[i] = (sp, numMeasuresSearched + 1)
+                for sp, numMeasuresSearched in defunctTieSpanners:
+                    partTieSpanners.remove((sp, numMeasuresSearched))
+
                 voices: list[m21.stream.Voice | m21.stream.Measure] = (
                     list(measure[m21.stream.Voice])
                 )
@@ -404,15 +417,14 @@ class MeiScore:
     def annotateTies(
         self,
         noteOrChord: m21.base.Music21Object,
-        part: m21.stream.Part,
-        parentChord: m21.chord.Chord | None = None
+        part: m21.stream.Part
     ) -> None:
         if not isinstance(noteOrChord, (m21.note.Note, m21.chord.Chord)):
             # Note that we reject Unpitched and PercussionChord here, since
             # they have no pitches.
             return
 
-        def startsTie(noteOrChord: m21.note.NotRest) -> bool:
+        def startsTie(noteOrChord: m21.note.Note | m21.chord.Chord) -> bool:
             if noteOrChord.tie is None:
                 return False
             if noteOrChord.tie.type in ('start', 'continue'):
@@ -420,81 +432,94 @@ class MeiScore:
             return False
 
         def stopsTieInWhichSpanner(
-            noteOrChord: m21.note.NotRest,
+            note: m21.note.Note,
             part: m21.stream.Part,
-            partTieSpanners: list[MeiTieSpanner],
-            noteIsInChord: bool = False
-        ) -> MeiTieSpanner | None:
-            # look at all the partTieSpanners and see if this noteOrChord has the
-            # same (exact) pitches as the start noteOrChord of that spanner.
-            for sp in partTieSpanners:
-                startNoteOrChord: m21.note.NotRest = sp.getFirst()
-                if noteOrChord is startNoteOrChord:
+            partTieSpanners: list[tuple[MeiTieSpanner, int]],
+            parentChord: m21.chord.Chord | None = None
+        ) -> tuple[MeiTieSpanner, int] | None:
+            # look at all the partTieSpanners and see if this note has the
+            # same (exact) pitches as the start note of that spanner.
+            for sp, numMeasuresSearched in partTieSpanners:
+                startNote: m21.note.Note = sp.getFirst()
+                if note is startNote:
                     continue
 
-                if len(startNoteOrChord.pitches) != len(noteOrChord.pitches):
+                if startNote.pitch != note.pitch:
                     continue
 
-                # to stop a tie, you have to start at the end of the tie's start note
-                # But get the duration/offset from the right object (notes within chords
-                # don't have them.)
+                # to stop a tie, you have to start at or beyond the end of the tie's start note.
                 startParentChord: m21.chord.Chord | None = sp.startParentChord
-                requiredPartOffset: OffsetQL
+                minPartOffset: OffsetQL
                 actualPartOffset: OffsetQL
                 if startParentChord is not None:
-                    requiredPartOffset = opFrac(
+                    minPartOffset = opFrac(
                         startParentChord.getOffsetInHierarchy(part)
                         + startParentChord.quarterLength
                     )
                 else:
-                    requiredPartOffset = opFrac(
-                        startNoteOrChord.getOffsetInHierarchy(part)
-                        + startNoteOrChord.quarterLength
+                    minPartOffset = opFrac(
+                        startNote.getOffsetInHierarchy(part)
+                        + startNote.quarterLength
                     )
 
                 if parentChord is not None:
                     actualPartOffset = parentChord.getOffsetInHierarchy(part)
                 else:
-                    actualPartOffset = noteOrChord.getOffsetInHierarchy(part)
+                    actualPartOffset = note.getOffsetInHierarchy(part)
 
-                if (actualPartOffset != requiredPartOffset):
+                if (actualPartOffset < minPartOffset):
                     continue
 
-                foundMismatchedPitch: bool = False
-                for pStart, pEnd in zip(startNoteOrChord.pitches, noteOrChord.pitches):
-                    if pStart != pEnd:
-                        foundMismatchedPitch = True
-                        break
-
-                if foundMismatchedPitch:
-                    # give up on this tie spanner
-                    continue
-
-                # we found a spanner whose startNoteOrChord has the same pitches as
-                # noteOrChord, so return that spanner.  noteOrChord stops the tie
+                # we found a spanner whose startNote has the same pitches as
+                # note, so return that spanner.  note stops the tie
                 # represented by that spanner.
-                return sp
+                return (sp, numMeasuresSearched)
 
             return None
 
-        partTieSpanners: list[MeiTieSpanner] = self.currentTieSpanners[part]
+        partTieSpanners: list[tuple[MeiTieSpanner, int]] = self.currentTieSpanners[part]
 
         if startsTie(noteOrChord):
             if t.TYPE_CHECKING:
                 assert noteOrChord.tie is not None
-            newTieSpanner = MeiTieSpanner(noteOrChord.tie, startParentChord=parentChord)
-            newTieSpanner.addSpannedElements(noteOrChord)
-            self.m21Score.append(newTieSpanner)
-            partTieSpanners.append(newTieSpanner)
-
-        sp: MeiTieSpanner | None = stopsTieInWhichSpanner(noteOrChord, part, partTieSpanners)
-        if sp is not None:
-            sp.addSpannedElements(noteOrChord)
-            partTieSpanners.remove(sp)
-            return
-
-        if isinstance(noteOrChord, m21.chord.Chord):
-            # the chord itself does not stop a tie; perhaps one or more of the chord's
+            if isinstance(noteOrChord, m21.chord.Chord):
+                # Pretend there was a tie on every note.
+                for note in noteOrChord.notes:
+                    noteTie: m21.tie.Tie = deepcopy(noteOrChord.tie)
+                    newTieSpanner = MeiTieSpanner(noteTie, startParentChord=noteOrChord)
+                    newTieSpanner.addSpannedElements(note)
+                    self.m21Score.append(newTieSpanner)
+                    partTieSpanners.append((newTieSpanner, 1))
+            else:
+                newTieSpanner = MeiTieSpanner(noteOrChord.tie, startParentChord=None)
+                newTieSpanner.addSpannedElements(noteOrChord)
+                self.m21Score.append(newTieSpanner)
+                partTieSpanners.append((newTieSpanner, 1))
+        elif isinstance(noteOrChord, m21.chord.Chord):
+            # The chord itself does not start a tie; perhaps one or more of the chord's
             # individual notes does.
             for note in noteOrChord.notes:
-                self.annotateTies(note, part, parentChord=noteOrChord)
+                if startsTie(note):
+                    if t.TYPE_CHECKING:
+                        assert note.tie is not None
+                    newTieSpanner = MeiTieSpanner(note.tie, startParentChord=noteOrChord)
+                    newTieSpanner.addSpannedElements(note)
+                    self.m21Score.append(newTieSpanner)
+                    partTieSpanners.append((newTieSpanner, 1))
+
+        spN: tuple[MeiTieSpanner, int] | None = None
+        if isinstance(noteOrChord, m21.chord.Chord):
+            # The chord itself does not stop a tie (MeiTieSpanners always span notes);
+            # perhaps one or more of the chord's individual notes does.
+            for note in noteOrChord.notes:
+                spN = stopsTieInWhichSpanner(note, part, partTieSpanners, noteOrChord)
+                if spN is not None:
+                    spN[0].addSpannedElements(note)
+                    partTieSpanners.remove(spN)
+        elif isinstance(noteOrChord, m21.note.Note):
+            spN = stopsTieInWhichSpanner(noteOrChord, part, partTieSpanners)
+            if spN is not None:
+                spN[0].addSpannedElements(noteOrChord)
+                partTieSpanners.remove(spN)
+        else:
+            raise MeiInternalError('noteOrChord is not Note or Chord')
