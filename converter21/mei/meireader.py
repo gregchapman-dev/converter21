@@ -343,25 +343,28 @@ class MeiReader:
         # The voice.id we are currently importing notes/chords/rests into.
         self.currVoiceId: str = ''
 
+        # noteFromElement needs to know whether it's a standalone note or within a chord,
+        # so we set/clear this at the start/end of chordFromElement.
+        self.withinChord: bool = False
+
         # MEI chord ties are weird.  If the chord is tied, it means that any note in the
-        # chord that is the same as the very next note (or a note in the very next chord)
+        # chord that is the same as a subsequent note (or a note in a subsequent chord)
         # in the layer, is tied to said note.  This is tricky to implement: We stash off
-        # any tied chord we see in the self.pendingTiedChord dictionary (keyed by voice.id).
-        # The very next note/chord in that Voice/layer is the only object we will consider
-        # as the end of the tie(s).  If the next object in the Voice is a rest or a space,
-        # we will give up on tying any of the pending chord's notes.
-        # 888 NOTE WELL THIS IS WRONG. A tie can be tied to any note (in the layer) at any
-        # offset in either the measure containing the tie start, or the measure immediately
-        # following.  This needs to change in MEI export as well (sigh...)
+        # any tied chord we see in the self.pendingTiedChords dictionary (keyed by voice.id).
+        # This Voice/layer, and the matching Voice/layer in the next Measure are the only
+        # places we will search for the ends of these note ties. A tie can be tied to any
+        # note (in the layer) at any offset in either the measure containing the tie start,
+        # or the measure immediately following.
 
         # The dictionary values are three-tuples:
         #   The first element of the tuple is the pending tied chord itself.
         #   The second element of the tuple is the chord@tie value.
-        #   The third element says whether the very next element is a chord.
-        #     (it's None until we start processing that next element).
-        self.pendingTiedChord: dict[
+        #   The third element of the tuple is the number of measures we've started searching
+        #       for the end ties.  If this is 2 when starting another measure, we stop
+        #       searching and delete the pending tied chord tuple from self.pendingTiedChords.
+        self.pendingTiedChords: dict[
             str,
-            tuple[m21.chord.Chord, str, bool | None]
+            tuple[m21.chord.Chord, str, int]
         ] = {}
 
         # The list of implied alters is implied by the current key, modified by
@@ -4392,31 +4395,32 @@ class MeiReader:
             # figure out which of the previous chord's notes are actually tied to theNote.
             pendingTiedChord: m21.chord.Chord | None = None
             pendingTieStr: str = ''
-            nextObjIsChord: bool | None = None
-            pendingTiedChord, pendingTieStr, nextObjIsChord = (
-                self.pendingTiedChord.get(self.currVoiceId, (None, '', None))
+            pendingTiedChord, pendingTieStr, _ = (
+                self.pendingTiedChords.get(self.currVoiceId, (None, '', 2))
             )
             if pendingTiedChord is not None:
-                if nextObjIsChord is None:
-                    # we're it
-                    nextObjIsChord = False
-                    self.pendingTiedChord[self.currVoiceId] = (
-                        pendingTiedChord, pendingTieStr, nextObjIsChord
-                    )
-
-                # This note doesn't do this processing if nextObjIsChord.
+                # This note doesn't do this processing if it is within a chord.
                 # The enclosing chord will do it.
-                if not nextObjIsChord:
+                if not self.withinChord:
                     for n in pendingTiedChord.notes:
                         if n.tie is not None:
                             # already tied? Don't override.
-                            print('noteFromElement: n.tie already set in pendingTiedChord')
+                            # print('noteFromElement: n.tie already set in pendingTiedChord')
                             continue
                         if n.pitch == theNote.pitch:
                             n.tie = self._tieFromAttr(pendingTieStr)
                             break  # we found the one pitch that matched ours
 
-                    self.pendingTiedChord.pop(self.currVoiceId, None)
+                    stillPending: bool = False
+                    for n in pendingTiedChord.notes:
+                        if n.tie is None:
+                            # pendingTiedChord is still pending
+                            stillPending = True
+                            break
+
+                    if not stillPending:
+                        # get rid of this voice's pending tied chord
+                        self.pendingTiedChords.pop(self.currVoiceId, None)
 
             if self.staffNumberForNotes:
                 self.updateStaffAltersWithPitches(self.staffNumberForNotes, theNote.pitches)
@@ -4583,10 +4587,6 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with spaceFromElement()
 
-        # Reach back to any immediately previous tied chord and tell it to give up,
-        # it will get no ties to this rest.
-        self.pendingTiedChord.pop(self.currVoiceId, None)
-
         theDuration: duration.Duration = self.durationFromAttributes(elem)
         theRest = note.Rest(duration=theDuration)
 
@@ -4667,10 +4667,6 @@ class MeiReader:
         In MEI 2013: pg.440 (455 in PDF) (MEI.shared module)
         '''
         # NOTE: keep this in sync with restFromElement()
-
-        # Reach back to any immediately previous tied chord and tell it to give up,
-        # it will get no ties to this space.
-        self.pendingTiedChord.pop(self.currVoiceId, None)
 
         theDuration: duration.Duration = self.durationFromAttributes(elem)
         theSpace: note.Rest = note.Rest(duration=theDuration)
@@ -4779,20 +4775,7 @@ class MeiReader:
         '''
         # Reach back to any immediately previous tied chord and using theChord.pitches,
         # figure out which of the previous chord's notes are actually tied to theChord.
-        pendingTiedChord: m21.chord.Chord | None = None
-        pendingTieStr: str = ''
-        nextObjIsChord: bool | None = None
-        pendingTiedChord, pendingTieStr, nextObjIsChord = (
-            self.pendingTiedChord.get(self.currVoiceId, (None, '', None))
-        )
-        if pendingTiedChord is not None:
-            if nextObjIsChord is None:
-                # we're it, make it so, so nested noteFromElement calls will leave
-                # deleting the processed pendingTiedChord to us.
-                nextObjIsChord = True
-                self.pendingTiedChord[self.currVoiceId] = (
-                    pendingTiedChord, pendingTieStr, nextObjIsChord
-                )
+        self.withinChord = True
 
         theNoteList: list[note.Note] = []
         theArticList: list[articulations.Articulation] = []
@@ -4816,17 +4799,30 @@ class MeiReader:
 
         theChord: chord.Chord = m21.chord.Chord(notes=theNoteList)
 
+        pendingTiedChord: m21.chord.Chord | None = None
+        pendingTieStr: str = ''
+        pendingTiedChord, pendingTieStr, _ = (
+            self.pendingTiedChords.get(self.currVoiceId, (None, '', 2))
+        )
         if pendingTiedChord is not None:
             for n1 in pendingTiedChord.notes:
                 if n1.tie is not None:
-                    # already set?  Don't override it?
-                    print('chordFromElement: n1.tie already set in pendingTiedChord')
                     continue
                 for n2 in theChord.notes:
                     if n1.pitch == n2.pitch:
                         n1.tie = self._tieFromAttr(pendingTieStr)
                         break  # we found n1 in theChord, go on to next n1
-            self.pendingTiedChord.pop(self.currVoiceId, None)
+
+            stillPending: bool = False
+            for n in pendingTiedChord.notes:
+                if n.tie is None:
+                    # pendingTiedChord is still pending
+                    stillPending = True
+                    break
+
+            if not stillPending:
+                # get rid of this voice's pending tied chord
+                self.pendingTiedChords.pop(self.currVoiceId, None)
 
         if theArticList:
             theChord.articulations = theArticList
@@ -4908,15 +4904,17 @@ class MeiReader:
                 # we just ignore chord tie stops, since music21 doesn't need tie stops,
                 # and it's way too hard to figure out what it means in terms of
                 # individual note tie stops.
+                # TODO: handle tie stops that are actually dangling (not just redundant)
                 pass
             else:
                 # Here we actually need to look ahead and see which of the notes
                 # in this chord are repeated in the next chord/note, and put the
                 # _tieFromAttr result on only those notes (call it for each note).
                 # Since there is no way to look ahead, we make a note-to-self, and
-                # we will look back at the next note/chord/rest in this layer (a rest
-                # is considered like a non-matching note).
-                self.pendingTiedChord[self.currVoiceId] = (theChord, tieStr, None)
+                # we will look back at the next note/chord/rest in this layer.
+                # Note that we set numMeasuresSearched to 1, since we are now searching
+                # in that first measure.
+                self.pendingTiedChords[self.currVoiceId] = (theChord, tieStr, 1)
 
         if elem.get('cue') == 'true':
             if t.TYPE_CHECKING:
@@ -4967,6 +4965,7 @@ class MeiReader:
         if self.staffNumberForNotes:
             theChord.mei_staff = self.staffNumberForNotes  # type: ignore
 
+        self.withinChord = False
         return theChord
 
 
@@ -5649,6 +5648,23 @@ class MeiReader:
         # Some (nested) processing needs to know what voice we are in
         # We will clear this before returning from layerFromElement.
         self.currVoiceId = theVoice.id
+
+        # Remove any pendingTiedChord for this voice id that has searched in two measures
+        # for tied notes.
+        pendingTiedChord: m21.chord.Chord | None = None
+        pendingTieStr: str = ''
+        numMeasuresSearched: int = 2
+        pendingTiedChord, pendingTieStr, numMeasuresSearched = (
+            self.pendingTiedChords.get(self.currVoiceId, (None, '', 2))
+        )
+        if pendingTiedChord is not None:
+            if numMeasuresSearched >= 2:
+                self.pendingTiedChords.pop(self.currVoiceId, None)
+            else:
+                # increment numMeasuresSearched, so we'll stop searching next time
+                self.pendingTiedChords[self.currVoiceId] = (
+                    pendingTiedChord, pendingTieStr, numMeasuresSearched + 1
+                )
 
         # iterate all immediate children
         theLayer: list[Music21Object] = self._processEmbeddedElements(

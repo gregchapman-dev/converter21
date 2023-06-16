@@ -173,7 +173,7 @@ class MeiLayer:
                 )
 
             # 2. Spanners (Slurs, DynamicWedges, TrillExtensions, etc) whose first
-            # element is in this voice.
+            # element is in this voice. Includes <beamSpan>, <tupletSpan>, <tie>
             for spanner in self.spannerBundle.getBySpannedElement(obj):
                 if spanner.isFirst(obj):
                     # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
@@ -231,5 +231,3 @@ class MeiLayer:
                             tb
                         )
                         continue
-
-            # 4. Ties on notes (including notes within chords) in this voice.
