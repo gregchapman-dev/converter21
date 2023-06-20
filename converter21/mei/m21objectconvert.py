@@ -11,6 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import html
 import typing as t
 from xml.etree.ElementTree import TreeBuilder
 from copy import deepcopy
@@ -265,7 +266,53 @@ class M21ObjectConvert:
 
         tb.start('note', attr)
         M21ObjectConvert.m21ArticulationsToMei(note.articulations, tb)
+        M21ObjectConvert.m21LyricsToMei(note.lyrics, tb)
         tb.end('note')
+
+    @staticmethod
+    def m21LyricsToMei(lyrics: list[m21.note.Lyric], tb: TreeBuilder):
+        for verse in lyrics:
+            attr: dict[str, str] = {}
+            if verse.number:
+                attr['n'] = str(verse.number)
+            if verse.identifier and verse.identifier != verse.number:
+                attr['label'] = str(verse.identifier)
+            tb.start('verse', attr)
+            if verse.isComposite:
+                if t.TYPE_CHECKING:
+                    assert verse.components is not None
+                # multiple <syl> must be generated
+                for syl in verse.components:
+                    M21ObjectConvert.m21SyllableToMei(syl, tb)
+            else:
+                # just one <syl>
+                M21ObjectConvert.m21SyllableToMei(verse, tb)
+            tb.end('verse')
+
+    _M21_SYLLABIC_TO_WORD_POS: dict[
+        t.Literal['begin', 'middle', 'end', 'composite', 'single'] | None,
+        str | None
+    ] = {
+        'begin': 'i',
+        'middle': 'm',
+        'end': 't',
+        'composite': None,
+        'single': None,
+        None: None
+    }
+
+    @staticmethod
+    def m21SyllableToMei(lyric: m21.note.Lyric, tb: TreeBuilder):
+        attr: dict[str, str] = {}
+        attr['con'] = 'd'  # music21 always uses dashes between syllables
+        wordPos: str | None = M21ObjectConvert._M21_SYLLABIC_TO_WORD_POS.get(lyric.syllabic, None)
+        if wordPos:
+            attr['wordpos'] = wordPos
+        text: str = lyric.text
+        text = html.escape(text)
+        tb.start('syl', attr)
+        tb.data(text)
+        tb.end('syl')
 
     _M21_ARTICULATION_NAME_TO_MEI_ARTIC_NAME: dict[str, str] = {
         'accent': 'acc',
