@@ -24,6 +24,8 @@ from converter21.mei import MeiInternalError
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
 
+environLocal = m21.environment.Environment('converter21.mei.m21objectconvert')
+
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
 # for current func name, specify 0 or no argument.
@@ -942,6 +944,58 @@ class M21ObjectConvert:
         tb.end('mordent')
 
     @staticmethod
+    def emitStyledTextElement(
+        text: str,
+        style: m21.style.TextStyle | None,
+        tag: str,
+        attr: dict[str, str],
+        tb: TreeBuilder
+    ):
+        tb.start(tag, attr)
+        needsRend: bool = False
+        if style is not None:
+            meiFontStyle: str | None = None
+            meiFontWeight: str | None = None
+            meiFontFamily: str | None = None
+            meiJustify: str | None = None
+
+            meiFontStyle, meiFontWeight = M21ObjectConvert.m21FontStyleAndWeightToMei(
+                style.fontStyle,
+                style.fontWeight
+            )
+
+            # style.fontFamily is always a list; just take the first one, I guess...
+            if style.fontFamily:
+                meiFontFamily = style.fontFamily[0]
+
+            if style.justify:
+                meiJustify = style.justify
+
+            needsRend = (
+                bool(meiFontStyle)
+                or bool(meiFontWeight)
+                or bool(meiFontFamily)
+                or bool(meiJustify)
+            )
+            if needsRend:
+                rendAttr: dict[str, str] = {}
+                if meiFontStyle:
+                    rendAttr['fontstyle'] = meiFontStyle
+                if meiFontWeight:
+                    rendAttr['fontweight'] = meiFontWeight
+                if meiFontFamily:
+                    rendAttr['fontfam'] = meiFontFamily
+                if meiJustify:
+                    rendAttr['halign'] = meiJustify
+                tb.start('rend', rendAttr)
+
+        tb.data(text)
+
+        if needsRend:
+            tb.end('rend')
+        tb.end(tag)
+
+    @staticmethod
     def convertPostStaveStreamElement(
         obj: m21.base.Music21Object,
         staffNStr: str,
@@ -964,30 +1018,31 @@ class M21ObjectConvert:
         M21ObjectConvert._addStylisticAttributes(obj, attr)
 
         tag: str = M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG.get(obj.classes[0], '')
+        style: m21.style.Style | None = None
+        if obj.hasStyleInformation:
+            style = obj.style
+
         if tag == 'dynam':
             if t.TYPE_CHECKING:
                 assert isinstance(obj, m21.dynamics.Dynamic)
-            tb.start(tag, attr)
-            tb.data(obj.value)
-            tb.end(tag)
+                assert style is None or isinstance(style, m21.style.TextStyle)
+            M21ObjectConvert.emitStyledTextElement(obj.value, style, tag, attr, tb)
             return
 
         if tag == 'dir':
             if t.TYPE_CHECKING:
                 assert isinstance(obj, m21.expressions.TextExpression)
-            tb.start(tag, attr)
-            tb.data(obj.content)
-            tb.end(tag)
+                assert style is None or isinstance(style, m21.style.TextStyle)
+            M21ObjectConvert.emitStyledTextElement(obj.content, style, tag, attr, tb)
             return
 
         if tag == 'tempo':
+            assert style is None or isinstance(style, m21.style.TextStyle)
             if isinstance(obj, m21.tempo.MetricModulation):
                 obj = obj.newMetronome
 
             if isinstance(obj, m21.tempo.TempoText):
-                tb.start(tag, attr)
-                tb.data(obj.text)
-                tb.end(tag)
+                M21ObjectConvert.emitStyledTextElement(obj.text, style, tag, attr, tb)
                 return
 
             if isinstance(obj, m21.tempo.MetronomeMark):
@@ -995,8 +1050,8 @@ class M21ObjectConvert:
                     # figure out @midi.bpm from obj.number, converting from referent
                     # to quarter note (e.g. referent might be half note)
                     attr['midi.bpm'] = obj.number * obj.referent.quarterLength
-                tb.start(tag, attr)
 
+                tb.start(tag, attr)
                 # also construct "blah=128" or whatever, using SMUFL for noteheads, and
                 # append it to the text before calling tb.data().  It will need a <rend>
                 # element in the middle of the text (thus it's mixed text and elements)
@@ -1012,6 +1067,67 @@ class M21ObjectConvert:
             noteHead: str = M21ObjectConvert._getNoteHeadSMUFLUnicodeForReferent(mm.referent)
             tb.data(noteHead)
             tb.data(f' = {int(mm.number)}')
+            tb.end('rend')
+
+    @staticmethod
+    def meiFontStyleAndWeightToM21FontStyle(
+        meiFontStyle: str | None,
+        meiFontWeight: str | None
+    ) -> str | None:
+        if not meiFontStyle:
+            meiFontStyle = 'normal'
+        if not meiFontWeight:
+            meiFontWeight = 'normal'
+
+        if meiFontStyle == 'oblique':
+            environLocal.warn('@fontstyle="oblique" not supported, treating as "italic"')
+            meiFontStyle = 'italic'
+        if meiFontStyle not in ('normal', 'italic'):
+            environLocal.warn(f'@fontstyle="{meiFontStyle}" not supported, treating as "normal"')
+            meiFontStyle = 'normal'
+        if meiFontWeight not in ('normal', 'bold'):
+            environLocal.warn(f'@fontweight="{meiFontWeight}" not supported, treating as "normal"')
+            meiFontWeight = 'normal'
+
+        if meiFontStyle == 'normal':
+            if meiFontWeight == 'normal':
+                return 'normal'
+            if meiFontWeight == 'bold':
+                return 'bold'
+
+        if meiFontStyle == 'italic':
+            if meiFontWeight == 'normal':
+                return 'italic'
+            if meiFontWeight == 'bold':
+                return 'bolditalic'
+
+        # should not ever get here...
+        raise MeiInternalError('Failed to compute m21FontStyle.')
+
+    @staticmethod
+    def m21FontStyleAndWeightToMei(
+        m21FontStyle: str | None,
+        m21FontWeight: str | None
+    ) -> tuple[str | None, str | None]:
+        # We derive everything we need from m21FontStyle (None, 'normal', 'bold', 'bolditalic')
+        # and then if m21FontWeight is set ('normal', 'bold'), then we use that to override
+        # the boldness of that result we derived.
+        meiFontStyle: str | None = None
+        meiFontWeight: str | None = None
+        if m21FontStyle == 'normal':
+            meiFontStyle = 'normal'
+        elif m21FontStyle == 'italic':
+            meiFontStyle = 'italic'
+        elif m21FontStyle == 'bold':
+            meiFontWeight = 'bold'
+        elif m21FontStyle == 'bolditalic':
+            meiFontStyle = 'italic'
+            meiFontWeight = 'bold'
+
+        if m21FontWeight:
+            meiFontWeight = m21FontWeight
+
+        return (meiFontStyle, meiFontWeight)
 
     _M21_DURATION_TYPE_TO_SMUFL_MM_NOTE_HEAD: dict[str, str] = {
         'breve': 'metNoteDoubleWhole',

@@ -4029,7 +4029,7 @@ class MeiReader:
 
         if fontStyle is not None or fontWeight is not None:
             output.style.fontStyle = (  # type: ignore
-                self._m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
+                M21ObjectConvert.meiFontStyleAndWeightToM21FontStyle(fontStyle, fontWeight)
             )
         if fontFamily is not None:
             output.style.fontFamily = fontFamily  # type: ignore
@@ -7220,14 +7220,9 @@ class MeiReader:
         if t.TYPE_CHECKING:
             assert isinstance(te.style, m21.style.TextStyle)
 
-    #     if elem.tag == f'{MEI_NS}dir':
-    #         # Match Verovio's default: <dir> with no fontStyle should be italic
-    #         if fontStyle is None:
-    #             fontStyle = 'italic'
-
         if fontStyle or fontWeight:
             te.style.fontStyle = (
-                self._m21FontStyleFromMeiFontStyleAndWeight(fontStyle, fontWeight)
+                M21ObjectConvert.meiFontStyleAndWeightToM21FontStyle(fontStyle, fontWeight)
             )
         if fontFamily:
             te.style.fontFamily = fontFamily
@@ -7296,41 +7291,6 @@ class MeiReader:
             fermata.shape = 'square'
 
         return staffNStr, (offset, None, None), fermata
-
-    @staticmethod
-    def _m21FontStyleFromMeiFontStyleAndWeight(
-        meiFontStyle: str | None,
-        meiFontWeight: str | None
-    ) -> str | None:
-        if not meiFontStyle:
-            meiFontStyle = 'normal'
-        if not meiFontWeight:
-            meiFontWeight = 'normal'
-
-        if meiFontStyle == 'oblique':
-            environLocal.warn('@fontstyle="oblique" not supported, treating as "italic"')
-            meiFontStyle = 'italic'
-        if meiFontStyle not in ('normal', 'italic'):
-            environLocal.warn(f'@fontstyle="{meiFontStyle}" not supported, treating as "normal"')
-            meiFontStyle = 'normal'
-        if meiFontWeight not in ('normal', 'bold'):
-            environLocal.warn(f'@fontweight="{meiFontWeight}" not supported, treating as "normal"')
-            meiFontWeight = 'normal'
-
-        if meiFontStyle == 'normal':
-            if meiFontWeight == 'normal':
-                return 'normal'
-            if meiFontWeight == 'bold':
-                return 'bold'
-
-        if meiFontStyle == 'italic':
-            if meiFontWeight == 'normal':
-                return 'italic'
-            if meiFontWeight == 'bold':
-                return 'bolditalic'
-
-        # should not ever get here...
-        raise MeiInternalError('Failed to compute m21FontStyle.')
 
     def measureFromElement(
         self,
