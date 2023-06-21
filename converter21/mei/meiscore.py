@@ -271,7 +271,8 @@ class MeiScore:
                 if isinstance(expr, (
                     m21.expressions.Turn,
                     m21.expressions.Trill,
-                    m21.expressions.GeneralMordent
+                    m21.expressions.GeneralMordent,
+                    m21.expressions.Fermata
                 )):
                     M21ObjectConvert.assureXmlId(obj)
                     break  # skip the rest of the expressions

@@ -199,7 +199,7 @@ class MeiLayer:
                                 tb
                             )
 
-            # 3. Turns/Trills/Mordents on notes/chords in this voice.
+            # 3. Turns/Trills/Mordents/Fermatas on notes/chords in this voice.
             #       We count on any TrillExtension being handled before
             #       now, in the spanner loop above. If that changes, all
             #       'mei_trill_already_handled' processing will need to
@@ -244,3 +244,14 @@ class MeiLayer:
                             tb
                         )
                         continue
+
+                    if isinstance(expr, m21.expressions.Fermata):
+                        M21ObjectConvert.fermataToMei(
+                            obj,
+                            expr,
+                            staffNStr,
+                            m21Part,
+                            m21Measure,
+                            self.scoreMeterStream,
+                            tb
+                        )

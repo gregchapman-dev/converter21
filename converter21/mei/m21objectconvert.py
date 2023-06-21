@@ -74,7 +74,7 @@ class M21ObjectConvert:
             attr['place'] = place
 
         if obj.hasStyleInformation:
-            pass  # a bunch of other stuff, like color, etc
+            pass  # 888 a bunch of other stuff, like color, etc
 
     @staticmethod
     def m21PlacementToMei(obj: m21.base.Music21Object) -> str | None:
@@ -304,7 +304,7 @@ class M21ObjectConvert:
     @staticmethod
     def m21SyllableToMei(lyric: m21.note.Lyric, tb: TreeBuilder):
         attr: dict[str, str] = {}
-        attr['con'] = 'd'  # music21 always uses dashes between syllables
+        # attr['con'] = 'd'  # music21 always uses dashes between syllables
         wordPos: str | None = M21ObjectConvert._M21_SYLLABIC_TO_WORD_POS.get(lyric.syllabic, None)
         if wordPos:
             attr['wordpos'] = wordPos
@@ -989,6 +989,39 @@ class M21ObjectConvert:
         M21ObjectConvert._addStylisticAttributes(mordent, attr)
         tb.start('mordent', attr)
         tb.end('mordent')
+
+    @staticmethod
+    def fermataToMei(
+        gn: m21.note.GeneralNote,
+        fermata: m21.expressions.Fermata,
+        staffNStr: str,
+        m21Part: m21.stream.Part,
+        m21Measure: m21.stream.Measure,
+        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        tb: TreeBuilder,
+    ) -> None:
+        attr: dict[str, str] = {}
+        M21ObjectConvert._fillInStandardPostStavesAttributes(
+            attr,
+            gn,
+            None,
+            staffNStr,
+            m21Part,
+            m21Measure,
+            scoreMeterStream
+        )
+
+        if fermata.type == 'inverted':
+            attr['form'] = 'inv'
+
+        if fermata.shape == 'square':
+            attr['shape'] = 'square'
+        elif fermata.shape == 'angled':
+            attr['shape'] = 'angular'
+
+        M21ObjectConvert._addStylisticAttributes(fermata, attr)
+        tb.start('fermata', attr)
+        tb.end('fermata')
 
     @staticmethod
     def emitStyledTextElement(
