@@ -74,7 +74,7 @@ class M21ObjectConvert:
             attr['place'] = place
 
         if obj.hasStyleInformation:
-            pass  # 888 a bunch of other stuff, like color, etc
+            pass  # TODO: a bunch of other stuff, like color, etc
 
     @staticmethod
     def m21PlacementToMei(obj: m21.base.Music21Object) -> str | None:
@@ -711,7 +711,7 @@ class M21ObjectConvert:
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
     ):
-        attr['staff'] = staffNStr  # 888 what about "1 2"
+        attr['staff'] = staffNStr  # TODO: what about "1 2"
 
         if first is None:
             # we're done
@@ -918,6 +918,11 @@ class M21ObjectConvert:
                 attr['accidlower'] = accid
             M21ObjectConvert._addStylisticAttributes(trill, attr)
 
+        if trill.direction == 'up':
+            attr['form'] = 'upper'
+        elif trill.direction == 'down':
+            attr['form'] = 'lower'
+
         if tb is not None:
             # do the full job
             tb.start('trill', attr)
@@ -951,8 +956,14 @@ class M21ObjectConvert:
             accidlower: str = M21ObjectConvert.m21AccidToMeiAccid(turn.lowerAccidental.name)
             attr['accidlower'] = accidlower
 
+        if isinstance(turn, m21.expressions.InvertedTurn):
+            attr['form'] = 'lower'
+        else:
+            attr['form'] = 'upper'
+
         if turn.isDelayed:
-            print('delayed turn not yet implemented: emitting non-delayed turn')
+            # TODO: non-standard turn delays (use tstamp instead of startid)
+            attr['delayed'] = 'true'
 
         M21ObjectConvert._addStylisticAttributes(turn, attr)
         tb.start('turn', attr)
@@ -985,6 +996,11 @@ class M21ObjectConvert:
                 attr['accidupper'] = accid
             else:
                 attr['accidlower'] = accid
+
+        if mordent.direction == 'up':
+            attr['form'] = 'upper'
+        elif mordent.direction == 'down':
+            attr['form'] = 'lower'
 
         M21ObjectConvert._addStylisticAttributes(mordent, attr)
         tb.start('mordent', attr)
