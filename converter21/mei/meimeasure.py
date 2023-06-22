@@ -10,7 +10,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from xml.etree.ElementTree import TreeBuilder
-# import typing as t
+import typing as t
 
 import music21 as m21
 # from music21.common import opFrac
@@ -45,6 +45,7 @@ class MeiMeasure:
             m21Measures: a list of simultaneous measures, one per staff
             staffNumbersForM21Parts: a dictionary of staff numbers, keyed by Part/PartStaff
         '''
+        self.m21Measures: list[m21.stream.Measure] = m21Measures
         self.nextMeiMeasure: MeiMeasure | None = None
         self.prevMeiMeasure: MeiMeasure | None = prevMeiMeasure
         if prevMeiMeasure is not None:
@@ -77,7 +78,54 @@ class MeiMeasure:
                 return p
         return None
 
+    def startsWithPageBreak(self) -> tuple[bool, int | None]:
+        for m in self.m21Measures:
+            pageLayouts: list[m21.base.Music21Object] = (
+                list(m[m21.layout.PageLayout])
+            )
+            if not pageLayouts:
+                continue
+            pageLayout: m21.base.Music21Object = pageLayouts[0]
+            if t.TYPE_CHECKING:
+                assert isinstance(pageLayout, m21.layout.PageLayout)
+            if pageLayout.offset != 0:
+                continue
+            if not pageLayout.isNew:
+                continue
+            return True, pageLayout.pageNumber
+        return False, 0
+
+    def startsWithSystemBreak(self) -> bool:
+        for m in self.m21Measures:
+            systemLayouts: list[m21.base.Music21Object] = (
+                list(m[m21.layout.SystemLayout])
+            )
+            if not systemLayouts:
+                continue
+            systemLayout: m21.base.Music21Object = systemLayouts[0]
+            if t.TYPE_CHECKING:
+                assert isinstance(systemLayout, m21.layout.SystemLayout)
+            if systemLayout.offset != 0:
+                continue
+            if not systemLayout.isNew:
+                continue
+            return True
+        return False
+
     def makeRootElement(self, tb: TreeBuilder):
+        startsWithPageBreak: bool = False
+        pageNum: int | None = None
+        startsWithPageBreak, pageNum = self.startsWithPageBreak()
+        if startsWithPageBreak:
+            pbAttr: dict[str, str] = {}
+            if pageNum is not None:
+                pbAttr['n'] = str(pageNum)
+            tb.start('pb', pbAttr)
+            tb.end('pb')
+        elif self.startsWithSystemBreak():
+            tb.start('sb', {})
+            tb.end('sb')
+
         attr: dict[str, str] = {}
         self._fillInMeasureAttributes(attr)
 
