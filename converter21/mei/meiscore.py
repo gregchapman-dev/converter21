@@ -260,7 +260,7 @@ class MeiScore:
                 # is not actually valid for real spanners, but it's ok for us).
                 # Handle this as a special case.
                 for note in obj.notes:
-                    for spanner in self.m21Score.spannerBundle.getBySpannedElement(note):
+                    for spanner in note.getSpannerSites():
                         if isinstance(spanner, MeiTieSpanner):
                             M21ObjectConvert.assureXmlId(spanner.getFirst())
                             if spanner.getLast() is not spanner.getFirst():
@@ -278,7 +278,7 @@ class MeiScore:
                     break  # skip the rest of the expressions
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
-            for spanner in self.m21Score.spannerBundle.getBySpannedElement(obj):
+            for spanner in obj.getSpannerSites():
                 if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
                     # Beam spanners and tuplet spanners only need xmlIds if they
                     # span multiple measures.  Note that we won't know this until
