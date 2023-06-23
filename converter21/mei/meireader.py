@@ -4089,7 +4089,7 @@ class MeiReader:
         }
 
         nStr: str | None = elem.get('n')
-        label: str | None = None
+        label: str | None = elem.get('label')  # will be overridden if we see <label>
         syllables: list[note.Lyric] = []
 
         for subElement in self._processEmbeddedElements(

@@ -196,6 +196,7 @@ class M21ObjectConvert:
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         tb.start('chord', attr)
         M21ObjectConvert.m21ArticulationsToMei(obj.articulations, tb)
+        M21ObjectConvert.m21LyricsToMei(obj.lyrics, tb)
         for note in obj.notes:
             M21ObjectConvert._noteToMei(note, tb, withDuration=False)
         tb.end('chord')
