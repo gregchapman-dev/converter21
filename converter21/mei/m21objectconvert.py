@@ -298,11 +298,16 @@ class M21ObjectConvert:
     def m21LyricsToMei(lyrics: list[m21.note.Lyric], tb: TreeBuilder):
         for verse in lyrics:
             attr: dict[str, str] = {}
+            label: str = ''
             if verse.number:
                 attr['n'] = str(verse.number)
             if verse.identifier and verse.identifier != verse.number:
-                attr['label'] = str(verse.identifier)
+                label = str(verse.identifier)
             tb.start('verse', attr)
+            if label:
+                tb.start('label', {})
+                tb.data(label)
+                tb.end('label')
             if verse.isComposite:
                 if t.TYPE_CHECKING:
                     assert verse.components is not None
