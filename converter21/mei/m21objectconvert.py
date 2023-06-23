@@ -338,11 +338,20 @@ class M21ObjectConvert:
         wordPos: str | None = M21ObjectConvert._M21_SYLLABIC_TO_WORD_POS.get(lyric.syllabic, None)
         if wordPos:
             attr['wordpos'] = wordPos
-        text: str = lyric.text
-        text = html.escape(text)
-        tb.start('syl', attr)
-        tb.data(text)
-        tb.end('syl')
+
+        style: m21.style.TextStylePlacement | None = None
+        if lyric.hasStyleInformation:
+            if t.TYPE_CHECKING:
+                assert isinstance(lyric.style, m21.style.TextStylePlacement)
+            style = lyric.style
+
+        M21ObjectConvert.emitStyledTextElement(
+            lyric.text,
+            style,
+            'syl',
+            attr,
+            tb
+        )
 
     _M21_ARTICULATION_NAME_TO_MEI_ARTIC_NAME: dict[str, str] = {
         'accent': 'acc',
