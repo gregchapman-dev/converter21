@@ -68,13 +68,37 @@ class M21ObjectConvert:
             elif obj.stemDirection in ('up', 'down'):
                 attr['stem.dir'] = obj.stemDirection
 
+        if isinstance(obj, (m21.note.Note, m21.note.Unpitched)):
+            if obj.notehead == 'cross':
+                attr['head.shape'] = '+'
+            elif obj.notehead == 'diamond':
+                attr['head.shape'] = 'diamond'
+            elif obj.notehead == 'triangle':
+                attr['head.shape'] = 'isotriangle'
+            elif obj.notehead == 'rectangle':
+                attr['head.shape'] = 'rectangle'
+            elif obj.notehead == 'slash':
+                attr['head.shape'] = 'slash'
+            elif obj.notehead == 'square':
+                attr['head.shape'] = 'square'
+            elif obj.notehead == 'x':
+                attr['head.shape'] = 'x'
+
         # placement (we pass obj because placement might be in obj or obj.style)
         place: str | None = M21ObjectConvert.m21PlacementToMei(obj)
         if place:
             attr['place'] = place
 
+        style: m21.style.Style | None = None
         if obj.hasStyleInformation:
-            pass  # TODO: a bunch of other stuff, like color, etc
+            style = obj.style
+
+        if style is not None:
+            if style.color:
+                attr['color'] = style.color
+            if isinstance(style, m21.style.NoteStyle):
+                if style.noteSize == 'cue':
+                    attr['cue'] = 'true'
 
     @staticmethod
     def m21PlacementToMei(obj: m21.base.Music21Object) -> str | None:
