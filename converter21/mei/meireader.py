@@ -3139,7 +3139,7 @@ class MeiReader:
         staffDefTag: str = f'{MEI_NS}staffDef'
 
         if elem.tag != staffGroupTag:
-            raise MeiInternalError('expected <{staffGroupTag}>, got <{elem.tag}>')
+            raise MeiInternalError(f'expected <{staffGroupTag}>, got <{elem.tag}>')
 
         # Set up a groupDesc for this group (elem), and insert it in parentGroupDesc tree.
         thisGroupDesc: M21StaffGroupDescriptionTree = M21StaffGroupDescriptionTree()
@@ -6554,7 +6554,8 @@ class MeiReader:
             if startObj is not None and hasattr(startObj, 'mei_staff'):
                 staffNStr = startObj.mei_staff  # type: ignore
         if not staffNStr:
-            staffNStr = '1'  # best we can do, hope it's ok
+            environLocal.warn('no @staff found in octave')
+            return ('', (-1., None, None), None)
 
         startId: str = elem.get('startid', '')
         tstamp: str = elem.get('tstamp', '')
@@ -6588,7 +6589,11 @@ class MeiReader:
         if elem.get('ignore_in_arpegFromElement') == 'true':
             return '', (-1., None, None), None
 
-        staffNStr: str = elem.get('staff', '1')
+        staffNStr: str = elem.get('staff', '')
+        if not staffNStr:
+            environLocal.warn('missing @staff in <arpeg> element')
+            return ('', (-1., None, None), None)
+
         tstamp: str | None = elem.get('tstamp')
         if tstamp is None:
             environLocal.warn('missing @tstamp/@startid/@plist in <arpeg> element')
@@ -6625,8 +6630,10 @@ class MeiReader:
             ]
         ] = []
 
-        # If no @staff, presume it is staff 1
         staffNStr = elem.get('staff', '')
+        if not staffNStr:
+            environLocal.warn('missing @staff in <trill> element')
+            return [('', (-1., None, None), None)]
 
         startId: str = elem.get('startid', '')
         tstamp: str = elem.get('tstamp', '')
@@ -6655,8 +6662,6 @@ class MeiReader:
 
             offset = self._tstampToOffset(tstamp)
             trillStaffNStr: str = staffNStr
-            if not trillStaffNStr:
-                trillStaffNStr = '1'
             output.append((trillStaffNStr, (offset, None, None), trill))
 
         if elem.get('ignore_trill_extension_in_trillFromElement') != 'true':
@@ -6696,14 +6701,6 @@ class MeiReader:
                 measSkip, offset2 = self._tstamp2ToMeasSkipAndOffset(tstamp2)
 
             trillExtStaffNStr: str = staffNStr
-            if not trillExtStaffNStr:
-                # get it from start note in trillExt (should already be there)
-                startObj: Music21Object | None = trillExt.getFirst()
-                if startObj is not None and hasattr(startObj, 'mei_staff'):
-                    trillExtStaffNStr = startObj.mei_staff  # type: ignore
-            if not trillExtStaffNStr:
-                trillExtStaffNStr = '1'  # best we can do, hope it's ok
-
             output.append((trillExtStaffNStr, (offset, measSkip, offset2), trillExt))
 
         if not output:
@@ -6728,8 +6725,10 @@ class MeiReader:
             ]
         ] = []
 
-        # If no @staff, presume it is staff 1
-        staffNStr = elem.get('staff', '1')
+        staffNStr = elem.get('staff', '')
+        if not staffNStr:
+            environLocal.warn('missing @staff in <mordent> element')
+            return [('', (-1., None, None), None)]
 
         tstamp: str = elem.get('tstamp', '')
         form: str = elem.get('form', '')
@@ -6803,8 +6802,10 @@ class MeiReader:
             ]
         ] = []
 
-        # If no @staff, presume it is staff 1
-        staffNStr = elem.get('staff', '1')
+        staffNStr = elem.get('staff', '')
+        if not staffNStr:
+            environLocal.warn('missing @staff in <turn> element')
+            return [('', (-1., None, None), None)]
 
         tstamp: str = elem.get('tstamp', '')
         form: str = elem.get('form', '')
@@ -6908,7 +6909,8 @@ class MeiReader:
             if hasattr(hairpin, 'mei_staff'):
                 staffNStr = hairpin.mei_staff  # type: ignore
         if not staffNStr:
-            staffNStr = '1'  # best we can do, hope it's ok
+            environLocal.warn('missing @staff in <octave> element')
+            return ('', (-1., None, None), None)
 
         startId: str = elem.get('startid', '')
         tstamp: str = elem.get('tstamp', '')
@@ -7157,8 +7159,11 @@ class MeiReader:
         if elem.get('ignore_in_dirFromElement') == 'true':
             return '', (-1., None, None), None
 
-        # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
-        staffNStr = elem.get('staff', '1')
+        # If no @staff, ignore it.
+        staffNStr = elem.get('staff', '')
+        if not staffNStr:
+            environLocal.warn(f'missing @staff in <{elem.tag}> element')
+            return '', (-1., None, None), None
         offset: OffsetQL
         te: expressions.TextExpression
 
@@ -7169,7 +7174,7 @@ class MeiReader:
         # @tstamp is required for now, someday we'll be able to derive offsets from @startid
         tstamp: str | None = elem.get('tstamp')
         if tstamp is None:
-            environLocal.warn('missing @tstamp in <dir> element')
+            environLocal.warn(f'missing @tstamp in <{elem.tag}> element')
             return '', (-1., None, None), None
 
         offset = self._tstampToOffset(tstamp)
@@ -7257,7 +7262,11 @@ class MeiReader:
             return '', (-1., None, None), None
 
         # If no @staff, presume it is staff 1; I've seen <tempo> without @staff, for example.
-        staffNStr = elem.get('staff', '1')
+        staffNStr = elem.get('staff', '')
+        if not staffNStr:
+            environLocal.warn('missing @staff in <fermata> element')
+            return '', (-1., None, None), None
+
         offset: OffsetQL
         fermata: expressions.Fermata
 
@@ -8180,7 +8189,8 @@ class MeiReader:
                 if startObj is not None and hasattr(startObj, 'mei_staff'):
                     staffNStr = startObj.mei_staff  # type: ignore
             if not staffNStr:
-                staffNStr = '1'  # best we can do, hope it's ok
+                environLocal.warn('missing @staff in <octave> element')
+                return [('', (-1., None, None), None)]
 
             staffNs: list[str] = staffNStr.split(' ')
             for i, staffN in enumerate(staffNs):
