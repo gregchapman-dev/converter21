@@ -11,7 +11,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import html
 import typing as t
 from xml.etree.ElementTree import TreeBuilder
 from copy import deepcopy
@@ -94,6 +93,8 @@ class M21ObjectConvert:
             style = obj.style
 
         if style is not None:
+            if style.hideObjectOnPrint:
+                attr['visible'] = 'false'
             if style.color:
                 attr['color'] = style.color
             if isinstance(style, m21.style.NoteStyle):
