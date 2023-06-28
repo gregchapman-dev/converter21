@@ -7665,26 +7665,6 @@ class MeiReader:
                         clonedObj: Music21Object = deepcopy(eachObj)
                         staveN.insert(eachOffset, clonedObj)
 
-        # Fill out all voices with invisible rests to match maxBarDuration.
-        for eachN, measure in staves.items():
-            if not isinstance(measure, m21.stream.Measure):
-                continue
-            for voice in measure.voices:
-                if len(voice) == 1 and hasattr(voice[0], 'm21wasMRest'):
-                    # a measure-long rest will be corrected below, ignore it
-                    continue
-
-                if voice.duration.quarterLength < maxBarDuration:
-                    environLocal.warn(
-                        f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
-                        f'is short by {maxBarDuration - voice.duration.quarterLength} quarter '
-                        'notes; assuming this was a missing <space> at the end.'
-                    )
-                    self.padVoiceWithInvisibleRests(
-                        voice,
-                        maxBarDuration - voice.duration.quarterLength
-                    )
-
         # create invisible-rest-filled measures for expected parts that had no <staff> tag
         # in this <measure>
         for eachN in expectedNs:
@@ -7710,6 +7690,29 @@ class MeiReader:
             if t.TYPE_CHECKING:
                 assert maxBarDuration is not None
             self._correctMRestDurs(staves, maxBarDuration)
+
+        # Fill out all voices with invisible rests to match maxBarDuration.
+        expectedVoiceDuration: OffsetQL = maxBarDuration
+        if maxBarDuration == self._DUR_ATTR_DICT[None]:
+            if self.activeMeter is not None:
+                expectedVoiceDuration = self.activeMeter.barDuration.quarterLength
+            else:
+                raise MeiInternalError('no maxBarDuration and no activeMeter')
+
+        for eachN, measure in staves.items():
+            if not isinstance(measure, m21.stream.Measure):
+                continue
+            for voice in measure.voices:
+                if voice.duration.quarterLength < expectedVoiceDuration:
+                    environLocal.warn(
+                        f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
+                        f'is short by {expectedVoiceDuration - voice.duration.quarterLength} '
+                        'quarter notes; assuming this was a missing <space> at the end.'
+                    )
+                    self.padVoiceWithInvisibleRests(
+                        voice,
+                        expectedVoiceDuration - voice.duration.quarterLength
+                    )
 
         # assign left and right barlines
         staves = self._makeBarlines(elem, staves)
