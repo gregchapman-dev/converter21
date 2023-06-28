@@ -17,6 +17,7 @@ import re
 import sys
 import copy
 import typing as t
+from fractions import Fraction
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
@@ -593,6 +594,88 @@ class M21Utilities:
         output: m21.duration.Duration = m21.duration.Duration(base)
         output.dots = dots
         return output
+
+    @staticmethod
+    def isPowerOfTwo(num: OffsetQLIn) -> bool:
+        numFraction: Fraction = Fraction(num)
+        if numFraction.numerator == 0:
+            return False
+        absNumer: int = abs(numFraction.numerator)
+        if numFraction.denominator == 1:
+            return (absNumer & (absNumer - 1)) == 0
+        if absNumer == 1:
+            return (numFraction.denominator & (numFraction.denominator - 1)) == 0
+        return False
+
+    @staticmethod
+    def isPowerOfTwoWithDots(quarterLength: OffsetQLIn) -> bool:
+        ql: OffsetQL = opFrac(quarterLength)
+        if M21Utilities.isPowerOfTwo(ql):
+            # power of two + no dots
+            return True
+        if M21Utilities.isPowerOfTwo(ql * opFrac(Fraction(2, 3))):
+            # power of two + 1 dot
+            return True
+        if M21Utilities.isPowerOfTwo(ql * opFrac(Fraction(4, 7))):
+            # power of two + 2 dots
+            return True
+        if M21Utilities.isPowerOfTwo(ql * opFrac(Fraction(8, 15))):
+            # power of two + 3 dots
+            return True
+        return False
+
+    @staticmethod
+    def computeDurationNoDotsAndNumDots(durWithDots: OffsetQLIn) -> tuple[OffsetQL, int | None]:
+        dd: OffsetQL = opFrac(durWithDots)
+        attemptedPowerOfTwo: OffsetQL = dd
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + no dots
+            return (attemptedPowerOfTwo, 0)
+
+        attemptedPowerOfTwo = dd * opFrac(Fraction(2, 3))
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 1 dot
+            return (attemptedPowerOfTwo, 1)
+
+        attemptedPowerOfTwo = dd * opFrac(Fraction(4, 7))
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 2 dots
+            return (attemptedPowerOfTwo, 2)
+
+        attemptedPowerOfTwo = dd * opFrac(Fraction(8, 15))
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 3 dots
+            return (attemptedPowerOfTwo, 3)
+
+        # None signals that we couldn't actually find a power-of-two duration
+        return (dd, None)
+
+    @staticmethod
+    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: OffsetQLIn) -> list[OffsetQL]:
+        output: list[OffsetQL] = []
+        ql: OffsetQL = opFrac(quarterLength)
+
+        if M21Utilities.isPowerOfTwoWithDots(ql):
+            # power of two + maybe some dots
+            output.append(ql)
+            return output
+
+        powerOfTwoQLAttempt: OffsetQL = opFrac(4)  # start with whole note
+        smallest: OffsetQL = opFrac(Fraction(1, 2048))
+        while powerOfTwoQLAttempt >= smallest:
+            if ql >= powerOfTwoQLAttempt:
+                output.append(powerOfTwoQLAttempt)
+                ql = opFrac(ql - powerOfTwoQLAttempt)
+            else:
+                powerOfTwoQLAttempt = opFrac(powerOfTwoQLAttempt / 2)
+
+            if M21Utilities.isPowerOfTwoWithDots(ql):
+                # power of two + maybe some dots
+                output.append(ql)
+                return output
+
+        # we couldn't compute a full list so just return the original param
+        return [opFrac(quarterLength)]
 
     @staticmethod
     def splitComplexRestDurations(s: m21.stream.Stream) -> None:

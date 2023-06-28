@@ -23,6 +23,7 @@ from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumNum
 from converter21.humdrum import Convert
+from converter21.shared import M21Utilities
 
 class ToolTremolo:
     # Tremolo expansion tool.
@@ -399,7 +400,7 @@ class ToolTremolo:
 
         value: int = int(m.group(1))
         valueHumNum: HumNum = opFrac(value)
-        if not Convert.isPowerOfTwo(valueHumNum):
+        if not M21Utilities.isPowerOfTwo(valueHumNum):
             print(f'Error: not a power of two: {token1}', file=sys.stderr)
             return
         if value < 8:

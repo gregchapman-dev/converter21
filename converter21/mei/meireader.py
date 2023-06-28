@@ -195,7 +195,6 @@ from music21 import bar
 from music21 import beam
 from music21 import chord
 from music21 import clef
-from music21 import duration
 from music21 import dynamics
 from music21 import environment
 from music21 import expressions
@@ -2398,7 +2397,7 @@ class MeiReader:
 
             # checking for len(thing.beams) avoids clobbering beams that were set with a nested
             # <beam> element, like a grace note
-            if (duration.convertTypeToNumber(thing.duration.type) > 4
+            if (m21.duration.convertTypeToNumber(thing.duration.type) > 4
                     and not thing.beams):  # type: ignore
                 thing.beams.fill(thing.duration.type, beamType)  # type: ignore
                 iLastBeamedNote = i
@@ -2413,14 +2412,14 @@ class MeiReader:
                 continue
             if thing.duration.isGrace != isGraceBeam:
                 continue
-            if duration.convertTypeToNumber(thing.duration.type) <= 4:
+            if m21.duration.convertTypeToNumber(thing.duration.type) <= 4:
                 continue
 
             nextThing: Music21Object | None = None
             for j in range(i + 1, len(someThings)):
                 if (hasattr(someThings[j], 'beams')
                         and someThings[j].duration.isGrace == isGraceBeam
-                        and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
+                        and m21.duration.convertTypeToNumber(someThings[j].duration.type) > 4):
                     nextThing = someThings[j]
                     break
 
@@ -2442,14 +2441,14 @@ class MeiReader:
                 continue
             if thing.duration.isGrace != isGraceBeam:
                 continue
-            if duration.convertTypeToNumber(thing.duration.type) <= 4:
+            if m21.duration.convertTypeToNumber(thing.duration.type) <= 4:
                 continue
 
             prevThing: Music21Object | None = None
             for j in reversed(range(0, i)):  # i - 1 .. 0
                 if (hasattr(someThings[j], 'beams')
                         and someThings[j].duration.isGrace == isGraceBeam
-                        and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
+                        and m21.duration.convertTypeToNumber(someThings[j].duration.type) > 4):
                     prevThing = someThings[j]
                     break
 
@@ -2479,7 +2478,7 @@ class MeiReader:
                 continue
             if thing.duration.isGrace != isGraceBeam:
                 continue
-            if duration.convertTypeToNumber(thing.duration.type) <= 4:
+            if m21.duration.convertTypeToNumber(thing.duration.type) <= 4:
                 continue
 
             breaksecNum: int | None = None
@@ -2507,7 +2506,7 @@ class MeiReader:
             for j in range(i + 1, len(someThings)):
                 if (hasattr(someThings[j], 'beams')
                         and someThings[j].duration.isGrace == isGraceBeam
-                        and duration.convertTypeToNumber(someThings[j].duration.type) > 4):
+                        and m21.duration.convertTypeToNumber(someThings[j].duration.type) > 4):
                     nextThing = someThings[j]
                     break
 
@@ -2734,7 +2733,7 @@ class MeiReader:
                 num: str | None = elem.get('m21TupletNum')
                 numbase: str | None = elem.get('m21TupletNumbase')
                 if num and numbase:
-                    newTuplet = duration.Tuplet(
+                    newTuplet = m21.duration.Tuplet(
                         numberNotesActual=int(num),
                         numberNotesNormal=int(numbase),
                         durationNormal=obj.duration.type,
@@ -4179,7 +4178,7 @@ class MeiReader:
         self,
         elem: Element,
         optionalDots: int | None = None
-    ) -> duration.Duration:
+    ) -> m21.duration.Duration:
         durFloat: float | None = None
         durGesFloat: float | None = None
         if elem.get('dur'):
@@ -4205,9 +4204,9 @@ class MeiReader:
             # There's no @dur or @dur.ges, go with that weird default 1/1024th note
             durFloat = self._qlDurationFromAttr(None)
 
-        visualDuration: duration.Duration = M21Utilities.makeDuration(durFloat, numDots)
+        visualDuration: m21.duration.Duration = M21Utilities.makeDuration(durFloat, numDots)
         if durGesFloat is not None or numDotsGes is not None:
-            gesDuration: duration.Duration
+            gesDuration: m21.duration.Duration
             if durGesFloat is not None and numDotsGes is not None:
                 gesDuration = M21Utilities.makeDuration(durGesFloat, numDotsGes)
             elif durGesFloat is not None and numDotsGes is None:
@@ -4324,7 +4323,7 @@ class MeiReader:
             theNote = note.Note()
 
         # set the Note's duration (we will update this if we find any inner <dot> elements)
-        theDuration: duration.Duration = self.durationFromAttributes(elem)
+        theDuration: m21.duration.Duration = self.durationFromAttributes(elem)
         theNote.duration = theDuration
 
         theAccidObj: pitch.Accidental | None = None
@@ -4522,7 +4521,7 @@ class MeiReader:
 
         # beams indicated by a <beamSpan> held elsewhere
         if elem.get('m21Beam') is not None:
-            if duration.convertTypeToNumber(theNote.duration.type) > 4:
+            if m21.duration.convertTypeToNumber(theNote.duration.type) > 4:
                 theNote.beams.fill(theNote.duration.type, elem.get('m21Beam'))
 
         # tuplets
@@ -4587,7 +4586,7 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with spaceFromElement()
 
-        theDuration: duration.Duration = self.durationFromAttributes(elem)
+        theDuration: m21.duration.Duration = self.durationFromAttributes(elem)
         theRest = note.Rest(duration=theDuration)
 
         xmlId: str | None = elem.get(_XMLID)
@@ -4668,7 +4667,7 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with restFromElement()
 
-        theDuration: duration.Duration = self.durationFromAttributes(elem)
+        theDuration: m21.duration.Duration = self.durationFromAttributes(elem)
         theSpace: note.Rest = note.Rest(duration=theDuration)
         theSpace.style.hideObjectOnPrint = True
 
@@ -4834,7 +4833,7 @@ class MeiReader:
                     eachSpanner.replaceSpannedElement(eachNote, theChord)
 
         # set the Chord's duration
-        theDuration: duration.Duration = self.durationFromAttributes(elem)
+        theDuration: m21.duration.Duration = self.durationFromAttributes(elem)
         theChord.duration = theDuration
 
         # grace note (only mark as accented or unaccented grace note;
@@ -4946,7 +4945,7 @@ class MeiReader:
         # beams indicated by a <beamSpan> held elsewhere
         m21BeamStr: str | None = elem.get('m21Beam')
         if m21BeamStr is not None:
-            if duration.convertTypeToNumber(theChord.duration.type) > 4:
+            if m21.duration.convertTypeToNumber(theChord.duration.type) > 4:
                 theChord.beams.fill(theChord.duration.type, m21BeamStr)
 
         # tuplets
@@ -7177,7 +7176,8 @@ class MeiReader:
         # @tstamp is required for now, someday we'll be able to derive offsets from @startid
         tstamp: str | None = elem.get('tstamp')
         if tstamp is None:
-            staffNStr = self.topPartN
+            environLocal.warn('missing @tstamp in <dir> element')
+            return '', (-1., None, None), None
 
         offset = self._tstampToOffset(tstamp)
 
@@ -7631,7 +7631,7 @@ class MeiReader:
                         # Just ignore this object, its @staff value is bogus.
                         continue
 
-                    staveN = staves.get(staffNumStr, None)
+                    staveN = staves[staffNumStr]
                     if t.TYPE_CHECKING:
                         assert isinstance(staveN, stream.Measure)
                     staveN.insert(eachOffset, eachObj)
@@ -7665,14 +7665,36 @@ class MeiReader:
                         clonedObj: Music21Object = deepcopy(eachObj)
                         staveN.insert(eachOffset, clonedObj)
 
-        # create rest-filled measures for expected parts that had no <staff> tag in this <measure>
-        # 888 These should likely be invisible rests.
+        # Fill out all voices with invisible rests to match maxBarDuration.
+        for eachN, measure in staves.items():
+            if not isinstance(measure, m21.stream.Measure):
+                continue
+            for voice in measure.voices:
+                if len(voice) == 1 and hasattr(voice[0], 'm21wasMRest'):
+                    # a measure-long rest will be corrected below, ignore it
+                    continue
+
+                if voice.duration.quarterLength < maxBarDuration:
+                    environLocal.warn(
+                        f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
+                        f'is short by {maxBarDuration - voice.duration.quarterLength} quarter '
+                        'notes; assuming this was a missing <space> at the end.'
+                    )
+                    self.padVoiceWithInvisibleRests(
+                        voice,
+                        maxBarDuration - voice.duration.quarterLength
+                    )
+
+        # create invisible-rest-filled measures for expected parts that had no <staff> tag
+        # in this <measure>
         for eachN in expectedNs:
             if eachN not in staves:
-                restVoice = stream.Voice([note.Rest(quarterLength=maxBarDuration)])
-                restVoice.id = '1'
+                rest = m21.note.Rest(quarterLength=maxBarDuration)
+                rest.style.hideObjectOnPrint = True
                 # just in case (e.g., when all the other voices are <mRest>)
-                restVoice[0].m21wasMRest = True
+                rest.m21wasMRest = True  # type: ignore
+                restVoice = stream.Voice([rest])
+                restVoice.id = '1'
                 staves[eachN] = stream.Measure([restVoice], number=measureNum or 0)
 
         # First search for Rest objects created by an <mRest> element that didn't have @dur set.
@@ -7696,6 +7718,18 @@ class MeiReader:
         self._addTimestampedExpressions(staves, tsExpressions)
 
         return staves
+
+    @staticmethod
+    def padVoiceWithInvisibleRests(voice: m21.stream.Voice, addedDuration: OffsetQL):
+        durations: list[OffsetQL] = (
+            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(addedDuration)
+        )
+        for duration in durations:
+            m21Rest: m21.note.Rest = m21.note.Rest(
+                duration=m21.duration.Duration(duration)
+            )
+            m21Rest.style.hideObjectOnPrint = True
+            voice.append(m21Rest)
 
     def sectionScoreCore(
         self,

@@ -21,7 +21,6 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import MeasureStyle
 from converter21.humdrum import FermataStyle
 from converter21.humdrum import EventData
-from converter21.humdrum import Convert
 from converter21.humdrum import M21Convert
 from converter21.shared import M21Utilities
 
@@ -267,7 +266,7 @@ class MeasureData:
         if emptyStartDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the beginning of m21Stream
-            durations = Convert.getPowerOfTwoDurationsWithDotsAddingTo(emptyStartDuration)
+            durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyStartDuration)
             startTime = self.startTime
             for duration in durations:
                 m21StartRest: m21.note.Rest = m21.note.Rest(
@@ -316,7 +315,7 @@ class MeasureData:
         if emptyEndDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the end of m21Stream
-            durations = Convert.getPowerOfTwoDurationsWithDotsAddingTo(emptyEndDuration)
+            durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyEndDuration)
             startTime = opFrac(self.startTime + self.duration - opFrac(emptyEndDuration))
             for duration in durations:
                 m21EndRest: m21.note.Rest = m21.note.Rest(duration=m21.duration.Duration(duration))
