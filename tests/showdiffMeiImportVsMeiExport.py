@@ -33,6 +33,7 @@ def runTheFullTest(meiPath: Path):
     meiwPath = Path(tempfile.gettempdir())
     meiwPath /= (meiPath.stem + '_Written')
     meiwPath = meiwPath.with_suffix('.mei')
+    print(f'Writing MEI file: {meiwPath}')
     with open(meiwPath, 'wb') as f:
         success = meiw.write(f)
 
@@ -41,6 +42,7 @@ def runTheFullTest(meiPath: Path):
     # compare with bbdiff:
     subprocess.run(['bbdiff', str(meiPath), str(meiwPath)], check=False)
 
+    print(f'Parsing written MEI file: {meiwPath}')
     score2 = m21.converter.parse(meiwPath, format='mei', forceSource=True)
     assert score2 is not None
     assert score2.isWellFormedNotation()
