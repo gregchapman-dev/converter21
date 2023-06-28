@@ -213,6 +213,7 @@ class M21ObjectConvert:
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
+            attr.pop('visible', None)  # remove @visible="false", since <space> is always invisible
             tb.start('space', attr)
             tb.end('space')
         else:
