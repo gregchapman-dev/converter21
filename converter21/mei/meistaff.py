@@ -62,7 +62,6 @@ class MeiStaff:
 
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
-        tb.start('staff', {'n': self.staffNStr})
         if not self.theOneLayerIsTheMeasureItself and self.m21Measure.offset != 0:
             # Process any clef/timesig/keysig at offset 0 in enclosing measure (but
             # only if the m21Measure itself is not the first measure in the m21Part,
@@ -84,12 +83,13 @@ class MeiStaff:
             if staffDefEmitted:
                 tb.end('staffDef')
 
+        tb.start('staff', {'n': self.staffNStr})
         for layer in self.layers:
             layer.makeRootElement(tb)
-
         # 888 process any final barline in the Measure (MeiStaff)
+        tb.end('staff')
 
-        tb.end('staffs')
+
 
     def makePostStavesElements(self, tb: TreeBuilder):
         for layer in self.layers:
