@@ -7680,38 +7680,28 @@ class MeiReader:
         # First search for Rest objects created by an <mRest> element that didn't have @dur set.
         # This will only work in cases where not all of the parts are resting. However, it avoids
         # a more time-consuming search later.
-        if (maxBarDuration == self._DUR_ATTR_DICT[None]
-                and self.activeMeter is not None
-                and maxBarDuration != self.activeMeter.barDuration.quarterLength):
-            # In this case, all the staves have <mRest> elements without a @dur.
-            self._correctMRestDurs(staves, self.activeMeter.barDuration.quarterLength)
-        else:
-            # In this case, some or none of the staves have an <mRest> element without a @dur.
-            if t.TYPE_CHECKING:
-                assert maxBarDuration is not None
-            self._correctMRestDurs(staves, maxBarDuration)
-
-        # Fill out all voices with invisible rests to match maxBarDuration.
-        expectedVoiceDuration: OffsetQL = maxBarDuration
+        expectedMeasureDuration: OffsetQL = maxBarDuration
         if maxBarDuration == self._DUR_ATTR_DICT[None]:
             if self.activeMeter is not None:
-                expectedVoiceDuration = self.activeMeter.barDuration.quarterLength
+                expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
             else:
-                raise MeiInternalError('no maxBarDuration and no activeMeter')
+                expectedMeasureDuration = 4.0
+            self._correctMRestDurs(staves, expectedMeasureDuration)
 
+        # Fill out all voices with invisible rests to match maxBarDuration.
         for eachN, measure in staves.items():
             if not isinstance(measure, m21.stream.Measure):
                 continue
             for voice in measure.voices:
-                if voice.duration.quarterLength < expectedVoiceDuration:
+                if voice.duration.quarterLength < expectedMeasureDuration:
                     environLocal.warn(
                         f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
-                        f'is short by {expectedVoiceDuration - voice.duration.quarterLength} '
+                        f'is short by {expectedMeasureDuration - voice.duration.quarterLength} '
                         'quarter notes; assuming this was a missing <space> at the end.'
                     )
                     self.padVoiceWithInvisibleRests(
                         voice,
-                        expectedVoiceDuration - voice.duration.quarterLength
+                        expectedMeasureDuration - voice.duration.quarterLength
                     )
 
         # assign left and right barlines
