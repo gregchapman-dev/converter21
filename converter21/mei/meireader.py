@@ -2749,6 +2749,18 @@ class MeiReader:
                 num: str | None = elem.get('m21TupletNum')
                 numbase: str | None = elem.get('m21TupletNumbase')
                 if num and numbase:
+                    hasGesturalDuration: bool = not obj.duration.linked
+                    gesturalQL: OffsetQL | None = None
+                    if hasGesturalDuration:
+                        # make obj.duration only visual again
+                        # Visual duration, when unlinked, is type and dots;
+                        # gestural duration is quarterLength.
+                        gesturalQL = obj.duration.quarterLength
+                        obj.duration = m21.duration.Duration(
+                            type=obj.duration.type,
+                            dots=obj.duration.dots
+                        )
+
                     newTuplet = m21.duration.Tuplet(
                         numberNotesActual=int(num),
                         numberNotesNormal=int(numbase),
@@ -2801,6 +2813,13 @@ class MeiReader:
                             newTuplet.tupletNormalShow = 'number'
 
                     obj.duration.appendTuplet(newTuplet)
+
+                    if hasGesturalDuration:
+                        # put it back (tupletized)
+                        mult: OffsetQL = newTuplet.tupletMultiplier()
+                        newGesturalQL: OffsetQL = opFrac(gesturalQL * mult)
+                        obj.duration.linked = False
+                        obj.duration.quarterLength = newGesturalQL
 
         if wasList:
             return objs
@@ -4228,7 +4247,7 @@ class MeiReader:
                 durFloat = self._qlDurationFromAttr(elem.get('dur'))
                 if durFloat is None:
                     # @dur value was not found in self._DUR_ATTR_DICT
-                    raise MeiAttributeError('dur attribute has illegal value: "{attr}"')
+                    raise MeiAttributeError(f'dur attribute has illegal value: "{elem.get("dur")}"')
 
             if elem.get('dur.ges'):
                 durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
