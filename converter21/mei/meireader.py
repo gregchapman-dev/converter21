@@ -2719,10 +2719,11 @@ class MeiReader:
             if not isinstance(obj, (note.Note, note.Unpitched, note.Rest, chord.Chord)):
                 # silently skip objects that don't have a duration
                 continue
-    #         if isinstance(obj, note.Note) and isinstance(obj.duration, duration.GraceDuration):
-    #             # silently skip grace notes (they don't have a duration either)
-    #             continue
-    # THIS CAUSED TEST FAILURE
+
+            if (isinstance(obj, note.GeneralNote)
+                    and isinstance(obj.duration, m21.duration.GraceDuration)):
+                # silently skip grace notes (they don't have a duration either)
+                continue
 
             if elem.get('m21TupletSearch') is not None:
                 obj.m21TupletSearch = elem.get('m21TupletSearch')  # type: ignore
@@ -2750,7 +2751,7 @@ class MeiReader:
                 numbase: str | None = elem.get('m21TupletNumbase')
                 if num and numbase:
                     hasGesturalDuration: bool = not obj.duration.linked
-                    gesturalQL: OffsetQL | None = None
+                    gesturalQL: OffsetQL
                     if hasGesturalDuration:
                         # make obj.duration only visual again
                         # Visual duration, when unlinked, is type and dots;
@@ -4234,7 +4235,7 @@ class MeiReader:
         optionalDots: int | None = None,
         usePlaceHolderDuration: bool = False  # True during mRest/mSpace processing
     ) -> m21.duration.Duration:
-        wasDefault: bool = False
+        # wasDefault: bool = False
         durFloat: float | None = 0.0
         durGesFloat: float | None = 0.0
         numDots: int = 0
@@ -4271,7 +4272,7 @@ class MeiReader:
 
         if durFloat == 0.0:
             # both @dur and @dur.ges were missing
-            wasDefault = True
+            # wasDefault = True
             durFloat = self._attrTranslator(
                 self.getDefaultDuration(self.staffNumberForNotes),
                 'dur',
