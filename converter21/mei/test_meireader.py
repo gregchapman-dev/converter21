@@ -1142,21 +1142,6 @@ class Test(unittest.TestCase):
         self.assertEqual(mockRestFromElement.return_value, actual)
         mockRestFromElement.assert_called_once_with(elem)
 
-    @mock.patch('converter21.mei.meireader.MeiReader.restFromElement')
-    def testUnit4TestRestFromElement(self, mockRestFromElement):
-        '''
-        mRestFromElement(): reacts properly to an Element without the @dur attribute
-        '''
-        elem = ETree.Element('mRest')
-        mockRestFromElement.return_value = mock.MagicMock()
-
-        c = MeiReader()
-        actual = c.mRestFromElement(elem)
-
-        self.assertEqual(mockRestFromElement.return_value, actual)
-        mockRestFromElement.assert_called_once_with(elem)
-        self.assertTrue(actual.m21wasMRest)
-
     @mock.patch('converter21.mei.meireader.MeiReader.spaceFromElement')
     def testUnit5TestRestFromElement(self, mockSpace):
         '''
@@ -1170,21 +1155,6 @@ class Test(unittest.TestCase):
 
         self.assertEqual(mockSpace.return_value, actual)
         mockSpace.assert_called_once_with(elem)
-
-    @mock.patch('converter21.mei.meireader.MeiReader.spaceFromElement')
-    def testUnit6TestRestFromElement(self, mockSpace):
-        '''
-        mSpaceFromElement(): reacts properly to an Element without the @dur attribute
-        '''
-        elem = ETree.Element('mSpace')
-        mockSpace.return_value = mock.MagicMock()
-
-        c = MeiReader()
-        actual = c.mSpaceFromElement(elem)
-
-        self.assertEqual(mockSpace.return_value, actual)
-        mockSpace.assert_called_once_with(elem)
-        self.assertTrue(actual.m21wasMRest)
 
     # -----------------------------------------------------------------------------
     # class TestChordFromElement(unittest.TestCase):

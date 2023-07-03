@@ -5624,9 +5624,12 @@ class MeiReader:
         firstNote = None
         lastNote = None
         for i, eachObj in enumerate(tupletMembers):
-            if firstNote is None and isinstance(eachObj, note.GeneralNote):
+            if (firstNote is None
+                    and isinstance(eachObj, note.GeneralNote)
+                    and not isinstance(eachObj.duration, m21.duration.GraceDuration)):
                 firstNote = i
-            elif isinstance(eachObj, note.GeneralNote):
+            elif (isinstance(eachObj, note.GeneralNote)
+                    and not isinstance(eachObj.duration, m21.duration.GraceDuration)):
                 lastNote = i
 
         if firstNote is None:
