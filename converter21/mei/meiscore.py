@@ -394,10 +394,11 @@ class MeiScore:
                     output += 1
             return output
 
-        starts: int = numStarts(gnote.duration.tuplets)
-        if len(gnote.duration.tuplets) - starts != len(self.currentTupletSpanners):
-            raise MeiExportError('malformed music21 nested tuplets')
-            # I guess we could try to figure it out
+        if not isinstance(gnote.duration, m21.duration.GraceDuration):
+            starts: int = numStarts(gnote.duration.tuplets)
+            if len(gnote.duration.tuplets) - starts != len(self.currentTupletSpanners):
+                raise MeiExportError('malformed music21 nested tuplets')
+                # I guess we could try to figure it out
 
         # start any new tuplet spanners
         for tuplet in gnote.duration.tuplets:
