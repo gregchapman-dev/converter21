@@ -53,6 +53,12 @@ class M21ObjectConvert:
         M21ObjectConvert._noteToMei(obj, tb, withDuration=True)
 
     @staticmethod
+    def _addStemMod(obj: m21.note.NotRest, attr: dict[str, str]):
+        if hasattr(obj, 'mei_stem_mod'):
+            stemMod: str = getattr(obj, 'mei_stem_mod')
+            attr['stem.mod'] = stemMod
+
+    @staticmethod
     def _addBreakSec(obj: m21.note.NotRest, attr: dict[str, str]):
         if hasattr(obj, 'mei_breaksec'):
             num: int = getattr(obj, 'mei_breaksec')
@@ -192,9 +198,15 @@ class M21ObjectConvert:
         xmlId: str = M21ObjectConvert.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
-        M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
+
+        inFTrem: bool = False
+        if hasattr(obj, 'mei_in_ftrem'):
+            inFTrem = getattr(obj, 'mei_in_ftrem')
+        M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr, inFTrem=inFTrem)
         M21ObjectConvert._addBreakSec(obj, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
+        M21ObjectConvert._addStemMod(obj, attr)
+
         tb.start('chord', attr)
         M21ObjectConvert.m21ArticulationsToMei(obj.articulations, tb)
         M21ObjectConvert.m21LyricsToMei(obj.lyrics, tb)
@@ -264,8 +276,13 @@ class M21ObjectConvert:
         if xmlId:
             attr['xml:id'] = xmlId
 
+        M21ObjectConvert._addStemMod(note, attr)
+
         if withDuration:
-            M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr)
+            inFTrem: bool = False
+            if hasattr(note, 'mei_in_ftrem'):
+                inFTrem = getattr(note, 'mei_in_ftrem')
+            M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr, inFTrem=inFTrem)
 
         if isinstance(note, m21.note.Unpitched):
             loc: str = M21ObjectConvert.m21DisplayPitchToMeiLoc(note.displayPitch())
@@ -543,7 +560,8 @@ class M21ObjectConvert:
     @staticmethod
     def m21DurationToMeiDurDotsGrace(
         duration: m21.duration.Duration,
-        attr: dict[str, str]
+        attr: dict[str, str],
+        inFTrem: bool = False
     ):
         # Note that the returned values ignore any tuplets (that's the way MEI likes it)
         dur: str = ''
@@ -564,16 +582,25 @@ class M21ObjectConvert:
         elif not duration.linked:
             # duration is not linked and not grace, so we have to
             # compute @dur.ges and @dots.ges
+            gesQL: OffsetQL = 0.0
             if duration.tuplets:
                 nonTupletduration: m21.duration.Duration = deepcopy(duration)
                 nonTupletduration.tuplets = tuple()
-                newDuration = m21.duration.Duration(nonTupletduration.quarterLength)
+                gesQL = nonTupletduration.quarterLength
             else:
-                newDuration = m21.duration.Duration(duration.quarterLength)
+                gesQL = duration.quarterLength
 
-            durGes = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(newDuration.type, '')
-            if newDuration.dots:
-                dotsGes = str(newDuration.dots)
+            if inFTrem:
+                # multiply gestural duration by 2 to adjust for how music21 represents
+                # gestural duration of notes/chords in TremoloSpanner.  If this makes
+                # it equivalent to visual duration, no @dur.ges or @dots.ges will be
+                # emitted.
+                gesQL = opFrac(gesQL * 2.0)
+
+            gesDuration = m21.duration.Duration(gesQL)
+            durGes = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(gesDuration.type, '')
+            if gesDuration.dots:
+                dotsGes = str(gesDuration.dots)
 
             # only emit @dur.ges or @dots.ges if different from @dur or @dots
             if durGes == dur:

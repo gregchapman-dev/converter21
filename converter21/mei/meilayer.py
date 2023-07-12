@@ -24,6 +24,8 @@ from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
 from converter21.mei import MeiTupletSpanner
 
+environLocal = m21.environment.Environment('converter21.mei.meilayer')
+
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
 # for current func name, specify 0 or no argument.
@@ -95,6 +97,8 @@ class MeiLayer:
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 # check for beam, tuplet
+                endFTremNeeded: bool = self.processFTremState(obj, tb)
+                endBTremNeeded: bool = self.processBTremState(obj, tb)
                 endBeamNeeded: bool = self.processBeamState(obj, tb)
                 endTupletNeeded: bool = self.processTupletState(obj, tb)
 
@@ -104,8 +108,123 @@ class MeiLayer:
                     tb.end('tuplet')
                 if endBeamNeeded:
                     tb.end('beam')
+                if endBTremNeeded:
+                    tb.end('bTrem')
+                if endFTremNeeded:
+                    tb.end('fTrem')
 
         tb.end('layer')
+
+    _NUM_MARKS_TO_UNIT_DUR: dict[int, str] = {
+        1: '8',
+        2: '16',
+        3: '32',
+        4: '64',
+        5: '128',
+        6: '256',
+        7: '512',
+        8: '1024',
+        9: '2048'
+    }
+
+    _UNIT_DUR_TO_BEAMS: dict[str, str] = {
+        '8': '1',
+        '16': '2',
+        '32': '3',
+        '64': '4',
+        '128': '5',
+        '256': '6',
+        '512': '7',
+        '1024': '8',
+        '2048': '9'
+    }
+
+    _QL_NO_DOTS_TO_NUM_FLAGS: dict[float, int] = {
+        # not present implies zero beams
+        0.5: 1,  # 0.5ql is an eighth note -> one beam
+        0.25: 2,
+        0.125: 3,
+        0.0625: 4,
+        0.03125: 5,
+        0.015625: 6,
+        0.0078125: 7,
+        0.00390625: 8,
+        0.001953125: 9
+    }
+
+    def processBTremState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
+        # starts a bTrem if necessary before this obj.
+        # returns whether or not the current bTrem should be ended after this obj.
+        endTheTremolo: bool = False
+        if not isinstance(obj, m21.note.GeneralNote):
+            return endTheTremolo
+
+        for expr in obj.expressions:
+            if isinstance(expr, m21.expressions.Tremolo):
+                durQLNoDots: float = m21.duration.typeToDuration.get(obj.duration.type, 0.0)
+                numNoteBeams: int = self._QL_NO_DOTS_TO_NUM_FLAGS.get(durQLNoDots, 0)
+                totalNumBeams: int = expr.numberOfMarks + numNoteBeams
+                unitDur: str = self._NUM_MARKS_TO_UNIT_DUR.get(totalNumBeams, '')
+                if not unitDur:
+                    environLocal.warn(f'invalid totalNumBeams ({totalNumBeams}), skipping bTrem.')
+                    break
+
+                # start a <bTrem>
+                attr: dict[str, str] = {}
+                attr['unitdur'] = unitDur
+                tb.start('bTrem', attr)
+
+                # <bTrem> contains only one note/chord, so end it now.
+                endTheTremolo = True
+                break
+
+        return endTheTremolo
+
+    def processFTremState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
+        # starts an fTrem if necessary before this obj.
+        # returns whether or not the current fTrem should be ended after this obj.
+        endTheTremolo: bool = False
+        if not isinstance(obj, m21.note.GeneralNote):
+            return endTheTremolo
+
+        for spanner in self.spannerBundle.getBySpannedElement(obj):  # type: ignore
+            if isinstance(spanner, m21.expressions.TremoloSpanner):
+                if len(spanner) != 2:
+                    environLocal.warn('len(TremoloSpanner) != 2, skipping fTrem.')
+                    break
+
+                obj.mei_in_ftrem = True  # type: ignore
+
+                if spanner.isFirst(obj):
+                    durQLNoDots: float = m21.duration.typeToDuration.get(obj.duration.type, 0.0)
+                    numNoteBeams: int = self._QL_NO_DOTS_TO_NUM_FLAGS.get(durQLNoDots, 0)
+                    totalNumBeams: int = spanner.numberOfMarks + numNoteBeams
+                    unitDur: str = self._NUM_MARKS_TO_UNIT_DUR.get(totalNumBeams, '')
+                    if not unitDur:
+                        environLocal.warn(
+                            f'invalid totalNumBeams ({totalNumBeams}), skipping fTrem.'
+                        )
+                        break
+                    beams: str = self._UNIT_DUR_TO_BEAMS.get(unitDur, '')
+                    if not beams:
+                        environLocal.warn(
+                            f'invalid unitDur ({unitDur}), skipping fTrem.'
+                        )
+                        break
+
+                    # start an <fTrem>
+                    attr: dict[str, str] = {}
+                    attr['beams'] = beams
+                    attr['unitdur'] = unitDur
+                    tb.start('fTrem', attr)
+                    break
+
+                if spanner.isLast(obj):
+                    endTheTremolo = True
+                    break
+
+        return endTheTremolo
+
 
     def processBeamState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
         # starts a beam if necessary before this obj.

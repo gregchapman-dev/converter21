@@ -5391,14 +5391,15 @@ class MeiReader:
         if t.TYPE_CHECKING:
             assert isinstance(noteOrChord, note.NotRest)
         tremolo: expressions.Tremolo = expressions.Tremolo()
-        unitdurStr: str = elem.get('unitdur', '')
-        numMarks: int = self._DUR_TO_NUMBEAMS.get(unitdurStr, 0)
+        unitDurStr: str = elem.get('unitdur', '')
+        numMarks: int = self._DUR_TO_NUMBEAMS.get(unitDurStr, 0)
         if numMarks == 0:
             # check the note or chord itself to see if it has @stem.mod = '3slashes' or the like
             if hasattr(noteOrChord, 'mei_stem_mod'):
                 numMarks = self._STEMMOD_TO_NUMSLASHES.get(
                     noteOrChord.mei_stem_mod, 0  # type: ignore
                 )
+                delattr(noteOrChord, 'mei_stem_mod')
 
         if numMarks == 9:
             numMarks = 8  # music21 doesn't support a 2048th note tremolo, pretend it's 1024th note
@@ -5443,16 +5444,24 @@ class MeiReader:
             pass
 
         if numMarks == 0:
+            # try @unitdur
+            unitDurStr: str = elem.get('unitdur', '')
+            if unitDurStr:
+                numMarks = self._DUR_TO_NUMBEAMS.get(unitDurStr, 0)
+
+        if numMarks == 0:
             # check the notes or chords themselves to see if they have @stem.mod = '3slashes'
             # or the like
             if hasattr(firstNoteOrChord, 'mei_stem_mod'):
                 numMarks = self._STEMMOD_TO_NUMSLASHES.get(
                     firstNoteOrChord.mei_stem_mod, 0  # type: ignore
                 )
+                delattr(firstNoteOrChord, 'mei_stem_mod')
             if numMarks == 0 and hasattr(secondNoteOrChord, 'mei_stem_mod'):
                 numMarks = self._STEMMOD_TO_NUMSLASHES.get(
                     secondNoteOrChord.mei_stem_mod, 0  # type: ignore
                 )
+                delattr(secondNoteOrChord, 'mei_stem_mod')
 
         # numMarks should be total number of beams - beams due to note duration
         numNoteBeams: int = self._QL_TO_NUMFLAGS.get(firstNoteOrChord.duration.quarterLength, 0)
