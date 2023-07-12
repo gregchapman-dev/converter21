@@ -97,21 +97,21 @@ class MeiLayer:
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 # check for beam, tuplet
-                endFTremNeeded: bool = self.processFTremState(obj, tb)
-                endBTremNeeded: bool = self.processBTremState(obj, tb)
                 endBeamNeeded: bool = self.processBeamState(obj, tb)
                 endTupletNeeded: bool = self.processTupletState(obj, tb)
+                endFTremNeeded: bool = self.processFTremState(obj, tb)
+                endBTremNeeded: bool = self.processBTremState(obj, tb)
 
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
 
-                if endTupletNeeded:
-                    tb.end('tuplet')
-                if endBeamNeeded:
-                    tb.end('beam')
                 if endBTremNeeded:
                     tb.end('bTrem')
                 if endFTremNeeded:
                     tb.end('fTrem')
+                if endTupletNeeded:
+                    tb.end('tuplet')
+                if endBeamNeeded:
+                    tb.end('beam')
 
         tb.end('layer')
 
