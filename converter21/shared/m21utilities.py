@@ -851,6 +851,18 @@ class M21Utilities:
         return True
 
     @staticmethod
+    def getSpannerQuarterLength(
+        spanner: m21.spanner.Spanner,
+        hierarchy: m21.stream.Stream
+    ) -> OffsetQL:
+        first = spanner.getFirst()
+        last = spanner.getLast()
+        start: OffsetQL = first.getOffsetInHierarchy(hierarchy)
+        end: OffsetQL = last.getOffsetInHierarchy(hierarchy)
+        end += last.duration.quarterLength
+        return opFrac(end - start)
+
+    @staticmethod
     def getActiveTimeSigFromMeterStream(
         offset: OffsetQL,
         meterStream: m21.stream.Stream[m21.meter.TimeSignature]

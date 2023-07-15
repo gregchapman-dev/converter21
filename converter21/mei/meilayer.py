@@ -15,7 +15,7 @@ from xml.etree.ElementTree import TreeBuilder
 # import typing as t
 
 import music21 as m21
-# from music21.common import OffsetQL, OffsetQLIn, opFrac
+from music21.common import OffsetQL
 
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
@@ -96,22 +96,26 @@ class MeiLayer:
 
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                # check for beam, tuplet
-                endBeamNeeded: bool = self.processBeamState(obj, tb)
-                endTupletNeeded: bool = self.processTupletState(obj, tb)
-                endFTremNeeded: bool = self.processFTremState(obj, tb)
+                # Gather a list of beam, tuplet, fTrem spanners that start
+                # with this obj.  Sort them by duration (longest first),
+                # so they will nest properly as elements.
+                beamTupletFTremStarts: list[
+                    MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
+                ] = self.getOrderedBeamTupletFTremStarts(obj)
+                beamTupletFTremEnds: list[
+                    MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
+                ] = self.getOrderedBeamTupletFTremEnds(obj)
+
+                for btfs in beamTupletFTremStarts:
+                    self.processBeamTupletFTremStart(btfs, tb)
+
                 endBTremNeeded: bool = self.processBTremState(obj, tb)
-
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
-
                 if endBTremNeeded:
                     tb.end('bTrem')
-                if endFTremNeeded:
-                    tb.end('fTrem')
-                if endTupletNeeded:
-                    tb.end('tuplet')
-                if endBeamNeeded:
-                    tb.end('beam')
+
+                for btfe in beamTupletFTremEnds:
+                    self.processBeamTupletFTremEnd(btfe, tb)
 
         tb.end('layer')
 
@@ -180,99 +184,143 @@ class MeiLayer:
 
         return endTheTremolo
 
-    def processFTremState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
-        # starts an fTrem if necessary before this obj.
-        # returns whether or not the current fTrem should be ended after this obj.
-        endTheTremolo: bool = False
-        if not isinstance(obj, m21.note.GeneralNote):
-            return endTheTremolo
+    def processBeamTupletFTremStart(
+        self,
+        btfs: MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner,
+        tb: TreeBuilder
+    ):
+        attr: dict[str, str] = {}
+        if isinstance(btfs, MeiBeamSpanner):
+            # start a <beam>
+            tb.start('beam', attr)
+        elif isinstance(btfs, MeiTupletSpanner):
+            # start a <tuplet>
+            M21ObjectConvert.fillInTupletAttributes(btfs.startTuplet, attr)
+            tb.start('tuplet', attr)
+        elif isinstance(btfs, m21.expressions.TremoloSpanner):
+            durQLNoDots: float = m21.duration.typeToDuration.get(
+                btfs.getFirst().duration.type, 0.0
+            )
+            numNoteBeams: int = self._QL_NO_DOTS_TO_NUM_FLAGS.get(durQLNoDots, 0)
+            totalNumBeams: int = btfs.numberOfMarks + numNoteBeams
+            unitDur: str = self._NUM_MARKS_TO_UNIT_DUR.get(totalNumBeams, '')
+            if not unitDur:
+                environLocal.warn(
+                    f'invalid totalNumBeams ({totalNumBeams}), skipping fTrem.'
+                )
+                btfs.mei_skip = True  # type: ignore
+                return
+            beams: str = self._UNIT_DUR_TO_BEAMS.get(unitDur, '')
+            if not beams:
+                environLocal.warn(
+                    f'invalid unitDur ({unitDur}), skipping fTrem.'
+                )
+                btfs.mei_skip = True  # type: ignore
+                return
 
-        for spanner in self.spannerBundle.getBySpannedElement(obj):  # type: ignore
-            if isinstance(spanner, m21.expressions.TremoloSpanner):
+            # start an <fTrem>
+            attr['beams'] = beams
+            attr['unitdur'] = unitDur
+            tb.start('fTrem', attr)
+
+    def processBeamTupletFTremEnd(
+        self,
+        btfe: MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner,
+        tb: TreeBuilder
+    ):
+        if hasattr(btfe, 'mei_skip'):
+            return
+
+        if isinstance(btfe, MeiBeamSpanner):
+            tb.end('beam')
+        elif isinstance(btfe, MeiTupletSpanner):
+            tb.end('tuplet')
+        elif isinstance(btfe, m21.expressions.TremoloSpanner):
+            tb.end('fTrem')
+
+    def getOrderedBeamTupletFTremStarts(
+        self,
+        obj: m21.base.Music21Object,
+    ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
+
+        def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
+            return M21Utilities.getSpannerQuarterLength(spanner, self.meiParent.m21Measure)
+
+        output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
+        for spanner in obj.getSpannerSites([
+            MeiBeamSpanner,
+            MeiTupletSpanner,
+            m21.expressions.TremoloSpanner
+        ]):
+            # we're only interested in starts
+            if not spanner.isFirst(obj):
+                continue
+
+            # Beam and tuplet are special, they can span across measure boundaries.
+            # If they do span across a measure boundary, skip them here, we'll
+            # emit a <beamSpan> or <tupletSpan> instead, later.
+            if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
+                if not M21Utilities.allSpannedElementsAreInHierarchy(
+                    spanner, self.meiParent.m21Measure
+                ):
+                    continue
+
+                # mark as having been emitted as <beam> or <tuplet> so we don't emit
+                # as <beamSpan> or <tupletSpan> later, in makePostStavesElements.
+                if isinstance(spanner, MeiBeamSpanner):
+                    spanner.mei_beam = True  # type: ignore
+                else:
+                    spanner.mei_tuplet = True  # type: ignore
+
+            elif isinstance(spanner, m21.expressions.TremoloSpanner):
                 if len(spanner) != 2:
                     environLocal.warn('len(TremoloSpanner) != 2, skipping fTrem.')
-                    break
+                    continue
 
                 obj.mei_in_ftrem = True  # type: ignore
 
-                if spanner.isFirst(obj):
-                    durQLNoDots: float = m21.duration.typeToDuration.get(obj.duration.type, 0.0)
-                    numNoteBeams: int = self._QL_NO_DOTS_TO_NUM_FLAGS.get(durQLNoDots, 0)
-                    totalNumBeams: int = spanner.numberOfMarks + numNoteBeams
-                    unitDur: str = self._NUM_MARKS_TO_UNIT_DUR.get(totalNumBeams, '')
-                    if not unitDur:
-                        environLocal.warn(
-                            f'invalid totalNumBeams ({totalNumBeams}), skipping fTrem.'
-                        )
-                        break
-                    beams: str = self._UNIT_DUR_TO_BEAMS.get(unitDur, '')
-                    if not beams:
-                        environLocal.warn(
-                            f'invalid unitDur ({unitDur}), skipping fTrem.'
-                        )
-                        break
+            output.append(spanner)  # type: ignore
 
-                    # start an <fTrem>
-                    attr: dict[str, str] = {}
-                    attr['beams'] = beams
-                    attr['unitdur'] = unitDur
-                    tb.start('fTrem', attr)
-                    break
+        output.sort(reverse=True, key=spannerQL)
+        return output
 
-                if spanner.isLast(obj):
-                    endTheTremolo = True
-                    break
+    def getOrderedBeamTupletFTremEnds(
+        self,
+        obj: m21.base.Music21Object,
+    ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
 
-        return endTheTremolo
+        def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
+            return M21Utilities.getSpannerQuarterLength(spanner, self.meiParent.m21Measure)
 
+        output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
+        for spanner in obj.getSpannerSites([
+            MeiBeamSpanner,
+            MeiTupletSpanner,
+            m21.expressions.TremoloSpanner
+        ]):
+            # we're only interested in starts
+            if not spanner.isLast(obj):
+                continue
 
-    def processBeamState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
-        # starts a beam if necessary before this obj.
-        # returns whether or not the current beam should be ended after this obj.
-        endTheBeam: bool = False
-        for spanner in self.spannerBundle.getBySpannedElement(obj):  # type: ignore
-            if isinstance(spanner, MeiBeamSpanner):
-                if spanner.isFirst(obj):
-                    # start a <beam>, but only if all the spanned elements are in
-                    # this m21Measure.
-                    if M21Utilities.allSpannedElementsAreInHierarchy(
-                        spanner, self.meiParent.m21Measure
-                    ):
-                        tb.start('beam', {})
-                        # Mark this spanner as having been emitted as <beam>
-                        # (so we don't also emit it as <beamSpan> later, in
-                        # makePostStavesElements).
-                        spanner.mei_beam = True  # type: ignore
-                if spanner.isLast(obj):
-                    if hasattr(spanner, 'mei_beam'):
-                        endTheBeam = True
+            if isinstance(spanner, MeiBeamSpanner) and not hasattr(spanner, 'mei_beam'):
+                # Skip if we're emitting as <beamSpan>
+                continue
 
-        return endTheBeam
+            if isinstance(spanner, MeiTupletSpanner) and not hasattr(spanner, 'mei_tuplet'):
+                # Skip if we're emitting as <tupletSpan>
+                continue
 
-    def processTupletState(self, obj: m21.base.Music21Object, tb: TreeBuilder) -> bool:
-        # starts a tuplet if necessary before this obj.
-        # returns whether or not the current tuplet should be ended after this obj.
-        endTheTuplet: bool = False
-        for spanner in self.spannerBundle.getBySpannedElement(obj):  # type: ignore
-            if isinstance(spanner, MeiTupletSpanner):
-                if spanner.isFirst(obj):
-                    # start a <beam>, but only if all the spanned elements are in
-                    # this m21Measure.
-                    if M21Utilities.allSpannedElementsAreInHierarchy(
-                        spanner, self.meiParent.m21Measure
-                    ):
-                        attr: dict[str, str] = {}
-                        M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
-                        tb.start('tuplet', attr)
-                        # Mark this spanner as having been emitted as <tuplet>
-                        # (so we don't also emit it as <tupletSpan> later, in
-                        # makePostStavesElements).
-                        spanner.mei_tuplet = True  # type: ignore
-                if spanner.isLast(obj):
-                    if hasattr(spanner, 'mei_tuplet'):
-                        endTheTuplet = True
+            if isinstance(spanner, m21.expressions.TremoloSpanner):
+                if len(spanner) != 2:
+                    environLocal.warn('len(TremoloSpanner) != 2, skipping fTrem.')
+                    continue
 
-        return endTheTuplet
+                obj.mei_in_ftrem = True  # type: ignore
+
+            output.append(spanner)  # type: ignore
+
+        output.sort(key=spannerQL)  # type: ignore
+        return output
 
     def makePostStavesElements(self, tb: TreeBuilder):
         m21Part: m21.stream.Part = self.meiParent.m21Part
