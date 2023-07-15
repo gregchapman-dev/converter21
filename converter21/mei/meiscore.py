@@ -65,6 +65,10 @@ class MeiScore:
         self.staffNumbersForM21Parts: dict[m21.stream.Part, int] = (
             self._getStaffNumbersForM21Parts()
         )
+        self.m21PartsForStaffNumbers: dict[int, m21.stream.Part] = {
+            value: key for key, value in self.staffNumbersForM21Parts.items()
+        }
+
         self.staffGroupTrees: list[M21StaffGroupTree] = (
             M21Utilities.getStaffGroupTrees(
                 list(m21Score[m21.layout.StaffGroup]),
@@ -145,66 +149,140 @@ class MeiScore:
         tb.end('workList')
         tb.end('meiHead')
 
+    def makeStaffDefElement(self, part: m21.stream.Part, staffN: int, tb: TreeBuilder):
+        # staffLines (defaults to 5)
+        staffLines: int = 5
+        initialStaffLayout: m21.layout.StaffLayout | None = None
+        initialStaffLayouts = list(
+            part.recurse().getElementsByClass(m21.layout.StaffLayout).getElementsByOffset(0.0)
+        )
+        if initialStaffLayouts:
+            initialStaffLayout = initialStaffLayouts[0]
+        if initialStaffLayout and initialStaffLayout.staffLines is not None:
+            staffLines = initialStaffLayout.staffLines
+
+        tb.start('staffDef', {
+            'n': str(staffN),
+            'lines': str(staffLines)
+        })
+
+        # clef
+        clef: m21.clef.Clef | None = part.clef
+        if clef is None:
+            clefs: list[m21.clef.Clef] = list(
+                part.recurse().getElementsByClass(m21.clef.Clef).getElementsByOffset(0.0)
+            )
+            if clefs:
+                clef = clefs[0]
+        if clef is not None:
+            M21ObjectConvert.m21ClefToMei(clef, tb)
+
+        # key signature
+        keySig: m21.key.KeySignature | None = part.keySignature
+        if keySig is None:
+            keySigs: list[m21.key.KeySignature] = list(
+                part.recurse()
+                .getElementsByClass(m21.key.KeySignature)
+                .getElementsByOffset(0.0)
+            )
+            if keySigs:
+                keySig = keySigs[0]
+        if keySig is not None:
+            M21ObjectConvert.m21KeySigToMei(keySig, tb)
+
+        # time signature
+        meterSig: m21.meter.TimeSignature | None = part.timeSignature
+        if meterSig is None:
+            meterSigs: list[m21.meter.TimeSignature] = list(
+                part.recurse()
+                .getElementsByClass(m21.meter.TimeSignature)
+                .getElementsByOffset(0.0)
+            )
+            if meterSigs:
+                meterSig = meterSigs[0]
+        if meterSig is not None:
+            M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
+
+        tb.end('staffDef')
+
+    _M21_STAFFGROUP_SYMBOL_TO_MEI: dict[str | None, str] = {
+        # m21 symbol can be 'brace', 'bracket', 'square', 'line', None
+        # mei symbol can be 'brace', 'bracket', 'bracketsq', 'line', 'none'
+        'brace': 'brace',
+        'bracket': 'bracket',
+        'square': 'bracketsq',
+        'line': 'line',
+        None: 'none'
+    }
+
+    def makeStaffGrpElement(self, sgtree: M21StaffGroupTree, tb: TreeBuilder) -> list[int]:
+        attr: dict[str, str] = {}
+        if sgtree.staffGroup.name:
+            attr['label'] = sgtree.staffGroup.name
+        elif sgtree.staffGroup.abbreviation:
+            attr['label'] = sgtree.staffGroup.abbreviation
+
+        if sgtree.staffGroup.barTogether == 'Mensurstrich':
+            attr['bar.method'] = 'mensur'
+        elif sgtree.staffGroup.barTogether is False:
+            attr['bar.thru'] = 'false'
+        elif sgtree.staffGroup.barTogether is True:
+            attr['bar.thru'] = 'true'
+
+        attr['symbol'] = self._M21_STAFFGROUP_SYMBOL_TO_MEI[sgtree.staffGroup.symbol]
+
+        tb.start('staffGrp', attr)
+
+        part: m21.stream.Part
+        staffNumsToProcess: set[int] = set(sgtree.staffNums)
+        staffNums: list[int] = []
+        for subgroup in sgtree.children:
+            # 1. any staffNums before this subgroup
+            for staffNum in sgtree.staffNums:
+                if staffNum >= subgroup.lowestStaffNumber:
+                    # we're done with staffNums before this subgroup
+                    break
+
+                if staffNum not in staffNumsToProcess:
+                    # we already did this one
+                    continue
+
+                part = self.m21PartsForStaffNumbers[staffNum]
+                self.makeStaffDefElement(part, staffNum, tb)
+                staffNumsToProcess.remove(staffNum)
+                staffNums.append(staffNum)
+
+            # 2. now the subgroup
+            newStaffNums: list[int] = self.makeStaffGrpElement(subgroup, tb)
+            staffNumsProcessed: set[int] = set(newStaffNums)  # for speed of "in" checking
+            staffNumsToProcess = set(num for num in staffNumsToProcess
+                                            if num not in staffNumsProcessed)
+            staffNums += newStaffNums
+
+        # 3. any staffNums at the end after all the subgroups
+        remainder: list[int] = sorted(list(staffNumsToProcess))
+        for staffNum in remainder:
+            part = self.m21PartsForStaffNumbers[staffNum]
+            self.makeStaffDefElement(part, staffNum, tb)
+            staffNumsToProcess.remove(staffNum)
+            staffNums.append(staffNum)
+
+        tb.end('staffGrp')
+        return staffNums
+
     def makeScoreDefElement(self, tb: TreeBuilder) -> None:
         tb.start('scoreDef', {})
-        tb.start('staffGrp', {})
-        for part, staffN in self.staffNumbersForM21Parts.items():
-            # staffLines (defaults to 5)
-            staffLines: int = 5
-            initialStaffLayout: m21.layout.StaffLayout | None = None
-            initialStaffLayouts = list(
-                part.recurse().getElementsByClass(m21.layout.StaffLayout).getElementsByOffset(0.0)
-            )
-            if initialStaffLayouts:
-                initialStaffLayout = initialStaffLayouts[0]
-            if initialStaffLayout and initialStaffLayout.staffLines is not None:
-                staffLines = initialStaffLayout.staffLines
+        if len(self.staffGroupTrees) > 1:
+            # we'll need a top-level staffGrp to hold them (just make it out of thin air)
+            tb.start('staffGrp', {})
 
-            tb.start('staffDef', {
-                'n': str(staffN),
-                'lines': str(staffLines)
-            })
+        for sgtree in self.staffGroupTrees:
+            self.makeStaffGrpElement(sgtree, tb)
 
-            # clef
-            clef: m21.clef.Clef | None = part.clef
-            if clef is None:
-                clefs: list[m21.clef.Clef] = list(
-                    part.recurse().getElementsByClass(m21.clef.Clef).getElementsByOffset(0.0)
-                )
-                if clefs:
-                    clef = clefs[0]
-            if clef is not None:
-                M21ObjectConvert.m21ClefToMei(clef, tb)
+        if len(self.staffGroupTrees) > 1:
+            # close out the top-level staffGrp we made out of thin air
+            tb.end('staffGrp')
 
-
-            # key signature
-            keySig: m21.key.KeySignature | None = part.keySignature
-            if keySig is None:
-                keySigs: list[m21.key.KeySignature] = list(
-                    part.recurse()
-                    .getElementsByClass(m21.key.KeySignature)
-                    .getElementsByOffset(0.0)
-                )
-                if keySigs:
-                    keySig = keySigs[0]
-            if keySig is not None:
-                M21ObjectConvert.m21KeySigToMei(keySig, tb)
-
-            # time signature
-            meterSig: m21.meter.TimeSignature | None = part.timeSignature
-            if meterSig is None:
-                meterSigs: list[m21.meter.TimeSignature] = list(
-                    part.recurse()
-                    .getElementsByClass(m21.meter.TimeSignature)
-                    .getElementsByOffset(0.0)
-                )
-                if meterSigs:
-                    meterSig = meterSigs[0]
-            if meterSig is not None:
-                M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
-
-            tb.end('staffDef')
-        tb.end('staffGrp')
         tb.end('scoreDef')
 
     def annotateScore(self) -> None:
