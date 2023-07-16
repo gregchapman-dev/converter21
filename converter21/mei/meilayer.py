@@ -341,7 +341,7 @@ class MeiLayer:
 
             # 2. Spanners (Slurs, DynamicWedges, TrillExtensions, etc) whose first
             # element is in this voice. Includes <beamSpan>, <tupletSpan>, <tie>
-            for spanner in self.spannerBundle.getBySpannedElement(obj):
+            for spanner in obj.getSpannerSites():
                 if spanner.isFirst(obj):
                     # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
                     M21ObjectConvert.postStavesSpannerToMei(
@@ -355,7 +355,7 @@ class MeiLayer:
             if isinstance(obj, m21.chord.Chord):
                 # check every note in the chord
                 for note in obj.notes:
-                    for spanner in self.spannerBundle.getBySpannedElement(note):  # type: ignore
+                    for spanner in note.getSpannerSites():  # type: ignore
                         if spanner.isFirst(note):
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,

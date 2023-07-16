@@ -7019,10 +7019,10 @@ class MeiReader:
         endId: str = elem.get('endid', '')
         tstamp2: str = elem.get('tstamp2', '')
         if not tstamp2 and not endId:
-            environLocal.warn('missing @tstamp2/@endid in <octave> element')
+            environLocal.warn('missing @tstamp2/@endid in <hairpin> element')
             return ('', (-1., None, None), None)
         if not tstamp and not startId:
-            environLocal.warn('missing @tstamp/@startid in <octave> element')
+            environLocal.warn('missing @tstamp/@startid in <hairpin> element')
             return ('', (-1., None, None), None)
         if not startId:
             hairpin.mei_needs_start_anchor = True  # type: ignore
