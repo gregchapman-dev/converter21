@@ -126,6 +126,8 @@ class MeiMeasure:
             tb.start('sb', {})
             tb.end('sb')
 
+        self._checkForEndingStart(tb)
+
         attr: dict[str, str] = {}
         self._fillInMeasureAttributes(attr)
 
@@ -135,6 +137,61 @@ class MeiMeasure:
         for staff in self.staves:
             staff.makePostStavesElements(tb)
         tb.end('measure')
+
+        self._checkForEndingEnd(tb)
+
+    def _checkForEndingStart(self, tb: TreeBuilder):
+        rb: m21.spanner.RepeatBracket | None = None
+
+        for m21m in self.m21Measures:
+            # Any one of them being first in a RepeatBracket is sufficient
+            # (they should all be, or none be).
+            for spanner in m21m.getSpannerSites():
+                if isinstance(spanner, m21.spanner.RepeatBracket):
+                    if spanner.isFirst(m21m):
+                        rb = spanner
+                        break
+            if rb is not None:
+                break
+
+        if rb is None:
+            return
+
+        attr: dict[str, str] = {}
+
+        if rb.overrideDisplay:
+            # technically we should strip spaces, but... that messes with a
+            # multi-word override, and verovio is happy to display ending@n
+            # with spaces.  Most overrides will be just one word anyway.
+            attr['n'] = rb.overrideDisplay
+        else:
+            # rb.number is a single number e.g. '1', or '2', or a list of numbers
+            # e.g. '1, 5' or '1-3'.  We must strip out any spaces, though, to meet
+            # MEI spec for ending@n
+            nStr: str = rb.number
+            nStr = nStr.strip()
+            attr['n'] = nStr
+
+        tb.start('ending', attr)
+
+    def _checkForEndingEnd(self, tb: TreeBuilder):
+        rb: m21.spanner.RepeatBracket | None = None
+
+        for m21m in self.m21Measures:
+            # Any one of them being last in a RepeatBracket is sufficient
+            # (they should all be, or none be).
+            for spanner in m21m.getSpannerSites():
+                if isinstance(spanner, m21.spanner.RepeatBracket):
+                    if spanner.isLast(m21m):
+                        rb = spanner
+                        break
+            if rb is not None:
+                break
+
+        if rb is None:
+            return
+
+        tb.end('ending')
 
     def _fillInMeasureAttributes(self, attr: dict[str, str]):
         nStr: str = self.measureNumStr

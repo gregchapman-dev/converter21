@@ -8090,13 +8090,15 @@ class MeiReader:
                         if endingTag == eachElem.tag:
                             # make the RepeatBracket for the ending
                             bracketNStr: str | None = eachElem.get('n')
-                            n: int = 0
-                            if bracketNStr is not None:
+                            if bracketNStr is None:
+                                rb = m21.spanner.RepeatBracket()
+                            else:
                                 try:
-                                    n = int(bracketNStr)
-                                except Exception:
-                                    pass
-                            rb = spanner.RepeatBracket(number=n)
+                                    # see if it is parseable (e.g. '1-3', '4', '5, 6, 8')
+                                    rb = m21.spanner.RepeatBracket(number=bracketNStr)
+                                except m21.spanner.SpannerException:
+                                    # not parseable
+                                    rb = m21.spanner.RepeatBracket(overrideDisplay=bracketNStr)
 
                         # This is a <section> or <ending>, which is nested in a <section>.
                         # We must "flatten" everything so it doesn't cause a disaster when
