@@ -366,7 +366,7 @@ class MeiLayer:
                                 tb
                             )
 
-            # 3. Turns/Trills/Mordents/Fermatas on notes/chords in this voice.
+            # 3. Turns/Trills/Mordents/Fermatas/ArpeggioMarks on notes/chords in this voice.
             #       We count on any TrillExtension being handled before
             #       now, in the spanner loop above. If that changes, all
             #       'mei_trill_already_handled' processing will need to
@@ -422,3 +422,16 @@ class MeiLayer:
                             self.scoreMeterStream,
                             tb
                         )
+                        continue
+
+                    if isinstance(expr, m21.expressions.ArpeggioMark):
+                        M21ObjectConvert.arpeggioMarkToMei(
+                            obj,
+                            expr,
+                            staffNStr,
+                            m21Part,
+                            m21Measure,
+                            self.scoreMeterStream,
+                            tb
+                        )
+                        continue

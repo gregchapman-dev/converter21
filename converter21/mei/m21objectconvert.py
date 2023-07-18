@@ -809,6 +809,13 @@ class M21ObjectConvert:
         else:
             attr['endid'] = f'#{M21ObjectConvert.getXmlId(last, required=True)}'
 
+    _ARPEGGIO_TYPE_TO_ARROW_AND_ORDER: dict[str, tuple[str, str]] = {
+        'normal': ('', ''),
+        'up': ('true', 'up'),
+        'down': ('true', 'down'),
+        'non-arpeggio': ('false', 'nonarp')
+    }
+
     @staticmethod
     def postStavesSpannerToMei(
         spanner: m21.spanner.Spanner,
@@ -851,6 +858,11 @@ class M21ObjectConvert:
                 attr['form'] = 'cres'
             else:
                 attr['form'] = 'dim'
+        elif isinstance(spanner, m21.expressions.ArpeggioMarkSpanner):
+            tag = 'arpeg'
+            # set up plist for every spanned element (yes, even the ones that are already
+            # in attr as 'startid' and 'endid')
+            M21ObjectConvert.fillInArpeggioAttributes(spanner, attr)
         elif isinstance(spanner, MeiBeamSpanner):
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
@@ -905,6 +917,45 @@ class M21ObjectConvert:
             M21ObjectConvert._addStylisticAttributes(spanner, attr)
             tb.start(tag, attr)
             tb.end(tag)
+
+    @staticmethod
+    def fillInArpeggioAttributes(
+        arpeggio: m21.expressions.ArpeggioMark | m21.expressions.ArpeggioMarkSpanner,
+        attr: dict[str, str]
+    ):
+        if isinstance(arpeggio, m21.expressions.ArpeggioMarkSpanner):
+            plistStr: str = ''
+            for el in arpeggio.getSpannedElements():
+                if plistStr:
+                    plistStr += ' '
+                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+            attr['plist'] = plistStr
+
+        arrow: str
+        order: str
+        arrow, order = M21ObjectConvert._ARPEGGIO_TYPE_TO_ARROW_AND_ORDER.get(
+            arpeggio.type, ('', '')
+        )
+        if arrow:
+            attr['arrow'] = arrow
+        if order:
+            attr['order'] = order
+
+    @staticmethod
+    def arpeggioMarkToMei(
+        gn: m21.note.GeneralNote,
+        arpeggio: m21.expressions.ArpeggioMark,
+        staffNStr: str,
+        m21Part: m21.stream.Part,
+        m21Measure: m21.stream.Measure,
+        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        tb: TreeBuilder
+    ):
+        attr: dict[str, str] = {}
+        attr['startid'] = f'#{M21ObjectConvert.getXmlId(gn, required=True)}'
+        M21ObjectConvert.fillInArpeggioAttributes(arpeggio, attr)
+        tb.start('arpeg', attr)
+        tb.end('arpeg')
 
     @staticmethod
     def fillInTupletAttributes(startTuplet: m21.duration.Tuplet, attr: dict[str, str]):
