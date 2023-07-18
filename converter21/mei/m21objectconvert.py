@@ -1035,7 +1035,8 @@ class M21ObjectConvert:
                 attr['accidupper'] = accid
             else:
                 attr['accidlower'] = accid
-            M21ObjectConvert._addStylisticAttributes(trill, attr)
+
+        M21ObjectConvert._addStylisticAttributes(trill, attr)
 
         if trill.direction == 'up':
             attr['form'] = 'upper'
