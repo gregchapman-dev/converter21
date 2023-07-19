@@ -6266,6 +6266,13 @@ class MeiReader:
             # this means @right was "rptboth"
             staves['next @left'] = bars[1]
             bars = bars[0]
+        elif isinstance(bars, m21.bar.Repeat) and bars.direction == 'start':
+            # music21 REALLY wants repeat starts to only ever go in a left barline.
+            # To the point that if you put one in a right barline, music21 will
+            # actually change the repeat direction to an end repeat(!)... sheesh.
+            # Put it in next left, replace it with a regular Barline here in right.
+            staves['next @left'] = bars
+            bars = m21.bar.Barline('regular')
 
         for eachMeasure in staves.values():
             if isinstance(eachMeasure, stream.Measure):
