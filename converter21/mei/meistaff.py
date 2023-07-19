@@ -98,6 +98,7 @@ class MeiStaff:
         # The top-level measure (if not treated as the one layer) might have some
         # post-staves elements, too (e.g. Dynamic, TextExpression, TempoIndication).
         # This is a small subset of what can be emitted in layer.makePostStavesElements.
+        # Also, there may be SpannerAnchors that exist at the Measure level.
         if not self.theOneLayerIsTheMeasureItself:
             for obj in self.m21Measure:
                 if M21ObjectConvert.streamElementBelongsInPostStaves(obj):
@@ -109,3 +110,15 @@ class MeiStaff:
                         self.scoreMeterStream,
                         tb
                     )
+                if isinstance(obj, m21.spanner.SpannerAnchor):
+                    for spanner in obj.getSpannerSites():
+                        if spanner.isFirst(obj):
+                            # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
+                            M21ObjectConvert.postStavesSpannerToMei(
+                                spanner,
+                                self.staffNStr,
+                                self.m21Part,
+                                self.m21Measure,
+                                self.scoreMeterStream,
+                                tb
+                            )
