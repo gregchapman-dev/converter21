@@ -106,14 +106,17 @@ class MeiLayer:
                     MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremEnds(obj)
 
+                # process any nested element starts
                 for btfs in beamTupletFTremStarts:
                     self.processBeamTupletFTremStart(btfs, tb)
-
                 endBTremNeeded: bool = self.processBTremState(obj, tb)
+
+                # emit the object itself
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+
+                # process any nested element ends
                 if endBTremNeeded:
                     tb.end('bTrem')
-
                 for btfe in beamTupletFTremEnds:
                     self.processBeamTupletFTremEnd(btfe, tb)
 

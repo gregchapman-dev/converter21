@@ -1398,6 +1398,7 @@ class M21ObjectConvert:
                     barline.direction
                 ]
             )
+            barline.mei_emitted_as_measure_attr = True  # type: ignore
             return output
 
         # not a repeat, use barline.type
@@ -1406,6 +1407,7 @@ class M21ObjectConvert:
                 barline.type
             ]
         )
+        barline.mei_emitted_as_measure_attr = True  # type: ignore
         return output
 
     @staticmethod
@@ -1424,6 +1426,36 @@ class M21ObjectConvert:
 
         output: str = M21ObjectConvert.meiMeasureBarlineAttrCombine(attr1, attr2)
         return output
+
+    @staticmethod
+    def m21BarlineToMei(barline: m21.base.Music21Object, tb: TreeBuilder) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(barline, m21.bar.Barline)
+
+        if hasattr(barline, 'mei_emitted_as_measure_attr'):
+            # ignore it, it's already represented in the output MEI
+            delattr(barline, 'mei_emitted_as_measure_attr')
+            return
+
+        attr: dict[str, str] = {}
+        form: str
+        if isinstance(barline, m21.bar.Repeat):
+            form = M21ObjectConvert._M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE[
+                barline.direction
+            ]
+        else:
+            form = M21ObjectConvert._M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE[
+                barline.type
+            ]
+
+        if not form:
+            # unlike <measure>, in <barline> we like form='single' for regular barlines.
+            form = 'single'
+
+        attr['form'] = form
+
+        tb.start('barLine', attr)
+        tb.end('barLine')
 
     @staticmethod
     def meiMeasureBarlineAttrCombine(
@@ -1556,6 +1588,7 @@ _M21_OBJECT_CONVERTER: dict[str, t.Callable[
     'Clef': M21ObjectConvert.m21ClefToMei,
     'KeySignature': M21ObjectConvert.m21KeySigToMei,
     'TimeSignature': M21ObjectConvert.m21TimeSigToMei,
+    'Barline': M21ObjectConvert.m21BarlineToMei
 }
 
 M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG: dict[str, str] = {
