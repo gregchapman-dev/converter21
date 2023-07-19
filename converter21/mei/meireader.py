@@ -6249,8 +6249,8 @@ class MeiReader:
         :returns: The ``staves`` dictionary with properly-set barlines.
         :rtype: dict
         '''
-        leftStr: str | None = elem.get('left')
-        if leftStr is not None:
+        leftStr: str = elem.get('left', 'single')
+        if leftStr is not None and leftStr != 'single':  # ignore any left='single'
             bars = self._barlineFromAttr(leftStr)
             if isinstance(bars, tuple):
                 # this means @left was "rptboth"
