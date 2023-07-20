@@ -891,15 +891,39 @@ class M21ObjectConvert:
                 # startid/endid only, which are already handled
 
         elif isinstance(spanner, m21.expressions.TrillExtension):
-            tag = 'trill'
-            if isinstance(first, m21.note.GeneralNote):
-                # search first.expressions for a Trill, and if found emit that, too.
-                for expr in first.expressions:
+            if hasattr(spanner, 'mei_trill_already_handled'):
+                return
+
+            # Note that we don't set tag (i.e. we don't emit a <trill> here) unless
+            # we find an actual m21.expressions.Trill.  A TrillExtension with no
+            # Trill is not a <trill>.  Maybe it's a <line form="wavy"> or something,
+            # but not today.
+            notes: list[m21.note.GeneralNote] = []
+            if isinstance(first, m21.spanner.SpannerAnchor):
+                # look for an actual note at the same offset in this m21Measure
+                offsetInMeasure: OffsetQL = first.getOffsetInHierarchy(m21Measure)
+                notes = list(
+                    m21Measure.recurse()
+                    .getElementsByOffset(offsetInMeasure)
+                    .getElementsByClass(m21.note.GeneralNote)
+                )
+            elif isinstance(first, m21.note.GeneralNote):
+                notes = [first]
+
+            for note in notes:
+                # search note.expressions for a Trill, and if found gather attr from that, too.
+                for expr in note.expressions:
                     if isinstance(expr, m21.expressions.Trill):
+                        if hasattr(expr, 'mei_trill_already_handled'):
+                            # not this one, we already emitted it.
+                            continue
+
+                        # There is an assocated Trill, so go ahead an emit a <trill>.
+                        tag = 'trill'
                         # passing None for trillToMei's last param (tb) means "just
                         # add the Trill info to attr, I'll emit this <trill> myself".
                         M21ObjectConvert.trillToMei(
-                            first,
+                            note,
                             expr,
                             staffNStr,
                             m21Part,
@@ -911,7 +935,13 @@ class M21ObjectConvert:
                         # mark the Trill as handled, so when we see it during note.expressions
                         # processing, we won't emit it again.
                         expr.mei_trill_already_handled = True  # type: ignore
+                        # mark the TrillExtension as handled, so when we (might) see it during
+                        # Trill processing or measure-level SpannerAnchor scanning, we won't
+                        # re-issue it.
+                        spanner.mei_trill_already_handled = True  # type: ignore
                         break
+                if tag:
+                    break
 
         if tag:
             M21ObjectConvert._addStylisticAttributes(spanner, attr)
@@ -1012,13 +1042,48 @@ class M21ObjectConvert:
         # This can be called with attr partly filled in, and tb is None (during TrillExtension
         # processing). In this case, we just add the Trill info to the attr dict.  One <trill>
         # will be emitted for both Trill and TrillExtension in that case, by the caller.
+        trillExtension: m21.expressions.TrillExtension | None = None
         if tb is not None:
             # do the full job (ignore any attr passed in, it should be None)
+            # Also, if we're doing the full job, we need to find any associated
+            # TrillExtension, and include the last element in trill@endid or trill@tstamp2.
+
+            # 1. Look for a TrillExtension with gn as first element.
+            for spanner in gn.getSpannerSites():
+                if isinstance(spanner, m21.expressions.TrillExtension):
+                    # found it!
+                    trillExtension = spanner
+                    break
+
+            # 2. Look for any SpannerAnchors with same offset in m21Measure as gn,
+            #       and look for a TrillExtension with one of those as first element.
+            if trillExtension is None:
+                anchors: list[m21.spanner.SpannerAnchor] = []
+                offsetInMeasure: OffsetQL = gn.getOffsetInHierarchy(m21Measure)
+                anchors = list(
+                    m21Measure.recurse()
+                    .getElementsByOffset(offsetInMeasure)
+                    .getElementsByClass(m21.spanner.SpannerAnchor)
+                )
+
+            for anchor in anchors:
+                for spanner in anchor.getSpannerSites():
+                    if isinstance(spanner, m21.expressions.TrillExtension):
+                        # found it!
+                        trillExtension = spanner
+                        break
+                if trillExtension is not None:
+                    break
+
+            last: m21.base.Music21Object | None = None
+            if trillExtension is not None:
+                last = trillExtension.getLast()
+
             attr = {}
             M21ObjectConvert._fillInStandardPostStavesAttributes(
                 attr,
                 gn,
-                None,
+                last,
                 staffNStr,
                 m21Part,
                 m21Measure,
@@ -1047,6 +1112,9 @@ class M21ObjectConvert:
             # do the full job
             tb.start('trill', attr)
             tb.end('trill')
+            trill.mei_trill_already_handled = True  # type: ignore
+            if trillExtension is not None:
+                trillExtension.mei_trill_already_handled = True  # type: ignore
 
     @staticmethod
     def turnToMei(

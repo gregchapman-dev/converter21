@@ -377,9 +377,9 @@ class MeiLayer:
             if isinstance(obj, m21.note.GeneralNote):
                 for expr in obj.expressions:  # type: ignore
                     if isinstance(expr, m21.expressions.Trill):
-                        if (hasattr(expr, 'mei_trill_already_handled')
-                                and expr.mei_trill_already_handled):
+                        if (hasattr(expr, 'mei_trill_already_handled')):
                             continue
+
                         M21ObjectConvert.trillToMei(
                             obj,
                             expr,

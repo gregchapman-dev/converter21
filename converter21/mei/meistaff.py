@@ -112,6 +112,8 @@ class MeiStaff:
                     )
                 if isinstance(obj, m21.spanner.SpannerAnchor):
                     for spanner in obj.getSpannerSites():
+                        if hasattr(spanner, 'mei_trill_already_handled'):
+                            continue
                         if spanner.isFirst(obj):
                             # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
                             M21ObjectConvert.postStavesSpannerToMei(
