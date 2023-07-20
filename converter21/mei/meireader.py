@@ -2935,7 +2935,7 @@ class MeiReader:
         self,
         elem: Element,
         allPartNs: tuple[str, ...],
-        parseStaffGrps: bool = True
+        firstScoreDefInScore: bool = True
     ) -> dict[str, list[Music21Object] | dict[str, Music21Object]]:
         '''
         <scoreDef> Container for score meta-information.
@@ -2974,7 +2974,7 @@ class MeiReader:
         >>> from xml.etree import ElementTree as ET
         >>> c = MeiReader()
         >>> scoreDef = ET.fromstring(meiDoc)
-        >>> result = c.scoreDefFromElement(scoreDef, ['1','2','3'], parseStaffGrps=True)
+        >>> result = c.scoreDefFromElement(scoreDef, ['1','2','3'], firstScoreDefInScore=True)
         >>> len(result)
         6
         >>> result['1']
@@ -3093,7 +3093,7 @@ class MeiReader:
         if len(topLevelStaffGrps) == 0:
             return post
 
-        if parseStaffGrps:
+        if firstScoreDefInScore:
             if len(topLevelStaffGrps) > 1:
                 # There is no outer group, so make a fake one.
                 fakeTopLevelGroup = M21StaffGroupDescriptionTree()
@@ -3119,7 +3119,7 @@ class MeiReader:
         for eachGrp in topLevelStaffGrps:
             post.update(self.staffGrpFromElement(eachGrp))
 
-        if parseStaffGrps:
+        if firstScoreDefInScore:
             # process the staffGroup description tree, generating a list of m21 StaffGroup objects.
             # Put them in post[wholeScore].
             pws = post[wholeScore]
@@ -7972,11 +7972,11 @@ class MeiReader:
                 # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups)
                 # in the very first <scoreDef> in the <score>.  After that we just scan them
                 # for staffDefs.
-                parseStaffGrps: bool = elem.tag == scoreTag and not scoreDefSeen
+                firstScoreDefInScore: bool = elem.tag == scoreTag and not scoreDefSeen
                 localResult = self.scoreDefFromElement(
                     eachElem,
                     allPartNs,
-                    parseStaffGrps=parseStaffGrps
+                    firstScoreDefInScore=firstScoreDefInScore
                 )
                 scoreDefSeen = True
 
@@ -7991,17 +7991,16 @@ class MeiReader:
                         assert isinstance(topPartObject, Music21Object)
                     inNextThing[self.topPartN].append(topPartObject)
 
+                # dict[staffNStr, dict[typeStr, obj]]
+                defaultStaffDefObjects: dict[str, dict[str, Music21Object]] = {}
                 for allPartObject in localResult['all-part objects']:
                     if t.TYPE_CHECKING:
                         # because 'all-part objects' is a list of objects
                         assert isinstance(allPartObject, Music21Object)
 
-                    newKey: key.Key | key.KeySignature | None = None
-                    if isinstance(allPartObject, key.KeySignature):
-                        newKey = allPartObject
-
-                    if isinstance(allPartObject, meter.TimeSignature):
-                        self.activeMeter = allPartObject
+                    typeStr: str = allPartObject.classes[0]
+                    if typeStr == 'Key':
+                        typeStr = 'KeySignature'
 
                     for i, eachN in enumerate(allPartNs):
                         if i == 0:
@@ -8009,21 +8008,37 @@ class MeiReader:
                         else:
                             # a single Music21Object should not exist in multiple parts
                             to_insert = deepcopy(allPartObject)
-                        inNextThing[eachN].append(to_insert)
-
-                        if newKey is not None:
-                            self.updateStaffKeyAndAltersWithNewKey(eachN, newKey)
+                        if eachN not in defaultStaffDefObjects:
+                            defaultStaffDefObjects[eachN] = {}
+                        defaultStaffDefObjects[eachN][typeStr] = to_insert
 
                 for eachN in allPartNs:
+                    # dict[typeStr, obj]
+                    staffNDefObjects: dict[str, Music21Object] = {}
                     if eachN in localResult:
                         resultNDict = localResult[eachN]
                         if t.TYPE_CHECKING:
                             # because localResult['n'] is a dict[str, Music21Object]
                             assert isinstance(resultNDict, dict)
                         for eachObj in resultNDict.values():
+                            typeStr = eachObj.classes[0]
+                            if typeStr == 'Key':
+                                typeStr = 'KeySignature'
+                            staffNDefObjects[typeStr] = eachObj
+                            inNextThing[eachN].append(eachObj)
                             if isinstance(eachObj, meter.TimeSignature):
                                 self.activeMeter = eachObj
-                            inNextThing[eachN].append(eachObj)
+                            if isinstance(eachObj, key.KeySignature):
+                                self.updateStaffKeyAndAltersWithNewKey(eachN, eachObj)
+
+                        defaultStaffNDefObjects = defaultStaffDefObjects.get(eachN, {})
+                        for typeStr, defaultObj in defaultStaffNDefObjects.items():
+                            if typeStr not in staffNDefObjects:
+                                inNextThing[eachN].append(defaultObj)
+                                if isinstance(defaultObj, meter.TimeSignature):
+                                    self.activeMeter = defaultObj
+                                if isinstance(defaultObj, key.KeySignature):
+                                    self.updateStaffKeyAndAltersWithNewKey(eachN, defaultObj)
 
             elif staffDefTag == eachElem.tag:
                 nStr: str | None = eachElem.get('n')
