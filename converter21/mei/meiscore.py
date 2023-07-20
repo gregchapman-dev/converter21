@@ -506,6 +506,11 @@ class MeiScore:
             return
 
         def startsTie(noteOrChord: m21.note.Note | m21.chord.Chord) -> bool:
+            if isinstance(noteOrChord, m21.chord.Chord):
+                # chord.tie should always be ignored, in music21 it actually returns
+                # the first tie it finds in the chord's notes. Which is not particularly
+                # useful for us here.
+                return False
             if noteOrChord.tie is None:
                 return False
             if noteOrChord.tie.type in ('start', 'continue'):
