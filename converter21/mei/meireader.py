@@ -8039,6 +8039,16 @@ class MeiReader:
                                     self.activeMeter = defaultObj
                                 if isinstance(defaultObj, key.KeySignature):
                                     self.updateStaffKeyAndAltersWithNewKey(eachN, defaultObj)
+                    else:
+                        # there was nothing in localResult for staff 'eachN', so we must
+                        # use any default key/time signature from the scoreDef element.
+                        defaultStaffNDefObjects = defaultStaffDefObjects.get(eachN, {})
+                        for typeStr, defaultObj in defaultStaffNDefObjects.items():
+                            inNextThing[eachN].append(defaultObj)
+                            if isinstance(defaultObj, meter.TimeSignature):
+                                self.activeMeter = defaultObj
+                            if isinstance(defaultObj, key.KeySignature):
+                                self.updateStaffKeyAndAltersWithNewKey(eachN, defaultObj)
 
             elif staffDefTag == eachElem.tag:
                 nStr: str | None = eachElem.get('n')
