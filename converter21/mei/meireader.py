@@ -326,6 +326,9 @@ class MeiReader:
 
         # Current parse state:
 
+        # Whether or not we have seen the first scoreDef
+        self.scoreDefSeen: bool = False
+
         # The staff number for the notes we are parsing.
         self.staffNumberForNotes: str = ''
 
@@ -7910,11 +7913,6 @@ class MeiReader:
             n: [] for n in allPartNs
         }
 
-        # if elem is a <score> and this is the first scoreDef in that score, then we also will
-        # be creating a dict of Part/PartStaffs, keyed by every 'n' in allPartNs, as well as a list
-        # of StaffGroups, which reference the PartStaffs.
-        scoreDefSeen: bool = False
-
         # hold things that belong in the following "Thing" (either Measure or Section)
         inNextThing: dict[str, list[Music21Object | list[Music21Object]]] = {
             n: [] for n in allPartNs
@@ -7977,15 +7975,15 @@ class MeiReader:
 
             elif scoreDefTag == eachElem.tag:
                 # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups)
-                # in the very first <scoreDef> in the <score>.  After that we just scan them
+                # in the very first <scoreDef> in the score.  After that we just scan them
                 # for staffDefs.
-                firstScoreDefInScore: bool = elem.tag == scoreTag and not scoreDefSeen
+                firstScoreDefInScore: bool = not self.scoreDefSeen
                 localResult = self.scoreDefFromElement(
                     eachElem,
                     allPartNs,
                     firstScoreDefInScore=firstScoreDefInScore
                 )
-                scoreDefSeen = True
+                self.scoreDefSeen = True
 
                 # copy all the parts and staffGroups from localResult to parsed
                 wholeScoreObjects = localResult.get('whole-score objects')
@@ -8089,6 +8087,7 @@ class MeiReader:
                     # TODO: this is where the Instruments get added
                     # TODO: I think "eachList" really means "each list that will become a Part"
                     if eachN == 'whole-score objects':
+                        parsed['whole-score objects'] = eachList
                         continue
 
                     if inNextThing[eachN]:

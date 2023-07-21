@@ -17,7 +17,7 @@ import music21 as m21
 from music21.common import opFrac
 from music21.common import OffsetQL
 
-from converter21.mei import MeiExportError
+# from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
@@ -478,18 +478,17 @@ class MeiScore:
                 return True
             return False
 
-        def numStarts(tuplets: tuple[m21.duration.Tuplet, ...]) -> int:
-            output: int = 0
-            for tupletObj in tuplets:
-                if startsTuplet(tupletObj):
-                    output += 1
-            return output
+#         def numStarts(tuplets: tuple[m21.duration.Tuplet, ...]) -> int:
+#             output: int = 0
+#             for tupletObj in tuplets:
+#                 if startsTuplet(tupletObj):
+#                     output += 1
+#             return output
 
-        if not isinstance(gnote.duration, m21.duration.GraceDuration):
-            starts: int = numStarts(gnote.duration.tuplets)
-            if len(gnote.duration.tuplets) - starts != len(self.currentTupletSpanners):
-                raise MeiExportError('malformed music21 nested tuplets')
-                # I guess we could try to figure it out
+#         if not isinstance(gnote.duration, m21.duration.GraceDuration):
+#             starts: int = numStarts(gnote.duration.tuplets)
+#             if len(gnote.duration.tuplets) - starts != len(self.currentTupletSpanners):
+#                 raise MeiExportError('malformed music21 nested tuplets')
 
         # start any new tuplet spanners
         for tuplet in gnote.duration.tuplets:
