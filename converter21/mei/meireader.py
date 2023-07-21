@@ -1039,7 +1039,12 @@ class MeiReader:
                 for eachXmlid in eachTuplet.get('plist', '').split(' '):
                     eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
                     if eachXmlid:
-                        # protect against extra spaces around the contained xml:id values
+                        numStr: str = eachTuplet.get('num', '')
+                        if not numStr:
+                            numStr = '3'
+                        numbaseStr: str = eachTuplet.get('numbase', '')
+                        if not numbaseStr:
+                            numbaseStr = '2'
                         self.m21Attr[eachXmlid]['m21TupletNum'] = eachTuplet.get('num')
                         self.m21Attr[eachXmlid]['m21TupletNumbase'] = eachTuplet.get('numbase')
                         # the following attributes may or may not be there
@@ -5597,8 +5602,10 @@ class MeiReader:
         # calculate the tuplet
         numStr: str | None = elem.get('num')
         numbaseStr: str | None = elem.get('numbase')
-        if numStr is None or numbaseStr is None:
-            raise MeiAttributeError(_MISSING_TUPLET_DATA)
+        if numStr is None:
+            numStr = '3'
+        if numbaseStr is None:
+            numbaseStr = '2'
         bracketVisibleStr: str | None = elem.get('bracket.visible')
         bracketPlaceStr: str | None = elem.get('bracket.place')
         numVisibleStr: str | None = elem.get('num.visible')
