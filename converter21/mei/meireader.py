@@ -487,17 +487,17 @@ class MeiReader:
         two unique @n attributes. The second appearance of <staffDef> with @n="2" signals
         a change of clef on that same staff---not that there is a new staff.
         '''
-        # xpathQuery = f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}staffDef'
-        xpathQuery: str = f'.//{MEI_NS}staffDef'
         partNs: list[str] = []  # hold the @n attribute for all the parts
         topPart: str = ''
 
-        for staffDef in scoreElem.findall(xpathQuery):
+        # we only look at the staffDefs inside the first scoreDef in the score
+        firstScoreDef: Element = scoreElem.find(f'.//{MEI_NS}scoreDef')
+        for staffDef in firstScoreDef.findall(f'.//{MEI_NS}staffDef'):
             nStr: str | None = staffDef.get('n')
             if nStr and nStr not in partNs:
                 partNs.append(nStr)
                 if not topPart:
-                    # This first 'n' we see is special, it's the 'n' of the top staff
+                    # This first 'n' we see in a staffDef is special, it's the 'n' of the top staff
                     topPart = nStr
 
         if not partNs:
@@ -1048,8 +1048,8 @@ class MeiReader:
                         numbaseStr: str = eachTuplet.get('numbase', '')
                         if not numbaseStr:
                             numbaseStr = '2'
-                        self.m21Attr[eachXmlid]['m21TupletNum'] = eachTuplet.get('num')
-                        self.m21Attr[eachXmlid]['m21TupletNumbase'] = eachTuplet.get('numbase')
+                        self.m21Attr[eachXmlid]['m21TupletNum'] = numStr
+                        self.m21Attr[eachXmlid]['m21TupletNumbase'] = numbaseStr
                         # the following attributes may or may not be there
                         tempStr = eachTuplet.get('bracket.visible', '')
                         if tempStr:
@@ -1074,8 +1074,14 @@ class MeiReader:
                 endid = self.removeOctothorpe(eachTuplet.get('endid'))
 
                 self.m21Attr[startid]['m21TupletSearch'] = 'start'
-                self.m21Attr[startid]['m21TupletNum'] = eachTuplet.get('num')
-                self.m21Attr[startid]['m21TupletNumbase'] = eachTuplet.get('numbase')
+                numStr = eachTuplet.get('num', '')
+                if not numStr:
+                    numStr = '3'
+                numbaseStr = eachTuplet.get('numbase', '')
+                if not numbaseStr:
+                    numbaseStr = '2'
+                self.m21Attr[startid]['m21TupletNum'] = numStr
+                self.m21Attr[startid]['m21TupletNumbase'] = numbaseStr
                 # the following attributes may or may not be there
                 tempStr = eachTuplet.get('bracket.visible', '')
                 if tempStr:
@@ -1094,8 +1100,8 @@ class MeiReader:
                     self.m21Attr[startid]['m21TupletNumFormat'] = tempStr
 
                 self.m21Attr[endid]['m21TupletSearch'] = 'end'
-                self.m21Attr[endid]['m21TupletNum'] = eachTuplet.get('num')
-                self.m21Attr[endid]['m21TupletNumbase'] = eachTuplet.get('numbase')
+                self.m21Attr[endid]['m21TupletNum'] = numStr
+                self.m21Attr[endid]['m21TupletNumbase'] = numbaseStr
                 # the following attributes may or may not be there
                 tempStr = eachTuplet.get('bracket.visible', '')
                 if tempStr:
@@ -8058,12 +8064,14 @@ class MeiReader:
             elif staffDefTag == eachElem.tag:
                 nStr: str | None = eachElem.get('n')
                 if nStr is not None:
-                    self.staffNumberForDef = nStr
-                    for eachObj in self.staffDefFromElement(eachElem).values():
-                        if isinstance(eachObj, meter.TimeSignature):
-                            self.activeMeter = eachObj
-                        inNextThing[nStr].append(eachObj)
-                    self.staffNumberForDef = ''
+                    if nStr in allPartNs:
+                        # ignore extra staffDefs that don't have associated staffs
+                        self.staffNumberForDef = nStr
+                        for eachObj in self.staffDefFromElement(eachElem).values():
+                            if isinstance(eachObj, meter.TimeSignature):
+                                self.activeMeter = eachObj
+                            inNextThing[nStr].append(eachObj)
+                        self.staffNumberForDef = ''
                 else:
                     # At the moment, to process this here, we need an @n on the <staffDef>. A
                     # document may have a still-valid <staffDef> if the <staffDef> has an @xml:id
