@@ -62,13 +62,15 @@ class MeiStaff:
 
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
-        if not self.theOneLayerIsTheMeasureItself and self.m21Measure.offset != 0:
+        if not self.theOneLayerIsTheMeasureItself:
             # Process any clef/timesig/keysig at offset 0 in enclosing measure (but
-            # only if the m21Measure itself is not the first measure in the m21Part,
-            # since those initial ones are handled in the original <scoredef>).
+            # if the m21Measure itself is the first measure in the m21Part, skip
+            # the very first clef, timesig and keysig, since those initial ones are
+            # handled in the original <scoredef>).
             # We assume that any clef/timesig/keysig at non-zero measure offset will
             # be sitting alongside the notes (e.g. in a Voice), and can just be emitted
             # like a note, without this <staffdef> wrapper.
+            firstSeen: list[str] = []
             staffDefEmitted: bool = False
             for el in self.m21Measure:
                 if el.offset == 0:
@@ -76,6 +78,22 @@ class MeiStaff:
                         el,
                         (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)
                     ):
+                        if self.m21Measure.offset == 0:
+                            # very first measure in part:
+                            # skip the first clef, the first timesig, and first keysig
+                            if isinstance(el, m21.clef.Clef):
+                                if 'clef' not in firstSeen:
+                                    firstSeen.append('clef')
+                                    continue
+                            if isinstance(el, m21.meter.TimeSignature):
+                                if 'timesig' not in firstSeen:
+                                    firstSeen.append('timesig')
+                                    continue
+                            if isinstance(el, m21.key.KeySignature):
+                                if 'keysig' not in firstSeen:
+                                    firstSeen.append('keysig')
+                                    continue
+
                         if not staffDefEmitted:
                             tb.start('staffDef', {'n': self.staffNStr})
                             staffDefEmitted = True

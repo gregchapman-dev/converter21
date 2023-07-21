@@ -28,6 +28,8 @@ from converter21.mei import MeiTieSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
 
+environLocal = m21.environment.Environment('converter21.mei.meiscore')
+
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
 # for current func name, specify 0 or no argument.
@@ -154,7 +156,9 @@ class MeiScore:
         staffLines: int = 5
         initialStaffLayout: m21.layout.StaffLayout | None = None
         initialStaffLayouts = list(
-            part.recurse().getElementsByClass(m21.layout.StaffLayout).getElementsByOffset(0.0)
+            part.recurse()
+            .getElementsByClass(m21.layout.StaffLayout)
+            .getElementsByOffsetInHierarchy(0.0)
         )
         if initialStaffLayouts:
             initialStaffLayout = initialStaffLayouts[0]
@@ -170,12 +174,16 @@ class MeiScore:
         clef: m21.clef.Clef | None = part.clef
         if clef is None:
             clefs: list[m21.clef.Clef] = list(
-                part.recurse().getElementsByClass(m21.clef.Clef).getElementsByOffset(0.0)
+                part.recurse()
+                .getElementsByClass(m21.clef.Clef)
+                .getElementsByOffsetInHierarchy(0.0)
             )
             if clefs:
                 clef = clefs[0]
         if clef is not None:
             M21ObjectConvert.m21ClefToMei(clef, tb)
+        else:
+            environLocal.warn(f'No initial clef found in part {staffN}')
 
         # key signature
         keySig: m21.key.KeySignature | None = part.keySignature
@@ -183,12 +191,14 @@ class MeiScore:
             keySigs: list[m21.key.KeySignature] = list(
                 part.recurse()
                 .getElementsByClass(m21.key.KeySignature)
-                .getElementsByOffset(0.0)
+                .getElementsByOffsetInHierarchy(0.0)
             )
             if keySigs:
                 keySig = keySigs[0]
         if keySig is not None:
             M21ObjectConvert.m21KeySigToMei(keySig, tb)
+        else:
+            environLocal.warn(f'No initial key signature found in part {staffN}')
 
         # time signature
         meterSig: m21.meter.TimeSignature | None = part.timeSignature
@@ -196,12 +206,14 @@ class MeiScore:
             meterSigs: list[m21.meter.TimeSignature] = list(
                 part.recurse()
                 .getElementsByClass(m21.meter.TimeSignature)
-                .getElementsByOffset(0.0)
+                .getElementsByOffsetInHierarchy(0.0)
             )
             if meterSigs:
                 meterSig = meterSigs[0]
         if meterSig is not None:
             M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
+        else:
+            environLocal.warn(f'No initial time signature found in part {staffN}')
 
         tb.end('staffDef')
 
