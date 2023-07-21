@@ -491,7 +491,10 @@ class MeiReader:
         topPart: str = ''
 
         # we only look at the staffDefs inside the first scoreDef in the score
-        firstScoreDef: Element = scoreElem.find(f'.//{MEI_NS}scoreDef')
+        firstScoreDef: Element | None = scoreElem.find(f'.//{MEI_NS}scoreDef')
+        if not firstScoreDef:
+            raise MeiValidityError('No scoreDef found.')
+
         for staffDef in firstScoreDef.findall(f'.//{MEI_NS}staffDef'):
             nStr: str | None = staffDef.get('n')
             if nStr and nStr not in partNs:
