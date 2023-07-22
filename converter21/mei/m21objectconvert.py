@@ -1066,14 +1066,14 @@ class M21ObjectConvert:
                     .getElementsByClass(m21.spanner.SpannerAnchor)
                 )
 
-            for anchor in anchors:
-                for spanner in anchor.getSpannerSites():
-                    if isinstance(spanner, m21.expressions.TrillExtension):
-                        # found it!
-                        trillExtension = spanner
+                for anchor in anchors:
+                    for spanner in anchor.getSpannerSites():
+                        if isinstance(spanner, m21.expressions.TrillExtension):
+                            # found it!
+                            trillExtension = spanner
+                            break
+                    if trillExtension is not None:
                         break
-                if trillExtension is not None:
-                    break
 
             last: m21.base.Music21Object | None = None
             if trillExtension is not None:
