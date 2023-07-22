@@ -949,16 +949,27 @@ class M21Utilities:
         # Hook up each child node to the parent with the smallest superset of the child's staves.
         # If there is no parent with a superset of the child's staves at all, the child is actually
         # a top level parent.
-        for child in staffGroupTrees:
+        for i, child in enumerate(staffGroupTrees):
             smallestParent: M21StaffGroupTree | None = None
             for parent in staffGroupTrees:
                 if parent is child or parent in child.children:
                     continue
 
-                if child.staffNums.issubset(parent.staffNums):
-                    smallestParent = parent
-                    # we know it's smallest because they're sorted by size
-                    break
+                if i < len(staffGroupTrees) - 1:
+                    if child.staffNums.issubset(parent.staffNums):
+                        smallestParent = parent
+                        # we know it's smallest because they're sorted by size
+                        break
+                else:
+                    # last child; if there are no top-level parents yet, this guy is it, so
+                    # don't bother looking for smallest parent (this fixes a bug where there
+                    # are multiple possible top-level parents, all with the same staves in
+                    # them, and none of them end up at the top, because they are all subsets
+                    # of eachother).
+                    if topLevelParents:
+                        if child.staffNums.issubset(parent.staffNums):
+                            smallestParent = parent
+                            break
 
             if smallestParent is None:
                 topLevelParents.append(child)
