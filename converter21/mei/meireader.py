@@ -4406,6 +4406,9 @@ class MeiReader:
         octStr: str = elem.get('oct', '')      # use only for Note
         if not octStr:
             octStr = elem.get('oct.ges', '')
+        if not octStr:
+            # no implicit octaves, please
+            octStr = '4'
         locStr: str = elem.get('loc', '')    # use only for Unpitched
 
         if locStr or not pnameStr:
