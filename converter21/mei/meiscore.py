@@ -10,7 +10,6 @@
 # ------------------------------------------------------------------------------
 import sys
 from xml.etree.ElementTree import Element, TreeBuilder
-from copy import deepcopy
 import typing as t
 
 import music21 as m21
@@ -325,6 +324,14 @@ class MeiScore:
                         self.annotateTuplets(obj)
                         self.annotateTies(obj, part)
 
+                if partTieSpanners:
+                    # We must have encountered a stop in a voice before we encountered the
+                    # start in a different voice.  Just run through the voices again,
+                    # looking for tie stops only, to pick up any we missed.
+                    for voice in voices:
+                        for obj in voice:
+                            self.annotateTies(obj, part, stopsOnly=True)
+
                 # once annotated, check to see if any of these objects
                 # need xml:id.
                 self.makeXmlIds(measure)
@@ -509,11 +516,12 @@ class MeiScore:
     def annotateTies(
         self,
         noteOrChord: m21.base.Music21Object,
-        part: m21.stream.Part
+        part: m21.stream.Part,
+        stopsOnly: bool = False
     ) -> None:
         if not isinstance(noteOrChord, (m21.note.Note, m21.chord.Chord)):
             # Note that we reject Unpitched and PercussionChord here, since
-            # they have no pitches.
+            # they have no pitches, so they cannot be tied.
             return
 
         def startsTie(noteOrChord: m21.note.Note | m21.chord.Chord) -> bool:
@@ -541,7 +549,10 @@ class MeiScore:
                 if note is startNote:
                     continue
 
-                if startNote.pitch != note.pitch:
+                # comparison via nameWithOctave is working around the music21
+                # bug where a pitch with accidental=None is different from
+                # a pitch with accidental='natural'.  Ugh.
+                if startNote.pitch.nameWithOctave != note.pitch.nameWithOctave:
                     continue
 
                 # to stop a tie, you have to start at or beyond the end of the tie's start note.
@@ -576,33 +587,29 @@ class MeiScore:
 
         partTieSpanners: list[tuple[MeiTieSpanner, int]] = self.currentTieSpanners[part]
 
-        if startsTie(noteOrChord):
-            if t.TYPE_CHECKING:
-                assert noteOrChord.tie is not None
+        if not stopsOnly:
             if isinstance(noteOrChord, m21.chord.Chord):
-                # Pretend there was a tie on every note.
+                # A chord itself never starts a tie; perhaps one or more of the chord's
+                # individual notes does.
                 for note in noteOrChord.notes:
-                    noteTie: m21.tie.Tie = deepcopy(noteOrChord.tie)
-                    newTieSpanner = MeiTieSpanner(noteTie, startParentChord=noteOrChord)
-                    newTieSpanner.addSpannedElements(note)
-                    self.m21Score.append(newTieSpanner)
-                    partTieSpanners.append((newTieSpanner, 1))
-            else:
+                    if startsTie(note):
+                        if t.TYPE_CHECKING:
+                            assert note.tie is not None
+                        newTieSpanner = MeiTieSpanner(note.tie, startParentChord=noteOrChord)
+                        newTieSpanner.addSpannedElements(note)
+                        self.m21Score.append(newTieSpanner)
+                        partTieSpanners.append((newTieSpanner, 1))
+            elif startsTie(noteOrChord):
+                if t.TYPE_CHECKING:
+                    assert noteOrChord.tie is not None
                 newTieSpanner = MeiTieSpanner(noteOrChord.tie, startParentChord=None)
                 newTieSpanner.addSpannedElements(noteOrChord)
                 self.m21Score.append(newTieSpanner)
                 partTieSpanners.append((newTieSpanner, 1))
-        elif isinstance(noteOrChord, m21.chord.Chord):
-            # The chord itself does not start a tie; perhaps one or more of the chord's
-            # individual notes does.
-            for note in noteOrChord.notes:
-                if startsTie(note):
-                    if t.TYPE_CHECKING:
-                        assert note.tie is not None
-                    newTieSpanner = MeiTieSpanner(note.tie, startParentChord=noteOrChord)
-                    newTieSpanner.addSpannedElements(note)
-                    self.m21Score.append(newTieSpanner)
-                    partTieSpanners.append((newTieSpanner, 1))
+
+        if not partTieSpanners:
+            # no tie stops to search for...
+            return
 
         spN: tuple[MeiTieSpanner, int] | None = None
         if isinstance(noteOrChord, m21.chord.Chord):
