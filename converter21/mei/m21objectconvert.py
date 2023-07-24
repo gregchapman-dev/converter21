@@ -737,6 +737,9 @@ class M21ObjectConvert:
             raise MeiInternalError('makeTstamp2: failed to find endObject in m21Part')
 
         for meas in m21Part:
+            if not isinstance(meas, m21.stream.Measure):
+                continue  # don't count RepeatBrackets!
+
             if meas is m21StartMeasure:
                 # We found the start measure! Start counting steps.
                 measureStepCount = 0
