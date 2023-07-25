@@ -7843,12 +7843,24 @@ class MeiReader:
 
     @staticmethod
     def padVoiceWithInvisibleRests(voice: m21.stream.Voice, addedDuration: OffsetQL):
-        durations: list[OffsetQL] = (
+        qls: list[OffsetQL] = (
             M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(addedDuration)
         )
+        durations: list[m21.duration.Duration] = []
+        for ql in qls:
+            durations.append(m21.duration.Duration(ql))
+
+        # tuplet-y addedDuration will not split into powers of two, so we'll get
+        # just 1 duration with tuplet(s).  If so, mark it as 'startStop', since
+        # it isn't really a part of any existing tuplets.  Hopefully this doesn't
+        # happen too often.
+        if len(durations) == 1 and durations[0].tuplets:
+            for tuplet in durations[0].tuplets:
+                tuplet.type = 'startStop'
+
         for duration in durations:
             m21Rest: m21.note.Rest = m21.note.Rest(
-                duration=m21.duration.Duration(duration)
+                duration=duration
             )
             m21Rest.style.hideObjectOnPrint = True
             voice.append(m21Rest)
