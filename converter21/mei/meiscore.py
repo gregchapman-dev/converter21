@@ -499,7 +499,8 @@ class MeiScore:
 
         # start any new tuplet spanners
         for tuplet in gnote.duration.tuplets:
-            if startsTuplet(tuplet):
+            if (startsTuplet(tuplet)
+                    or (tuplet.type is None and not self.currentTupletSpanners)):
                 newTupletSpanner = MeiTupletSpanner(tuplet)
                 self.m21Score.append(newTupletSpanner)
                 self.currentTupletSpanners.append(newTupletSpanner)
