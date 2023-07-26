@@ -817,6 +817,15 @@ class M21ObjectConvert:
         'non-arpeggio': ('false', 'nonarp')
     }
 
+    _DIS_AND_DIS_PLACE_FROM_M21_OTTAVA_TYPE: dict[str, tuple[str, str]] = {
+        '8va': ('8', 'above'),
+        '8vb': ('8', 'below'),
+        '15ma': ('15', 'above'),
+        '15mb': ('15', 'below'),
+        '22da': ('22', 'above'),
+        '22db': ('22', 'below')
+    }
+
     @staticmethod
     def postStavesSpannerToMei(
         spanner: m21.spanner.Spanner,
@@ -864,6 +873,13 @@ class M21ObjectConvert:
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
             M21ObjectConvert.fillInArpeggioAttributes(spanner, attr)
+        elif isinstance(spanner, m21.spanner.Ottava):
+            tag = 'octave'
+            dis: str
+            disPlace: str
+            dis, disPlace = M21ObjectConvert._DIS_AND_DIS_PLACE_FROM_M21_OTTAVA_TYPE[spanner.type]
+            attr['dis'] = dis
+            attr['dis.place'] = disPlace
         elif isinstance(spanner, MeiBeamSpanner):
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
