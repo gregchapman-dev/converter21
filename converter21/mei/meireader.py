@@ -4298,16 +4298,17 @@ class MeiReader:
 
         if t.TYPE_CHECKING:
             assert durFloat is not None
+            assert durGesFloat is not None
 
         duration: m21.duration.Duration = M21Utilities.makeDuration(durFloat, numDots)
         if durGesFloat != 0.0 or numDotsGes is not None:
             # there is a gestural duration
             gesDuration: m21.duration.Duration
-            if durGesFloat is not None and numDotsGes is not None:
+            if durGesFloat != 0.0 and numDotsGes is not None:
                 gesDuration = M21Utilities.makeDuration(durGesFloat, numDotsGes)
-            elif durGesFloat is not None and numDotsGes is None:
+            elif durGesFloat != 0.0 and numDotsGes is None:
                 gesDuration = M21Utilities.makeDuration(durGesFloat, numDots)
-            elif durGesFloat is None and numDotsGes is not None:
+            elif durGesFloat == 0.0 and numDotsGes is not None:
                 gesDuration = M21Utilities.makeDuration(durFloat, numDotsGes)
 
             duration.linked = False

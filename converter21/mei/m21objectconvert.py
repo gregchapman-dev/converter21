@@ -599,8 +599,7 @@ class M21ObjectConvert:
 
             gesDuration = m21.duration.Duration(gesQL)
             durGes = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(gesDuration.type, '')
-            if gesDuration.dots:
-                dotsGes = str(gesDuration.dots)
+            dotsGes = str(gesDuration.dots)
 
             # only emit @dur.ges or @dots.ges if different from @dur or @dots
             if durGes == dur:
