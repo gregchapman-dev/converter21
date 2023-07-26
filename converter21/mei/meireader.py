@@ -7607,6 +7607,9 @@ class MeiReader:
                     stavesWaitingFromStaffDef[nStr] = self.staffDefFromElement(
                         eachElem
                     )
+                    for eachObj in stavesWaitingFromStaffDef[nStr].values():
+                        if isinstance(eachObj, meter.TimeSignature):
+                            self.activeMeter = eachObj
                     self.staffNumberForDef = ''
 
             elif eachElem.tag in self.staffItemsTagToFunction:
