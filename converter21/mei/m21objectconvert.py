@@ -265,6 +265,25 @@ class M21ObjectConvert:
         loc: int = base7 - 30
         return str(loc)
 
+    _OTTAVA_TYPE_TO_OCTAVE_SHIFT: dict[str, int] = {
+        '8va': +1,
+        '8vb': -1,
+        '15ma': +2,
+        '15mb': -2,
+        '22da': +3,
+        '22db': -3
+    }
+
+    @staticmethod
+    def _getOttavaShiftAndTransposing(gn: m21.note.GeneralNote) -> tuple[int, bool]:
+        for spanner in gn.getSpannerSites():
+            if isinstance(spanner, m21.spanner.Ottava):
+                return (
+                    M21ObjectConvert._OTTAVA_TYPE_TO_OCTAVE_SHIFT[spanner.type],
+                    spanner.transposing
+                )
+        return 0, True
+
     @staticmethod
     def _noteToMei(
         note: m21.note.Note | m21.note.Unpitched,
@@ -289,8 +308,20 @@ class M21ObjectConvert:
             attr['loc'] = loc
         else:
             # @pname, @oct, @accid/@accid.ges
-            attr['oct'] = str(note.pitch.octave)
             attr['pname'] = note.pitch.step.lower()
+            octaveShift: int
+            ottavaTransposes: bool
+            octaveShift, ottavaTransposes = M21ObjectConvert._getOttavaShiftAndTransposing(note)
+            if octaveShift == 0:
+                attr['oct'] = str(note.pitch.implicitOctave)
+            else:
+                # there is an ottava in play, does it transpose or not?
+                if ottavaTransposes:
+                    attr['oct'] = str(note.pitch.implicitOctave)
+                    attr['oct.ges'] = str(note.pitch.implicitOctave + octaveShift)
+                else:
+                    attr['oct'] = str(note.pitch.implicitOctave - octaveShift)
+                    attr['oct.ges'] = str(note.pitch.implicitOctave)
 
         M21ObjectConvert._addBreakSec(note, attr)
         M21ObjectConvert._addStylisticAttributes(note, attr)
@@ -611,7 +642,7 @@ class M21ObjectConvert:
             attr['dots'] = dots
         if dur:
             attr['dur'] = dur
-        if dotsGes and dotsGes != '0':
+        if dotsGes:
             attr['dots.ges'] = dotsGes
         if durGes:
             attr['dur.ges'] = durGes

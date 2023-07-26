@@ -323,6 +323,7 @@ class MeiScore:
                         self.annotateBeams(obj)
                         self.annotateTuplets(obj)
                         self.annotateTies(obj, part)
+                        self.fillOttavas(obj, part)
 
                 if partTieSpanners:
                     # We must have encountered a stop in a voice before we encountered the
@@ -337,6 +338,11 @@ class MeiScore:
                 self.makeXmlIds(measure)
 
         # print('done annotating score')
+
+    def fillOttavas(self, obj: m21.base.Music21Object, part: m21.stream.Part) -> None:
+        for spanner in obj.getSpannerSites():
+            if isinstance(spanner, m21.spanner.Ottava) and spanner.isFirst(obj):
+                spanner.fill(part)
 
     def deannotateScore(self) -> None:
         for sp in self.m21Score.getElementsByClass(MeiTemporarySpanner):
