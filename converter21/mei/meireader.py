@@ -4311,8 +4311,9 @@ class MeiReader:
             elif durGesFloat == 0.0 and numDotsGes is not None:
                 gesDuration = M21Utilities.makeDuration(durFloat, numDotsGes)
 
-            duration.linked = False
-            duration.quarterLength = gesDuration.quarterLength
+            if gesDuration.quarterLength != duration.quarterLength:
+                duration.linked = False
+                duration.quarterLength = gesDuration.quarterLength
 
         return duration
 

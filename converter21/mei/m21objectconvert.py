@@ -13,7 +13,6 @@
 import sys
 import typing as t
 from xml.etree.ElementTree import TreeBuilder
-from copy import deepcopy
 
 import music21 as m21
 from music21.common import OffsetQLIn, OffsetQL
@@ -614,9 +613,10 @@ class M21ObjectConvert:
             # compute @dur.ges and @dots.ges
             gesQL: OffsetQL = 0.0
             if duration.tuplets:
-                nonTupletduration: m21.duration.Duration = deepcopy(duration)
-                nonTupletduration.tuplets = tuple()
-                gesQL = nonTupletduration.quarterLength
+                mult: OffsetQL = 1.0
+                for tuplet in duration.tuplets:
+                    mult = opFrac(mult * tuplet.tupletMultiplier())
+                gesQL = duration.quarterLength / mult
             else:
                 gesQL = duration.quarterLength
 
