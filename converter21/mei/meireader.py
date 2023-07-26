@@ -6689,15 +6689,12 @@ class MeiReader:
         tstamp: str = elem.get('tstamp', '')
         endId: str = elem.get('endid', '')
         tstamp2: str = elem.get('tstamp2', '')
-        if not tstamp2 and not endId:
-            environLocal.warn('missing @tstamp2/@endid in <octave> element')
-            return ('', (-1., None, None), None)
         if not tstamp and not startId:
             environLocal.warn('missing @tstamp/@startid in <octave> element')
             return ('', (-1., None, None), None)
         if not startId:
             ottava.mei_needs_start_anchor = True  # type: ignore
-        if not endId:
+        if not endId and tstamp2:
             ottava.mei_needs_end_anchor = True  # type: ignore
         if tstamp:
             offset = self._tstampToOffset(tstamp)
