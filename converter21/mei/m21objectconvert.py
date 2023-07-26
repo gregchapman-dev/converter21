@@ -571,8 +571,7 @@ class M21ObjectConvert:
         grace: str = ''
 
         dur = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(duration.type, '')
-        if duration.dots:
-            dots = str(duration.dots)
+        dots = str(duration.dots)
 
         if isinstance(duration, m21.duration.GraceDuration):
             if duration.slash:
@@ -608,11 +607,11 @@ class M21ObjectConvert:
                 dotsGes = ''
 
         # all computed, put the relevant ones in the attr dict
-        if dots:
+        if dots and dots != '0':
             attr['dots'] = dots
         if dur:
             attr['dur'] = dur
-        if dotsGes:
+        if dotsGes and dotsGes != '0':
             attr['dots.ges'] = dotsGes
         if durGes:
             attr['dur.ges'] = durGes
