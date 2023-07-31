@@ -347,8 +347,12 @@ class MeiReader:
         # key = staffNStr, value = current Key/KeySignature
         self.currKeyPerStaff: dict[str, key.Key | key.KeySignature | None] = {}
 
-        # key = staffNStr, value = current Key/KeySignature
-        self.currClefPerStaff: dict[str, m21.clef.Clef | None] = {}
+        # key = staffNStr, value = Clef at start of measure for this staff
+        self.measureStartClefPerStaff: dict[str, m21.clef.Clef | None] = {}
+
+        # keys = staffNStr, layerNStr, value = Clef right now in the layer.
+        # This only contains clefs that were introduced in this layer/staff/measure.
+        self.currentClefPerStaffLayer: dict[str, dict[str, m21.clef.Clef | None]] = {}
 
         # The voice.id we are currently importing notes/chords/rests into.
         self.currVoiceId: str = ''
@@ -3774,12 +3778,37 @@ class MeiReader:
 
         return post
 
-    def updateStaffClef(
+    def updateMeasureStartStaffClef(
         self,
         staffNStr: str,
         newClef: m21.clef.Clef | None
     ):
-        self.currClefPerStaff[staffNStr] = newClef
+        self.measureStartClefPerStaff[staffNStr] = newClef
+
+    def updateCurrentStaffLayerClef(
+        self,
+        staffNStr: str,
+        layerNStr: str,
+        newClef: m21.clef.Clef | None
+    ):
+        if self.currentClefPerStaffLayer.get(staffNStr, None) is None:
+            self.currentClefPerStaffLayer[staffNStr] = {}
+        self.currentClefPerStaffLayer[staffNStr][layerNStr] = newClef
+
+    def getCurrentStaffLayerClef(
+        self,
+        staffNStr: str,
+        layerNStr: str,
+    ) -> m21.clef.Clef | None:
+        currClef: m21.clef.Clef | None = None
+        currClefPerLayer: dict[str, m21.clef.Clef | None] | None = (
+            self.currentClefPerStaffLayer.get(staffNStr, None)
+        )
+        if currClefPerLayer is not None:
+            currClef = currClefPerLayer.get(layerNStr, None)
+        if currClef is None:
+            currClef = self.measureStartClefPerStaff.get(staffNStr, None)
+        return currClef
 
     def updateStaffKeyAndAltersWithNewKey(
         self,
@@ -4746,7 +4775,7 @@ class MeiReader:
                 environLocal.warn(f'Invalid rest@loc or mRest@loc value: {loc}')
         elif ploc and oloc:
             activeClef: m21.clef.Clef | None = (
-                self.currClefPerStaff.get(self.staffNumberForNotes, None)
+                self.getCurrentStaffLayerClef(self.staffNumberForNotes, self.currVoiceId)
             )
             if activeClef is None or not hasattr(activeClef, 'lowestLine'):
                 activeClef = m21.clef.TrebleClef()
@@ -5195,7 +5224,7 @@ class MeiReader:
             self._clefFromElement(elem)
         )
         if self.staffNumberForDef:
-            self.updateStaffClef(self.staffNumberForDef, newClef)
+            self.updateMeasureStartStaffClef(self.staffNumberForDef, newClef)
 
         return newClef
 
@@ -5207,7 +5236,7 @@ class MeiReader:
             self._clefFromElement(elem)
         )
         if self.staffNumberForNotes:
-            self.updateStaffClef(self.staffNumberForNotes, newClef)
+            self.updateCurrentStaffLayerClef(self.staffNumberForNotes, self.currVoiceId, newClef)
 
         return newClef
 
@@ -7899,6 +7928,24 @@ class MeiReader:
 
         # take the timestamped fermatas, etc, and find notes/barlines to put them on
         self._addTimestampedExpressions(staves, tsExpressions)
+
+        # if we saw any clefs in this measure, they will be in self.currentClefPerStaffLayer.
+        # Use them to initialize self.measureStartClefPerStaff (for the next measure).  If
+        # there are any staffDefs before the next measure, any clefs in those staffDefs will
+        # override these clefs.
+        for staffNStr, layerClefDict in self.currentClefPerStaffLayer.items():
+            staffClef: m21.clef.Clef | None = None
+            for layerClef in layerClefDict.values():
+                if staffClef is None:
+                    staffClef = layerClef
+                elif layerClef is not None and staffClef != layerClef:
+                    raise MeiInternalError(
+                        'Different layers ended the staff with different clefs.'
+                    )
+            self.measureStartClefPerStaff[staffNStr] = staffClef
+
+        # having done that, clear out self.currentClefPerStaffLayer
+        self.currentClefPerStaffLayer = {}
 
         return staves
 
