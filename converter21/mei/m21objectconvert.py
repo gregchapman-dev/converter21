@@ -218,11 +218,20 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.note.Rest)
         attr: dict[str, str] = {}
+
         xmlId: str = M21ObjectConvert.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
+
+        oloc: str = getattr(obj, 'mei_oloc', '')
+        ploc: str = getattr(obj, 'mei_ploc', '')
+        if oloc and ploc:
+            attr['ploc'] = ploc
+            attr['oloc'] = oloc
+
         M21ObjectConvert._addStylisticAttributes(obj, attr)
+
         if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
             attr.pop('visible', None)  # remove @visible="false", since <space> is always invisible
             tb.start('space', attr)

@@ -203,7 +203,6 @@ from music21 import key
 from music21 import metadata
 from music21 import meter
 from music21 import note
-from music21 import pitch
 from music21 import spanner
 from music21 import stream
 from music21 import style
@@ -347,6 +346,9 @@ class MeiReader:
 
         # key = staffNStr, value = current Key/KeySignature
         self.currKeyPerStaff: dict[str, key.Key | key.KeySignature | None] = {}
+
+        # key = staffNStr, value = current Key/KeySignature
+        self.currClefPerStaff: dict[str, m21.clef.Clef | None] = {}
 
         # The voice.id we are currently importing notes/chords/rests into.
         self.currVoiceId: str = ''
@@ -2216,7 +2218,7 @@ class MeiReader:
             m21AccidName = self._m21AccidentalNameFromAccid(accidLower)
         trill = expressions.Trill()
         if m21AccidName:
-            m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+            m21Accid: m21.pitch.Accidental = m21.pitch.Accidental(m21AccidName)
             m21Accid.displayStatus = True
             trill.accidental = m21Accid
 
@@ -2279,7 +2281,7 @@ class MeiReader:
             mordent = expressions.Mordent()
 
         if m21AccidName:
-            m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+            m21Accid: m21.pitch.Accidental = m21.pitch.Accidental(m21AccidName)
             m21Accid.displayStatus = True
             mordent.accidental = m21Accid
 
@@ -2334,14 +2336,14 @@ class MeiReader:
         if accidLower:
             m21AccidNameLower = self._m21AccidentalNameFromAccid(accidLower)
 
-        m21AccidUpper: pitch.Accidental | None = None
+        m21AccidUpper: m21.pitch.Accidental | None = None
         if m21AccidNameUpper:
-            m21AccidUpper = pitch.Accidental(m21AccidNameUpper)
+            m21AccidUpper = m21.pitch.Accidental(m21AccidNameUpper)
             m21AccidUpper.displayStatus = True
 
-        m21AccidLower: pitch.Accidental | None = None
+        m21AccidLower: m21.pitch.Accidental | None = None
         if m21AccidNameLower:
-            m21AccidLower = pitch.Accidental(m21AccidNameLower)
+            m21AccidLower = m21.pitch.Accidental(m21AccidNameLower)
             m21AccidLower.displayStatus = True
 
 
@@ -3676,7 +3678,7 @@ class MeiReader:
             [Element],
             t.Any]
         ] = {
-            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}clef': self.clefFromElementInStaffDef,
             f'{MEI_NS}keySig': self.keySigFromElementInStaffDef,
             f'{MEI_NS}meterSig': self.timeSigFromElement,
         }
@@ -3734,7 +3736,7 @@ class MeiReader:
             if displace:
                 attribDict['dis.place'] = displace
             el = Element('clef', attribDict)
-            clefObj = self.clefFromElement(el)
+            clefObj = self.clefFromElementInStaffDef(el)
             if clefObj is not None:
                 post['clef'] = clefObj
 
@@ -3772,6 +3774,12 @@ class MeiReader:
 
         return post
 
+    def updateStaffClef(
+        self,
+        staffNStr: str,
+        newClef: m21.clef.Clef | None
+    ):
+        self.currClefPerStaff[staffNStr] = newClef
 
     def updateStaffKeyAndAltersWithNewKey(
         self,
@@ -3784,7 +3792,7 @@ class MeiReader:
     def updateStaffAltersWithPitches(
         self,
         staffNStr: str,
-        pitches: t.Sequence[pitch.Pitch],
+        pitches: t.Sequence[m21.pitch.Pitch],
     ):
         # every note and chord (and Trill/Mordent/Turn) flows through this routine
         if self.currentImpliedAltersPerStaff.get(staffNStr, None) is None:
@@ -3907,7 +3915,7 @@ class MeiReader:
     def accidFromElement(
         self,
         elem: Element,
-    ) -> pitch.Accidental | None:
+    ) -> m21.pitch.Accidental | None:
         '''
         <accid> Records a temporary alteration to the pitch of a note.
 
@@ -3995,7 +4003,7 @@ class MeiReader:
         if accidStr is None:
             return None
 
-        accidental: pitch.Accidental = pitch.Accidental(accidStr)
+        accidental: m21.pitch.Accidental = m21.pitch.Accidental(accidStr)
         accidental.displayStatus = displayStatus
         if displayLocation:
             accidental.displayLocation = displayLocation
@@ -4418,6 +4426,9 @@ class MeiReader:
 
         if isUnpitched:
             # what pitch would loc represent in the treble clef?
+            # We don't need active clef here, because percussion always
+            # assumes treble clef definitions if there is more than one
+            # staff line.
             displayName: str = M21ObjectConvert.meiLocToM21DisplayName(locStr)
             theNote = note.Unpitched(displayName=displayName)
         else:
@@ -4427,7 +4438,7 @@ class MeiReader:
         theDuration: m21.duration.Duration = self.durationFromAttributes(elem)
         theNote.duration = theDuration
 
-        theAccidObj: pitch.Accidental | None = None
+        theAccidObj: m21.pitch.Accidental | None = None
         if not isUnpitched:
             # get any @accid/@accid.ges from this element.
             # We'll overwrite with any subElements below.
@@ -4444,7 +4455,7 @@ class MeiReader:
                 dotElements += subElement
             elif isinstance(subElement, articulations.Articulation):
                 theNote.articulations.append(subElement)
-            elif isinstance(subElement, pitch.Accidental):
+            elif isinstance(subElement, m21.pitch.Accidental):
                 theAccidObj = subElement
             elif isinstance(subElement, note.Lyric):
                 if theNote.lyrics is None:
@@ -4722,6 +4733,30 @@ class MeiReader:
                 # because scaleToTuplet returns whatever it was passed (modified)
                 assert isinstance(obj, note.Rest)
             theRest = obj
+
+        # positioning (oloc/ploc or just loc -> theRest.stepShift)
+        oloc: str = elem.get('oloc', '')
+        ploc: str = elem.get('ploc', '')
+        loc: str = elem.get('loc', '')
+        stepShift: int = 0
+        if loc:
+            try:
+                stepShift = int(loc) - 4
+            except Exception:
+                environLocal.warn(f'Invalid rest@loc or mRest@loc value: {loc}')
+        elif ploc and oloc:
+            activeClef: m21.clef.Clef | None = (
+                self.currClefPerStaff.get(self.staffNumberForNotes, None)
+            )
+            if activeClef is None or not hasattr(activeClef, 'lowestLine'):
+                activeClef = m21.clef.TrebleClef()
+            midLine: int = activeClef.lowestLine + 4
+            pitch = m21.pitch.Pitch(ploc + oloc)
+            restPosNoteNum: int = pitch.diatonicNoteNum
+            stepShift = restPosNoteNum - midLine
+
+        if stepShift != 0:
+            theRest.stepShift = stepShift
 
         # visibility
         if elem.get('visible') == 'false':
@@ -5076,7 +5111,7 @@ class MeiReader:
         return theChord
 
 
-    def clefFromElement(
+    def _clefFromElement(
         self,
         elem: Element,
     ) -> clef.Clef | None:
@@ -5151,6 +5186,30 @@ class MeiReader:
             theClef.id = xmlId
 
         return theClef
+
+    def clefFromElementInStaffDef(
+        self,
+        elem: Element,
+    ) -> m21.clef.Clef | None:
+        newClef: m21.clef.Clef | None = (
+            self._clefFromElement(elem)
+        )
+        if self.staffNumberForDef:
+            self.updateStaffClef(self.staffNumberForDef, newClef)
+
+        return newClef
+
+    def clefFromElementInLayer(
+        self,
+        elem: Element,
+    ) -> m21.clef.Clef | None:
+        newClef: m21.clef.Clef | None = (
+            self._clefFromElement(elem)
+        )
+        if self.staffNumberForNotes:
+            self.updateStaffClef(self.staffNumberForNotes, newClef)
+
+        return newClef
 
     def pageBreakFromElement(
         self,
@@ -6774,7 +6833,7 @@ class MeiReader:
 
             trill = expressions.Trill()
             if m21AccidName:
-                m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+                m21Accid: m21.pitch.Accidental = m21.pitch.Accidental(m21AccidName)
                 m21Accid.displayStatus = True
                 trill.accidental = m21Accid
 
@@ -6898,7 +6957,7 @@ class MeiReader:
                 mordent = expressions.Mordent()
 
             if m21AccidName:
-                m21Accid: pitch.Accidental = pitch.Accidental(m21AccidName)
+                m21Accid: m21.pitch.Accidental = m21.pitch.Accidental(m21AccidName)
                 m21Accid.displayStatus = True
                 mordent.accidental = m21Accid
 
@@ -6986,11 +7045,11 @@ class MeiReader:
                 turn = expressions.InvertedTurn(delay=delay)
 
             if m21AccidUpper:
-                m21UpperAccidental: pitch.Accidental = pitch.Accidental(m21AccidUpper)
+                m21UpperAccidental: m21.pitch.Accidental = m21.pitch.Accidental(m21AccidUpper)
                 m21UpperAccidental.displayStatus = True
                 turn.upperAccidental = m21UpperAccidental
             if m21AccidLower:
-                m21LowerAccidental: pitch.Accidental = pitch.Accidental(m21AccidLower)
+                m21LowerAccidental: m21.pitch.Accidental = m21.pitch.Accidental(m21AccidLower)
                 m21LowerAccidental.displayStatus = True
                 turn.lowerAccidental = m21LowerAccidental
 
@@ -8424,7 +8483,7 @@ class MeiReader:
             f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialLayerChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialLayerChildrenFromElement,
-            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}clef': self.clefFromElementInLayer,
             f'{MEI_NS}chord': self.chordFromElement,
             f'{MEI_NS}note': self.noteFromElement,
             f'{MEI_NS}rest': self.restFromElement,
@@ -8542,7 +8601,7 @@ class MeiReader:
             f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialBeamChildrenFromElement,
-            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}clef': self.clefFromElementInLayer,
             f'{MEI_NS}chord': self.chordFromElement,
             f'{MEI_NS}note': self.noteFromElement,
             f'{MEI_NS}rest': self.restFromElement,
@@ -8577,7 +8636,7 @@ class MeiReader:
             f'{MEI_NS}note': self.noteFromElement,
             f'{MEI_NS}rest': self.restFromElement,
             f'{MEI_NS}chord': self.chordFromElement,
-            f'{MEI_NS}clef': self.clefFromElement,
+            f'{MEI_NS}clef': self.clefFromElementInLayer,
             f'{MEI_NS}space': self.spaceFromElement,
             f'{MEI_NS}barLine': self.barLineFromElement,
         }
@@ -8629,7 +8688,6 @@ _DOC_ORDER = [
     MeiReader.articFromElement,
     MeiReader.beamFromElement,
     MeiReader.chordFromElement,
-    MeiReader.clefFromElement,
     MeiReader.dotFromElement,
     MeiReader.instrDefFromElement,
     MeiReader.layerFromElement,

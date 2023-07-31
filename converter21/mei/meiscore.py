@@ -323,6 +323,7 @@ class MeiScore:
                         self.annotateBeams(obj)
                         self.annotateTuplets(obj)
                         self.annotateTies(obj, part)
+                        self.annotatePositionedRests(obj, part)
                         self.fillOttavas(obj, part)
 
                 if partTieSpanners:
@@ -338,6 +339,27 @@ class MeiScore:
                 self.makeXmlIds(measure)
 
         # print('done annotating score')
+
+    def annotatePositionedRests(self, obj: m21.base.Music21Object, part: m21.stream.Part) -> None:
+        if not isinstance(obj, m21.note.Rest):
+            return
+        if obj.stepShift == 0:
+            return
+
+        # obj is a positioned rest, compute and stash off MEI ploc/oloc strings
+        currentClef: m21.clef.PitchClef | None = obj.getContextByClass(m21.clef.PitchClef)
+        if currentClef is None or not hasattr(currentClef, 'lowestLine'):
+            currentClef = m21.clef.TrebleClef()
+            # this should not be common enough to
+            # worry about the overhead
+        if t.TYPE_CHECKING:
+            assert isinstance(currentClef, m21.clef.PitchClef)
+        midLineDNN = currentClef.lowestLine + 4
+        restObjectPseudoDNN = midLineDNN + obj.stepShift
+        tempPitch = m21.pitch.Pitch()
+        tempPitch.diatonicNoteNum = restObjectPseudoDNN
+        obj.mei_ploc = tempPitch.step.lower()  # type: ignore
+        obj.mei_oloc = str(tempPitch.octave)  # type: ignore
 
     def fillOttavas(self, obj: m21.base.Music21Object, part: m21.stream.Part) -> None:
         for spanner in obj.getSpannerSites():
