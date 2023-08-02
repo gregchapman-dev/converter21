@@ -142,3 +142,17 @@ class MeiStaff:
                                 self.scoreMeterStream,
                                 tb
                             )
+
+        # lastly, any fermata on the right barline is a post-staves element.
+        if self.m21Measure.rightBarline is not None:
+            if self.m21Measure.rightBarline.pause is not None:
+                M21ObjectConvert.fermataToMei(
+                    self.m21Measure.rightBarline,
+                    self.m21Measure.rightBarline.pause,
+                    self.staffNStr,
+                    self.m21Part,
+                    self.m21Measure,
+                    self.scoreMeterStream,
+                    tb
+                )
+

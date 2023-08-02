@@ -4281,6 +4281,11 @@ class MeiReader:
         elif fermataShape == 'square':
             fermata.shape = 'square'
 
+        if fermataPlace in ('above', 'below'):
+            # m21.expressions.Fermata has no placement, officially, but if you set it,
+            # it will be exported to MusicXML correctly.
+            fermata.placement = fermataPlace  # type: ignore
+
         return fermata
 
     def durationFromAttributes(
@@ -7520,6 +7525,11 @@ class MeiReader:
             fermata.shape = 'angled'
         elif fermataShape == 'square':
             fermata.shape = 'square'
+
+        if fermataPlace in ('above', 'below'):
+            # m21.expressions.Fermata has no placement, officially, but if you set it,
+            # it will be exported to MusicXML correctly.
+            fermata.placement = fermataPlace  # type: ignore
 
         return staffNStr, (offset, None, None), fermata
 

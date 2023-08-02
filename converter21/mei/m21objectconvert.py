@@ -1253,7 +1253,7 @@ class M21ObjectConvert:
 
     @staticmethod
     def fermataToMei(
-        gn: m21.note.GeneralNote,
+        obj: m21.note.GeneralNote | m21.bar.Barline,
         fermata: m21.expressions.Fermata,
         staffNStr: str,
         m21Part: m21.stream.Part,
@@ -1264,7 +1264,7 @@ class M21ObjectConvert:
         attr: dict[str, str] = {}
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
-            gn,
+            obj,
             None,
             staffNStr,
             m21Part,
