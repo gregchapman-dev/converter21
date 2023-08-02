@@ -7945,9 +7945,10 @@ class MeiReader:
                 if staffClef is None:
                     staffClef = layerClef
                 elif layerClef is not None and staffClef != layerClef:
-                    raise MeiInternalError(
-                        'Different layers ended the staff with different clefs.'
-                    )
+                    environLocal.warn('Different layers ended the staff with different clefs.')
+#                     raise MeiInternalError(
+#                         'Different layers ended the staff with different clefs.'
+#                     )
             self.measureStartClefPerStaff[staffNStr] = staffClef
 
         # having done that, clear out self.currentClefPerStaffLayer
