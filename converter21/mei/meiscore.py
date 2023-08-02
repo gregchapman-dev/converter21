@@ -486,7 +486,7 @@ class MeiScore:
             self.previousBeamedNoteOrChord = None
             return
 
-        if allStart(noteOrChord.beams):
+        if allStart(noteOrChord.beams) or not self.currentBeamSpanners:
             newBeamSpanner = MeiBeamSpanner()
             self.m21Score.append(newBeamSpanner)
             self.currentBeamSpanners.append(newBeamSpanner)
