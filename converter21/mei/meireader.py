@@ -5182,8 +5182,6 @@ class MeiReader:
         **Contained Elements not Implemented:** none
         '''
         theClef: clef.Clef
-        if elem.get('sameas') is not None:
-            return None
 
         shapeStr: str | None = elem.get('shape')
         lineStr: str | None = elem.get('line')
@@ -5213,6 +5211,14 @@ class MeiReader:
         xmlId: str | None = elem.get(_XMLID)
         if xmlId is not None:
             theClef.id = xmlId
+
+        if elem.get('sameas') is not None:
+            # this is the exact same clef as one in (probably) another layer.
+            # Don't print this one; the other one is sufficient.
+            theClef.style.hideObjectOnPrint = True
+
+        if elem.get('visible') == 'false':
+            theClef.style.hideObjectOnPrint = True
 
         return theClef
 
