@@ -2400,7 +2400,20 @@ class MeiReader:
         return
 
     @staticmethod
-    def beamTogether(someThings: list[Music21Object]):
+    def beamGroupIsAllGraceNotes(someThings: list[Music21Object]) -> bool:
+        # Compute if this is a beamed grace note group (i.e. all beamable objects are grace notes).
+        isGraceBeam: bool = True
+        for thing in someThings:
+            if not hasattr(thing, 'beams'):
+                continue
+
+            if not thing.duration.isGrace:
+                isGraceBeam = False
+                break
+
+        return isGraceBeam
+
+    def beamTogether(self, someThings: list[Music21Object]):
         '''
         Beam some things together. The function beams every object that has a :attr:`beams`
         attribute, leaving the other objects unmodified.
@@ -2409,15 +2422,9 @@ class MeiReader:
         :type someThings: iterable of :class:`~music21.base.Music21Object`
         '''
 
-        # First see if this is a beamed grace note group, or a beamed non-grace note group.
-        # Each will skip over the other type of note.
-        isGraceBeam: bool = False
-        for thing in someThings:
-            if not hasattr(thing, 'beams'):
-                continue
-
-            isGraceBeam = thing.duration.isGrace
-            break
+        # First see if this is a beamed grace note group (i.e. all grace notes), or a beamed
+        # non-grace note group (might have grace notes, but we will skip them while beaming).
+        isGraceBeam: bool = self.beamGroupIsAllGraceNotes(someThings)
 
         # Index of the most recent beamedNote/Chord in someThings. Not all Note/Chord objects will
         # necessarily be beamed, so we have to make that distinction.
@@ -2426,7 +2433,7 @@ class MeiReader:
         for i, thing in enumerate(someThings):
             if not hasattr(thing, 'beams'):
                 continue
-            if thing.duration.isGrace != isGraceBeam:
+            if not isGraceBeam and thing.duration.isGrace:
                 continue
 
             if iLastBeamedNote == -1:
@@ -2449,7 +2456,7 @@ class MeiReader:
         for i, thing in enumerate(someThings):
             if not hasattr(thing, 'beams'):
                 continue
-            if thing.duration.isGrace != isGraceBeam:
+            if not isGraceBeam and thing.duration.isGrace:
                 continue
             if m21.duration.convertTypeToNumber(thing.duration.type) <= 4:
                 continue
@@ -2478,7 +2485,7 @@ class MeiReader:
         for i, thing in enumerate(someThings):
             if not hasattr(thing, 'beams'):
                 continue
-            if thing.duration.isGrace != isGraceBeam:
+            if not isGraceBeam and thing.duration.isGrace:
                 continue
             if m21.duration.convertTypeToNumber(thing.duration.type) <= 4:
                 continue
@@ -2500,22 +2507,15 @@ class MeiReader:
                     b.type = 'partial'
                     b.direction = 'left'
 
-    @staticmethod
-    def applyBreaksecs(someThings: list[Music21Object]):
-        # First see if this is a beamed grace note group, or a beamed non-grace note group.
-        # Each will skip over the other type of note.
-        isGraceBeam: bool = False
-        for thing in someThings:
-            if not hasattr(thing, 'beams'):
-                continue
-
-            isGraceBeam = thing.duration.isGrace
-            break
+    def applyBreaksecs(self, someThings: list[Music21Object]):
+        # First see if this is a beamed grace note group (i.e. all grace notes), or a beamed
+        # non-grace note group (might have grace notes, but we will skip them while beaming).
+        isGraceBeam: bool = self.beamGroupIsAllGraceNotes(someThings)
 
         for i, thing in enumerate(someThings):
             if not hasattr(thing, 'beams'):
                 continue
-            if thing.duration.isGrace != isGraceBeam:
+            if not isGraceBeam and thing.duration.isGrace:
                 continue
             if m21.duration.convertTypeToNumber(thing.duration.type) <= 4:
                 continue

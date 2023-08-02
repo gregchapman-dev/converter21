@@ -45,7 +45,7 @@ class MeiScore:
         self.m21Score: m21.stream.Score = m21Score
 
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
-        self.currentBeamSpanner: MeiBeamSpanner | None = None
+        self.currentBeamSpanners: list[MeiBeamSpanner] = []
         self.currentTupletSpanners: list[MeiTupletSpanner] = []
         self.currentTieSpanners: dict[m21.stream.Part, list[tuple[MeiTieSpanner, int]]] = {}
         for part in self.m21Score.parts:
@@ -457,6 +457,14 @@ class MeiScore:
                     return False
             return True
 
+        def allStart(beams: m21.beam.Beams) -> bool:
+            if len(beams.beamsList) == 0:
+                return False
+            for beamObj in beams:
+                if not startsBeam(beamObj):
+                    return False
+            return True
+
         def computeBreakSec(prevBeams: m21.beam.Beams, currBeams: m21.beam.Beams) -> int:
             # returns the number of beams that should be seen during the break
             # returns 0 if no breaksec seen
@@ -478,16 +486,17 @@ class MeiScore:
             self.previousBeamedNoteOrChord = None
             return
 
-        if self.currentBeamSpanner is None:
-            self.currentBeamSpanner = MeiBeamSpanner()
-            self.m21Score.append(self.currentBeamSpanner)
+        if allStart(noteOrChord.beams):
+            newBeamSpanner = MeiBeamSpanner()
+            self.m21Score.append(newBeamSpanner)
+            self.currentBeamSpanners.append(newBeamSpanner)
 
-        self.currentBeamSpanner.addSpannedElements(noteOrChord)
+        self.currentBeamSpanners[-1].addSpannedElements(noteOrChord)
 
         if allStop(noteOrChord.beams):
             # done with this <beam> or <beamSpan>.  Put the spanner in the score,
             # and clear out any state variables.
-            self.currentBeamSpanner = None
+            self.currentBeamSpanners = self.currentBeamSpanners[:-1]
             self.previousBeamedNoteOrChord = None
             return
 
