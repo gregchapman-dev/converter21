@@ -1522,7 +1522,9 @@ class HumdrumFile(HumdrumFileContent):
     ) -> list[FakeRestToken]:
         output: list[FakeRestToken] = []
         durFromBarline: HumNum = opFrac(durationFromBarline)
-        restDurations: list[HumNum] = Convert.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
+        restDurations: list[HumNum] = (
+            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
+        )
         for restDuration in restDurations:
             output.append(FakeRestToken(restDuration, durFromBarline))
             durFromBarline = opFrac(durFromBarline + restDuration)
@@ -2516,7 +2518,7 @@ class HumdrumFile(HumdrumFileContent):
                 assert isinstance(tempo.style, m21.style.TextStyle)
             tempo.style.fontStyle = 'bold'
             if hasattr(tempo, 'placement'):
-                tempo.placement = 'above'
+                tempo.placement = 'above'  # type: ignore
             else:
                 tempo.style.absoluteY = 'above'
 
@@ -3847,7 +3849,7 @@ class HumdrumFile(HumdrumFileContent):
         for i, durItem in enumerate(durItems):
             durNoDots: HumNum = durItem.durationNoDots
             dotlessDur[i] = opFrac(durNoDots / opFrac(4))
-            isPowerOfTwoWithoutDots[i] = Convert.isPowerOfTwo(durNoDots)
+            isPowerOfTwoWithoutDots[i] = M21Utilities.isPowerOfTwo(durNoDots)
             hasTuplet = hasTuplet or not isPowerOfTwoWithoutDots[i]
             durationWithDots[i] = durItem.duration
             durSum[i] = sumSoFar
@@ -4023,7 +4025,7 @@ class HumdrumFile(HumdrumFileContent):
                     break
 
                 if forcedTupletDuration is None:
-                    if Convert.isPowerOfTwo(groupDur):
+                    if M21Utilities.isPowerOfTwo(groupDur):
                         ending = j
                         break
 
@@ -4079,7 +4081,7 @@ class HumdrumFile(HumdrumFileContent):
 
             dotlessDurFraction: Fraction = Fraction(dotlessDur[i])
             if (dotlessDurFraction.numerator == 3
-                    and Convert.isPowerOfTwo(dotlessDurFraction.denominator)):
+                    and M21Utilities.isPowerOfTwo(dotlessDurFraction.denominator)):
                 # correction for duplets
                 nextPowOfTwo = opFrac(nextPowOfTwo / opFrac(2))
 
@@ -4165,7 +4167,7 @@ class HumdrumFile(HumdrumFileContent):
                     proposedTupletDur = opFrac(
                         tupletDursI / opFrac(Fraction(numNotes, numNotesActual[i]))
                     )
-                    if Convert.isPowerOfTwo(proposedTupletDur):
+                    if M21Utilities.isPowerOfTwo(proposedTupletDur):
                         durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
                             proposedTupletDur
                         )
@@ -4183,7 +4185,7 @@ class HumdrumFile(HumdrumFileContent):
                     tupletDurWithoutSingleDot: HumNum = opFrac(
                         proposedTupletDur / opFrac(Fraction(3, 2))
                     )
-                    if Convert.isPowerOfTwo(tupletDurWithoutSingleDot):
+                    if M21Utilities.isPowerOfTwo(tupletDurWithoutSingleDot):
                         durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
                             proposedTupletDur
                         )
@@ -4721,7 +4723,7 @@ class HumdrumFile(HumdrumFileContent):
         allPow2: bool = True
         if hasInternalTrem:
             for grouping in groupings:
-                if not Convert.isPowerOfTwo(len(grouping)):
+                if not M21Utilities.isPowerOfTwo(len(grouping)):
                     allPow2 = False
                     break
 
@@ -4876,27 +4878,27 @@ class HumdrumFile(HumdrumFileContent):
     @staticmethod
     def _getNumDotsForPowerOfTwo(value: HumNumIn) -> int:
         val: HumNum = opFrac(value)
-        if Convert.isPowerOfTwo(val):
+        if M21Utilities.isPowerOfTwo(val):
             return 0
 
         # check for one dot
         tval: HumNum = opFrac(val / opFrac(Fraction(3, 2)))
-        if Convert.isPowerOfTwo(tval):
+        if M21Utilities.isPowerOfTwo(tval):
             return 1
 
         # check for two dots
         tval = opFrac(val / opFrac(Fraction(7, 4)))
-        if Convert.isPowerOfTwo(tval):
+        if M21Utilities.isPowerOfTwo(tval):
             return 2
 
         # check for three dots
         tval = opFrac(val / opFrac(Fraction(15, 8)))
-        if Convert.isPowerOfTwo(tval):
+        if M21Utilities.isPowerOfTwo(tval):
             return 3
 
         # check for four dots
         tval = opFrac(val / opFrac(Fraction(31, 16)))
-        if Convert.isPowerOfTwo(tval):
+        if M21Utilities.isPowerOfTwo(tval):
             return 4
 
         return -1
@@ -9033,7 +9035,7 @@ class HumdrumFile(HumdrumFileContent):
                 direction.placement = placement
             elif tempo:
                 if placement in ('above', 'below'):
-                    tempo.placement = placement
+                    tempo.placement = placement  # type: ignore
 
         if color:
             tempoOrDirection.style.color = color
@@ -9154,7 +9156,7 @@ class HumdrumFile(HumdrumFileContent):
                 direction.placement = placement
             elif tempo:
                 if placement in ('above', 'below'):
-                    tempo.placement = placement
+                    tempo.placement = placement  # type: ignore
 
         if color:
             tempoOrDirection.style.color = color
@@ -9556,7 +9558,7 @@ class HumdrumFile(HumdrumFileContent):
                 assert isinstance(tempo.style, m21.style.TextStyle)
             tempo.style.fontStyle = 'bold'
             if hasattr(tempo, 'placement'):
-                tempo.placement = 'above'
+                tempo.placement = 'above'  # type: ignore
             else:
                 tempo.style.absoluteY = 'above'
 

@@ -14,9 +14,12 @@ import typing as t
 import pathlib
 
 from music21 import stream
+from music21 import common
+
 from music21.converter.subConverters import SubConverter
 
-from converter21.mei import MeiToM21Converter
+from converter21.mei import MeiReader
+from converter21.mei import MeiWriter
 
 class MEIConverter(SubConverter):
     '''
@@ -46,7 +49,7 @@ class MEIConverter(SubConverter):
         if dataString.startswith('mei:'):
             dataString = dataString[4:]
 
-        self.stream = MeiToM21Converter(dataString).run()
+        self.stream = MeiReader(dataString).run()
 
         output: stream.Stream = self.stream
 
@@ -97,25 +100,29 @@ class MEIConverter(SubConverter):
 
         return self.stream
 
-    def checkShowAbility(self, **keywords):
-        '''
-        MEI export is not yet implemented.
-        '''
-        return False
+    # pylint: disable=arguments-differ
+    def write(
+        self,
+        obj,
+        fmt,
+        fp=None,
+        subformats=None,
+        makeNotation=True,
+        **keywords
+    ):
+        if fp is None:
+            fp = self.getTemporaryFile()
+        else:
+            fp = common.cleanpath(fp, returnPathlib=True)
 
-    # def launch(self, filePath, fmt=None, options='', app=None, key=None):
-    #     raise NotImplementedError('MEI export is not yet implemented.')
+        if not fp.suffix:
+            fp = fp.with_suffix('.mei')
 
-    def show(self, obj, fmt, app=None, subformats=None, **keywords):  # pragma: no cover
-        raise NotImplementedError('MEI export is not yet implemented.')
+        meiw = MeiWriter(obj)
+        meiw.makeNotation = makeNotation
 
-    # def getTemporaryFile(self, subformats=None):
-    #     raise NotImplementedError('MEI export is not yet implemented.')
+        # MeiWriter always writes as binary because xml.etree likes it that way.
+        with open(fp, 'wb', encoding='utf-8') as f:
+            meiw.write(f)
 
-    def write(self, obj, fmt, fp=None, subformats=None, **keywords):  # pragma: no cover
-        raise NotImplementedError('MEI export is not yet implemented.')
-
-    # def writeDataStream(self, fp, dataStr):
-    #     raise NotImplementedError('MEI export is not yet implemented.')
-
-
+        return fp

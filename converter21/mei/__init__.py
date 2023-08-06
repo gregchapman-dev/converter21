@@ -3,26 +3,32 @@
 # Name:         mei/__init__.py
 # Purpose:      MEI: The Music Encoding Initiative modules and classes
 #
-# Authors:      Christopher Antila
+# Authors:      Greg Chapman
 #
-# Copyright:    Copyright © 2014 Michael Scott Asato Cuthbert and the music21 Project
+# Copyright:    Copyright © 2021-2022 Greg Chapman
 # License:      BSD, see license.txt
 # -----------------------------------------------------------------------------
 '''
-The :mod:`mei` module provides functionality related to the interactions between music21 and MEI.
-
-As of December 2014, we provide basic conversion from an MEI document to related music21 objects.
-You may import an MEI file in the same way you import any other file to music21. You may also use
-the :class:`music21.mei.MeiToM21Converter` directly for a complete file, or one of the functions,
-like :func:`music21.mei.base.noteFromElement` to convert from a :class:`xml.etree.Element`
-to the corresponding music21 object.
-
-For more information, including about which elements and attributes are currently supported, please
-refer to the :mod:`~music21.mei.base` module's documentation.
+The :mod:`mei` module provides import from and export to MEI files for music21.
 '''
 
-# NOTE: I want to keep the 'mei' namespace relatively clean---we should only put here those classes
-#       and functions that will be used regularly by other parts of music21, which is probably just
-#       the MeiToM21Converter used by the MEI-specific SubConverter class. Everything else belongs
-#       in its 'music21.mei.base.*' module, or similar.
-from .base import MeiToM21Converter
+from .meiexceptions import MeiValidityError
+from .meiexceptions import MeiValueError
+from .meiexceptions import MeiAttributeError
+from .meiexceptions import MeiElementError
+from .meiexceptions import MeiExportError
+from .meiexceptions import MeiInternalError
+
+from .m21objectconvert import M21ObjectConvert
+from .m21objectconvert import MeiTemporarySpanner
+from .m21objectconvert import MeiBeamSpanner
+from .m21objectconvert import MeiTupletSpanner
+from .m21objectconvert import MeiTieSpanner
+
+from .meireader import MeiReader
+
+from .meilayer import MeiLayer
+from .meistaff import MeiStaff
+from .meimeasure import MeiMeasure
+from .meiscore import MeiScore
+from .meiwriter import MeiWriter

@@ -14,11 +14,22 @@
 #    look-up tables.
 
 import re
+import sys
+import copy
+import typing as t
+from fractions import Fraction
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
+from music21.common.numberTools import opFrac
 
-from converter21.humdrum import HumdrumInternalError
+class CannotMakeScoreFromObjectError(Exception):
+    pass
+
+
+class NoMusic21VersionError(Exception):
+    pass
+
 
 # pylint: disable=protected-access
 
@@ -72,6 +83,66 @@ def setDebugReprInternal(self, method) -> None:
         self._reprInternal = types.MethodType(method, self)
 
 # pylint: disable=protected-access
+
+
+class M21StaffGroupTree:
+    # Used during export
+    def __init__(
+            self,
+            sg: m21.layout.StaffGroup,
+            staffNumbersByM21Part: dict[m21.stream.Part, int]
+    ) -> None:
+        # about this staff group
+        self.staffGroup: m21.layout.StaffGroup = sg
+        self.staffNums: set[int] = set(staffNumbersByM21Part[m21Part]
+                                            for m21Part in
+                                                sg.spannerStorage.elements)
+        self.numStaves: int = len(self.staffNums)
+        self.lowestStaffNumber: int = min(self.staffNums)
+
+        # tree links
+        self.children: list[M21StaffGroupTree] = []
+
+
+class M21StaffGroupDescriptionTree:
+    # Used during import
+    def __init__(self) -> None:
+        # about this group description
+        self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
+        self.barTogether: bool | str = False  # see m21.layout.StaffGroup.barTogether
+
+        # instrument should be set if there is an instrument for the staff group.
+        # The Humdrum importer doesn't use this field, as it has other ways of
+        # tracking this.
+        self.instrument: m21.instrument.Instrument | None = None
+
+        # Humdrum importer sets groupNum instead, and then gathers names later
+        # using that groupNum.
+        self.groupNum: int = 0
+
+        # staves referenced by this group (includes staves in subgroups).
+        # staffIds should be in staff order (on the page, from top to bottom).
+        self.staffIds: list[int | str] = []  # Humdrum likes int, MEI likes str
+
+        # staves actually in this group (i.e. not in a subgroup).
+        # ownedStaffIds should be in staff order (on the page, from top to bottom).
+        self.ownedStaffIds: list[int | str] = []
+
+        # staffInstruments should contain the instrument for each staff (if there
+        # is one). The Humdrum importer doesn't use this field, as it has other
+        # ways of tracking this.
+        self.staffInstruments: list[m21.instrument.Instrument | None] = []
+
+        # ownedStaffInstruments should contain the instrument for each owned staff
+        # (if there is one). The Humdrum importer doesn't use this field, as it has
+        # other ways of tracking this.
+        self.ownedStaffInstruments: list[m21.instrument.Instrument | None] = []
+
+        # tree links:
+        # children == subgroups, parent = enclosing group (None for top)
+        self.children: list[M21StaffGroupDescriptionTree] = []
+        self.parent: M21StaffGroupDescriptionTree | None = None
+
 
 class M21Utilities:
 
@@ -146,6 +217,254 @@ class M21Utilities:
                 spanner.replaceSpannedElement(placeHolder, rest)
 
         return rest
+
+    @staticmethod
+    def makeScoreFromObject(obj: m21.prebase.ProtoM21Object) -> m21.stream.Score:
+        '''
+        makeScoreFromObject (et al) are here to turn any ProtoM21Object into a well-formed
+        Score/Part/Measure/whatever stream.  stream.makeNotation will also be called.  Clients
+        can avoid this if they init with a Score, and set self.makeNotation to False before
+        calling write().
+        '''
+        _classMapping: dict[str, str] = {
+            'Score': '_fromScore',
+            'Part': '_fromPart',
+            'Measure': '_fromMeasure',
+            'Voice': '_fromVoice',
+            'Stream': '_fromStream',
+            'GeneralNote': '_fromGeneralNote',
+            'Pitch': '_fromPitch',
+            'Duration': '_fromDuration',
+            'Dynamic': '_fromDynamic',
+            'DiatonicScale': '_fromDiatonicScale',
+            'Scale': '_fromScale',
+            'Music21Object': '_fromMusic21Object',
+        }
+
+        classes = obj.classes
+        outScore: m21.stream.Score | None = None
+        for cM, methName in _classMapping.items():
+            if cM in classes:
+                meth = getattr(M21Utilities, methName)
+                outScore = meth(obj)
+                break
+        if outScore is None:
+            raise CannotMakeScoreFromObjectError(
+                f'Cannot translate {obj} to a well-formed Score; put it in a Stream first!')
+
+        return outScore
+
+    @staticmethod
+    def _fromScore(sc: m21.stream.Score) -> m21.stream.Score:
+        '''
+        From a score, make a new, perhaps better notated score
+        '''
+        scOut = sc.makeNotation(inPlace=False)
+        if not scOut.isWellFormedNotation():
+            print(f'{scOut} is not well-formed; see isWellFormedNotation()', file=sys.stderr)
+        return scOut
+
+    @staticmethod
+    def _fromPart(p: m21.stream.Part) -> m21.stream.Score:
+        '''
+        From a part, put it in a new, better notated score.
+        '''
+        if p.isFlat:
+            p = p.makeMeasures()
+        s = m21.stream.Score()
+        s.insert(0, p)
+        s.metadata = copy.deepcopy(M21Utilities._getMetadataFromContext(p))
+        return M21Utilities._fromScore(s)
+
+    @staticmethod
+    def _getMetadataFromContext(s: m21.stream.Stream) -> m21.metadata.Metadata | None:
+        '''
+        Get metadata from site or context, so that a Part
+        can be shown and have the rich metadata of its Score
+        '''
+        # get metadata from context.
+        md = s.metadata
+        if md is not None:
+            return md
+
+        for contextSite in s.contextSites():
+            if contextSite.site.metadata is not None:
+                return contextSite.site.metadata
+        return None
+
+    @staticmethod
+    def _fromMeasure(m: m21.stream.Measure) -> m21.stream.Score:
+        '''
+        From a measure, put it in a part, then in a new, better notated score
+        '''
+        mCopy = m.makeNotation()
+        if not m.recurse().getElementsByClass('Clef').getElementsByOffset(0.0):
+            mCopy.clef = m21.clef.bestClef(mCopy, recurse=True)
+        p = m21.stream.Part()
+        p.append(mCopy)
+        p.metadata = copy.deepcopy(M21Utilities._getMetadataFromContext(m))
+        return M21Utilities._fromPart(p)
+
+    @staticmethod
+    def _fromVoice(v: m21.stream.Voice) -> m21.stream.Score:
+        '''
+        From a voice, put it in a measure, then a part, then a score
+        '''
+        m = m21.stream.Measure(number=1)
+        m.insert(0, v)
+        return M21Utilities._fromMeasure(m)
+
+    @staticmethod
+    def _fromStream(st: m21.stream.Stream) -> m21.stream.Score:
+        '''
+        From a stream (that is not a voice, measure, part, or score), make an educated guess
+        at it's structure, and do the appropriate thing to wrap it in a score.
+        '''
+        if st.isFlat:
+            # if it's flat, treat it like a Part (which will make measures)
+            part = m21.stream.Part()
+            part.mergeAttributes(st)
+            part.elements = copy.deepcopy(st)  # type: ignore
+            if not st.getElementsByClass('Clef').getElementsByOffset(0.0):
+                part.clef = m21.clef.bestClef(part)
+            part.makeNotation(inPlace=True)
+            part.metadata = copy.deepcopy(M21Utilities._getMetadataFromContext(st))
+            return M21Utilities._fromPart(part)
+
+        if st.hasPartLikeStreams():
+            # if it has part-like streams, treat it like a Score
+            score = m21.stream.Score()
+            score.mergeAttributes(st)
+            score.elements = copy.deepcopy(st)  # type: ignore
+            score.makeNotation(inPlace=True)
+            score.metadata = copy.deepcopy(M21Utilities._getMetadataFromContext(st))
+            return M21Utilities._fromScore(score)
+
+        firstSubStream = st.getElementsByClass('Stream').first()
+        if firstSubStream is not None and firstSubStream.isFlat:
+            # like a part w/ measures...
+            part = m21.stream.Part()
+            part.mergeAttributes(st)
+            part.elements = copy.deepcopy(st)  # type: ignore
+            bestClef = not st.getElementsByClass('Clef').getElementsByOffset(0.0)
+            part.makeNotation(inPlace=True, bestClef=bestClef)
+            part.metadata = copy.deepcopy(M21Utilities._getMetadataFromContext(st))
+            return M21Utilities._fromPart(part)
+
+        # probably a problem? or a voice...
+        bestClef = not st.getElementsByClass('Clef').getElementsByOffset(0.0)
+        st2 = st.makeNotation(inPlace=False, bestClef=bestClef)
+        return M21Utilities._fromScore(st2)
+
+    @staticmethod
+    def _fromGeneralNote(n: m21.note.GeneralNote) -> m21.stream.Score:
+        '''
+        From a note/chord/rest, put it in a measure/part/score
+        '''
+        # Make a copy, as this process will change tuplet types.
+        # This method is called infrequently, and only for display of a single
+        # note
+        nCopy = copy.deepcopy(n)
+
+        out = m21.stream.Measure(number=1)
+        out.append(nCopy)
+        m21.stream.makeNotation.makeTupletBrackets(out, inPlace=True)
+        return M21Utilities._fromMeasure(out)
+
+    @staticmethod
+    def _fromPitch(p: m21.pitch.Pitch) -> m21.stream.Score:
+        '''
+        From a pitch, put it in a note, then put that in a measure/part/score
+        '''
+        n = m21.note.Note()
+        n.pitch = copy.deepcopy(p)
+        out = m21.stream.Measure(number=1)
+        out.append(n)
+        return M21Utilities._fromMeasure(out)
+
+    @staticmethod
+    def _fromDuration(d: m21.duration.Duration) -> m21.stream.Score:
+        '''
+        Rarely rarely used.  Only if you call .show() on a duration object
+        '''
+        # Make a copy, as this process will change tuplet types.
+        # Not needed, since fromGeneralNote does it too.  But so
+        # rarely used, it doesn't matter, and the extra safety is nice.
+        dCopy = copy.deepcopy(d)
+        n = m21.note.Note()
+        n.duration = dCopy
+        return M21Utilities._fromGeneralNote(n)
+
+    @staticmethod
+    def _fromDynamic(dynamicObject: m21.dynamics.Dynamic) -> m21.stream.Score:
+        '''
+        Rarely rarely used.  Only if you call .show() on a dynamic object
+        '''
+        dCopy = copy.deepcopy(dynamicObject)
+        out: m21.stream.Stream = m21.stream.Stream()
+        out.append(dCopy)
+        return M21Utilities._fromStream(out)
+
+    @staticmethod
+    def _fromDiatonicScale(diatonicScaleObject: m21.scale.DiatonicScale) -> m21.stream.Score:
+        '''
+        Generate the pitches from this scale
+        and put it into a stream.Measure, then call
+        fromMeasure on it.
+        '''
+        m = m21.stream.Measure(number=1)
+        for i in range(1, diatonicScaleObject.abstract.getDegreeMaxUnique() + 1):
+            p = diatonicScaleObject.pitchFromDegree(i)
+            n = m21.note.Note()
+            n.pitch = p
+            if i == 1:
+                n.addLyric(diatonicScaleObject.name)
+
+            if p.name == diatonicScaleObject.getTonic().name:
+                n.quarterLength = 4  # set longer
+            elif p.name == diatonicScaleObject.getDominant().name:
+                n.quarterLength = 2  # set longer
+            else:
+                n.quarterLength = 1
+            m.append(n)
+        m.timeSignature = m.bestTimeSignature()
+        return M21Utilities._fromMeasure(m)
+
+    @staticmethod
+    def _fromScale(scaleObject: m21.scale.Scale) -> m21.stream.Score:
+        '''
+        Generate the pitches from this scale
+        and put it into a stream.Measure, then call
+        fromMeasure on it.
+        '''
+        if t.TYPE_CHECKING:
+            assert isinstance(scaleObject, m21.scale.ConcreteScale)
+
+        m = m21.stream.Measure(number=1)
+        for i in range(1, scaleObject.abstract.getDegreeMaxUnique() + 1):
+            p = scaleObject.pitchFromDegree(i)
+            n = m21.note.Note()
+            n.pitch = p
+            if i == 1:
+                n.addLyric(scaleObject.name)
+
+            if p.name == scaleObject.getTonic().name:
+                n.quarterLength = 4  # set longer
+            else:
+                n.quarterLength = 1
+            m.append(n)
+        m.timeSignature = m.bestTimeSignature()
+        return M21Utilities._fromMeasure(m)
+
+    @staticmethod
+    def _fromMusic21Object(obj) -> m21.stream.Score:
+        '''
+        return things such as a single TimeSignature as a score
+        '''
+        objCopy = copy.deepcopy(obj)
+        out = m21.stream.Measure(number=1)
+        out.append(objCopy)
+        return M21Utilities._fromMeasure(out)
 
     @staticmethod
     def getTextExpressionsFromGeneralNote(
@@ -277,6 +596,88 @@ class M21Utilities:
         return output
 
     @staticmethod
+    def isPowerOfTwo(num: OffsetQLIn) -> bool:
+        numFraction: Fraction = Fraction(num)
+        if numFraction.numerator == 0:
+            return False
+        absNumer: int = abs(numFraction.numerator)
+        if numFraction.denominator == 1:
+            return (absNumer & (absNumer - 1)) == 0
+        if absNumer == 1:
+            return (numFraction.denominator & (numFraction.denominator - 1)) == 0
+        return False
+
+    @staticmethod
+    def isPowerOfTwoWithDots(quarterLength: OffsetQLIn) -> bool:
+        ql: OffsetQL = opFrac(quarterLength)
+        if M21Utilities.isPowerOfTwo(ql):
+            # power of two + no dots
+            return True
+        if M21Utilities.isPowerOfTwo(ql * opFrac(Fraction(2, 3))):
+            # power of two + 1 dot
+            return True
+        if M21Utilities.isPowerOfTwo(ql * opFrac(Fraction(4, 7))):
+            # power of two + 2 dots
+            return True
+        if M21Utilities.isPowerOfTwo(ql * opFrac(Fraction(8, 15))):
+            # power of two + 3 dots
+            return True
+        return False
+
+    @staticmethod
+    def computeDurationNoDotsAndNumDots(durWithDots: OffsetQLIn) -> tuple[OffsetQL, int | None]:
+        dd: OffsetQL = opFrac(durWithDots)
+        attemptedPowerOfTwo: OffsetQL = dd
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + no dots
+            return (attemptedPowerOfTwo, 0)
+
+        attemptedPowerOfTwo = dd * opFrac(Fraction(2, 3))
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 1 dot
+            return (attemptedPowerOfTwo, 1)
+
+        attemptedPowerOfTwo = dd * opFrac(Fraction(4, 7))
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 2 dots
+            return (attemptedPowerOfTwo, 2)
+
+        attemptedPowerOfTwo = dd * opFrac(Fraction(8, 15))
+        if M21Utilities.isPowerOfTwo(attemptedPowerOfTwo):
+            # power of two + 3 dots
+            return (attemptedPowerOfTwo, 3)
+
+        # None signals that we couldn't actually find a power-of-two duration
+        return (dd, None)
+
+    @staticmethod
+    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: OffsetQLIn) -> list[OffsetQL]:
+        output: list[OffsetQL] = []
+        ql: OffsetQL = opFrac(quarterLength)
+
+        if M21Utilities.isPowerOfTwoWithDots(ql):
+            # power of two + maybe some dots
+            output.append(ql)
+            return output
+
+        powerOfTwoQLAttempt: OffsetQL = opFrac(4)  # start with whole note
+        smallest: OffsetQL = opFrac(Fraction(1, 2048))
+        while powerOfTwoQLAttempt >= smallest:
+            if ql >= powerOfTwoQLAttempt:
+                output.append(powerOfTwoQLAttempt)
+                ql = opFrac(ql - powerOfTwoQLAttempt)
+            else:
+                powerOfTwoQLAttempt = opFrac(powerOfTwoQLAttempt / 2)
+
+            if M21Utilities.isPowerOfTwoWithDots(ql):
+                # power of two + maybe some dots
+                output.append(ql)
+                return output
+
+        # we couldn't compute a full list so just return the original param
+        return [opFrac(quarterLength)]
+
+    @staticmethod
     def splitComplexRestDurations(s: m21.stream.Stream) -> None:
         # only handles rests that are in s directly (does not recurse)
         # always in-place, never adds ties (because they're rests)
@@ -333,11 +734,29 @@ class M21Utilities:
         'B': 6
     }
 
+    _PITCH_CLASS_TO_STEP: dict[int, str] = {
+        0: 'C',
+        1: 'D',
+        2: 'E',
+        3: 'F',
+        4: 'G',
+        5: 'A',
+        6: 'B'
+    }
+
     @staticmethod
     def pitchToBase7(m21Pitch: m21.pitch.Pitch) -> int:
         pc: int = M21Utilities._STEP_TO_PITCH_CLASS[m21Pitch.step]
         octave: int = m21Pitch.implicitOctave  # implicit means return default (4) if None
         return pc + (7 * octave)
+
+    @staticmethod
+    def base7ToDisplayName(base7: int) -> str:
+        pc: int = base7 % 7
+        octave: int = base7 // 7
+        name: str = M21Utilities._PITCH_CLASS_TO_STEP[pc]
+        name += str(octave)
+        return name
 
     @staticmethod
     def safePitch(
@@ -360,14 +779,14 @@ class M21Utilities:
 
         Returns A :class:`~music21.pitch.Pitch` with the appropriate properties.
 
-        >>> from converter21.M21Utilities import safePitch
-        >>> safePitch('D#6')
+        >>> from converter21.shared import M21Utilities
+        >>> M21Utilities.safePitch('D#6')
         <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#', '6')
+        >>> M21Utilities.safePitch('D', '#', '6')
         <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#', 6)
+        >>> M21Utilities.safePitch('D', '#', 6)
         <music21.pitch.Pitch D#6>
-        >>> safePitch('D', '#')
+        >>> M21Utilities.safePitch('D', '#')
         <music21.pitch.Pitch D#>
         '''
         if not name:
@@ -402,9 +821,63 @@ class M21Utilities:
         return alters
 
     @staticmethod
+    def safeGetOffsetInHierarchy(
+        obj: m21.base.Music21Object,
+        stream: m21.stream.Stream
+    ) -> OffsetQL | None:
+        try:
+            return obj.getOffsetInHierarchy(stream)
+        except m21.sites.SitesException:
+            return None
+
+    @staticmethod
+    def objectIsInHierarchy(
+        obj: m21.base.Music21Object,
+        stream: m21.stream.Stream
+    ) -> bool:
+        offset = M21Utilities.safeGetOffsetInHierarchy(obj, stream)
+        if offset is None:
+            return False
+        return True
+
+    @staticmethod
+    def allSpannedElementsAreInHierarchy(
+        spanner: m21.spanner.Spanner,
+        stream: m21.stream.Stream
+    ) -> bool:
+        for obj in spanner.getSpannedElements():
+            if not M21Utilities.objectIsInHierarchy(obj, stream):
+                return False
+        return True
+
+    @staticmethod
+    def getSpannerQuarterLength(
+        spanner: m21.spanner.Spanner,
+        hierarchy: m21.stream.Stream
+    ) -> OffsetQL:
+        first = spanner.getFirst()
+        last = spanner.getLast()
+        start: OffsetQL = first.getOffsetInHierarchy(hierarchy)
+        end: OffsetQL = last.getOffsetInHierarchy(hierarchy)
+        end += last.duration.quarterLength
+        return opFrac(end - start)
+
+    @staticmethod
+    def getActiveTimeSigFromMeterStream(
+        offset: OffsetQL,
+        meterStream: m21.stream.Stream[m21.meter.TimeSignature]
+    ) -> m21.meter.TimeSignature | None:
+        timeSig: m21.base.Music21Object | None = (
+            meterStream.getElementAtOrBefore(opFrac(offset))
+        )
+        if t.TYPE_CHECKING:
+            assert timeSig is None or isinstance(timeSig, (m21.meter.TimeSignature))
+        return timeSig
+
+    @staticmethod
     def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
         if len(m21.VERSION) == 0:
-            raise HumdrumInternalError('music21 version must be set!')
+            raise NoMusic21VersionError('music21 version must be set!')
 
         try:
             # compare element 0
@@ -458,59 +931,65 @@ class M21Utilities:
 
         return False
 
-class M21StaffGroupTree:
-    # Used during export
-    def __init__(
-            self,
-            sg: m21.layout.StaffGroup,
-            staffNumbersByM21Part: dict[m21.stream.Part, int]
-    ) -> None:
-        # about this staff group
-        self.staffGroup: m21.layout.StaffGroup = sg
-        self.staffNums: set[int] = set(staffNumbersByM21Part[m21Part]
-                                            for m21Part in
-                                                sg.spannerStorage.elements)
-        self.numStaves: int = len(self.staffNums)
-        self.lowestStaffNumber: int = min(self.staffNums)
+    @staticmethod
+    def getStaffGroupTrees(
+        staffGroups: list[m21.layout.StaffGroup],
+        staffNumbersByM21Part: dict[m21.stream.Part, int]
+    ) -> list[M21StaffGroupTree]:
+        topLevelParents: list[M21StaffGroupTree] = []
 
-        # tree links
-        self.children: list[M21StaffGroupTree] = []
+        # Start with the tree being completely flat. Sort it by number of staves, so
+        # we can bail early when searching for smallest parent, since the first one
+        # we find will be the smallest.
+        staffGroupTrees: list[M21StaffGroupTree] = [
+            M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
+        ]
+        staffGroupTrees.sort(key=lambda tree: tree.numStaves)
 
-class M21StaffGroupDescriptionTree:
-    # Used during import
-    def __init__(self) -> None:
-        # about this group description
-        self.symbol: str = 'none'       # see m21.layout.StaffGroup.symbol
-        self.barTogether: bool | str = False  # see m21.layout.StaffGroup.barTogether
+        # Hook up each child node to the parent with the smallest superset of the child's staves.
+        # If there is no parent with a superset of the child's staves at all, the child is actually
+        # a top level parent.
+        for i, child in enumerate(staffGroupTrees):
+            smallestParent: M21StaffGroupTree | None = None
+            for parent in staffGroupTrees:
+                if parent is child or parent in child.children:
+                    continue
 
-        # instrument should be set if there is an instrument for the staff group.
-        # The Humdrum importer doesn't use this field, as it has other ways of
-        # tracking this.
-        self.instrument: m21.instrument.Instrument | None = None
+                if i < len(staffGroupTrees) - 1:
+                    if child.staffNums.issubset(parent.staffNums):
+                        smallestParent = parent
+                        # we know it's smallest because they're sorted by size
+                        break
+                else:
+                    # last child; if there are no top-level parents yet, this guy is it, so
+                    # don't bother looking for smallest parent (this fixes a bug where there
+                    # are multiple possible top-level parents, all with the same staves in
+                    # them, and none of them end up at the top, because they are all subsets
+                    # of eachother).
+                    if topLevelParents:
+                        if child.staffNums.issubset(parent.staffNums):
+                            smallestParent = parent
+                            break
 
-        # Humdrum importer sets groupNum instead, and then gathers names later
-        # using that groupNum.
-        self.groupNum: int = 0
+            if smallestParent is None:
+                topLevelParents.append(child)
+            else:
+                smallestParent.children.append(child)
 
-        # staves referenced by this group (includes staves in subgroups).
-        # staffIds should be in staff order (on the page, from top to bottom).
-        self.staffIds: list[int | str] = []  # Humdrum likes int, MEI likes str
+        # Sort every list of siblings in the tree (including the
+        # topLevelParents themselves) by lowest staff number, so
+        # the staff numbers are in order.
+        M21Utilities._sortStaffGroupTrees(topLevelParents)
 
-        # staves actually in this group (i.e. not in a subgroup).
-        # ownedStaffIds should be in staff order (on the page, from top to bottom).
-        self.ownedStaffIds: list[int | str] = []
+        return topLevelParents
 
-        # staffInstruments should contain the instrument for each staff (if there
-        # is one). The Humdrum importer doesn't use this field, as it has other
-        # ways of tracking this.
-        self.staffInstruments: list[m21.instrument.Instrument | None] = []
+    @staticmethod
+    def _sortStaffGroupTrees(trees: list[M21StaffGroupTree]) -> None:
+        # Sort every list of siblings in the tree (including the
+        # passed-in trees list itself) by lowest staff number.
+        if not trees:
+            return
 
-        # ownedStaffInstruments should contain the instrument for each owned staff
-        # (if there is one). The Humdrum importer doesn't use this field, as it has
-        # other ways of tracking this.
-        self.ownedStaffInstruments: list[m21.instrument.Instrument | None] = []
-
-        # tree links:
-        # children == subgroups, parent = enclosing group (None for top)
-        self.children: list[M21StaffGroupDescriptionTree] = []
-        self.parent: M21StaffGroupDescriptionTree | None = None
+        trees.sort(key=lambda tree: tree.lowestStaffNumber)
+        for tree in trees:
+            M21Utilities._sortStaffGroupTrees(tree.children)

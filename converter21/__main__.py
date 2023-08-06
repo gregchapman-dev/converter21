@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------------------
 # Purpose:       converter21 is a music21-based music notation file format converter CLI app,
-#                and a new Humdrum subconverter plug-in
+#                and a new Humdrum subConverter plug-in
 #
 # Authors:       Greg Chapman <gregc@mac.com>
 #                Humdrum code derived/translated from humlib (authored by
@@ -20,7 +20,7 @@ import converter21
 
 def getInputFormatsList() -> list[str]:
     c = converter.Converter()
-    inList = c.subconvertersList('input')
+    inList = c.subConvertersList('input')
     result = []
     for subc in inList:
         if subc.registerInputExtensions:  # if this subc supports input at all
@@ -30,7 +30,7 @@ def getInputFormatsList() -> list[str]:
 
 def getInputExtensionsList() -> list[str]:
     c = converter.Converter()
-    inList = c.subconvertersList('input')
+    inList = c.subConvertersList('input')
     result = []
     for subc in inList:
         for inputExt in subc.registerInputExtensions:
@@ -39,7 +39,7 @@ def getInputExtensionsList() -> list[str]:
 
 def getOutputFormatsList() -> list[str]:
     c = converter.Converter()
-    outList = c.subconvertersList('output')
+    outList = c.subConvertersList('output')
     result = []
     for subc in outList:
         if subc.registerOutputExtensions:  # if this subc supports output at all
@@ -50,7 +50,7 @@ def getOutputFormatsList() -> list[str]:
 def printSupportedFormats(whichList: str) -> None:  # whichList should be 'input' or 'output'
     c = converter.Converter()
     if whichList == 'input':
-        inList = c.subconvertersList('input')
+        inList = c.subConvertersList('input')
         print('Supported input formats are:', file=sys.stderr)
         for subc in inList:
             if subc.registerInputExtensions:
@@ -58,7 +58,7 @@ def printSupportedFormats(whichList: str) -> None:  # whichList should be 'input
                         + '\textensions: ' + ', '.join(subc.registerInputExtensions),
                         file=sys.stderr)
     else:
-        outList = c.subconvertersList('output')
+        outList = c.subConvertersList('output')
         print('Supported output formats are:', file=sys.stderr)
         for subc in outList:
             if subc.registerOutputExtensions:
@@ -68,7 +68,7 @@ def printSupportedFormats(whichList: str) -> None:  # whichList should be 'input
 
 def getValidOutputExtensionForFormat(form: str) -> str:
     c = converter.Converter()
-    outList = c.subconvertersList('output')
+    outList = c.subConvertersList('output')
     for subc in outList:
         if subc.registerOutputExtensions:
             if form in subc.registerFormats:
@@ -77,7 +77,7 @@ def getValidOutputExtensionForFormat(form: str) -> str:
 
 def getOutputExtensionsListForFormat(form: str) -> list[str]:
     c = converter.Converter()
-    outList = c.subconvertersList('output')
+    outList = c.subConvertersList('output')
     result = []
     for subc in outList:
         if subc.registerOutputExtensions:

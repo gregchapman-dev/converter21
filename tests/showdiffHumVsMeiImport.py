@@ -66,10 +66,17 @@ def runTheFullTest(krnPath: Path):
 
     # compare the two music21 scores
     # with music-score-diff:
-    print('comparing the two m21 scores')
-    score_lin1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
+    print('comparing the two m21 scores (ignoring rest positions, because verovio invents them)')
+    TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
+    score_lin1 = AnnScore(
+        score1,
+        DetailLevel.AllObjectsWithStyle | TURN_OFF_REST_POSITION_COMPARISON
+    )
     print('loaded first score')
-    score_lin2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+    score_lin2 = AnnScore(
+        score2,
+        DetailLevel.AllObjectsWithStyle | TURN_OFF_REST_POSITION_COMPARISON
+    )
     print('loaded second score')
     diffList, _cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
     print('diffed the two scores:')

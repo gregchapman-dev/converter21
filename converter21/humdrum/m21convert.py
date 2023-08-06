@@ -578,7 +578,7 @@ class M21Convert:
             vdur = opFrac(Convert.recipToDuration(vdurStr) / tuplet.tupletMultiplier())
             if t.TYPE_CHECKING:
                 assert vdur is not None
-            vdurNoDots, vdurNumDots = Convert.computeDurationNoDotsAndNumDots(vdur)
+            vdurNoDots, vdurNumDots = M21Utilities.computeDurationNoDotsAndNumDots(vdur)
             if vdurNumDots is None:
                 print(f'Cannot figure out vDurNoDots + vDurNumDots from {vdurStr} (on '
                       + f'line number {token.lineNumber}), tuplet={tuplet}, ignoring'
@@ -589,7 +589,7 @@ class M21Convert:
         dur: HumNum = opFrac(token.duration / tuplet.tupletMultiplier())
         durNoDots: HumNum
         numDots: int | None
-        durNoDots, numDots = Convert.computeDurationNoDotsAndNumDots(dur)
+        durNoDots, numDots = M21Utilities.computeDurationNoDotsAndNumDots(dur)
         if numDots is None:
             print(f'Cannot figure out durNoDots + numDots from {token.text} (on '
                     + f'line number {token.lineNumber}), tuplet={tuplet}, about to '
@@ -1808,8 +1808,9 @@ class M21Convert:
             # even if the number is implicit, go ahead and generate a *MM for it.
             # Note that we always round to integer to emit *MM (we round to integer
             # when we parse it, too).
-            quarterBPM: float = tempo.getQuarterBPM()
-            mmTokenStr = '*MM' + M21Convert._floatOrIntString(int(quarterBPM + 0.5))
+            quarterBPM: float | None = tempo.getQuarterBPM()
+            if quarterBPM is not None:
+                mmTokenStr = '*MM' + M21Convert._floatOrIntString(int(quarterBPM + 0.5))
 
         return (mmTokenStr, tempoOMD)
 

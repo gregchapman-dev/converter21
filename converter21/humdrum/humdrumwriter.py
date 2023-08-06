@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Name:          HumdrumWriter.py
+# Name:          humdrumwriter.py
 # Purpose:       HumdrumWriter is an object that takes a music21 stream and
 #                writes it to a file as Humdrum data.
 #
@@ -11,8 +11,6 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import copy
-from collections import OrderedDict
 from enum import IntEnum, auto
 import typing as t
 
@@ -61,22 +59,6 @@ class RepeatBracketState(IntEnum):
 
 class HumdrumWriter:
     Debug: bool = False  # can be set to True for more debugging
-
-    _classMapping = OrderedDict([
-        ('Score', '_fromScore'),
-        ('Part', '_fromPart'),
-        ('Measure', '_fromMeasure'),
-        ('Voice', '_fromVoice'),
-        ('Stream', '_fromStream'),
-        # ## individual parts
-        ('GeneralNote', '_fromGeneralNote'),
-        ('Pitch', '_fromPitch'),
-        ('Duration', '_fromDuration'),  # not an m21 object
-        ('Dynamic', '_fromDynamic'),
-        ('DiatonicScale', '_fromDiatonicScale'),
-        ('Scale', '_fromScale'),
-        ('Music21Object', '_fromMusic21Object'),
-    ])
 
     # '<>' are not considered reservable, they are hard-coded to below/above, and
     # used as such without coordination here.
@@ -346,12 +328,14 @@ class HumdrumWriter:
         # note, for example).  This code is swiped from music21 v7's musicxml exporter.  The hope
         # is that someday it will become an API in music21 that every exporter can call.
         if self.makeNotation:
-            self._m21Score = self._makeScoreFromObject(self._m21Object)
+            self._m21Score = M21Utilities.makeScoreFromObject(self._m21Object)
         else:
             if not isinstance(self._m21Object, m21.stream.Score):
                 raise HumdrumExportError(
                     'Since makeNotation=False, source obj must be a music21 Score, and it is not.'
                 )
+            if not self._m21Object.isWellFormedNotation():
+                print('Source obj is not well-formed; see isWellFormedNotation()', file=sys.stderr)
             self._m21Score = self._m21Object
         del self._m21Object  # everything after this uses self._m21Score
 
@@ -783,7 +767,7 @@ class HumdrumWriter:
             list(self.spannerBundle.getByClass(m21.layout.StaffGroup))
         )
         staffGroupTrees: list[M21StaffGroupTree] = (
-            self._getStaffGroupTrees(staffGroups, staffNumbersByM21Part)
+            M21Utilities.getStaffGroupTrees(staffGroups, staffNumbersByM21Part)
         )
 
         for sgtree in staffGroupTrees:
@@ -858,58 +842,6 @@ class HumdrumWriter:
         output += postString
 
         return (output, staffNums)
-
-    @staticmethod
-    def _getStaffGroupTrees(
-        staffGroups: list[m21.layout.StaffGroup],
-        staffNumbersByM21Part: dict[m21.stream.Part, int]
-    ) -> list[M21StaffGroupTree]:
-        topLevelParents: list[M21StaffGroupTree] = []
-
-        # Start with the tree being completely flat. Sort it by number of staves, so
-        # we can bail early when searching for smallest parent, since the first one
-        # we find will be the smallest.
-        staffGroupTrees: list[M21StaffGroupTree] = [
-            M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
-        ]
-        staffGroupTrees.sort(key=lambda tree: tree.numStaves)
-
-        # Hook up each child node to the parent with the smallest superset of the child's staves.
-        # If there is no parent with a superset of the child's staves at all, the child is actually
-        # a top level parent.
-        for child in staffGroupTrees:
-            smallestParent: M21StaffGroupTree | None = None
-            for parent in staffGroupTrees:
-                if parent is child or parent in child.children:
-                    continue
-
-                if child.staffNums.issubset(parent.staffNums):
-                    smallestParent = parent
-                    # we know it's smallest because they're sorted by size
-                    break
-
-            if smallestParent is None:
-                topLevelParents.append(child)
-            else:
-                smallestParent.children.append(child)
-
-        # Sort every list of siblings in the tree (including the
-        # topLevelParents themselves) by lowest staff number, so
-        # the staff numbers are in order.
-        HumdrumWriter._sortStaffGroupTrees(topLevelParents)
-
-        return topLevelParents
-
-    @staticmethod
-    def _sortStaffGroupTrees(trees: list[M21StaffGroupTree]) -> None:
-        # Sort every list of siblings in the tree (including the
-        # passed-in trees list itself) by lowest staff number.
-        if not trees:
-            return
-
-        trees.sort(key=lambda tree: tree.lowestStaffNumber)
-        for tree in trees:
-            HumdrumWriter._sortStaffGroupTrees(tree.children)
 
     @staticmethod
     def _getGlobalStaffNumbersForM21Parts(scoreData: ScoreData) -> dict[m21.stream.Part, int]:
@@ -2573,226 +2505,3 @@ class HumdrumWriter:
         if self or part or event or nowTime or partIndex:
             return 0
         return 0
-
-    '''
-        _makeScoreFromObject (et al) are here to turn any ProtoM21Object into a well-formed
-        Score/Part/Measure/whatever stream.  stream.makeNotation will also be called.  Clients
-        can avoid this if they init with a Score, and set self.makeNotation to False before
-        calling write().
-    '''
-    def _makeScoreFromObject(self, obj: m21.prebase.ProtoM21Object) -> m21.stream.Score:
-        classes = obj.classes
-        outScore: m21.stream.Score | None = None
-        for cM, methName in self._classMapping.items():
-            if cM in classes:
-                meth = getattr(self, methName)
-                outScore = meth(obj)
-                break
-        if outScore is None:
-            raise HumdrumExportError(
-                f'Cannot translate {obj} to a well-formed Score; put it in a Stream first!')
-
-        return outScore
-
-    @staticmethod
-    def _fromScore(sc: m21.stream.Score) -> m21.stream.Score:
-        '''
-            From a score, make a new, perhaps better notated score
-        '''
-        scOut = sc.makeNotation(inPlace=False)
-        if not scOut.isWellFormedNotation():
-            print(f'{scOut} is not well-formed; see isWellFormedNotation()', file=sys.stderr)
-        return scOut
-
-    def _fromPart(self, p: m21.stream.Part) -> m21.stream.Score:
-        '''
-        From a part, put it in a new, better notated score.
-        '''
-        if p.isFlat:
-            p = p.makeMeasures()
-        s = m21.stream.Score()
-        s.insert(0, p)
-        s.metadata = copy.deepcopy(self._getMetadataFromContext(p))
-        return self._fromScore(s)
-
-    def _fromMeasure(self, m: m21.stream.Measure) -> m21.stream.Score:
-        '''
-        From a measure, put it in a part, then in a new, better notated score
-        '''
-        mCopy = m.makeNotation()
-        if not m.recurse().getElementsByClass('Clef').getElementsByOffset(0.0):
-            mCopy.clef = m21.clef.bestClef(mCopy, recurse=True)
-        p = m21.stream.Part()
-        p.append(mCopy)
-        p.metadata = copy.deepcopy(self._getMetadataFromContext(m))
-        return self._fromPart(p)
-
-    def _fromVoice(self, v: m21.stream.Voice) -> m21.stream.Score:
-        '''
-        From a voice, put it in a measure, then a part, then a score
-        '''
-        m = m21.stream.Measure(number=1)
-        m.insert(0, v)
-        return self._fromMeasure(m)
-
-    def _fromStream(self, st: m21.stream.Stream) -> m21.stream.Score:
-        '''
-        From a stream (that is not a voice, measure, part, or score), make an educated guess
-        at it's structure, and do the appropriate thing to wrap it in a score.
-        '''
-        if st.isFlat:
-            # if it's flat, treat it like a Part (which will make measures)
-            part = m21.stream.Part()
-            part.mergeAttributes(st)
-            part.elements = copy.deepcopy(st)  # type: ignore
-            if not st.getElementsByClass('Clef').getElementsByOffset(0.0):
-                part.clef = m21.clef.bestClef(part)
-            part.makeNotation(inPlace=True)
-            part.metadata = copy.deepcopy(self._getMetadataFromContext(st))
-            return self._fromPart(part)
-
-        if st.hasPartLikeStreams():
-            # if it has part-like streams, treat it like a Score
-            score = m21.stream.Score()
-            score.mergeAttributes(st)
-            score.elements = copy.deepcopy(st)  # type: ignore
-            score.makeNotation(inPlace=True)
-            score.metadata = copy.deepcopy(self._getMetadataFromContext(st))
-            return self._fromScore(score)
-
-        firstSubStream = st.getElementsByClass('Stream').first()
-        if firstSubStream is not None and firstSubStream.isFlat:
-            # like a part w/ measures...
-            part = m21.stream.Part()
-            part.mergeAttributes(st)
-            part.elements = copy.deepcopy(st)  # type: ignore
-            bestClef = not st.getElementsByClass('Clef').getElementsByOffset(0.0)
-            part.makeNotation(inPlace=True, bestClef=bestClef)
-            part.metadata = copy.deepcopy(self._getMetadataFromContext(st))
-            return self._fromPart(part)
-
-        # probably a problem? or a voice...
-        bestClef = not st.getElementsByClass('Clef').getElementsByOffset(0.0)
-        st2 = st.makeNotation(inPlace=False, bestClef=bestClef)
-        return self._fromScore(st2)
-
-    def _fromGeneralNote(self, n: m21.note.GeneralNote) -> m21.stream.Score:
-        '''
-        From a note/chord/rest, put it in a measure/part/score
-        '''
-        # Make a copy, as this process will change tuplet types.
-        # This method is called infrequently, and only for display of a single
-        # note
-        nCopy = copy.deepcopy(n)
-
-        out = m21.stream.Measure(number=1)
-        out.append(nCopy)
-        m21.stream.makeNotation.makeTupletBrackets(out, inPlace=True)
-        return self._fromMeasure(out)
-
-    def _fromPitch(self, p: m21.pitch.Pitch) -> m21.stream.Score:
-        '''
-        From a pitch, put it in a note, then put that in a measure/part/score
-        '''
-        n = m21.note.Note()
-        n.pitch = copy.deepcopy(p)
-        out = m21.stream.Measure(number=1)
-        out.append(n)
-        # call the musicxml property on Stream
-        return self._fromMeasure(out)
-
-    def _fromDuration(self, d: m21.duration.Duration) -> m21.stream.Score:
-        '''
-        Rarely rarely used.  Only if you call .show() on a duration object
-        '''
-        # Make a copy, as this process will change tuplet types.
-        # Not needed, since fromGeneralNote does it too.  But so
-        # rarely used, it doesn't matter, and the extra safety is nice.
-        dCopy = copy.deepcopy(d)
-        n = m21.note.Note()
-        n.duration = dCopy
-        # call the musicxml property on Stream
-        return self._fromGeneralNote(n)
-
-    def _fromDynamic(self, dynamicObject: m21.dynamics.Dynamic) -> m21.stream.Score:
-        '''
-        Rarely rarely used.  Only if you call .show() on a dynamic object
-        '''
-        dCopy = copy.deepcopy(dynamicObject)
-        out: m21.stream.Stream = m21.stream.Stream()
-        out.append(dCopy)
-        return self._fromStream(out)
-
-    def _fromDiatonicScale(self, diatonicScaleObject: m21.scale.DiatonicScale) -> m21.stream.Score:
-        '''
-        Generate the pitches from this scale
-        and put it into a stream.Measure, then call
-        fromMeasure on it.
-        '''
-        m = m21.stream.Measure(number=1)
-        for i in range(1, diatonicScaleObject.abstract.getDegreeMaxUnique() + 1):
-            p = diatonicScaleObject.pitchFromDegree(i)
-            n = m21.note.Note()
-            n.pitch = p
-            if i == 1:
-                n.addLyric(diatonicScaleObject.name)
-
-            if p.name == diatonicScaleObject.getTonic().name:
-                n.quarterLength = 4  # set longer
-            elif p.name == diatonicScaleObject.getDominant().name:
-                n.quarterLength = 2  # set longer
-            else:
-                n.quarterLength = 1
-            m.append(n)
-        m.timeSignature = m.bestTimeSignature()
-        return self._fromMeasure(m)
-
-    def _fromScale(self, scaleObject: m21.scale.Scale) -> m21.stream.Score:
-        '''
-        Generate the pitches from this scale
-        and put it into a stream.Measure, then call
-        fromMeasure on it.
-        '''
-        if t.TYPE_CHECKING:
-            assert isinstance(scaleObject, m21.scale.ConcreteScale)
-
-        m = m21.stream.Measure(number=1)
-        for i in range(1, scaleObject.abstract.getDegreeMaxUnique() + 1):
-            p = scaleObject.pitchFromDegree(i)
-            n = m21.note.Note()
-            n.pitch = p
-            if i == 1:
-                n.addLyric(scaleObject.name)
-
-            if p.name == scaleObject.getTonic().name:
-                n.quarterLength = 4  # set longer
-            else:
-                n.quarterLength = 1
-            m.append(n)
-        m.timeSignature = m.bestTimeSignature()
-        return self._fromMeasure(m)
-
-    def _fromMusic21Object(self, obj) -> m21.stream.Score:
-        '''
-        return things such as a single TimeSignature as a score
-        '''
-        objCopy = copy.deepcopy(obj)
-        out = m21.stream.Measure(number=1)
-        out.append(objCopy)
-        return self._fromMeasure(out)
-
-    @staticmethod
-    def _getMetadataFromContext(s: m21.stream.Stream) -> m21.metadata.Metadata | None:
-        '''
-        Get metadata from site or context, so that a Part
-        can be shown and have the rich metadata of its Score
-        '''
-        # get metadata from context.
-        md = s.metadata
-        if md is not None:
-            return md
-
-        for contextSite in s.contextSites():
-            if contextSite.site.metadata is not None:
-                return contextSite.site.metadata
-        return None
