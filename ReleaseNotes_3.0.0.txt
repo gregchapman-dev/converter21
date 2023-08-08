@@ -1,0 +1,55 @@
+Changes since 2.0.1:
+
+Add MEI exporter.
+
+MEI import:
+    - refactor to share code with MEI exporter and have instance-based state
+    - handle nested beams (i.e. grace note beams within another beam group)
+    - fermata placement (above, below)
+    - fix some clef bugs
+    - handle rest positioning (oloc/ploc)
+    - fix some octave/Ottava bugs
+    - fix some gestural duration bugs (including some bugs in tuplets)
+    - fix dots.ges handling
+    - fix activeMeter tracking
+    - pad layer with spaces if it is shorter than the longest layer in any staff in the measure
+    - fix handling of missing note@oct/note@oct.ges
+    - handle missing tuplet@num and tuplet@numbase (default num=3, numbase=2)
+    - allPartNs now only contains the staffs defined in the initial scoreDef (instead
+        of all the staffDefs in the score)
+    - allow first scoreDef to be inside first section
+    - better handling of scoreDef keysig/timesig vs staffDef (and vs missing staffDef)
+    - better handling of measure@left (ignore it more)
+    - better handling of repeat starts
+    - support ending "numbers" that are non-numeric
+    - support @unitdur in tremolos (bTrem/fTrem)
+    - fix bug when there are grace notes within a tuplet
+    - add @dur.default handling, and rework @dur/@dur.ges/mRest/mSpace/maxBarDuration handling
+    - better handling of missing @staff
+    - handle verse@label just like <verse><label>
+    - handle ties much more accurately, including chord@tie
+    - stop making up measure numbers
+    - support unpitched notes, fix percussion clefs, staff lines != 5
+    - support placement of articulations (e.g. staccato)
+    - support hairpin with @startid, @endid, or both
+    - support dir/dynam/tempo with @startid instead of @tstamp
+    - generate music21 StaffGroups (and PartStaffs if appropriate)
+    - support tuplet display details
+
+Humdrum export:
+    - support tuplet display details (*{X}tuplet/*{X}brackettup)
+    - support ornaments
+    - support ottavas
+    - fix export of articulations with placement
+
+Humdrum import/export:
+    - support of center justification
+    - tweaks to systemdecoration/StaffGroup code, now shared with MEI import/export
+
+All importers/exporters:
+    - support ornament accidentals (I implemented this in music21 v9)
+    - support page and system breaks
+    - support ottavas (I improved Ottava support in music21 v9)
+    - support delayed turns (I implemented this in music21 v9)
+
+Require music21 v9 (for several features/fixes)
