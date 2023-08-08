@@ -2273,12 +2273,16 @@ class M21Convert:
             )
             if humdrumChar:
                 output += humdrumChar
-                continue
-
-            # check for caesura (isn't in the lookup because it's an RDF signifier)
-            if isinstance(artic, m21.articulations.Caesura):
+            elif isinstance(artic, m21.articulations.Caesura):
+                # check for caesura (isn't in the lookup because it's an RDF signifier)
                 caesuraChar: str = owner.reportCaesuraToOwner()
                 output += caesuraChar
+
+            # add any placement
+            if artic.placement == 'below':
+                output += '<'
+            elif artic.placement == 'above':
+                output += '>'
 
         return output
 
