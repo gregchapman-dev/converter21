@@ -294,6 +294,10 @@ class GridSlice:
         return self.sliceType == SliceType.TupletDisplay
 
     @property
+    def isOttavaSlice(self) -> bool:
+        return self.sliceType == SliceType.Ottavas
+
+    @property
     def isSectionNameSlice(self) -> bool:
         return self.sliceType == SliceType.SectionNames
 
@@ -320,10 +324,6 @@ class GridSlice:
     @property
     def isReferenceRecord(self) -> bool:
         return self.sliceType == SliceType.ReferenceRecords
-
-    @property
-    def isOttavaRecord(self) -> bool:
-        return self.sliceType == SliceType.Ottavas
 
     @property
     def hasSpines(self) -> bool:

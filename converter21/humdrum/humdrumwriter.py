@@ -56,6 +56,10 @@ class RepeatBracketState(IntEnum):
     InBracket = auto()
     FinishedBracket = auto()
 
+class PendingOttavaStop:
+    def __init__(self, tokenString: str, timestamp: HumNumIn) -> None:
+        self.tokenString: str = tokenString
+        self.timestamp: HumNum = opFrac(timestamp)
 
 class HumdrumWriter:
     Debug: bool = False  # can be set to True for more debugging
@@ -128,6 +132,9 @@ class HumdrumWriter:
         self._currentDynamics: list[tuple[int, int, m21.dynamics.Dynamic]] = []
         # First element of tempo tuple is part index (tempo is at the part level)
         self._currentTempos: list[tuple[int, m21.tempo.TempoIndication]] = []
+
+        # we stash any ottava stops here, to be emitted at the appropriate timestamp
+        self.pendingOttavaStopsForPartAndStaff: dict[int, dict[int, list[PendingOttavaStop]]] = {}
 
         # whether or not we should avoid output of the first MetronomeMark (as !LO:TX or !!!OMD)
         # that matches the OMD (movementName) that was chosen to represent the temop in the
@@ -1967,6 +1974,51 @@ class HumdrumWriter:
             for event in events:
                 self._addEvent(outSlice, outgm, event, nowTime)
 
+    def storePendingOttavaStops(
+        self,
+        stops: list[str],
+        timestamp: HumNum,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int
+    ):
+        if self.pendingOttavaStopsForPartAndStaff.get(partIndex, None) is None:
+            self.pendingOttavaStopsForPartAndStaff[partIndex] = {}
+        if self.pendingOttavaStopsForPartAndStaff[partIndex].get(staffIndex, None) is None:
+            self.pendingOttavaStopsForPartAndStaff[partIndex][staffIndex] = []
+
+        for stop in stops:
+            pendingOttavaStop = PendingOttavaStop(stop, timestamp)
+            self.pendingOttavaStopsForPartAndStaff[partIndex][staffIndex].append(pendingOttavaStop)
+
+    def popPendingOttavaStopsAtTime(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        timestamp: HumNum
+    ) -> list[str]:
+        output: list[str] = []
+        stopsForPart: dict[int, list[PendingOttavaStop]] | None = (
+            self.pendingOttavaStopsForPartAndStaff.get(partIndex, None)
+        )
+        if not stopsForPart:
+            return output
+
+        stopsForStaff: list[PendingOttavaStop] | None = stopsForPart.get(staffIndex, None)
+        if not stopsForStaff:
+            return output
+
+        removeList: list[PendingOttavaStop] = []
+        for stop in stopsForStaff:
+            if stop.timestamp == timestamp:
+                output.append(stop.tokenString)
+                removeList.append(stop)
+
+        for removeThis in removeList:
+            stopsForStaff.remove(removeThis)
+
+        return output
+
     '''
     //////////////////////////////
     //
@@ -1987,6 +2039,20 @@ class HumdrumWriter:
             partIndex = event.partIndex
             staffIndex = event.staffIndex
             voiceIndex = event.voiceIndex
+
+        if outSlice is not None:
+            # Insert any pending Ottava stops
+            ottavaStopTokenStrings: list[str] = (
+                self.popPendingOttavaStopsAtTime(partIndex, staffIndex, nowTime)
+            )
+
+            outgm.addOttavaTokensBefore(
+                ottavaStopTokenStrings,
+                outSlice,
+                partIndex,
+                staffIndex,
+                voiceIndex
+            )
 
         tokenString: str = ''
         layouts: list[str] = []
@@ -2017,6 +2083,33 @@ class HumdrumWriter:
                     outgm.addLayoutParameter(
                         outSlice, partIndex, staffIndex, voiceIndex, layoutString
                     )
+
+                # check for ottava starts/stops and emit *8va or *X8va aut cetera
+                if event.isOttavaStartOrStop:
+                    starts: list[str]
+                    stops: list[str]
+                    starts, stops = event.getOttavaTokenStrings()
+                    if starts:
+                        # any starts go before this slice
+                        outgm.addOttavaTokensBefore(
+                            starts,
+                            outSlice,
+                            partIndex,
+                            staffIndex,
+                            voiceIndex
+                        )
+                    if stops:
+                        # any stops go after the full duration of this event,
+                        # which might be many slices from now (maybe even in
+                        # a different measure) so we have to stash them off
+                        # and insert them later.
+                        self.storePendingOttavaStops(
+                            stops,
+                            opFrac(event.startTime + event.duration),
+                            partIndex,
+                            staffIndex,
+                            voiceIndex
+                        )
 
                 # implement tuplet number/bracket visibility
                 # *tuplet means display tuplets (default)

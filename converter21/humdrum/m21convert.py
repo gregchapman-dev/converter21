@@ -1167,6 +1167,38 @@ class M21Convert:
 
         return []
 
+    _M21_OTTAVA_TYPES_TO_HUMDRUM = {
+        '8va': '8va',
+        '8vb': '8ba',
+        '15ma': '15ma',
+        '15mb': '15ba'
+    }
+
+    @staticmethod
+    def _getKernTokenStringFromM21Ottava(ottava: m21.spanner.Ottava, start: bool) -> str:
+        output: str = ''
+        humdrumOttavaType: str = M21Convert._M21_OTTAVA_TYPES_TO_HUMDRUM.get(ottava.type, '')
+        if not humdrumOttavaType:
+            print(
+                'Ottava type not supported in Humdrum: {ottava.type}; assuming 8va',
+                file=sys.stderr
+            )
+            humdrumOttavaType = '8va'
+
+        output = '*'
+        if not start:
+            output += 'X'
+        output += humdrumOttavaType
+        return output
+
+    @staticmethod
+    def getKernTokenStringFromM21OttavaStart(ottava: m21.spanner.Ottava) -> str:
+        return M21Convert._getKernTokenStringFromM21Ottava(ottava, start=True)
+
+    @staticmethod
+    def getKernTokenStringFromM21OttavaStop(ottava: m21.spanner.Ottava) -> str:
+        return M21Convert._getKernTokenStringFromM21Ottava(ottava, start=False)
+
     @staticmethod
     def _getKernSlurStartsAndStopsFromGeneralNote(
         m21GeneralNote: m21.note.GeneralNote,

@@ -528,6 +528,64 @@ class GridMeasure:
         newSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
         self.slices.insert(associatedSliceIdx, newSlice)
 
+    def addOttavaTokensBefore(
+        self,
+        toks: list[str],
+        associatedSlice: GridSlice,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int
+    ) -> None:
+        newSlice: GridSlice
+
+        # add these tokens just before the associatedSlice
+        if associatedSlice is None:
+            return
+
+        if len(self.slices) == 0:
+            # something strange happened: expecting at least one item in measure.
+            # associatedSlice is supposed to already be in the measure.
+            return
+
+        associatedSliceIdx: int | None = None
+        # find owning line (associatedSlice)
+        foundIt: bool = False
+        for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
+            gridSlice: GridSlice = self.slices[associatedSliceIdx]
+            if gridSlice is associatedSlice:
+                foundIt = True
+                break
+        if not foundIt:
+            # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
+            return
+
+        for i, tok in enumerate(toks):
+            if i == 0:
+                # see if the previous slice is a Ottava slice we can use
+                prevIdx: int = associatedSliceIdx - 1
+                prevSlice: GridSlice = self.slices[prevIdx]
+                if prevSlice.isOttavaSlice:
+                    prevVoices: list[GridVoice | None] = (
+                        prevSlice.parts[partIndex].staves[staffIndex].voices
+                    )
+                    prevTok: HumdrumToken | None = None
+                    if voiceIndex < len(prevVoices):
+                        prevVoice: GridVoice | None = prevVoices[voiceIndex]
+                        if prevVoice is not None:
+                            prevTok = prevVoice.token
+
+                    if prevTok is None or prevTok.text == '*':
+                        # go ahead and overwrite it (adding new voice if necessary)
+                        prevSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+                        continue
+
+            # if we get here, we couldn't use the previous slice, so we need to insert
+            # a new Ottava slice to use, just before the associated slice.
+            newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Ottavas)
+            newSlice.initializeBySlice(associatedSlice)
+            newSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+            self.slices.insert(associatedSliceIdx, newSlice)
+
     '''
     //////////////////////////////
     //

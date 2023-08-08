@@ -41,6 +41,7 @@ class EventData:
         from converter21.humdrum import MeasureData
         from converter21.humdrum import ScoreData
         self.ownerMeasure: MeasureData = ownerMeasure
+        self.ownerScore: ScoreData = ownerMeasure.ownerStaff.ownerPart.ownerScore
         self.spannerBundle: m21.spanner.SpannerBundle = (
             self.ownerMeasure.spannerBundle  # from ownerScore, ultimately
         )
@@ -58,9 +59,7 @@ class EventData:
         self._myDynamicsComputed: bool = False
 
         self._parseEvent(element, offsetInScore, duration)
-
-        ownerScore: ScoreData = ownerMeasure.ownerStaff.ownerPart.ownerScore
-        ownerScore.eventFromM21Object[id(element)] = self
+        self.ownerScore.eventFromM21Object[id(element)] = self
 
     def __str__(self) -> str:
         output: str = self.kernTokenString()
@@ -86,6 +85,14 @@ class EventData:
             self._duration = opFrac(element.duration.quarterLength)
             if element.duration.tuplets:
                 self._durationTuplets = element.duration.tuplets
+
+        ottavas: list[m21.spanner.Ottava] = self.getOttavasStartedHere()
+        for ottava in ottavas:
+            if ottava.transposing:
+                # Convert the Ottava to a non-transposing Ottava by transposing all pitches
+                # to their sounding octave.  This makes the Humdrum notes export correctly.
+                ottava.fill(self.ownerMeasure.ownerStaff.m21PartStaff)
+                ottava.performTransposition()
 
         # element.classes is a tuple containing the names (strings, not objects) of classes
         # that this object belongs to -- starting with the object's class name and going up
@@ -199,6 +206,66 @@ class EventData:
     @property
     def tempos(self) -> list[m21.tempo.TempoIndication]:
         return self._tempos
+
+    def getOttavasStartedHere(self) -> list[m21.spanner.Ottava]:
+        output: list[m21.spanner.Ottava] = []
+        for sp in self.m21Object.getSpannerSites():
+            if not isinstance(sp, m21.spanner.Ottava):
+                continue
+            if sp not in self.spannerBundle:
+                continue
+            if sp.isFirst(self.m21Object):
+                output.append(sp)
+        return output
+
+    @property
+    def isOttavaStartOrStop(self) -> bool:
+        for sp in self.m21Object.getSpannerSites():
+            if not isinstance(sp, m21.spanner.Ottava):
+                continue
+            if sp not in self.spannerBundle:
+                continue
+            if sp.isFirst(self.m21Object):
+                return True
+            if sp.isLast(self.m21Object):
+                return True
+        return False
+
+    def getOttavaTokenStrings(self) -> tuple[list[str], list[str]]:
+        # returns an ottava starts list and an ottava ends list (both sorted to nest properly)
+
+        def spannerQL(spanner: m21.spanner.Spanner) -> HumNum:
+            return M21Utilities.getSpannerQuarterLength(spanner, self.ownerScore.m21Score)
+
+        ottavaStarts: list[m21.spanner.Ottava] = []
+        ottavaStops: list[m21.spanner.Ottava] = []
+
+        for sp in self.m21Object.getSpannerSites():
+            if not isinstance(sp, m21.spanner.Ottava):
+                continue
+            if sp not in self.spannerBundle:
+                continue
+            if sp.isFirst(self.m21Object):
+                ottavaStarts.append(sp)
+            if sp.isLast(self.m21Object):
+                ottavaStops.append(sp)
+
+        # Sort the starts by longest ottava first, and the stops by shortest ottava first
+        # so they nest properly.  (I wonder if ottavas ever actually overlap; they certainly
+        # can, in music21. If they do overlap, this will be important.)
+        ottavaStarts.sort(key=spannerQL, reverse=True)
+        ottavaStops.sort(key=spannerQL)
+
+        outputStarts: list[str] = []
+        outputStops: list[str] = []
+
+        for sp in ottavaStarts:
+            outputStarts.append(M21Convert.getKernTokenStringFromM21OttavaStart(sp))
+
+        for sp in ottavaStops:
+            outputStops.append(M21Convert.getKernTokenStringFromM21OttavaStop(sp))
+
+        return outputStarts, outputStops
 
     '''
         getNoteKernTokenString -- get a **kern token string and a list of layout strings
