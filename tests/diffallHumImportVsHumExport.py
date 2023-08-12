@@ -284,8 +284,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
-        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle | DetailLevel.Metadata)
+        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle | DetailLevel.Metadata)
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)

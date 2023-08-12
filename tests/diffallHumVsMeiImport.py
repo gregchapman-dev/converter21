@@ -263,11 +263,15 @@ def runTheDiff(krnPath: Path, results) -> bool:
         TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
         annotatedScore1 = AnnScore(
             score1,
-            DetailLevel.AllObjectsWithStyle | TURN_OFF_REST_POSITION_COMPARISON
+            (DetailLevel.AllObjectsWithStyle
+                | TURN_OFF_REST_POSITION_COMPARISON
+                | DetailLevel.Metadata)
         )
         annotatedScore2 = AnnScore(
             score2,
-            DetailLevel.AllObjectsWithStyle | TURN_OFF_REST_POSITION_COMPARISON
+            (DetailLevel.AllObjectsWithStyle
+                | TURN_OFF_REST_POSITION_COMPARISON
+                | DetailLevel.Metadata)
         )
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)

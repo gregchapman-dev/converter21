@@ -2582,7 +2582,15 @@ class MeiReader:
         :rtype: :class:`music21.metadata.Metadata`
         '''
         meta = metadata.Metadata()
+
+        # we look for basic metadata in first <work>, <manifestation>, or <fileDesc> found,
+        # in that order.
         work = self.documentRoot.find(f'.//{MEI_NS}work')
+        if work is None:
+            work = self.documentRoot.find(f'.//{MEI_NS}manifestation')
+        if work is None:
+            work = self.documentRoot.find(f'.//{MEI_NS}fileDesc')
+
         if work is not None:
             # title, subtitle, and movement name
             meta = self.metaSetTitle(work, meta)
@@ -2607,7 +2615,7 @@ class MeiReader:
         # title, subtitle, and movement name
         subtitle = None
         for title in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}title'):
-            if title.get('type', '') == 'subtitle':  # or 'subordinate', right?
+            if title.get('type', '') in ('subtitle', 'subordinate'):
                 subtitle = title.text
             elif meta.title is None:
                 meta.title = title.text
