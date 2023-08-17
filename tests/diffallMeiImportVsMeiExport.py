@@ -42,6 +42,7 @@ def oplistSummary(
     counts['notestyle'] = 0
     counts['stemdirection'] = 0
     counts['staffgroup'] = 0
+    counts['metadata'] = 0
 
     for op in op_list:
         # measure
@@ -112,6 +113,13 @@ def oplistSummary(
                         'staffgrpbartogetheredit',
                         'staffgrppartindicesedit'):
             counts['staffgroup'] += 1
+        # metadata
+        elif op[0] in ('mditemins',
+                        'mditemdel',
+                        'mditemsub',
+                        'mditemkeyedit',
+                        'mditemvalueedit'):
+            counts['metadata'] += 1
 
         elif op[0] == 'extradel':
             # op[1] only
