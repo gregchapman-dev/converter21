@@ -736,25 +736,30 @@ class HumdrumWriter:
 
         # what's left in allItems goes at the bottom of the file
         for uniqueName, value in allItems:
-            nsName: str | None = m21Metadata.uniqueNameToNamespaceName(uniqueName)
-            if nsName and nsName.startswith('m21FileInfo:'):
-                # We don't write fileInfo (which is about the original file, not the one we're
-                # writing) to the output Humdrum file.
-                continue
-            refLineStr = None
-            hdKeyWithoutIndex = (
-                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            )
-            if hdKeyWithoutIndex is not None:
-                idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+            if uniqueName.startswith('humdrumraw:'):
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
-                    idx, uniqueName, value
+                    0, uniqueName[11:], value
                 )
             else:
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
-                    0, uniqueName, value
+                nsName: str | None = m21Metadata.uniqueNameToNamespaceName(uniqueName)
+                if nsName and nsName.startswith('m21FileInfo:'):
+                    # We don't write fileInfo (which is about the original file, not the one we're
+                    # writing) to the output Humdrum file.
+                    continue
+                refLineStr = None
+                hdKeyWithoutIndex = (
+                    M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
                 )
+                if hdKeyWithoutIndex is not None:
+                    idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                    hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+                    refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                        idx, uniqueName, value
+                    )
+                else:
+                    refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                        0, uniqueName, value
+                    )
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
