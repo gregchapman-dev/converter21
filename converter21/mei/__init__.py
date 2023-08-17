@@ -25,6 +25,8 @@ from .m21objectconvert import MeiBeamSpanner
 from .m21objectconvert import MeiTupletSpanner
 from .m21objectconvert import MeiTieSpanner
 
+from .meishared import MeiShared
+from .meimetadatareader import MeiMetadataReader
 from .meireader import MeiReader
 
 from .meilayer import MeiLayer

@@ -186,8 +186,7 @@ from uuid import uuid4
 # music21
 import music21 as m21
 from music21.base import Music21Object
-if hasattr(m21.common.enums, 'OrnamentDelay'):
-    from music21.common.enums import OrnamentDelay  # type: ignore
+from music21.common.enums import OrnamentDelay
 from music21.common.numberTools import opFrac
 from music21.common.types import OffsetQL
 from music21 import articulations
@@ -214,9 +213,11 @@ from converter21.mei import MeiValidityError
 from converter21.mei import MeiAttributeError
 from converter21.mei import MeiElementError
 from converter21.mei import MeiInternalError
-from converter21.mei import M21ObjectConvert
 
-from converter21.shared import SharedConstants
+from converter21.mei import M21ObjectConvert
+from converter21.mei import MeiShared
+from converter21.mei import MeiMetadataReader
+
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupDescriptionTree
 
@@ -1622,7 +1623,7 @@ class MeiReader:
             text: str
             styleDict: dict[str, str]
 
-            text, styleDict = self.textFromElem(eachElem)
+            text, styleDict = MeiShared.textFromElem(eachElem)
             text = html.unescape(text)
             text = text.strip()
             if not text:
@@ -2574,30 +2575,36 @@ class MeiReader:
             return xmlid[1:]
         return xmlid
 
-    def makeMetadata(self) -> metadata.Metadata:
+    def makeMetadata(self) -> m21.metadata.Metadata:
         '''
         Produce metadata objects for all the metadata stored in the MEI header.
 
-        :returns: A :class:`Metadata` object with some of the metadata stored in the MEI document.
+        :returns: A :class:`Metadata` object containing the metadata from the MEI document.
         :rtype: :class:`music21.metadata.Metadata`
         '''
-        meta = metadata.Metadata()
 
-        # we look for basic metadata in first <work>, <manifestation>, or <fileDesc> found,
-        # in that order.
-        work = self.documentRoot.find(f'.//{MEI_NS}work')
-        if work is None:
-            work = self.documentRoot.find(f'.//{MEI_NS}manifestation')
-        if work is None:
-            work = self.documentRoot.find(f'.//{MEI_NS}fileDesc')
+        meiHead: Element | None = self.documentRoot.find(f'.//{MEI_NS}meiHead')
+        if meiHead is None:
+            raise MeiElementError('No <meiHead> element found.')
 
-        if work is not None:
-            # title, subtitle, and movement name
-            meta = self.metaSetTitle(work, meta)
-            # composer
-            meta = self.metaSetComposer(work, meta)
-            # date
-            meta = self.metaSetDate(work, meta)
+        meiMetadataReader = MeiMetadataReader(meiHead)
+        meta: m21.metadata.Metadata = meiMetadataReader.m21Metadata
+
+#         # we look for basic metadata in first <work>, <manifestation>, or <fileDesc> found,
+#         # in that order.
+#         work = self.documentRoot.find(f'.//{MEI_NS}work')
+#         if work is None:
+#             work = self.documentRoot.find(f'.//{MEI_NS}manifestation')
+#         if work is None:
+#             work = self.documentRoot.find(f'.//{MEI_NS}fileDesc')
+#
+#         if work is not None:
+#             # title, subtitle, and movement name
+#             meta = self.metaSetTitle(work, meta)
+#             # composer
+#             meta = self.metaSetComposer(work, meta)
+#             # date
+#             meta = self.metaSetDate(work, meta)
 
         return meta
 
@@ -4116,7 +4123,7 @@ class MeiReader:
         text: str
         styleDict: dict[str, str]
 
-        text, styleDict = self.textFromElem(elem)
+        text, styleDict = MeiShared.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
     #     if 'i' == wordPos:
@@ -5949,7 +5956,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -5985,7 +5992,7 @@ class MeiReader:
             Music21Object
         ]
     ]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6036,7 +6043,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6066,7 +6073,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6096,7 +6103,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6126,7 +6133,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6156,7 +6163,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6186,7 +6193,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6686,76 +6693,6 @@ class MeiReader:
             return tempoName, noteChar, int(float(notesPerMinute) + 0.5)
 
         return None, None, None
-
-
-    @staticmethod
-    def chooseSubElement(appOrChoice: Element) -> Element | None:
-        # self will eventually be used if we have a specified choice mechanism there...
-        chosen: Element | None = None
-        if appOrChoice.tag == f'{MEI_NS}app':
-            # choose 'lem' (lemma) if present, else first 'rdg' (reading)
-            chosen = appOrChoice.find(f'{MEI_NS}lem')
-            if chosen is None:
-                chosen = appOrChoice.find(f'{MEI_NS}rdg')
-            return chosen
-
-        if appOrChoice.tag == f'{MEI_NS}choice':
-            # choose 'corr' (correction) if present,
-            # else 'reg' (regularization) if present,
-            # else first sub-element.
-            chosen = appOrChoice.find(f'{MEI_NS}corr')
-            if chosen is None:
-                chosen = appOrChoice.find(f'{MEI_NS}reg')
-            if chosen is None:
-                chosen = appOrChoice.find('*')
-            return chosen
-
-        environLocal.warn('Internal error: chooseSubElement expects <app> or <choice>')
-        return chosen  # None, if we get here
-
-    _EDITORIAL_ELEMENTS: tuple[str, ...] = (
-        f'{MEI_NS}abbr',
-        f'{MEI_NS}add',
-        f'{MEI_NS}app',
-        f'{MEI_NS}choice',
-        f'{MEI_NS}corr',
-        f'{MEI_NS}damage',
-        f'{MEI_NS}del',
-        f'{MEI_NS}expan',
-        f'{MEI_NS}orig',
-        f'{MEI_NS}ref',
-        f'{MEI_NS}reg',
-        f'{MEI_NS}restore',
-        f'{MEI_NS}sic',
-        f'{MEI_NS}subst',
-        f'{MEI_NS}supplied',
-        f'{MEI_NS}unclear',
-    )
-
-    _IGNORED_EDITORIALS: tuple[str, ...] = (
-        f'{MEI_NS}abbr',
-        f'{MEI_NS}del',
-        f'{MEI_NS}ref',
-        f'{MEI_NS}restore',  # I could support restore with a special FromElement API
-    )                        # that reverses the meaning of del and add
-
-    _PASSTHRU_EDITORIALS: tuple[str, ...] = (
-        f'{MEI_NS}add',
-        f'{MEI_NS}corr',
-        f'{MEI_NS}damage',
-        f'{MEI_NS}expan',
-        f'{MEI_NS}orig',
-        f'{MEI_NS}reg',
-        f'{MEI_NS}sic',
-        f'{MEI_NS}subst',
-        f'{MEI_NS}supplied',
-        f'{MEI_NS}unclear',
-    )
-
-    _CHOOSING_EDITORIALS: tuple[str, ...] = (
-        f'{MEI_NS}app',
-        f'{MEI_NS}choice',
-    )
 
     def octaveFromElement(
         self,
@@ -7300,90 +7237,6 @@ class MeiReader:
 
         return tempoObj
 
-    @staticmethod
-    def _glyphNameToUnicodeChar(name: str) -> str:
-        # name is things like 'noteQuarterUp', which can be looked up
-        return SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
-
-    @staticmethod
-    def _glyphNumToUnicodeChar(num: str) -> str:
-        # num can be '#xNNNN' or 'U+NNNN'
-        pattern: str = r'^(#x|U\+)([A-F0-9]+)$'
-        m = re.match(pattern, num)
-        if m is None:
-            return ''
-        return chr(int(m.group(2), 16))
-
-    def textFromElem(self, elem: Element) -> tuple[str, dict[str, str]]:
-        styleDict: dict[str, str] = {}
-        text: str = ''
-        if elem.text:
-            if elem.text[0] != '\n' or not elem.text.isspace():
-                text += elem.text
-
-        for el in elem.iterfind('*'):
-            # do whatever is appropriate given el.tag (<rend> for example)
-            if el.tag == f'{MEI_NS}rend':
-                # music21 doesn't currently support changing style in the middle of a
-                # TextExpression, so we just grab the first ones we see and save them
-                # off to use.
-                fontStyle: str = el.get('fontstyle', '')
-                fontWeight: str = el.get('fontweight', '')
-                fontFamily: str = el.get('fontfam', '')
-                justify: str = el.get('halign', '')
-                if fontStyle:
-                    styleDict['fontStyle'] = fontStyle
-                if fontWeight:
-                    styleDict['fontWeight'] = fontWeight
-                if fontFamily:
-                    styleDict['fontFamily'] = fontFamily
-                if justify:
-                    styleDict['justify'] = justify
-
-            elif el.tag in self._CHOOSING_EDITORIALS:
-                subEl: Element | None = self.chooseSubElement(el)
-                if subEl is None:
-                    continue
-                el = subEl
-            elif el.tag in self._PASSTHRU_EDITORIALS:
-                # for now assume all we care about here is the text/tail of these subElements
-                for subEl in el.iterfind('*'):
-                    if subEl.text:
-                        if subEl.text[0] != '\n' or not subEl.text.isspace():
-                            text += subEl.text
-                    if subEl.tail:
-                        if subEl.tail[0] != '\n' or not subEl.tail.isspace():
-                            text += subEl.tail
-            elif el.tag == f'{MEI_NS}lb':
-                text += '\n'
-            elif el.tag == f'{MEI_NS}symbol':
-                # This is a glyph in the SMUFL font (@glyph.auth="smufl"), with a
-                # particular name (@glyph.name="metNoteQuarterUp").  Sometimes
-                # instead of @glyph.name, there is @glyph.num, which is just the
-                # utf16 code as 'U+NNNN' or '#xNNNN'.
-                glyphAuth: str = el.get('glyph.auth', '')
-                if not glyphAuth or glyphAuth == 'smufl':
-                    glyphName: str = el.get('glyph.name', '')
-                    glyphNum: str = el.get('glyph.num', '')
-                    if glyphNum:
-                        text += self._glyphNumToUnicodeChar(glyphNum)
-                    elif glyphName:
-                        text += self._glyphNameToUnicodeChar(glyphName)
-
-            # grab the text from el
-            elText: str
-            elStyleDict: dict[str, str]
-            elText, elStyleDict = self.textFromElem(el)
-            text += elText
-            styleDict.update(elStyleDict)
-
-            # grab the text between this el and the next el
-            if el.tail:
-                if el.tail[0] != '\n' or not el.tail.isspace():
-                    text += el.tail
-
-        return text, styleDict
-
     def dirFromElement(
         self,
         elem: Element,
@@ -7422,7 +7275,7 @@ class MeiReader:
         text: str
         styleDict: dict[str, str]
 
-        text, styleDict = self.textFromElem(elem)
+        text, styleDict = MeiShared.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
         if enclose is not None:
@@ -8625,7 +8478,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialNoteChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}dot': self.dotFromElement,
@@ -8648,7 +8501,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialChordChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}note': self.noteFromElement,
@@ -8670,7 +8523,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialBeamChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}clef': self.clefFromElementInLayer,
@@ -8698,7 +8551,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialTupletChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}tuplet': self.tupletFromElement,
@@ -8726,7 +8579,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialBTremChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}note': self.noteFromElement,
@@ -8746,7 +8599,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialFTremChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}note': self.noteFromElement,
