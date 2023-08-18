@@ -12,6 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from enum import IntEnum, auto
+from copy import deepcopy
 import typing as t
 
 import music21 as m21
@@ -140,7 +141,7 @@ class HumdrumWriter:
         # that matches the OMD (movementName) that was chosen to represent the temop in the
         # initial Humdrum header.
         self._waitingToMaybeSkipFirstTempoText: bool = True
-        self._tempoMovementNames: [str] = []
+        self._tempoMovementNames: list[str] = []
 
         # The initial OMD token that was not emitted inline, but instead will be used
         # to put the metadata.movementName back the way it was (if appropriate).
@@ -576,11 +577,14 @@ class HumdrumWriter:
                 # mdMovementNameItems[-1][1] is a Text value
                 lastMovementNameStr: str = str(mdMovementNameItems[-1][1])
                 if initialOMDValue.startswith(lastMovementNameStr):
-                    mname = mdMovementNameItems[-1][1]
+                    # replace in mdMovementNameItems with a deepcopy (don't change
+                    # the original metadata item!)
+                    newValue = deepcopy(mdMovementNameItems[-1][1])
                     if t.TYPE_CHECKING:
-                        assert isinstance(mname, m21.metadata.Text)
+                        assert isinstance(newValue, m21.metadata.Text)
                     initialOMDValue = M21Convert.translateSMUFLNotesToNoteNames(initialOMDValue)
-                    mname._data = initialOMDValue  # pylint: disable=protected-access
+                    newValue._data = initialOMDValue  # pylint: disable=protected-access
+                    mdMovementNameItems[-1] = (mdMovementNameItems[-1][0], newValue)
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
         atLine: int = 0
