@@ -738,7 +738,7 @@ class HumdrumWriter:
         for uniqueName, value in allItems:
             if uniqueName.startswith('humdrumraw:'):
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
-                    0, uniqueName[11:], value
+                    0, uniqueName, value
                 )
             else:
                 nsName: str | None = m21Metadata.uniqueNameToNamespaceName(uniqueName)

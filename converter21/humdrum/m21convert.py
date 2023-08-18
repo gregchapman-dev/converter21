@@ -3413,38 +3413,41 @@ class M21Convert:
     ) -> str | None:
         valueStr: str = ''
         refLineStr: str = ''
+        isRaw: bool = False
 
-        hdKey: str | None = (
-            M21Convert.m21UniqueNameToHumdrumKeyWithoutIndexOrLanguage(uniqueName)
-        )
-        if hdKey is not None:
-            if idx > 0:
-                # we generate 'XXX', 'XXX1', 'XXX2', etc
-                hdKey += str(idx)
-        else:
-            # must be free-form personal key... pass it thru as is (no indexing)
+        if uniqueName.startswith('humdrumraw:'):
+            uniqueName = uniqueName[11:]
+            isRaw = True
+
+        hdKey: str | None = None
+        if isRaw:
             hdKey = uniqueName
-
-        if isinstance(value, m21.metadata.Text):
-            if value.language:
-                if value.isTranslated:
-                    hdKey += '@' + value.language.upper()
-                else:
-                    hdKey += '@@' + value.language.upper()
             valueStr = str(value)
-        elif isinstance(value,
-                (m21.metadata.DateSingle,
-                m21.metadata.DateRelative,
-                m21.metadata.DateBetween,
-                m21.metadata.DateSelection)
-        ):
-            # We don't like str(DateXxxx)'s results so we do our own.
-            valueStr = M21Convert.stringFromM21DateObject(value)
-        elif isinstance(value, m21.metadata.Contributor):
-            valueStr = M21Convert.stringFromM21Contributor(value)
         else:
-            # it's already a str, we hope, but if not, we convert here
-            valueStr = str(value)
+            hdKey = M21Convert.m21UniqueNameToHumdrumKeyWithoutIndexOrLanguage(uniqueName)
+            if hdKey is not None:
+                if idx > 0:
+                    # we generate 'XXX', 'XXX1', 'XXX2', etc
+                    hdKey += str(idx)
+            else:
+                # must be free-form personal key... pass it thru as is (no indexing)
+                hdKey = uniqueName
+
+            if isinstance(value, m21.metadata.Text):
+                if value.language:
+                    if value.isTranslated:
+                        hdKey += '@' + value.language.upper()
+                    else:
+                        hdKey += '@@' + value.language.upper()
+                valueStr = str(value)
+            elif isinstance(value, m21.metadata.DatePrimitive):
+                # We don't like str(DateXxxx)'s results so we do our own.
+                valueStr = M21Convert.stringFromM21DateObject(value)
+            elif isinstance(value, m21.metadata.Contributor):
+                valueStr = M21Convert.stringFromM21Contributor(value)
+            else:
+                # it's already a str, we hope, but if not, we convert here
+                valueStr = str(value)
 
         # html escape-ify the string, and convert any actual linefeeds to r'\n'
         valueStr = html.escape(valueStr)

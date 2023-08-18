@@ -9809,7 +9809,7 @@ class HumdrumFile(HumdrumFileContent):
 
             # Doesn't match any known m21.metadata-supported metadata (or it does, and
             # we couldn't parse it, so we'll have to treat it verbatim).
-            if isStandardHumdrumKey:
+            if isStandardHumdrumKey or k == 'title':  # 'title' is a special humdrumraw: case
                 # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
                 # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
                 # it in as "custom" unparsed
