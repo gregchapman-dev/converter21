@@ -140,7 +140,7 @@ class HumdrumWriter:
         # that matches the OMD (movementName) that was chosen to represent the temop in the
         # initial Humdrum header.
         self._waitingToMaybeSkipFirstTempoText: bool = True
-        self._tempoMovementName: str | None = None
+        self._tempoMovementNames: [str] = []
 
         # The initial OMD token that was not emitted inline, but instead will be used
         # to put the metadata.movementName back the way it was (if appropriate).
@@ -348,13 +348,13 @@ class HumdrumWriter:
 
         self.spannerBundle = self._m21Score.spannerBundle
 
-        # set up _tempoMovementName for use when emitting the first measure (to
+        # set up _tempoMovementNames for use when emitting the first measure (to
         # maybe skip producing '!LO:TX' from a MetronomeMark that is described
         # perfectly already by the tempo movementName/!!!OMD.
         if self._m21Score.metadata:
             movementNames: list[str] = self._m21Score.metadata['movementName']
             if movementNames:
-                self._tempoMovementName = str(movementNames[-1])
+                self._tempoMovementNames = [str(movementName) for movementName in movementNames]
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -1481,9 +1481,10 @@ class HumdrumWriter:
                     # We will still output the *MM as appropriate.
                     if self._waitingToMaybeSkipFirstTempoText:
                         self._waitingToMaybeSkipFirstTempoText = False
-                        if self._tempoMovementName:
-                            if m21Obj.text is not None and self._tempoMovementName in m21Obj.text:
+                        for movementName in self._tempoMovementNames:
+                            if m21Obj.text is not None and movementName in m21Obj.text:
                                 m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
+                                break
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
