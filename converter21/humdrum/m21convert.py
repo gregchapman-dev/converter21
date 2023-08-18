@@ -1810,13 +1810,16 @@ class M21Convert:
         tempoOMD: str = ''
 
         textExp: m21.expressions.TextExpression | None = None
+        contentString: str = ''
 
         # a TempoText has only text (no bpm info)
         if isinstance(tempo, m21.tempo.TempoText):
             textExp = tempo.getTextExpression()  # only returns explicit text
             if textExp is None:
                 return ('', '')
-            tempoOMD = '!!!OMD: ' + textExp.content
+            contentString = M21Convert.translateSMUFLNotesToNoteNames(textExp.content)
+            contentString = M21Convert._cleanSpacesAndColons(contentString)
+            tempoOMD = '!!!OMD: ' + contentString
             return ('', tempoOMD)
 
         # a MetricModulation describes a change from one MetronomeMark to another
@@ -1834,7 +1837,9 @@ class M21Convert:
         textExp = tempo.getTextExpression()  # only returns explicit text
         if textExp is not None:
             # We have some text (like 'Andante') to display
-            tempoOMD = '!!!OMD: ' + textExp.content
+            contentString = M21Convert.translateSMUFLNotesToNoteNames(textExp.content)
+            contentString = M21Convert._cleanSpacesAndColons(contentString)
+            tempoOMD = '!!!OMD: ' + contentString
 
         if tempo.number is not None:
             # even if the number is implicit, go ahead and generate a *MM for it.

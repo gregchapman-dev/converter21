@@ -896,17 +896,20 @@ class HumdrumFile(HumdrumFileContent):
             if key == 'OMD':
                 # only take OMDs before the firstDataLineIdx as movementName in metadata,
                 # because after the first data line, they're not movementNames, just
-                # tempo changes.
+                # tempo changes.  But only take them as movementName if they actually have
+                # a tempoName (or are just a name with no mm info).
                 if bibLine.lineIndex < firstDataLineIdx:
                     # strip off any [quarter = 128] suffix, and any 'M.M.' or 'M. M.' or etc.
-                    tempoName, _mmStr, _noteName, _bpmText = (
+                    tempoName, mmStr, noteName, bpmText = (
                         Convert.getMetronomeMarkInfo(value)
                     )
-                    if tempoName:
+                    if not tempoName and not mmStr and not noteName and not bpmText:
+                        self._biblio.append((key, value))
+                    elif tempoName:
                         tempoName.strip()
                         if tempoName:
                             value = tempoName
-                    self._biblio.append((key, value))
+                            self._biblio.append((key, value))
             else:
                 self._biblio.append((key, value))
 
