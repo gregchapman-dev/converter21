@@ -50,8 +50,8 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
     HumdrumFile class is HumdrumFileContent plus conversion to music21.stream.Score
 '''
 
-# Note that these durations are expressed in quarter notes,
-# so Fraction(1,2), a.k.a "a half" actually means an eighth note,
+# Note that these durations are expressed in quarter notes, so
+# Fraction(1,2), a.k.a "a half" actually means an eighth note,
 # which has one beam.
 durationNoDotsToNumBeams: dict[HumNum, int] = {
     opFrac(Fraction(1, 2)): 1,    # eighth note has 1 beam
