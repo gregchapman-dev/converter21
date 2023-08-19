@@ -9,9 +9,9 @@
 # ------------------------------------------------------------------------------
 
 import typing as t
-from xml.etree.ElementTree import Element, ParseError, tostring, ElementTree
-import re
-import html
+from xml.etree.ElementTree import Element, tostring
+# import re
+# import html
 
 import music21 as m21
 
@@ -200,8 +200,8 @@ class MeiMetadataReader:
         # Assume for now that every title belongs in md['title'] (that's not right, we need to
         # pick the right one, maybe as a post-processing pass over the mei-specific metadata)
         text: str
-        styleDict: dict[str, str]
-        text, styleDict = MeiShared.textFromElem(elem)
+        _styleDict: dict[str, str]
+        text, _styleDict = MeiShared.textFromElem(elem)
         text = text.strip()
         md.add('title', text)
 

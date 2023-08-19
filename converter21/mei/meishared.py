@@ -9,9 +9,10 @@
 # ------------------------------------------------------------------------------
 from xml.etree.ElementTree import Element
 import re
-from converter21.shared import SharedConstants
 
 import music21 as m21
+
+from converter21.shared import SharedConstants
 
 environLocal = m21.environment.Environment('converter21.mei.meireader')
 
