@@ -993,3 +993,274 @@ class M21Utilities:
         trees.sort(key=lambda tree: tree.lowestStaffNumber)
         for tree in trees:
             M21Utilities._sortStaffGroupTrees(tree.children)
+
+    # Conversions from str to m21.metadata.DatePrimitive types, and back.
+    # e.g. '1942///-1943///' -> DateBetween([Date(1942), Date(1943)])
+    # m21.metadata.DateBlah have conversions to/from str, and the strings are really close
+    # to Humdrum/MEI format, but not quite, and they don't handle some Humdrum cases at all
+    # (like the one above).  So I need to replace them here.
+
+    # str -> DateSingle | DateRelative | DateBetween | DateSelection
+
+    # approximate (i.e. not exactly, but reasonably close)
+    _dateApproximateSymbols: tuple[str, ...] = ('~', 'x')
+
+    # uncertain (i.e. maybe not correct at all)
+    _dateUncertainSymbols: tuple[str, ...] = ('?', 'z')
+
+    # date1-date2 or date1^date2 (DateBetween)
+    # date1|date2|date3|date4... (DateSelection)
+    _dateDividerSymbols: tuple[str, ...] = ('-', '^', '|')
+
+    @staticmethod
+    def m21DateObjectFromString(
+        string: str
+    ) -> m21.metadata.DatePrimitive | None:
+        typeNeeded: t.Type = m21.metadata.DateSingle
+        relativeType: str = ''
+        if '<' in string[0:1]:  # this avoids string[0] crash on empty string
+            typeNeeded = m21.metadata.DateRelative
+            string = string.replace('<', '')
+            relativeType = 'before'
+        elif '>' in string[0:1]:  # this avoids string[0] crash on empty string
+            typeNeeded = m21.metadata.DateRelative
+            string = string.replace('>', '')
+            relativeType = 'after'
+
+        dateStrings: list[str] = [string]  # if we don't split it, this is what we will parse
+        for divider in M21Utilities._dateDividerSymbols:
+            if divider in string:
+                if divider == '|':
+                    typeNeeded = m21.metadata.DateSelection
+                    # split on all '|'s
+                    dateStrings = string.split(divider)
+                else:
+                    typeNeeded = m21.metadata.DateBetween
+                    # split only at first divider
+                    dateStrings = string.split(divider, 1)
+                # we assume there is only one type of divider present
+                break
+
+        del string  # to make sure we never look at it again in this method
+
+        singleRelevance: str = ''
+        if typeNeeded == m21.metadata.DateSingle:
+            # special case where a leading '~' or '?' should be removed and cause
+            # the DateSingle's relevance to be set to 'approximate' or 'uncertain'.
+            # Other DataBlah types use their relevance for other things, so leaving
+            # the '~'/'?' in place to cause yearError to be set is a better choice.
+            if '~' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
+                dateStrings[0] = dateStrings[0][1:]
+                singleRelevance = 'approximate'
+            elif '?' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
+                dateStrings[0] = dateStrings[0][1:]
+                singleRelevance = 'uncertain'
+
+        dates: list[m21.metadata.Date] = []
+        for dateString in dateStrings:
+            date: m21.metadata.Date | None = M21Utilities._dateFromString(dateString)
+            if date is None:
+                # if dateString is unparseable, give up on date parsing of this whole metadata item
+                return None
+            dates.append(date)
+
+        if typeNeeded == m21.metadata.DateSingle:
+            if singleRelevance:
+                return m21.metadata.DateSingle(dates[0], relevance=singleRelevance)
+            return m21.metadata.DateSingle(dates[0])
+
+        # the "type ignore" comments below are because DateRelative, DateBetween, and
+        # DateSelection are not declared to take a list of Dates, even though they do
+        # (DateSingle does as well, but it is declared so).
+        if typeNeeded == m21.metadata.DateRelative:
+            return m21.metadata.DateRelative(dates[0], relevance=relativeType)  # type: ignore
+
+        if typeNeeded == m21.metadata.DateBetween:
+            return m21.metadata.DateBetween(dates)  # type: ignore
+
+        if typeNeeded == m21.metadata.DateSelection:
+            return m21.metadata.DateSelection(dates)  # type: ignore
+
+        return None
+
+    @staticmethod
+    def _stripDateError(value: str) -> tuple[str, str | None]:
+        '''
+        Strip error symbols from a numerical value. Return cleaned source and
+        error symbol. Only one error symbol is expected per string.
+        '''
+        sym: tuple[str, ...] = (
+            M21Utilities._dateApproximateSymbols + M21Utilities._dateUncertainSymbols
+        )
+        found = None
+        for char in value:
+            if char in sym:
+                found = char
+                break
+        if found is None:
+            return value, None
+        if found in M21Utilities._dateApproximateSymbols:
+            value = value.replace(found, '')
+            return value, 'approximate'
+
+        # found is in M21Utilities._dateUncertainSymbols
+        value = value.replace(found, '')
+        return value, 'uncertain'
+
+    _dateAttrNames: list[str] = [
+        'year', 'month', 'day', 'hour', 'minute', 'second'
+    ]
+    _dateAttrStrFormat: list[str] = [
+        '%i', '%02.i', '%02.i', '%02.i', '%02.i', '%02.i'
+    ]
+
+    _highestSecondString: str = '59'
+
+    @staticmethod
+    def _dateFromString(dateStr: str) -> m21.metadata.Date | None:
+        # year, month, day, hour, minute are int, second is float
+        # (each can be None if not specified)
+        values: list[int | float | None] = []
+
+        # yearError, monthError, dayError, hourError, minuteError, secondError
+        valueErrors: list[str | None] = []
+        dateStr = dateStr.replace(':', '/')
+        dateStr = dateStr.replace(' ', '')
+        gotOne: bool = False
+        try:
+            for i, chunk in enumerate(dateStr.split('/')):
+                value, error = M21Utilities._stripDateError(chunk)
+                if i == 0 and len(value) >= 2:
+                    if value[0] == '@':
+                        # year with prepended '@' is B.C.E. so replace with '-'
+                        value = '-' + value[1:]
+
+                if value == '':
+                    values.append(None)
+                elif i == 5:
+                    # second is a float, but music21 has started ignoring milliseconds recently
+                    # so we convert from str to float and then to int (truncating).
+                    values.append(int(float(value)))
+                    gotOne = True
+                else:
+                    values.append(int(value))
+                    gotOne = True
+                valueErrors.append(error)
+        except ValueError:
+            # if anything failed to convert to integer, this string is unparseable
+            gotOne = False
+
+        if not gotOne:
+            # There were no parseable values in the string, so no meaningful date to return
+            return None
+
+        date: m21.metadata.Date = m21.metadata.Date()
+        for attr, attrValue, attrError in zip(M21Utilities._dateAttrNames, values, valueErrors):
+            if attrValue is not None:
+                setattr(date, attr, attrValue)
+                if attrError is not None:
+                    setattr(date, attr + 'Error', attrError)
+
+        return date
+
+    @staticmethod
+    def stringFromM21DateObject(m21Date: m21.metadata.DatePrimitive) -> str:
+        # m21Date is DateSingle, DateRelative, DateBetween, or DateSelection
+        # (all derive from DatePrimitive)
+        # pylint: disable=protected-access
+        output: str = ''
+        dateString: str
+        if isinstance(m21Date, m21.metadata.DateSelection):
+            # series of multiple dates, delimited by '|'
+            for i, date in enumerate(m21Date._data):
+                dateString = M21Utilities._stringFromDate(date)
+                if i > 0:
+                    output += '|'
+                output += dateString
+
+        elif isinstance(m21Date, m21.metadata.DateBetween):
+            # two dates, delimited by '-'
+            for i, date in enumerate(m21Date._data):
+                dateString = M21Utilities._stringFromDate(date)
+                if i > 0:
+                    output += '-'
+                output += dateString
+
+        elif isinstance(m21Date, m21.metadata.DateRelative):
+            # one date, prefixed by '<' or '>' for 'prior'/'onorbefore' or 'after'/'onorafter'
+            output = '<'  # assume before
+            if m21Date.relevance in ('after', 'onorafter'):
+                output = '>'
+
+            dateString = M21Utilities._stringFromDate(m21Date._data[0])
+            output += dateString
+
+        elif isinstance(m21Date, m21.metadata.DateSingle):
+            # one date, no prefixes
+            output = M21Utilities._stringFromDate(m21Date._data[0])
+            if m21Date.relevance == 'uncertain':
+                # [0] is the date error symbol
+                output = M21Utilities._dateUncertainSymbols[0] + output
+            elif m21Date.relevance == 'approximate':
+                # [0] is the date error symbol
+                output = M21Utilities._dateApproximateSymbols[0] + output
+
+        # pylint: enable=protected-access
+        return output
+
+    @staticmethod
+    def _stringFromDate(date: m21.metadata.Date) -> str:
+        msg = []
+        if date.hour is None and date.minute is None and date.second is None:
+            breakIndex = 3  # index
+        else:
+            breakIndex = 99999
+
+        for i in range(len(M21Utilities._dateAttrNames)):
+            if i >= breakIndex:
+                break
+            attr = M21Utilities._dateAttrNames[i]
+            value = getattr(date, attr)
+            error = getattr(date, attr + 'Error')
+            if not value:
+                msg.append('')
+            else:
+                fmt = M21Utilities._dateAttrStrFormat[i]
+                sub = fmt % int(value)
+                if i == 0:  # year
+                    # check for negative year, and replace '-' with '@'
+                    if len(sub) >= 2 and sub[0] == '-':
+                        sub = '@' + sub[1:]
+                elif i == 5:  # seconds
+                    # Check for formatted seconds starting with '60' (due to rounding) and
+                    # truncate to '59'. That's easier than doing rounding correctly
+                    # (carrying into minutes, hours, days, etc).
+                    if sub.startswith('60'):
+                        sub = M21Utilities._highestSecondString
+                if error is not None:
+                    sub += M21Utilities._dateErrorToSymbol(error)
+                msg.append(sub)
+
+        output: str = ''
+        if breakIndex == 3:
+            # just a date, so leave off any trailing '/'s
+            output = msg[0]
+            if msg[1] or msg[2]:
+                output += '/' + msg[1]
+            if msg[2]:
+                output += '/' + msg[2]
+        else:
+            # has a time, so we have to do the whole thing
+            output = (
+                msg[0] + '/' + msg[1] + '/' + msg[2] + '/' + msg[3] + ':' + msg[4] + ':' + msg[5]
+            )
+
+        return output
+
+    @staticmethod
+    def _dateErrorToSymbol(value: str) -> str:
+        if value.lower() in M21Utilities._dateApproximateSymbols + ('approximate',):
+            return M21Utilities._dateApproximateSymbols[1]  # [1] is the single value error symbol
+        if value.lower() in M21Utilities._dateUncertainSymbols + ('uncertain',):
+            return M21Utilities._dateUncertainSymbols[1]    # [1] is the single value error symbol
+        return ''

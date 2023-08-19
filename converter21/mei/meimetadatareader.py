@@ -15,12 +15,16 @@ from xml.etree.ElementTree import Element, tostring
 
 import music21 as m21
 
+from converter21.shared import M21Utilities
 from converter21.mei import MeiShared
 
 environLocal = m21.environment.Environment('converter21.mei.meimetadatareader')
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
+
+_MISSED_DATE = 'Unable to decipher an MEI date "{}"'
+
 
 class MeiMetadataReader:
     def __init__(self, meiHead: Element) -> None:
@@ -30,12 +34,25 @@ class MeiMetadataReader:
             environLocal.warn('MeiMetadataReader must be initialized with an <meiHead> element.')
             return
 
+        # figure out if there is a <work> element.  If not, we should gather "work"-style metadata
+        # from the <fileDesc> element instead.
+        self.workExists = False
+        work: Element | None = meiHead.find(f'.//{MEI_NS}work')
+        if work is not None:
+            self.workExists = True
+
         self._processEmbeddedMetadataElements(
             meiHead.iterfind('*'),
             self._meiHeadChildrenTagToFunction,
             '',
             self.m21Metadata
         )
+
+        # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
+        # entire <meiHead> element (in case someone wants to parse out more info than we do.
+        meiHeadXmlStr: str = tostring(meiHead, encoding='unicode')
+        meiHeadXmlStr = meiHeadXmlStr.strip()
+        self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
 
     def _processEmbeddedMetadataElements(
         self,
@@ -190,20 +207,38 @@ class MeiMetadataReader:
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
-        # first, add a custom mei-specific item (because there are
-        # several places in meiHead that might have a title or two).
-        fullMeiTitleElementContents: str = tostring(elem, encoding='unicode')
-        fullMeiTitleElementContents = fullMeiTitleElementContents.strip()
-        tagPath: str = self._getTagPath(callerTagPath, elem.tag)
-        md.addCustom('meiHead:' + tagPath, fullMeiTitleElementContents)
+        if self.workExists and 'work' not in callerTagPath:
+            # if <work> exists, insist on <work> title(s) only
+            return
 
-        # Assume for now that every title belongs in md['title'] (that's not right, we need to
-        # pick the right one, maybe as a post-processing pass over the mei-specific metadata)
+        if not self.workExists and 'fileDesc' not in callerTagPath:
+            # if <work> doesn't exist, insist on <fileDesc> title(s) only
+            return
+
         text: str
         _styleDict: dict[str, str]
         text, _styleDict = MeiShared.textFromElem(elem)
         text = text.strip()
-        md.add('title', text)
+        if not text:
+            return
+
+        uniqueName: str = 'title'
+        typeStr: str = elem.get('type', '')
+        label: str = elem.get('label', '')
+        analog: str = elem.get('analog', '')
+        if analog:
+            if analog == 'humdrum:OTP':
+                uniqueName = 'popularTitle'
+            elif analog == 'humdrum:OTA':
+                uniqueName = 'alternativeTitle'
+        else:
+            if typeStr == 'alternative':
+                if label == 'popular':
+                    uniqueName = 'popularTitle'
+                else:
+                    uniqueName = 'alternativeTitle'
+
+        md.add(uniqueName, text)
 
     def _headFromElement(
         self,
@@ -253,18 +288,18 @@ class MeiMetadataReader:
     ) -> None:
         pass
 
-    def _seriesStmtFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        self._processEmbeddedMetadataElements(
-            elem.iterfind('*'),
-            self._seriesStmtChildrenTagToFunction,
-            self._getTagPath(callerTagPath, elem.tag),
-            md
-        )
+#     def _seriesStmtFromElement(
+#         self,
+#         elem: Element,
+#         callerTagPath: str,
+#         md: m21.metadata.Metadata
+#     ) -> None:
+#         self._processEmbeddedMetadataElements(
+#             elem.iterfind('*'),
+#             self._seriesStmtChildrenTagToFunction,
+#             self._getTagPath(callerTagPath, elem.tag),
+#             md
+#         )
 
     def _notesStmtFromElement(
         self,
@@ -307,6 +342,169 @@ class MeiMetadataReader:
             self._getTagPath(callerTagPath, elem.tag),
             md
         )
+
+    def _workFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        self._processEmbeddedMetadataElements(
+            elem.iterfind('*'),
+            self._workChildrenTagToFunction,
+            self._getTagPath(callerTagPath, elem.tag),
+            md
+        )
+
+    def m21DateFromDateElement(
+        self,
+        date: Element
+    ) -> m21.metadata.DatePrimitive | None:
+        m21DateObj: m21.metadata.DatePrimitive | None = None
+        isodate: str | None = date.get('isodate')
+        if date.text or isodate:
+            dateStr: str
+            if isodate:
+                dateStr = isodate
+            else:
+                if t.TYPE_CHECKING:
+                    assert date.text is not None
+                dateStr = date.text
+
+            theDate: m21.metadata.DatePrimitive | None = (
+                M21Utilities.m21DateObjectFromString(dateStr)
+            )
+
+            if theDate is not None:
+                m21DateObj = theDate
+            else:
+                environLocal.warn(_MISSED_DATE.format(dateStr))
+        else:
+            dateStart = date.get('notbefore') or date.get('startdate')
+            dateEnd = date.get('notafter') or date.get('enddate')
+            if dateStart and dateEnd:
+                m21DateObj = M21Utilities.m21DateObjectFromString(dateStart + '-' + dateEnd)
+            elif dateStart:
+                m21DateObj = M21Utilities.m21DateObjectFromString('>' + dateStart)
+            elif dateEnd:
+                m21DateObj = M21Utilities.m21DateObjectFromString('<' + dateEnd)
+            else:
+                environLocal.warn(_MISSED_DATE.format(tostring(date)))
+
+        return m21DateObj
+
+    def _creationFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        if 'work' not in callerTagPath:
+            return
+
+        date: Element | None = elem.find(f'{MEI_NS}date')
+        geogNames: list[Element] = elem.findall(f'{MEI_NS}geogName')
+
+        m21Date: m21.metadata.DatePrimitive | None = None
+        if date is not None:
+            m21Date = self.m21DateFromDateElement(date)
+        if m21Date is not None:
+            md.add('dateCreated', m21Date)
+
+        for geogName in geogNames:
+            name: str = geogName.text or ''
+            if not name:
+                continue
+            analog: str = geogName.get('analog', '')
+            uniqueName: str = 'countryOfComposition'
+            if analog:
+                # @analog="humdrum:OPC", for example, means 'localeOfComposition'
+                # m21 metadata happens to use these names, otherwise we'd have to
+                # declare our own lookup table.
+                uniqueName = md.namespaceNameToUniqueName(analog) or ''
+                if not uniqueName:
+                    uniqueName = 'countryOfComposition'
+            md.add(uniqueName, name)
+
+    def _identifierFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _arrangerFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _authorFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _composerFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _contributorFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _editorFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _funderFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _librettistFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _lyricistFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
+
+    def _sponsorFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        pass
 
     def _manifestationListFromElement(
         self,
@@ -400,7 +598,7 @@ class MeiMetadataReader:
             f'{MEI_NS}extent': self._extentFromElement,
             f'{MEI_NS}notesStmt': self._notesStmtFromElement,
             f'{MEI_NS}pubStmt': self._pubStmtFromElement,
-            f'{MEI_NS}seriesStmt': self._seriesStmtFromElement,
+            # f'{MEI_NS}seriesStmt': self._seriesStmtFromElement,
             f'{MEI_NS}sourceDesc': self._sourceDescFromElement,
             f'{MEI_NS}titleStmt': self._titleStmtFromElement,
         }
@@ -427,27 +625,27 @@ class MeiMetadataReader:
             f'{MEI_NS}title': self._titleFromElement,
         }
 
-        self._seriesStmtChildrenTagToFunction: dict[str, t.Callable[
-            [
-                Element,                # element to process
-                str,                    # tag of parent element
-                m21.metadata.Metadata  # in/out (gets updated from contents of element)
-            ],
-            None]                   # no return value
-        ] = {
-            f'{MEI_NS}head': self._headFromElement,
-            f'{MEI_NS}respStmt': self._respStmtFromElement,
-            f'{MEI_NS}arranger': self._respLikePartFromElement,
-            f'{MEI_NS}author': self._respLikePartFromElement,
-            f'{MEI_NS}composer': self._respLikePartFromElement,
-            f'{MEI_NS}contributor': self._respLikePartFromElement,
-            f'{MEI_NS}editor': self._respLikePartFromElement,
-            f'{MEI_NS}funder': self._respLikePartFromElement,
-            f'{MEI_NS}librettist': self._respLikePartFromElement,
-            f'{MEI_NS}lyricist': self._respLikePartFromElement,
-            f'{MEI_NS}sponsor': self._respLikePartFromElement,
-            f'{MEI_NS}title': self._titleFromElement,
-        }
+#         self._seriesStmtChildrenTagToFunction: dict[str, t.Callable[
+#             [
+#                 Element,                # element to process
+#                 str,                    # tag of parent element
+#                 m21.metadata.Metadata  # in/out (gets updated from contents of element)
+#             ],
+#             None]                   # no return value
+#         ] = {
+#             f'{MEI_NS}head': self._headFromElement,
+#             f'{MEI_NS}respStmt': self._respStmtFromElement,
+#             f'{MEI_NS}arranger': self._respLikePartFromElement,
+#             f'{MEI_NS}author': self._respLikePartFromElement,
+#             f'{MEI_NS}composer': self._respLikePartFromElement,
+#             f'{MEI_NS}contributor': self._respLikePartFromElement,
+#             f'{MEI_NS}editor': self._respLikePartFromElement,
+#             f'{MEI_NS}funder': self._respLikePartFromElement,
+#             f'{MEI_NS}librettist': self._respLikePartFromElement,
+#             f'{MEI_NS}lyricist': self._respLikePartFromElement,
+#             f'{MEI_NS}sponsor': self._respLikePartFromElement,
+#             f'{MEI_NS}title': self._seriesTitleFromElement,
+#         }
 
         self._encodingDescChildrenTagToFunction: dict[str, t.Callable[
             [
@@ -465,7 +663,58 @@ class MeiMetadataReader:
                 m21.metadata.Metadata  # in/out (gets updated from contents of element)
             ],
             None]                   # no return value
-        ] = {}
+        ] = {
+            f'{MEI_NS}app': self._appChoiceMeiHeadChildrenFromElement,
+            f'{MEI_NS}choice': self._appChoiceMeiHeadChildrenFromElement,
+            f'{MEI_NS}add': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}corr': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}damage': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}expan': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}orig': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}reg': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}sic': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}subst': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}supplied': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}unclear': self._passThruEditorialMeiHeadChildrenFromElement,
+            # f'{MEI_NS}head': self._headFromElement,
+            f'{MEI_NS}work': self._workFromElement,
+        }
+
+        self._workChildrenTagToFunction: dict[str, t.Callable[
+            [
+                Element,                # element to process
+                str,                    # tag of parent element
+                m21.metadata.Metadata  # in/out (gets updated from contents of element)
+            ],
+            None]                   # no return value
+        ] = {
+            f'{MEI_NS}app': self._appChoiceMeiHeadChildrenFromElement,
+            f'{MEI_NS}choice': self._appChoiceMeiHeadChildrenFromElement,
+            f'{MEI_NS}add': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}corr': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}damage': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}expan': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}orig': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}reg': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}sic': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}subst': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}supplied': self._passThruEditorialMeiHeadChildrenFromElement,
+            f'{MEI_NS}unclear': self._passThruEditorialMeiHeadChildrenFromElement,
+            # f'{MEI_NS}head': self._headFromElement,
+            f'{MEI_NS}creation': self._creationFromElement,
+            f'{MEI_NS}notesStmt': self._notesStmtFromElement,
+            f'{MEI_NS}identifier': self._identifierFromElement,
+            f'{MEI_NS}arranger': self._arrangerFromElement,
+            f'{MEI_NS}author': self._authorFromElement,
+            f'{MEI_NS}composer': self._composerFromElement,
+            f'{MEI_NS}contributor': self._contributorFromElement,
+            f'{MEI_NS}editor': self._editorFromElement,
+            f'{MEI_NS}funder': self._funderFromElement,
+            f'{MEI_NS}librettist': self._librettistFromElement,
+            f'{MEI_NS}lyricist': self._lyricistFromElement,
+            f'{MEI_NS}sponsor': self._sponsorFromElement,
+            f'{MEI_NS}title': self._titleFromElement,
+        }
 
         self._manifestationListChildrenTagToFunction: dict[str, t.Callable[
             [
