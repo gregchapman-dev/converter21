@@ -10,8 +10,6 @@
 
 import typing as t
 from xml.etree.ElementTree import Element, tostring
-# import re
-# import html
 
 import music21 as m21
 
@@ -358,38 +356,37 @@ class MeiMetadataReader:
 
     def m21DateFromDateElement(
         self,
-        date: Element
+        dateEl: Element
     ) -> m21.metadata.DatePrimitive | None:
         m21DateObj: m21.metadata.DatePrimitive | None = None
-        isodate: str | None = date.get('isodate')
-        if date.text or isodate:
-            dateStr: str
-            if isodate:
-                dateStr = isodate
-            else:
-                if t.TYPE_CHECKING:
-                    assert date.text is not None
-                dateStr = date.text
+        isodate: str | None = dateEl.get('isodate')
+        if isodate:
+            m21DateObj = M21Utilities.m21DateObjectFromISODate(isodate)
+            if m21DateObj is None:
+                # try it as humdrum date/zeit
+                m21DateObj = M21Utilities.m21DateObjectFromString(isodate)
+            if m21DateObj is not None:
+                # if m21DateObj is None, we'll fall through and
+                # try to parse date.text, since @isodate was a fail.
+                return m21DateObj
 
-            theDate: m21.metadata.DatePrimitive | None = (
-                M21Utilities.m21DateObjectFromString(dateStr)
-            )
-
-            if theDate is not None:
-                m21DateObj = theDate
-            else:
-                environLocal.warn(_MISSED_DATE.format(dateStr))
+        if dateEl.text:
+            m21DateObj = M21Utilities.m21DateObjectFromString(dateEl.text)
+            if m21DateObj is None:
+                # try it as isodate
+                m21DateObj = M21Utilities.m21DateObjectFromISODate(dateEl.text)
         else:
-            dateStart = date.get('notbefore') or date.get('startdate')
-            dateEnd = date.get('notafter') or date.get('enddate')
+            dateStart = dateEl.get('notbefore') or dateEl.get('startdate')
+            dateEnd = dateEl.get('notafter') or dateEl.get('enddate')
             if dateStart and dateEnd:
                 m21DateObj = M21Utilities.m21DateObjectFromString(dateStart + '-' + dateEnd)
             elif dateStart:
                 m21DateObj = M21Utilities.m21DateObjectFromString('>' + dateStart)
             elif dateEnd:
                 m21DateObj = M21Utilities.m21DateObjectFromString('<' + dateEnd)
-            else:
-                environLocal.warn(_MISSED_DATE.format(tostring(date)))
+
+        if m21DateObj is None:
+            environLocal.warn(_MISSED_DATE.format(tostring(dateEl)))
 
         return m21DateObj
 

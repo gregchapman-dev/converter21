@@ -16,6 +16,7 @@
 import re
 import sys
 import copy
+import datetime
 import typing as t
 from fractions import Fraction
 
@@ -993,6 +994,21 @@ class M21Utilities:
         trees.sort(key=lambda tree: tree.lowestStaffNumber)
         for tree in trees:
             M21Utilities._sortStaffGroupTrees(tree.children)
+
+    @staticmethod
+    def m21DateObjectFromISODate(
+        isodate: str
+    ) -> m21.metadata.DatePrimitive | None:
+        # TODO: handle isodates that contain multiple dates (DateBetween, DateSelection)
+        m21DateSingle: m21.metadata.DateSingle | None = None
+        try:
+            dt: datetime.datetime = datetime.datetime.fromisoformat(isodate)
+            date = m21.metadata.Date()
+            date.load(dt)
+            m21DateSingle = m21.metadata.DateSingle(date)
+        except Exception:
+            pass
+        return m21DateSingle
 
     # Conversions from str to m21.metadata.DatePrimitive types, and back.
     # e.g. '1942///-1943///' -> DateBetween([Date(1942), Date(1943)])
