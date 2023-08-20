@@ -2585,7 +2585,7 @@ class MeiReader:
 
         meiHead: Element | None = self.documentRoot.find(f'.//{MEI_NS}meiHead')
         if meiHead is None:
-            raise MeiElementError('No <meiHead> element found.')
+            return m21.metadata.Metadata()
 
         meiMetadataReader = MeiMetadataReader(meiHead)
         meta: m21.metadata.Metadata = meiMetadataReader.m21Metadata
