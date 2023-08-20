@@ -88,122 +88,6 @@ class M21Convert:
         'END': 'humdrum:date',  # encoding date
     }
 
-    humdrumReferenceKeyToM21MetadataPropertyUniqueName: dict[str, str] = {
-        # dict value is music21's unique name or '' (if there is no m21Metadata equivalent)
-        # Authorship information:
-        'COM': 'composer',              # composer's name
-        'COA': 'attributedComposer',    # attributed composer
-        'COS': 'suspectedComposer',     # suspected composer
-        'COL': 'composerAlias',         # composer's abbreviated, alias, or stage name
-        'COC': 'composerCorporate',     # composer's corporate name
-        'CDT': '',                      # composer's birth and death dates (**zeit format)
-        'CBL': '',                      # composer's birth location
-        'CDL': '',                      # composer's death location
-        'CNT': '',                      # composer's nationality
-        'LYR': 'lyricist',              # lyricist's name
-        'LIB': 'librettist',            # librettist's name
-        'LAR': 'arranger',              # music arranger's name
-        'LOR': 'orchestrator',          # orchestrator's name
-        'TXO': 'textOriginalLanguage',  # original language of vocal/choral text
-        'TXL': 'textLanguage',          # language of the encoded vocal/choral text
-        # Recording information (if the Humdrum encodes information pertaining to an
-        # audio recording)
-        'TRN': 'translator',            # translator of the text
-        'RTL': '',                      # album title
-        'RMM': 'manufacturer',          # manufacturer or sponsoring company
-        'RC#': '',                      # recording company's catalog number of album
-        'RRD': 'dateIssued',            # release date (**date format)
-        'RLC': '',                      # place of recording
-        'RNP': 'producer',              # producer's name
-        'RDT': '',                      # date of recording (**date format)
-        'RT#': '',                      # track number
-        # Performance information (if the Humdrum encodes, say, a MIDI performance)
-        'MGN': '',                      # ensemble's name
-        'MPN': '',                      # performer's name
-        'MPS': '',                      # suspected performer
-        'MRD': '',                      # date of performance (**date format)
-        'MLC': '',                      # place of performance
-        'MCN': 'conductor',             # conductor's name
-        'MPD': '',                      # date of first performance (**date format)
-        'MDT': '',                      # I've seen 'em (another way to say date of performance?)
-        # Work identification information
-        'OTL': 'title',                 # title
-        'OTP': 'popularTitle',          # popular title
-        'OTA': 'alternativeTitle',      # alternative title
-        'OPR': 'parentTitle',           # title of parent work
-        'OAC': 'actNumber',             # act number (e.g. '2' or 'Act 2')
-        'OSC': 'sceneNumber',           # scene number (e.g. '3' or 'Scene 3')
-        'OMV': 'movementNumber',        # movement number (e.g. '4', or 'mov. 4', or...)
-        'OMD': 'movementName',          # movement name
-        'OPS': 'opusNumber',            # opus number (e.g. '23', or 'Opus 23')
-        'ONM': 'number',                # number (e.g. number of song within ABC multi-song file)
-        'OVM': 'volumeNumber',          # volume number (e.g. '6' or 'Vol. 6')
-        'ODE': 'dedicatedTo',           # dedicated to
-        'OCO': 'commission',            # commissioned by
-        'OCL': 'transcriber',           # collected/transcribed by
-        'ONB': '',                      # free form note related to title or identity of work
-        'ODT': 'dateCreated',           # date or period of composition (**date or **zeit format)
-        'OCY': 'countryOfComposition',  # country of composition
-        'OPC': 'localeOfComposition',   # city, town, or village of composition
-        # Group information
-        'GTL': 'groupTitle',            # group title (e.g. 'The Seasons')
-        'GAW': 'associatedWork',        # associated work, such as a play or film
-        'GCO': 'collectionDesignation',  # collection designation (e.g. 'Norton Scores')
-        # Imprint information
-        'PUB': '',                      # publication status 'published'/'unpublished'
-        'PED': '',                      # publication editor
-        'PPR': 'firstPublisher',        # first publisher
-        'PDT': 'dateFirstPublished',    # date first published (**date format)
-        'PTL': 'publicationTitle',      # publication (volume) title
-        'PPP': 'placeFirstPublished',   # place first published
-        'PC#': 'publishersCatalogNumber',  # publisher's catalog number (NOT scholarly catalog)
-        'SCT': 'scholarlyCatalogAbbreviation',  # scholarly catalog abbrev/number (e.g. 'BWV 551')
-        'SCA': 'scholarlyCatalogName',  # scholarly catalog (unabbreviated) (e.g. 'Koechel 117')
-        'SMS': 'manuscriptSourceName',  # unpublished manuscript source name
-        'SML': 'manuscriptLocation',    # unpublished manuscript location
-        'SMA': 'manuscriptAccessAcknowledgement',  # acknowledgment of manuscript access
-        'YEP': 'electronicPublisher',   # publisher of electronic edition
-        'YEC': 'copyright',             # date and owner of electronic copyright
-        'YER': 'electronicReleaseDate',  # date electronic edition released
-        'YEM': '',                      # copyright message (e.g. 'All rights reserved')
-        'YEN': '',                      # country of copyright
-        'YOR': '',                      # original document from which encoded doc was prepared
-        'YOO': '',                      # original document owner
-        'YOY': '',                      # original copyright year
-        'YOE': '',                      # original editor
-        'EED': '',                      # electronic editor
-        'ENC': '',                      # electronic encoder (person)
-        'END': '',                      # encoding date
-        'EMD': '',                      # electronic document modification description (one/mod)
-        'EEV': '',                      # electronic edition version
-        'EFL': '',                      # file number e.g. '1/4' for one of four
-        'EST': '',                      # encoding status (usually deleted before distribution)
-        'VTS': '',                      # checksum (excluding the VTS line itself)
-        # Analytic information
-        'ACO': '',  # collection designation
-        'AFR': '',  # form designation
-        'AGN': '',  # genre designation
-        'AST': '',  # style, period, or type of work designation
-        'AMD': '',  # mode classification e.g. '5; Lydian'
-        'AMT': '',  # metric classification, must be one of eight names, e.g. 'simple quadruple'
-        'AIN': '',  # instrumentation, must be alphabetical list of *I abbrevs, space-delimited
-        'ARE': '',  # geographical region of origin (list of 'narrowing down' names of regions)
-        'ARL': '',  # geographical location of origin (lat/long)
-        # Historical and background information
-        'HAO': '',  # aural history (lots of text, stories about the work)
-        'HTX': '',  # freeform translation of vocal text
-        # Representation information
-        'RLN': '',  # Extended ASCII language code
-        'RNB': '',  # a note about the representation
-        'RWB': ''   # a warning about the representation
-    }
-
-    # This dict is private because we wrap a function around it.
-    _m21MetadataPropertyUniqueNameToHumdrumReferenceKey: dict[str, str] = {
-        uniqueName: hdKey for (hdKey, uniqueName) in
-        humdrumReferenceKeyToM21MetadataPropertyUniqueName.items() if uniqueName != ''
-    }
-
     # Only used by old (pre-DublinCore) metadata code
     humdrumReferenceKeyToM21ContributorRole: dict[str, str] = {
         'COM': 'composer',
@@ -3107,7 +2991,7 @@ class M21Convert:
     @staticmethod
     def m21UniqueNameToHumdrumKeyWithoutIndexOrLanguage(uniqueName: str) -> str | None:
         hdKey: str | None = (
-            M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
+            M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
         )
 
         if hdKey is None:
@@ -3123,7 +3007,7 @@ class M21Convert:
         value: t.Any
     ) -> str | None:
         hdKey: str | None = (
-            M21Convert._m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
+            M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
         )
 
         if hdKey is None:

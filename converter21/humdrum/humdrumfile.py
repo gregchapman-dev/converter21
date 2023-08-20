@@ -9747,7 +9747,7 @@ class HumdrumFile(HumdrumFileContent):
         isHumdrumStandardKey: bool = (
             isParseable
             and len(parsedKey) >= 3
-            and parsedKey[0:3] in M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName
+            and parsedKey[0:3] in M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName
         )
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
@@ -9802,7 +9802,7 @@ class HumdrumFile(HumdrumFileContent):
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
             m21UniqueName: str | None = (
-                M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
                     parsedKey, None)
             )
             if m21UniqueName:

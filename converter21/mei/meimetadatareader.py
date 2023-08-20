@@ -10,6 +10,7 @@
 
 import typing as t
 from xml.etree.ElementTree import Element, tostring
+import re
 
 import music21 as m21
 
@@ -38,6 +39,9 @@ class MeiMetadataReader:
         work: Element | None = meiHead.find(f'.//{MEI_NS}work')
         if work is not None:
             self.workExists = True
+
+        # only process the first <work> element.
+        self.firstWorkProcessed = False
 
         self._processEmbeddedMetadataElements(
             meiHead.iterfind('*'),
@@ -238,21 +242,18 @@ class MeiMetadataReader:
 
         md.add(uniqueName, text)
 
-    def _headFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
-
     def _respStmtFromElement(
         self,
         elem: Element,
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
-        pass
+        self._processEmbeddedMetadataElements(
+            elem.iterfind('*'),
+            self._respStmtChildrenTagToFunction,
+            self._getTagPath(callerTagPath, elem.tag),
+            md
+        )
 
     def _respLikePartFromElement(
         self,
@@ -284,20 +285,79 @@ class MeiMetadataReader:
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
-        pass
+        if 'fileDesc' not in callerTagPath:
+            # might also be in <manifestation>, which is less interesting
+            return
 
-#     def _seriesStmtFromElement(
-#         self,
-#         elem: Element,
-#         callerTagPath: str,
-#         md: m21.metadata.Metadata
-#     ) -> None:
-#         self._processEmbeddedMetadataElements(
-#             elem.iterfind('*'),
-#             self._seriesStmtChildrenTagToFunction,
-#             self._getTagPath(callerTagPath, elem.tag),
-#             md
-#         )
+        for el in elem.iterfind('*'):
+            tagPath: str = self._getTagPath(callerTagPath, el.tag)
+            if el.tag == f'{MEI_NS}availability':
+                self._availabilityFromElement(el, tagPath, md)
+            elif el.tag == f'{MEI_NS}pubPlace':
+                if el.text:
+                    md.addCustom('humdrum:YEN', el.text)
+            elif el.tag == f'{MEI_NS}publisher':
+                self._contributorFromElement(el, tagPath, md)
+            elif el.tag == f'{MEI_NS}date':
+                m21DateObj: m21.metadata.DatePrimitive | None = self.m21DateFromDateElement(el)
+                if m21DateObj is not None:
+                    md.add('electronicReleaseDate', m21DateObj)
+            elif el.tag == f'{MEI_NS}respStmt':
+                self._respStmtFromElement(el, tagPath, md)
+            else:
+                environLocal.warn(f'Unprocessed <{el.tag}> in {callerTagPath}')
+
+    @staticmethod
+    def _isCopyright(text: str) -> bool:
+        # we say True if we can find a 4-digit number in a reasonable range, and some other text.
+        pattFourDigitsWithinString: str = r'(.*)(\d{4})(.*)'
+        m = re.match(pattFourDigitsWithinString, text)
+        if not m:
+            return False
+
+        prefix: str = m.group(1)
+        year: str = m.group(2)
+        suffix: str = m.group(3)
+
+        # first we require that there be _some_ other text (there's supposed to be at least
+        # a name, maybe the word "Copyright" or something, too)
+        if not prefix and not suffix:
+            return False
+
+        yearInt: int = int(year)
+        # First copyright ever was in 1710.
+        if yearInt < 1710:
+            return False
+
+        # I'm assuming this code will not be running after the year 2200.
+        if yearInt > 2200:
+            return False
+
+        return True
+
+    def _availabilityFromElement(
+        self,
+        elem: Element,
+        callerTagPath: str,
+        md: m21.metadata.Metadata
+    ) -> None:
+        if 'fileDesc' not in callerTagPath:
+            # uninterested in <manifestation>
+            return
+
+        callerTag: str = self._getTagPath(callerTagPath, elem.tag)
+        for el in elem.iterfind('*'):
+            if el.tag == f'{MEI_NS}useRestrict':
+                if not el.text:
+                    continue
+                analog: str = el.get('analog', '')
+                if analog == 'humdrum:YEC' or self._isCopyright(el.text):
+                    md.add('copyright', el.text)
+                else:
+                    # copyrightMessage (not yet supported in music21)
+                    md.addCustom('humdrum:YEM', el.text)
+            else:
+                environLocal.warn(f'Unprocessed <{el.tag}> in {callerTag}')
 
     def _notesStmtFromElement(
         self,
@@ -347,12 +407,18 @@ class MeiMetadataReader:
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
+        # only parse the first work
+        if self.firstWorkProcessed:
+            return
+
         self._processEmbeddedMetadataElements(
             elem.iterfind('*'),
             self._workChildrenTagToFunction,
             self._getTagPath(callerTagPath, elem.tag),
             md
         )
+
+        self.firstWorkProcessed = True
 
     def m21DateFromDateElement(
         self,
@@ -429,31 +495,86 @@ class MeiMetadataReader:
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
-        pass
+        if not elem.text:
+            return
 
-    def _arrangerFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+        if callerTagPath.endswith('work'):
+            # <identifier> shows up in a lot of elements, and means something
+            # different in each place.
+            md.add('scholarlyCatalogAbbreviation', elem.text)
 
-    def _authorFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+    @staticmethod
+    def _meiAnalogToM21UniqueName(analog: str, md: m21.metadata.Metadata) -> str:
+        if analog.startswith('dcterm:'):
+            # convert to 'dcterms:whatever' and then process normally
+            substrings: list[str] = analog.split(':')
+            result: str = ''
+            for i, substring in enumerate(substrings):
+                if i == 0:
+                    result = 'dcterms'
+                else:
+                    result += ':' + substring
+            analog = result
 
-    def _composerFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+        if md._isStandardUniqueName(analog):
+            return analog
+        if md._isStandardNamespaceName(analog):
+            s: str | None = md.namespaceNameToUniqueName(analog)
+            if t.TYPE_CHECKING:
+                assert s is not None
+            return s
+
+        # Hmmm... perhaps it's 'humdrum:???', but in m21 metadata it's 'dcterms:*' or 'marcrel:*'
+        if analog.startswith('humdrum:') and len(analog) == len('humdrum:') + 3:
+            humdrumKey: str = analog[8:]
+            uniqueName: str = (
+                M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                    humdrumKey, ''
+                )
+            )
+            if uniqueName:
+                return uniqueName
+
+        # give up
+        return ''
+
+    @staticmethod
+    def _combineSpaceDelimited(text: str) -> str:
+        output: str = ''
+        capitalizeNext: bool = False
+        for ch in text:
+            if ch == ' ':
+                capitalizeNext = True
+                continue
+
+            if capitalizeNext:
+                output += ch.upper()
+                capitalizeNext = False
+            else:
+                output += ch.lower()
+        return output
+
+    def _meiRoleToM21UniqueName(self, role: str, md: m21.metadata.Metadata) -> str:
+        if md._isStandardUniqueName(role):
+            return role
+        if md._isStandardNamespaceName(role):
+            s: str | None = md.namespaceNameToUniqueName(role)
+            if t.TYPE_CHECKING:
+                assert s is not None
+            return s
+
+        # Let's try combining space-delimited words into uniqueNames.
+        # This will, for example, turn 'ComPoser aliaS' into 'composerAlias'.
+        if ' ' in role:
+            possibleUniqueName: str = self._combineSpaceDelimited(role)
+            if md._isStandardUniqueName(possibleUniqueName):
+                return possibleUniqueName
+
+        return ''
+
+    _NAME_KEY_TO_CORP_NAME_KEY: dict[str, str] = {
+        'composer': 'composerCorporate'
+    }
 
     def _contributorFromElement(
         self,
@@ -461,60 +582,43 @@ class MeiMetadataReader:
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
-        pass
+        # instead of choosing between work and fileDesc, do both, but check md to make
+        # sure you're not exactly duplicating something that's already there.
+        if 'work' not in callerTagPath and 'fileDesc' not in callerTagPath:
+            return
 
-    def _editorFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+        if not elem.text:
+            return
 
-    def _funderFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+        analog: str = elem.get('analog', '')
+        role: str = elem.get('role', '')
+        key: str = ''
+        if elem.tag in (f'{MEI_NS}name', f'{MEI_NS}persName', f'{MEI_NS}corpName'):
+            # prefer @analog (if it works), because it isn't free-form, like @role
+            if analog:
+                key = self._meiAnalogToM21UniqueName(analog, md)
+            if role and not key:
+                key = self._meiRoleToM21UniqueName(role, md)
+        else:
+            # the elem.tag ends with 'composer', or 'arranger', or...
+            # and those are (hopefully) all valid m21 metadata uniqueNames.
+            key = elem.tag.split('}')[-1]
 
-    def _librettistFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+        if not key:
+            return
 
-    def _lyricistFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
+        if md._isStandardUniqueName(key):
+            if elem.tag == f'{MEI_NS}corpName':
+                key = self._NAME_KEY_TO_CORP_NAME_KEY.get(key, key)
+            self._addIfNotADuplicate(md, key, elem.text)
+        else:
+            self._addIfNotADuplicate(md, 'otherContributor', m21.metadata.Contributor(role=key, name=elem.text))
 
-    def _sponsorFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        pass
-
-    def _manifestationListFromElement(
-        self,
-        elem: Element,
-        callerTagPath: str,
-        md: m21.metadata.Metadata
-    ) -> None:
-        self._processEmbeddedMetadataElements(
-            elem.iterfind('*'),
-            self._manifestationListChildrenTagToFunction,
-            self._getTagPath(callerTagPath, elem.tag),
-            md
-        )
+    def _addIfNotADuplicate(self, md: m21.metadata.Metadata, key: str, value: t.Any):
+        for val in md[key]:
+            if val == value:
+                return
+        md.add(key, value)
 
     def _revisionDescFromElement(
         self,
@@ -566,7 +670,7 @@ class MeiMetadataReader:
             f'{MEI_NS}fileDesc': self._fileDescFromElement,
             f'{MEI_NS}encodingDesc': self._encodingDescFromElement,
             f'{MEI_NS}workList': self._workListFromElement,
-            f'{MEI_NS}manifestationList': self._manifestationListFromElement,
+            # f'{MEI_NS}manifestationList': self._manifestationListFromElement,
             f'{MEI_NS}revisionDesc': self._revisionDescFromElement,
             f'{MEI_NS}extMeta': self._extMetaFromElement,
         }
@@ -608,7 +712,7 @@ class MeiMetadataReader:
             ],
             None]                   # no return value
         ] = {
-            f'{MEI_NS}head': self._headFromElement,
+            # f'{MEI_NS}head': self._headFromElement,
             f'{MEI_NS}respStmt': self._respStmtFromElement,
             f'{MEI_NS}arranger': self._respLikePartFromElement,
             f'{MEI_NS}author': self._respLikePartFromElement,
@@ -622,27 +726,18 @@ class MeiMetadataReader:
             f'{MEI_NS}title': self._titleFromElement,
         }
 
-#         self._seriesStmtChildrenTagToFunction: dict[str, t.Callable[
-#             [
-#                 Element,                # element to process
-#                 str,                    # tag of parent element
-#                 m21.metadata.Metadata  # in/out (gets updated from contents of element)
-#             ],
-#             None]                   # no return value
-#         ] = {
-#             f'{MEI_NS}head': self._headFromElement,
-#             f'{MEI_NS}respStmt': self._respStmtFromElement,
-#             f'{MEI_NS}arranger': self._respLikePartFromElement,
-#             f'{MEI_NS}author': self._respLikePartFromElement,
-#             f'{MEI_NS}composer': self._respLikePartFromElement,
-#             f'{MEI_NS}contributor': self._respLikePartFromElement,
-#             f'{MEI_NS}editor': self._respLikePartFromElement,
-#             f'{MEI_NS}funder': self._respLikePartFromElement,
-#             f'{MEI_NS}librettist': self._respLikePartFromElement,
-#             f'{MEI_NS}lyricist': self._respLikePartFromElement,
-#             f'{MEI_NS}sponsor': self._respLikePartFromElement,
-#             f'{MEI_NS}title': self._seriesTitleFromElement,
-#         }
+        self._respStmtChildrenTagToFunction: dict[str, t.Callable[
+            [
+                Element,                # element to process
+                str,                    # tag of parent element
+                m21.metadata.Metadata  # in/out (gets updated from contents of element)
+            ],
+            None]                   # no return value
+        ] = {
+            f'{MEI_NS}name': self._contributorFromElement,
+            f'{MEI_NS}persName': self._contributorFromElement,
+            f'{MEI_NS}corpName': self._contributorFromElement,
+        }
 
         self._encodingDescChildrenTagToFunction: dict[str, t.Callable[
             [
@@ -701,26 +796,17 @@ class MeiMetadataReader:
             f'{MEI_NS}creation': self._creationFromElement,
             f'{MEI_NS}notesStmt': self._notesStmtFromElement,
             f'{MEI_NS}identifier': self._identifierFromElement,
-            f'{MEI_NS}arranger': self._arrangerFromElement,
-            f'{MEI_NS}author': self._authorFromElement,
-            f'{MEI_NS}composer': self._composerFromElement,
+            f'{MEI_NS}arranger': self._contributorFromElement,
+            f'{MEI_NS}author': self._contributorFromElement,
+            f'{MEI_NS}composer': self._contributorFromElement,
             f'{MEI_NS}contributor': self._contributorFromElement,
-            f'{MEI_NS}editor': self._editorFromElement,
-            f'{MEI_NS}funder': self._funderFromElement,
-            f'{MEI_NS}librettist': self._librettistFromElement,
-            f'{MEI_NS}lyricist': self._lyricistFromElement,
-            f'{MEI_NS}sponsor': self._sponsorFromElement,
+            f'{MEI_NS}editor': self._contributorFromElement,
+            f'{MEI_NS}funder': self._contributorFromElement,
+            f'{MEI_NS}librettist': self._contributorFromElement,
+            f'{MEI_NS}lyricist': self._contributorFromElement,
+            f'{MEI_NS}sponsor': self._contributorFromElement,
             f'{MEI_NS}title': self._titleFromElement,
         }
-
-        self._manifestationListChildrenTagToFunction: dict[str, t.Callable[
-            [
-                Element,                # element to process
-                str,                    # tag of parent element
-                m21.metadata.Metadata  # in/out (gets updated from contents of element)
-            ],
-            None]                   # no return value
-        ] = {}
 
         self._revisionDescChildrenTagToFunction: dict[str, t.Callable[
             [
