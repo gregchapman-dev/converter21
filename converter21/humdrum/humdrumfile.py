@@ -9730,7 +9730,7 @@ class HumdrumFile(HumdrumFileContent):
             isParseable = True
             parsedKey = m.group(1)
             langCode: str = m.group(5)
-            isTranslated: bool = langCode != '' and m.group(4) != '@@'
+            isTranslated: bool = bool(langCode) and m.group(4) != '@@'
             encodingScheme: str | None = (
                 M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
             )

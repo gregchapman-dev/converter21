@@ -209,12 +209,9 @@ class MeiMetadataReader:
         callerTagPath: str,
         md: m21.metadata.Metadata
     ) -> None:
-        if self.workExists and 'work' not in callerTagPath:
-            # if <work> exists, insist on <work> title(s) only
-            return
-
-        if not self.workExists and 'fileDesc' not in callerTagPath:
-            # if <work> doesn't exist, insist on <fileDesc> title(s) only
+        # instead of choosing between work and fileDesc, do both, but check md to make
+        # sure you're not exactly duplicating something that's already there.
+        if 'work' not in callerTagPath and 'fileDesc' not in callerTagPath:
             return
 
         text: str
@@ -240,7 +237,7 @@ class MeiMetadataReader:
                 else:
                     uniqueName = 'alternativeTitle'
 
-        md.add(uniqueName, text)
+        self._addIfNotADuplicate(md, uniqueName, text)
 
     def _respStmtFromElement(
         self,
@@ -599,6 +596,10 @@ class MeiMetadataReader:
                 key = self._meiAnalogToM21UniqueName(analog, md)
             if role and not key:
                 key = self._meiRoleToM21UniqueName(role, md)
+                if not key:
+                    key = role
+            if not key:
+                key = analog
         else:
             # the elem.tag ends with 'composer', or 'arranger', or...
             # and those are (hopefully) all valid m21 metadata uniqueNames.
@@ -615,6 +616,15 @@ class MeiMetadataReader:
             self._addIfNotADuplicate(md, 'otherContributor', m21.metadata.Contributor(role=key, name=elem.text))
 
     def _addIfNotADuplicate(self, md: m21.metadata.Metadata, key: str, value: t.Any):
+        uniqueName: str = ''
+        if md._isStandardUniqueName(key):
+            uniqueName = key
+        elif md._isStandardNamespaceName(key):
+            uniqueName = md.namespaceNameToUniqueName(key)
+        if isinstance(value, str):
+            value = m21.metadata.Text(value)
+        if uniqueName:
+            value = md._convertValue(uniqueName, value)
         for val in md[key]:
             if val == value:
                 return
