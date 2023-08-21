@@ -617,10 +617,11 @@ class MeiMetadataReader:
                 key = self._NAME_KEY_TO_CORP_NAME_KEY.get(key, key)
             self._addIfNotADuplicate(md, key, elem.text)
         else:
+            nameText = m21.metadata.Text(data=elem.text, isTranslated=False)
             self._addIfNotADuplicate(
                 md,
                 'otherContributor',
-                m21.metadata.Contributor(role=key, name=elem.text)
+                m21.metadata.Contributor(role=key, name=nameText)
             )
 
     def _addIfNotADuplicate(self, md: m21.metadata.Metadata, key: str, value: t.Any):

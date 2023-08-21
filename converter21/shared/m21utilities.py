@@ -1361,11 +1361,11 @@ class M21Utilities:
         'YEM': '',                      # copyright message (e.g. 'All rights reserved')
         'YEN': '',                      # country of copyright
         'YOR': '',                      # original document from which encoded doc was prepared
-        'YOO': '',                      # original document owner
+        'YOO': 'originalDocumentOwner',  # original document owner
         'YOY': '',                      # original copyright year
-        'YOE': '',                      # original editor
+        'YOE': 'originalEditor',        # original editor
         'EED': 'electronicEditor',      # electronic editor
-        'ENC': '',                      # electronic encoder (person)
+        'ENC': 'electronicEncoder',     # electronic encoder (person)
         'END': '',                      # encoding date
         'EMD': '',                      # electronic document modification description (one/mod)
         'EEV': '',                      # electronic edition version
@@ -1394,5 +1394,15 @@ class M21Utilities:
     m21MetadataPropertyUniqueNameToHumdrumReferenceKey: dict[str, str] = {
         uniqueName: hdKey for (hdKey, uniqueName) in
         humdrumReferenceKeyToM21MetadataPropertyUniqueName.items() if uniqueName != ''
+    }
+
+    humdrumReferenceKeyToM21OtherContributorRole: dict[str, str] = {
+        'MPN': 'performer',
+        'MPS': 'suspected performer',
+        'PED': 'source editor',  # to match Verovio (instead of 'publication editor')
+    }
+
+    m21OtherContributorRoleToHumdrumReferenceKey: dict[str, str] = {
+        role: hdKey for (hdKey, role) in humdrumReferenceKeyToM21OtherContributorRole.items()
     }
 

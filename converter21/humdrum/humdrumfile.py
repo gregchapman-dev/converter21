@@ -9810,6 +9810,18 @@ class HumdrumFile(HumdrumFileContent):
                 m21Metadata.add(m21UniqueName, m21Value)
                 continue
 
+            if isStandardHumdrumKey:
+                # Check if it's a contributor (that music21 doesn't apparently support),
+                # and if so, make a Contributor with role set appropriately, and add it
+                # with key 'otherContributor'.
+                if parsedKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
+                    role: str = (
+                        M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[parsedKey]
+                    )
+                    contrib = m21.metadata.Contributor(name=parsedValue, role=role)
+                    m21Metadata.add('otherContributor', contrib)
+                    continue
+
             # Doesn't match any known m21.metadata-supported metadata (or it does, and
             # we couldn't parse it, so we'll have to treat it verbatim).
             if isStandardHumdrumKey or k == 'title':  # 'title' is a special humdrumraw: case
