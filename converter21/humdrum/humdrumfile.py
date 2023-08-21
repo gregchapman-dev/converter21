@@ -9818,8 +9818,9 @@ class HumdrumFile(HumdrumFileContent):
                 # it in as "custom" unparsed
                 m21Metadata.addCustom('humdrumraw:' + k, v)
             else:
-                # freeform key/value, put it in as custom
-                m21Metadata.addCustom(k, v)
+                # freeform key/value, put it in as custom (but with key prepended with
+                # 'raw:' to prevent possible overlap with music21 metadata uniqueName key).
+                m21Metadata.addCustom('raw:' + k, v)
 
     def _prepartPartInstrumentInfo(self, partStartTok: HumdrumToken, staffNum: int) -> None:
         # staffNum is 1-based, but _staffStates is 0-based
