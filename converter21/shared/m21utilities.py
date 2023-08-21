@@ -1364,7 +1364,7 @@ class M21Utilities:
         'YOO': '',                      # original document owner
         'YOY': '',                      # original copyright year
         'YOE': '',                      # original editor
-        'EED': '',                      # electronic editor
+        'EED': 'electronicEditor',      # electronic editor
         'ENC': '',                      # electronic encoder (person)
         'END': '',                      # encoding date
         'EMD': '',                      # electronic document modification description (one/mod)

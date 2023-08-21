@@ -223,6 +223,7 @@ class MeiMetadataReader:
 
         uniqueName: str = 'title'
         typeStr: str = elem.get('type', '')
+        lang: str | None = elem.get('xml:lang')
         label: str = elem.get('label', '')
         analog: str = elem.get('analog', '')
         if analog:
@@ -237,7 +238,10 @@ class MeiMetadataReader:
                 else:
                     uniqueName = 'alternativeTitle'
 
-        self._addIfNotADuplicate(md, uniqueName, text)
+        isTranslated: bool = typeStr == 'translated'
+
+        value = m21.metadata.Text(data=text, language=lang, isTranslated=isTranslated)
+        self._addIfNotADuplicate(md, uniqueName, value)
 
     def _respStmtFromElement(
         self,
@@ -626,7 +630,7 @@ class MeiMetadataReader:
         elif md._isStandardNamespaceName(key):
             uniqueName = md.namespaceNameToUniqueName(key)
         if isinstance(value, str):
-            value = m21.metadata.Text(value)
+            value = m21.metadata.Text(value, isTranslated=False)
         if uniqueName:
             value = md._convertValue(uniqueName, value)
         for val in md[key]:
