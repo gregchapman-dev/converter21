@@ -613,10 +613,14 @@ class MeiMetadataReader:
                 key = self._NAME_KEY_TO_CORP_NAME_KEY.get(key, key)
             self._addIfNotADuplicate(md, key, elem.text)
         else:
-            self._addIfNotADuplicate(md, 'otherContributor', m21.metadata.Contributor(role=key, name=elem.text))
+            self._addIfNotADuplicate(
+                md,
+                'otherContributor',
+                m21.metadata.Contributor(role=key, name=elem.text)
+            )
 
     def _addIfNotADuplicate(self, md: m21.metadata.Metadata, key: str, value: t.Any):
-        uniqueName: str = ''
+        uniqueName: str | None = None
         if md._isStandardUniqueName(key):
             uniqueName = key
         elif md._isStandardNamespaceName(key):
