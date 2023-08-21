@@ -8046,7 +8046,7 @@ class HumdrumFile(HumdrumFileContent):
 
                 dynText: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 't', '', '')
                 if dynText:
-                    dynText = re.sub('%s', dynamic, dynText)
+                    dynText = re.sub('%s', dynamic + ' ', dynText)
                     dynamic = dynText
 
                 above = False
