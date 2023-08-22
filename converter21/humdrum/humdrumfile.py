@@ -9807,7 +9807,7 @@ class HumdrumFile(HumdrumFileContent):
             )
             if m21UniqueName:
                 m21Value: t.Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
-                m21Metadata.add(m21UniqueName, m21Value)
+                M21Utilities.addIfNotADuplicate(m21Metadata, m21UniqueName, m21Value)
                 continue
 
             if isStandardHumdrumKey:
@@ -9819,7 +9819,7 @@ class HumdrumFile(HumdrumFileContent):
                         M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[parsedKey]
                     )
                     contrib = m21.metadata.Contributor(name=parsedValue, role=role)
-                    m21Metadata.add('otherContributor', contrib)
+                    M21Utilities.addIfNotADuplicate(m21Metadata, 'otherContributor', contrib)
                     continue
 
             # Doesn't match any known m21.metadata-supported metadata (or it does, and

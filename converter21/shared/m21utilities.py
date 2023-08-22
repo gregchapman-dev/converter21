@@ -1477,3 +1477,18 @@ class M21Utilities:
                 output += ch
         return output
 
+    @staticmethod
+    def addIfNotADuplicate(md: m21.metadata.Metadata, key: str, value: t.Any):
+        uniqueName: str | None = None
+        if md._isStandardUniqueName(key):
+            uniqueName = key
+        elif md._isStandardNamespaceName(key):
+            uniqueName = md.namespaceNameToUniqueName(key)
+        if isinstance(value, str):
+            value = m21.metadata.Text(value, isTranslated=False)
+        if uniqueName:
+            value = md._convertValue(uniqueName, value)
+        for val in md[key]:
+            if val == value:
+                return
+        md.add(key, value)

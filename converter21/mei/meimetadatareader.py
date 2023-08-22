@@ -241,7 +241,7 @@ class MeiMetadataReader:
         isTranslated: bool = typeStr == 'translated'
 
         value = m21.metadata.Text(data=text, language=lang, isTranslated=isTranslated)
-        self._addIfNotADuplicate(md, uniqueName, value)
+        M21Utilities.addIfNotADuplicate(md, uniqueName, value)
 
     def _respStmtFromElement(
         self,
@@ -604,29 +604,14 @@ class MeiMetadataReader:
         if md._isStandardUniqueName(key):
             if elem.tag == f'{MEI_NS}corpName':
                 key = self._NAME_KEY_TO_CORP_NAME_KEY.get(key, key)
-            self._addIfNotADuplicate(md, key, elem.text)
+            M21Utilities.addIfNotADuplicate(md, key, elem.text)
         else:
             nameText = m21.metadata.Text(data=elem.text, isTranslated=False)
-            self._addIfNotADuplicate(
+            M21Utilities.addIfNotADuplicate(
                 md,
                 'otherContributor',
                 m21.metadata.Contributor(role=key, name=nameText)
             )
-
-    def _addIfNotADuplicate(self, md: m21.metadata.Metadata, key: str, value: t.Any):
-        uniqueName: str | None = None
-        if md._isStandardUniqueName(key):
-            uniqueName = key
-        elif md._isStandardNamespaceName(key):
-            uniqueName = md.namespaceNameToUniqueName(key)
-        if isinstance(value, str):
-            value = m21.metadata.Text(value, isTranslated=False)
-        if uniqueName:
-            value = md._convertValue(uniqueName, value)
-        for val in md[key]:
-            if val == value:
-                return
-        md.add(key, value)
 
     def _revisionDescFromElement(
         self,
