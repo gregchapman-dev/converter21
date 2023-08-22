@@ -1410,6 +1410,11 @@ class M21Utilities:
         'sourceEditor': 'PED',
     }
 
+    humdrumReferenceKeysWeWishMusic21Supported: set[str] = {
+        'YEM',  # copyrightMessage
+        'YEN',  # copyrightCountry
+    }
+
     @staticmethod
     def contributorRoleToHumdrumKey(role: str) -> str:
         output: str = (
@@ -1492,3 +1497,16 @@ class M21Utilities:
             if val == value:
                 return
         md.add(key, value)
+
+    @staticmethod
+    def addCustomIfNotADuplicate(
+        md: m21.metadata.Metadata,
+        key: str,
+        value: str | m21.metadata.Text
+    ):
+        if isinstance(value, str):
+            value = m21.metadata.Text(value, isTranslated=False)
+        for val in md.getCustom(key):
+            if val == value:
+                return
+        md.addCustom(key, value)

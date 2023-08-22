@@ -296,13 +296,13 @@ class MeiMetadataReader:
                 self._availabilityFromElement(el, tagPath, md)
             elif el.tag == f'{MEI_NS}pubPlace':
                 if el.text:
-                    md.addCustom('humdrum:YEN', el.text)
+                    M21Utilities.addCustomIfNotADuplicate(md, 'humdrum:YEN', el.text)
             elif el.tag == f'{MEI_NS}publisher':
                 self._contributorFromElement(el, tagPath, md)
             elif el.tag == f'{MEI_NS}date':
                 m21DateObj: m21.metadata.DatePrimitive | None = self.m21DateFromDateElement(el)
                 if m21DateObj is not None:
-                    md.add('electronicReleaseDate', m21DateObj)
+                    M21Utilities.addIfNotADuplicate(md, 'electronicReleaseDate', m21DateObj)
             elif el.tag == f'{MEI_NS}respStmt':
                 self._respStmtFromElement(el, tagPath, md)
             else:
@@ -353,10 +353,10 @@ class MeiMetadataReader:
                     continue
                 analog: str = el.get('analog', '')
                 if analog == 'humdrum:YEC' or self._isCopyright(el.text):
-                    md.add('copyright', el.text)
+                    M21Utilities.addIfNotADuplicate(md, 'copyright', el.text)
                 else:
                     # copyrightMessage (not yet supported in music21)
-                    md.addCustom('humdrum:YEM', el.text)
+                    M21Utilities.addCustomIfNotADuplicate(md, 'humdrum:YEM', el.text)
             else:
                 environLocal.warn(f'Unprocessed <{el.tag}> in {callerTag}')
 
@@ -488,7 +488,7 @@ class MeiMetadataReader:
                 uniqueName = md.namespaceNameToUniqueName(analog) or ''
                 if not uniqueName:
                     uniqueName = 'countryOfComposition'
-            md.add(uniqueName, name)
+            M21Utilities.addIfNotADuplicate(md, uniqueName, name)
 
     def _identifierFromElement(
         self,
@@ -502,7 +502,7 @@ class MeiMetadataReader:
         if callerTagPath.endswith('work'):
             # <identifier> shows up in a lot of elements, and means something
             # different in each place.
-            md.add('scholarlyCatalogAbbreviation', elem.text)
+            M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)
 
     @staticmethod
     def _meiAnalogToM21UniqueName(analog: str, md: m21.metadata.Metadata) -> str:
@@ -602,7 +602,23 @@ class MeiMetadataReader:
             return
 
         if md._isStandardUniqueName(key):
-            if elem.tag == f'{MEI_NS}corpName':
+            if key == 'composer':
+                # Check analog (and cert, if necessary) to see if composer is suspected
+                # or attributed.
+                if analog == 'humdrum:COA':
+                    key = 'attributedComposer'
+                elif analog == 'humdrum:COS':
+                    key = 'suspectedComposer'
+                else:
+                    cert: str = elem.get('cert', '')
+                    if cert == 'unknown':
+                        # iohumdrum.cpp (verovio) used to write this for both suspect and attrib
+                        key = 'suspectedComposer'
+                    elif cert == 'medium':
+                        key = 'attributedComposer'
+                    elif cert == 'low':
+                        key = 'suspectedComposer'
+            elif elem.tag == f'{MEI_NS}corpName':
                 key = self._NAME_KEY_TO_CORP_NAME_KEY.get(key, key)
             M21Utilities.addIfNotADuplicate(md, key, elem.text)
         else:

@@ -9822,6 +9822,16 @@ class HumdrumFile(HumdrumFileContent):
                     M21Utilities.addIfNotADuplicate(m21Metadata, 'otherContributor', contrib)
                     continue
 
+                # Check it isn't in the list of humdrum keys we want to treat as if they
+                # are true music21 keys (use 'humdrum:???' because no uniqueName).
+                if parsedKey in M21Utilities.humdrumReferenceKeysWeWishMusic21Supported:
+                    M21Utilities.addCustomIfNotADuplicate(
+                        m21Metadata,
+                        'humdrum:' + parsedKey,
+                        parsedValue
+                    )
+                    continue
+
             # Doesn't match any known m21.metadata-supported metadata (or it does, and
             # we couldn't parse it, so we'll have to treat it verbatim).
             if isStandardHumdrumKey or k == 'title':  # 'title' is a special humdrumraw: case
