@@ -1403,6 +1403,77 @@ class M21Utilities:
     }
 
     m21OtherContributorRoleToHumdrumReferenceKey: dict[str, str] = {
-        role: hdKey for (hdKey, role) in humdrumReferenceKeyToM21OtherContributorRole.items()
+        'performer': 'MPN',
+        'suspected performer': 'MPS',
+        'suspectedPerformer': 'MPS',
+        'source editor': 'PED',
+        'sourceEditor': 'PED',
     }
+
+    @staticmethod
+    def contributorRoleToHumdrumKey(role: str) -> str:
+        output: str = (
+            M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(
+                role, ''
+            )
+        )
+        if output:
+            return output
+
+        output = M21Utilities.m21OtherContributorRoleToHumdrumReferenceKey.get(
+            role, ''
+        )
+        if output:
+            return output
+
+        altRole: str
+        if ' ' in role:
+            # try converting to camelCase.
+            altRole = M21Utilities.spaceDelimitedToCamelCase(role)
+        else:
+            # try converting to space-delimited.
+            altRole = M21Utilities.camelCaseToSpaceDelimited(role)
+
+        output = (
+            M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(
+                altRole, ''
+            )
+        )
+        if output:
+            return output
+
+        output = M21Utilities.m21OtherContributorRoleToHumdrumReferenceKey.get(
+            altRole, ''
+        )
+        if output:
+            return output
+
+        return role
+
+    @staticmethod
+    def spaceDelimitedToCamelCase(text: str) -> str:
+        output: str = ''
+        capitalizeNext: bool = False
+        for ch in text:
+            if ch == ' ':
+                capitalizeNext = True
+                continue
+
+            if capitalizeNext:
+                output += ch.upper()
+                capitalizeNext = False
+            else:
+                output += ch.lower()
+        return output
+
+    @staticmethod
+    def camelCaseToSpaceDelimited(text: str) -> str:
+        output: str = ''
+        for ch in text:
+            if ch.isupper():
+                output += ' '
+                output += ch.lower()
+            else:
+                output += ch
+        return output
 

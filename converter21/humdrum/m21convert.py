@@ -1940,6 +1940,10 @@ class M21Convert:
                             if endDelim == r'\s':
                                 substitution = substitution + dynstr[-1]
                             fmt: str = re.sub(dynstr, substitution, dynamic.value, count=1)
+                            # See if there is a double space after the %s we just put in.
+                            # If there is, assume verovio's humdrum reader put the extra space,
+                            # and delete it.
+                            fmt = re.sub('%s  ', '%s ', fmt, count=1)
                             output += ':t=' + fmt
                             return output
 
@@ -2986,6 +2990,46 @@ class M21Convert:
                 else:
                     hdKey += '@@' + value.language.upper()
         return hdKey
+
+    @staticmethod
+    def humdrumMetadataItemToHumdrumReferenceLineStr(
+        idx: int,
+        hdKey: str,
+        value: t.Any
+    ) -> str | None:
+        valueStr: str = ''
+        refLineStr: str = ''
+
+        if idx > 0:
+            # we generate 'XXX', 'XXX1', 'XXX2', etc
+            hdKey += str(idx)
+
+        if isinstance(value, m21.metadata.Text):
+            if value.language:
+                if value.isTranslated:
+                    hdKey += '@' + value.language.upper()
+                else:
+                    hdKey += '@@' + value.language.upper()
+            valueStr = str(value)
+        elif isinstance(value, m21.metadata.DatePrimitive):
+            # We don't like str(DateXxxx)'s results so we do our own.
+            valueStr = M21Utilities.stringFromM21DateObject(value)
+        elif isinstance(value, m21.metadata.Contributor):
+            valueStr = M21Convert.stringFromM21Contributor(value)
+        else:
+            # it's already a str, we hope, but if not, we convert here
+            valueStr = str(value)
+
+        # html escape-ify the string, and convert any actual linefeeds to r'\n'
+        valueStr = html.escape(valueStr)
+        valueStr = valueStr.replace('\n', r'\n')
+
+        if valueStr == '':
+            refLineStr = '!!!' + hdKey + ':'
+        else:
+            refLineStr = '!!!' + hdKey + ': ' + valueStr
+
+        return refLineStr
 
     @staticmethod
     def m21MetadataItemToHumdrumReferenceLineStr(

@@ -751,9 +751,28 @@ class HumdrumWriter:
                     # writing) to the output Humdrum file.
                     continue
                 refLineStr = None
+                hdKeyWithoutIndex = None
+
+                if uniqueName == 'otherContributor':
+                    # See if we can make a valid humdrum key out of the contributor role.
+                    if t.TYPE_CHECKING:
+                        assert isinstance(value, m21.metadata.Contributor)
+                    hdKeyWithoutIndex = M21Utilities.contributorRoleToHumdrumKey(value.role)
+                    if hdKeyWithoutIndex is not None:
+                        idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                        hdKeyWithoutIndexToCurrentIndex[
+                            hdKeyWithoutIndex] = idx + 1  # for next time
+                        refLineStr = M21Convert.humdrumMetadataItemToHumdrumReferenceLineStr(
+                            idx, hdKeyWithoutIndex, value
+                        )
+                    if refLineStr is not None:
+                        outfile.appendLine(refLineStr, asGlobalToken=True)
+                        continue
+
                 hdKeyWithoutIndex = (
                     M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
                 )
+
                 if hdKeyWithoutIndex is not None:
                     idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                     hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time

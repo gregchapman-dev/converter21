@@ -539,22 +539,6 @@ class MeiMetadataReader:
         # give up
         return ''
 
-    @staticmethod
-    def _combineSpaceDelimited(text: str) -> str:
-        output: str = ''
-        capitalizeNext: bool = False
-        for ch in text:
-            if ch == ' ':
-                capitalizeNext = True
-                continue
-
-            if capitalizeNext:
-                output += ch.upper()
-                capitalizeNext = False
-            else:
-                output += ch.lower()
-        return output
-
     def _meiRoleToM21UniqueName(self, role: str, md: m21.metadata.Metadata) -> str:
         if md._isStandardUniqueName(role):
             return role
@@ -567,7 +551,7 @@ class MeiMetadataReader:
         # Let's try combining space-delimited words into uniqueNames.
         # This will, for example, turn 'ComPoser aliaS' into 'composerAlias'.
         if ' ' in role:
-            possibleUniqueName: str = self._combineSpaceDelimited(role)
+            possibleUniqueName: str = M21Utilities.spaceDelimitedToCamelCase(role)
             if md._isStandardUniqueName(possibleUniqueName):
                 return possibleUniqueName
 
