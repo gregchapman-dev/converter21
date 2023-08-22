@@ -578,7 +578,12 @@ class MeiMetadataReader:
         analog: str = elem.get('analog', '')
         role: str = elem.get('role', '')
         key: str = ''
-        if elem.tag in (f'{MEI_NS}name', f'{MEI_NS}persName', f'{MEI_NS}corpName'):
+        if elem.tag in (
+                f'{MEI_NS}name',
+                f'{MEI_NS}persName',
+                f'{MEI_NS}corpName',
+                f'{MEI_NS}contributor'
+        ):
             # prefer @analog (if it works), because it isn't free-form, like @role
             if analog:
                 key = self._meiAnalogToM21UniqueName(analog, md)
