@@ -9813,7 +9813,7 @@ class HumdrumFile(HumdrumFileContent):
             if isStandardHumdrumKey:
                 # Check if it's a contributor (that music21 doesn't apparently support),
                 # and if so, make a Contributor with role set appropriately, and add it
-                # with key 'otherContributor'.
+                # with music21-supported 'otherContributor'.
                 if parsedKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
                     role: str = (
                         M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[parsedKey]
@@ -9822,27 +9822,19 @@ class HumdrumFile(HumdrumFileContent):
                     M21Utilities.addIfNotADuplicate(m21Metadata, 'otherContributor', contrib)
                     continue
 
-                # Check it isn't in the list of humdrum keys we want to treat as if they
-                # are true music21 keys (use 'humdrum:???' because no uniqueName).
-                if parsedKey in M21Utilities.humdrumReferenceKeysWeWishMusic21Supported:
-                    M21Utilities.addCustomIfNotADuplicate(
-                        m21Metadata,
-                        'humdrum:' + parsedKey,
-                        parsedValue
-                    )
-                    continue
+                # Treat any other standard Humdrum keys as if they are true music21 keys.
+                # Use 'humdrum:???' because there is no uniqueName (yet; I'll try to get
+                # them all into music21 at some point).
+                M21Utilities.addCustomIfNotADuplicate(
+                    m21Metadata,
+                    'humdrum:' + parsedKey,
+                    parsedValue
+                )
+                continue
 
-            # Doesn't match any known m21.metadata-supported metadata (or it does, and
-            # we couldn't parse it, so we'll have to treat it verbatim).
-            if isStandardHumdrumKey or k == 'title':  # 'title' is a special humdrumraw: case
-                # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
-                # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
-                # it in as "custom" unparsed
-                m21Metadata.addCustom('humdrumraw:' + k, v)
-            else:
-                # freeform key/value, put it in as custom (but with key prepended with
-                # 'raw:' to prevent possible overlap with music21 metadata uniqueName key).
-                m21Metadata.addCustom('raw:' + k, v)
+            # freeform key/value, put it in as custom (but with key prepended with
+            # 'raw:' to prevent possible overlap with music21 metadata uniqueName key).
+            m21Metadata.addCustom('raw:' + k, v)
 
     def _prepartPartInstrumentInfo(self, partStartTok: HumdrumToken, staffNum: int) -> None:
         # staffNum is 1-based, but _staffStates is 0-based
