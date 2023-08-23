@@ -499,10 +499,19 @@ class MeiMetadataReader:
         if not elem.text:
             return
 
-        if callerTagPath.endswith('work'):
-            # <identifier> shows up in a lot of elements, and means something
-            # different in each place.
+        analog: str = elem.get('analog', '')
+        if analog == 'humdrum:SCT':
             M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)
+            return
+        if analog == 'humdrum:SCA':
+            M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogName', elem.text)
+            return
+        if analog == 'humdrum:PC#':
+            M21Utilities.addIfNotADuplicate(md, 'publishersCatalogNumber', elem.text)
+            return
+
+        # We'll guess that this could be considered a scholarly catalog abbreviation
+        M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)
 
     @staticmethod
     def _meiAnalogToM21UniqueName(analog: str, md: m21.metadata.Metadata) -> str:
