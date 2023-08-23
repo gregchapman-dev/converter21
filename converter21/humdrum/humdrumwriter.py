@@ -740,7 +740,7 @@ class HumdrumWriter:
 
         # what's left in allItems goes at the bottom of the file
         for uniqueName, value in allItems:
-            if uniqueName.startswith('humdrumraw:'):
+            if uniqueName.startswith('humdrumraw:') or uniqueName.startswith('humdrum:'):
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
                     0, uniqueName, value
                 )

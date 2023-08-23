@@ -3040,17 +3040,24 @@ class M21Convert:
         valueStr: str = ''
         refLineStr: str = ''
         isRaw: bool = False
+        isNonRawHumdrum: bool = False
 
         if uniqueName.startswith('humdrumraw:'):
             uniqueName = uniqueName[11:]
             isRaw = True
+        if uniqueName.startswith('humdrum:'):
+            uniqueName = uniqueName[8:]
+            isNonRawHumdrum = True
 
         hdKey: str | None = None
         if isRaw:
             hdKey = uniqueName
             valueStr = str(value)
         else:
-            hdKey = M21Convert.m21UniqueNameToHumdrumKeyWithoutIndexOrLanguage(uniqueName)
+            if isNonRawHumdrum:
+                hdKey = uniqueName
+            else:
+                hdKey = M21Convert.m21UniqueNameToHumdrumKeyWithoutIndexOrLanguage(uniqueName)
             if hdKey is not None:
                 if idx > 0:
                     # we generate 'XXX', 'XXX1', 'XXX2', etc
