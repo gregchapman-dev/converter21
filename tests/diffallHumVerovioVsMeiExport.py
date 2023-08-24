@@ -7,7 +7,7 @@ import subprocess
 import music21 as m21
 from music21.base import VERSION_STR
 
-from musicdiff.annotation import AnnScore, AnnExtra
+from musicdiff.annotation import AnnScore, AnnExtra, AnnMetadataItem
 from musicdiff import Comparison
 from musicdiff import DetailLevel
 
@@ -43,7 +43,6 @@ def oplistSummary(
     counts['notestyle'] = 0
     counts['stemdirection'] = 0
     counts['staffgroup'] = 0
-    counts['metadata'] = 0
 
     for op in op_list:
         # measure
@@ -115,13 +114,42 @@ def oplistSummary(
                         'staffgrppartindicesedit'):
             counts['staffgroup'] += 1
         # metadata
-        elif op[0] in ('mditemins',
-                        'mditemdel',
-                        'mditemsub',
-                        'mditemkeyedit',
-                        'mditemvalueedit'):
-            counts['metadata'] += 1
-
+        elif op[0] == 'mditemdel':
+            assert isinstance(op[1], AnnMetadataItem)
+            key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemins':
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[2].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemsub':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            if op[1].key != op[2].key:
+                key = 'MD:' + op[1].key + '!=' + op[2].key
+            else:
+                key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemkeyedit':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[1].key + '!=' + op[2].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemvalueedit':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
         elif op[0] == 'extradel':
             # op[1] only
             assert isinstance(op[1], AnnExtra)
