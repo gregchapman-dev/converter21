@@ -893,6 +893,9 @@ class HumdrumFile(HumdrumFileContent):
             if value:
                 value = html.unescape(value)
                 value = value.replace(r'\n', '\n')
+            if not value:
+                continue
+
             if key == 'OMD':
                 # only take OMDs before the firstDataLineIdx as movementName in metadata,
                 # because after the first data line, they're not movementNames, just

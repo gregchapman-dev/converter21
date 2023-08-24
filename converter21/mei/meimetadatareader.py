@@ -22,7 +22,7 @@ environLocal = m21.environment.Environment('converter21.mei.meimetadatareader')
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 
-_MISSED_DATE = 'Unable to decipher an MEI date "{}"'
+_MISSED_DATE = 'Unable to decipher an MEI date "{}". Leaving as str.'
 
 
 class MeiMetadataReader:
@@ -300,9 +300,8 @@ class MeiMetadataReader:
             elif el.tag == f'{MEI_NS}publisher':
                 self._contributorFromElement(el, tagPath, md)
             elif el.tag == f'{MEI_NS}date':
-                m21DateObj: m21.metadata.DatePrimitive | None = self.m21DateFromDateElement(el)
-                if m21DateObj is not None:
-                    M21Utilities.addIfNotADuplicate(md, 'electronicReleaseDate', m21DateObj)
+                m21DateObj: m21.metadata.DatePrimitive | str = self.m21DateFromDateElement(el)
+                M21Utilities.addIfNotADuplicate(md, 'electronicReleaseDate', m21DateObj)
             elif el.tag == f'{MEI_NS}respStmt':
                 self._respStmtFromElement(el, tagPath, md)
             else:
@@ -424,8 +423,8 @@ class MeiMetadataReader:
     def m21DateFromDateElement(
         self,
         dateEl: Element
-    ) -> m21.metadata.DatePrimitive | None:
-        m21DateObj: m21.metadata.DatePrimitive | None = None
+    ) -> m21.metadata.DatePrimitive | str:
+        m21DateObj: m21.metadata.DatePrimitive | str | None
         isodate: str | None = dateEl.get('isodate')
         if isodate:
             m21DateObj = M21Utilities.m21DateObjectFromISODate(isodate)
@@ -442,20 +441,38 @@ class MeiMetadataReader:
             if m21DateObj is None:
                 # try it as isodate
                 m21DateObj = M21Utilities.m21DateObjectFromISODate(dateEl.text)
-        else:
-            dateStart = dateEl.get('notbefore') or dateEl.get('startdate')
-            dateEnd = dateEl.get('notafter') or dateEl.get('enddate')
-            if dateStart and dateEnd:
-                m21DateObj = M21Utilities.m21DateObjectFromString(dateStart + '-' + dateEnd)
-            elif dateStart:
-                m21DateObj = M21Utilities.m21DateObjectFromString('>' + dateStart)
-            elif dateEnd:
-                m21DateObj = M21Utilities.m21DateObjectFromString('<' + dateEnd)
+            if m21DateObj is None:
+                environLocal.warn(_MISSED_DATE.format(dateEl.text))
+                return dateEl.text
+            return m21DateObj
 
-        if m21DateObj is None:
-            environLocal.warn(_MISSED_DATE.format(tostring(dateEl)))
+        dateStart = dateEl.get('notbefore') or dateEl.get('startdate')
+        dateEnd = dateEl.get('notafter') or dateEl.get('enddate')
+        if dateStart and dateEnd:
+            betweenDates: str = dateStart + '-' + dateEnd
+            m21DateObj = M21Utilities.m21DateObjectFromString(betweenDates)
+            if m21DateObj is None:
+                environLocal.warn(_MISSED_DATE.format(betweenDates))
+                return betweenDates
+            return m21DateObj
 
-        return m21DateObj
+        if dateStart:
+            afterDate: str = '>' + dateStart
+            m21DateObj = M21Utilities.m21DateObjectFromString(afterDate)
+            if m21DateObj is None:
+                environLocal.warn(_MISSED_DATE.format(afterDate))
+                return afterDate
+            return m21DateObj
+
+        if dateEnd:
+            beforeDate: str = '<' + dateEnd
+            m21DateObj = M21Utilities.m21DateObjectFromString(beforeDate)
+            if m21DateObj is None:
+                environLocal.warn(_MISSED_DATE.format(beforeDate))
+                return beforeDate
+            return m21DateObj
+
+        return ''
 
     def _creationFromElement(
         self,
@@ -469,11 +486,10 @@ class MeiMetadataReader:
         date: Element | None = elem.find(f'{MEI_NS}date')
         geogNames: list[Element] = elem.findall(f'{MEI_NS}geogName')
 
-        m21Date: m21.metadata.DatePrimitive | None = None
         if date is not None:
-            m21Date = self.m21DateFromDateElement(date)
-        if m21Date is not None:
-            md.add('dateCreated', m21Date)
+            m21Date: m21.metadata.DatePrimitive | str = self.m21DateFromDateElement(date)
+            if m21Date:
+                md.add('dateCreated', m21Date)
 
         for geogName in geogNames:
             name: str = geogName.text or ''
