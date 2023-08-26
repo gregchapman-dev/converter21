@@ -757,7 +757,9 @@ class HumdrumWriter:
                     # See if we can make a valid humdrum key out of the contributor role.
                     if t.TYPE_CHECKING:
                         assert isinstance(value, m21.metadata.Contributor)
-                    hdKeyWithoutIndex = M21Utilities.contributorRoleToHumdrumKey(value.role)
+                    hdKeyWithoutIndex = (
+                        M21Utilities.contributorRoleToHumdrumReferenceKey(value.role)
+                    )
                     if hdKeyWithoutIndex is not None:
                         idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                         hdKeyWithoutIndexToCurrentIndex[

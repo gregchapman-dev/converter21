@@ -1416,7 +1416,7 @@ class M21Utilities:
     }
 
     @staticmethod
-    def contributorRoleToHumdrumKey(role: str) -> str:
+    def contributorRoleToHumdrumReferenceKey(role: str) -> str:
         output: str = (
             M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(
                 role, ''

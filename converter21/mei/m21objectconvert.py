@@ -1639,6 +1639,685 @@ class M21ObjectConvert:
         # we shouldn't get here, but if we do, we didn't recognize either one.
         return ''
 
+    _HUMDRUM_METADATA_KEY_TO_MEI_HEAD_PATH: dict[str, str] = {
+        'COM': 'workList/work',         # composer's name
+        'COA': 'workList/work',         # attributed composer
+        'COS': 'workList/work',         # suspected composer
+        'COL': '',                      # composer's abbreviated, alias, or stage name
+        'COC': 'workList/work',         # composer's corporate name
+        'CDT': '',                      # composer's birth and death dates (**zeit format)
+        'CBL': '',                      # composer's birth location
+        'CDL': '',                      # composer's death location
+        'CNT': '',                      # composer's nationality
+        'LYR': 'workList/work',         # lyricist's name
+        'LIB': 'workList/work',         # librettist's name
+        'LAR': 'workList/work',         # music arranger's name
+        'LOR': 'workList/work',         # orchestrator's name
+        'TXO': '',                      # original language of vocal/choral text
+        'TXL': '',                      # language of the encoded vocal/choral text
+        'TRN': 'workList/work',         # translator of the text
+        # Recording information (if the Humdrum encodes information pertaining to an
+        # audio recording)
+        'RTL': 'workList/work/expressionList/expression',           # album title
+        'RMM': 'workList/work/expressionList/expression',           # manufacturer or sponsoring
+                                                                    #   company
+        'RC#': 'workList/work/expressionList/expression',           # recording company's catalog
+                                                                    #   number of album
+        'RRD': 'workList/work/expressionList/expression/creation',  # release date
+        'RLC': 'workList/work/expressionList/expression',           # place of recording
+        'RNP': 'workList/work/expressionList/expression',           # producer's name
+        'RDT': 'workList/work/expressionList/expression',           # date of recording
+        'RT#': 'workList/work/expressionList/expression',           # track number
+        # Performance information (if the Humdrum encodes, say, a MIDI performance)
+        'MGN': 'workList/work/expressionList/expression',           # ensemble's name
+        'MPN': 'workList/work/expressionList/expression',           # performer's name
+        'MPS': 'workList/work/expressionList/expression',           # suspected performer
+        'MRD': 'workList/work/expressionList/expression/creation',  # date of performance
+        'MLC': 'workList/work/expressionList/expression/creation',  # place of performance
+        'MCN': 'workList/work/expressionList/expression',           # conductor's name
+        'MPD': '',                                                  # date of first performance
+        'MDT': 'workList/work/expressionList/expression/creation',  # date of performance
+        # Work identification information
+        'OTL': 'special',                   # title
+        'OTP': 'workList/work',             # popular title
+        'OTA': 'workList/work',             # alternative title
+        'OPR': 'workList/work',             # title of parent work
+        'OAC': 'workList/work',             # act number (e.g. '2' or 'Act 2')
+        'OSC': 'workList/work',             # scene number (e.g. '3' or 'Scene 3')
+        'OMV': 'workList/work',             # movement number (e.g. '4', or 'mov. 4', or...)
+        'OMD': 'workList/work',             # movement name
+        'OPS': 'workList/work',             # opus number (e.g. '23', or 'Opus 23')
+        'ONM': 'workList/work',             # number (eg. number of song within ABC multi-song file)
+        'OVM': 'workList/work',             # volume number (e.g. '6' or 'Vol. 6')
+        'ODE': 'workList/work',             # dedicated to
+        'OCO': 'workList/work',             # commissioned by
+        'OCL': 'workList/work',             # collected/transcribed by
+        'ONB': 'workList/work/notesStmt',   # free form note related to title or identity of work
+        'ODT': 'workList/work/creation',    # date or period of composition
+        'OCY': 'workList/work/creation',    # country of composition
+        'OPC': 'workList/work/creation',    # city, town, or village of composition
+        # Group information
+        'GTL': 'workList/work',          # group title (e.g. 'The Seasons')
+        'GAW': 'workList/work',          # associated work, such as a play or film
+        'GCO': 'workList/work',          # collection designation (e.g. 'Norton Scores')
+        # Imprint information
+        'PUB': '',                              # publication status 'published'/'unpublished'
+        'PED': 'fileDesc/pubStmt/respStmt',     # publication editor
+        'PPR': 'fileDesc/pubStmt/respStmt',     # first publisher
+        'PDT': 'fileDesc/pubStmt',              # date first published
+        'PTL': 'fileDesc/titleStmt',            # publication (volume) title
+        'PPP': 'fileDesc/pubStmt',              # place first published
+        'PC#': 'manifestionList/manifestation',  # publisher's catalog number (NOT scholarly)
+        'SCT': 'manifestionList/manifestation',  # scholarly catalog abbrev/number (e.g. 'BWV 551')
+        'SCA': 'manifestionList/manifestation',  # scholarly catalog (unabbrev) (e.g. 'Koechel 117')
+        'SMS': '',                  # unpublished manuscript source name
+        'SML': '',                  # unpublished manuscript location
+        'SMA': '',                  # acknowledgment of manuscript access
+        'YEP': 'fileDesc/pubStmt',               # publisher of electronic edition
+        'YEC': 'fileDesc/pubStmt/availability',  # date and owner of electronic copyright
+        'YER': 'fileDesc/pubStmt',               # date electronic edition released
+        'YEM': 'fileDesc/pubStmt/availability',  # copyright message (e.g. 'All rights reserved')
+        'YEN': 'fileDesc/pubStmt',               # country of copyright
+        'YOR': 'manifestionList/manifestation/titleStmt',   # original document from which
+                                                            # encoded doc was prepared
+        'YOO': 'manifestionList/manifestation/titleStmt',           # original document owner
+        'YOY': 'manifestionList/manifestation/pubStmt/availability',    # original copyright year
+        'YOE': 'manifestationList/manifestation/titleStmt',         # original editor
+        'EED': 'fileDesc/pubStmt/respStmt',                         # electronic editor
+        'ENC': 'fileDesc/pubStmt/respStmt',                         # electronic encoder (person)
+        'END': 'fileDesc/pubStmt',                                  # encoding date
+        'EMD': '',  # 'maybe revisionDesc', electronic document modification description (one/mod)
+        'EEV': 'fileDesc/encodingDesc/projectDesc',  # electronic edition version
+        'EFL': 'fileDesc/titleStmt',                 # file number e.g. '1/4' for one of four
+        'EST': '',                  # encoding status (usually deleted before distribution)
+        'VTS': '',                  # checksum (excluding the VTS line itself)
+        # Analytic information
+        'ACO': '',                  # collection designation
+        'AFR': '',                  # form designation
+        'AGN': '',                  # genre designation
+        'AST': '',                  # style, period, or type of work designation
+        'AMD': '',                  # mode classification e.g. '5; Lydian'
+        'AMT': '',                  # metric classification, must be one of eight names,
+                                    #   e.g. 'simple quadruple'
+        'AIN': '',                  # instrumentation, must be alphabetical list of *I
+                                    #   abbrevs, space-delimited
+        'ARE': '',                  # geographical region of origin (list of 'narrowing
+                                    #   down' names of regions)
+        'ARL': '',                  # geographical location of origin (lat/long)
+        # Historical and background information
+        'HAO': 'workList/work/history',  # aural history (lots of text, stories about the work)
+        'HTX': '',                  # freeform translation of vocal text
+        # Representation information
+        'RLN': '',                  # Extended ASCII language code
+        'RNB': 'fileDesc/encodingDesc/editorialDecl',   # a note about the representation
+        'RWB': 'fileDesc/encodingDesc/editorialDecl',   # a warning about the representation
+    }
+
+    _HUMDRUM_METADATA_KEY_TO_MEI_NAME_AND_ATTRS: dict[str, tuple[str, dict[str, str]] | None] = {
+        'COM': (                        # composer's name
+            'composer',
+            {
+                'analog': 'marcrel:cmp',
+            }
+        ),
+        'COA': (                        # attributed composer
+            'composer',
+            {
+                'cert': 'medium',
+                'analog': 'humdrum:COA',
+            }
+        ),
+        'COS': (                        # suspected composer
+            'composer',
+            {
+                'cert': 'low',
+                'analog': 'humdrum:COS',
+            }
+        ),
+        'COL': (                        # composer's abbreviated, alias, or stage name
+            'composer',
+            {
+                'type': 'alternative',
+                'analog': 'humdrum:COL',
+            }
+        ),
+        'COC': (                        # composer's corporate name
+            'composer',
+            {
+                'analog': 'humdrum:COC',
+            }
+        ),
+        'CDT': None,                 # composer's birth and death dates (**zeit format)
+        'CBL': None,                 # composer's birth location
+        'CDL': None,                 # composer's death location
+        'CNT': None,                 # composer's nationality
+        'LYR': (                        # lyricist's name
+            'lyricist',
+            {
+                'analog': 'marcrel:lyr',
+            }
+        ),
+        'LIB': (                        # librettist's name
+            'librettist',
+            {
+                'analog': 'marcrel:lbt',
+            }
+        ),
+        'LAR': (                        # music arranger's name
+            'contributor',
+            {
+                'role': 'arranger',
+                'analog': 'marcrel:arr',
+            }
+        ),
+        'LOR': (                        # orchestrator's name
+            'contributor',
+            {
+                'role': 'orchestrator',
+                'analog': 'humdrum:LOR',
+            }
+        ),
+        'TXO': None,                 # original language of vocal/choral text
+        'TXL': None,                 # language of the encoded vocal/choral text
+        'TRN': (                        # translator of the text
+            'contributor',
+            {
+                'role': 'translator',
+                'analog': 'marcrel:tlr',
+            }
+        ),
+        # Recording information (if the Humdrum encodes information pertaining to an
+        # audio recording)
+        'RTL': (            # album title
+            'title',
+            {
+                'type': 'album',
+                'analog': 'humdrum:RTL',
+            }
+        ),
+        'RMM': (            # manufacturer or sponsoring company
+            'contributor',
+            {
+                'role': 'recordingManufacturer',
+                'analog': 'humdrum:RMM',
+            }
+        ),
+        'RC#': (            # recording company's catalog number of album
+            'identifier',
+            {
+                'type': 'recordingCatalogNumber',
+                'analog': 'humdrum:RC#',
+            }
+        ),
+        'RRD': (            # release date
+            'date',
+            {
+                'type': 'recordingRelease',
+                'analog': 'humdrum:RRD',
+            }
+        ),
+        'RLC': (            # place of recording
+            'geogName',
+            {
+                'type': 'recording',
+                'analog': 'humdrum:RLC',
+            }
+        ),
+        'RNP': (            # producer's name
+            'contributor',
+            {
+                'role': 'producer',
+                'analog': 'marcrel:pro',
+            }
+        ),
+        'RDT': (            # date of recording
+            'date',
+            {
+                'type': 'recording',
+                'analog': 'humdrum:RDT',
+            }
+        ),
+        'RT#': (            # track number
+            'title',
+            {
+                'type': 'trackNumber',
+                'analog': 'humdrum:RT#',
+            }
+        ),
+        # Performance information (if the Humdrum encodes, say, a MIDI performance)
+        'MGN': (            # ensemble's name
+            'contributor',
+            {
+                'role': 'ensemble',
+                'analog': 'humdrum:MGN',
+            }
+        ),
+        'MPN': (            # performer's name
+            'contributor',
+            {
+                'role': 'performer',
+                'analog': 'humdrum:MPN',
+            }
+        ),
+        'MPS': (            # suspected performer
+            'contributor',
+            {
+                'cert': 'low',
+                'role': 'performer',
+                'analog': 'humdrum:MPS',
+            }
+        ),
+        'MRD': (            # date of performance
+            'date',
+            {
+                'type': 'performance',
+                'analog': 'humdrum:MRD',
+            }
+        ),
+        'MLC': (            # place of performance
+            'geogName',
+            {
+                'role': 'performance',
+                'analog': 'humdrum:MLC',
+            }
+        ),
+        'MCN': (            # conductor's name
+            'contributor',
+            {
+                'role': 'conductor',
+                'analog': 'marcrel:cnd',
+            }
+        ),
+        'MPD': None,     # date of first performance
+        'MDT': (            # date of performance
+            'date',
+            {
+                'role': 'performance',
+                'analog': 'humdrum:MDT',
+            }
+        ),
+        # Work identification information
+        'OTL': (            # title
+            'title',
+            {
+                'type': 'main',
+                'analog': 'dcterms:title',
+            }
+        ),
+        'OTP': (            # popular title
+            'title',
+            {
+                'type': 'alternative',
+                'label': 'popular',
+                'analog': 'humdrum:OTP',
+            }
+        ),
+        'OTA': (            # alternative title
+            'title',
+            {
+                'type': 'alternative',
+                'analog': 'dcterms:alternative',
+            }
+        ),
+        'OPR': (            # title of parent work
+            'title',
+            {
+                'type': 'parent',
+                'analog': 'humdrum:OPR',
+            }
+        ),
+        'OAC': (            # act number (e.g. '2' or 'Act 2')
+            'title',
+            {
+                'type': 'actNumber',
+                'analog': 'humdrum:OAC',
+            }
+        ),
+        'OSC': (            # scene number (e.g. '3' or 'Scene 3')
+            'title',
+            {
+                'type': 'sceneNumber',
+                'analog': 'humdrum:OSC',
+            }
+        ),
+        'OMV': (            # movement number (e.g. '4', or 'mov. 4', or...)
+            'title',
+            {
+                'type': 'movementNumber',
+                'analog': 'humdrum:OMV',
+            }
+        ),
+        'OMD': (            # movement name
+            'title',
+            {
+                'type': 'movementName',
+                'analog': 'humdrum:OMD',
+            }
+        ),
+        'OPS': (            # opus number (e.g. '23', or 'Opus 23')
+            'title',
+            {
+                'type': 'opusNumber',
+                'analog': 'humdrum:OPS',
+            }
+        ),
+        'ONM': (            # number (e.g. '2' or 'No. 2')
+            'title',
+            {
+                'type': 'number',
+                'analog': 'humdrum:ONM',
+            }
+        ),
+        'OVM': (            # volume number (e.g. '6' or 'Vol. 6')
+            'title',
+            {
+                'type': 'volumeNumber',
+                'analog': 'humdrum:OVM',
+            }
+        ),
+        'ODE': (            # dedicated to
+            'contributor',
+            {
+                'role': 'dedicatee',
+                'analog': 'marcrel:dte',
+            }
+        ),
+        'OCO': (            # commissioned by
+            'contributor',
+            {
+                'type': 'patron',
+                'analog': 'marcrel:pat',
+            }
+        ),
+        'OCL': (            # collected/transcribed by
+            'contributor',
+            {
+                'type': 'transcriber',
+                'analog': 'marcrel:trc',
+            }
+        ),
+        'ONB': (            # free form note related to title or identity of work
+            'annot',
+            {
+                'analog': 'humdrum:ONB',
+            }
+        ),
+        'ODT': (            # date or period of composition
+            'date',
+            {
+                'analog': 'humdrum:ODT',
+            }
+        ),
+        'OCY': (            # country of composition
+            'geogName',
+            {
+                'type': 'country',
+                'analog': 'humdrum:OCY',
+            }
+        ),
+        'OPC': (            # city, town, or village of composition
+            'geogName',
+            {
+                'type': 'settlement',
+                'analog': 'humdrum:OPC',
+            }
+        ),
+        # Group information
+        'GTL': (            # group title (e.g. 'The Seasons')
+            'title',
+            {
+                'type': 'group',
+                'analog': 'humdrum:GTL',
+            }
+        ),
+        'GAW': (            # associated work, such as a play or film
+            'title',
+            {
+                'type': 'associated',
+                'analog': 'humdrum:GAW',
+            }
+        ),
+        'GCO': (            # collection designation (e.g. 'Norton Scores')
+            'title',
+            {
+                'type': 'collection',
+                'analog': 'humdrum:GCO',
+            }
+        ),
+        # Imprint information
+        'PUB': None,     # publication status 'published'/'unpublished'
+        'PED': (            # publication editor
+            'contributor',
+            {
+                'role': 'source editor',
+                'analog': 'humdrum:PED',
+            }
+        ),
+        'PPR': (            # first publisher
+            'contributor',
+            {
+                'role': 'first publisher',
+                'analog': 'humdrum:OPC',
+            }
+        ),
+        'PDT': (            # date first published
+            'date',
+            {
+                'type': 'firstPublished',
+                'analog': 'humdrum:OPC',
+            }
+        ),
+        'PTL': (            # publication (volume) title
+            'title',
+            {
+                'type': 'publication',
+                'analog': 'humdrum:PTL',
+            }
+        ),
+        'PPP': (            # place first published
+            'geogName',
+            {
+                'type': 'firstPublished',
+                'analog': 'humdrum:PPP',
+            }
+        ),
+        'PC#': (            # publisher's catalog number (NOT scholarly catalog)
+            'identifier',
+            {
+                'type': 'publishersCatalogNumber',
+                'analog': 'humdrum:PC#',
+            }
+        ),
+        'SCT': (            # scholarly catalog abbrev/number (e.g. 'BWV 551')
+            'identifier',
+            {
+                'type': 'scholarlyCatalogAbbreviation',
+                'analog': 'humdrum:SCT',
+            }
+        ),
+        'SCA': (            # scholarly catalog (unabbreviated) (e.g. 'Koechel 117')
+            'identifier',
+            {
+                'type': 'scholarlyCatalogName',
+                'analog': 'humdrum:SCA',
+            }
+        ),
+        'SMS': None,     # unpublished manuscript source name
+        'SML': None,     # unpublished manuscript location
+        'SMA': None,     # acknowledgment of manuscript access
+        'YEP': (            # publisher of electronic edition
+            'contributor',
+            {
+                'type': 'electronic publisher',
+                'analog': 'humdrum:YEP',
+            }
+        ),
+        'YEC': (            # date and owner of electronic copyright
+            'useRestrict',
+            {
+                'analog': 'humdrum:YEC',
+            }
+        ),
+        'YER': (            # date electronic edition released
+            'date',
+            {
+                'type': 'electronicRelease',
+                'analog': 'humdrum:YER',
+            }
+        ),
+        'YEM': (            # copyright message (e.g. 'All rights reserved')
+            'useRestrict',
+            {
+                'type': 'copyrightMessage',
+                'analog': 'humdrum:YEM',
+            }
+        ),
+        'YEN': (            # country of copyright
+            'pubPlace',
+            {
+                'type': 'copyrightCountry',
+                'analog': 'humdrum:YEN',
+            }
+        ),
+        'YOR': (            # original document from which encoded doc was prepared
+            'title',
+            {
+                'type': 'originalDocument',
+                'analog': 'humdrum:YOR',
+            }
+        ),
+        'YOO': (                        # original document owner
+            'contributor',
+            {
+                'role': 'original document owner',
+                'analog': 'humdrum:YOO',
+            }
+        ),
+        'YOY': (            # original copyright year
+            'useRestrict',
+            {
+                'type': 'originalCopyrightYear',
+                'analog': 'humdrum:YOY',
+            }
+        ),
+        'YOE': (            # original editor
+            'contributor',
+            {
+                'role': 'original editor',
+                'analog': 'humdrum:YOE',
+            }
+        ),
+        'EED': (                                    # electronic editor
+            'contributor',
+            {
+                'role': 'digital editor',
+                'analog': 'humdrum:EED',
+            }
+        ),
+        'ENC': (                                    # electronic encoder (person)
+            'contributor',
+            {
+                'type': 'encoder',
+                'analog': 'humdrum:ENC',
+            }
+        ),
+        'END': (                                    # encoding date
+            'date',
+            {
+                'type': 'encoding',
+                'analog': 'humdrum:END',
+            }
+        ),
+        'EMD': None,     # electronic document modification description (one/mod)
+        'EEV': (            # electronic edition version
+            'identifier',
+            {
+                'type': 'electronicVersion',
+                'analog': 'humdrum:EEV',
+                '_prefix': 'Version: ',
+            }
+        ),
+        'EFL': None,    # file number e.g. '1/4' for one of four
+        'EST': None,    # encoding status (usually deleted before distribution)
+        'VTS': None,    # checksum (excluding the VTS line itself)
+        # Analytic information
+        'ACO': None,    # collection designation
+        'AFR': None,    # form designation
+        'AGN': None,    # genre designation
+        'AST': None,    # style, period, or type of work designation
+        'AMD': None,    # mode classification e.g. '5; Lydian'
+        'AMT': None,    # metric classification, must be one of eight names,
+                        # e.g. 'simple quadruple'
+        'AIN': None,    # instrumentation, must be alphabetical list of *I
+                        #   abbrevs, space-delimited
+        'ARE': None,    # geographical region of origin (list of 'narrowing
+                        #   down' names of regions)
+        'ARL': None,    # geographical location of origin (lat/long)
+        # Historical and background information
+        'HAO': (         # aural history (lots of text, stories about the work)
+            'p',
+            {
+                'analog': 'humdrum:HAO',
+            }
+        ),
+        'HTX': None,     # freeform translation of vocal text
+        # Representation information
+        'RLN': None,     # Extended ASCII language code
+        'RNB': (            # a note about the representation
+            'p',
+            {
+                'type': 'representationNote',
+                'analog': 'humdrum:RNB',
+            }
+        ),
+        'RWB': (            # a warning about the representation
+            'p',
+            {
+                'type': 'representationWarning',
+                'analog': 'humdrum:RWB',
+            }
+        ),
+    }
+
+    @staticmethod
+    def getTopLevelMeiElementForM21MetadataKeyOrRole(key: str) -> str:
+        pathElements: tuple[str, ...] = (
+            M21ObjectConvert.getMeiPathElementsForM21MetadataKeyOrRole(key)
+        )
+        if pathElements:
+            return pathElements[0]
+        return ''
+
+    @staticmethod
+    def getMeiPathElementsForM21MetadataKeyOrRole(key: str) -> tuple[str, ...]:
+        path: str = M21ObjectConvert.getMeiPathForM21MetadataKeyOrRole(key)
+        if not path:
+            return tuple()
+        return tuple(path.split('/'))
+
+    @staticmethod
+    def getMeiPathForM21MetadataKeyOrRole(key: str) -> str:
+        if key == 'otherContributor':
+            # caller needs to call again with contributor.role
+            return ''
+        if key.startswith('humdrum:'):
+            return key[8:]
+
+        # Now it's either a uniqueName or a contributor role
+
+        # Weird that we just call contributorRoleToHumdrumReferenceKey, but it actually
+        # starts out by trying m21MetadataPropertyUniqueNameToHumdrumReferenceKey,
+        # because many roles are actually the same as uniqueNames, so it will work
+        # for uniqueNames, too.
+        humdrumKey: str = M21Utilities.contributorRoleToHumdrumReferenceKey(key)
+        if not humdrumKey:
+            return ''
+        return M21ObjectConvert._HUMDRUM_METADATA_KEY_TO_MEI_HEAD_PATH.get(humdrumKey, '')
+
+    @staticmethod
+    def getElementNameForM21MetadataKey(key: str) -> str:
+        return ''
+
     @staticmethod
     def _getM21ObjectConverter(
         obj: m21.base.Music21Object
