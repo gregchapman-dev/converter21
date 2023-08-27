@@ -158,18 +158,22 @@ class MeiScore:
         md: m21.metadata.Metadata = self.m21Score.metadata
         seenFirstTitle: bool = False
         m21Item: tuple[str, t.Any]
-        for m21Item in md.all(returnPrimitives=True):
-            elName: str = (
-                M21ObjectConvert.getTopLevelMeiElementForM21MetadataKey(m21Item[0])
-            )
-            meiItem = MeiMetadataItem(m21Item)
+        for m21Item in md.all(returnPrimitives=True, returnSorted=False):
             if m21Item[0] == 'title':
                 # special case: first title seen goes in fileDesc _and_ workList,
                 # the rest only go in workList
-                workListItems.append(meiItem)
+                meiWorkTitleItem = MeiMetadataItem(m21Item, meiPath='workList/work')
+                workListItems.append(meiWorkTitleItem)
                 if not seenFirstTitle:
-                    fileDescItems.append(meiItem)
+                    meiFileDescTitleItem = MeiMetadataItem(m21Item, meiPath='fileDesc/titleStmt')
+                    fileDescItems.append(meiFileDescTitleItem)
                     seenFirstTitle = True
+                continue
+
+            elName: str = (
+                M21ObjectConvert.getTopLevelMeiElementForM21MetadataKeyOrRole(m21Item[0])
+            )
+            meiItem = MeiMetadataItem(m21Item)
             if elName == 'fileDesc':
                 fileDescItems.append(meiItem)
                 continue

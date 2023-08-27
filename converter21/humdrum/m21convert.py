@@ -15,7 +15,6 @@
 
 import sys
 import re
-import html
 import math
 import typing as t
 from fractions import Fraction
@@ -2950,13 +2949,6 @@ class M21Convert:
         return m21Value
 
     @staticmethod
-    def stringFromM21Contributor(c: m21.metadata.Contributor) -> str:
-        # TODO: someday support export of multi-named Contributors
-        if not c.names:
-            return ''
-        return c.names[0]
-
-    @staticmethod
     def m21UniqueNameToHumdrumKeyWithoutIndexOrLanguage(uniqueName: str) -> str | None:
         hdKey: str | None = (
             M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(uniqueName, None)
@@ -2997,7 +2989,7 @@ class M21Convert:
         hdKey: str,
         value: t.Any
     ) -> str | None:
-        valueStr: str = ''
+        valueStr: str = M21Utilities.m21MetadataValueToString(value)
         refLineStr: str = ''
 
         if idx > 0:
@@ -3010,19 +3002,6 @@ class M21Convert:
                     hdKey += '@' + value.language.upper()
                 else:
                     hdKey += '@@' + value.language.upper()
-            valueStr = str(value)
-        elif isinstance(value, m21.metadata.DatePrimitive):
-            # We don't like str(DateXxxx)'s results so we do our own.
-            valueStr = M21Utilities.stringFromM21DateObject(value)
-        elif isinstance(value, m21.metadata.Contributor):
-            valueStr = M21Convert.stringFromM21Contributor(value)
-        else:
-            # it's already a str, we hope, but if not, we convert here
-            valueStr = str(value)
-
-        # html escape-ify the string, and convert any actual linefeeds to r'\n'
-        valueStr = html.escape(valueStr)
-        valueStr = valueStr.replace('\n', r'\n')
 
         if valueStr == '':
             refLineStr = '!!!' + hdKey + ':'
@@ -3050,9 +3029,9 @@ class M21Convert:
             isNonRawHumdrum = True
 
         hdKey: str | None = None
+        valueStr = M21Utilities.m21MetadataValueToString(value, isRaw)
         if isRaw:
             hdKey = uniqueName
-            valueStr = str(value)
         else:
             if isNonRawHumdrum:
                 hdKey = uniqueName
@@ -3066,25 +3045,11 @@ class M21Convert:
                 # must be free-form personal key... pass it thru as is (no indexing)
                 hdKey = uniqueName
 
-            if isinstance(value, m21.metadata.Text):
-                if value.language:
-                    if value.isTranslated:
-                        hdKey += '@' + value.language.upper()
-                    else:
-                        hdKey += '@@' + value.language.upper()
-                valueStr = str(value)
-            elif isinstance(value, m21.metadata.DatePrimitive):
-                # We don't like str(DateXxxx)'s results so we do our own.
-                valueStr = M21Utilities.stringFromM21DateObject(value)
-            elif isinstance(value, m21.metadata.Contributor):
-                valueStr = M21Convert.stringFromM21Contributor(value)
-            else:
-                # it's already a str, we hope, but if not, we convert here
-                valueStr = str(value)
-
-        # html escape-ify the string, and convert any actual linefeeds to r'\n'
-        valueStr = html.escape(valueStr)
-        valueStr = valueStr.replace('\n', r'\n')
+            if value.language:
+                if value.isTranslated:
+                    hdKey += '@' + value.language.upper()
+                else:
+                    hdKey += '@@' + value.language.upper()
 
         if t.TYPE_CHECKING:
             assert hdKey is not None

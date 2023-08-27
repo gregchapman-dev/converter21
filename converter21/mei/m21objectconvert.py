@@ -1678,7 +1678,7 @@ class M21ObjectConvert:
         'MPD': '',                                                  # date of first performance
         'MDT': 'workList/work/expressionList/expression/creation',  # date of performance
         # Work identification information
-        'OTL': 'special',                   # title
+        'OTL': 'it depends',                # title
         'OTP': 'workList/work',             # popular title
         'OTA': 'workList/work',             # alternative title
         'OPR': 'workList/work',             # title of parent work
@@ -2087,14 +2087,14 @@ class M21ObjectConvert:
         # Imprint information
         'PUB': None,     # publication status 'published'/'unpublished'
         'PED': (            # publication editor
-            'contributor',
+            'persName',
             {
                 'role': 'source editor',
                 'analog': 'humdrum:PED',
             }
         ),
         'PPR': (            # first publisher
-            'contributor',
+            'persName',
             {
                 'role': 'first publisher',
                 'analog': 'humdrum:OPC',
@@ -2208,16 +2208,16 @@ class M21ObjectConvert:
             }
         ),
         'EED': (                                    # electronic editor
-            'contributor',
+            'persName',
             {
                 'role': 'digital editor',
                 'analog': 'humdrum:EED',
             }
         ),
         'ENC': (                                    # electronic encoder (person)
-            'contributor',
+            'persName',
             {
-                'type': 'encoder',
+                'role': 'encoder',
                 'analog': 'humdrum:ENC',
             }
         ),
@@ -2315,8 +2315,58 @@ class M21ObjectConvert:
         return M21ObjectConvert._HUMDRUM_METADATA_KEY_TO_MEI_HEAD_PATH.get(humdrumKey, '')
 
     @staticmethod
-    def getElementNameForM21MetadataKey(key: str) -> str:
-        return ''
+    def _getHumdrumReferenceKeyForM21MetadataKeyOrRole(key: str) -> str:
+        if key.startswith('humdrum:'):
+            return key[8:]
+
+        # Now it's either a uniqueName or a contributor role
+
+        # Weird that we just call contributorRoleToHumdrumReferenceKey, but it actually
+        # starts out by trying m21MetadataPropertyUniqueNameToHumdrumReferenceKey,
+        # because many roles are actually the same as uniqueNames, so it will work
+        # for uniqueNames, too.
+        return M21Utilities.contributorRoleToHumdrumReferenceKey(key)
+
+    @staticmethod
+    def _getElementNameAndAttrsForM21MetadataKeyOrRole(
+        key: str
+    ) -> tuple[str, dict[str, str]] | None:
+        humdrumKey: str = M21ObjectConvert._getHumdrumReferenceKeyForM21MetadataKeyOrRole(key)
+        if not humdrumKey:
+            return None
+        return (
+            M21ObjectConvert._HUMDRUM_METADATA_KEY_TO_MEI_NAME_AND_ATTRS.get(humdrumKey, None)
+        )
+
+    @staticmethod
+    def getElementNameForM21MetadataKeyOrRole(key: str) -> str:
+        if key == 'otherContributor':
+            # should never happen
+            raise MeiInternalError(
+                "getElementNameForM21MetadataKeyOrRole cannot be called with 'otherContributor'"
+            )
+
+        nameAndAttrs: tuple[str, dict[str, str]] | None = (
+            M21ObjectConvert._getElementNameAndAttrsForM21MetadataKeyOrRole(key)
+        )
+        if not nameAndAttrs:
+            return ''
+        return nameAndAttrs[0]
+
+    @staticmethod
+    def getAttribDictForM21MetadataKeyOrRole(key: str) -> dict[str, str]:
+        if key == 'otherContributor':
+            # should never happen
+            raise MeiInternalError(
+                "getAttribDictForM21MetadataKeyOrRole cannot be called with 'otherContributor'"
+            )
+
+        nameAndAttrs: tuple[str, dict[str, str]] | None = (
+            M21ObjectConvert._getElementNameAndAttrsForM21MetadataKeyOrRole(key)
+        )
+        if not nameAndAttrs:
+            return {}
+        return nameAndAttrs[1]
 
     @staticmethod
     def _getM21ObjectConverter(

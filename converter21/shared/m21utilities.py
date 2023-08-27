@@ -17,6 +17,7 @@ import re
 import sys
 import copy
 import datetime
+import html
 import typing as t
 from fractions import Fraction
 
@@ -1453,7 +1454,7 @@ class M21Utilities:
         if output:
             return output
 
-        return role
+        return ''
 
     @staticmethod
     def spaceDelimitedToCamelCase(text: str) -> str:
@@ -1481,6 +1482,32 @@ class M21Utilities:
             else:
                 output += ch
         return output
+
+    @staticmethod
+    def stringFromM21Contributor(c: m21.metadata.Contributor) -> str:
+        # TODO: someday support export of multi-named Contributors
+        if not c.names:
+            return ''
+        return c.names[0]
+
+    @staticmethod
+    def m21MetadataValueToString(value: t.Any, isRaw: bool = False) -> str:
+        valueStr: str
+        if isRaw or isinstance(value, m21.metadata.Text):
+            valueStr = str(value)
+        elif isinstance(value, m21.metadata.DatePrimitive):
+            # We don't like str(DateXxxx)'s results so we do our own.
+            valueStr = M21Utilities.stringFromM21DateObject(value)
+        elif isinstance(value, m21.metadata.Contributor):
+            valueStr = M21Utilities.stringFromM21Contributor(value)
+        else:
+            # it's already a str, we hope, but if not, we convert here
+            valueStr = str(value)
+
+        # html escape-ify the string, and convert any actual linefeeds to r'\n'
+        valueStr = html.escape(valueStr)
+        valueStr = valueStr.replace('\n', r'\n')
+        return valueStr
 
     @staticmethod
     def addIfNotADuplicate(md: m21.metadata.Metadata, key: str, value: t.Any):
