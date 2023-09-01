@@ -160,12 +160,12 @@ class MeiScore:
         m21Item: tuple[str, t.Any]
         for m21Item in md.all(returnPrimitives=True, returnSorted=False):
             if m21Item[0] == 'title':
-                # special case: first title seen goes in fileDesc _and_ workList,
-                # the rest only go in workList
-                meiWorkTitleItem = MeiMetadataItem(m21Item, meiPath='workList/work')
+                # special case: first title seen goes in fileDesc _and_ several other
+                # places, the rest only go in the several other places
+                meiWorkTitleItem = MeiMetadataItem(m21Item, meiPath='workList/work/title')
                 workListItems.append(meiWorkTitleItem)
                 if not seenFirstTitle:
-                    meiFileDescTitleItem = MeiMetadataItem(m21Item, meiPath='fileDesc/titleStmt')
+                    meiFileDescTitleItem = MeiMetadataItem(m21Item, meiPath='fileDesc/titleStmt/title')
                     fileDescItems.append(meiFileDescTitleItem)
                     seenFirstTitle = True
                 continue

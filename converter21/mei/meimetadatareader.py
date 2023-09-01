@@ -516,15 +516,28 @@ class MeiMetadataReader:
             return
 
         analog: str = elem.get('analog', '')
-        if analog == 'humdrum:SCT':
-            M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)
-            return
-        if analog == 'humdrum:SCA':
-            M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogName', elem.text)
-            return
-        if analog == 'humdrum:PC#':
-            M21Utilities.addIfNotADuplicate(md, 'publishersCatalogNumber', elem.text)
-            return
+        if analog:
+            if analog == 'humdrum:SCT':
+                M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)
+                return
+            if analog == 'humdrum:SCA':
+                M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogName', elem.text)
+                return
+            if analog == 'humdrum:PC#':
+                M21Utilities.addIfNotADuplicate(md, 'publishersCatalogNumber', elem.text)
+                return
+
+        typeStr: str = elem.get('type', '')
+        if typeStr:
+            if typeStr == 'scholarlyCatalogAbbreviation':
+                M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)
+                return
+            if typeStr == 'scholarlyCatalogName':
+                M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogName', elem.text)
+                return
+            if typeStr == 'publishersCatalogNumber':
+                M21Utilities.addIfNotADuplicate(md, 'publishersCatalogNumber', elem.text)
+                return
 
         # We'll guess that this could be considered a scholarly catalog abbreviation
         M21Utilities.addIfNotADuplicate(md, 'scholarlyCatalogAbbreviation', elem.text)

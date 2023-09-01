@@ -1304,7 +1304,7 @@ class M21Utilities:
         # audio recording)
         'TRN': 'translator',            # translator of the text
         'RTL': '',                      # album title
-        'RMM': 'manufacturer',          # manufacturer or sponsoring company
+        'RMM': '',                      # manufacturer or sponsoring company
         'RC#': '',                      # recording company's catalog number of album
         'RRD': 'dateIssued',            # release date (**date format)
         'RLC': '',                      # place of recording
@@ -1333,7 +1333,7 @@ class M21Utilities:
         'ONM': 'number',                # number (e.g. number of song within ABC multi-song file)
         'OVM': 'volumeNumber',          # volume number (e.g. '6' or 'Vol. 6')
         'ODE': 'dedicatedTo',           # dedicated to
-        'OCO': 'commission',            # commissioned by
+        'OCO': '',                      # commissioned by
         'OCL': 'transcriber',           # collected/transcribed by
         'ONB': '',                      # free form note related to title or identity of work
         'ODT': 'dateCreated',           # date or period of composition (**date or **zeit format)
@@ -1504,9 +1504,6 @@ class M21Utilities:
             # it's already a str, we hope, but if not, we convert here
             valueStr = str(value)
 
-        # html escape-ify the string, and convert any actual linefeeds to r'\n'
-        valueStr = html.escape(valueStr)
-        valueStr = valueStr.replace('\n', r'\n')
         return valueStr
 
     @staticmethod

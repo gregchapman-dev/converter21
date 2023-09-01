@@ -1640,20 +1640,22 @@ class M21ObjectConvert:
         return ''
 
     _HUMDRUM_METADATA_KEY_TO_MEI_HEAD_PATH: dict[str, str] = {
-        'COM': 'workList/work',         # composer's name
-        'COA': 'workList/work',         # attributed composer
-        'COS': 'workList/work',         # suspected composer
+        # processing of COM will pull up any COL, CDT, CBL, CDL, CNT as well,
+        # all into one <composer> element
+        'COM': 'complex case',          # composer's name
         'COL': '',                      # composer's abbreviated, alias, or stage name
-        'COC': 'workList/work',         # composer's corporate name
         'CDT': '',                      # composer's birth and death dates (**zeit format)
         'CBL': '',                      # composer's birth location
         'CDL': '',                      # composer's death location
         'CNT': '',                      # composer's nationality
+        'COA': 'workList/work',         # attributed composer
+        'COS': 'workList/work',         # suspected composer
+        'COC': 'workList/work',         # composer's corporate name
         'LYR': 'workList/work',         # lyricist's name
         'LIB': 'workList/work',         # librettist's name
         'LAR': 'workList/work',         # music arranger's name
         'LOR': 'workList/work',         # orchestrator's name
-        'TXO': '',                      # original language of vocal/choral text
+        'TXO': 'workList/work/langUsage',  # original language of vocal/choral text
         'TXL': '',                      # language of the encoded vocal/choral text
         'TRN': 'workList/work',         # translator of the text
         # Recording information (if the Humdrum encodes information pertaining to an
@@ -1678,7 +1680,7 @@ class M21ObjectConvert:
         'MPD': '',                                                  # date of first performance
         'MDT': 'workList/work/expressionList/expression/creation',  # date of performance
         # Work identification information
-        'OTL': 'it depends',                # title
+        'OTL': 'complex case',              # title
         'OTP': 'workList/work',             # popular title
         'OTA': 'workList/work',             # alternative title
         'OPR': 'workList/work',             # title of parent work
@@ -1757,7 +1759,7 @@ class M21ObjectConvert:
         'COM': (                        # composer's name
             'composer',
             {
-                'analog': 'marcrel:cmp',
+                'analog': 'humdrum:COM',
             }
         ),
         'COA': (                        # attributed composer
@@ -1777,7 +1779,7 @@ class M21ObjectConvert:
         'COL': (                        # composer's abbreviated, alias, or stage name
             'composer',
             {
-                'type': 'alternative',
+                'type': 'alias',
                 'analog': 'humdrum:COL',
             }
         ),
@@ -1794,20 +1796,20 @@ class M21ObjectConvert:
         'LYR': (                        # lyricist's name
             'lyricist',
             {
-                'analog': 'marcrel:lyr',
+                'analog': 'humdrum:LYR',
             }
         ),
         'LIB': (                        # librettist's name
             'librettist',
             {
-                'analog': 'marcrel:lbt',
+                'analog': 'humdrum:LIB',
             }
         ),
         'LAR': (                        # music arranger's name
             'contributor',
             {
                 'role': 'arranger',
-                'analog': 'marcrel:arr',
+                'analog': 'humdrum:LAR',
             }
         ),
         'LOR': (                        # orchestrator's name
@@ -1817,13 +1819,18 @@ class M21ObjectConvert:
                 'analog': 'humdrum:LOR',
             }
         ),
-        'TXO': None,                 # original language of vocal/choral text
-        'TXL': None,                 # language of the encoded vocal/choral text
+        'TXO': (                        # original language of vocal/choral text
+            'language',
+            {
+                'analog': 'humdrum:TXO',
+            }
+        ),
+        'TXL': None,                    # language of the encoded vocal/choral text
         'TRN': (                        # translator of the text
             'contributor',
             {
                 'role': 'translator',
-                'analog': 'marcrel:tlr',
+                'analog': 'humdrum:TRN',
             }
         ),
         # Recording information (if the Humdrum encodes information pertaining to an
@@ -1867,7 +1874,7 @@ class M21ObjectConvert:
             'contributor',
             {
                 'role': 'producer',
-                'analog': 'marcrel:pro',
+                'analog': 'humdrum:RNP',
             }
         ),
         'RDT': (            # date of recording
@@ -1925,10 +1932,10 @@ class M21ObjectConvert:
             'contributor',
             {
                 'role': 'conductor',
-                'analog': 'marcrel:cnd',
+                'analog': 'humdrum:MCN',
             }
         ),
-        'MPD': None,     # date of first performance
+        'MPD': None,        # date of first performance
         'MDT': (            # date of performance
             'date',
             {
@@ -1938,17 +1945,16 @@ class M21ObjectConvert:
         ),
         # Work identification information
         'OTL': (            # title
-            'title',
+            'titlePart',
             {
                 'type': 'main',
-                'analog': 'dcterms:title',
+                'analog': 'humdrum:OTL',
             }
         ),
         'OTP': (            # popular title
             'title',
             {
-                'type': 'alternative',
-                'label': 'popular',
+                'type': 'popular',
                 'analog': 'humdrum:OTP',
             }
         ),
@@ -1956,7 +1962,7 @@ class M21ObjectConvert:
             'title',
             {
                 'type': 'alternative',
-                'analog': 'dcterms:alternative',
+                'analog': 'humdrum:OTA',
             }
         ),
         'OPR': (            # title of parent work
@@ -1967,49 +1973,49 @@ class M21ObjectConvert:
             }
         ),
         'OAC': (            # act number (e.g. '2' or 'Act 2')
-            'title',
+            'titlePart',
             {
                 'type': 'actNumber',
                 'analog': 'humdrum:OAC',
             }
         ),
         'OSC': (            # scene number (e.g. '3' or 'Scene 3')
-            'title',
+            'titlePart',
             {
                 'type': 'sceneNumber',
                 'analog': 'humdrum:OSC',
             }
         ),
         'OMV': (            # movement number (e.g. '4', or 'mov. 4', or...)
-            'title',
+            'titlePart',
             {
                 'type': 'movementNumber',
                 'analog': 'humdrum:OMV',
             }
         ),
         'OMD': (            # movement name
-            'title',
+            'titlePart',
             {
                 'type': 'movementName',
                 'analog': 'humdrum:OMD',
             }
         ),
         'OPS': (            # opus number (e.g. '23', or 'Opus 23')
-            'title',
+            'titlePart',
             {
                 'type': 'opusNumber',
                 'analog': 'humdrum:OPS',
             }
         ),
         'ONM': (            # number (e.g. '2' or 'No. 2')
-            'title',
+            'titlePart',
             {
                 'type': 'number',
                 'analog': 'humdrum:ONM',
             }
         ),
         'OVM': (            # volume number (e.g. '6' or 'Vol. 6')
-            'title',
+            'titlePart',
             {
                 'type': 'volumeNumber',
                 'analog': 'humdrum:OVM',
@@ -2019,21 +2025,21 @@ class M21ObjectConvert:
             'contributor',
             {
                 'role': 'dedicatee',
-                'analog': 'marcrel:dte',
+                'analog': 'humdrum:ODE',
             }
         ),
         'OCO': (            # commissioned by
             'contributor',
             {
                 'type': 'patron',
-                'analog': 'marcrel:pat',
+                'analog': 'humdrum:OCO',
             }
         ),
         'OCL': (            # collected/transcribed by
             'contributor',
             {
                 'type': 'transcriber',
-                'analog': 'marcrel:trc',
+                'analog': 'humdrum:OCL',
             }
         ),
         'ONB': (            # free form note related to title or identity of work
@@ -2085,18 +2091,18 @@ class M21ObjectConvert:
             }
         ),
         # Imprint information
-        'PUB': None,     # publication status 'published'/'unpublished'
+        'PUB': None,        # publication status 'published'/'unpublished'
         'PED': (            # publication editor
             'persName',
             {
-                'role': 'source editor',
+                'role': 'sourceEditor',
                 'analog': 'humdrum:PED',
             }
         ),
         'PPR': (            # first publisher
             'persName',
             {
-                'role': 'first publisher',
+                'role': 'firstPublisher',
                 'analog': 'humdrum:OPC',
             }
         ),
@@ -2148,7 +2154,7 @@ class M21ObjectConvert:
         'YEP': (            # publisher of electronic edition
             'contributor',
             {
-                'type': 'electronic publisher',
+                'type': 'electronicPublisher',
                 'analog': 'humdrum:YEP',
             }
         ),
@@ -2189,7 +2195,7 @@ class M21ObjectConvert:
         'YOO': (                        # original document owner
             'contributor',
             {
-                'role': 'original document owner',
+                'role': 'originalDocumentOwner',
                 'analog': 'humdrum:YOO',
             }
         ),
@@ -2203,14 +2209,14 @@ class M21ObjectConvert:
         'YOE': (            # original editor
             'contributor',
             {
-                'role': 'original editor',
+                'role': 'originalEditor',
                 'analog': 'humdrum:YOE',
             }
         ),
         'EED': (                                    # electronic editor
             'persName',
             {
-                'role': 'digital editor',
+                'role': 'digitalEditor',
                 'analog': 'humdrum:EED',
             }
         ),

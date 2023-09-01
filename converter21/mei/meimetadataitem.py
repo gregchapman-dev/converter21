@@ -62,9 +62,9 @@ class MeiMetadataItem:
         self.valuePrefix: str = ''
         self._parseAttribsForInstructions()
 
-        self.meiValue: str = (
-            self.valuePrefix + M21Utilities.m21MetadataValueToString(self.value)
-        )
+        self.meiValue: str = M21Utilities.m21MetadataValueToString(self.value)
+        if self.valuePrefix:
+            self.meiValue = self.valuePrefix + self.meiValue
 
     def _parseAttribsForInstructions(self):
         if '_prefix' in self.rootElementAttribs:
@@ -73,7 +73,7 @@ class MeiMetadataItem:
         # remove all keys that start with '_'; they're instructions
         for key in list(self.rootElementAttribs.keys()):
             if key.startswith('_'):
-                self.rootElementAttribs.remove(key)
+                del self.rootElementAttribs[key]
 
     def makeRootElement(self, tb: TreeBuilder) -> None:
         if not self.meiPath:
