@@ -40,7 +40,7 @@ class MeiMetadataItem:
         if meiPath:
             # custom path
             self.meiPath = meiPath
-            self.meiPathElements = meiPath.split('/')
+            self.meiPathElements = tuple(meiPath.split('/'))
         else:
             # get the expected path
             self.meiPath = M21ObjectConvert.getMeiPathForM21MetadataKeyOrRole(self.key)

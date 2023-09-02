@@ -221,6 +221,8 @@ class MeiMetadataReader:
         if not text:
             return
 
+        # TODO: handle <titlePart> sub-elements
+
         uniqueName: str = 'title'
         typeStr: str = elem.get('type', '')
         lang: str | None = elem.get('xml:lang')
@@ -237,6 +239,8 @@ class MeiMetadataReader:
                     uniqueName = 'popularTitle'
                 else:
                     uniqueName = 'alternativeTitle'
+            elif typeStr == 'popular':
+                uniqueName = 'popularTitle'
 
         isTranslated: bool = typeStr == 'translated'
 
