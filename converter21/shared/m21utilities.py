@@ -17,7 +17,6 @@ import re
 import sys
 import copy
 import datetime
-import html
 import typing as t
 from fractions import Fraction
 
@@ -1397,6 +1396,9 @@ class M21Utilities:
         humdrumReferenceKeyToM21MetadataPropertyUniqueName.items() if uniqueName != ''
     }
 
+    validHumdrumReferenceKeys: tuple[str, ...] = tuple(hdKey for hdKey in
+        humdrumReferenceKeyToM21MetadataPropertyUniqueName.keys())
+
     humdrumReferenceKeyToM21OtherContributorRole: dict[str, str] = {
         'MPN': 'performer',
         'MPS': 'suspected performer',
@@ -1409,11 +1411,6 @@ class M21Utilities:
         'suspectedPerformer': 'MPS',
         'source editor': 'PED',
         'sourceEditor': 'PED',
-    }
-
-    humdrumReferenceKeysWeWishMusic21Supported: set[str] = {
-        'YEM',  # copyrightMessage
-        'YEN',  # copyrightCountry
     }
 
     @staticmethod

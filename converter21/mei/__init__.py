@@ -29,7 +29,8 @@ from .meishared import MeiShared
 from .meimetadatareader import MeiMetadataReader
 from .meireader import MeiReader
 
-from .meimetadataitem import MeiMetadataItem
+from .meielement import MeiElement
+from .meimetadata import MeiMetadata
 from .meilayer import MeiLayer
 from .meistaff import MeiStaff
 from .meimeasure import MeiMeasure

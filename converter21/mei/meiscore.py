@@ -11,7 +11,6 @@
 import sys
 import typing as t
 from xml.etree.ElementTree import Element, TreeBuilder
-from copy import copy
 
 import music21 as m21
 from music21.common import opFrac
@@ -19,7 +18,7 @@ from music21.common import OffsetQL
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
-from converter21.mei import MeiMetadataItem
+from converter21.mei import MeiMetadata
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiTemporarySpanner
@@ -78,6 +77,7 @@ class MeiScore:
         )
 
         self.measures: list[MeiMeasure] = self._getMeiMeasures()
+        self.metadata: MeiMetadata = MeiMetadata(m21Score.metadata)
 
     def _getStaffNumbersForM21Parts(self) -> dict[m21.stream.Part, int]:
         output: dict[m21.stream.Part, int] = {}
@@ -117,7 +117,8 @@ class MeiScore:
             'meiversion': '4.0.0'
         })
 
-        self.makeMeiHeadElement(tb)
+        # meiHead
+        self.metadata.makeRootElement(tb)
 
         tb.start('music', {})
         tb.start('body', {})
@@ -140,112 +141,6 @@ class MeiScore:
         tb.end('mei')
         root: Element = tb.close()
         return root
-
-    def makeMeiHeadElement(self, tb: TreeBuilder) -> None:
-        # Here lies metadata, in <fileDesc>, <encodingDesc>, <workList>, etc
-        tb.start('meiHead', {})
-
-        # First, walk the metadata, gathering items in lists for each of the top-level
-        # elements in meiHead: fileDesc, encodingDesc, workList, manifestationList,
-        # revisionDesc, extMeta
-        fileDescItems: list[MeiMetadataItem] = []
-        encodingDescItems: list[MeiMetadataItem] = []
-        workListItems: list[MeiMetadataItem] = []
-        manifestationListItems: list[MeiMetadataItem] = []
-        revisionDescItems: list[MeiMetadataItem] = []
-        extMetaItems: list[MeiMetadataItem] = []
-
-        md: m21.metadata.Metadata = self.m21Score.metadata
-        seenFirstTitle: bool = False
-        m21Item: tuple[str, t.Any]
-        for m21Item in md.all(returnPrimitives=True, returnSorted=False):
-            if m21Item[0] == 'title':
-                # special case: first title seen goes in fileDesc _and_ several other
-                # places, the rest only go in the several other places
-                meiWorkTitleItem = MeiMetadataItem(m21Item, meiPath='workList/work/title')
-                workListItems.append(meiWorkTitleItem)
-                if not seenFirstTitle:
-                    meiFileDescTitleItem = MeiMetadataItem(m21Item, meiPath='fileDesc/titleStmt/title')
-                    fileDescItems.append(meiFileDescTitleItem)
-                    seenFirstTitle = True
-                continue
-
-            elName: str = (
-                M21ObjectConvert.getTopLevelMeiElementForM21MetadataKeyOrRole(m21Item[0])
-            )
-            meiItem = MeiMetadataItem(m21Item)
-            if elName == 'fileDesc':
-                fileDescItems.append(meiItem)
-                continue
-            if elName == 'encodingDesc':
-                encodingDescItems.append(meiItem)
-                continue
-            if elName == 'workList':
-                workListItems.append(meiItem)
-                continue
-            if elName == 'manifestationList':
-                manifestationListItems.append(meiItem)
-                continue
-            if elName == 'revisionDesc':
-                revisionDescItems.append(meiItem)
-                continue
-            if elName == 'extMeta':
-                extMetaItems.append(meiItem)
-                continue
-
-        self.makeTopLevelElement(fileDescItems, tb, emptyName='fileDesc')
-        self.makeTopLevelElement(encodingDescItems, tb)
-        self.makeTopLevelElement(workListItems, tb)
-        self.makeTopLevelElement(manifestationListItems, tb)
-        self.makeTopLevelElement(revisionDescItems, tb)
-        self.makeTopLevelElement(extMetaItems, tb)
-
-        tb.end('meiHead')
-
-    def makeTopLevelElement(
-        self,
-        meiItems: list[MeiMetadataItem],
-        tb: TreeBuilder,
-        emptyName: str = ''
-    ):
-        if not meiItems:
-            if emptyName:
-                tb.start(emptyName, {})
-                if emptyName == 'fileDesc':
-                    # within mandatory <fileDesc>, <titleStmt> and <pubStmt> are also mandatory
-                    tb.start('titleStmt', {})
-                    tb.end('titleStmt')
-                    tb.start('pubStmt', {})
-                    tb.end('pubStmt')
-                tb.end(emptyName)
-            return
-
-        # First we must sort the list by path, so the elements get
-        # started in the right order
-        meiItems.sort(key=lambda item: item.meiPath)
-
-        # Then end and start any necessary elements, and make the item's element
-        elementsStarted: list[str] = []
-        for meiItem in meiItems:
-            # stop any trailing elements that aren't needed
-            elementsStartedCopy: list[str] = copy(elementsStarted)
-            for elemName in reversed(elementsStartedCopy):
-                if elemName in meiItem.meiPathElements:
-                    break
-                tb.end(elemName)
-                elementsStarted = elementsStarted[:-1]
-
-            for elemName in meiItem.meiPathElements:
-                if elemName not in elementsStarted:
-                    tb.start(elemName, {})
-                    elementsStarted.append(elemName)
-
-            # we've started the necessary elements, now make the meiItem's element
-            meiItem.makeRootElement(tb)
-
-        # Now end any elements we started that are still open (that we started)
-        for elemName in reversed(elementsStarted):
-            tb.end(elemName)
 
     def makeStaffDefElement(self, part: m21.stream.Part, staffN: int, tb: TreeBuilder):
         # staffLines (defaults to 5)
