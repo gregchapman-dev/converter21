@@ -93,16 +93,16 @@ class MeiMetadata:
         extMeta: MeiElement | None = self.makeExtMetaElement(self.m21Metadata)
 
         # fileDesc is required
-        meiHead.appendSubElement(fileDesc)
+        meiHead.subElements.append(fileDesc)
 
         if encodingDesc:
-            meiHead.appendSubElement(encodingDesc)
+            meiHead.subElements.append(encodingDesc)
         if workList:
-            meiHead.appendSubElement(workList)
+            meiHead.subElements.append(workList)
         if manifestationList:
-            meiHead.appendSubElement(manifestationList)
+            meiHead.subElements.append(manifestationList)
         if extMeta:
-            meiHead.appendSubElement(extMeta)
+            meiHead.subElements.append(extMeta)
 
         meiHead.makeRootElement(tb)
 
@@ -110,29 +110,174 @@ class MeiMetadata:
         # meiHead/fileDesc is required, so we never return None here
         fileDesc: MeiElement = MeiElement('fileDesc')
         titleStmt: MeiElement = fileDesc.appendSubElement('titleStmt')
-        mainTitleElement: MeiElement | None = self.makeMainTitleElement(md)
-        if mainTitleElement is not None:
-            self.mainTitleElement = titleStmt.appendSubElement(mainTitleElement)
+        self.mainTitleElement = self.makeMainTitleElement(md)
+        if self.mainTitleElement is not None:
+            titleStmt.subElements.append(self.mainTitleElement)
 
         # TODO: finish fileDesc (pubStmt, sourceDesc)
         return fileDesc
 
     def makeMainTitleElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
-        mainTitleElement = MeiElement('title')
+        mainTitles: list[MeiMetadataItem] = self.contents.get('OTL', [])
+        plainNumbers: list[MeiMetadataItem] = self.contents.get('ONM', [])
+        movementNumbers: list[MeiMetadataItem] = self.contents.get('OMV', [])
+        movementNames: list[MeiMetadataItem] = self.contents.get('OMD', [])
+        opusNumbers: list[MeiMetadataItem] = self.contents.get('OPS', [])
+        actNumbers: list[MeiMetadataItem] = self.contents.get('OAC', [])
+        sceneNumbers: list[MeiMetadataItem] = self.contents.get('OSC', [])
+
+        titleElement = MeiElement('title')
         # First all the main titles (OTL).  The untranslated one goes first,
         # with titlePart@type="main", and the others get titlePart@type=translated.
-        mainTitleList: list[MeiMetadataItem] = self.contents.get('OTL', [])
-        # Then any number (ONM).
-        # Then any movement number (OMV).
-        # Then any movement names (OMD). titlePart@type=movementName.  Untranslated first,
+        titlePart: MeiElement
+        firstTitle: MeiMetadataItem | None = None
+        firstLang: str = ''
+        for mainTitle in mainTitles:
+            if (isinstance(mainTitle.value, m21.metadata.Text)
+                    and mainTitle.value.isTranslated is not True):
+                firstTitle = mainTitle
+                if firstTitle.value.language:
+                    firstLang = firstTitle.value.language.lower()
+                break
+
+        if firstTitle is not None:
+            attrib: dict[str, str] = {'type': 'main', 'analog': 'humdrum:OTL'}
+            if firstLang:
+                attrib['xml:lang'] = firstLang
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = firstTitle.meiValue
+
+        for mainTitle in mainTitles:
+            if mainTitle is firstTitle:
+                continue
+
+            isTranslated: bool = False
+            lang: str = ''
+            if isinstance(mainTitle.value, m21.metadata.Text):
+                isTranslated = mainTitle.value.isTranslated is True
+                if mainTitle.value.language:
+                    lang = mainTitle.value.language.lower()
+
+            attrib = {}
+            if isTranslated:
+                attrib['type'] = 'translated'
+            else:
+                attrib['type'] = 'main'
+            attrib['analog'] = 'humdrum:OTL'
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = mainTitle.meiValue
+
+        # Then any number(s) (ONM).
+        for plainNumber in plainNumbers:
+            lang = ''
+            if isinstance(plainNumber.value, m21.metadata.Text):
+                if plainNumber.value.language:
+                    lang = plainNumber.value.language.lower()
+
+            attrib = {'type': 'number', 'analog': 'humdrum:ONM'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = plainNumber.meiValue
+
+        # Then any movement number(s) (OMV).
+        for movementNumber in movementNumbers:
+            lang = ''
+            if isinstance(movementNumber.value, m21.metadata.Text):
+                if movementNumber.value.language:
+                    lang = movementNumber.value.language.lower()
+
+            attrib = {'type': 'movementNumber', 'analog': 'humdrum:OMV'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = movementNumber.meiValue
+
+        # Then any movement name(s) (OMD). titlePart@type=movementName.  Untranslated first,
         # if there is one, but type is always movementName here.
-        movementNameList: list[MeiMetadataItem] = self.contents.get('OMD', [])
-        # Then any opus number (OPS).
-        # Then any act number (OAC).
-        # THen any scene number (OSC).
-        if mainTitleElement.isEmpty():
+        firstMovementName: MeiMetadataItem | None = None
+        firstLang = ''
+        for movementName in movementNames:
+            if (isinstance(movementName.value, m21.metadata.Text)
+                    and movementName.value.isTranslated is not True):
+                firstMovementName = movementName
+                if movementName.value.language:
+                    firstLang = movementName.value.language.lower()
+                break
+
+        if firstMovementName is not None:
+            attrib = {'type': 'movementName', 'analog': 'humdrum:OMD'}
+            if firstLang:
+                attrib['xml:lang'] = firstLang
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = firstMovementName.meiValue
+
+        for movementName in movementNames:
+            if movementName is firstMovementName:
+                continue
+
+            lang = ''
+            if isinstance(movementName.value, m21.metadata.Text):
+                if movementName.value.language:
+                    lang = movementName.value.language.lower()
+
+            attrib = {'type': 'movementName', 'analog': 'humdrum:OMD'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = movementName.meiValue
+
+        # Then any opus number(s) (OPS).
+        for opusNumber in opusNumbers:
+            lang = ''
+            if isinstance(opusNumber.value, m21.metadata.Text):
+                if opusNumber.value.language:
+                    lang = opusNumber.value.language.lower()
+
+            attrib = {'type': 'opusNumber', 'analog': 'humdrum:OPS'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = opusNumber.meiValue
+
+        # Then any act number(s) (OAC).
+        for actNumber in actNumbers:
+            lang = ''
+            if isinstance(actNumber.value, m21.metadata.Text):
+                if actNumber.value.language:
+                    lang = actNumber.value.language.lower()
+
+            attrib = {'type': 'actNumber', 'analog': 'humdrum:OAC'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = actNumber.meiValue
+
+        # Then any scene number(s) (OSC).
+        for sceneNumber in sceneNumbers:
+            lang = ''
+            if isinstance(sceneNumber.value, m21.metadata.Text):
+                if sceneNumber.value.language:
+                    lang = sceneNumber.value.language.lower()
+
+            attrib = {'type': 'sceneNumber', 'analog': 'humdrum:OSC'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = sceneNumber.meiValue
+
+        if titleElement.isEmpty():
             return None
-        return mainTitleElement
+        return titleElement
 
     def makeEncodingDescElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
         return None

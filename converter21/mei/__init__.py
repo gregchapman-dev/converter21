@@ -30,6 +30,7 @@ from .meimetadatareader import MeiMetadataReader
 from .meireader import MeiReader
 
 from .meielement import MeiElement
+from .meimetadata import MeiMetadataItem
 from .meimetadata import MeiMetadata
 from .meilayer import MeiLayer
 from .meistaff import MeiStaff

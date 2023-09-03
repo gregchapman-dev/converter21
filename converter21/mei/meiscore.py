@@ -18,6 +18,7 @@ from music21.common import OffsetQL
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
+from converter21.mei import MeiMetadataItem
 from converter21.mei import MeiMetadata
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
@@ -121,6 +122,23 @@ class MeiScore:
         self.metadata.makeRootElement(tb)
 
         tb.start('music', {})
+        # There's one bit of metadata that goes in music/back/div@type="textTranslation"/p:
+        # humdrum:HTX (one per <p>)
+        htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
+        if htxItems:
+            tb.start('back', {})
+            tb.start('div', {'type': 'textTranslation'})
+            for htxItem in htxItems:
+                attrib: dict[str, str] = {}
+                if isinstance(htxItem.value, m21.metadata.Text):
+                    if htxItem.value.language:
+                        attrib['xml:lang'] = htxItem.value.language.lower()
+                tb.start('p', attrib)
+                tb.data(htxItem.meiValue)
+                tb.end('p')
+            tb.end('div')
+            tb.end('back')
+
         tb.start('body', {})
         tb.start('mdiv', {})
 

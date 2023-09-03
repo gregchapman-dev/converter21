@@ -10,14 +10,13 @@
 # Copyright:     (c) 2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-from xml.etree.ElementTree import TreeBuilder
+from xml.etree.ElementTree import TreeBuilder, tostring
 
 class MeiElement:
     def __init__(
         self,
         name: str,
         attrib: dict[str, str] | None = None,
-        subElements: list['MeiElement'] | None = None
     ) -> None:
         self.name = name
         self.attrib: dict[str, str]
@@ -27,23 +26,22 @@ class MeiElement:
             self.attrib = attrib
         else:
             self.attrib = {}
-        if subElements:
-            self.subElements = subElements
-        else:
-            self.subElements = []
+        self.subElements = []
+        self.text = ''
 
     def appendSubElement(
         self,
-        subElement: str | MeiElement,
+        name: str,
         attrib: dict[str, str] | None = None
-    ) -> MeiElement:
-        if isinstance(subElement, str):
-            subElement = MeiElement(subElement, attrib)
+    ) -> 'MeiElement':
+        subElement = MeiElement(name, attrib)
         self.subElements.append(subElement)
         return subElement
 
     def isEmpty(self) -> bool:
         if self.attrib:
+            return False
+        if self.text:
             return False
         if self.subElements:
             return False
@@ -51,6 +49,14 @@ class MeiElement:
 
     def makeRootElement(self, tb: TreeBuilder):
         tb.start(self.name, self.attrib)
+        if self.text:
+            tb.data(self.text)
         for subEl in self.subElements:
             subEl.makeRootElement(tb)
         tb.end(self.name)
+
+    def __repr__(self) -> str:
+        # for debug view of MeiElement (displays XML)
+        tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
+        self.makeRootElement(tb)
+        return tostring(tb.close(), encoding='unicode')
