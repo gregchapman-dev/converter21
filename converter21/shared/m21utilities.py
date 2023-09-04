@@ -999,7 +999,8 @@ class M21Utilities:
     def m21DateObjectFromISODate(
         isodate: str
     ) -> m21.metadata.DatePrimitive | None:
-        # TODO: handle isodates that contain multiple dates (DateBetween, DateSelection)
+        # TODO: handle isodates that contain multiple dates (DateBetween, DateSelection).
+        # TODO: We'll have to split by hand, and then call fromisoformat on each one.
         m21DateSingle: m21.metadata.DateSingle | None = None
         try:
             dt: datetime.datetime = datetime.datetime.fromisoformat(isodate)
@@ -1009,6 +1010,21 @@ class M21Utilities:
         except Exception:
             pass
         return m21DateSingle
+
+    @staticmethod
+    def isoDateFromM21DateObject(
+        dateObj: m21.metadata.DatePrimitive
+    ) -> str:
+        # TODO: handle DatePrimitives that contain multiple dates (DateBetween, DateSelection)
+        # TODO: currently m21.metadata.DatePrimitive.datetime() returns the datetime of the
+        # TODO: first date only.
+        isodate: str = ''
+        try:
+            dt: datetime.datetime = dateObj.datetime()
+            isodate = datetime.datetime.isoformat(dt)
+        except Exception:
+            pass
+        return isodate
 
     # Conversions from str to m21.metadata.DatePrimitive types, and back.
     # e.g. '1942///-1943///' -> DateBetween([Date(1942), Date(1943)])

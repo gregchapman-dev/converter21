@@ -39,8 +39,9 @@ class MeiMetadataItem:
         #   unique name.
         # self.humdrumRefKey is set in two cases:
         #   1. self.key is 'humdrum:XXX' and 'XXX' is something we understand
-        #   2. self.key is a standard music21 uniqueName, in which case we know
-        #       which humdrum key it maps to (this is knowledge shared with our
+        #       (we share this knowledge with our humdrum converter).
+        #   2. self.key is a standard music21 uniqueName, and it maps to a
+        #       particular humdrum key (this is knowledge shared with our
         #       humdrum converter).
 
         self.uniqueName: str = ''
@@ -82,15 +83,15 @@ class MeiMetadata:
         # saved off state during makeRootElement (e.g. MeiElement trees that
         # may need to be re-used)
         self.mainTitleElement: MeiElement | None = None
-        self.mainComposerElement: MeiElement | None = None
+        self.mainComposerElements: list[MeiElement] = []
 
     def makeRootElement(self, tb: TreeBuilder):
         meiHead: MeiElement = MeiElement('meiHead')
-        fileDesc: MeiElement = self.makeFileDescElement(self.m21Metadata)
-        encodingDesc: MeiElement | None = self.makeEncodingDescElement(self.m21Metadata)
-        workList: MeiElement | None = self.makeWorkListElement(self.m21Metadata)
-        manifestationList: MeiElement | None = self.makeManifestationListElement(self.m21Metadata)
-        extMeta: MeiElement | None = self.makeExtMetaElement(self.m21Metadata)
+        fileDesc: MeiElement = self.makeFileDescElement()
+        encodingDesc: MeiElement | None = self.makeEncodingDescElement()
+        workList: MeiElement | None = self.makeWorkListElement()
+        manifestationList: MeiElement | None = self.makeManifestationListElement()
+        extMeta: MeiElement | None = self.makeExtMetaElement()
 
         # fileDesc is required
         meiHead.subElements.append(fileDesc)
@@ -106,18 +107,338 @@ class MeiMetadata:
 
         meiHead.makeRootElement(tb)
 
-    def makeFileDescElement(self, md: m21.metadata.Metadata) -> MeiElement:
+    def anyExist(self, *args: str) -> bool:
+        for arg in args:
+            if self.contents.get(arg, []):
+                return True
+        return False
+
+    def makeFileDescElement(self) -> MeiElement:
         # meiHead/fileDesc is required, so we never return None here
         fileDesc: MeiElement = MeiElement('fileDesc')
+
+        # titleStmt is required, so we create/append in one step
         titleStmt: MeiElement = fileDesc.appendSubElement('titleStmt')
-        self.mainTitleElement = self.makeMainTitleElement(md)
+
+        # We stash off the main title element because we will reuse it in
+        # the workList/work that describes the work we have encoded here.
+        self.mainTitleElement = self.makeMainTitleElement()
         if self.mainTitleElement is not None:
             titleStmt.subElements.append(self.mainTitleElement)
 
-        # TODO: finish fileDesc (pubStmt, sourceDesc)
+        self.mainComposerElements = self.makeMainComposerElements()
+        if self.mainComposerElements:
+            titleStmt.subElements.extend(self.mainComposerElements)
+
+        # pubStmt describes the MEI file we are writing.  It is, of course,
+        # unpublished, so we use <unpub> to say that.  This pubStmt will
+        # always be non-empty, so create/append in one step
+        pubStmt: MeiElement = fileDesc.appendSubElement('pubStmt')
+        unpub: MeiElement = pubStmt.appendSubElement('unpub')
+        unpub.text = (
+            '''This MEI file was created by converter21's MEI writer, from a music21 score.
+                   If it is published, this unpub element should be removed, and the enclosing
+                   pubStmt element should be properly filled out.'''
+        )
+
+        # sourceDesc: There are potentially multiple sources here, depending on what
+        # metadata items we find.  One for the digital source, one for the published
+        # printed source, one for a recorded source album (with maybe one for the
+        # recorded source album track), and one for an unpublished manuscript source.
+        # if sourceDesc ends up empty, we will not add it, so create separately and
+        # only append if not empty.
+        sourceDesc: MeiElement = MeiElement('sourceDesc')
+
+        digitalSource: MeiElement | None = self.makeDigitalSource()
+        if digitalSource is not None:
+            sourceDesc.subElements.append(digitalSource)
+
+        printedSource: MeiElement | None = self.makePrintedSource()
+        if printedSource is not None:
+            sourceDesc.subElements.append(printedSource)
+
+        recordedSource: MeiElement | None = self.makeRecordedSource()
+        if recordedSource is not None:
+            sourceDesc.subElements.append(recordedSource)
+            recordedTrackSource: MeiElement | None = self.makeRecordedTrackSource()
+            if recordedTrackSource is not None:
+                sourceDesc.subElements.append(recordedTrackSource)
+
+        unpublishedSource: MeiElement | None = self.makeUnpublishedSource()
+        if unpublishedSource is not None:
+            sourceDesc.subElements.append(unpublishedSource)
+
+        if not sourceDesc.isEmpty():
+            fileDesc.subElements.append(sourceDesc)
+
         return fileDesc
 
-    def makeMainTitleElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
+    def makeDigitalSource(self) -> MeiElement | None:
+        if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEM', 'YEN'):
+            return None
+
+        source: MeiElement = MeiElement('source')
+        bibl: MeiElement = source.appendSubElement('bibl')
+        if self.mainTitleElement:
+            bibl.subElements.append(self.mainTitleElement)
+        if self.mainComposerElements:
+            bibl.subElements.extend(self.mainComposerElements)
+
+        editors: list[MeiMetadataItem] = self.contents.get('EED', [])
+        encoders: list[MeiMetadataItem] = self.contents.get('ENC', [])
+        versions: list[MeiMetadataItem] = self.contents.get('EEV', [])
+        fileNumbers: list[MeiMetadataItem] = self.contents.get('EFL', [])
+        publishers: list[MeiMetadataItem] = self.contents.get('YEP', [])
+        releaseDates: list[MeiMetadataItem] = self.contents.get('YER', [])
+        encodingDates: list[MeiMetadataItem] = self.contents.get('END', [])
+        copyrightStatements: list[MeiMetadataItem] = self.contents.get('YEM', [])
+        copyrightCountries: list[MeiMetadataItem] = self.contents.get('YEN', [])
+
+        if editors:
+            for editor in editors:
+                editorEl: MeiElement = bibl.appendSubElement(
+                    'editor',
+                    {
+                        'analog': 'humdrum:EED'
+                    }
+                )
+                editorEl.text = editor.meiValue
+
+        if encoders:
+            for encoder in encoders:
+                encoderEl: MeiElement = bibl.appendSubElement(
+                    'editor',
+                    {
+                        'type': 'encoder',
+                        'analog': 'humdrum:ENC'
+                    }
+                )
+                encoderEl.text = encoder.meiValue
+
+        if versions:
+            for version in versions:
+                versionEl: MeiElement = bibl.appendSubElement(
+                    'edition',
+                    {
+                        'type': 'version',
+                        'analog': 'humdrum:EEV'
+                    }
+                )
+                versionEl.text = version.meiValue
+
+        if fileNumbers:
+            for fileNumber in fileNumbers:
+                fileNumberEl: MeiElement = bibl.appendSubElement(
+                    'edition',
+                    {
+                        'type': 'fileNumber',
+                        'analog': 'humdrum:EFL'
+                    }
+                )
+                fileNumberEl.text = fileNumber.meiValue
+
+        if publishers or releaseDates or encodingDates:
+            imprint: MeiElement = bibl.appendSubElement('imprint')
+            if publishers:
+                for publisher in publishers:
+                    publisherEl: MeiElement = imprint.appendSubElement(
+                        'publisher',
+                        {
+                            'analog': 'humdrum:YEP'
+                        }
+                    )
+                    publisherEl.text = publisher.meiValue
+
+            if releaseDates:
+                for releaseDate in releaseDates:
+                    releaseDateEl: MeiElement = imprint.appendSubElement(
+                        'date',
+                        {
+                            'type': 'releaseDate',
+                            'analog': 'humdrum:YER'
+                        }
+                    )
+                    releaseDateEl.text = releaseDate.meiValue
+
+            if encodingDates:
+                for encodingDate in encodingDates:
+                    encodingDateEl: MeiElement = imprint.appendSubElement(
+                        'date',
+                        {
+                            'type': 'encodingDate',
+                            'analog': 'humdrum:END'
+                        }
+                    )
+                    encodingDateEl.text = encodingDate.meiValue
+
+        if copyrightStatements:
+            for copyrightStatement in copyrightStatements:
+                copyrightStatementEl: MeiElement = bibl.appendSubElement(
+                    'annot',
+                    {
+                        'type': 'copyrightStatement',
+                        'analog': 'humdrum:YEM'
+                    }
+                )
+                copyrightStatementEl.text = copyrightStatement.meiValue
+
+        if copyrightCountries:
+            for copyrightCountry in copyrightCountries:
+                copyrightCountryEl: MeiElement = bibl.appendSubElement(
+                    'annot',
+                    {
+                        'type': 'copyrightCountry',
+                        'analog': 'humdrum:YEN'
+                    }
+                )
+                copyrightCountryEl.text = copyrightCountry.meiValue
+
+        if bibl.isEmpty():
+            # we check bibl because source is not empty: it contains bibl.
+            return None
+        return source
+
+    def makePrintedSource(self) -> MeiElement | None:
+        if not self.anyExist('LAR', 'YOE', 'PED', 'LOR', 'TRN', 'OCL', 'OVM', 'PTL'):
+            return None
+
+        source: MeiElement = MeiElement('source')
+        bibl: MeiElement = source.appendSubElement('bibl')
+
+        if bibl.isEmpty():
+            return None
+        return source
+
+    def makeRecordedSource(self) -> MeiElement | None:
+        if not self.anyExist('RTL', 'RC#', 'MGN', 'MPN', 'MPS', 'RNP',
+                'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'MLC'):
+            return None
+
+        source: MeiElement = MeiElement('source')
+        bibl: MeiElement = source.appendSubElement('bibl')
+
+        if bibl.isEmpty():
+            return None
+        return source
+
+    def makeRecordedTrackSource(self) -> MeiElement | None:
+        if not self.anyExist('RT#'):
+            return None
+
+        source: MeiElement = MeiElement('source')
+        bibl: MeiElement = source.appendSubElement('bibl')
+
+        if bibl.isEmpty():
+            return None
+        return source
+
+    def makeUnpublishedSource(self) -> MeiElement | None:
+        if not self.anyExist('PUB', 'SMS', 'SML', 'YOO', 'SMA'):
+            return None
+
+        source: MeiElement = MeiElement('source')
+        bibl: MeiElement = source.appendSubElement('bibl')
+
+        if bibl.isEmpty():
+            return None
+        return source
+
+    def makeMainComposerElements(self) -> list[MeiElement]:
+        output: list[MeiElement] = []
+        composers: list[MeiMetadataItem] = self.contents.get('COM', [])
+        composerAliases: list[MeiMetadataItem] = self.contents.get('COL', [])
+        composerDates: list[MeiMetadataItem] = self.contents.get('CDT', [])
+        composerBirthPlaces: list[MeiMetadataItem] = self.contents.get('CBL', [])
+        composerDeathPlaces: list[MeiMetadataItem] = self.contents.get('CDL', [])
+        # TODO: Prefer composer birth/death dates from Contributor value.
+        # TODO: But first make Humdrum importer put them there.
+
+
+        for i, composer in enumerate(composers):
+            # Assume association is done by ordering of the metadata item arrays
+            # Currently our Humdrum importer assumes this ordering should match
+            # the ordering in the file.
+            composerAlias: MeiMetadataItem | None = None
+            composerBirthAndDeathDate: MeiMetadataItem | None = None
+            composerBirthPlace: MeiMetadataItem | None = None
+            composerDeathPlace: MeiMetadataItem | None = None
+            if i < len(composerAliases):
+                composerAlias = composerAliases[i]
+            if i < len(composerDates):
+                composerBirthAndDeathDate = composerDates[i]
+            if i < len(composerBirthPlaces):
+                composerBirthPlace = composerBirthPlaces[i]
+            if i < len(composerDeathPlaces):
+                composerDeathPlace = composerDeathPlaces[i]
+
+            composerElement = MeiElement('composer')
+            output.append(composerElement)
+
+            # composer name ('COM')
+            persNameElement: MeiElement = composerElement.appendSubElement(
+                'persName',
+                {
+                    'analog': 'humdrum:COM'
+                }
+            )
+            persNameElement.text = composer.meiValue
+
+            # composer alias ('COL')
+            if composerAlias is not None:
+                persNameElement = composerElement.appendSubElement(
+                    'persName',
+                    {
+                        'type': 'alias',
+                        'analog': 'humdrum:COL'
+                    }
+                )
+                persNameElement.text = composerAlias.meiValue
+
+            # composer birth and death dates
+            if composerBirthAndDeathDate is not None:
+                isodate: str = M21Utilities.isoDateFromM21DateObject(
+                    composerBirthAndDeathDate.value
+                )
+
+                attrib: dict[str, str] = {
+                    'type': 'birth/death',
+                    'analog': 'humdrum:CDT',
+                }
+
+                if isodate:
+                    attrib['isodate'] = isodate
+
+                dateElement: MeiElement = composerElement.appendSubElement(
+                    'date',
+                    attrib
+                )
+                dateElement.text = composerBirthAndDeathDate.meiValue
+
+            # composer birth place
+            if composerBirthPlace is not None:
+                geogNameElement: MeiElement = composerElement.appendSubElement(
+                    'geogName',
+                    {
+                        'type': 'birthPlace',
+                        'analog': 'humdrum:CBL'
+                    }
+                )
+                geogNameElement.text = composerBirthPlace.meiValue
+
+            # composer death place
+            if composerDeathPlace is not None:
+                geogNameElement = composerElement.appendSubElement(
+                    'geogName',
+                    {
+                        'type': 'deathPlace',
+                        'analog': 'humdrum:CDL'
+                    }
+                )
+                geogNameElement.text = composerDeathPlace.meiValue
+
+        return output
+
+    def makeMainTitleElement(self) -> MeiElement | None:
         mainTitles: list[MeiMetadataItem] = self.contents.get('OTL', [])
         plainNumbers: list[MeiMetadataItem] = self.contents.get('ONM', [])
         movementNumbers: list[MeiMetadataItem] = self.contents.get('OMV', [])
@@ -127,6 +448,7 @@ class MeiMetadata:
         sceneNumbers: list[MeiMetadataItem] = self.contents.get('OSC', [])
 
         titleElement = MeiElement('title')
+
         # First all the main titles (OTL).  The untranslated one goes first,
         # with titlePart@type="main", and the others get titlePart@type=translated.
         titlePart: MeiElement
@@ -279,14 +601,14 @@ class MeiMetadata:
             return None
         return titleElement
 
-    def makeEncodingDescElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
+    def makeEncodingDescElement(self) -> MeiElement | None:
         return None
 
-    def makeWorkListElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
+    def makeWorkListElement(self) -> MeiElement | None:
         return None
 
-    def makeManifestationListElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
+    def makeManifestationListElement(self) -> MeiElement | None:
         return None
 
-    def makeExtMetaElement(self, md: m21.metadata.Metadata) -> MeiElement | None:
+    def makeExtMetaElement(self) -> MeiElement | None:
         return None

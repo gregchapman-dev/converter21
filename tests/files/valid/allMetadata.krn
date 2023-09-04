@@ -109,6 +109,8 @@
 !!!ARE: geographical region of origin (list of "narrowing down" names of regions)
 !!!ARL: geographical location of origin (lat/long)
 !!!HAO: aural history (lots of text, stories about the work)
+!!!HAO: aural history line 2
+!!!HAO: aural history line 3
 !!!HTX@RU: freeform translation to Russian of vocal text (line 1)
 !!!HTX1@RU: freeform translation to Russian of vocal text (line 2)
 !!!RLN: Extended ASCII language code

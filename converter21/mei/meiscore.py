@@ -122,6 +122,22 @@ class MeiScore:
         self.metadata.makeRootElement(tb)
 
         tb.start('music', {})
+        tb.start('body', {})
+        tb.start('mdiv', {})
+
+        tb.start('score', {})
+        self.makeScoreDefElement(tb)
+
+        tb.start('section', {})
+        for meim in self.measures:
+            meim.makeRootElement(tb)
+        tb.end('section')
+
+        tb.end('score')
+
+        tb.end('mdiv')
+        tb.end('body')
+
         # There's one bit of metadata that goes in music/back/div@type="textTranslation"/p:
         # humdrum:HTX (one per <p>)
         htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
@@ -139,21 +155,6 @@ class MeiScore:
             tb.end('div')
             tb.end('back')
 
-        tb.start('body', {})
-        tb.start('mdiv', {})
-
-        tb.start('score', {})
-        self.makeScoreDefElement(tb)
-
-        tb.start('section', {})
-        for meim in self.measures:
-            meim.makeRootElement(tb)
-        tb.end('section')
-
-        tb.end('score')
-
-        tb.end('mdiv')
-        tb.end('body')
         tb.end('music')
 
         tb.end('mei')
