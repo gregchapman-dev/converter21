@@ -626,11 +626,107 @@ class MeiMetadata:
         return source
 
     def makeUnpublishedSource(self) -> MeiElement | None:
-        if not self.anyExist('PUB', 'SMS', 'SML', 'YOO', 'SMA', 'YOE', 'YOR', 'YOY'):
+        if not self.anyExist('SMS', 'YOR', 'SML', 'YOO', 'YOE', 'YOY', 'SMA'):
             return None
 
-        source: MeiElement = MeiElement('source', {'type': 'unpublished'})
+        source: MeiElement = MeiElement('source', {'type': 'unpub'})
         bibl: MeiElement = source.appendSubElement('bibl')
+
+        manuscriptNames: list[MeiMetadataItem] = self.contents.get('SMS', [])
+        moreManuscriptNames: list[MeiMetadataItem] = self.contents.get('YOR', [])
+        manuscriptLocations: list[MeiMetadataItem] = self.contents.get('SML', [])
+        manuscriptOwners: list[MeiMetadataItem] = self.contents.get('YOO', [])
+        editors: list[MeiMetadataItem] = self.contents.get('YOE', [])
+        copyrightDates: list[MeiMetadataItem] = self.contents.get('YOY', [])
+        acknowledgments: list[MeiMetadataItem] = self.contents.get('SMA', [])
+
+        for manuscriptName in manuscriptNames:
+            manuscriptNameEl: MeiElement = bibl.appendSubElement(
+                'identifier',
+                {
+                    'analog': 'humdrum:SMS'
+                }
+            )
+            manuscriptNameEl.text = manuscriptName.meiValue
+
+        for manuscriptName in moreManuscriptNames:
+            manuscriptNameEl = bibl.appendSubElement(
+                'identifier',
+                {
+                    'analog': 'humdrum:YOR'
+                }
+            )
+            manuscriptNameEl.text = manuscriptName.meiValue
+
+        # do both again as <title>
+        for manuscriptName in manuscriptNames:
+            manuscriptNameEl = bibl.appendSubElement(
+                'title',
+                {
+                    'analog': 'humdrum:SMS'
+                }
+            )
+            manuscriptNameEl.text = manuscriptName.meiValue
+
+        for manuscriptName in moreManuscriptNames:
+            manuscriptNameEl = bibl.appendSubElement(
+                'title',
+                {
+                    'analog': 'humdrum:YOR'
+                }
+            )
+            manuscriptNameEl.text = manuscriptName.meiValue
+
+        for manuscriptLocation in manuscriptLocations:
+            manuscriptLocationEl = bibl.appendSubElement(
+                'repository',
+                {
+                    'analog': 'humdrum:SML'
+                }
+            )
+            manuscriptLocationEl.text = manuscriptLocation.meiValue
+
+        for manuscriptOwner in manuscriptOwners:
+            manuscriptOwnerEl = bibl.appendSubElement(
+                'persName',
+                {
+                    'role': 'manuscriptOwner',
+                    'analog': 'humdrum:YOO'
+                }
+            )
+            manuscriptOwnerEl.text = manuscriptOwner.meiValue
+
+        for editor in editors:
+            editorEl = bibl.appendSubElement(
+                'editor',
+                {
+                    'analog': 'humdrum:YOE'
+                }
+            )
+            editorEl.text = editor.meiValue
+
+        for copyrightDate in copyrightDates:
+            copyrightDateEl = bibl.appendSubElement(
+                'date',
+                {
+                    'type': 'copyrightDate',
+                    'isodate': M21Utilities.isoDateFromM21DateObject(
+                        copyrightDate.value
+                    ),
+                    'analog': 'humdrum:YOY'
+                }
+            )
+            copyrightDateEl.text = copyrightDate.meiValue
+
+        for acknowledgment in acknowledgments:
+            acknowledgmentEl = bibl.appendSubElement(
+                'annot',
+                {
+                    'type': 'manuscriptAccessAcknowledgment',
+                    'analog': 'humdrum:SMA'
+                }
+            )
+            acknowledgmentEl.text = acknowledgment.meiValue
 
         if bibl.isEmpty():
             return None
