@@ -153,9 +153,9 @@ class MeiMetadata:
         if digitalSource is not None:
             sourceDesc.subElements.append(digitalSource)
 
-        printedSource: MeiElement | None = self.makePrintedSource()
-        if printedSource is not None:
-            sourceDesc.subElements.append(printedSource)
+        publishedSource: MeiElement | None = self.makePublishedSource()
+        if publishedSource is not None:
+            sourceDesc.subElements.append(publishedSource)
 
         recordedSource: MeiElement | None = self.makeRecordedSource()
         if recordedSource is not None:
@@ -177,7 +177,7 @@ class MeiMetadata:
         if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEM', 'YEN'):
             return None
 
-        source: MeiElement = MeiElement('source')
+        source: MeiElement = MeiElement('source', {'type': 'digital'})
         bibl: MeiElement = source.appendSubElement('bibl')
         if self.mainTitleElement:
             bibl.subElements.append(self.mainTitleElement)
@@ -194,116 +194,233 @@ class MeiMetadata:
         copyrightStatements: list[MeiMetadataItem] = self.contents.get('YEM', [])
         copyrightCountries: list[MeiMetadataItem] = self.contents.get('YEN', [])
 
-        if editors:
-            for editor in editors:
-                editorEl: MeiElement = bibl.appendSubElement(
-                    'editor',
-                    {
-                        'analog': 'humdrum:EED'
-                    }
-                )
-                editorEl.text = editor.meiValue
+        for editor in editors:
+            editorEl: MeiElement = bibl.appendSubElement(
+                'editor',
+                {
+                    'analog': 'humdrum:EED'
+                }
+            )
+            editorEl.text = editor.meiValue
 
-        if encoders:
-            for encoder in encoders:
-                encoderEl: MeiElement = bibl.appendSubElement(
-                    'editor',
-                    {
-                        'type': 'encoder',
-                        'analog': 'humdrum:ENC'
-                    }
-                )
-                encoderEl.text = encoder.meiValue
+        for encoder in encoders:
+            encoderEl: MeiElement = bibl.appendSubElement(
+                'editor',
+                {
+                    'type': 'encoder',
+                    'analog': 'humdrum:ENC'
+                }
+            )
+            encoderEl.text = encoder.meiValue
 
-        if versions:
-            for version in versions:
-                versionEl: MeiElement = bibl.appendSubElement(
-                    'edition',
-                    {
-                        'type': 'version',
-                        'analog': 'humdrum:EEV'
-                    }
-                )
-                versionEl.text = version.meiValue
+        for version in versions:
+            versionEl: MeiElement = bibl.appendSubElement(
+                'edition',
+                {
+                    'type': 'version',
+                    'analog': 'humdrum:EEV'
+                }
+            )
+            versionEl.text = version.meiValue
 
-        if fileNumbers:
-            for fileNumber in fileNumbers:
-                fileNumberEl: MeiElement = bibl.appendSubElement(
-                    'edition',
-                    {
-                        'type': 'fileNumber',
-                        'analog': 'humdrum:EFL'
-                    }
-                )
-                fileNumberEl.text = fileNumber.meiValue
+        for fileNumber in fileNumbers:
+            fileNumberEl: MeiElement = bibl.appendSubElement(
+                'edition',
+                {
+                    'type': 'fileNumber',
+                    'analog': 'humdrum:EFL'
+                }
+            )
+            fileNumberEl.text = fileNumber.meiValue
 
         if publishers or releaseDates or encodingDates:
             imprint: MeiElement = bibl.appendSubElement('imprint')
-            if publishers:
-                for publisher in publishers:
-                    publisherEl: MeiElement = imprint.appendSubElement(
-                        'publisher',
-                        {
-                            'analog': 'humdrum:YEP'
-                        }
-                    )
-                    publisherEl.text = publisher.meiValue
-
-            if releaseDates:
-                for releaseDate in releaseDates:
-                    releaseDateEl: MeiElement = imprint.appendSubElement(
-                        'date',
-                        {
-                            'type': 'releaseDate',
-                            'analog': 'humdrum:YER'
-                        }
-                    )
-                    releaseDateEl.text = releaseDate.meiValue
-
-            if encodingDates:
-                for encodingDate in encodingDates:
-                    encodingDateEl: MeiElement = imprint.appendSubElement(
-                        'date',
-                        {
-                            'type': 'encodingDate',
-                            'analog': 'humdrum:END'
-                        }
-                    )
-                    encodingDateEl.text = encodingDate.meiValue
-
-        if copyrightStatements:
-            for copyrightStatement in copyrightStatements:
-                copyrightStatementEl: MeiElement = bibl.appendSubElement(
-                    'annot',
+            for publisher in publishers:
+                publisherEl: MeiElement = imprint.appendSubElement(
+                    'publisher',
                     {
-                        'type': 'copyrightStatement',
-                        'analog': 'humdrum:YEM'
+                        'analog': 'humdrum:YEP'
                     }
                 )
-                copyrightStatementEl.text = copyrightStatement.meiValue
+                publisherEl.text = publisher.meiValue
 
-        if copyrightCountries:
-            for copyrightCountry in copyrightCountries:
-                copyrightCountryEl: MeiElement = bibl.appendSubElement(
-                    'annot',
+            for releaseDate in releaseDates:
+                releaseDateEl: MeiElement = imprint.appendSubElement(
+                    'date',
                     {
-                        'type': 'copyrightCountry',
-                        'analog': 'humdrum:YEN'
+                        'type': 'releaseDate',
+                        'analog': 'humdrum:YER'
                     }
                 )
-                copyrightCountryEl.text = copyrightCountry.meiValue
+                releaseDateEl.text = releaseDate.meiValue
+
+            for encodingDate in encodingDates:
+                encodingDateEl: MeiElement = imprint.appendSubElement(
+                    'date',
+                    {
+                        'type': 'encodingDate',
+                        'analog': 'humdrum:END'
+                    }
+                )
+                encodingDateEl.text = encodingDate.meiValue
+
+        for copyrightStatement in copyrightStatements:
+            copyrightStatementEl: MeiElement = bibl.appendSubElement(
+                'annot',
+                {
+                    'type': 'copyrightStatement',
+                    'analog': 'humdrum:YEM'
+                }
+            )
+            copyrightStatementEl.text = copyrightStatement.meiValue
+
+        for copyrightCountry in copyrightCountries:
+            copyrightCountryEl: MeiElement = bibl.appendSubElement(
+                'annot',
+                {
+                    'type': 'copyrightCountry',
+                    'analog': 'humdrum:YEN'
+                }
+            )
+            copyrightCountryEl.text = copyrightCountry.meiValue
 
         if bibl.isEmpty():
             # we check bibl because source is not empty: it contains bibl.
             return None
         return source
 
-    def makePrintedSource(self) -> MeiElement | None:
-        if not self.anyExist('LAR', 'YOE', 'PED', 'LOR', 'TRN', 'OCL', 'OVM', 'PTL'):
+    def makePublishedSource(self) -> MeiElement | None:
+        if not self.anyExist('LAR', 'PED', 'LOR', 'TRN', 'OCL', 'OVM', 'PTL',
+                'PPR', 'PDT', 'PPP', 'PC#'):
             return None
 
-        source: MeiElement = MeiElement('source')
+        source: MeiElement = MeiElement('source', {'type': 'published'})
         bibl: MeiElement = source.appendSubElement('bibl')
+        if self.mainTitleElement:
+            bibl.subElements.append(self.mainTitleElement)
+        if self.mainComposerElements:
+            bibl.subElements.extend(self.mainComposerElements)
+
+        arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
+        editors: list[MeiMetadataItem] = self.contents.get('YOE', [])
+        orchestrators: list[MeiMetadataItem] = self.contents.get('LOR', [])
+        translators: list[MeiMetadataItem] = self.contents.get('TRN', [])
+        collectors: list[MeiMetadataItem] = self.contents.get('OCL', [])
+        textLanguages: list[MeiMetadataItem] = self.contents.get('TXL', [])
+        volumeNumbers: list[MeiMetadataItem] = self.contents.get('OVM', [])
+        volumeNames: list[MeiMetadataItem] = self.contents.get('PTL', [])
+
+        for arranger in arrangers:
+            arrangerEl: MeiElement = bibl.appendSubElement(
+                'arranger',
+                {
+                    'analog': 'humdrum:LAR'
+                }
+            )
+            arrangerEl.text = arranger.meiValue
+
+        for editor in editors:
+            editorEl: MeiElement = bibl.appendSubElement(
+                'editor',
+                {
+                    'analog': 'humdrum:PED'
+                }
+            )
+            editorEl.text = editor.meiValue
+
+        if orchestrators or translators or collectors:
+            respStmt: MeiElement = bibl.appendSubElement('respStmt')
+
+            for orchestrator in orchestrators:
+                respEl: MeiElement = respStmt.appendSubElement(
+                    'resp',
+                    {
+                        'analog': 'humdrum:LOR'
+                    }
+                )
+                respEl.text = 'orchestrator'
+                persNameEl: MeiElement = respStmt.appendSubElement(
+                    'persName',
+                    {
+                        'analog': 'humdrum:LOR'
+                    }
+                )
+                persNameEl.text = orchestrator.meiValue
+
+            for translator in translators:
+                respEl = respStmt.appendSubElement(
+                    'resp',
+                    {
+                        'analog': 'humdrum:TRN'
+                    }
+                )
+                respEl.text = 'translator'
+                persNameEl = respStmt.appendSubElement(
+                    'persName',
+                    {
+                        'analog': 'humdrum:TRN'
+                    }
+                )
+                persNameEl.text = translator.meiValue
+
+            for collector in collectors:
+                respEl = respStmt.appendSubElement(
+                    'resp',
+                    {
+                        'analog': 'humdrum:OCL'
+                    }
+                )
+                respEl.text = 'collector/transcriber'
+                persNameEl = respStmt.appendSubElement(
+                    'persName',
+                    {
+                        'analog': 'humdrum:OCL'
+                    }
+                )
+                persNameEl.text = collector.meiValue
+
+        for textLanguage in textLanguages:
+            textLanguageEl: MeiElement = bibl.appendSubElement(
+                'textLang',
+                {
+                    'analog': 'humdrum:TXL'
+                }
+            )
+            textLanguageEl.text = textLanguage.meiValue
+
+        for volumeName in volumeNames:
+            relatedItem: MeiElement = bibl.appendSubElement(
+                'relatedItem',
+                {
+                    'rel': 'host'
+                }
+            )
+            relBibl: MeiElement = relatedItem.appendSubElement('bibl')
+            relBibl.appendSubElement('title')
+            biblScope: MeiElement = relBibl.appendSubElement(
+                'biblScope',
+                {
+                    'analog': 'humdrum:PTL'
+                }
+            )
+            biblScope.text = volumeName.meiValue
+
+        for volumeNumber in volumeNumbers:
+            relatedItem = bibl.appendSubElement(
+                'relatedItem',
+                {
+                    'rel': 'host'
+                }
+            )
+            relBibl = relatedItem.appendSubElement('bibl')
+            relBibl.appendSubElement('title')
+            biblScope = relBibl.appendSubElement(
+                'biblScope',
+                {
+                    'analog': 'humdrum:OVM'
+                }
+            )
+            biblScope.text = volumeNumber.meiValue
 
         if bibl.isEmpty():
             return None
@@ -314,8 +431,166 @@ class MeiMetadata:
                 'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'MLC'):
             return None
 
-        source: MeiElement = MeiElement('source')
-        bibl: MeiElement = source.appendSubElement('bibl')
+        source: MeiElement = MeiElement('source', {'type': 'recordedAlbum'})
+        bibl: MeiElement = source.appendSubElement('bibl', {'xml:id': 'album1'})
+
+        albumTitles: list[MeiMetadataItem] = self.contents.get('RTL', [])
+        albumCatalogNumbers: list[MeiMetadataItem] = self.contents.get('RC#', [])
+        ensembleNames: list[MeiMetadataItem] = self.contents.get('MGN', [])
+        performerNames: list[MeiMetadataItem] = self.contents.get('MPN', [])
+        suspectedPerformerNames: list[MeiMetadataItem] = self.contents.get('MPS', [])
+        producers: list[MeiMetadataItem] = self.contents.get('RNP', [])
+        conductors: list[MeiMetadataItem] = self.contents.get('MCN', [])
+        manufacturers: list[MeiMetadataItem] = self.contents.get('RMM', [])
+        releaseDates: list[MeiMetadataItem] = self.contents.get('RRD', [])
+        recordingPlaces: list[MeiMetadataItem] = self.contents.get('RLC', [])
+        recordingDates: list[MeiMetadataItem] = self.contents.get('RDT', [])
+        performanceLocations: list[MeiMetadataItem] = self.contents.get('MLC', [])
+
+        for albumTitle in albumTitles:
+            albumTitleEl: MeiElement = bibl.appendSubElement(
+                'title',
+                {
+                    'analog': 'humdrum:RTL'
+                }
+            )
+            albumTitleEl.text = albumTitle.meiValue
+
+        for albumCatalogNumber in albumCatalogNumbers:
+            albumCatalogNumberEl: MeiElement = bibl.appendSubElement(
+                'identifier',
+                {
+                    'type': 'albumCatalogNumber',
+                    'analog': 'humdrum:RC#'
+                }
+            )
+            albumCatalogNumberEl.text = albumCatalogNumber.meiValue
+
+        for ensembleName in ensembleNames:
+            ensembleNameEl: MeiElement = bibl.appendSubElement(
+                'corpName',
+                {
+                    'type': 'ensembleName',
+                    'role': 'performer',
+                    'analog': 'humdrum:MGN'
+                }
+            )
+            ensembleNameEl.text = ensembleName.meiValue
+
+        for performerName in performerNames:
+            performerNameEl: MeiElement = bibl.appendSubElement(
+                'persName',
+                {
+                    'role': 'performer',
+                    'analog': 'humdrum:MPN'
+                }
+            )
+            performerNameEl.text = performerName.meiValue
+
+        for suspectedPerformerName in suspectedPerformerNames:
+            suspectedPerformerNameEl: MeiElement = bibl.appendSubElement(
+                'persName',
+                {
+                    'role': 'performer',
+                    'cert': 'medium',
+                    'analog': 'humdrum:MPS'
+                }
+            )
+            suspectedPerformerNameEl.text = suspectedPerformerName.meiValue
+
+        if producers or conductors:
+            respStmt: MeiElement = bibl.appendSubElement('respStmt')
+
+            for producer in producers:
+                respEl: MeiElement = respStmt.appendSubElement(
+                    'resp',
+                    {
+                        'analog': 'humdrum:RNP'
+                    }
+                )
+                respEl.text = 'producer'
+                persNameEl: MeiElement = respStmt.appendSubElement(
+                    'persName',
+                    {
+                        'analog': 'humdrum:RNP'
+                    }
+                )
+                persNameEl.text = producer.meiValue
+
+            for conductor in conductors:
+                respEl = respStmt.appendSubElement(
+                    'resp',
+                    {
+                        'analog': 'humdrum:MCN'
+                    }
+                )
+                respEl.text = 'conductor'
+                persNameEl = respStmt.appendSubElement(
+                    'persName',
+                    {
+                        'analog': 'humdrum:MCN'
+                    }
+                )
+                persNameEl.text = conductor.meiValue
+
+        if manufacturers or releaseDates or recordingPlaces or recordingDates:
+            imprint: MeiElement = bibl.appendSubElement('imprint')
+
+            for manufacturer in manufacturers:
+                manufacturerEl: MeiElement = imprint.appendSubElement(
+                    'corpName',
+                    {
+                        'role': 'production/distribution',
+                        'analog': 'humdrum:RMM'
+                    }
+                )
+                manufacturerEl.text = manufacturer.meiValue
+
+            for releaseDate in releaseDates:
+                releaseDateEl: MeiElement = imprint.appendSubElement(
+                    'date',
+                    {
+                        'type': 'releaseDate',
+                        'isodate': M21Utilities.isoDateFromM21DateObject(
+                            releaseDate.value
+                        ),
+                        'analog': 'humdrum:RRD'
+                    }
+                )
+                releaseDateEl.text = releaseDate.meiValue
+
+            for recordingPlace in recordingPlaces:
+                recordingPlaceEl: MeiElement = imprint.appendSubElement(
+                    'geogName',
+                    {
+                        'role': 'recordingPlace',
+                        'analog': 'humdrum:RLC'
+                    }
+                )
+                recordingPlaceEl.text = recordingPlace.meiValue
+
+            for recordingDate in recordingDates:
+                recordingDateEl: MeiElement = imprint.appendSubElement(
+                    'date',
+                    {
+                        'type': 'recordingDate',
+                        'isodate': M21Utilities.isoDateFromM21DateObject(
+                            recordingDate.value
+                        ),
+                        'analog': 'humdrum:RDT'
+                    }
+                )
+                recordingDateEl.text = recordingDate.meiValue
+
+        for performanceLocation in performanceLocations:
+            performanceLocationEl: MeiElement = bibl.appendSubElement(
+                'geogName',
+                {
+                    'role': 'performanceLocation',
+                    'analog': 'humdrum:MLC'
+                }
+            )
+            performanceLocationEl.text = performanceLocation.meiValue
 
         if bibl.isEmpty():
             return None
@@ -325,18 +600,36 @@ class MeiMetadata:
         if not self.anyExist('RT#'):
             return None
 
-        source: MeiElement = MeiElement('source')
+        source: MeiElement = MeiElement('source', {'type': 'recordedTrack'})
         bibl: MeiElement = source.appendSubElement('bibl')
 
-        if bibl.isEmpty():
-            return None
+        trackNumbers: list[MeiMetadataItem] = self.contents.get('RT#', [])
+
+        bibl.appendSubElement('title')
+        for trackNumber in trackNumbers:
+            trackNumberEl: MeiElement = bibl.appendSubElement(
+                'identifier',
+                {
+                    'analog': 'humdrum:RT#'
+                }
+            )
+            trackNumberEl.text = trackNumber.meiValue
+
+        bibl.appendSubElement(
+            'relatedItem',
+            {
+                'rel': 'host',
+                'data': '#album1'
+            }
+        )
+
         return source
 
     def makeUnpublishedSource(self) -> MeiElement | None:
-        if not self.anyExist('PUB', 'SMS', 'SML', 'YOO', 'SMA'):
+        if not self.anyExist('PUB', 'SMS', 'SML', 'YOO', 'SMA', 'YOE', 'YOR', 'YOY'):
             return None
 
-        source: MeiElement = MeiElement('source')
+        source: MeiElement = MeiElement('source', {'type': 'unpublished'})
         bibl: MeiElement = source.appendSubElement('bibl')
 
         if bibl.isEmpty():
@@ -419,7 +712,7 @@ class MeiMetadata:
                 geogNameElement: MeiElement = composerElement.appendSubElement(
                     'geogName',
                     {
-                        'type': 'birthPlace',
+                        'role': 'birthPlace',
                         'analog': 'humdrum:CBL'
                     }
                 )
@@ -430,7 +723,7 @@ class MeiMetadata:
                 geogNameElement = composerElement.appendSubElement(
                     'geogName',
                     {
-                        'type': 'deathPlace',
+                        'role': 'deathPlace',
                         'analog': 'humdrum:CDL'
                     }
                 )
