@@ -619,7 +619,7 @@ class MeiMetadata:
             'relatedItem',
             {
                 'rel': 'host',
-                'data': '#album1'
+                'target': '#album1'
             }
         )
 
