@@ -735,15 +735,20 @@ class MeiMetadata:
     def makeMainComposerElements(self) -> list[MeiElement]:
         output: list[MeiElement] = []
         composers: list[MeiMetadataItem] = self.contents.get('COM', [])
+        attributedComposers: list[MeiMetadataItem] = self.contents.get('COA', [])
+        suspectedComposers: list[MeiMetadataItem] = self.contents.get('COS', [])
+        corporateComposers: list[MeiMetadataItem] = self.contents.get('COC', [])
         composerAliases: list[MeiMetadataItem] = self.contents.get('COL', [])
         composerDates: list[MeiMetadataItem] = self.contents.get('CDT', [])
         composerBirthPlaces: list[MeiMetadataItem] = self.contents.get('CBL', [])
         composerDeathPlaces: list[MeiMetadataItem] = self.contents.get('CDL', [])
+        composerNationalities: list[MeiMetadataItem] = self.contents.get('CNT', [])
         # TODO: Prefer composer birth/death dates from Contributor value.
         # TODO: But first make Humdrum importer put them there.
 
 
-        for i, composer in enumerate(composers):
+        for i, composer in enumerate(
+                composers + attributedComposers + suspectedComposers + corporateComposers):
             # Assume association is done by ordering of the metadata item arrays
             # Currently our Humdrum importer assumes this ordering should match
             # the ordering in the file.
@@ -751,6 +756,7 @@ class MeiMetadata:
             composerBirthAndDeathDate: MeiMetadataItem | None = None
             composerBirthPlace: MeiMetadataItem | None = None
             composerDeathPlace: MeiMetadataItem | None = None
+            composerNationality: MeiMetadataItem | None = None
             if i < len(composerAliases):
                 composerAlias = composerAliases[i]
             if i < len(composerDates):
@@ -759,18 +765,40 @@ class MeiMetadata:
                 composerBirthPlace = composerBirthPlaces[i]
             if i < len(composerDeathPlaces):
                 composerDeathPlace = composerDeathPlaces[i]
+            if i < len(composerNationalities):
+                composerNationality = composerNationalities[i]
 
             composerElement = MeiElement('composer')
             output.append(composerElement)
 
-            # composer name ('COM')
-            persNameElement: MeiElement = composerElement.appendSubElement(
-                'persName',
-                {
-                    'analog': 'humdrum:COM'
-                }
-            )
-            persNameElement.text = composer.meiValue
+            if composer.value.role == 'composerCorporate':
+                # composer corpName ('COC')
+                corpNameElement: MeiElement = composerElement.appendSubElement(
+                    'corpName',
+                    {
+                        'analog': 'humdrum:COC'
+                    }
+                )
+                corpNameElement.text = composer.meiValue
+            else:
+                # composer persName ('COM'/'COA'/'COS')
+                composerAnalog: str = 'humdrum:COM'
+                composerCert: str = ''
+                if composer.value.role == 'attributedComposer':
+                    composerAnalog = 'humdrum:COA'
+                    composerCert = 'medium'
+                elif composer.value.role == 'suspectedComposer':
+                    composerAnalog = 'humdrum:COS'
+                    composerCert = 'low'
+
+                persNameAttr = {'analog': composerAnalog}
+                if composerCert:
+                    persNameAttr['cert'] = composerCert
+                persNameElement: MeiElement = composerElement.appendSubElement(
+                    'persName',
+                    persNameAttr
+                )
+                persNameElement.text = composer.meiValue
 
             # composer alias ('COL')
             if composerAlias is not None:
@@ -824,6 +852,17 @@ class MeiMetadata:
                     }
                 )
                 geogNameElement.text = composerDeathPlace.meiValue
+
+            # composer nationality
+            if composerNationality is not None:
+                geogNameElement = composerElement.appendSubElement(
+                    'geogName',
+                    {
+                        'role': 'nationality',
+                        'analog': 'humdrum:CNT'
+                    }
+                )
+                geogNameElement.text = composerNationality.meiValue
 
         return output
 
@@ -991,9 +1030,38 @@ class MeiMetadata:
         return titleElement
 
     def makeEncodingDescElement(self) -> MeiElement | None:
-        return None
+        encodingNotes: list[MeiMetadataItem] = self.contents.get('RNB', [])
+        encodingWarnings: list[MeiMetadataItem] = self.contents.get('RWB', [])
+        if not encodingNotes and not encodingWarnings:
+            return None
+
+        encodingDesc: MeiElement = MeiElement('encodingDesc')
+        editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
+
+        for note in encodingNotes:
+            p: MeiElement = editorialDecl.appendSubElement('p', {'analog': 'humdrum:RNB'})
+            p.text = note.meiValue
+        for warning in encodingWarnings:
+            p = editorialDecl.appendSubElement('p', {'analog': 'humdrum:RWB'})
+            p.text = warning.meiValue
+
+        return encodingDesc
 
     def makeWorkListElement(self) -> MeiElement | None:
+        parentWorkTitles: list[MeiMetadataItem] = self.contents.get('OPR', [])
+        groupWorkTitles: list[MeiMetadataItem] = self.contents.get('GTL', [])
+        associatedWorkTitles: list[MeiMetadataItem] = self.contents.get('GAW', [])
+        collectionWorkTitles: list[MeiMetadataItem] = self.contents.get('GCO', [])
+
+        if not (parentWorkTitles
+                or groupWorkTitles
+                or associatedWorkTitles
+                or collectionWorkTitles
+                or self.mainTitleElement
+                or self.mainComposerElements):
+            return None
+
+
         return None
 
     def makeManifestationListElement(self) -> MeiElement | None:
