@@ -136,9 +136,9 @@ class MeiMetadata:
         pubStmt: MeiElement = fileDesc.appendSubElement('pubStmt')
         unpub: MeiElement = pubStmt.appendSubElement('unpub')
         unpub.text = (
-            '''This MEI file was created by converter21's MEI writer, from a music21 score.
-                   If it is published, this unpub element should be removed, and the enclosing
-                   pubStmt element should be properly filled out.'''
+            '''This MEI file was created by converter21's MEI writer, from a music21
+                   score. When published, this unpub element should be removed, and the
+                   enclosing pubStmt element should be properly filled out.'''
         )
 
         # sourceDesc: There are potentially multiple sources here, depending on what
@@ -252,6 +252,7 @@ class MeiMetadata:
                         'analog': 'humdrum:YER'
                     }
                 )
+                releaseDateEl.fillInIsodate(releaseDate.value)
                 releaseDateEl.text = releaseDate.meiValue
 
             for encodingDate in encodingDates:
@@ -262,6 +263,7 @@ class MeiMetadata:
                         'analog': 'humdrum:END'
                     }
                 )
+                encodingDateEl.fillInIsodate(encodingDate.value)
                 encodingDateEl.text = encodingDate.meiValue
 
         for copyrightStatement in copyrightStatements:
@@ -551,12 +553,10 @@ class MeiMetadata:
                     'date',
                     {
                         'type': 'releaseDate',
-                        'isodate': M21Utilities.isoDateFromM21DateObject(
-                            releaseDate.value
-                        ),
                         'analog': 'humdrum:RRD'
                     }
                 )
+                releaseDateEl.fillInIsodate(releaseDate.value)
                 releaseDateEl.text = releaseDate.meiValue
 
             for recordingPlace in recordingPlaces:
@@ -574,12 +574,10 @@ class MeiMetadata:
                     'date',
                     {
                         'type': 'recordingDate',
-                        'isodate': M21Utilities.isoDateFromM21DateObject(
-                            recordingDate.value
-                        ),
                         'analog': 'humdrum:RDT'
                     }
                 )
+                recordingDateEl.fillInIsodate(recordingDate.value)
                 recordingDateEl.text = recordingDate.meiValue
 
         for performanceLocation in performanceLocations:
@@ -710,12 +708,10 @@ class MeiMetadata:
                 'date',
                 {
                     'type': 'copyrightDate',
-                    'isodate': M21Utilities.isoDateFromM21DateObject(
-                        copyrightDate.value
-                    ),
                     'analog': 'humdrum:YOY'
                 }
             )
+            copyrightDateEl.fillInIsodate(copyrightDate.value)
             copyrightDateEl.text = copyrightDate.meiValue
 
         for acknowledgment in acknowledgments:
@@ -813,22 +809,14 @@ class MeiMetadata:
 
             # composer birth and death dates
             if composerBirthAndDeathDate is not None:
-                isodate: str = M21Utilities.isoDateFromM21DateObject(
-                    composerBirthAndDeathDate.value
-                )
-
-                attrib: dict[str, str] = {
-                    'type': 'birth/death',
-                    'analog': 'humdrum:CDT',
-                }
-
-                if isodate:
-                    attrib['isodate'] = isodate
-
                 dateElement: MeiElement = composerElement.appendSubElement(
                     'date',
-                    attrib
+                    {
+                        'type': 'birth/death',
+                        'analog': 'humdrum:CDT',
+                    }
                 )
+                dateElement.fillInIsodate(composerBirthAndDeathDate.value)
                 dateElement.text = composerBirthAndDeathDate.meiValue
 
             # composer birth place
@@ -1048,21 +1036,501 @@ class MeiMetadata:
         return encodingDesc
 
     def makeWorkListElement(self) -> MeiElement | None:
+        # the main (encoded) work
+        catalogNumbers: list[MeiMetadataItem] = self.contents.get('SCA', [])
+        catalogAbbrevNumbers: list[MeiMetadataItem] = self.contents.get('SCT', [])
+        alternativeTitles: list[MeiMetadataItem] = self.contents.get('OTA', [])
+        popularTitles: list[MeiMetadataItem] = self.contents.get('OTP', [])
+        creationDates: list[MeiMetadataItem] = self.contents.get('ODT', [])
+        creationCountries: list[MeiMetadataItem] = self.contents.get('OCY', [])
+        creationSettlements: list[MeiMetadataItem] = self.contents.get('OPC', [])
+        creationRegions: list[MeiMetadataItem] = self.contents.get('ARE', [])
+        creationLatLongs: list[MeiMetadataItem] = self.contents.get('ARL', [])
+        lyricists: list[MeiMetadataItem] = self.contents.get('LYR', [])
+        librettists: list[MeiMetadataItem] = self.contents.get('LIB', [])
+        dedicatees: list[MeiMetadataItem] = self.contents.get('ODE', [])
+        funders: list[MeiMetadataItem] = self.contents.get('OCO', [])
+        languages: list[MeiMetadataItem] = self.contents.get('TXO', [])
+        histories: list[MeiMetadataItem] = self.contents.get('HAO', [])
+        instrumentLists: list[MeiMetadataItem] = self.contents.get('AIN', [])
+        notes: list[MeiMetadataItem] = self.contents.get('ONB', [])
+        forms: list[MeiMetadataItem] = self.contents.get('AFR', [])
+        genres: list[MeiMetadataItem] = self.contents.get('AGN', [])
+        modes: list[MeiMetadataItem] = self.contents.get('AMD', [])
+        meters: list[MeiMetadataItem] = self.contents.get('AMT', [])
+        styles: list[MeiMetadataItem] = self.contents.get('AST', [])
+        firstPerformanceDates: list[MeiMetadataItem] = self.contents.get('MPD', [])
+        performanceDates: list[MeiMetadataItem] = self.contents.get('MDT', [])
+        performanceDates.extend(self.contents.get('MRD', []))
+
+        # related works
         parentWorkTitles: list[MeiMetadataItem] = self.contents.get('OPR', [])
         groupWorkTitles: list[MeiMetadataItem] = self.contents.get('GTL', [])
         associatedWorkTitles: list[MeiMetadataItem] = self.contents.get('GAW', [])
         collectionWorkTitles: list[MeiMetadataItem] = self.contents.get('GCO', [])
 
-        if not (parentWorkTitles
-                or groupWorkTitles
-                or associatedWorkTitles
-                or collectionWorkTitles
+        parentWorkXmlId: str = ''
+        groupWorkXmlId: str = ''
+        associatedWorkXmlId: str = ''
+        collectionWorkXmlId: str = ''
+
+        workList: MeiElement | None = None
+        workNumber: int = 0
+
+        # the parent work
+        if parentWorkTitles:
+            workList = workList or MeiElement('workList')
+
+            parentWorkXmlId = f'work{workNumber}_parent'
+            parentWork = workList.appendSubElement(
+                'work',
+                {
+                    'xml:id': parentWorkXmlId,
+                    'type': 'parent'
+                }
+            )
+            workNumber += 1
+
+            for parentWorkTitle in parentWorkTitles:
+                titleElement = parentWork.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:OPR'
+                    }
+                )
+                titleElement.text = parentWorkTitle.meiValue
+
+        # the group work
+        if groupWorkTitles:
+            workList = workList or MeiElement('workList')
+
+            groupWorkXmlId = f'work{workNumber}_group'
+            groupWork = workList.appendSubElement(
+                'work',
+                {
+                    'xml:id': groupWorkXmlId,
+                    'type': 'group'
+                }
+            )
+            workNumber += 1
+
+            for groupWorkTitle in groupWorkTitles:
+                titleElement = groupWork.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:GTL'
+                    }
+                )
+                titleElement.text = groupWorkTitle.meiValue
+
+        # the associated work
+        if associatedWorkTitles:
+            workList = workList or MeiElement('workList')
+
+            associatedWorkXmlId = f'work{workNumber}_associated'
+            associatedWork = workList.appendSubElement(
+                'work',
+                {
+                    'xml:id': associatedWorkXmlId,
+                    'type': 'associated'
+                }
+            )
+            workNumber += 1
+
+            for associatedWorkTitle in associatedWorkTitles:
+                titleElement = associatedWork.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:GAW'
+                    }
+                )
+                titleElement.text = associatedWorkTitle.meiValue
+
+        # the collection work
+        if collectionWorkTitles:
+            workList = workList or MeiElement('workList')
+
+            collectionWorkXmlId = f'work{workNumber}_collection'
+            collectionWork = workList.appendSubElement(
+                'work',
+                {
+                    'xml:id': collectionWorkXmlId,
+                    'type': 'collection'
+                }
+            )
+            workNumber += 1
+
+            for collectionWorkTitle in collectionWorkTitles:
+                titleElement = collectionWork.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:GCO'
+                    }
+                )
+                titleElement.text = collectionWorkTitle.meiValue
+
+        # the main (encoded) work
+        if (catalogNumbers
+                or catalogAbbrevNumbers
                 or self.mainTitleElement
-                or self.mainComposerElements):
-            return None
+                or alternativeTitles
+                or popularTitles
+                or creationDates
+                or creationCountries
+                or creationSettlements
+                or creationRegions
+                or creationLatLongs
+                or self.mainComposerElements
+                or lyricists
+                or librettists
+                or dedicatees
+                or funders
+                or languages
+                or histories
+                or instrumentLists
+                or notes
+                or forms
+                or genres
+                or modes
+                or meters
+                or styles
+                or firstPerformanceDates
+                or performanceDates):
+            workList = workList or MeiElement('workList')
 
+            theWork = workList.appendSubElement(
+                'work',
+                {
+                    'xml:id': f'work{workNumber}_main',
+                    'type': 'main'
+                }
+            )
+            workNumber += 1
 
-        return None
+            # <identifier>
+            for catalogNumber in catalogNumbers:
+                identifierElement = theWork.appendSubElement(
+                    'identifier',
+                    {
+                        'analog': 'humdrum:SCA'
+                    }
+                )
+                identifierElement.text = catalogNumber.meiValue
+
+            for catalogAbbrevNumber in catalogAbbrevNumbers:
+                identifierElement = theWork.appendSubElement(
+                    'identifier',
+                    {
+                        'analog': 'humdrum:SCT'
+                    }
+                )
+                identifierElement.text = catalogAbbrevNumber.meiValue
+
+            # <title>
+            if self.mainTitleElement is not None:
+                theWork.subElements.append(self.mainTitleElement)
+
+            for alternativeTitle in alternativeTitles:
+                titleElement = theWork.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:OTA'
+                    }
+                )
+                titleElement.text = alternativeTitle.meiValue
+
+            for popularTitle in popularTitles:
+                titleElement = theWork.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:OTP'
+                    }
+                )
+                titleElement.text = popularTitle.meiValue
+
+            # <creation>
+            if (creationDates
+                    or creationCountries
+                    or creationSettlements
+                    or creationRegions
+                    or creationLatLongs):
+                creationElement: MeiElement = theWork.appendSubElement('creation')
+
+                for creationDate in creationDates:
+                    dateElement: MeiElement = creationElement.appendSubElement(
+                        'date',
+                        {
+                            'analog': 'humdrum:ODT',
+                        }
+                    )
+                    dateElement.fillInIsodate(creationDate.value)
+                    dateElement.text = creationDate.meiValue
+
+                for creationCountry in creationCountries:
+                    countryElement: MeiElement = creationElement.appendSubElement(
+                        'country',
+                        {
+                            'analog': 'humdrum:OCY'
+                        }
+                    )
+                    countryElement.text = creationCountry.meiValue
+
+                for creationSettlement in creationSettlements:
+                    settlementElement: MeiElement = creationElement.appendSubElement(
+                        'settlement',
+                        {
+                            'analog': 'humdrum:OPC'
+                        }
+                    )
+                    settlementElement.text = creationSettlement.meiValue
+
+                for creationRegion in creationRegions:
+                    regionElement: MeiElement = creationElement.appendSubElement(
+                        'region',
+                        {
+                            'analog': 'humdrum:ARE'
+                        }
+                    )
+                    regionElement.text = creationRegion.meiValue
+
+                for creationLatLong in creationLatLongs:
+                    regionElement = creationElement.appendSubElement(
+                        'region',
+                        {
+                            'analog': 'humdrum:ARL'
+                        }
+                    )
+                    regionElement.text = creationLatLong.meiValue
+
+            # <composer>
+            if self.mainComposerElements:
+                theWork.subElements.extend(self.mainComposerElements)
+
+            # <lyricist>
+            for lyricist in lyricists:
+                lyricistElement: MeiElement = theWork.appendSubElement(
+                    'lyricist',
+                    {
+                        'analog': 'humdrum:LYR'
+                    }
+                )
+                persName = lyricistElement.appendSubElement('persName')
+                persName.text = lyricist.meiValue
+
+            # <librettist>
+            for librettist in librettists:
+                librettistElement: MeiElement = theWork.appendSubElement(
+                    'librettist',
+                    {
+                        'analog': 'humdrum:LIB'
+                    }
+                )
+                persName = librettistElement.appendSubElement('persName')
+                persName.text = librettist.meiValue
+
+            # <dedicatee> someday; for now <contributor role="dedicatee">
+            for dedicatee in dedicatees:
+                contributorElement: MeiElement = theWork.appendSubElement(
+                    'contributor',
+                    {
+                        'role': 'dedicatee',
+                        'analog': 'humdrum:ODE'
+                    }
+                )
+                contributorElement.text = dedicatee.meiValue
+
+            # <funder>
+            for funder in funders:
+                funderElement: MeiElement = theWork.appendSubElement(
+                    'funder',
+                    {
+                        'analog': 'humdrum:OCO'
+                    }
+                )
+                funderElement.text = funder.meiValue
+
+            # <langUsage>
+            if languages:
+                langUsageElement: MeiElement = theWork.appendSubElement('langUsage')
+                for language in languages:
+                    languageElement: MeiElement = langUsageElement.appendSubElement(
+                        'language',
+                        {
+                            'analog': 'humdrum:TXO'
+                        }
+                    )
+                    languageElement.text = language.meiValue
+
+            # <history>
+            if histories:
+                historyElement: MeiElement = theWork.appendSubElement('history')
+                for history in histories:
+                    pElement: MeiElement = historyElement.appendSubElement(
+                        'p',
+                        {
+                            'analog': 'humdrum:HAO'
+                        }
+                    )
+                    pElement.text = history.meiValue
+
+            # TODO: <perfMedium><perfResList>
+#             if instrumentLists:
+#                 perfMediumElement: MeiElement = theWork.appendSubElement('perfMedium')
+#                 if len(instrumentLists) == 1:
+#                     perfResListElement: MeiElement = perfMediumElement.appendSubElement(
+#                         'perfResList'
+#                     )
+#                     for instrument in instrumentLists[0].split(' '):
+#                         perfResElement: MeiElement = perfResListElement.appendSubElement(
+#                             'perfRes'
+#                         )
+#                         perfResElement.text = oh boy, what about counts
+#                     outerPerfResListElement: MeiElement = perfMediumElement.appendSubElement(
+#                         'perfResList'
+#                     )
+
+            # <notesStmt>
+            if notes:
+                notesStmtElement: MeiElement = theWork.appendSubElement('notesStmt')
+                for note in notes:
+                    annotElement: MeiElement = notesStmtElement.appendSubElement(
+                        'annot',
+                        {
+                            'analog': 'humdrum:ONB'
+                        }
+                    )
+                    annotElement.text = note.meiValue
+
+            # <classification>
+            if forms or genres or modes or meters or styles:
+                classificationElement: MeiElement = theWork.appendSubElement('classification')
+                termListElement: MeiElement = classificationElement.appendSubElement('termList')
+                for form in forms:
+                    termElement: MeiElement = termListElement.appendSubElement(
+                        'term',
+                        {
+                            'label': 'form',
+                            'analog': 'humdrum:AFR'
+                        }
+                    )
+                    termElement.text = form.meiValue
+
+                for genre in genres:
+                    termElement = termListElement.appendSubElement(
+                        'term',
+                        {
+                            'label': 'genre',
+                            'analog': 'humdrum:AGN'
+                        }
+                    )
+                    termElement.text = genre.meiValue
+
+                for mode in modes:
+                    termElement = termListElement.appendSubElement(
+                        'term',
+                        {
+                            'label': 'mode',
+                            'analog': 'humdrum:AMD'
+                        }
+                    )
+                    termElement.text = mode.meiValue
+
+                for meter in meters:
+                    termElement = termListElement.appendSubElement(
+                        'term',
+                        {
+                            'label': 'meter',
+                            'analog': 'humdrum:AMT'
+                        }
+                    )
+                    termElement.text = meter.meiValue
+
+                for style in styles:
+                    termElement = termListElement.appendSubElement(
+                        'term',
+                        {
+                            'label': 'style',
+                            'analog': 'humdrum:AST'
+                        }
+                    )
+                    termElement.text = style.meiValue
+
+            # <expressionList>
+            if firstPerformanceDates:
+                expressionListElement: MeiElement = theWork.appendSubElement('expressionList')
+                expressionElement: MeiElement = expressionListElement.appendSubElement(
+                    'expression'
+                )
+                titleElement = expressionElement.appendSubElement('title')
+                creationElement = expressionElement.appendSubElement('creation')
+                for firstPerformanceDate in firstPerformanceDates:
+                    dateElement = creationElement.appendSubElement(
+                        'date',
+                        {
+                            'type': 'firstPerformance',
+                            'analog': 'humdrum:MPD'
+                        }
+                    )
+                    dateElement.fillInIsodate(firstPerformanceDate.value)
+                    dateElement.text = firstPerformanceDate.meiValue
+
+            if performanceDates:
+                expressionListElement = (
+                    expressionListElement or theWork.appendSubElement('expressionList')
+                )
+                expressionElement = expressionListElement.appendSubElement(
+                    'expression'
+                )
+                titleElement = expressionElement.appendSubElement('title')
+                creationElement = expressionElement.appendSubElement('creation')
+                for performanceDate in performanceDates:
+                    dateElement = creationElement.appendSubElement(
+                        'date',
+                        {
+                            'type': 'performance',
+                            'analog': 'humdrum:MDT'
+                        }
+                    )
+                    dateElement.fillInIsodate(performanceDate.value)
+                    dateElement.text = performanceDate.meiValue
+
+            # <relationList> (relations to the other works)
+            if parentWorkXmlId or groupWorkXmlId or associatedWorkXmlId or collectionWorkXmlId:
+                relationList = theWork.appendSubElement('relationList')
+                if parentWorkXmlId:
+                    relationList.appendSubElement(
+                        'relation',
+                        {
+                            'rel': 'host',
+                            'plist': f'#{parentWorkXmlId}'
+                        }
+                    )
+                if groupWorkXmlId:
+                    relationList.appendSubElement(
+                        'relation',
+                        {
+                            'rel': 'isPartOf',
+                            'plist': f'#{groupWorkXmlId}'
+                        }
+                    )
+                if associatedWorkXmlId:
+                    relationList.appendSubElement(
+                        'relation',
+                        {
+                            'rel': 'isVersionOf',
+                            'plist': f'#{associatedWorkXmlId}'
+                        }
+                    )
+                if collectionWorkXmlId:
+                    relationList.appendSubElement(
+                        'relation',
+                        {
+                            'rel': 'isPartOf',
+                            'plist': f'#{collectionWorkXmlId}'
+                        }
+                    )
+
+        return workList
 
     def makeManifestationListElement(self) -> MeiElement | None:
         return None

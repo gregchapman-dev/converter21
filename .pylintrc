@@ -327,7 +327,7 @@ exclude-protected=_asdict,_fields,_replace,_source,_make
 max-args=5
 
 # maximum boolean expressions in a line (too-many-boolean-expressions)
-max-bool-expr=10
+max-bool-expr=30
 
 # Argument names that match this expression will be ignored. Default to name
 # with leading underscore

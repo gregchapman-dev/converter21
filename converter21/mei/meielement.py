@@ -12,6 +12,10 @@
 # ------------------------------------------------------------------------------
 from xml.etree.ElementTree import TreeBuilder, tostring
 
+import music21 as m21
+
+from converter21.shared import M21Utilities
+
 class MeiElement:
     def __init__(
         self,
@@ -46,6 +50,15 @@ class MeiElement:
         if self.subElements:
             return False
         return True
+
+    def fillInIsodate(
+        self,
+        m21Date: m21.metadata.DatePrimitive | m21.metadata.Text,
+        attributeName: str = 'isodate'
+    ):
+        isodate: str = M21Utilities.isoDateFromM21DateObject(m21Date)
+        if isodate:
+            self.attrib[attributeName] = isodate
 
     def makeRootElement(self, tb: TreeBuilder):
         tb.start(self.name, self.attrib)

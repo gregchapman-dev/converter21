@@ -1013,18 +1013,55 @@ class M21Utilities:
 
     @staticmethod
     def isoDateFromM21DateObject(
-        dateObj: m21.metadata.DatePrimitive
+        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text
     ) -> str:
-        # TODO: handle DatePrimitives that contain multiple dates (DateBetween, DateSelection)
-        # TODO: currently m21.metadata.DatePrimitive.datetime() returns the datetime of the
-        # TODO: first date only.
         isodate: str = ''
-        try:
-            dt: datetime.datetime = dateObj.datetime()
-            isodate = datetime.datetime.isoformat(dt)
-        except Exception:
-            pass
+        if isinstance(dateObj, m21.metadata.Text):
+            # convert to DatePrimitive
+            do: m21.metadata.DatePrimitive | None = (
+                M21Utilities.m21DateObjectFromString(str(dateObj))
+            )
+            if do is None:
+                return ''
+            dateObj = do
+
+        isodates: list[str] = []
+        for date in dateObj._data:
+            iso: str = M21Utilities.isoDateFromM21Date(date)
+            isodates.append(iso)
+
+        if isinstance(dateObj, m21.metadata.DateSingle):
+            isodate = isodates[0]
+        elif isinstance(dateObj, m21.metadata.DateRelative):
+            if dateObj.relevance in ('prior', 'onorbefore'):
+                isodate = '../' + isodate
+            elif dateObj.relevance in ('after', 'onorafter'):
+                isodate = isodate + '/..'
+        elif isinstance(dateObj, m21.metadata.DateBetween):
+            isodate = isodates[0] + '/' + isodates[1]
+        elif isinstance(dateObj, m21.metadata.DateSelection):
+            isodate = '{' + ','.join(isodates) + '}'
         return isodate
+
+    @staticmethod
+    def isoDateFromM21Date(date: m21.metadata.Date) -> str:
+        msg: list[str] = []
+        for attr in date.attrNames:
+            value = t.cast(int, getattr(date, attr))
+            if value is None:
+                break  # ignore anything after this
+
+            sub: str
+            if attr == 'year':
+                sub = '%04d' % value
+            else:
+                sub = '%02d' % value
+            msg.append(sub)
+
+        out = '-'.join(msg[:4])
+        if len(msg) > 4:
+            out += 'T' + ':'.join(msg[4:])
+        return out
 
     # Conversions from str to m21.metadata.DatePrimitive types, and back.
     # e.g. '1942///-1943///' -> DateBetween([Date(1942), Date(1943)])
