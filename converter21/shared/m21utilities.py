@@ -1040,7 +1040,10 @@ class M21Utilities:
         elif isinstance(dateObj, m21.metadata.DateBetween):
             isodate = isodates[0] + '/' + isodates[1]
         elif isinstance(dateObj, m21.metadata.DateSelection):
-            isodate = '{' + ','.join(isodates) + '}'
+            if dateObj.relevance == 'and':
+                isodate = '{' + ','.join(isodates) + '}'
+            else:
+                isodate = '[' + ','.join(isodates) + ']'
         return isodate
 
     @staticmethod
