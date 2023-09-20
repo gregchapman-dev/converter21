@@ -16,6 +16,7 @@ import music21 as m21
 
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
+from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiElement
 from converter21.shared import M21Utilities
 
@@ -82,8 +83,8 @@ class MeiMetadata:
 
         # saved off state during makeRootElement (e.g. MeiElement trees that
         # may need to be re-used)
-        self.mainTitleElement: MeiElement | None = None
-        self.mainComposerElements: list[MeiElement] = []
+        self.mainTitleSameAsElement: MeiElement | None = None
+        self.composerSameAsElements: list[MeiElement] = []
 
     def makeRootElement(self, tb: TreeBuilder):
         meiHead: MeiElement = MeiElement('meiHead')
@@ -113,6 +114,76 @@ class MeiMetadata:
                 return True
         return False
 
+    def makeSameAs(self, element: MeiElement) -> MeiElement:
+        # note that we might modify element (add @xml:id="asdf" if necessary)
+        # as well as return a new element that has @sameas="#asdf".
+        xmlId: str = element.attrib.get('xml:id', '')
+        if not xmlId:
+            xmlId = M21ObjectConvert.makeXmlIdFrom(id(element), element.name)
+            element.attrib['xml:id'] = xmlId
+
+        sameAsElement: MeiElement = MeiElement(
+            element.name,
+            {
+                'sameas': '#' + xmlId
+            }
+        )
+
+        # Fill in sameAsElement.text with something recognizable,
+        # if possible, for the sake of human Mei readers.
+        text: str = element.text
+        if not text:
+            persNames: list[MeiElement] = element.getSubElements('persName')
+            if persNames:
+                for persName in persNames:
+                    if persName.attrib.get('type', '') in ('', 'main'):
+                        text = persName.text
+                        break
+                if not text:
+                    text = persNames[0].text
+
+        if not text:
+            names: list[MeiElement] = element.getSubElements('name')
+            if names:
+                for name in names:
+                    if name.attrib.get('type', '') in ('', 'main'):
+                        text = name.text
+                        break
+                if not text:
+                    text = names[0].text
+
+        if not text:
+            corpNames: list[MeiElement] = element.getSubElements('corpName')
+            if corpNames:
+                for corpName in corpNames:
+                    if corpName.attrib.get('type', '') in ('', 'main'):
+                        text = corpName.text
+                        break
+                if not text:
+                    text = corpNames[0].text
+
+        if not text:
+            titleParts: list[MeiElement] = element.getSubElements('titlePart')
+            if titleParts:
+                for titlePart in titleParts:
+                    if titlePart.attrib.get('type', '') in ('', 'main'):
+                        text = titlePart.text
+                        break
+                if not text:
+                    text = titleParts[0].text
+
+        if text:
+            sameAsElement.text = text
+
+        return sameAsElement
+
+    def makeSameAsList(self, elements: list[MeiElement]) -> list[MeiElement]:
+        sameAsList: list[MeiElement] = []
+        for element in elements:
+            sameAsElement: MeiElement = self.makeSameAs(element)
+            sameAsList.append(sameAsElement)
+        return sameAsList
+
     def makeFileDescElement(self) -> MeiElement:
         # meiHead/fileDesc is required, so we never return None here
         fileDesc: MeiElement = MeiElement('fileDesc')
@@ -122,13 +193,15 @@ class MeiMetadata:
 
         # We stash off the main title element because we will reuse it in
         # the workList/work that describes the work we have encoded here.
-        self.mainTitleElement = self.makeMainTitleElement()
-        if self.mainTitleElement is not None:
-            titleStmt.subElements.append(self.mainTitleElement)
+        mainTitleElement: MeiElement | None = self.makeMainTitleElement()
+        if mainTitleElement is not None:
+            titleStmt.subElements.append(mainTitleElement)
+            self.mainTitleSameAsElement = self.makeSameAs(mainTitleElement)
 
-        self.mainComposerElements = self.makeMainComposerElements()
-        if self.mainComposerElements:
-            titleStmt.subElements.extend(self.mainComposerElements)
+        composerElements = self.makeComposerElements()
+        if composerElements:
+            titleStmt.subElements.extend(composerElements)
+            self.composerSameAsElements = self.makeSameAsList(composerElements)
 
         # pubStmt describes the MEI file we are writing.  It is, of course,
         # unpublished, so we use <unpub> to say that.  This pubStmt will
@@ -179,10 +252,10 @@ class MeiMetadata:
 
         source: MeiElement = MeiElement('source', {'type': 'digital'})
         bibl: MeiElement = source.appendSubElement('bibl')
-        if self.mainTitleElement:
-            bibl.subElements.append(self.mainTitleElement)
-        if self.mainComposerElements:
-            bibl.subElements.extend(self.mainComposerElements)
+        if self.mainTitleSameAsElement:
+            bibl.subElements.append(self.mainTitleSameAsElement)
+        if self.composerSameAsElements:
+            bibl.subElements.extend(self.composerSameAsElements)
 
         editors: list[MeiMetadataItem] = self.contents.get('EED', [])
         encoders: list[MeiMetadataItem] = self.contents.get('ENC', [])
@@ -298,10 +371,10 @@ class MeiMetadata:
 
         source: MeiElement = MeiElement('source', {'type': 'published'})
         bibl: MeiElement = source.appendSubElement('bibl')
-        if self.mainTitleElement:
-            bibl.subElements.append(self.mainTitleElement)
-        if self.mainComposerElements:
-            bibl.subElements.extend(self.mainComposerElements)
+        if self.mainTitleSameAsElement:
+            bibl.subElements.append(self.mainTitleSameAsElement)
+        if self.composerSameAsElements:
+            bibl.subElements.extend(self.composerSameAsElements)
 
         arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
         editors: list[MeiMetadataItem] = self.contents.get('YOE', [])
@@ -728,7 +801,7 @@ class MeiMetadata:
             return None
         return source
 
-    def makeMainComposerElements(self) -> list[MeiElement]:
+    def makeComposerElements(self) -> list[MeiElement]:
         output: list[MeiElement] = []
         composers: list[MeiMetadataItem] = self.contents.get('COM', [])
         attributedComposers: list[MeiMetadataItem] = self.contents.get('COA', [])
@@ -1172,7 +1245,7 @@ class MeiMetadata:
         # the main (encoded) work
         if (catalogNumbers
                 or catalogAbbrevNumbers
-                or self.mainTitleElement
+                or self.mainTitleSameAsElement
                 or alternativeTitles
                 or popularTitles
                 or creationDates
@@ -1180,7 +1253,7 @@ class MeiMetadata:
                 or creationSettlements
                 or creationRegions
                 or creationLatLongs
-                or self.mainComposerElements
+                or self.composerSameAsElements
                 or lyricists
                 or librettists
                 or dedicatees
@@ -1227,8 +1300,8 @@ class MeiMetadata:
                 identifierElement.text = catalogAbbrevNumber.meiValue
 
             # <title>
-            if self.mainTitleElement is not None:
-                theWork.subElements.append(self.mainTitleElement)
+            if self.mainTitleSameAsElement is not None:
+                theWork.subElements.append(self.mainTitleSameAsElement)
 
             for alternativeTitle in alternativeTitles:
                 titleElement = theWork.appendSubElement(
@@ -1303,8 +1376,8 @@ class MeiMetadata:
                     regionElement.text = creationLatLong.meiValue
 
             # <composer>
-            if self.mainComposerElements:
-                theWork.subElements.extend(self.mainComposerElements)
+            if self.composerSameAsElements:
+                theWork.subElements.extend(self.composerSameAsElements)
 
             # <lyricist>
             for lyricist in lyricists:

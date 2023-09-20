@@ -1,5 +1,14 @@
 !!!COM: Composer's name
+!!CDT: Composers birth/death dates
+!!!CDT: 1770/-1827/
+!!!CBL: Composer's birth location
+!!!CDL: Composer's death location
+!!!CNT: Composer's nationality
 !!!COM2: A different composer's name
+!!!CDT: 1775/-1810/
+!!!CBL: A different composer's birth location
+!!!CDL: A different composer's death location
+!!!CNT: A different composer's nationality
 !!!OTL@@FR: French (untranslated) title
 !!!OTL@EN: English (translated) title
 !!!OMD@@FR: French (untranslated) movement name
@@ -21,14 +30,14 @@
 *-	*-
 !!!system-decoration: {(s1,s2)}
 !!!COA: Attributed composer
+!!!CBL: Attributed composer's birth location
+!!!CDL: Attributed composer's death location
+!!!CDT: 1750/-1832/
+!!!CNT: Attributed composer's nationality
 !!!COS: Suspected composer
 !!!COL: Composer's abbreviated, alias, or stage name
-!!!COC: Composer's corporate name
+!!!COC: Corporate composer
 !!CDT: Composer's birth and death dates
-!!!CDT: 1770/-1827/
-!!!CBL: Composer's birth location
-!!!CDL: Composer's death location
-!!!CNT: Composer's nationality
 !!!LYR: Lyricist's name
 !!!LIB: librettist's name
 !!!LAR: music arranger's name

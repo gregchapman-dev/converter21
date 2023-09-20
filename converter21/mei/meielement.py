@@ -42,6 +42,16 @@ class MeiElement:
         self.subElements.append(subElement)
         return subElement
 
+    def getSubElements(
+        self,
+        name: str
+    ) -> list['MeiElement']:
+        output: list[MeiElement] = []
+        for subEl in self.subElements:
+            if subEl.name == name:
+                output.append(subEl)
+        return output
+
     def isEmpty(self) -> bool:
         if self.attrib:
             return False

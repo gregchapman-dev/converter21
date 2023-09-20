@@ -143,10 +143,8 @@ class M21ObjectConvert:
 
 
     @staticmethod
-    def assureXmlId(obj: m21.base.Music21Object):
-        # if xml id has already been set, leave it as is
-        if hasattr(obj, 'mei_xml_id'):
-            return
+    def makeXmlIdFrom(identifier: int | str, prefix: str = '') -> str:
+        output: str = ''
 
         def alphabet_encode(numToEncode: int) -> str:
             if numToEncode == 0:
@@ -158,27 +156,36 @@ class M21ObjectConvert:
                 encoded = M21ObjectConvert._XMLID_BASE_ALPHABET[remainder] + encoded
             return encoded
 
-        if isinstance(obj.id, str):
+        if isinstance(identifier, str):
             # str, use as is
-            obj.mei_xml_id = obj.id  # type: ignore
-            return
-
-        if (isinstance(obj.id, int)
-                and obj.id < m21.defaults.minIdNumberToConsiderMemoryLocation):
+            output = identifier
+        elif (isinstance(identifier, int)
+                and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
             # Nice low integer, use as is (converted to str)
-            obj.mei_xml_id = str(obj.id)  # type: ignore
-            return
+            output = str(identifier)
 
-        if isinstance(obj.id, int):
+        elif isinstance(identifier, int):
             # Actually a memory location, so make it a nice short ASCII string,
             # with lower-case class name prefix.
-            obj.mei_xml_id = (  # type: ignore
-                obj.classes[0].lower() + '-' + alphabet_encode(obj.id)
-            )
-            return
+            output = alphabet_encode(identifier)
+        else:
+            # hope for the best...
+            output = str(identifier)
 
-        # hope for the best...
-        obj.mei_xml_id = str(obj.id)  # type: ignore
+        if not prefix:
+            return output
+
+        output = prefix + '-' + output
+        return output
+
+    @staticmethod
+    def assureXmlId(obj: m21.base.Music21Object):
+        # if xml id has already been set, leave it as is
+        if hasattr(obj, 'mei_xml_id'):
+            return
+        obj.mei_xml_id = M21ObjectConvert.makeXmlIdFrom(  # type: ignore
+            obj.id, obj.classes[0].lower()
+        )
 
     @staticmethod
     def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
