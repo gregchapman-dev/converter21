@@ -292,10 +292,12 @@ class MeiReader:
         self.initializeTagToFunctionTables()
 
         self.documentRoot: Element
+        self.meiVersion: str
 
         if theDocument is None:
             # Without this, the class can't be pickled.
             self.documentRoot = Element(f'{MEI_NS}mei')
+            self.meiVersion = '4.0.1'  # '5.0+CMN'
         else:
             try:
                 self.documentRoot = fromstring(theDocument)
@@ -307,6 +309,10 @@ class MeiReader:
 
             if isinstance(self.documentRoot, ElementTree):
                 self.documentRoot = self.documentRoot.getroot()
+
+            self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
+            if not self.meiVersion:
+                raise MeiAttributeError('No @meiversion on root element.')
 
             if f'{MEI_NS}mei' != self.documentRoot.tag:
                 raise MeiElementError(_WRONG_ROOT_ELEMENT.format(self.documentRoot.tag))
