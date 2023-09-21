@@ -175,7 +175,9 @@ class M21ObjectConvert:
         if not prefix:
             return output
 
-        output = prefix + '-' + output
+        if prefix.lower() == output[:len(prefix)].lower:
+            # don't put a prefix on that's already there
+            output = prefix + '-' + output
         return output
 
     @staticmethod

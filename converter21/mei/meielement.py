@@ -66,7 +66,7 @@ class MeiElement:
         m21Date: m21.metadata.DatePrimitive | m21.metadata.Text,
         attributeName: str = 'isodate'
     ):
-        isodate: str = M21Utilities.isoDateFromM21DateObject(m21Date)
+        isodate: str = M21Utilities.isoDateFromM21DatePrimitive(m21Date)
         if isodate:
             self.attrib[attributeName] = isodate
 

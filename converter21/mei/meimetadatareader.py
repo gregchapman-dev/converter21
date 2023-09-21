@@ -431,7 +431,7 @@ class MeiMetadataReader:
         m21DateObj: m21.metadata.DatePrimitive | str | None
         isodate: str | None = dateEl.get('isodate')
         if isodate:
-            m21DateObj = M21Utilities.m21DateObjectFromISODate(isodate)
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(isodate)
             if m21DateObj is None:
                 # try it as humdrum date/zeit
                 m21DateObj = M21Utilities.m21DateObjectFromString(isodate)
@@ -444,7 +444,7 @@ class MeiMetadataReader:
             m21DateObj = M21Utilities.m21DateObjectFromString(dateEl.text)
             if m21DateObj is None:
                 # try it as isodate
-                m21DateObj = M21Utilities.m21DateObjectFromISODate(dateEl.text)
+                m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(dateEl.text)
             if m21DateObj is None:
                 environLocal.warn(_MISSED_DATE.format(dateEl.text))
                 return dateEl.text

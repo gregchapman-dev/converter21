@@ -16,7 +16,6 @@
 import re
 import sys
 import copy
-import datetime
 import typing as t
 from fractions import Fraction
 
@@ -996,23 +995,134 @@ class M21Utilities:
             M21Utilities._sortStaffGroupTrees(tree.children)
 
     @staticmethod
-    def m21DateObjectFromISODate(
+    def m21DatePrimitiveFromIsoDate(
         isodate: str
     ) -> m21.metadata.DatePrimitive | None:
-        # TODO: handle isodates that contain multiple dates (DateBetween, DateSelection).
-        # TODO: We'll have to split by hand, and then call fromisoformat on each one.
-        m21DateSingle: m21.metadata.DateSingle | None = None
-        try:
-            dt: datetime.datetime = datetime.datetime.fromisoformat(isodate)
-            date = m21.metadata.Date()
-            date.load(dt)
-            m21DateSingle = m21.metadata.DateSingle(date)
-        except Exception:
-            pass
-        return m21DateSingle
+        def removeSplitChars(isodate: str) -> str:
+            for ch in ['{', '}', '[', ']']:
+                isodate = isodate.strip(ch)
+            return isodate
+
+        def splitIsoDateList(isodate: str) -> list[str]:
+            isodate = removeSplitChars(isodate)
+            return isodate.split(',')
+
+        if not isodate:
+            return None
+        if isodate[0] in ('{', '['):
+            # list (DateSelection)
+            relevance: str = 'and' if isodate[0] == '{' else 'or'
+            m21Dates: list[m21.metadata.Date] = (
+                M21Utilities.m21DateListFromIsoDateList(splitIsoDateList(isodate))
+            )
+            return m21.metadata.DateSelection(m21Dates, relevance=relevance)
+        if '/' in isodate:
+            if '..' not in isodate:
+                # regular range (DateBetween)
+                m21Dates = M21Utilities.m21DateListFromIsoDateList(isodate.split('/'))
+                return m21.metadata.DateBetween(m21Dates[:2])
+
+            # open ended range (DateRelative)
+            if isodate.startswith('../'):
+                isodate = isodate[3:]
+                relevance = 'prior'
+            elif isodate.endswith('/..'):
+                isodate = isodate[:-3]
+                relevance = 'after'
+            else:
+                return None
+            if '/' in isodate:
+                # should not be any '/' once we remove '../' or '/..'
+                return None
+
+            m21Date: m21.metadata.Date | None = M21Utilities.m21DateFromIsoDate(isodate)
+            if m21Date is None:
+                return None
+            return m21.metadata.DateRelative(m21Date, relevance=relevance)
+
+        # single date (DateSingle)
+        m21Date = M21Utilities.m21DateFromIsoDate(isodate)
+        if m21Date is None:
+            return None
+        return m21.metadata.DateSingle(m21Date)
 
     @staticmethod
-    def isoDateFromM21DateObject(
+    def m21DateListFromIsoDateList(
+        isodates: list[str]
+    ) -> list[m21.metadata.Date]:
+        m21Dates: list[m21.metadata.Date] = []
+        for isodate in isodates:
+            m21Date: m21.metadata.Date | None = M21Utilities.m21DateFromIsoDate(isodate)
+            if m21Date is not None:
+                m21Dates.append(m21Date)
+        return m21Dates
+
+    @staticmethod
+    def m21DateFromIsoDate(
+        isodate: str
+    ) -> m21.metadata.Date | None:
+        # Requires the isodate to contain a single date and/or time, no ranges
+        # or lists of dates/times.
+        if not isodate:
+            return None
+        if '/' in isodate:
+            return None
+        if isodate[0] in ('{', '['):
+            return None
+
+        # parse the single isodate into a Date
+        date: str = ''
+        time: str = ''
+
+        if 'Z' in isodate:
+            pieces: list[str] = isodate.split('Z')
+            if len(pieces) != 2:
+                return None
+            date = pieces[0]
+            time = pieces[1]
+        else:
+            if '-' not in isodate and ':' not in isodate:
+                date = isodate
+            elif '-' in isodate and ':' not in isodate:
+                date = isodate
+            elif '-' not in isodate and ':' in isodate:
+                time = isodate
+            else:
+                return None
+
+        # we have date and/or time
+        year: str | None = None
+        month: str | None = None
+        day: str | None = None
+        hour: str | None = None
+        minute: str | None = None
+        second: str | None = None
+        if date:
+            datePieces: list[str] = date.split('-')
+            year = datePieces[0]
+            if len(datePieces) > 1:
+                month = datePieces[1]
+            if len(datePieces) > 2:
+                day = datePieces[2]
+
+        if time:
+            timePieces: list[str] = time.split(':')
+            if len(timePieces) >= 3:
+                hour = timePieces[0]
+                minute = timePieces[1]
+                second = timePieces[2]
+
+        return m21.metadata.Date(
+            year=year,
+            month=month,
+            day=day,
+            hour=hour,
+            minute=minute,
+            second=second
+        )
+
+    @staticmethod
+    def isoDateFromM21DatePrimitive(
         dateObj: m21.metadata.DatePrimitive | m21.metadata.Text
     ) -> str:
         isodate: str = ''
