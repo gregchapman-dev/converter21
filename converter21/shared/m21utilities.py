@@ -1074,8 +1074,8 @@ class M21Utilities:
         date: str = ''
         time: str = ''
 
-        if 'Z' in isodate:
-            pieces: list[str] = isodate.split('Z')
+        if 'T' in isodate:
+            pieces: list[str] = isodate.split('T')
             if len(pieces) != 2:
                 return None
             date = pieces[0]

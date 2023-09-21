@@ -163,19 +163,17 @@ class M21ObjectConvert:
                 and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
             # Nice low integer, use as is (converted to str)
             output = str(identifier)
-
         elif isinstance(identifier, int):
             # Actually a memory location, so make it a nice short ASCII string,
             # with lower-case class name prefix.
             output = alphabet_encode(identifier)
         else:
-            # hope for the best...
-            output = str(identifier)
+            raise MeiInternalError('identifier not int or str')
 
         if not prefix:
             return output
 
-        if prefix.lower() == output[:len(prefix)].lower:
+        if not output.lower().startswith(prefix.lower()):
             # don't put a prefix on that's already there
             output = prefix + '-' + output
         return output
