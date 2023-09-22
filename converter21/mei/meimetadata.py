@@ -16,7 +16,6 @@ import music21 as m21
 
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
-from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiElement
 from converter21.shared import M21Utilities
 
@@ -83,8 +82,8 @@ class MeiMetadata:
 
         # saved off state during makeRootElement (e.g. MeiElement trees that
         # may need to be re-used)
-        self.mainTitleSameAsElement: MeiElement | None = None
-        self.composerSameAsElements: list[MeiElement] = []
+        self.simpleTitleElement: MeiElement | None = None
+        self.composerElements: list[MeiElement] = []
 
     def makeRootElement(self, tb: TreeBuilder):
         meiHead: MeiElement = MeiElement('meiHead')
@@ -114,76 +113,6 @@ class MeiMetadata:
                 return True
         return False
 
-    def makeSameAs(self, element: MeiElement) -> MeiElement:
-        # note that we might modify element (add @xml:id="asdf" if necessary)
-        # as well as return a new element that has @sameas="#asdf".
-        xmlId: str = element.attrib.get('xml:id', '')
-        if not xmlId:
-            xmlId = M21ObjectConvert.makeXmlIdFrom(id(element), element.name)
-            element.attrib['xml:id'] = xmlId
-
-        sameAsElement: MeiElement = MeiElement(
-            element.name,
-            {
-                'sameas': '#' + xmlId
-            }
-        )
-
-        # Fill in sameAsElement.text with something recognizable,
-        # if possible, for the sake of human Mei readers.
-        text: str = element.text
-        if not text:
-            persNames: list[MeiElement] = element.getSubElements('persName')
-            if persNames:
-                for persName in persNames:
-                    if persName.attrib.get('type', '') in ('', 'main'):
-                        text = persName.text
-                        break
-                if not text:
-                    text = persNames[0].text
-
-        if not text:
-            names: list[MeiElement] = element.getSubElements('name')
-            if names:
-                for name in names:
-                    if name.attrib.get('type', '') in ('', 'main'):
-                        text = name.text
-                        break
-                if not text:
-                    text = names[0].text
-
-        if not text:
-            corpNames: list[MeiElement] = element.getSubElements('corpName')
-            if corpNames:
-                for corpName in corpNames:
-                    if corpName.attrib.get('type', '') in ('', 'main'):
-                        text = corpName.text
-                        break
-                if not text:
-                    text = corpNames[0].text
-
-        if not text:
-            titleParts: list[MeiElement] = element.getSubElements('titlePart')
-            if titleParts:
-                for titlePart in titleParts:
-                    if titlePart.attrib.get('type', '') in ('', 'main'):
-                        text = titlePart.text
-                        break
-                if not text:
-                    text = titleParts[0].text
-
-        if text:
-            sameAsElement.text = text
-
-        return sameAsElement
-
-    def makeSameAsList(self, elements: list[MeiElement]) -> list[MeiElement]:
-        sameAsList: list[MeiElement] = []
-        for element in elements:
-            sameAsElement: MeiElement = self.makeSameAs(element)
-            sameAsList.append(sameAsElement)
-        return sameAsList
-
     def makeFileDescElement(self) -> MeiElement:
         # meiHead/fileDesc is required, so we never return None here
         fileDesc: MeiElement = MeiElement('fileDesc')
@@ -191,17 +120,8 @@ class MeiMetadata:
         # titleStmt is required, so we create/append in one step
         titleStmt: MeiElement = fileDesc.appendSubElement('titleStmt')
 
-        # We stash off the main title element because we will reuse it in
-        # the workList/work that describes the work we have encoded here.
-        mainTitleElement: MeiElement | None = self.makeMainTitleElement()
-        if mainTitleElement is not None:
-            titleStmt.subElements.append(mainTitleElement)
-            self.mainTitleSameAsElement = self.makeSameAs(mainTitleElement)
-
-        composerElements = self.makeComposerElements()
-        if composerElements:
-            titleStmt.subElements.extend(composerElements)
-            self.composerSameAsElements = self.makeSameAsList(composerElements)
+        self.simpleTitleElement = self.makeSimpleTitleElement()
+        titleStmt.subElements.append(self.simpleTitleElement)
 
         # pubStmt describes the MEI file we are writing.  It is, of course,
         # unpublished, so we use <unpub> to say that.  This pubStmt will
@@ -233,9 +153,6 @@ class MeiMetadata:
         recordedSource: MeiElement | None = self.makeRecordedSource()
         if recordedSource is not None:
             sourceDesc.subElements.append(recordedSource)
-            recordedTrackSource: MeiElement | None = self.makeRecordedTrackSource()
-            if recordedTrackSource is not None:
-                sourceDesc.subElements.append(recordedTrackSource)
 
         unpublishedSource: MeiElement | None = self.makeUnpublishedSource()
         if unpublishedSource is not None:
@@ -252,10 +169,13 @@ class MeiMetadata:
 
         source: MeiElement = MeiElement('source', {'type': 'digital'})
         bibl: MeiElement = source.appendSubElement('bibl')
-        if self.mainTitleSameAsElement:
-            bibl.subElements.append(self.mainTitleSameAsElement)
-        if self.composerSameAsElements:
-            bibl.subElements.extend(self.composerSameAsElements)
+        if self.simpleTitleElement is None:
+            self.simpleTitleElement = self.makeSimpleTitleElement()
+        bibl.subElements.append(self.simpleTitleElement)
+        if not self.composerElements:
+            self.composerElements = self.makeComposerElements()
+        if self.composerElements:
+            bibl.subElements.extend(self.composerElements)
 
         editors: list[MeiMetadataItem] = self.contents.get('EED', [])
         encoders: list[MeiMetadataItem] = self.contents.get('ENC', [])
@@ -266,6 +186,7 @@ class MeiMetadata:
         encodingDates: list[MeiMetadataItem] = self.contents.get('END', [])
         copyrightStatements: list[MeiMetadataItem] = self.contents.get('YEM', [])
         copyrightCountries: list[MeiMetadataItem] = self.contents.get('YEN', [])
+        textLanguages: list[MeiMetadataItem] = self.contents.get('TXL', [])
 
         for editor in editors:
             editorEl: MeiElement = bibl.appendSubElement(
@@ -298,7 +219,7 @@ class MeiMetadata:
 
         for fileNumber in fileNumbers:
             fileNumberEl: MeiElement = bibl.appendSubElement(
-                'edition',
+                'extent',
                 {
                     'type': 'fileNumber',
                     'analog': 'humdrum:EFL'
@@ -339,25 +260,36 @@ class MeiMetadata:
                 encodingDateEl.fillInIsodate(encodingDate.value)
                 encodingDateEl.text = encodingDate.meiValue
 
-        for copyrightStatement in copyrightStatements:
-            copyrightStatementEl: MeiElement = bibl.appendSubElement(
-                'annot',
-                {
-                    'type': 'copyrightStatement',
-                    'analog': 'humdrum:YEM'
-                }
-            )
-            copyrightStatementEl.text = copyrightStatement.meiValue
+        if copyrightStatements or copyrightCountries:
+            availability: MeiElement = bibl.appendSubElement('availability')
+            for copyrightStatement in copyrightStatements:
+                copyrightStatementEl: MeiElement = availability.appendSubElement(
+                    'useRestrict',
+                    {
+                        'type': 'copyrightStatement',
+                        'analog': 'humdrum:YEM'
+                    }
+                )
+                copyrightStatementEl.text = copyrightStatement.meiValue
 
-        for copyrightCountry in copyrightCountries:
-            copyrightCountryEl: MeiElement = bibl.appendSubElement(
-                'annot',
+            for copyrightCountry in copyrightCountries:
+                copyrightCountryEl: MeiElement = availability.appendSubElement(
+                    'useRestrict',
+                    {
+                        'type': 'copyrightCountry',
+                        'analog': 'humdrum:YEN'
+                    }
+                )
+                copyrightCountryEl.text = copyrightCountry.meiValue
+
+        for textLanguage in textLanguages:
+            textLanguageEl: MeiElement = bibl.appendSubElement(
+                'textLang',
                 {
-                    'type': 'copyrightCountry',
-                    'analog': 'humdrum:YEN'
+                    'analog': 'humdrum:TXL'
                 }
             )
-            copyrightCountryEl.text = copyrightCountry.meiValue
+            textLanguageEl.text = textLanguage.meiValue
 
         if bibl.isEmpty():
             # we check bibl because source is not empty: it contains bibl.
@@ -371,17 +303,19 @@ class MeiMetadata:
 
         source: MeiElement = MeiElement('source', {'type': 'published'})
         bibl: MeiElement = source.appendSubElement('bibl')
-        if self.mainTitleSameAsElement:
-            bibl.subElements.append(self.mainTitleSameAsElement)
-        if self.composerSameAsElements:
-            bibl.subElements.extend(self.composerSameAsElements)
+        if self.simpleTitleElement is None:
+            self.simpleTitleElement = self.makeSimpleTitleElement()
+        bibl.subElements.append(self.simpleTitleElement)
+        if not self.composerElements:
+            self.composerElements = self.makeComposerElements()
+        if self.composerElements:
+            bibl.subElements.extend(self.composerElements)
 
         arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
         editors: list[MeiMetadataItem] = self.contents.get('YOE', [])
         orchestrators: list[MeiMetadataItem] = self.contents.get('LOR', [])
         translators: list[MeiMetadataItem] = self.contents.get('TRN', [])
         collectors: list[MeiMetadataItem] = self.contents.get('OCL', [])
-        textLanguages: list[MeiMetadataItem] = self.contents.get('TXL', [])
         volumeNumbers: list[MeiMetadataItem] = self.contents.get('OVM', [])
         volumeNames: list[MeiMetadataItem] = self.contents.get('PTL', [])
 
@@ -407,12 +341,7 @@ class MeiMetadata:
             respStmt: MeiElement = bibl.appendSubElement('respStmt')
 
             for orchestrator in orchestrators:
-                respEl: MeiElement = respStmt.appendSubElement(
-                    'resp',
-                    {
-                        'analog': 'humdrum:LOR'
-                    }
-                )
+                respEl: MeiElement = respStmt.appendSubElement('resp')
                 respEl.text = 'orchestrator'
                 persNameEl: MeiElement = respStmt.appendSubElement(
                     'persName',
@@ -423,12 +352,7 @@ class MeiMetadata:
                 persNameEl.text = orchestrator.meiValue
 
             for translator in translators:
-                respEl = respStmt.appendSubElement(
-                    'resp',
-                    {
-                        'analog': 'humdrum:TRN'
-                    }
-                )
+                respEl = respStmt.appendSubElement('resp')
                 respEl.text = 'translator'
                 persNameEl = respStmt.appendSubElement(
                     'persName',
@@ -439,12 +363,7 @@ class MeiMetadata:
                 persNameEl.text = translator.meiValue
 
             for collector in collectors:
-                respEl = respStmt.appendSubElement(
-                    'resp',
-                    {
-                        'analog': 'humdrum:OCL'
-                    }
-                )
+                respEl = respStmt.appendSubElement('resp')
                 respEl.text = 'collector/transcriber'
                 persNameEl = respStmt.appendSubElement(
                     'persName',
@@ -454,48 +373,48 @@ class MeiMetadata:
                 )
                 persNameEl.text = collector.meiValue
 
-        for textLanguage in textLanguages:
-            textLanguageEl: MeiElement = bibl.appendSubElement(
-                'textLang',
-                {
-                    'analog': 'humdrum:TXL'
-                }
-            )
-            textLanguageEl.text = textLanguage.meiValue
+            for volumeName, volumeNumber in zip(volumeNames, volumeNumbers):
+                relatedItem: MeiElement = bibl.appendSubElement(
+                    'relatedItem',
+                    {
+                        'rel': 'host'
+                    }
+                )
+                relBibl: MeiElement = relatedItem.appendSubElement('bibl')
+                titleElement = relBibl.appendSubElement(
+                    'title',
+                    {
+                        'analog': 'humdrum:PTL'
+                    }
+                )
+                titleElement.text = volumeName.meiValue
 
-        for volumeName in volumeNames:
-            relatedItem: MeiElement = bibl.appendSubElement(
-                'relatedItem',
-                {
-                    'rel': 'host'
-                }
-            )
-            relBibl: MeiElement = relatedItem.appendSubElement('bibl')
-            relBibl.appendSubElement('title')
-            biblScope: MeiElement = relBibl.appendSubElement(
-                'biblScope',
-                {
-                    'analog': 'humdrum:PTL'
-                }
-            )
-            biblScope.text = volumeName.meiValue
+                biblScope: MeiElement = relBibl.appendSubElement(
+                    'biblScope',
+                    {
+                        'analog': 'humdrum:OVM'
+                    }
+                )
+                biblScope.text = volumeNumber.meiValue
 
-        for volumeNumber in volumeNumbers:
-            relatedItem = bibl.appendSubElement(
-                'relatedItem',
-                {
-                    'rel': 'host'
-                }
-            )
-            relBibl = relatedItem.appendSubElement('bibl')
-            relBibl.appendSubElement('title')
-            biblScope = relBibl.appendSubElement(
-                'biblScope',
-                {
-                    'analog': 'humdrum:OVM'
-                }
-            )
-            biblScope.text = volumeNumber.meiValue
+            if len(volumeNames) - len(volumeNumbers) > 0:
+                # we ignore any extra volume numbers, since a number without a name
+                # isn't interesting.
+                for volumeName in volumeNames[len(volumeNumbers):]:
+                    relatedItem = bibl.appendSubElement(
+                        'relatedItem',
+                        {
+                            'rel': 'host'
+                        }
+                    )
+                    relBibl = relatedItem.appendSubElement('bibl')
+                    titleElement = relBibl.appendSubElement(
+                        'title',
+                        {
+                            'analog': 'humdrum:PTL'
+                        }
+                    )
+                    titleElement.text = volumeName.meiValue
 
         if bibl.isEmpty():
             return None
@@ -506,8 +425,8 @@ class MeiMetadata:
                 'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'MLC'):
             return None
 
-        source: MeiElement = MeiElement('source', {'type': 'recordedAlbum'})
-        bibl: MeiElement = source.appendSubElement('bibl', {'xml:id': 'album1'})
+        source: MeiElement = MeiElement('source', {'type': 'recording'})
+        biblStruct: MeiElement = source.appendSubElement('biblStruct')
 
         albumTitles: list[MeiMetadataItem] = self.contents.get('RTL', [])
         albumCatalogNumbers: list[MeiMetadataItem] = self.contents.get('RC#', [])
@@ -518,12 +437,25 @@ class MeiMetadata:
         conductors: list[MeiMetadataItem] = self.contents.get('MCN', [])
         manufacturers: list[MeiMetadataItem] = self.contents.get('RMM', [])
         releaseDates: list[MeiMetadataItem] = self.contents.get('RRD', [])
-        recordingPlaces: list[MeiMetadataItem] = self.contents.get('RLC', [])
+        recordingLocations: list[MeiMetadataItem] = self.contents.get('RLC', [])
         recordingDates: list[MeiMetadataItem] = self.contents.get('RDT', [])
-        performanceLocations: list[MeiMetadataItem] = self.contents.get('MLC', [])
+        trackNumbers: list[MeiMetadataItem] = self.contents.get('RT#', [])
 
-        for albumTitle in albumTitles:
-            albumTitleEl: MeiElement = bibl.appendSubElement(
+        for i, albumTitle in enumerate(albumTitles):
+            if i < len(trackNumbers):
+                analytic: MeiElement = biblStruct.appendSubElement('analytic')
+                analytic.appendSubElement('title')
+                biblScope = analytic.appendSubElement(
+                    'biblScope',
+                    {
+                        'type': 'trackNumber',
+                        'analog': 'humdrum:RT#'
+                    }
+                )
+                biblScope.text = trackNumbers[i].meiValue
+
+            monogr: MeiElement = biblStruct.appendSubElement('monogr')
+            albumTitleEl: MeiElement = monogr.appendSubElement(
                 'title',
                 {
                     'analog': 'humdrum:RTL'
@@ -531,85 +463,87 @@ class MeiMetadata:
             )
             albumTitleEl.text = albumTitle.meiValue
 
-        for albumCatalogNumber in albumCatalogNumbers:
-            albumCatalogNumberEl: MeiElement = bibl.appendSubElement(
-                'identifier',
-                {
-                    'type': 'albumCatalogNumber',
-                    'analog': 'humdrum:RC#'
-                }
-            )
-            albumCatalogNumberEl.text = albumCatalogNumber.meiValue
-
-        for ensembleName in ensembleNames:
-            ensembleNameEl: MeiElement = bibl.appendSubElement(
-                'corpName',
-                {
-                    'type': 'ensembleName',
-                    'role': 'performer',
-                    'analog': 'humdrum:MGN'
-                }
-            )
-            ensembleNameEl.text = ensembleName.meiValue
-
-        for performerName in performerNames:
-            performerNameEl: MeiElement = bibl.appendSubElement(
-                'persName',
-                {
-                    'role': 'performer',
-                    'analog': 'humdrum:MPN'
-                }
-            )
-            performerNameEl.text = performerName.meiValue
-
-        for suspectedPerformerName in suspectedPerformerNames:
-            suspectedPerformerNameEl: MeiElement = bibl.appendSubElement(
-                'persName',
-                {
-                    'role': 'performer',
-                    'cert': 'medium',
-                    'analog': 'humdrum:MPS'
-                }
-            )
-            suspectedPerformerNameEl.text = suspectedPerformerName.meiValue
-
-        if producers or conductors:
-            respStmt: MeiElement = bibl.appendSubElement('respStmt')
-
-            for producer in producers:
-                respEl: MeiElement = respStmt.appendSubElement(
-                    'resp',
+            if i < len(albumCatalogNumbers):
+                albumCatalogNumberEl: MeiElement = monogr.appendSubElement(
+                    'identifier',
                     {
-                        'analog': 'humdrum:RNP'
+                        'type': 'albumCatalogNumber',
+                        'analog': 'humdrum:RC#'
                     }
                 )
-                respEl.text = 'producer'
-                persNameEl: MeiElement = respStmt.appendSubElement(
-                    'persName',
-                    {
-                        'analog': 'humdrum:RNP'
-                    }
-                )
-                persNameEl.text = producer.meiValue
+                albumCatalogNumberEl.text = albumCatalogNumbers[i].meiValue
 
-            for conductor in conductors:
-                respEl = respStmt.appendSubElement(
-                    'resp',
-                    {
-                        'analog': 'humdrum:MCN'
-                    }
-                )
-                respEl.text = 'conductor'
-                persNameEl = respStmt.appendSubElement(
-                    'persName',
-                    {
-                        'analog': 'humdrum:MCN'
-                    }
-                )
-                persNameEl.text = conductor.meiValue
+            if (i < len(ensembleNames)
+                    or i < len(performerNames)
+                    or i < len(suspectedPerformerNames)
+                    or i < len(producers)
+                    or i < len(conductors)):
+                respStmt: MeiElement = monogr.appendSubElement('respStmt')
 
-        if manufacturers or releaseDates or recordingPlaces or recordingDates:
-            imprint: MeiElement = bibl.appendSubElement('imprint')
+                if i < len(ensembleNames):
+                    ensembleName = ensembleNames[i]
+                    respEl: MeiElement = respStmt.appendSubElement('resp')
+                    respEl.text = 'performer'
+                    ensembleNameEl: MeiElement = respStmt.appendSubElement(
+                        'corpName',
+                        {
+                            'type': 'ensembleName',
+                            'analog': 'humdrum:MGN'
+                        }
+                    )
+                    ensembleNameEl.text = ensembleName.meiValue
+
+                if i < len(performerNames):
+                    performerName = performerNames[i]
+                    respEl = respStmt.appendSubElement('resp')
+                    respEl.text = 'performer'
+                    performerNameEl: MeiElement = monogr.appendSubElement(
+                        'persName',
+                        {
+                            'analog': 'humdrum:MPN'
+                        }
+                    )
+                    performerNameEl.text = performerName.meiValue
+
+                if i < len(suspectedPerformerNames):
+                    suspectedPerformerName = suspectedPerformerNames[i]
+                    respEl = respStmt.appendSubElement('resp')
+                    respEl.text = 'performer'
+                    suspectedPerformerNameEl: MeiElement = monogr.appendSubElement(
+                        'persName',
+                        {
+                            'cert': 'medium',
+                            'analog': 'humdrum:MPS'
+                        }
+                    )
+                    suspectedPerformerNameEl.text = suspectedPerformerName.meiValue
+
+                if i < len(producers):
+                    producer = producers[i]
+                    respEl = respStmt.appendSubElement('resp')
+                    respEl.text = 'producer'
+                    persNameEl: MeiElement = respStmt.appendSubElement(
+                        'persName',
+                        {
+                            'analog': 'humdrum:RNP'
+                        }
+                    )
+                    persNameEl.text = producer.meiValue
+
+                for conductor in conductors:
+                    conductor = conductors[i]
+                    respEl = respStmt.appendSubElement('resp')
+                    respEl.text = 'conductor'
+                    persNameEl = respStmt.appendSubElement(
+                        'persName',
+                        {
+                            'analog': 'humdrum:MCN'
+                        }
+                    )
+                    persNameEl.text = conductor.meiValue
+
+        if manufacturers or releaseDates or recordingLocations or recordingDates:
+            imprint: MeiElement = monogr.appendSubElement('imprint')
 
             for manufacturer in manufacturers:
                 manufacturerEl: MeiElement = imprint.appendSubElement(
@@ -632,15 +566,15 @@ class MeiMetadata:
                 releaseDateEl.fillInIsodate(releaseDate.value)
                 releaseDateEl.text = releaseDate.meiValue
 
-            for recordingPlace in recordingPlaces:
-                recordingPlaceEl: MeiElement = imprint.appendSubElement(
+            for recordingLocation in recordingLocations:
+                recordingLocationEl: MeiElement = imprint.appendSubElement(
                     'geogName',
                     {
-                        'role': 'recordingPlace',
+                        'role': 'recordingLocation',
                         'analog': 'humdrum:RLC'
                     }
                 )
-                recordingPlaceEl.text = recordingPlace.meiValue
+                recordingLocationEl.text = recordingLocation.meiValue
 
             for recordingDate in recordingDates:
                 recordingDateEl: MeiElement = imprint.appendSubElement(
@@ -653,47 +587,8 @@ class MeiMetadata:
                 recordingDateEl.fillInIsodate(recordingDate.value)
                 recordingDateEl.text = recordingDate.meiValue
 
-        for performanceLocation in performanceLocations:
-            performanceLocationEl: MeiElement = bibl.appendSubElement(
-                'geogName',
-                {
-                    'role': 'performanceLocation',
-                    'analog': 'humdrum:MLC'
-                }
-            )
-            performanceLocationEl.text = performanceLocation.meiValue
-
-        if bibl.isEmpty():
+        if biblStruct.isEmpty():
             return None
-        return source
-
-    def makeRecordedTrackSource(self) -> MeiElement | None:
-        if not self.anyExist('RT#'):
-            return None
-
-        source: MeiElement = MeiElement('source', {'type': 'recordedTrack'})
-        bibl: MeiElement = source.appendSubElement('bibl')
-
-        trackNumbers: list[MeiMetadataItem] = self.contents.get('RT#', [])
-
-        bibl.appendSubElement('title')
-        for trackNumber in trackNumbers:
-            trackNumberEl: MeiElement = bibl.appendSubElement(
-                'identifier',
-                {
-                    'analog': 'humdrum:RT#'
-                }
-            )
-            trackNumberEl.text = trackNumber.meiValue
-
-        bibl.appendSubElement(
-            'relatedItem',
-            {
-                'rel': 'host',
-                'target': '#album1'
-            }
-        )
-
         return source
 
     def makeUnpublishedSource(self) -> MeiElement | None:
@@ -806,68 +701,74 @@ class MeiMetadata:
         composers: list[MeiMetadataItem] = self.contents.get('COM', [])
         attributedComposers: list[MeiMetadataItem] = self.contents.get('COA', [])
         suspectedComposers: list[MeiMetadataItem] = self.contents.get('COS', [])
-        corporateComposers: list[MeiMetadataItem] = self.contents.get('COC', [])
+        composerCorporateNames: list[MeiMetadataItem] = self.contents.get('COC', [])
         composerAliases: list[MeiMetadataItem] = self.contents.get('COL', [])
-        composerDates: list[MeiMetadataItem] = self.contents.get('CDT', [])
-        composerBirthPlaces: list[MeiMetadataItem] = self.contents.get('CBL', [])
-        composerDeathPlaces: list[MeiMetadataItem] = self.contents.get('CDL', [])
-        composerNationalities: list[MeiMetadataItem] = self.contents.get('CNT', [])
+#         composerDates: list[MeiMetadataItem] = self.contents.get('CDT', [])
+#         composerBirthPlaces: list[MeiMetadataItem] = self.contents.get('CBL', [])
+#         composerDeathPlaces: list[MeiMetadataItem] = self.contents.get('CDL', [])
+#         composerNationalities: list[MeiMetadataItem] = self.contents.get('CNT', [])
         # TODO: Prefer composer birth/death dates from Contributor value.
         # TODO: But first make Humdrum importer put them there.
 
-
         for i, composer in enumerate(
-                composers + attributedComposers + suspectedComposers + corporateComposers):
+                composers + attributedComposers + suspectedComposers):
             # Assume association is done by ordering of the metadata item arrays
             # Currently our Humdrum importer assumes this ordering should match
             # the ordering in the file.
             composerAlias: MeiMetadataItem | None = None
-            composerBirthAndDeathDate: MeiMetadataItem | None = None
-            composerBirthPlace: MeiMetadataItem | None = None
-            composerDeathPlace: MeiMetadataItem | None = None
-            composerNationality: MeiMetadataItem | None = None
+            composerCorporateName: MeiMetadataItem | None = None
+#             composerBirthAndDeathDate: MeiMetadataItem | None = None
+#             composerBirthPlace: MeiMetadataItem | None = None
+#             composerDeathPlace: MeiMetadataItem | None = None
+#             composerNationality: MeiMetadataItem | None = None
+            if i < len(composerCorporateNames):
+                composerCorporateName = composerCorporateNames[i]
             if i < len(composerAliases):
                 composerAlias = composerAliases[i]
-            if i < len(composerDates):
-                composerBirthAndDeathDate = composerDates[i]
-            if i < len(composerBirthPlaces):
-                composerBirthPlace = composerBirthPlaces[i]
-            if i < len(composerDeathPlaces):
-                composerDeathPlace = composerDeathPlaces[i]
-            if i < len(composerNationalities):
-                composerNationality = composerNationalities[i]
+#             if i < len(composerDates):
+#                 composerBirthAndDeathDate = composerDates[i]
+#             if i < len(composerBirthPlaces):
+#                 composerBirthPlace = composerBirthPlaces[i]
+#             if i < len(composerDeathPlaces):
+#                 composerDeathPlace = composerDeathPlaces[i]
+#             if i < len(composerNationalities):
+#                 composerNationality = composerNationalities[i]
 
             composerElement = MeiElement('composer')
             output.append(composerElement)
 
-            if composer.value.role == 'composerCorporate':
-                # composer corpName ('COC')
-                corpNameElement: MeiElement = composerElement.appendSubElement(
+            # composer persName ('COM'/'COA'/'COS')
+            composerAnalog: str = 'humdrum:COM'
+            composerCert: str = ''
+            if composer.value.role == 'attributedComposer':
+                composerAnalog = 'humdrum:COA'
+                composerCert = 'medium'
+            elif composer.value.role == 'suspectedComposer':
+                composerAnalog = 'humdrum:COS'
+                composerCert = 'low'
+
+            if composerCert:
+                # We put @cert on <composer>, not on <persName>.
+                # The uncertainty is about whether this composer was involved,
+                # not about this composer's name.
+                composerElement.attrib['cert'] = composerCert
+
+            persNameAttr = {'analog': composerAnalog}
+            persNameElement: MeiElement = composerElement.appendSubElement(
+                'persName',
+                persNameAttr
+            )
+            persNameElement.text = composer.meiValue
+
+            # composer corporate name ('COC')
+            if composerCorporateName is not None:
+                persNameElement = composerElement.appendSubElement(
                     'corpName',
                     {
                         'analog': 'humdrum:COC'
                     }
                 )
-                corpNameElement.text = composer.meiValue
-            else:
-                # composer persName ('COM'/'COA'/'COS')
-                composerAnalog: str = 'humdrum:COM'
-                composerCert: str = ''
-                if composer.value.role == 'attributedComposer':
-                    composerAnalog = 'humdrum:COA'
-                    composerCert = 'medium'
-                elif composer.value.role == 'suspectedComposer':
-                    composerAnalog = 'humdrum:COS'
-                    composerCert = 'low'
-
-                persNameAttr = {'analog': composerAnalog}
-                if composerCert:
-                    persNameAttr['cert'] = composerCert
-                persNameElement: MeiElement = composerElement.appendSubElement(
-                    'persName',
-                    persNameAttr
-                )
-                persNameElement.text = composer.meiValue
+                persNameElement.text = composerCorporateName.meiValue
 
             # composer alias ('COL')
             if composerAlias is not None:
@@ -881,54 +782,92 @@ class MeiMetadata:
                 persNameElement.text = composerAlias.meiValue
 
             # composer birth and death dates
-            if composerBirthAndDeathDate is not None:
-                dateElement: MeiElement = composerElement.appendSubElement(
-                    'date',
-                    {
-                        'type': 'birth/death',
-                        'analog': 'humdrum:CDT',
-                    }
-                )
-                dateElement.fillInIsodate(composerBirthAndDeathDate.value)
-                dateElement.text = composerBirthAndDeathDate.meiValue
+#             if composerBirthAndDeathDate is not None:
+#                 dateElement: MeiElement = composerElement.appendSubElement(
+#                     'date',
+#                     {
+#                         'type': 'birth/death',
+#                         'analog': 'humdrum:CDT',
+#                     }
+#                 )
+#                 dateElement.fillInIsodate(composerBirthAndDeathDate.value)
+#                 dateElement.text = composerBirthAndDeathDate.meiValue
 
             # composer birth place
-            if composerBirthPlace is not None:
-                geogNameElement: MeiElement = composerElement.appendSubElement(
-                    'geogName',
-                    {
-                        'role': 'birthPlace',
-                        'analog': 'humdrum:CBL'
-                    }
-                )
-                geogNameElement.text = composerBirthPlace.meiValue
+#             if composerBirthPlace is not None:
+#                 geogNameElement: MeiElement = composerElement.appendSubElement(
+#                     'geogName',
+#                     {
+#                         'role': 'birthPlace',
+#                         'analog': 'humdrum:CBL'
+#                     }
+#                 )
+#                 geogNameElement.text = composerBirthPlace.meiValue
 
             # composer death place
-            if composerDeathPlace is not None:
-                geogNameElement = composerElement.appendSubElement(
-                    'geogName',
-                    {
-                        'role': 'deathPlace',
-                        'analog': 'humdrum:CDL'
-                    }
-                )
-                geogNameElement.text = composerDeathPlace.meiValue
+#             if composerDeathPlace is not None:
+#                 geogNameElement = composerElement.appendSubElement(
+#                     'geogName',
+#                     {
+#                         'role': 'deathPlace',
+#                         'analog': 'humdrum:CDL'
+#                     }
+#                 )
+#                 geogNameElement.text = composerDeathPlace.meiValue
 
             # composer nationality
-            if composerNationality is not None:
-                geogNameElement = composerElement.appendSubElement(
-                    'geogName',
-                    {
-                        'role': 'nationality',
-                        'analog': 'humdrum:CNT'
-                    }
-                )
-                geogNameElement.text = composerNationality.meiValue
+#             if composerNationality is not None:
+#                 geogNameElement = composerElement.appendSubElement(
+#                     'geogName',
+#                     {
+#                         'role': 'nationality',
+#                         'analog': 'humdrum:CNT'
+#                     }
+#                 )
+#                 geogNameElement.text = composerNationality.meiValue
 
         return output
 
-    def makeMainTitleElement(self) -> MeiElement | None:
+    def makeSimpleTitleElement(self) -> MeiElement:
+        # first untranslated OTL (or just first OTL, if all are translated)
+        # goes in the <title> element (no titlePart).
+        # If there are no OTLs, empty <title/> is returned
+        titles: list[MeiMetadataItem] = self.contents.get('OTL', [])
+        titleElement = MeiElement('title')
+        if not titles:
+            return titleElement
+
+        for title in titles:
+            if (isinstance(title.value, m21.metadata.Text)
+                    and title.value.isTranslated is not True):
+                firstTitle = title
+                if firstTitle.value.language:
+                    firstLang = firstTitle.value.language.lower()
+                break
+
+        if firstTitle is None:
+            firstTitle = titles[0]
+            firstLang = firstTitle.value.language.lower()
+
+        if firstTitle is None:
+            return titleElement
+
+        titleElement.attrib = {}
+        if firstTitle.value.isTranslated is True:
+            titleElement.attrib['type'] = 'translated'
+        else:
+            titleElement.attrib['type'] = 'main'
+        titleElement.attrib['analog'] = 'humdrum:OTL'
+        if firstLang:
+            titleElement.attrib['xml:lang'] = firstLang
+        titleElement.text = firstTitle.meiValue
+
+        return titleElement
+
+    def makeTitleElements(self, firstTitleOnly: bool = False) -> list[MeiElement]:
         mainTitles: list[MeiMetadataItem] = self.contents.get('OTL', [])
+        alternativeTitles: list[MeiMetadataItem] = self.contents.get('OTA', [])
+        popularTitles: list[MeiMetadataItem] = self.contents.get('OTP', [])
         plainNumbers: list[MeiMetadataItem] = self.contents.get('ONM', [])
         movementNumbers: list[MeiMetadataItem] = self.contents.get('OMV', [])
         movementNames: list[MeiMetadataItem] = self.contents.get('OMD', [])
@@ -936,38 +875,18 @@ class MeiMetadata:
         actNumbers: list[MeiMetadataItem] = self.contents.get('OAC', [])
         sceneNumbers: list[MeiMetadataItem] = self.contents.get('OSC', [])
 
-        titleElement = MeiElement('title')
+        untranslatedTitleElement = MeiElement('title')
+        translatedTitleElement = MeiElement('title', {'type': 'translated'})
 
-        # First all the main titles (OTL).  The untranslated one goes first,
-        # with titlePart@type="main", and the others get titlePart@type=translated.
+        # First all the main titles (OTL).
         titlePart: MeiElement
-        firstTitle: MeiMetadataItem | None = None
-        firstLang: str = ''
         for mainTitle in mainTitles:
-            if (isinstance(mainTitle.value, m21.metadata.Text)
-                    and mainTitle.value.isTranslated is not True):
-                firstTitle = mainTitle
-                if firstTitle.value.language:
-                    firstLang = firstTitle.value.language.lower()
-                break
-
-        if firstTitle is not None:
-            attrib: dict[str, str] = {'type': 'main', 'analog': 'humdrum:OTL'}
-            if firstLang:
-                attrib['xml:lang'] = firstLang
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
-            titlePart.text = firstTitle.meiValue
-
-        for mainTitle in mainTitles:
-            if mainTitle is firstTitle:
-                continue
-
-            isTranslated: bool = False
             lang: str = ''
-            if isinstance(mainTitle.value, m21.metadata.Text):
-                isTranslated = mainTitle.value.isTranslated is True
-                if mainTitle.value.language:
-                    lang = mainTitle.value.language.lower()
+            if t.TYPE_CHECKING:
+                assert isinstance(mainTitle.value, m21.metadata.Text)
+            isTranslated = mainTitle.value.isTranslated is True
+            if mainTitle.value.language:
+                lang = mainTitle.value.language.lower()
 
             attrib = {}
             if isTranslated:
@@ -978,117 +897,170 @@ class MeiMetadata:
             if lang:
                 attrib['xml:lang'] = lang
 
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = mainTitle.meiValue
+
+        # Then any movement name(s) (OMD).
+        for movementName in movementNames:
+            lang = ''
+            if t.TYPE_CHECKING:
+                assert isinstance(movementName.value, m21.metadata.Text)
+            isTranslated = movementName.value.isTranslated is True
+            if movementName.value.language:
+                lang = movementName.value.language.lower()
+
+            attrib = {'type': 'movementName', 'analog': 'humdrum:OMD'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = movementName.meiValue
+
+        # Then any alternative titles (OTA).
+        for alternativeTitle in alternativeTitles:
+            lang = ''
+            if t.TYPE_CHECKING:
+                assert isinstance(alternativeTitle.value, m21.metadata.Text)
+            isTranslated = alternativeTitle.value.isTranslated is True
+            if alternativeTitle.value.language:
+                lang = alternativeTitle.value.language.lower()
+
+            attrib = {'type': 'alternative', 'analog': 'humdrum:OTA'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = alternativeTitle.meiValue
+
+        # Then any popular titles (OTP).
+        for popularTitle in popularTitles:
+            lang = ''
+            if t.TYPE_CHECKING:
+                assert isinstance(popularTitle.value, m21.metadata.Text)
+            isTranslated = popularTitle.value.isTranslated is True
+            if popularTitle.value.language:
+                lang = popularTitle.value.language.lower()
+
+            attrib = {'type': 'popular', 'analog': 'humdrum:OTP'}
+            if lang:
+                attrib['xml:lang'] = lang
+
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
+            titlePart.text = popularTitle.meiValue
 
         # Then any number(s) (ONM).
         for plainNumber in plainNumbers:
             lang = ''
-            if isinstance(plainNumber.value, m21.metadata.Text):
-                if plainNumber.value.language:
-                    lang = plainNumber.value.language.lower()
+            if t.TYPE_CHECKING:
+                assert isinstance(plainNumber.value, m21.metadata.Text)
+            isTranslated = plainNumber.value.isTranslated is True
+            if plainNumber.value.language:
+                lang = plainNumber.value.language.lower()
 
             attrib = {'type': 'number', 'analog': 'humdrum:ONM'}
             if lang:
                 attrib['xml:lang'] = lang
 
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = plainNumber.meiValue
 
         # Then any movement number(s) (OMV).
         for movementNumber in movementNumbers:
             lang = ''
-            if isinstance(movementNumber.value, m21.metadata.Text):
-                if movementNumber.value.language:
-                    lang = movementNumber.value.language.lower()
+            if t.TYPE_CHECKING:
+                assert isinstance(movementNumber.value, m21.metadata.Text)
+            isTranslated = movementNumber.value.isTranslated is True
+            if movementNumber.value.language:
+                lang = movementNumber.value.language.lower()
 
             attrib = {'type': 'movementNumber', 'analog': 'humdrum:OMV'}
             if lang:
                 attrib['xml:lang'] = lang
 
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = movementNumber.meiValue
-
-        # Then any movement name(s) (OMD). titlePart@type=movementName.  Untranslated first,
-        # if there is one, but type is always movementName here.
-        firstMovementName: MeiMetadataItem | None = None
-        firstLang = ''
-        for movementName in movementNames:
-            if (isinstance(movementName.value, m21.metadata.Text)
-                    and movementName.value.isTranslated is not True):
-                firstMovementName = movementName
-                if movementName.value.language:
-                    firstLang = movementName.value.language.lower()
-                break
-
-        if firstMovementName is not None:
-            attrib = {'type': 'movementName', 'analog': 'humdrum:OMD'}
-            if firstLang:
-                attrib['xml:lang'] = firstLang
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
-            titlePart.text = firstMovementName.meiValue
-
-        for movementName in movementNames:
-            if movementName is firstMovementName:
-                continue
-
-            lang = ''
-            if isinstance(movementName.value, m21.metadata.Text):
-                if movementName.value.language:
-                    lang = movementName.value.language.lower()
-
-            attrib = {'type': 'movementName', 'analog': 'humdrum:OMD'}
-            if lang:
-                attrib['xml:lang'] = lang
-
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
-            titlePart.text = movementName.meiValue
 
         # Then any opus number(s) (OPS).
         for opusNumber in opusNumbers:
             lang = ''
-            if isinstance(opusNumber.value, m21.metadata.Text):
-                if opusNumber.value.language:
-                    lang = opusNumber.value.language.lower()
+            if t.TYPE_CHECKING:
+                assert isinstance(opusNumber.value, m21.metadata.Text)
+            isTranslated = opusNumber.value.isTranslated is True
+            if opusNumber.value.language:
+                lang = opusNumber.value.language.lower()
 
             attrib = {'type': 'opusNumber', 'analog': 'humdrum:OPS'}
             if lang:
                 attrib['xml:lang'] = lang
 
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = opusNumber.meiValue
 
         # Then any act number(s) (OAC).
         for actNumber in actNumbers:
             lang = ''
-            if isinstance(actNumber.value, m21.metadata.Text):
-                if actNumber.value.language:
-                    lang = actNumber.value.language.lower()
+            if t.TYPE_CHECKING:
+                assert isinstance(actNumber.value, m21.metadata.Text)
+            isTranslated = actNumber.value.isTranslated is True
+            if actNumber.value.language:
+                lang = actNumber.value.language.lower()
 
             attrib = {'type': 'actNumber', 'analog': 'humdrum:OAC'}
             if lang:
                 attrib['xml:lang'] = lang
 
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = actNumber.meiValue
 
         # Then any scene number(s) (OSC).
         for sceneNumber in sceneNumbers:
             lang = ''
-            if isinstance(sceneNumber.value, m21.metadata.Text):
-                if sceneNumber.value.language:
-                    lang = sceneNumber.value.language.lower()
+            if t.TYPE_CHECKING:
+                assert isinstance(sceneNumber.value, m21.metadata.Text)
+            isTranslated = sceneNumber.value.isTranslated is True
+            if sceneNumber.value.language:
+                lang = sceneNumber.value.language.lower()
 
             attrib = {'type': 'sceneNumber', 'analog': 'humdrum:OSC'}
             if lang:
                 attrib['xml:lang'] = lang
 
-            titlePart = titleElement.appendSubElement('titlePart', attrib)
+            if isTranslated:
+                titlePart = translatedTitleElement.appendSubElement('titlePart', attrib)
+            else:
+                titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = sceneNumber.meiValue
 
-        if titleElement.isEmpty():
-            return None
-        return titleElement
+        titleElements: list[MeiElement] = []
+        if not untranslatedTitleElement.isEmpty():
+            titleElements.append(untranslatedTitleElement)
+        if not translatedTitleElement.isEmpty():
+            titleElements.append(translatedTitleElement)
+        return titleElements
 
     def makeEncodingDescElement(self) -> MeiElement | None:
         encodingNotes: list[MeiMetadataItem] = self.contents.get('RNB', [])
@@ -1100,10 +1072,12 @@ class MeiMetadata:
         editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
 
         for note in encodingNotes:
-            p: MeiElement = editorialDecl.appendSubElement('p', {'analog': 'humdrum:RNB'})
+            # <p> does not take @analog, so use @type instead (says Perry)
+            p: MeiElement = editorialDecl.appendSubElement('p', {'type': 'humdrum:RNB'})
             p.text = note.meiValue
         for warning in encodingWarnings:
-            p = editorialDecl.appendSubElement('p', {'analog': 'humdrum:RWB'})
+            # <p> does not take @analog, so use @type instead (says Perry)
+            p = editorialDecl.appendSubElement('p', {'type': 'humdrum:RWB'})
             p.text = warning.meiValue
 
         return encodingDesc
@@ -1112,8 +1086,7 @@ class MeiMetadata:
         # the main (encoded) work
         catalogNumbers: list[MeiMetadataItem] = self.contents.get('SCA', [])
         catalogAbbrevNumbers: list[MeiMetadataItem] = self.contents.get('SCT', [])
-        alternativeTitles: list[MeiMetadataItem] = self.contents.get('OTA', [])
-        popularTitles: list[MeiMetadataItem] = self.contents.get('OTP', [])
+        opusNumbers: list[MeiMetadataItem] = self.contents.get('OPS', [])
         creationDates: list[MeiMetadataItem] = self.contents.get('ODT', [])
         creationCountries: list[MeiMetadataItem] = self.contents.get('OCY', [])
         creationSettlements: list[MeiMetadataItem] = self.contents.get('OPC', [])
@@ -1135,6 +1108,7 @@ class MeiMetadata:
         firstPerformanceDates: list[MeiMetadataItem] = self.contents.get('MPD', [])
         performanceDates: list[MeiMetadataItem] = self.contents.get('MDT', [])
         performanceDates.extend(self.contents.get('MRD', []))
+        performanceLocations: list[MeiMetadataItem] = self.contents.get('MLC', [])
 
         # related works
         parentWorkTitles: list[MeiMetadataItem] = self.contents.get('OPR', [])
@@ -1242,18 +1216,19 @@ class MeiMetadata:
                 )
                 titleElement.text = collectionWorkTitle.meiValue
 
+        titleElements: list[MeiElement] = self.makeTitleElements()
+
         # the main (encoded) work
         if (catalogNumbers
                 or catalogAbbrevNumbers
-                or self.mainTitleSameAsElement
-                or alternativeTitles
-                or popularTitles
+                or opusNumbers
+                or titleElements
                 or creationDates
                 or creationCountries
                 or creationSettlements
                 or creationRegions
                 or creationLatLongs
-                or self.composerSameAsElements
+                or self.composerElements
                 or lyricists
                 or librettists
                 or dedicatees
@@ -1268,7 +1243,8 @@ class MeiMetadata:
                 or meters
                 or styles
                 or firstPerformanceDates
-                or performanceDates):
+                or performanceDates
+                or performanceLocations):
             workList = workList or MeiElement('workList')
 
             theWork = workList.appendSubElement(
@@ -1299,34 +1275,25 @@ class MeiMetadata:
                 )
                 identifierElement.text = catalogAbbrevNumber.meiValue
 
-            # <title>
-            if self.mainTitleSameAsElement is not None:
-                theWork.subElements.append(self.mainTitleSameAsElement)
-
-            for alternativeTitle in alternativeTitles:
-                titleElement = theWork.appendSubElement(
-                    'title',
+            for opusNumber in opusNumbers:
+                identifierElement = theWork.appendSubElement(
+                    'identifier',
                     {
-                        'analog': 'humdrum:OTA'
+                        'analog': 'humdrum:OPS'
                     }
                 )
-                titleElement.text = alternativeTitle.meiValue
+                identifierElement.text = opusNumber.meiValue
 
-            for popularTitle in popularTitles:
-                titleElement = theWork.appendSubElement(
-                    'title',
-                    {
-                        'analog': 'humdrum:OTP'
-                    }
-                )
-                titleElement.text = popularTitle.meiValue
+            # all <title>s
+            theWork.subElements.extend(titleElements)
 
             # <creation>
             if (creationDates
                     or creationCountries
                     or creationSettlements
                     or creationRegions
-                    or creationLatLongs):
+                    or creationLatLongs
+                    or dedicatees):
                 creationElement: MeiElement = theWork.appendSubElement('creation')
 
                 for creationDate in creationDates:
@@ -1375,42 +1342,41 @@ class MeiMetadata:
                     )
                     regionElement.text = creationLatLong.meiValue
 
+                for dedicatee in dedicatees:
+                    contributorElement = creationElement.appendSubElement(
+                        'dedicatee',
+                        {
+                            'analog': 'humdrum:ODE'
+                        }
+                    )
+                    contributorElement.text = dedicatee.meiValue
+
             # <composer>
-            if self.composerSameAsElements:
-                theWork.subElements.extend(self.composerSameAsElements)
+            if not self.composerElements:
+                self.composerElements = self.makeComposerElements()
+            theWork.subElements.extend(self.composerElements)
 
             # <lyricist>
             for lyricist in lyricists:
-                lyricistElement: MeiElement = theWork.appendSubElement(
-                    'lyricist',
+                lyricistElement: MeiElement = theWork.appendSubElement('lyricist')
+                persName = lyricistElement.appendSubElement(
+                    'persName',
                     {
                         'analog': 'humdrum:LYR'
                     }
                 )
-                persName = lyricistElement.appendSubElement('persName')
                 persName.text = lyricist.meiValue
 
             # <librettist>
             for librettist in librettists:
-                librettistElement: MeiElement = theWork.appendSubElement(
-                    'librettist',
+                librettistElement: MeiElement = theWork.appendSubElement('librettist')
+                persName = librettistElement.appendSubElement(
+                    'persName',
                     {
                         'analog': 'humdrum:LIB'
                     }
                 )
-                persName = librettistElement.appendSubElement('persName')
                 persName.text = librettist.meiValue
-
-            # <dedicatee> someday; for now <contributor role="dedicatee">
-            for dedicatee in dedicatees:
-                contributorElement: MeiElement = theWork.appendSubElement(
-                    'contributor',
-                    {
-                        'role': 'dedicatee',
-                        'analog': 'humdrum:ODE'
-                    }
-                )
-                contributorElement.text = dedicatee.meiValue
 
             # <funder>
             for funder in funders:
@@ -1438,10 +1404,11 @@ class MeiMetadata:
             if histories:
                 historyElement: MeiElement = theWork.appendSubElement('history')
                 for history in histories:
+                    # <p> can't take @analog, so use @type (says Perry)
                     pElement: MeiElement = historyElement.appendSubElement(
                         'p',
                         {
-                            'analog': 'humdrum:HAO'
+                            'type': 'humdrum:HAO'
                         }
                     )
                     pElement.text = history.meiValue
@@ -1529,12 +1496,15 @@ class MeiMetadata:
                     termElement.text = style.meiValue
 
             # <expressionList>
+            expressionListElement: MeiElement | None = None
             if firstPerformanceDates:
-                expressionListElement: MeiElement = theWork.appendSubElement('expressionList')
+                expressionListElement = theWork.appendSubElement('expressionList')
+
                 expressionElement: MeiElement = expressionListElement.appendSubElement(
                     'expression'
                 )
                 titleElement = expressionElement.appendSubElement('title')
+                titleElement.text = "First performance"
                 creationElement = expressionElement.appendSubElement('creation')
                 for firstPerformanceDate in firstPerformanceDates:
                     dateElement = creationElement.appendSubElement(
@@ -1548,15 +1518,17 @@ class MeiMetadata:
                     dateElement.text = firstPerformanceDate.meiValue
 
             if performanceDates:
-                expressionListElement = (
-                    expressionListElement or theWork.appendSubElement('expressionList')
-                )
-                expressionElement = expressionListElement.appendSubElement(
-                    'expression'
-                )
-                titleElement = expressionElement.appendSubElement('title')
-                creationElement = expressionElement.appendSubElement('creation')
-                for performanceDate in performanceDates:
+                if expressionListElement is None:
+                    expressionListElement = theWork.appendSubElement('expressionList')
+
+                for i, performanceDate in enumerate(performanceDates):
+                    expressionElement = expressionListElement.appendSubElement(
+                        'expression'
+                    )
+                    titleElement = expressionElement.appendSubElement('title')
+                    titleElement.text = 'Performance'
+                    creationElement = expressionElement.appendSubElement('creation')
+
                     dateElement = creationElement.appendSubElement(
                         'date',
                         {
@@ -1566,6 +1538,17 @@ class MeiMetadata:
                     )
                     dateElement.fillInIsodate(performanceDate.value)
                     dateElement.text = performanceDate.meiValue
+
+                    if i < len(performanceLocations):
+                        performanceLocation = performanceLocations[i]
+                        geogNameElement = creationElement.appendSubElement(
+                            'geogName',
+                            {
+                                'role': 'performanceLocation',
+                                'analog': 'humdrum:MLC'
+                            }
+                        )
+                        geogNameElement.text = performanceLocation.meiValue
 
             # <relationList> (relations to the other works)
             if parentWorkXmlId or groupWorkXmlId or associatedWorkXmlId or collectionWorkXmlId:

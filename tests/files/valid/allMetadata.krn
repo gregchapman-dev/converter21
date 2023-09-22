@@ -4,7 +4,7 @@
 !!!CBL: Composer's birth location
 !!!CDL: Composer's death location
 !!!CNT: Composer's nationality
-!!!COM2: A different composer's name
+!!!COM2: The second composer's name
 !!!CDT: 1775/-1810/
 !!!CBL: A different composer's birth location
 !!!CDL: A different composer's death location
@@ -36,7 +36,7 @@
 !!!CNT: Attributed composer's nationality
 !!!COS: Suspected composer
 !!!COL: Composer's abbreviated, alias, or stage name
-!!!COC: Corporate composer
+!!!COC: Composer's corporate name
 !!CDT: Composer's birth and death dates
 !!!LYR: Lyricist's name
 !!!LIB: librettist's name
@@ -59,13 +59,14 @@
 !!!MPN: performer's name
 !!!MPS: suspected performer's name
 !!!MLC: place of performance
+!!MDT: date of performance (undocumented, but more common)
+!!!MDT: 1973/09/01
+!!!MLC: place of Sept 2, 1973 performance
+!!MRD: date of performance (documented, but rare)
+!!!MRD: 1973/09/02
 !!!MCN: conductor's name
 !!MPD: date of first performance
 !!!MPD: 1973/08/30
-!!MDT: date of performance (undocumented, but more common)
-!!!MDT: 1973/09/01
-!!MRD: date of performance (documented, but rare)
-!!!MRD: 1973/09/02
 !!!OTA: alternative title
 !!!OTP: popular title
 !!!OPR: title of parent work

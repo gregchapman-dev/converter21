@@ -138,14 +138,15 @@ class MeiScore:
         tb.end('mdiv')
         tb.end('body')
 
-        # There's one bit of metadata that goes in music/back/div@type="textTranslation"/p:
-        # humdrum:HTX (one per <p>)
+        # There's one bit of metadata that goes in music/back/div@type="textTranslation":
+        # humdrum:HTX
         htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
         if htxItems:
             tb.start('back', {})
             tb.start('div', {'type': 'textTranslation'})
             for htxItem in htxItems:
-                attrib: dict[str, str] = {}
+                # <p> can't take @analog, so use @type instead (says Perry)
+                attrib: dict[str, str] = {'type': 'humdrum:HTX'}
                 if isinstance(htxItem.value, m21.metadata.Text):
                     if htxItem.value.language:
                         attrib['xml:lang'] = htxItem.value.language.lower()
