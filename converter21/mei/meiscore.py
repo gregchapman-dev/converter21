@@ -41,8 +41,9 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 class MeiScore:
     Debug: bool = False  # can be set to True for more debugging
 
-    def __init__(self, m21Score: m21.stream.Score) -> None:
+    def __init__(self, m21Score: m21.stream.Score, meiVersion: str) -> None:
         self.m21Score: m21.stream.Score = m21Score
+        self.meiVersion = meiVersion
 
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanners: list[MeiBeamSpanner] = []
@@ -112,10 +113,16 @@ class MeiScore:
 
     def makeRootElement(self) -> Element:
         tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
-        tb.start('mei', {
-            'xmlns': 'http://www.music-encoding.org/ns/mei',
-            'meiversion': '4.0.0'
-        })
+        if self.meiVersion.startswith('4'):
+            tb.start('mei', {
+                'xmlns': 'http://www.music-encoding.org/ns/mei',
+                'meiversion': '4.0.1'
+            })
+        elif self.meiVersion.startswith('5'):
+            tb.start('mei', {
+                'xmlns': 'http://www.music-encoding.org/ns/mei',
+                'meiversion': '5.0+CMN'
+            })
 
         self.makeMeiHead(tb)
 
