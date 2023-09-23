@@ -43,6 +43,9 @@ class MeiWriter:
         # client can set to False if obj is a Score
         self.makeNotation: bool = True
 
+        # client can set to '4' or '5' (or anything starting with '4' or '5')
+        self.meiVersion: str = '5'
+
     def write(self, fp) -> bool:
         if self.makeNotation:
             self._m21Score = M21Utilities.makeScoreFromObject(self._m21Object)
@@ -61,7 +64,7 @@ class MeiWriter:
         # the object structure is MEI-like. For example:
         #   music21 scores are {Staff1(Measure1 .. MeasureN), Staff2(Measure1 .. MeasureN)}
         #   but MEI scores are {Measure1{Staff1, Staff2} .. MeasureN{Staff1, Staff2}}.
-        meiScore: MeiScore = MeiScore(self._m21Score)
+        meiScore: MeiScore = MeiScore(self._m21Score, self.meiVersion)
 
         # Here we convert the MeiScore to an in-memory tree of Elements
         meiElement: Element = meiScore.makeRootElement()
@@ -69,13 +72,27 @@ class MeiWriter:
 
         # Write to the output MEI XML file
         # pylint: disable=line-too-long
-        prefixBytes: bytes = bytes(
-            '''<?xml version="1.0" encoding="UTF-8"?>
-<?xml-model href="https://music-encoding.org/schema/4.0.0/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
-<?xml-model href="https://music-encoding.org/schema/4.0.0/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+        prefixBytes: bytes
+        if self.meiVersion.startswith('4'):
+            prefixBytes = bytes(
+                '''<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/4.0.1/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/4.0.1/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
 ''',
-            encoding='utf-8',
-        )
+                encoding='utf-8',
+            )
+        elif self.meiVersion.startswith('5'):
+            prefixBytes = bytes(
+                '''<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+''',
+                encoding='utf-8',
+            )
+        else:
+            raise MeiExportError(
+                f'invalid meiVersion: {self.meiVersion}. Must start with \'4\' or \'5\'.'
+            )
         # pylint: enable=line-too-long
 
         fp.write(prefixBytes)

@@ -37,6 +37,7 @@ def runTheFullTest(krnPath: Path):
 
     meiw: MeiWriter = MeiWriter(score1)
     meiw.makeNotation = False
+    # meiw.meiVersion = '4'
 
     success: bool = True
     meiwPath = Path(tempfile.gettempdir())
