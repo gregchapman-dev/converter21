@@ -149,22 +149,39 @@ class MeiScore:
         # humdrum:HTX
         htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
         if htxItems:
+            allTheSameLanguage: bool = True
+            theLanguage: str | None = None
+            for htxItem in htxItems:
+                if t.TYPE_CHECKING:
+                    assert isinstance(htxItem.value, m21.metadata.Text)
+                if theLanguage is None:
+                    theLanguage = htxItem.value.language.lower()
+                    continue
+                if theLanguage != htxItem.value.language.lower():
+                    allTheSameLanguage = False
+                    break
+
             tb.start('back', {})
             tb.start('div', {'type': 'textTranslation'})
+            if allTheSameLanguage and theLanguage:
+                tb.start('lg', {'xml:lang': theLanguage})
+            else:
+                tb.start('lg', {})
+
             for htxItem in htxItems:
-                # <p> can't take @analog, so use @type instead (says Perry)
+                # <l> can't take @analog, so use @type instead (says Perry)
                 attrib: dict[str, str] = {'type': 'humdrum:HTX'}
                 if isinstance(htxItem.value, m21.metadata.Text):
-                    if htxItem.value.language:
+                    if htxItem.value.language and not allTheSameLanguage:
                         attrib['xml:lang'] = htxItem.value.language.lower()
-                tb.start('p', attrib)
+                tb.start('l', attrib)
                 tb.data(htxItem.meiValue)
-                tb.end('p')
+                tb.end('l')
+            tb.end('lg')
             tb.end('div')
             tb.end('back')
 
         tb.end('music')
-
         tb.end('mei')
         root: Element = tb.close()
         return root
