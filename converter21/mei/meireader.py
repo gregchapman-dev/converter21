@@ -291,10 +291,12 @@ class MeiReader:
         self.initializeTagToFunctionTables()
 
         self.documentRoot: Element
+        self.meiVersion: str
 
         if theDocument is None:
             # Without this, the class can't be pickled.
             self.documentRoot = Element(f'{MEI_NS}mei')
+            self.meiVersion = '5.0+CMN'
         else:
             try:
                 self.documentRoot = fromstring(theDocument)
@@ -306,6 +308,21 @@ class MeiReader:
 
             if isinstance(self.documentRoot, ElementTree):
                 self.documentRoot = self.documentRoot.getroot()
+
+            self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
+            if not self.meiVersion:
+                raise MeiAttributeError('No @meiversion on root element.')
+            if not (self.meiVersion[0] in ('5', '4')):
+                raise MeiAttributeError(
+                    f'@meiversion {self.meiVersion} not supported (only v4 and v5)'
+                )
+            if self.meiVersion[0] == '5':
+                # check for 'Mensural' and 'Neumes' (NOT supported)
+                if self.meiVersion.endswith('Mensural'):
+                    raise MeiAttributeError('@meiversion "Mensural" not supported')
+
+                if self.meiVersion.endswith('Neumes'):
+                    raise MeiAttributeError('@meiversion "Neumes" not supported')
 
             if f'{MEI_NS}mei' != self.documentRoot.tag:
                 raise MeiElementError(_WRONG_ROOT_ELEMENT.format(self.documentRoot.tag))
@@ -1785,9 +1802,10 @@ class MeiReader:
         count: str | None = elem.get(prefix + 'count')
         unit: str | None = elem.get(prefix + 'unit')
         sym: str | None = elem.get(prefix + 'sym')
-        # We ignore form="invis" because this usually happens in the presence of
-        # <mensur>, which we (and music21) do not support, so we really need this guy.
-        # form: str | None = elem.get(prefix + 'form')
+
+        # We ignore @visible="false" (v5+) and @form="invis" (v4) because this usually
+        # happens in the presence of <mensur>, which we (and music21) do not support,
+        # so we really need this guy.
         if sym:
             if (sym == 'cut'
                     and (count is None or count == '2')
@@ -1806,8 +1824,6 @@ class MeiReader:
 
         if count and unit:
             timeSig = meter.TimeSignature(f'{count}/{unit}')
-            # if form == 'invis':
-            #     timeSig.style.hideObjectOnPrint = True
             return timeSig
 
         return None
@@ -1823,7 +1839,7 @@ class MeiReader:
 
         elem is an :class:`Element` with either the @pname or @sig attribute
 
-        Note that the prefix 'key.' can be passed in to parse @key.pname, @key.sig, etc
+        Note that the prefix 'key.' can be passed in to parse @key.pname, @keysig, etc
 
         Returns the key or key signature.
         '''
@@ -1833,8 +1849,15 @@ class MeiReader:
         pname: str | None = elem.get(prefix + 'pname')
         mode: str | None = elem.get(prefix + 'mode')
         accid: str | None = elem.get(prefix + 'accid')
-        sig: str | None = elem.get(prefix + 'sig')
-        form: str | None = elem.get(prefix + 'form')
+        if self.meiVersion.startswith('4'):
+            sig: str | None = elem.get(prefix + 'sig')
+        else:
+            # starting with v5, @key.sig is actually @keysig
+            if prefix == 'key.':
+                sig = elem.get('keysig')
+            else:
+                sig = elem.get('sig')
+
         if pname is not None and mode is not None:
             accidental: str | None = self._accidentalFromAttr(accid)
             tonic: str
@@ -1865,8 +1888,20 @@ class MeiReader:
             # malformed elem: return None
             output = None
 
-        if output is not None and form == 'invis':
+        keysigVisible: str | None = None
+        if self.meiVersion.startswith('4'):
+            if prefix == 'key.':
+                keysigVisible = elem.get('keysig.show')
+            else:
+                keysigVisible = elem.get('visible')
+        else:
+            if prefix == 'key.':
+                keysigVisible = elem.get('keysig.visible')
+            else:
+                keysigVisible = elem.get('visible')
+        if output is not None and keysigVisible == 'false':
             output.style.hideObjectOnPrint = True
+
         return output
 
     @staticmethod
@@ -3093,7 +3128,12 @@ class MeiReader:
                 postAllParts.append(timesig)
 
         # --> key signature
-        if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
+        keySigAttrName: str = 'keysig'
+        if self.meiVersion.startswith('4'):
+            keySigAttrName = 'key.sig'
+
+        if (elem.get('key.pname') is not None
+                or elem.get(keySigAttrName) is not None):
             keysig = self._keySigFromAttrs(elem, prefix='key.')
             if keysig is not None:
                 postAllParts.append(keysig)
@@ -3717,8 +3757,12 @@ class MeiReader:
                 post['meter'] = timesig
 
         # --> key signature
+        keySigAttrName: str = 'keysig'
+        if self.meiVersion.startswith('4'):
+            keySigAttrName = 'key.sig'
+
         updateStaffKeyAndAlters: bool = False
-        if elem.get('key.pname') is not None or elem.get('key.sig') is not None:
+        if elem.get('key.pname') is not None or elem.get(keySigAttrName) is not None:
             keysig = self._keySigFromAttrs(elem, prefix='key.')
             if keysig is not None:
                 post['key'] = keysig
@@ -4793,8 +4837,17 @@ class MeiReader:
             theRest.stepShift = stepShift
 
         # visibility
-        if elem.get('visible') == 'false':
-            theRest.style.hideObjectOnPrint = True
+        checkMRestVisibility: bool = False
+        if self.meiVersion.startswith('4'):
+            checkMRestVisibility = True
+
+        if elem.tag.endswith('mRest'):
+            if checkMRestVisibility:
+                if elem.get('visible') == 'false':
+                    theRest.style.hideObjectOnPrint = True
+        else:
+            if elem.get('visible') == 'false':
+                theRest.style.hideObjectOnPrint = True
 
         # stash the staff number in theRest.mei_staff (in case a spanner needs to know)
         if self.staffNumberForNotes:
