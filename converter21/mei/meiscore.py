@@ -149,17 +149,9 @@ class MeiScore:
         # humdrum:HTX
         htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
         if htxItems:
-            allTheSameLanguage: bool = True
-            theLanguage: str | None = None
-            for htxItem in htxItems:
-                if t.TYPE_CHECKING:
-                    assert isinstance(htxItem.value, m21.metadata.Text)
-                if theLanguage is None:
-                    theLanguage = htxItem.value.language.lower()
-                    continue
-                if theLanguage != htxItem.value.language.lower():
-                    allTheSameLanguage = False
-                    break
+            allTheSameLanguage: bool
+            theLanguage: str | None
+            theLanguage, allTheSameLanguage = MeiMetadata.getTextListLanguage(htxItems)
 
             tb.start('back', {})
             tb.start('div', {'type': 'textTranslation'})

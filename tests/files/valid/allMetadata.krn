@@ -139,9 +139,9 @@
 !!!ARE: America, North America, United States of America, Ohio, Columbus
 !!ARL: geographical location of origin (lat/long)
 !!!ARL: 51.5/10.5@
-!!!HAO: aural history (lots of text, stories about the work)
-!!!HAO: aural history line 2
-!!!HAO: aural history line 3
+!!!HAO@@FR: aural history (fr) (stories about the work)
+!!!HAO@@FR: aural history (fr) line 2
+!!!HAO@EN: aural history (en) line 3
 !!!HTX@RU: freeform translation to Russian of vocal text (line 1)
 !!!HTX1@RU: freeform translation to Russian of vocal text (line 2)
 !!!RLN: Extended ASCII language code

@@ -80,10 +80,13 @@ class MeiMetadata:
             else:
                 currList.append(meiItem)
 
-        # saved off state during makeRootElement (e.g. MeiElement trees that
-        # may need to be re-used)
+        # Saved off state during makeRootElement (e.g. MeiElement trees that
+        # may need to be re-used).
+
+        # These are the simplified title and composers, that are used in
+        # <fileDesc> and <source>.  The main <work> will have ALL the details.
         self.simpleTitleElement: MeiElement | None = None
-        self.composerElements: list[MeiElement] = []
+        self.simpleComposerElements: list[MeiElement] = []
 
     def makeRootElement(self, tb: TreeBuilder):
         meiHead: MeiElement = MeiElement('meiHead')
@@ -129,8 +132,8 @@ class MeiMetadata:
         pubStmt: MeiElement = fileDesc.appendSubElement('pubStmt')
         unpub: MeiElement = pubStmt.appendSubElement('unpub')
         unpub.text = (
-            '''This MEI file was created by converter21's MEI writer, from a music21
-                   score. When published, this unpub element should be removed, and the
+            '''This MEI file was created by converter21's MEI writer. When
+                   published, this unpub element should be removed, and the
                    enclosing pubStmt element should be properly filled out.'''
         )
 
@@ -172,10 +175,10 @@ class MeiMetadata:
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
         bibl.subElements.append(self.simpleTitleElement)
-        if not self.composerElements:
-            self.composerElements = self.makeComposerElements()
-        if self.composerElements:
-            bibl.subElements.extend(self.composerElements)
+        if not self.simpleComposerElements:
+            self.simpleComposerElements = self.makeSimpleComposerElements()
+        if self.simpleComposerElements:
+            bibl.subElements.extend(self.simpleComposerElements)
 
         editors: list[MeiMetadataItem] = self.contents.get('EED', [])
         encoders: list[MeiMetadataItem] = self.contents.get('ENC', [])
@@ -306,10 +309,10 @@ class MeiMetadata:
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
         bibl.subElements.append(self.simpleTitleElement)
-        if not self.composerElements:
-            self.composerElements = self.makeComposerElements()
-        if self.composerElements:
-            bibl.subElements.extend(self.composerElements)
+        if not self.simpleComposerElements:
+            self.simpleComposerElements = self.makeSimpleComposerElements()
+        if self.simpleComposerElements:
+            bibl.subElements.extend(self.simpleComposerElements)
 
         arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
         editors: list[MeiMetadataItem] = self.contents.get('YOE', [])
@@ -696,6 +699,49 @@ class MeiMetadata:
             return None
         return source
 
+    def makeSimpleComposerElements(self) -> list[MeiElement]:
+        # Just all the COMs.  If no COMs, then do the COCs (corporate), the COAs (attributed),
+        # the COSs (suspected), or the COLs (aliases), in that order of preference.
+        output: list[MeiElement] = []
+        composers: list[MeiMetadataItem] = self.contents.get('COM', [])
+        if not composers:
+            composers = self.contents.get('COC', [])
+        if not composers:
+            composers = self.contents.get('COA', [])
+        if not composers:
+            composers = self.contents.get('COS', [])
+        if not composers:
+            composers = self.contents.get('COL', [])
+        if not composers:
+            return output
+
+        for composer in composers:
+            composerElement = MeiElement('composer')
+            output.append(composerElement)
+
+            # composer cert
+            composerCert: str = ''
+            if composer.value.role == 'attributedComposer':
+                composerCert = 'medium'
+            elif composer.value.role == 'suspectedComposer':
+                composerCert = 'low'
+            if composerCert:
+                # We put @cert on <composer>, not on <persName>.
+                # The uncertainty is about whether this composer was involved,
+                # not about what this composer's name was.
+                composerElement.attrib['cert'] = composerCert
+
+            nameElement: MeiElement = composerElement.appendSubElement('persName')
+            nameElement.text = composer.meiValue
+
+            # adjust nameElement.name and nameElement.attrib as necessary
+            if composer.value.role == 'composerCorporate':
+                nameElement.name = 'corpName'
+            elif composer.value.role == 'composerAlias':
+                nameElement.attrib['type'] = 'alias'
+
+        return output
+
     def makeComposerElements(self) -> list[MeiElement]:
         output: list[MeiElement] = []
         composers: list[MeiMetadataItem] = self.contents.get('COM', [])
@@ -828,40 +874,65 @@ class MeiMetadata:
 
         return output
 
+    @staticmethod
+    def getBestName(
+        mmItems: list[MeiMetadataItem],
+        requiredLanguage: str = ''
+    ) -> MeiMetadataItem | None:
+        # If requiredLanguage is set, return the first item with that language,
+        # otherwise return the first item that is untranslated.
+        # If nothing is found that has the right language/is untranslated,
+        # just return the first item (or None, if mmItems is empty).
+        bestName: MeiMetadataItem | None = None
+        for mmItem in mmItems:
+            if not isinstance(mmItem.value, m21.metadata.Text):
+                continue
+
+            if requiredLanguage:
+                if mmItem.value.language.lower() == requiredLanguage.lower():
+                    bestName = mmItem
+                    break
+            else:
+                if mmItem.value.isTranslated is not True:
+                    bestName = mmItem
+                    break
+
+        if bestName is None and mmItems:
+            bestName = mmItems[0]
+            firstLang = bestName.value.language.lower()
+        return bestName
+
     def makeSimpleTitleElement(self) -> MeiElement:
         # first untranslated OTL (or just first OTL, if all are translated)
-        # goes in the <title> element (no titlePart).
-        # If there are no OTLs, empty <title/> is returned
+        # plus first OMD in that same language goes in the <title> element
+        # (no titlePart).
+        # If there are no OTLs/OMDs, empty <title/> is returned
+        # Note: no @analog, the individual titles will have @analog elsewhere.
         titles: list[MeiMetadataItem] = self.contents.get('OTL', [])
+        movementNames: list[MeiMetadataItem] = self.contents.get('OMD', [])
         titleElement = MeiElement('title')
-        if not titles:
+        firstLang: str = ''
+        bestTitle: MeiElement | None = self.getBestName(titles)
+        if bestTitle is not None and bestTitle.value.language:
+            firstLang = bestTitle.value.language
+        bestMovementName: MeiMetadataItem | None = self.getBestName(movementNames, firstLang)
+        if (bestTitle is None
+                and bestMovementName is not None
+                and bestMovementName.value.language):
+            firstLang = bestMovementName.value.language.lower()
+
+        if bestTitle is None and bestMovementName is None:
             return titleElement
 
-        for title in titles:
-            if (isinstance(title.value, m21.metadata.Text)
-                    and title.value.isTranslated is not True):
-                firstTitle = title
-                if firstTitle.value.language:
-                    firstLang = firstTitle.value.language.lower()
-                break
-
-        if firstTitle is None:
-            firstTitle = titles[0]
-            firstLang = firstTitle.value.language.lower()
-
-        if firstTitle is None:
-            return titleElement
-
-        titleElement.attrib = {}
-        if firstTitle.value.isTranslated is True:
-            titleElement.attrib['type'] = 'translated'
-        else:
-            titleElement.attrib['type'] = 'main'
-        titleElement.attrib['analog'] = 'humdrum:OTL'
         if firstLang:
             titleElement.attrib['xml:lang'] = firstLang
-        titleElement.text = firstTitle.meiValue
 
+        if bestTitle and bestMovementName:
+            titleElement.text = bestTitle.meiValue + ', ' + bestMovementName.meiValue
+        elif bestTitle:
+            titleElement.text = bestTitle.meiValue
+        elif bestMovementName:
+            titleElement.text = bestMovementName.meiValue
         return titleElement
 
     def makeTitleElements(self, firstTitleOnly: bool = False) -> list[MeiElement]:
@@ -1071,16 +1142,52 @@ class MeiMetadata:
         encodingDesc: MeiElement = MeiElement('encodingDesc')
         editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
 
-        for note in encodingNotes:
-            # <p> does not take @analog, so use @type instead (says Perry)
-            p: MeiElement = editorialDecl.appendSubElement('p', {'type': 'humdrum:RNB'})
-            p.text = note.meiValue
-        for warning in encodingWarnings:
-            # <p> does not take @analog, so use @type instead (says Perry)
-            p = editorialDecl.appendSubElement('p', {'type': 'humdrum:RWB'})
-            p.text = warning.meiValue
+        if encodingNotes:
+            language: str
+            allTheSameLanguage: bool
+            language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
+            lg: MeiElement = editorialDecl.appendSubElement('lg')
+            if allTheSameLanguage and language:
+                lg.attrib['xml:lang'] = language
+            for note in encodingNotes:
+                # <l> does not take @analog, so use @type instead (says Perry)
+                l: MeiElement = lg.appendSubElement('l', {'type': 'humdrum:RNB'})
+                l.text = note.meiValue
+                if note.value.language and not allTheSameLanguage:
+                    l.attrib['xml:lang'] = note.text.language.lower()
+        if encodingWarnings:
+            language: str
+            allTheSameLanguage: bool
+            language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
+            lg = editorialDecl.appendSubElement('lg')
+            if allTheSameLanguage and language:
+                lg.attrib['xml:lang'] = language
+            for warning in encodingWarnings:
+                # <l> does not take @analog, so use @type instead (says Perry)
+                l = lg.appendSubElement('l', {'type': 'humdrum:RWB'})
+                l.text = warning.meiValue
+                if note.value.language and not allTheSameLanguage:
+                    l.attrib['xml:lang'] = note.text.language.lower()
 
         return encodingDesc
+
+    @staticmethod
+    def getTextListLanguage(textItems: list[MeiMetadataItem]) -> tuple[str, bool]:
+        # returns tuple(theLanguage: str | None, allTheSameLanguage: bool)
+        theLanguage: str | None = None
+        allTheSameLanguage: bool = True
+        for textItem in textItems:
+            if t.TYPE_CHECKING:
+                assert isinstance(textItem.value, m21.metadata.Text)
+            if theLanguage is None and textItem.value.language is not None:
+                theLanguage = textItem.value.language.lower()
+                continue
+            if theLanguage is not None and textItem.value.language is not None:
+                if theLanguage != textItem.value.language.lower():
+                    allTheSameLanguage = False
+                    break
+
+        return theLanguage, allTheSameLanguage
 
     def makeWorkListElement(self) -> MeiElement | None:
         # the main (encoded) work
@@ -1217,6 +1324,7 @@ class MeiMetadata:
                 titleElement.text = collectionWorkTitle.meiValue
 
         titleElements: list[MeiElement] = self.makeTitleElements()
+        composerElements: list[MeiElement] = self.makeComposerElements()
 
         # the main (encoded) work
         if (catalogNumbers
@@ -1228,7 +1336,7 @@ class MeiMetadata:
                 or creationSettlements
                 or creationRegions
                 or creationLatLongs
-                or self.composerElements
+                or composerElements
                 or lyricists
                 or librettists
                 or dedicatees
@@ -1326,7 +1434,7 @@ class MeiMetadata:
 
                 for creationRegion in creationRegions:
                     regionElement: MeiElement = creationElement.appendSubElement(
-                        'region',
+                        'geogName',
                         {
                             'analog': 'humdrum:ARE'
                         }
@@ -1335,8 +1443,9 @@ class MeiMetadata:
 
                 for creationLatLong in creationLatLongs:
                     regionElement = creationElement.appendSubElement(
-                        'region',
+                        'geogName',
                         {
+                            'type': 'coordinates',
                             'analog': 'humdrum:ARL'
                         }
                     )
@@ -1351,10 +1460,8 @@ class MeiMetadata:
                     )
                     contributorElement.text = dedicatee.meiValue
 
-            # <composer>
-            if not self.composerElements:
-                self.composerElements = self.makeComposerElements()
-            theWork.subElements.extend(self.composerElements)
+            # all <composer>s
+            theWork.subElements.extend(composerElements)
 
             # <lyricist>
             for lyricist in lyricists:
@@ -1402,16 +1509,24 @@ class MeiMetadata:
 
             # <history>
             if histories:
+                allTheSameLanguage: bool
+                theLanguage: str | None
+                theLanguage, allTheSameLanguage = MeiMetadata.getTextListLanguage(histories)
                 historyElement: MeiElement = theWork.appendSubElement('history')
+                attrib: dict[str, str] = {}
+                if allTheSameLanguage and theLanguage:
+                    attrib['xml:lang'] = theLanguage
+                lgElement: MeiElement = historyElement.appendSubElement('lg', attrib)
+
                 for history in histories:
-                    # <p> can't take @analog, so use @type (says Perry)
-                    pElement: MeiElement = historyElement.appendSubElement(
-                        'p',
-                        {
-                            'type': 'humdrum:HAO'
-                        }
-                    )
-                    pElement.text = history.meiValue
+                    if t.TYPE_CHECKING:
+                        assert isintance(history.value, m21.metadata.Text)
+                    attrib = {'type': 'humdrum:HAO'}
+                    if history.value.language and not allTheSameLanguage:
+                        attrib['xml:lang'] = history.value.language.lower()
+                    # <l> can't take @analog, so use @type (says Perry)
+                    lElement: MeiElement = lgElement.appendSubElement('l', attrib)
+                    lElement.text = history.meiValue
 
             # TODO: <perfMedium><perfResList>
 #             if instrumentLists:
@@ -1439,6 +1554,8 @@ class MeiMetadata:
                             'analog': 'humdrum:ONB'
                         }
                     )
+                    if note.value.language:
+                        annotElement.attrib['xml:lang'] = note.value.language.lower()
                     annotElement.text = note.meiValue
 
             # <classification>
