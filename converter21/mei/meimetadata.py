@@ -88,13 +88,16 @@ class MeiMetadata:
         self.simpleTitleElement: MeiElement | None = None
         self.simpleComposerElements: list[MeiElement] = []
 
+        # These are the <mads> elements that will end up in <extMeta>.
+        self.madsElements: list[MeiElement] = []
+
     def makeRootElement(self, tb: TreeBuilder):
         meiHead: MeiElement = MeiElement('meiHead')
         fileDesc: MeiElement = self.makeFileDescElement()
         encodingDesc: MeiElement | None = self.makeEncodingDescElement()
         workList: MeiElement | None = self.makeWorkListElement()
         manifestationList: MeiElement | None = self.makeManifestationListElement()
-        extMeta: MeiElement | None = self.makeExtMetaElement()
+        extMeta: MeiElement | None = self.makeExtMetaElementForMeiHead()
 
         # fileDesc is required
         meiHead.subElements.append(fileDesc)
@@ -743,42 +746,44 @@ class MeiMetadata:
         return output
 
     def makeComposerElements(self) -> list[MeiElement]:
+        # returns a list of <composer> elements
+        # As a side effect, generates any <mads> XML for composer personal info
+        # (e.g. birth and death dates/places, nationality), stashing them in
+        # self.madsElements to emit later.
+
         output: list[MeiElement] = []
         composers: list[MeiMetadataItem] = self.contents.get('COM', [])
         attributedComposers: list[MeiMetadataItem] = self.contents.get('COA', [])
         suspectedComposers: list[MeiMetadataItem] = self.contents.get('COS', [])
-        composerCorporateNames: list[MeiMetadataItem] = self.contents.get('COC', [])
+        corporateComposers: list[MeiMetadataItem] = self.contents.get('COC', [])
         composerAliases: list[MeiMetadataItem] = self.contents.get('COL', [])
-#         composerDates: list[MeiMetadataItem] = self.contents.get('CDT', [])
-#         composerBirthPlaces: list[MeiMetadataItem] = self.contents.get('CBL', [])
-#         composerDeathPlaces: list[MeiMetadataItem] = self.contents.get('CDL', [])
-#         composerNationalities: list[MeiMetadataItem] = self.contents.get('CNT', [])
+        composerDates: list[MeiMetadataItem] = self.contents.get('CDT', [])
+        composerBirthPlaces: list[MeiMetadataItem] = self.contents.get('CBL', [])
+        composerDeathPlaces: list[MeiMetadataItem] = self.contents.get('CDL', [])
+        composerNationalities: list[MeiMetadataItem] = self.contents.get('CNT', [])
         # TODO: Prefer composer birth/death dates from Contributor value.
         # TODO: But first make Humdrum importer put them there.
+        allComposers: list[MeiMetadataItem] = composers + attributedComposers + suspectedComposers + corporateComposers
 
-        for i, composer in enumerate(
-                composers + attributedComposers + suspectedComposers):
+        for i, composer in enumerate(allComposers):
             # Assume association is done by ordering of the metadata item arrays
             # Currently our Humdrum importer assumes this ordering should match
             # the ordering in the file.
             composerAlias: MeiMetadataItem | None = None
-            composerCorporateName: MeiMetadataItem | None = None
-#             composerBirthAndDeathDate: MeiMetadataItem | None = None
-#             composerBirthPlace: MeiMetadataItem | None = None
-#             composerDeathPlace: MeiMetadataItem | None = None
-#             composerNationality: MeiMetadataItem | None = None
-            if i < len(composerCorporateNames):
-                composerCorporateName = composerCorporateNames[i]
+            composerBirthAndDeathDate: MeiMetadataItem | None = None
+            composerBirthPlace: MeiMetadataItem | None = None
+            composerDeathPlace: MeiMetadataItem | None = None
+            composerNationality: MeiMetadataItem | None = None
             if i < len(composerAliases):
                 composerAlias = composerAliases[i]
-#             if i < len(composerDates):
-#                 composerBirthAndDeathDate = composerDates[i]
-#             if i < len(composerBirthPlaces):
-#                 composerBirthPlace = composerBirthPlaces[i]
-#             if i < len(composerDeathPlaces):
-#                 composerDeathPlace = composerDeathPlaces[i]
-#             if i < len(composerNationalities):
-#                 composerNationality = composerNationalities[i]
+            if i < len(composerDates):
+                composerBirthAndDeathDate = composerDates[i]
+            if i < len(composerBirthPlaces):
+                composerBirthPlace = composerBirthPlaces[i]
+            if i < len(composerDeathPlaces):
+                composerDeathPlace = composerDeathPlaces[i]
+            if i < len(composerNationalities):
+                composerNationality = composerNationalities[i]
 
             composerElement = MeiElement('composer')
             output.append(composerElement)
@@ -786,12 +791,16 @@ class MeiMetadata:
             # composer persName ('COM'/'COA'/'COS')
             composerAnalog: str = 'humdrum:COM'
             composerCert: str = ''
+            composerNameElement: str = 'persName'
             if composer.value.role == 'attributedComposer':
                 composerAnalog = 'humdrum:COA'
                 composerCert = 'medium'
             elif composer.value.role == 'suspectedComposer':
                 composerAnalog = 'humdrum:COS'
                 composerCert = 'low'
+            elif composer.value.role == 'composerCorporate':
+                composerAnalog = 'humdrum:COC'
+                composerNameElement = 'corpName'
 
             if composerCert:
                 # We put @cert on <composer>, not on <persName>.
@@ -799,26 +808,16 @@ class MeiMetadata:
                 # not about this composer's name.
                 composerElement.attrib['cert'] = composerCert
 
-            persNameAttr = {'analog': composerAnalog}
-            persNameElement: MeiElement = composerElement.appendSubElement(
-                'persName',
-                persNameAttr
+            nameAttr = {'analog': composerAnalog}
+            nameElement: MeiElement = composerElement.appendSubElement(
+                composerNameElement,
+                nameAttr
             )
-            persNameElement.text = composer.meiValue
-
-            # composer corporate name ('COC')
-            if composerCorporateName is not None:
-                persNameElement = composerElement.appendSubElement(
-                    'corpName',
-                    {
-                        'analog': 'humdrum:COC'
-                    }
-                )
-                persNameElement.text = composerCorporateName.meiValue
+            nameElement.text = composer.meiValue
 
             # composer alias ('COL')
             if composerAlias is not None:
-                persNameElement = composerElement.appendSubElement(
+                persNameElement: MeiElement = composerElement.appendSubElement(
                     'persName',
                     {
                         'type': 'alias',
@@ -827,50 +826,68 @@ class MeiMetadata:
                 )
                 persNameElement.text = composerAlias.meiValue
 
-            # composer birth and death dates
-#             if composerBirthAndDeathDate is not None:
-#                 dateElement: MeiElement = composerElement.appendSubElement(
-#                     'date',
-#                     {
-#                         'type': 'birth/death',
-#                         'analog': 'humdrum:CDT',
-#                     }
-#                 )
-#                 dateElement.fillInIsodate(composerBirthAndDeathDate.value)
-#                 dateElement.text = composerBirthAndDeathDate.meiValue
+            # MADS-style authority records (personal info about a composer)
+            if (composerBirthAndDeathDate is None
+                    and composerBirthPlace is None
+                    and composerDeathPlace is None
+                    and composerNationality is None):
+                # nothing for MADS
+                continue
 
-            # composer birth place
-#             if composerBirthPlace is not None:
-#                 geogNameElement: MeiElement = composerElement.appendSubElement(
-#                     'geogName',
-#                     {
-#                         'role': 'birthPlace',
-#                         'analog': 'humdrum:CBL'
-#                     }
-#                 )
-#                 geogNameElement.text = composerBirthPlace.meiValue
+            # There is extra info about the composer, that will need to go
+            # in <extMeta><mads>
+            mads = MeiElement(
+                'mads:mads',
+                {
+                    'xmlns:mads': 'http://www.loc.gov/mads/'
+                }
+            )
+            self.madsElements.append(mads)
 
-            # composer death place
-#             if composerDeathPlace is not None:
-#                 geogNameElement = composerElement.appendSubElement(
-#                     'geogName',
-#                     {
-#                         'role': 'deathPlace',
-#                         'analog': 'humdrum:CDL'
-#                     }
-#                 )
-#                 geogNameElement.text = composerDeathPlace.meiValue
+            authority: MeiElement = mads.appendSubElement('mads:authority')
+            name: MeiElement = authority.appendSubElement('mads:name')
+            if composerNameElement == 'corpName':
+                name.attrib['type'] = 'corporate'
+            namePart: MeiElement = name.appendSubElement('mads:namePart')
+            namePart.text = composer.meiValue
 
-            # composer nationality
-#             if composerNationality is not None:
-#                 geogNameElement = composerElement.appendSubElement(
-#                     'geogName',
-#                     {
-#                         'role': 'nationality',
-#                         'analog': 'humdrum:CNT'
-#                     }
-#                 )
-#                 geogNameElement.text = composerNationality.meiValue
+            # extra info goes in <mads><personInfo>
+            personInfo: MeiElement = mads.appendSubElement('mads:personInfo')
+            if composerBirthAndDeathDate is not None:
+                isodate: str = (
+                    M21Utilities.isoDateFromM21DatePrimitive(composerBirthAndDeathDate.value)
+                )
+                isodateBirth: str = ''
+                isodateDeath: str = ''
+                isodateBirth, isodateDeath = isodate.split('/')
+                birthDate: MeiElement = personInfo.appendSubElement(
+                    'mads:birthDate',
+                    {
+                        'encoding': 'edtf'
+                    }
+                )
+                birthDate.text = isodateBirth
+
+                if isodateDeath:
+                    deathDate: MeiElement = personInfo.appendSubElement(
+                        'mads:deathDate',
+                        {
+                            'encoding': 'edtf'
+                        }
+                    )
+                    deathDate.text = isodateDeath
+
+            if composerBirthPlace is not None:
+                birthPlace: MeiElement = personInfo.appendSubElement('mads:birthPlace')
+                birthPlace.text = composerBirthPlace.meiValue
+
+            if composerDeathPlace is not None:
+                deathPlace: MeiElement = personInfo.appendSubElement('mads:deathPlace')
+                deathPlace.text = composerDeathPlace.meiValue
+
+            if composerNationality is not None:
+                nationality: MeiElement = personInfo.appendSubElement('mads:nationality')
+                nationality.text = composerNationality.meiValue
 
         return output
 
@@ -1142,32 +1159,14 @@ class MeiMetadata:
         encodingDesc: MeiElement = MeiElement('encodingDesc')
         editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
 
-        if encodingNotes:
-            language: str
-            allTheSameLanguage: bool
-            language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
-            lg: MeiElement = editorialDecl.appendSubElement('lg')
-            if allTheSameLanguage and language:
-                lg.attrib['xml:lang'] = language
-            for note in encodingNotes:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                l: MeiElement = lg.appendSubElement('l', {'type': 'humdrum:RNB'})
-                l.text = note.meiValue
-                if note.value.language and not allTheSameLanguage:
-                    l.attrib['xml:lang'] = note.text.language.lower()
-        if encodingWarnings:
-            language: str
-            allTheSameLanguage: bool
-            language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
-            lg = editorialDecl.appendSubElement('lg')
-            if allTheSameLanguage and language:
-                lg.attrib['xml:lang'] = language
-            for warning in encodingWarnings:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                l = lg.appendSubElement('l', {'type': 'humdrum:RWB'})
-                l.text = warning.meiValue
-                if note.value.language and not allTheSameLanguage:
-                    l.attrib['xml:lang'] = note.text.language.lower()
+        for note in encodingNotes:
+            # <p> does not take @analog, so use @type instead (says Perry)
+            p: MeiElement = editorialDecl.appendSubElement('p', {'type': 'humdrum:RNB'})
+            p.text = note.meiValue
+        for warning in encodingWarnings:
+            # <p> does not take @analog, so use @type instead (says Perry)
+            p = editorialDecl.appendSubElement('p', {'type': 'humdrum:RWB'})
+            p.text = warning.meiValue
 
         return encodingDesc
 
@@ -1233,7 +1232,8 @@ class MeiMetadata:
 
         # the parent work
         if parentWorkTitles:
-            workList = workList or MeiElement('workList')
+            if workList is None:
+                workList = MeiElement('workList')
 
             parentWorkXmlId = f'work{workNumber}_parent'
             parentWork = workList.appendSubElement(
@@ -1256,7 +1256,8 @@ class MeiMetadata:
 
         # the group work
         if groupWorkTitles:
-            workList = workList or MeiElement('workList')
+            if workList is None:
+                workList = MeiElement('workList')
 
             groupWorkXmlId = f'work{workNumber}_group'
             groupWork = workList.appendSubElement(
@@ -1279,7 +1280,8 @@ class MeiMetadata:
 
         # the associated work
         if associatedWorkTitles:
-            workList = workList or MeiElement('workList')
+            if workList is None:
+                workList = MeiElement('workList')
 
             associatedWorkXmlId = f'work{workNumber}_associated'
             associatedWork = workList.appendSubElement(
@@ -1302,7 +1304,8 @@ class MeiMetadata:
 
         # the collection work
         if collectionWorkTitles:
-            workList = workList or MeiElement('workList')
+            if workList is None:
+                workList = MeiElement('workList')
 
             collectionWorkXmlId = f'work{workNumber}_collection'
             collectionWork = workList.appendSubElement(
@@ -1353,7 +1356,8 @@ class MeiMetadata:
                 or firstPerformanceDates
                 or performanceDates
                 or performanceLocations):
-            workList = workList or MeiElement('workList')
+            if workList is None:
+                workList = MeiElement('workList')
 
             theWork = workList.appendSubElement(
                 'work',
@@ -1703,10 +1707,24 @@ class MeiMetadata:
                         }
                     )
 
+            extMeta: MeiElement | None = self.makeExtMetaElementForWork()
+            if extMeta is not None:
+                theWork.subElements.append(extMeta)
+
         return workList
 
     def makeManifestationListElement(self) -> MeiElement | None:
         return None
 
-    def makeExtMetaElement(self) -> MeiElement | None:
+    def makeExtMetaElementForMeiHead(self) -> MeiElement | None:
         return None
+
+    def makeExtMetaElementForWork(self) -> MeiElement | None:
+        if not self.madsElements:
+            return None
+
+        extMeta: MeiElement = MeiElement('extMeta')
+        extMeta.subElements.extend(self.madsElements)
+        self.madsElements = []
+
+        return extMeta

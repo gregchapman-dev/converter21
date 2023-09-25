@@ -6,9 +6,9 @@
 !!!CNT: Composer's nationality
 !!!COM2: The second composer's name
 !!!CDT: 1775/-1810/
-!!!CBL: A different composer's birth location
-!!!CDL: A different composer's death location
-!!!CNT: A different composer's nationality
+!!!CBL: The second composer's birth location
+!!!CDL: The second composer's death location
+!!!CNT: The second composer's nationality
 !!!OTL@@FR: French (untranslated) title
 !!!OTL@EN: English (translated) title
 !!!OMD@@FR: French (untranslated) movement name
@@ -36,7 +36,7 @@
 !!!CNT: Attributed composer's nationality
 !!!COS: Suspected composer
 !!!COL: Composer's abbreviated, alias, or stage name
-!!!COC: Composer's corporate name
+!!!COC: Corporate composer
 !!CDT: Composer's birth and death dates
 !!!LYR: Lyricist's name
 !!!LIB: librettist's name
