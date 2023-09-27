@@ -703,18 +703,17 @@ class MeiMetadata:
                     'type': 'manuscriptAccessAcknowledgment',
                 }
             )
-        for acknowledgment in acknowledgments:
             language, allTheSameLanguage = self.getTextListLanguage(acknowledgments)
             lineGroup: MeiElement = annot.appendSubElement('lg')
             if allTheSameLanguage and language:
                 lineGroup.attrib['xml:lang'] = language
 
-            for acknowledgment in acknowledgments:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
-                line.text = acknowledgment.meiValue
-                if acknowledgment.value.language and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = acknowledgment.value.language.lower()
+        for acknowledgment in acknowledgments:
+            # <l> does not take @analog, so use @type instead (says Perry)
+            line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
+            line.text = acknowledgment.meiValue
+            if acknowledgment.value.language and not allTheSameLanguage:
+                line.attrib['xml:lang'] = acknowledgment.value.language.lower()
 
         if bibl.isEmpty():
             return None
@@ -1604,7 +1603,7 @@ class MeiMetadata:
 
                 for note in notes:
                     # <l> does not take @analog, so use @type instead (says Perry)
-                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:RNB'})
+                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:ONB'})
                     line.text = note.meiValue
                     if note.value.language and not allTheSameLanguage:
                         line.attrib['xml:lang'] = note.value.language.lower()

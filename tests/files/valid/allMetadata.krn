@@ -79,7 +79,8 @@
 !!!ODE: dedicated to
 !!!OCO: commissioned by
 !!!OCL: collected/transcribed by
-!!!ONB: free form note related to title or identity of work
+!!!ONB@@FR: free form (French) note related to title or identity of work (line 1)
+!!!ONB@@FR: free form (French) note related to title or identity of work (line 2)
 !!ODT: date or period of composition (**date or **zeit format)
 !!!ODT: 1962/01/01-1963/4/13
 !!!OCY: country of composition
@@ -99,7 +100,11 @@
 !!!SCA: scholarly catalog (unabbreviated) (e.g. "Koechel 117")
 !!!SMS: unpublished manuscript source name
 !!!SML: unpublished manuscript location
-!!!SMA: acknowledgment of manuscript access
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 1)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 2)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 3)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 4)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 5)
 !!!YEP: publisher of electronic edition
 !!!YEC: date and owner of electronic copyright
 !!YER: date electronic edition released
@@ -145,8 +150,8 @@
 !!!HTX@RU: freeform translation to Russian of vocal text (line 1)
 !!!HTX1@RU: freeform translation to Russian of vocal text (line 2)
 !!!RLN: Extended ASCII language code
-!!!RNB: a note about the representation (line 1)
-!!!RNB: a note about the representation (line 2)
-!!!RWB: a warning about the representation (line 1)
-!!!RWB: a warning about the representation (line 2)
-!!!RWB: a warning about the representation (line 3)
+!!!RNB: a note (no language) about the representation (line 1)
+!!!RNB: a note (no language) about the representation (line 2)
+!!!RWB: a warning (no language) about the representation (line 1)
+!!!RWB: a warning (no language) about the representation (line 2)
+!!!RWB: a warning (no language) about the representation (line 3)
