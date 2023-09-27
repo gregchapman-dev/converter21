@@ -16,6 +16,7 @@ import music21 as m21
 
 from converter21.shared import M21Utilities
 from converter21.mei import MeiShared
+from converter21.mei import MeiElement
 
 environLocal = m21.environment.Environment('converter21.mei.meimetadatareader')
 
@@ -26,6 +27,68 @@ _MISSED_DATE = 'Unable to decipher an MEI date "{}". Leaving as str.'
 
 
 class MeiMetadataReader:
+    def __init__(self, meiHead: Element) -> None:
+        self.m21Metadata: m21.metadata.Metadata = m21.metadata.Metadata()
+        if meiHead.tag != f'{MEI_NS}meiHead':
+            environLocal.warn('MeiMetadataReader must be initialized with an <meiHead> element.')
+            return
+
+        self.meiHeadElement: MeiElement = MeiElement(meiHead)
+
+        fileDescMD: m21.metadata.Metadata | None = None
+        encodingDescMD: m21.metadata.Metadata | None = None
+
+        # Gather up separate metadata from each subElement of meiHead, then combine
+        # them (e.g. use title from workList if it's there, else from fileDesc).
+        for subEl in self.meiHeadElement.subElements:
+            if subEl.name == 'fileDesc':
+                fileDescMD = self.processFileDesc(subEl)
+            elif subEl.name == 'encodingDesc':
+                encodingDescMD = self.processEncodingDesc(subEl)
+            elif subEl.name == 'workList':
+                workListMD = self.processEncodingDesc(subEl)
+
+        self.m21Metadata = self.combineFileDescEncodingDescAndWorkListMetadata(
+            fileDescMD,
+            encodingDescMD,
+            workListMD
+        )
+
+        # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
+        # entire <meiHead> element (in case someone wants to parse out more info than we do).
+        meiHeadXmlStr: str = tostring(meiHead, encoding='unicode')
+        meiHeadElementStr: str = self.meiHeadElement.__repr__()
+        meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
+        self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
+
+    def processFileDesc(self, fileDescElement: MeiElement) -> m21.metadata.Metadata:
+        output = m21.metadata.Metadata()
+        return output
+
+    def processEncodingDesc(self, encodingDescElement: MeiElement) -> m21.metadata.Metadata:
+        output = m21.metadata.Metadata()
+        return output
+
+    def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
+        output = m21.metadata.Metadata()
+        for subEl in workListElement.getSubElements('work'):
+            if
+        return output
+
+    def combineFileDescEncodingDescAndWorkListMetadata(
+        self,
+        fileDescMD: m21.metadata.Metadata,
+        encodingDescMD: m21.metadata.Metadata,
+        workListMD: m21.metadata.Metadata
+    ) -> m21.metadata.Metadata:
+        output = m21.metadata.Metadata()
+        return output
+
+    def updateWithBackMatter(self, back: Element):
+        # back/div@type="textTranslation"/lg@lang=""/l@type="humdrum:HTX"@lang=""
+        return
+
+class MeiMetadataReaderOLD:
     def __init__(self, meiHead: Element) -> None:
         self._initializeTagToFunctionTables()
         self.m21Metadata: m21.metadata.Metadata = m21.metadata.Metadata()

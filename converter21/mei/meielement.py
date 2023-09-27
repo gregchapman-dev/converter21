@@ -10,7 +10,7 @@
 # Copyright:     (c) 2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-from xml.etree.ElementTree import TreeBuilder, tostring
+from xml.etree.ElementTree import TreeBuilder, Element, tostring
 
 import music21 as m21
 
@@ -19,19 +19,30 @@ from converter21.shared import M21Utilities
 class MeiElement:
     def __init__(
         self,
-        name: str,
-        attrib: dict[str, str] | None = None,
+        elem: str | Element,
+        attrib: dict[str, str] | None = None,  # ignored if elem is an Element
     ) -> None:
-        self.name = name
-        self.attrib: dict[str, str]
-        self.subElements: list[MeiElement]
+        self.name: str = ''
+        self.attrib: dict[str, str] = {}
+        self.text: str = ''
+        self.tail: str = ''
+        self.subElements: list[MeiElement] = []
 
+        if isinstance(elem, Element):
+            self.name = elem.tag
+            self.attrib = elem.attrib
+            self.text = elem.text or ''
+            self.tail = elem.tail or ''
+
+            for i in range(0, len(elem)):
+                self.subElements.append(MeiElement(elem[i]))
+
+            return
+
+        # isinstance(elem, str)
+        self.name = elem
         if attrib:
             self.attrib = attrib
-        else:
-            self.attrib = {}
-        self.subElements = []
-        self.text = ''
 
     def appendSubElement(
         self,
@@ -59,6 +70,9 @@ class MeiElement:
             return False
         if self.subElements:
             return False
+        if self.tail.strip():
+            # tail is considered empty if it just has \n and spaces/tabs
+            return False
         return True
 
     def fillInIsodate(
@@ -77,6 +91,8 @@ class MeiElement:
         for subEl in self.subElements:
             subEl.makeRootElement(tb)
         tb.end(self.name)
+        if self.tail:
+            tb.data(self.tail)
 
     def __repr__(self) -> str:
         # for debug view of MeiElement (displays XML)

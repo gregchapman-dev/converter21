@@ -26,10 +26,10 @@ from .m21objectconvert import MeiTupletSpanner
 from .m21objectconvert import MeiTieSpanner
 
 from .meishared import MeiShared
+from .meielement import MeiElement
 from .meimetadatareader import MeiMetadataReader
 from .meireader import MeiReader
 
-from .meielement import MeiElement
 from .meimetadata import MeiMetadataItem
 from .meimetadata import MeiMetadata
 from .meilayer import MeiLayer
