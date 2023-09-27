@@ -126,8 +126,10 @@ class MeiMetadata:
         # titleStmt is required, so we create/append in one step
         titleStmt: MeiElement = fileDesc.appendSubElement('titleStmt')
 
-        self.simpleTitleElement = self.makeSimpleTitleElement()
-        titleStmt.subElements.append(self.simpleTitleElement)
+        if self.simpleTitleElement is None:
+            self.simpleTitleElement = self.makeSimpleTitleElement()
+        if self.simpleTitleElement is not None:
+            titleStmt.subElements.append(self.simpleTitleElement)
 
         # pubStmt describes the MEI file we are writing.  It is, of course,
         # unpublished, so we use <unpub> to say that.  This pubStmt will
@@ -177,7 +179,8 @@ class MeiMetadata:
         bibl: MeiElement = source.appendSubElement('bibl')
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        bibl.subElements.append(self.simpleTitleElement)
+        if self.simpleTitleElement is not None:
+            bibl.subElements.append(self.simpleTitleElement)
         if not self.simpleComposerElements:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
@@ -203,15 +206,19 @@ class MeiMetadata:
             )
             editorEl.text = editor.meiValue
 
-        for encoder in encoders:
-            encoderEl: MeiElement = bibl.appendSubElement(
-                'editor',
-                {
-                    'type': 'encoder',
-                    'analog': 'humdrum:ENC'
-                }
-            )
-            encoderEl.text = encoder.meiValue
+        if encoders:
+            respStmt: MeiElement = bibl.appendSubElement('respStmt')
+
+            for encoder in encoders:
+                respEl: MeiElement = respStmt.appendSubElement('resp')
+                respEl.text = 'encoder'
+                persNameEl: MeiElement = respStmt.appendSubElement(
+                    'persName',
+                    {
+                        'analog': 'humdrum:ENC'
+                    }
+                )
+                persNameEl.text = encoder.meiValue
 
         for version in versions:
             versionEl: MeiElement = bibl.appendSubElement(
@@ -312,7 +319,8 @@ class MeiMetadata:
         bibl: MeiElement = source.appendSubElement('bibl')
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        bibl.subElements.append(self.simpleTitleElement)
+        if self.simpleTitleElement is not None:
+            bibl.subElements.append(self.simpleTitleElement)
         if not self.simpleComposerElements:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
@@ -326,10 +334,19 @@ class MeiMetadata:
         volumeNumbers: list[MeiMetadataItem] = self.contents.get('OVM', [])
         volumeNames: list[MeiMetadataItem] = self.contents.get('PTL', [])
 
-        if arrangers or editors or orchestrators or translators or collectors:
-            # arrangers and editors could technically go outside <respStmt>,
-            # but Perry requests that they go inside <respStmt> for ease of
-            # conversion to his proposed v. 6.
+        for editor in editors:
+            editorEl: MeiElement = bibl.appendSubElement(
+                'editor',
+                {
+                    'analog': 'humdrum:PED'
+                }
+            )
+            editorEl.text = editor.meiValue
+
+        if arrangers or orchestrators or translators or collectors:
+            # arrangers could technically go outside <respStmt>, but
+            # Perry requests that they go inside <respStmt> for ease
+            # of conversion to his proposed v. 6.
             respStmt: MeiElement = bibl.appendSubElement('respStmt')
 
             for arranger in arrangers:
@@ -342,17 +359,6 @@ class MeiMetadata:
                     }
                 )
                 arrangerEl.text = arranger.meiValue
-
-            for editor in editors:
-                respEl = respStmt.appendSubElement('resp')
-                respEl.text = 'editor'
-                editorEl: MeiElement = respStmt.appendSubElement(
-                    'persName',
-                    {
-                        'analog': 'humdrum:PED'
-                    }
-                )
-                editorEl.text = editor.meiValue
 
             for orchestrator in orchestrators:
                 respEl = respStmt.appendSubElement('resp')
@@ -458,6 +464,10 @@ class MeiMetadata:
         for i, albumTitle in enumerate(albumTitles):
             if i < len(trackNumbers):
                 analytic: MeiElement = biblStruct.appendSubElement('analytic')
+                if self.simpleTitleElement is None:
+                    self.simpleTitleElement = self.makeSimpleTitleElement()
+                if self.simpleTitleElement is not None:
+                    analytic.subElements.append(self.simpleTitleElement)
                 biblScope = analytic.appendSubElement(
                     'biblScope',
                     {
@@ -784,6 +794,7 @@ class MeiMetadata:
             composers + attributedComposers + suspectedComposers + corporateComposers
         )
 
+        madsXmlIdIndex: int = 0
         for i, composer in enumerate(allComposers):
             # Assume association is done by ordering of the metadata item arrays
             # Currently our Humdrum importer assumes this ordering should match
@@ -834,17 +845,6 @@ class MeiMetadata:
             )
             nameElement.text = composer.meiValue
 
-            # composer alias ('COL')
-            if composerAlias is not None:
-                persNameElement: MeiElement = composerElement.appendSubElement(
-                    'persName',
-                    {
-                        'type': 'alias',
-                        'analog': 'humdrum:COL'
-                    }
-                )
-                persNameElement.text = composerAlias.meiValue
-
             # MADS-style authority records (personal info about a composer)
             if (composerBirthAndDeathDate is None
                     and composerBirthPlace is None
@@ -856,22 +856,43 @@ class MeiMetadata:
             # There is extra info about the composer, that will need to go
             # in <extMeta><madsCollection><mads>
             if self.madsCollection is None:
+                schemaLoc: str = (
+                    'http://www.loc.gov/mads/v2 https://www.loc.gov/standards/mads/mads-2-1.xsd'
+                )
                 self.madsCollection = MeiElement(
                     'madsCollection',
                     {
                         'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
-                        'xsi:schemaLocation': 'https://www.loc.gov/standards/mads/mads-2-1.xsd',
+                        'xsi:schemaLocation': schemaLoc,
                         'xmlns': 'http://www.loc.gov/mads/v2'
                     }
                 )
 
-            mads = self.madsCollection.appendSubElement('mads')
+            madsXmlId: str = f'mads{madsXmlIdIndex}'
+            madsXmlIdIndex += 1
+
+            mads = self.madsCollection.appendSubElement('mads', {'ID': madsXmlId})
+            composerElement.attrib['auth.uri'] = '#' + madsXmlId
+
             authority: MeiElement = mads.appendSubElement('authority')
             name: MeiElement = authority.appendSubElement('name')
             if composerNameElement == 'corpName':
                 name.attrib['type'] = 'corporate'
             namePart: MeiElement = name.appendSubElement('namePart')
             namePart.text = composer.meiValue
+
+            # composerAlias ('humdrum:COL') goes in <mads><variant>
+            if composerAlias:
+                variant: MeiElement = mads.appendSubElement(
+                    'variant',
+                    {
+                        'type': 'other',
+                        'otherType': 'humdrum:COL'
+                    }
+                )
+                name = variant.appendSubElement('name')
+                namePart = name.appendSubElement('namePart')
+                namePart.text = composerAlias.meiValue
 
             # extra info goes in <mads><personInfo>
             personInfo: MeiElement = mads.appendSubElement('personInfo')
@@ -1154,7 +1175,7 @@ class MeiMetadata:
             if popularTitle.value.language:
                 lang = popularTitle.value.language.lower()
 
-            attrib = {'type': 'popular', 'analog': 'humdrum:OTA'}
+            attrib = {'type': 'popular', 'analog': 'humdrum:OTP'}
             if lang:
                 attrib['xml:lang'] = lang
 
