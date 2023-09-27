@@ -347,7 +347,7 @@ class MeiMetadata:
                 respEl = respStmt.appendSubElement('resp')
                 respEl.text = 'editor'
                 editorEl: MeiElement = respStmt.appendSubElement(
-                    'editor',
+                    'persName',
                     {
                         'analog': 'humdrum:PED'
                     }
