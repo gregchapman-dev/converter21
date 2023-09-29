@@ -128,7 +128,10 @@ class MeiScore:
         # meiHead
         self.metadata.makeRootElement(tb)
 
-        tb.start('music', {})
+        if self.metadata.mainWorkXmlId:
+            tb.start('music', {'decls': '#' + self.metadata.mainWorkXmlId})
+        else:
+            tb.start('music', {})
         tb.start('body', {})
         tb.start('mdiv', {})
 

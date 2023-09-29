@@ -80,6 +80,10 @@ class MeiMetadata:
             else:
                 currList.append(meiItem)
 
+        # The xml:id of the main work (the work that is actually encoded).
+        # This will be referenced in mdiv@decls (or maybe music@decls).
+        self.mainWorkXmlId: str = ''
+
         # Saved off state during makeRootElement (e.g. MeiElement trees that
         # may need to be re-used).
 
@@ -1424,14 +1428,16 @@ class MeiMetadata:
             if workList is None:
                 workList = MeiElement('workList')
 
+            self.mainWorkXmlId = f'work{workNumber}_encoded'
+            workNumber += 1
+
             theWork = workList.appendSubElement(
                 'work',
                 {
-                    'xml:id': f'work{workNumber}_main',
-                    'type': 'main'
+                    'xml:id': self.mainWorkXmlId,
+                    'type': 'encoded'
                 }
             )
-            workNumber += 1
 
             # <identifier>
             for catalogNumber in catalogNumbers:
@@ -1745,8 +1751,9 @@ class MeiMetadata:
                     relationList.appendSubElement(
                         'relation',
                         {
-                            'rel': 'host',
-                            'plist': f'#{parentWorkXmlId}'
+                            'rel': 'isPartOf',
+                            'type': 'isChildOfParent',
+                            'target': f'#{parentWorkXmlId}'
                         }
                     )
                 if groupWorkXmlId:
@@ -1754,7 +1761,8 @@ class MeiMetadata:
                         'relation',
                         {
                             'rel': 'isPartOf',
-                            'plist': f'#{groupWorkXmlId}'
+                            'type': 'isMemberOfGroup',
+                            'target': f'#{groupWorkXmlId}'
                         }
                     )
                 if associatedWorkXmlId:
@@ -1762,7 +1770,7 @@ class MeiMetadata:
                         'relation',
                         {
                             'rel': 'isVersionOf',
-                            'plist': f'#{associatedWorkXmlId}'
+                            'target': f'#{associatedWorkXmlId}'
                         }
                     )
                 if collectionWorkXmlId:
@@ -1770,7 +1778,8 @@ class MeiMetadata:
                         'relation',
                         {
                             'rel': 'isPartOf',
-                            'plist': f'#{collectionWorkXmlId}'
+                            'type': 'isMemberOfCollection',
+                            'target': f'#{collectionWorkXmlId}'
                         }
                     )
 
