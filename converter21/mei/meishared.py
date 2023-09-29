@@ -79,6 +79,21 @@ class MeiShared:
         return chr(int(m.group(2), 16))
 
     @staticmethod
+    def removeOctothorpe(xmlid: str) -> str:
+        '''
+        Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
+
+        >>> from converter21.mei import MeiShared
+        >>> MeiShared.removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
+        '110a923d-a13a-4a2e-b85c-e1d438e4c5d6'
+        >>> MeiShared.removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
+        'e46cbe82-95fc-4522-9f7a-700e41a40c8e'
+        '''
+        if xmlid.startswith('#'):
+            return xmlid[1:]
+        return xmlid
+
+    @staticmethod
     def chooseSubElement(appOrChoice: Element) -> Element | None:
         chosen: Element | None = None
         if appOrChoice.tag == f'{MEI_NS}app':

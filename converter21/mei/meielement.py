@@ -11,6 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 from xml.etree.ElementTree import TreeBuilder, Element, tostring
+import typing as t
 
 import music21 as m21
 
@@ -27,6 +28,7 @@ class MeiElement:
         self.text: str = ''
         self.tail: str = ''
         self.subElements: list[MeiElement] = []
+        self.annotations: dict[str, t.Any] = {}  # this is just for making external notes
 
         if isinstance(elem, Element):
             self.name = elem.tag
@@ -53,15 +55,52 @@ class MeiElement:
         self.subElements.append(subElement)
         return subElement
 
-    def getSubElements(
+    def findAll(
         self,
-        name: str
+        name: str,
+        recurse: bool = True
     ) -> list['MeiElement']:
         output: list[MeiElement] = []
         for subEl in self.subElements:
-            if subEl.name == name:
+            if subEl.name.endswith(name):
                 output.append(subEl)
+            if recurse:
+                output.extend(subEl.findAll(name, recurse=True))
         return output
+
+    def findFirst(
+        self,
+        name: str,
+        recurse: bool = True
+    ) -> t.Union['MeiElement', None]:
+        for subEl in self.subElements:
+            if subEl.name.endswith(name):
+                return subEl
+            if recurse:
+                foundEl: MeiElement | None = subEl.findFirst(name, recurse=True)
+                if foundEl is not None:
+                    return foundEl
+        return None
+
+    def findFirstWithAttributeValue(
+        self,
+        key: str,
+        value: str,
+        recurse: bool = True
+    ) -> t.Union['MeiElement', None]:
+        key = key.split(':')[-1]
+        for subEl in self.subElements:
+            for attribKey, attribValue in subEl.attrib.items():
+                if attribKey.endswith(key):
+                    if attribValue == value:
+                        return subEl
+            if recurse:
+                foundEl: MeiElement | None = subEl.findFirstWithAttributeValue(
+                    key, value, recurse=True
+                )
+                if foundEl is not None:
+                    return foundEl
+        return None
 
     def isEmpty(self) -> bool:
         if self.attrib:

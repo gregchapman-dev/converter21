@@ -37,16 +37,17 @@ class MeiMetadataReader:
 
         fileDescMD: m21.metadata.Metadata | None = None
         encodingDescMD: m21.metadata.Metadata | None = None
+        workListMD: m21.metadata.Metadata | None = None
 
         # Gather up separate metadata from each subElement of meiHead, then combine
         # them (e.g. use title from workList if it's there, else from fileDesc).
         for subEl in self.meiHeadElement.subElements:
-            if subEl.name == 'fileDesc':
+            if subEl.name.endswith('fileDesc'):
                 fileDescMD = self.processFileDesc(subEl)
-            elif subEl.name == 'encodingDesc':
+            elif subEl.name.endswith('encodingDesc'):
                 encodingDescMD = self.processEncodingDesc(subEl)
-            elif subEl.name == 'workList':
-                workListMD = self.processEncodingDesc(subEl)
+            elif subEl.name.endswith('workList'):
+                workListMD = self.processWorkList(subEl)
 
         self.m21Metadata = self.combineFileDescEncodingDescAndWorkListMetadata(
             fileDescMD,
@@ -57,7 +58,7 @@ class MeiMetadataReader:
         # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
         # entire <meiHead> element (in case someone wants to parse out more info than we do).
         meiHeadXmlStr: str = tostring(meiHead, encoding='unicode')
-        meiHeadElementStr: str = self.meiHeadElement.__repr__()
+#         meiHeadElementStr: str = self.meiHeadElement.__repr__()
         meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
         self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
 
@@ -71,15 +72,134 @@ class MeiMetadataReader:
 
     def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
         output = m21.metadata.Metadata()
-        for subEl in workListElement.getSubElements('work'):
-            if
+        works: list[MeiElement] = workListElement.findAll('work', recurse=False)
+        mainWorks: list[MeiElement] = []
+        associatedWorks: list[MeiElement] = []
+        parentWorks: list[MeiElement] = []
+
+        if not works:
+            return output
+
+        # annotate the works, with 'parent'/'child', 'group'/'member', and 'associated' links
+        for work in works:
+            relationList: MeiElement | None = work.findFirst('relationList')
+            if relationList is None:
+                continue
+
+            relations: list[MeiElement] = relationList.findAll('relation')
+            if not relations:
+                continue
+
+            for relation in relations:
+                rel: str = relation.attrib.get('rel', '')
+                plist: str = relation.attrib.get('plist', '')
+    #             target: str = work.attrib.get('target', '')  # might be better than plist
+                if rel == 'isPartOf' and plist:
+                    if not work.annotations.get('groups', []):
+                        work.annotations['groups'] = []
+
+                    for xmlId in plist.split(' '):
+                        xmlId = MeiShared.removeOctothorpe(xmlId)
+                        group: MeiElement | None = (
+                            workListElement.findFirstWithAttributeValue(
+                                'xml:id',
+                                xmlId,
+                                recurse=False
+                            )
+                        )
+                        if not group:
+                            continue
+
+                        work.annotations['groups'].append(group)
+                        if not group.annotations.get('members', []):
+                            group.annotations['members'] = []
+                        group.annotations['members'].append(work)
+                elif rel == 'hasPart' and plist:
+                    # same, but backward
+                    if not work.annotations.get('members', []):
+                        work.annotations['members'] = []
+                    for xmlId in plist.split(' '):
+                        xmlId = MeiShared.removeOctothorpe(xmlId)
+                        member: MeiElement | None = (
+                            workListElement.findFirstWithAttributeValue(
+                                'xml:id',
+                                xmlId,
+                                recurse=False
+                            )
+                        )
+                        if not member:
+                            continue
+
+                        work.annotations['members'].append(member)
+                        if not member.annotations.get('groups', []):
+                            member.annotations['groups'] = []
+                        member.annotations['groups'].append(work)
+                elif rel == 'host' and plist:
+                    if not work.annotations.get('parents', []):
+                        work.annotations['parents'] = []
+                    for xmlId in plist.split(' '):
+                        xmlId = MeiShared.removeOctothorpe(xmlId)
+                        parent: MeiElement | None = (
+                            workListElement.findFirstWithAttributeValue(
+                                'xml:id',
+                                xmlId,
+                                recurse=False
+                            )
+                        )
+                        if not parent:
+                            continue
+
+                        work.annotations['parents'].append(parent)
+                        if not parent.annotations.get('children', []):
+                            parent.annotations['children'] = []
+                        parent.annotations['children'].append(work)
+
+        # Figure out which is the main work.  First candidate is anything that has
+        # no 'children' or 'members' links.  If no such is found, just use the first
+        # work in the workList.
+        for work in works:
+            if work.annotations.get('children', []) or work.annotations.get('members', []):
+                continue
+            mainWorks.append(work)
+
+        if not mainWorks:
+            mainWorks.append(works[0])
+
+        # Figure out if we have any parent works (of the mainWorks)
+        for mainWork in mainWorks:
+            for work in mainWork.annotations.get('parents', []):
+                for parentWork in parentWorks:
+                    if work is parentWork:
+                        skipIt = True
+                        break
+                if skipIt:
+                    skipIt = False
+                    continue
+                parentWorks.append(work)
+
+        # Figure out if we have any associated works (of the mainWorks)
+        for mainWork in mainWorks:
+            for work in mainWork.annotations.get('associated', []):
+                for associatedWork in associatedWorks:
+                    if work is associatedWork:
+                        skipIt = True
+                        break
+                if skipIt:
+                    skipIt = False
+                    continue
+                associatedWorks.append(work)
+
+        print(f'we have {len(mainWorks)} main works,')
+        print(f'{len(parentWorks)} parent works,')
+        print(f'and {len(associatedWorks)} associated works')
+
         return output
 
     def combineFileDescEncodingDescAndWorkListMetadata(
         self,
-        fileDescMD: m21.metadata.Metadata,
-        encodingDescMD: m21.metadata.Metadata,
-        workListMD: m21.metadata.Metadata
+        fileDescMD: m21.metadata.Metadata | None,
+        encodingDescMD: m21.metadata.Metadata | None,
+        workListMD: m21.metadata.Metadata | None
     ) -> m21.metadata.Metadata:
         output = m21.metadata.Metadata()
         return output

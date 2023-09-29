@@ -915,9 +915,9 @@ class MeiReader:
         for eachSlur in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
         ):
-            startId: str | None = self.removeOctothorpe(eachSlur.get('startid'))
-            endId: str | None = self.removeOctothorpe(eachSlur.get('endid'))
-            if startId is not None and endId is not None:
+            startId: str = self.removeOctothorpe(eachSlur.get('startid', ''))
+            endId: str = self.removeOctothorpe(eachSlur.get('endid', ''))
+            if startId and endId:
                 thisIdLocal = str(uuid4())
                 thisSlur = spanner.Slur()
                 if t.TYPE_CHECKING:
@@ -960,9 +960,9 @@ class MeiReader:
 
         for eachTie in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
-            startId: str | None = self.removeOctothorpe(eachTie.get('startid'))
-            endId: str | None = self.removeOctothorpe(eachTie.get('endid'))
-            if startId is not None and endId is not None:
+            startId: str = self.removeOctothorpe(eachTie.get('startid', ''))
+            endId: str = self.removeOctothorpe(eachTie.get('endid', ''))
+            if startId and endId:
                 if startId in self.m21Attr and self.m21Attr[startId].get('tie', '') == 't':
                     # the startid note is already a tie end, so now it's both end and start
                     self.m21Attr[startId]['tie'] = 'ti'
@@ -1009,18 +1009,18 @@ class MeiReader:
         # pre-processing for <beamSpan> elements
         for eachBeam in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'):
-            if eachBeam.get('startid') is None or eachBeam.get('endid') is None:
+            if eachBeam.get('startid', '') or eachBeam.get('endid', ''):
                 environLocal.warn(
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<beamSpan>', '@startid and @endid')
                 )
                 continue
 
-            self.m21Attr[self.removeOctothorpe(eachBeam.get('startid'))]['m21Beam'] = 'start'
-            self.m21Attr[self.removeOctothorpe(eachBeam.get('endid'))]['m21Beam'] = 'stop'
+            self.m21Attr[self.removeOctothorpe(eachBeam.get('startid', ''))]['m21Beam'] = 'start'
+            self.m21Attr[self.removeOctothorpe(eachBeam.get('endid', ''))]['m21Beam'] = 'stop'
 
             # iterate things in the @plist attribute
             for eachXmlid in eachBeam.get('plist', '').split(' '):
-                eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                eachXmlid = self.removeOctothorpe(eachXmlid)
                 # only set to 'continue' if it wasn't previously set (to 'start' or 'stop')
                 if 'm21Beam' not in self.m21Attr[eachXmlid]:
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
@@ -1067,7 +1067,7 @@ class MeiReader:
                 # @xml:id of every affected element. In this case, tupletSpanFromElement() can
                 # use the @plist to add our custom @m21TupletNum and @m21TupletNumbase attributes.
                 for eachXmlid in eachTuplet.get('plist', '').split(' '):
-                    eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                    eachXmlid = self.removeOctothorpe(eachXmlid)
                     if eachXmlid:
                         numStr: str = eachTuplet.get('num', '')
                         if not numStr:
@@ -1097,8 +1097,8 @@ class MeiReader:
                 # For <tupletSpan> elements that don't give a @plist attribute, we have to do
                 # some guesswork and hope we find all the related elements. Right here, we're
                 # only setting the "flags" that this guesswork must be done later.
-                startid = self.removeOctothorpe(eachTuplet.get('startid'))
-                endid = self.removeOctothorpe(eachTuplet.get('endid'))
+                startid = self.removeOctothorpe(eachTuplet.get('startid', ''))
+                endid = self.removeOctothorpe(eachTuplet.get('endid', ''))
 
                 self.m21Attr[startid]['m21TupletSearch'] = 'start'
                 numStr = eachTuplet.get('num', '')
@@ -1228,8 +1228,8 @@ class MeiReader:
 
         for eachFermata in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
-            startId: str | None = self.removeOctothorpe(eachFermata.get('startid'))
-            if startId is None:
+            startId: str | None = self.removeOctothorpe(eachFermata.get('startid', ''))
+            if not startId:
                 # leave this alone, we'll handle it later in fermataFromElement
                 continue
 
@@ -1619,7 +1619,7 @@ class MeiReader:
                 if theType == 'fingering':
                     continue
 
-            startId: str | None = self.removeOctothorpe(eachElem.get('startid'))
+            startId: str = self.removeOctothorpe(eachElem.get('startid', ''))
             if not startId:
                 continue
 
@@ -2593,22 +2593,6 @@ class MeiReader:
                 b: beam.Beam = nextThing.beams.getByNumber(beamNum)  # type: ignore
                 if b.type == 'continue':
                     b.type = 'start'
-
-    @staticmethod
-    def removeOctothorpe(xmlid: str | None) -> str | None:
-        '''
-        Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
-
-        >>> from converter21.mei import MeiReader
-        >>> c = MeiReader()
-        >>> c.removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
-        '110a923d-a13a-4a2e-b85c-e1d438e4c5d6'
-        >>> c.removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
-        'e46cbe82-95fc-4522-9f7a-700e41a40c8e'
-        '''
-        if xmlid and xmlid.startswith('#'):
-            return xmlid[1:]
-        return xmlid
 
     def makeMetadata(self) -> m21.metadata.Metadata:
         '''
