@@ -390,7 +390,7 @@ class MeiMetadata:
                 respEl = respStmt.appendSubElement('resp')
                 respEl.text = 'collector/transcriber'
                 persNameEl = respStmt.appendSubElement(
-                    'persName',
+                    'name',
                     {
                         'analog': 'humdrum:OCL'
                     }
@@ -551,7 +551,7 @@ class MeiMetadata:
                     respEl = respStmt.appendSubElement('resp')
                     respEl.text = 'producer'
                     persNameEl: MeiElement = respStmt.appendSubElement(
-                        'persName',
+                        'name',
                         {
                             'analog': 'humdrum:RNP'
                         }
@@ -682,7 +682,7 @@ class MeiMetadata:
 
         for manuscriptOwner in manuscriptOwners:
             manuscriptOwnerEl = bibl.appendSubElement(
-                'persName',
+                'name',
                 {
                     'role': 'manuscriptOwner',
                     'analog': 'humdrum:YOO'
@@ -825,7 +825,7 @@ class MeiMetadata:
             # composer persName ('COM'/'COA'/'COS')
             composerAnalog: str = 'humdrum:COM'
             composerCert: str = ''
-            composerNameElement: str = 'persName'
+            composerNameElementName: str = 'persName'
             if composer.value.role == 'attributedComposer':
                 composerAnalog = 'humdrum:COA'
                 composerCert = 'medium'
@@ -834,7 +834,7 @@ class MeiMetadata:
                 composerCert = 'low'
             elif composer.value.role == 'composerCorporate':
                 composerAnalog = 'humdrum:COC'
-                composerNameElement = 'corpName'
+                composerNameElementName = 'corpName'
 
             if composerCert:
                 # We put @cert on <composer>, not on <persName>.
@@ -842,10 +842,11 @@ class MeiMetadata:
                 # not about this composer's name.
                 composerElement.attrib['cert'] = composerCert
 
-            nameAttr = {'analog': composerAnalog}
             nameElement: MeiElement = composerElement.appendSubElement(
-                composerNameElement,
-                nameAttr
+                composerNameElementName,
+                {
+                    'analog': composerAnalog
+                }
             )
             nameElement.text = composer.meiValue
 
@@ -856,6 +857,12 @@ class MeiMetadata:
                     and composerNationality is None):
                 # nothing for MADS
                 continue
+
+            madsXmlId: str = f'mads{madsXmlIdIndex}'
+            madsXmlIdIndex += 1
+
+            # reference <mads> element from composer's nameElement
+            nameElement.attrib['auth.uri'] = '#' + madsXmlId
 
             # There is extra info about the composer, that will need to go
             # in <extMeta><madsCollection><mads>
@@ -872,15 +879,11 @@ class MeiMetadata:
                     }
                 )
 
-            madsXmlId: str = f'mads{madsXmlIdIndex}'
-            madsXmlIdIndex += 1
-
             mads = self.madsCollection.appendSubElement('mads', {'ID': madsXmlId})
-            composerElement.attrib['auth.uri'] = '#' + madsXmlId
 
             authority: MeiElement = mads.appendSubElement('authority')
             name: MeiElement = authority.appendSubElement('name')
-            if composerNameElement == 'corpName':
+            if composerNameElementName == 'corpName':
                 name.attrib['type'] = 'corporate'
             namePart: MeiElement = name.appendSubElement('namePart')
             namePart.text = composer.meiValue
@@ -1497,13 +1500,14 @@ class MeiMetadata:
 
             # <funder>
             for funder in funders:
-                funderElement: MeiElement = theWork.appendSubElement(
-                    'funder',
+                funderElement: MeiElement = theWork.appendSubElement('funder')
+                persName = funderElement.appendSubElement(
+                    'name',
                     {
                         'analog': 'humdrum:OCO'
                     }
                 )
-                funderElement.text = funder.meiValue
+                persName.text = funder.meiValue
 
             # <creation>
             if (creationDates
