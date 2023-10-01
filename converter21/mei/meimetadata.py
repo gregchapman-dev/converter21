@@ -1012,8 +1012,8 @@ class MeiMetadata:
         actNumbers: list[MeiMetadataItem] = self.contents.get('OAC', [])
         sceneNumbers: list[MeiMetadataItem] = self.contents.get('OSC', [])
 
-        untranslatedTitleElement = MeiElement('title', {'type': 'uniform'})
-        translatedTitleElement = MeiElement('title', {'type': 'translated'})
+        untranslatedTitleElement = MeiElement('title')
+        translatedTitleElement = MeiElement('title')
         alternativeTitleElements: list[MeiElement] = []
         popularTitleElements: list[MeiElement] = []
 
@@ -1193,8 +1193,10 @@ class MeiMetadata:
         # roll them all up into a list
         titleElements: list[MeiElement] = []
         if not untranslatedTitleElement.isEmpty():
+            untranslatedTitleElement.attrib['type'] = 'uniform'
             titleElements.append(untranslatedTitleElement)
         if not translatedTitleElement.isEmpty():
+            translatedTitleElement.attrib['type'] = 'translated'
             titleElements.append(translatedTitleElement)
 
         if alternativeTitleElements:
