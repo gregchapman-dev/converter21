@@ -1001,7 +1001,7 @@ class MeiMetadata:
             titleElement.text = bestMovementName.meiValue
         return titleElement
 
-    def makeTitleElements(self, firstTitleOnly: bool = False) -> list[MeiElement]:
+    def makeTitleElements(self) -> list[MeiElement]:
         mainTitles: list[MeiMetadataItem] = self.contents.get('OTL', [])
         alternativeTitles: list[MeiMetadataItem] = self.contents.get('OTA', [])
         popularTitles: list[MeiMetadataItem] = self.contents.get('OTP', [])
@@ -1774,6 +1774,7 @@ class MeiMetadata:
                         'relation',
                         {
                             'rel': 'isVersionOf',
+                            'type': 'isAssociatedWith',
                             'target': f'#{associatedWorkXmlId}'
                         }
                     )

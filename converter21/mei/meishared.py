@@ -12,6 +12,7 @@ import re
 
 import music21 as m21
 
+from converter21.mei import MeiElement
 from converter21.shared import SharedConstants
 
 environLocal = m21.environment.Environment('converter21.mei.meireader')
@@ -62,6 +63,50 @@ class MeiShared:
     _CHOOSING_EDITORIALS: tuple[str, ...] = (
         f'{MEI_NS}app',
         f'{MEI_NS}choice',
+    )
+
+    _EDITORIAL_ELEMENTS_NO_NAMESPACE: tuple[str, ...] = (
+        'abbr',
+        'add',
+        'app',
+        'choice',
+        'corr',
+        'damage',
+        'del',
+        'expan',
+        'orig',
+        'ref',
+        'reg',
+        'restore',
+        'sic',
+        'subst',
+        'supplied',
+        'unclear',
+    )
+
+    _IGNORED_EDITORIALS_NO_NAMESPACE: tuple[str, ...] = (
+        'abbr',
+        'del',
+        'ref',
+        'restore',  # I could support restore with a special FromElement API
+    )                        # that reverses the meaning of del and add
+
+    _PASSTHRU_EDITORIALS_NO_NAMESPACE: tuple[str, ...] = (
+        'add',
+        'corr',
+        'damage',
+        'expan',
+        'orig',
+        'reg',
+        'sic',
+        'subst',
+        'supplied',
+        'unclear',
+    )
+
+    _CHOOSING_EDITORIALS_NO_NAMESPACE: tuple[str, ...] = (
+        'app',
+        'choice',
     )
 
     @staticmethod
@@ -118,16 +163,44 @@ class MeiShared:
         return chosen  # None, if we get here
 
     @staticmethod
-    def textFromElem(elem: Element) -> tuple[str, dict[str, str]]:
+    def chooseSubMeiElement(appOrChoice: MeiElement) -> MeiElement | None:
+        chosen: MeiElement | None = None
+        if appOrChoice.tag.endswith('app'):
+            # choose 'lem' (lemma) if present, else first 'rdg' (reading)
+            chosen = appOrChoice.findFirst('lem', recurse=False)
+            if chosen is None:
+                chosen = appOrChoice.findFirst('rdg', recurse=False)
+            return chosen
+
+        if appOrChoice.tag.endswith('choice'):
+            # choose 'corr' (correction) if present,
+            # else 'reg' (regularization) if present,
+            # else first sub-element.
+            chosen = appOrChoice.findFirst('corr', recurse=False)
+            if chosen is None:
+                chosen = appOrChoice.findFirst('reg', recurse=False)
+            if chosen is None:
+                chosen = appOrChoice.findFirst('*', recurse=False)
+            return chosen
+
+        environLocal.warn('Internal error: chooseSubMeiElement expects <app> or <choice>')
+        return chosen  # None, if we get here
+
+    @staticmethod
+    def textFromElem(elem: Element | MeiElement) -> tuple[str, dict[str, str]]:
+        # can take Element by converting directly to MeiElement
+        if isinstance(elem, Element):
+            elem = MeiElement(elem)
+
         styleDict: dict[str, str] = {}
         text: str = ''
         if elem.text:
             if elem.text[0] != '\n' or not elem.text.isspace():
                 text += elem.text
 
-        for el in elem.iterfind('*'):
+        for el in elem.findAll('*', recurse=True):
             # do whatever is appropriate given el.tag (<rend> for example)
-            if el.tag == f'{MEI_NS}rend':
+            if el.name == 'rend':
                 # music21 doesn't currently support changing style in the middle of a
                 # TextExpression, so we just grab the first ones we see and save them
                 # off to use.
@@ -144,23 +217,23 @@ class MeiShared:
                 if justify:
                     styleDict['justify'] = justify
 
-            elif el.tag in MeiShared._CHOOSING_EDITORIALS:
-                subEl: Element | None = MeiShared.chooseSubElement(el)
+            elif el.name in MeiShared._CHOOSING_EDITORIALS_NO_NAMESPACE:
+                subEl: MeiElement | None = MeiShared.chooseSubMeiElement(el)
                 if subEl is None:
                     continue
                 el = subEl
-            elif el.tag in MeiShared._PASSTHRU_EDITORIALS:
+            elif el.name in MeiShared._PASSTHRU_EDITORIALS_NO_NAMESPACE:
                 # for now assume all we care about here is the text/tail of these subElements
-                for subEl in el.iterfind('*'):
+                for subEl in el.findAll('*', recurse=True):
                     if subEl.text:
                         if subEl.text[0] != '\n' or not subEl.text.isspace():
                             text += subEl.text
                     if subEl.tail:
                         if subEl.tail[0] != '\n' or not subEl.tail.isspace():
                             text += subEl.tail
-            elif el.tag == f'{MEI_NS}lb':
+            elif el.name == 'lb':
                 text += '\n'
-            elif el.tag == f'{MEI_NS}symbol':
+            elif el.name == 'symbol':
                 # This is a glyph in the SMUFL font (@glyph.auth="smufl"), with a
                 # particular name (@glyph.name="metNoteQuarterUp").  Sometimes
                 # instead of @glyph.name, there is @glyph.num, which is just the

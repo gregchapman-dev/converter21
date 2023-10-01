@@ -915,8 +915,8 @@ class MeiReader:
         for eachSlur in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
         ):
-            startId: str = self.removeOctothorpe(eachSlur.get('startid', ''))
-            endId: str = self.removeOctothorpe(eachSlur.get('endid', ''))
+            startId: str = MeiShared.removeOctothorpe(eachSlur.get('startid', ''))
+            endId: str = MeiShared.removeOctothorpe(eachSlur.get('endid', ''))
             if startId and endId:
                 thisIdLocal = str(uuid4())
                 thisSlur = spanner.Slur()
@@ -960,8 +960,8 @@ class MeiReader:
 
         for eachTie in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
-            startId: str = self.removeOctothorpe(eachTie.get('startid', ''))
-            endId: str = self.removeOctothorpe(eachTie.get('endid', ''))
+            startId: str = MeiShared.removeOctothorpe(eachTie.get('startid', ''))
+            endId: str = MeiShared.removeOctothorpe(eachTie.get('endid', ''))
             if startId and endId:
                 if startId in self.m21Attr and self.m21Attr[startId].get('tie', '') == 't':
                     # the startid note is already a tie end, so now it's both end and start
@@ -1015,12 +1015,17 @@ class MeiReader:
                 )
                 continue
 
-            self.m21Attr[self.removeOctothorpe(eachBeam.get('startid', ''))]['m21Beam'] = 'start'
-            self.m21Attr[self.removeOctothorpe(eachBeam.get('endid', ''))]['m21Beam'] = 'stop'
+            self.m21Attr[
+                MeiShared.removeOctothorpe(eachBeam.get('startid', ''))
+            ]['m21Beam'] = 'start'
+
+            self.m21Attr[
+                MeiShared.removeOctothorpe(eachBeam.get('endid', ''))
+            ]['m21Beam'] = 'stop'
 
             # iterate things in the @plist attribute
             for eachXmlid in eachBeam.get('plist', '').split(' '):
-                eachXmlid = self.removeOctothorpe(eachXmlid)
+                eachXmlid = MeiShared.removeOctothorpe(eachXmlid)
                 # only set to 'continue' if it wasn't previously set (to 'start' or 'stop')
                 if 'm21Beam' not in self.m21Attr[eachXmlid]:
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
@@ -1067,7 +1072,7 @@ class MeiReader:
                 # @xml:id of every affected element. In this case, tupletSpanFromElement() can
                 # use the @plist to add our custom @m21TupletNum and @m21TupletNumbase attributes.
                 for eachXmlid in eachTuplet.get('plist', '').split(' '):
-                    eachXmlid = self.removeOctothorpe(eachXmlid)
+                    eachXmlid = MeiShared.removeOctothorpe(eachXmlid)
                     if eachXmlid:
                         numStr: str = eachTuplet.get('num', '')
                         if not numStr:
@@ -1097,8 +1102,8 @@ class MeiReader:
                 # For <tupletSpan> elements that don't give a @plist attribute, we have to do
                 # some guesswork and hope we find all the related elements. Right here, we're
                 # only setting the "flags" that this guesswork must be done later.
-                startid = self.removeOctothorpe(eachTuplet.get('startid', ''))
-                endid = self.removeOctothorpe(eachTuplet.get('endid', ''))
+                startid = MeiShared.removeOctothorpe(eachTuplet.get('startid', ''))
+                endid = MeiShared.removeOctothorpe(eachTuplet.get('endid', ''))
 
                 self.m21Attr[startid]['m21TupletSearch'] = 'start'
                 numStr = eachTuplet.get('num', '')
@@ -1158,8 +1163,8 @@ class MeiReader:
 
         for eachElem in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}hairpin'):
-            startId: str = self.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
-            endId: str = self.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
+            endId: str = MeiShared.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
             form: str = eachElem.get('form', '')
             dw: m21.dynamics.DynamicWedge
             if form == 'cres':
@@ -1228,7 +1233,7 @@ class MeiReader:
 
         for eachFermata in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
-            startId: str | None = self.removeOctothorpe(eachFermata.get('startid', ''))
+            startId: str | None = MeiShared.removeOctothorpe(eachFermata.get('startid', ''))
             if not startId:
                 # leave this alone, we'll handle it later in fermataFromElement
                 continue
@@ -1272,8 +1277,8 @@ class MeiReader:
 
         for eachTrill in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}trill'):
-            startId: str = self.removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
-            endId: str = self.removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
+            endId: str = MeiShared.removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
             tstamp2: str = eachTrill.get('tstamp2', '')
             hasExtension: bool = bool(endId) or bool(tstamp2)
             place: str = eachTrill.get('place', 'place_unspecified')
@@ -1350,7 +1355,7 @@ class MeiReader:
 
         for eachMordent in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}mordent'):
-            startId: str = self.removeOctothorpe(eachMordent.get('startid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachMordent.get('startid', ''))
             place: str = eachMordent.get('place', 'place_unspecified')
             form: str = eachMordent.get('form', '')
             long: str = eachMordent.get('long', '')
@@ -1402,7 +1407,7 @@ class MeiReader:
 
         for eachTurn in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}turn'):
-            startId: str = self.removeOctothorpe(eachTurn.get('startid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachTurn.get('startid', ''))
             place: str = eachTurn.get('place', 'place_unspecified')
             form: str = eachTurn.get('form', '')
             theType: str = eachTurn.get('type', '')
@@ -1462,8 +1467,8 @@ class MeiReader:
 
         for eachOctave in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}octave'):
-            startId: str = self.removeOctothorpe(eachOctave.get('startid', ''))  # type: ignore
-            endId: str = self.removeOctothorpe(eachOctave.get('endid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachOctave.get('startid', ''))
+            endId: str = MeiShared.removeOctothorpe(eachOctave.get('endid', ''))
             amount: str = eachOctave.get('dis', '')
             direction: str = eachOctave.get('dis.place', '')
             if not amount or not direction:
@@ -1578,10 +1583,10 @@ class MeiReader:
                     # iterate things in the @plist attribute,  and reference the
                     # ArpeggioMarkSpanner from each of the notes/chords in the plist
                     for eachXmlid in plist:
-                        eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                        eachXmlid = MeiShared.removeOctothorpe(eachXmlid)
                         self.m21Attr[eachXmlid]['m21ArpeggioMarkSpanner'] = thisIdLocal
                 else:
-                    eachXmlid = self.removeOctothorpe(plist[0])  # type: ignore
+                    eachXmlid = MeiShared.removeOctothorpe(plist[0])
                     self.m21Attr[eachXmlid]['m21ArpeggioMarkType'] = arpeggioType
 
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
@@ -1619,7 +1624,7 @@ class MeiReader:
                 if theType == 'fingering':
                     continue
 
-            startId: str = self.removeOctothorpe(eachElem.get('startid', ''))
+            startId: str = MeiShared.removeOctothorpe(eachElem.get('startid', ''))
             if not startId:
                 continue
 

@@ -1,9 +1,10 @@
 # ------------------------------------------------------------------------------
 # Name:          meielement.py
 # Purpose:       MeiElement is an object that represents an element (tree) in
-#                an MEI file.  This is generally only used for export of metadata,
-#                where <meiHead> sub-trees need to be constructed in a way that
-#                TreeBuilder can't easily support.
+#                an MEI file. Very much like Element, but with a few enhancements
+#                (name == tag with no namespace, direct access to subElement list,
+#                explicit recursion, find elements with a particular attribute),
+#                but no iterators yet, just lists.
 #
 # Authors:       Greg Chapman <gregc@mac.com>
 #
@@ -23,7 +24,8 @@ class MeiElement:
         elem: str | Element,
         attrib: dict[str, str] | None = None,  # ignored if elem is an Element
     ) -> None:
-        self.name: str = ''
+        self.tag: str = ''
+        self.name: str = ''  # no namespace
         self.attrib: dict[str, str] = {}
         self.text: str = ''
         self.tail: str = ''
@@ -31,7 +33,8 @@ class MeiElement:
         self.annotations: dict[str, t.Any] = {}  # this is just for making external notes
 
         if isinstance(elem, Element):
-            self.name = elem.tag
+            self.tag = elem.tag
+            self.name = self.tag.split(':')[-1]
             self.attrib = elem.attrib
             self.text = elem.text or ''
             self.tail = elem.tail or ''
@@ -42,42 +45,46 @@ class MeiElement:
             return
 
         # isinstance(elem, str)
-        self.name = elem
+        self.tag = elem
+        self.name = self.tag.split(':')[-1]
         if attrib:
             self.attrib = attrib
 
     def appendSubElement(
         self,
-        name: str,
+        tag: str,
         attrib: dict[str, str] | None = None
     ) -> 'MeiElement':
-        subElement = MeiElement(name, attrib)
+        subElement = MeiElement(tag, attrib)
         self.subElements.append(subElement)
         return subElement
 
+    def get(self, attribName, default=None):
+        return self.attrib.get(attribName, default)
+
     def findAll(
         self,
-        name: str,
+        tagOrName: str,
         recurse: bool = True
     ) -> list['MeiElement']:
         output: list[MeiElement] = []
         for subEl in self.subElements:
-            if subEl.name.endswith(name):
+            if tagOrName in ('*', subEl.tag, subEl.name):
                 output.append(subEl)
             if recurse:
-                output.extend(subEl.findAll(name, recurse=True))
+                output.extend(subEl.findAll(tagOrName, recurse=True))
         return output
 
     def findFirst(
         self,
-        name: str,
+        tagOrName: str,
         recurse: bool = True
     ) -> t.Union['MeiElement', None]:
         for subEl in self.subElements:
-            if subEl.name.endswith(name):
+            if tagOrName in ('*', subEl.tag, subEl.name):
                 return subEl
             if recurse:
-                foundEl: MeiElement | None = subEl.findFirst(name, recurse=True)
+                foundEl: MeiElement | None = subEl.findFirst(tagOrName, recurse=True)
                 if foundEl is not None:
                     return foundEl
         return None
@@ -124,12 +131,12 @@ class MeiElement:
             self.attrib[attributeName] = isodate
 
     def makeRootElement(self, tb: TreeBuilder):
-        tb.start(self.name, self.attrib)
+        tb.start(self.tag, self.attrib)
         if self.text:
             tb.data(self.text)
         for subEl in self.subElements:
             subEl.makeRootElement(tb)
-        tb.end(self.name)
+        tb.end(self.tag)
         if self.tail:
             tb.data(self.tail)
 

@@ -71,16 +71,22 @@ class MeiMetadataReader:
         return output
 
     def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
-        output = m21.metadata.Metadata()
+        md = m21.metadata.Metadata()
+
+        # Note that we only deal with top-level <work> elements in <workList>.
+        # Nested <work>s are out-of-scope.
         works: list[MeiElement] = workListElement.findAll('work', recurse=False)
-        mainWorks: list[MeiElement] = []
-        associatedWorks: list[MeiElement] = []
-        parentWorks: list[MeiElement] = []
+        mainWorks: set[MeiElement] = set()
+        parentWorks: set[MeiElement] = set()
+        groupWorks: set[MeiElement] = set()
+        collectionWorks: set[MeiElement] = set()
+        associatedWorks: set[MeiElement] = set()
 
         if not works:
-            return output
+            return md
 
-        # annotate the works, with 'parent'/'child', 'group'/'member', and 'associated' links
+        # annotate the works, with 'parent'/'child', 'group'/'member', or
+        # 'collection'/'member' links.
         for work in works:
             relationList: MeiElement | None = work.findFirst('relationList')
             if relationList is None:
@@ -92,13 +98,31 @@ class MeiMetadataReader:
 
             for relation in relations:
                 rel: str = relation.attrib.get('rel', '')
-                plist: str = relation.attrib.get('plist', '')
-    #             target: str = work.attrib.get('target', '')  # might be better than plist
-                if rel == 'isPartOf' and plist:
-                    if not work.annotations.get('groups', []):
-                        work.annotations['groups'] = []
+                target: str = work.attrib.get('target', '')
+                relType: str = work.attrib.get('type', '')
+                parentsTypeName: str = ''
+                childrenTypeName: str = ''
+                if rel == 'isPartOf' and target:
+                    # our MEI exporter writes  @rel="isPartOf" @type= in order to make clear
+                    # which Humdrum-style relationship we are describing.
+                    if relType == 'isMemberOfCollection':
+                        parentsTypeName = 'collections'
+                        childrenTypeName = 'members'
+                    elif relType == 'isMemberOfGroup':
+                        parentsTypeName = 'groups'
+                        childrenTypeName = 'members'
+                    elif relType == 'isChildOfParent':
+                        parentsTypeName = 'parents'
+                        childrenTypeName = 'children'
+                    else:
+                        # default for 'isPartOf' is 'isMemberOfCollection'
+                        parentsTypeName = 'collections'
+                        childrenTypeName = 'members'
 
-                    for xmlId in plist.split(' '):
+                    if not work.annotations.get(parentsTypeName, []):
+                        work.annotations[parentsTypeName] = []
+
+                    for xmlId in target.split(' '):
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         group: MeiElement | None = (
                             workListElement.findFirstWithAttributeValue(
@@ -110,15 +134,19 @@ class MeiMetadataReader:
                         if not group:
                             continue
 
-                        work.annotations['groups'].append(group)
-                        if not group.annotations.get('members', []):
-                            group.annotations['members'] = []
-                        group.annotations['members'].append(work)
-                elif rel == 'hasPart' and plist:
+                        work.annotations[parentsTypeName].append(group)
+                        if not group.annotations.get(childrenTypeName, []):
+                            group.annotations[childrenTypeName] = []
+                        group.annotations[childrenTypeName].append(work)
+                elif rel == 'hasPart' and target:
                     # same, but backward
-                    if not work.annotations.get('members', []):
-                        work.annotations['members'] = []
-                    for xmlId in plist.split(' '):
+                    # 'hasPart' is interpreted as 'hasCollectionMember' (our MEI writer
+                    # doesn't write rel="hasPart", so we have no further info)
+                    parentsTypeName = 'collections'
+                    childrenTypeName = 'members'
+                    if not work.annotations.get(childrenTypeName, []):
+                        work.annotations[childrenTypeName] = []
+                    for xmlId in target.split(' '):
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         member: MeiElement | None = (
                             workListElement.findFirstWithAttributeValue(
@@ -130,14 +158,18 @@ class MeiMetadataReader:
                         if not member:
                             continue
 
-                        work.annotations['members'].append(member)
-                        if not member.annotations.get('groups', []):
-                            member.annotations['groups'] = []
-                        member.annotations['groups'].append(work)
-                elif rel == 'host' and plist:
-                    if not work.annotations.get('parents', []):
-                        work.annotations['parents'] = []
-                    for xmlId in plist.split(' '):
+                        work.annotations[childrenTypeName].append(member)
+                        if not member.annotations.get(parentsTypeName, []):
+                            member.annotations[parentsTypeName] = []
+                        member.annotations[parentsTypeName].append(work)
+                elif rel == 'host' and target:
+                    # handle this, even though it's not strictly allowed.
+                    # It implies 'parent'/'child'
+                    parentsTypeName = 'parents'
+                    childrenTypeName = 'children'
+                    if not work.annotations.get(parentsTypeName, []):
+                        work.annotations[parentsTypeName] = []
+                    for xmlId in target.split(' '):
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         parent: MeiElement | None = (
                             workListElement.findFirstWithAttributeValue(
@@ -149,51 +181,113 @@ class MeiMetadataReader:
                         if not parent:
                             continue
 
-                        work.annotations['parents'].append(parent)
-                        if not parent.annotations.get('children', []):
-                            parent.annotations['children'] = []
-                        parent.annotations['children'].append(work)
+                        work.annotations[parentsTypeName].append(parent)
+                        if not parent.annotations.get(childrenTypeName, []):
+                            parent.annotations[childrenTypeName] = []
+                        parent.annotations[childrenTypeName].append(work)
 
-        # Figure out which is the main work.  First candidate is anything that has
-        # no 'children' or 'members' links.  If no such is found, just use the first
-        # work in the workList.
+        # First pass at categorizing works.  Use work@type (only values that could have
+        # been set by our MEI writer).  But also rule out non-typed works with children
+        # or members from being a main work (these could be from other MEI writers).
         for work in works:
+            workType: str = work.attrib.get('type', '')
+            if workType == 'associated':
+                associatedWorks.add(work)
+                continue
+            if workType == 'parent':
+                parentWorks.add(work)
+                continue
+            if workType == 'collection':
+                collectionWorks.add(work)
+                continue
+            if workType == 'group':
+                groupWorks.add(work)
+                continue
             if work.annotations.get('children', []) or work.annotations.get('members', []):
                 continue
-            mainWorks.append(work)
+
+            mainWorks.add(work)
 
         if not mainWorks:
-            mainWorks.append(works[0])
+            mainWorks.add(works[0])
 
-        # Figure out if we have any parent works (of the mainWorks)
+        # Figure out if we have any parent/group/collection works (of the mainWorks).
+        # This is redundant for MEI files we wrote, but non-redundant for MEI files
+        # we didn't write.
         for mainWork in mainWorks:
-            for work in mainWork.annotations.get('parents', []):
-                for parentWork in parentWorks:
-                    if work is parentWork:
-                        skipIt = True
-                        break
-                if skipIt:
-                    skipIt = False
-                    continue
-                parentWorks.append(work)
+            parentWorks.update(mainWork.annotations.get('parents', []))
+            groupWorks.update(mainWork.annotations.get('groups', []))
+            collectionWorks.update(mainWork.annotations.get('collections', []))
 
-        # Figure out if we have any associated works (of the mainWorks)
-        for mainWork in mainWorks:
-            for work in mainWork.annotations.get('associated', []):
-                for associatedWork in associatedWorks:
-                    if work is associatedWork:
-                        skipIt = True
-                        break
-                if skipIt:
-                    skipIt = False
-                    continue
-                associatedWorks.append(work)
+        # Pull various titles out of the parent/group/collection/associated works.
+        for work in parentWorks:
+            # we only parse the top-level <title> subelements.
+            titleElements: list[MeiElement] = work.findAll('title', recurse=False)
+            uniqueNameFromContext: str = 'parentTitle'
+            for titleEl in titleElements:
+                self.processTitle(titleEl, uniqueNameFromContext, md)
+        return md
 
-        print(f'we have {len(mainWorks)} main works,')
-        print(f'{len(parentWorks)} parent works,')
-        print(f'and {len(associatedWorks)} associated works')
+    def processTitleOrTitlePart(
+        self,
+        elem: MeiElement,
+        uniqueNameFromContext: str,
+        originalLanguage: str = '',
+        md: m21.metadata.Metadata
+    ) -> None:
+        text: str
+        _styleDict: dict[str, str]
+        text, _styleDict = MeiShared.textFromElem(elem)
+        text = text.strip()
+        if text:
+            typeStr: str = elem.get('type', '')
+            lang: str | None = elem.get('xml:lang')
+            label: str = elem.get('label', '')
+            analog: str = elem.get('analog', '')
+            uniqueName: str = uniqueNameFromContext
+            if analog:
+                hdKey: str = analog[8:]
+                uniqueName = M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                    hdKey
+                )
+                if hdKey and not uniqueName:
+                    uniqueName = hdKey
+                if not uniqueName:
+                    uniqueName = uniqueNameFromContext
+            else:
+                if uniqueName == 'title':
+                    if typeStr == 'alternative':
+                        uniqueName = 'alternativeTitle'
+                        if label == 'popular':
+                            # verovio's Humdrum importer does @type="alternative" @label="popular"
+                            # for 'humdrum:OTP' aka. 'popularTitle'
+                            uniqueName = 'popularTitle'
+                    elif typeStr == 'popular':
+                        # This is what converter21's MEI exporter writes, and hopefully someday
+                        # verovio will, too.
+                        uniqueName = 'popularTitle'
+                    elif typeStr in ('movementName', 'number', 'movementNumber', 'opusNumber', 'actNumber', 'sceneNumber'):
+                        uniqueName = typeStr
+                    else:
+                        # e.g. nothing, 'main', 'uniform', 'translated', 'somethingElse'
+                        uniqueName = 'title'
 
-        return output
+            isTranslated: bool = typeStr == 'translated'
+            if not originalLanguage and typeStr in ('main', 'uniform', '') and lang:
+                # we trust the first title we see with @type=="main"/"uniform"/None
+                # and @xml:lang="something" to tell us the original language (or
+                # the caller might have passed it in, in which case we trust it)
+                originalLanguage = lang
+            if originalLanguage and lang:
+                isTranslated = lang != originalLanguage:
+
+            value = m21.metadata.Text(data=text, language=lang, isTranslated=isTranslated)
+            M21Utilities.addIfNotADuplicate(md, uniqueName, value)
+
+        # Process <titlePart> sub-elements (unless this elem is a titlePart)
+        titleParts: list[MeiElement] = elem.findAll('titlePart', recurse=False)
+        for titlePart in titleParts:
+            processTitleOrTitlePart(titlePart, uniqueNameFromContext, originalLanguage, md)
 
     def combineFileDescEncodingDescAndWorkListMetadata(
         self,
