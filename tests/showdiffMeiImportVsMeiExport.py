@@ -34,7 +34,7 @@ def runTheFullTest(meiPath: Path):
     meiwPath /= (meiPath.stem + '_Written')
     meiwPath = meiwPath.with_suffix('.mei')
     print(f'Writing MEI file: {meiwPath}')
-    with open(meiwPath, 'wb') as f:
+    with open(meiwPath, 'wt') as f:
         success = meiw.write(f)
 
     assert success

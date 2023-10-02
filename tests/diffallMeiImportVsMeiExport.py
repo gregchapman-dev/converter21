@@ -243,7 +243,7 @@ def runTheDiff(meiPath: Path, results) -> bool:
         meiwPath = Path(tempfile.gettempdir())
         meiwPath /= (meiPath.stem + '_Written')
         meiwPath = meiwPath.with_suffix('.mei')
-        with open(meiwPath, 'wb') as f:
+        with open(meiwPath, 'wt') as f:
             success = meiw.write(f)
         if not success:
             print('export failed')
