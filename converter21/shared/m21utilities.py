@@ -1112,14 +1112,19 @@ class M21Utilities:
                 minute = timePieces[1]
                 second = timePieces[2]
 
-        return m21.metadata.Date(
-            year=year,
-            month=month,
-            day=day,
-            hour=hour,
-            minute=minute,
-            second=second
-        )
+        try:
+            return m21.metadata.Date(
+                year=year,
+                month=month,
+                day=day,
+                hour=hour,
+                minute=minute,
+                second=second
+            )
+        except Exception:
+            pass
+
+        return None
 
     @staticmethod
     def isoDateFromM21DatePrimitive(
