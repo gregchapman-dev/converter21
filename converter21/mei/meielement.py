@@ -11,6 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 from xml.etree.ElementTree import TreeBuilder, tostring
+import typing as t
 
 import music21 as m21
 
@@ -51,6 +52,20 @@ class MeiElement:
             if subEl.name == name:
                 output.append(subEl)
         return output
+
+    def findFirst(
+        self,
+        name: str,
+        recurse: bool = True
+    ) -> t.Union['MeiElement', None]:
+        for subEl in self.subElements:
+            if name in ('*', subEl.name):
+                return subEl
+            if recurse:
+                foundEl: MeiElement | None = subEl.findFirst(name, recurse=True)
+                if foundEl is not None:
+                    return foundEl
+        return None
 
     def isEmpty(self) -> bool:
         if self.attrib:

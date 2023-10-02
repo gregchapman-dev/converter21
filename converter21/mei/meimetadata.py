@@ -162,6 +162,33 @@ class MeiMetadata:
         if publishedSource is not None:
             sourceDesc.subElements.append(publishedSource)
 
+        if digitalSource is not None and publishedSource is not None:
+            digitalSourceBibl: MeiElement | None = (
+                digitalSource.findFirst('bibl', recurse=False)
+            )
+            publishedSourceBibl: MeiElement | None = (
+                publishedSource.findFirst('bibl', recurse=False)
+            )
+            # relate them to eachother with 'otherFormat'.  They are the same,
+            # just in different formats (printed vs digital).
+            if digitalSourceBibl is not None and publishedSourceBibl is not None:
+                digitalSourceBibl.attrib['xml:id'] = 'source0_digital'
+                publishedSourceBibl.attrib['xml:id'] = 'source1_printed'
+                digitalSourceBibl.appendSubElement(
+                    'relatedItem',
+                    {
+                        'rel': 'otherFormat',
+                        'target': '#source1_printed'
+                    }
+                )
+                publishedSourceBibl.appendSubElement(
+                    'relatedItem',
+                    {
+                        'rel': 'otherFormat',
+                        'target': '#source0_digital'
+                    }
+                )
+
         recordedSource: MeiElement | None = self.makeRecordedSource()
         if recordedSource is not None:
             sourceDesc.subElements.append(recordedSource)
@@ -319,7 +346,7 @@ class MeiMetadata:
                 'PPR', 'PDT', 'PPP', 'PC#'):
             return None
 
-        source: MeiElement = MeiElement('source', {'type': 'published'})
+        source: MeiElement = MeiElement('source', {'type': 'printed'})
         bibl: MeiElement = source.appendSubElement('bibl')
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
