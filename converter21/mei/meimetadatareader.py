@@ -219,25 +219,181 @@ class MeiMetadataReader:
             groupWorks.update(mainWork.annotations.get('groups', []))
             collectionWorks.update(mainWork.annotations.get('collections', []))
 
-        # Pull various titles out of the parent/group/collection/associated works.
+        # Pull only titles out of the parent/group/collection/associated works.  There's
+        # no other metadata here that can map to music21 or Humdrum metadata.
+        titleElements: list[MeiElement]
         for work in parentWorks:
-            # we only parse the top-level <title> subelements.
-            titleElements: list[MeiElement] = work.findAll('title', recurse=False)
-            uniqueNameFromContext: str = 'parentTitle'
+            titleElements = work.findAll('title', recurse=False)
             for titleEl in titleElements:
-                self.processTitle(titleEl, uniqueNameFromContext, md)
+                self.processTitleOrTitlePart(titleEl, 'parentTitle', '', md)
+
+        for work in groupWorks:
+            titleElements = work.findAll('title', recurse=False)
+            for titleEl in titleElements:
+                self.processTitleOrTitlePart(titleEl, 'groupTitle', '', md)
+
+        for work in collectionWorks:
+            titleElements = work.findAll('title', recurse=False)
+            for titleEl in titleElements:
+                self.processTitleOrTitlePart(titleEl, 'collectionDesignation', '', md)
+
+        for work in associatedWorks:
+            titleElements = work.findAll('title', recurse=False)
+            for titleEl in titleElements:
+                self.processTitleOrTitlePart(titleEl, 'associatedWork', '', md)
+
+        # OK, now for the main works, we process everything we see (including any titles)
+        for work in mainWorks:
+            allElements = work.findAll('*', recurse=False)
+            for elem in allElements:
+                self.processMainWorkSubElement(elem, md)
+
         return md
+
+    def processMainWorkSubElement(self, element: MeiElement, md: m21.metadata.Metadata):
+        if element.name == 'identifier':
+            self.processIdentifier(element, md)
+        elif element.name == 'title':
+            self.processTitleOrTitlePart(element, 'title', '', md)
+        elif element.name == 'composer':
+            self.processComposer(element, md)
+        elif element.name == 'lyricist':
+            self.processLyricist(element, md)
+        elif element.name == 'librettist':
+            self.processLibrettist(element, md)
+        elif element.name == 'funder':
+            self.processFunder(element, md)
+        elif element.name == 'creation':
+            self.processCreation(element, md)
+        elif element.name == 'history':
+            self.processHistory(element, md)
+        elif element.name == 'langUsage':
+            self.processLangUsage(element, md)
+        elif element.name == 'notesStmt':
+            self.processNotesStmt(element, md)
+        elif element.name == 'classification':
+            self.processClassification(element, md)
+        elif element.name == 'expressionList':
+            self.processExpressionList(element, md)
+
+    def processIdentifier(self, element: MeiElement, md: m21.metadata.Metadata):
+        text: str
+        _styleDict: dict[str, str]
+        text, _styleDict = MeiShared.textFromElem(element)
+        text = text.strip()
+        if not text:
+            return
+
+        analog: str = element.get('analog', '')
+        if not analog.startswith('humdrum:'):
+            # compute what analog should be (make it start with 'humdrum:')
+            if text.startswith('Koechel') or text.startswith('Köchel'):
+                analog = 'humdrum:SCA'
+            if text.startswith('BWV'):
+                analog = 'humdrum:SCT'
+            else:
+                # we can't interpret this identifier
+                return
+
+        M21Utilities.addIfNotADuplicate(md, analog, text)
+
+    def processComposer(self, element: MeiElement, md: m21.metadata.Metadata):
+        names: list[str] = []
+        types: list[str] = []
+        analogs: list[str] = []
+        elementNames: list[str] = []
+
+        analog: str = element.get('analog', '')
+        typeStr: str = element.get('type', '')
+        cert: str = element.get('cert', '')
+
+        name: str = element.text
+        name = name.strip()
+        if name:
+            # <composer>name</composer>
+            if not analog.startswith('humdrum:'):
+                # compute what analog should be (make it start with 'humdrum:')
+                if typeStr == 'alias':
+                    analog = 'humdrum:COL'
+                elif cert == 'medium':
+                    analog = 'humdrum:COA'
+                elif cert == 'low':
+                    analog = 'humdrum:COS'
+                else:
+                    analog = 'humdrum:COM'
+            M21Utilities.addIfNotADuplicate(md, analog, name)
+
+        # Whether or not <composer> held a name, check all persName/corpName/name
+        # subElements as well.
+        for elementName in ('persName', 'corpName', 'name'):
+            nameEls: list[MeiElement] = element.findAll(elementName, recurse=False)
+            for nameEl in nameEls:
+                _styleDict: dict[str, str]
+                name, _styleDict = MeiShared.textFromElem(nameEl)
+                name = name.strip()
+                if name:
+                    analog = nameEl.get('analog', '')
+                    typeStr = nameEl.get('type', '')
+                    names.append(name)
+                    types.append(typeStr)
+                    analogs.append(analog)
+                    elementNames.append(elementName)
+
+        for name, typeStr, analog, elementName in zip(names, types, analogs, elementNames):
+            if not analog.startswith('humdrum:'):
+                # compute what analog should be (make it start with 'humdrum:')
+                if elementName == 'corpName':
+                    analog = 'humdrum:COC'
+                elif typeStr == 'alias':
+                    analog = 'humdrum:COL'
+                elif cert == 'medium':
+                    analog = 'humdrum:COA'
+                elif cert == 'low':
+                    analog = 'humdrum:COS'
+                else:
+                    analog = 'humdrum:COM'
+            M21Utilities.addIfNotADuplicate(md, analog, name)
+
+    def processLyricist(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processLibrettist(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processFunder(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processCreation(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processHistory(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processLangUsage(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processNotesStmt(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processClassification(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
+
+    def processExpressionList(self, element: MeiElement, md: m21.metadata.Metadata):
+        pass
 
     def processTitleOrTitlePart(
         self,
         elem: MeiElement,
         uniqueNameFromContext: str,
-        originalLanguage: str = '',
+        originalLanguage: str,
         md: m21.metadata.Metadata
     ) -> None:
         text: str
         _styleDict: dict[str, str]
-        text, _styleDict = MeiShared.textFromElem(elem)
+        if elem.name == 'title':
+            text = elem.text
+        else:
+            text, _styleDict = MeiShared.textFromElem(elem)
         text = text.strip()
         if text:
             typeStr: str = elem.get('type', '')
@@ -245,13 +401,14 @@ class MeiMetadataReader:
             label: str = elem.get('label', '')
             analog: str = elem.get('analog', '')
             uniqueName: str = uniqueNameFromContext
-            if analog:
+            if analog.startswith('humdrum:'):
                 hdKey: str = analog[8:]
                 uniqueName = M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
-                    hdKey
+                    hdKey,
+                    ''
                 )
                 if hdKey and not uniqueName:
-                    uniqueName = hdKey
+                    uniqueName = analog
                 if not uniqueName:
                     uniqueName = uniqueNameFromContext
             else:
@@ -259,35 +416,47 @@ class MeiMetadataReader:
                     if typeStr == 'alternative':
                         uniqueName = 'alternativeTitle'
                         if label == 'popular':
-                            # verovio's Humdrum importer does @type="alternative" @label="popular"
+                            # verovio:iohumdrum.cpp writes @type="alternative" @label="popular"
                             # for 'humdrum:OTP' aka. 'popularTitle'
                             uniqueName = 'popularTitle'
                     elif typeStr == 'popular':
                         # This is what converter21's MEI exporter writes, and hopefully someday
                         # verovio will, too.
                         uniqueName = 'popularTitle'
-                    elif typeStr in ('movementName', 'number', 'movementNumber', 'opusNumber', 'actNumber', 'sceneNumber'):
+                    elif typeStr in ('movementName', 'number',
+                            'movementNumber', 'opusNumber',
+                            'actNumber', 'sceneNumber'):
                         uniqueName = typeStr
                     else:
                         # e.g. nothing, 'main', 'uniform', 'translated', 'somethingElse'
                         uniqueName = 'title'
 
-            isTranslated: bool = typeStr == 'translated'
-            if not originalLanguage and typeStr in ('main', 'uniform', '') and lang:
-                # we trust the first title we see with @type=="main"/"uniform"/None
+            if not originalLanguage and lang and typeStr in ('', 'main', 'uniform'):
+                # We trust the first title we see with @type=="main"/"uniform"/None
                 # and @xml:lang="something" to tell us the original language (or
-                # the caller might have passed it in, in which case we trust it)
+                # the caller might have passed it in, in which case we trust it,
+                # and don't override it here).
                 originalLanguage = lang
+
+            isTranslated: bool = typeStr == 'translated'
             if originalLanguage and lang:
-                isTranslated = lang != originalLanguage:
+                # Override typeStr == 'translated' with more reliable info, because
+                # typeStr == 'translated' can only happen with main/uniform titles,
+                # the other ones like 'movementName', 'opusNumber' et al have no way
+                # to say they are translated.
+                isTranslated = lang != originalLanguage
 
             value = m21.metadata.Text(data=text, language=lang, isTranslated=isTranslated)
             M21Utilities.addIfNotADuplicate(md, uniqueName, value)
 
-        # Process <titlePart> sub-elements (unless this elem is a titlePart)
+        # Process <titlePart> sub-elements (unless this elem is already a titlePart)
+        if elem.name == 'titlePart':
+            return
+
         titleParts: list[MeiElement] = elem.findAll('titlePart', recurse=False)
         for titlePart in titleParts:
-            processTitleOrTitlePart(titlePart, uniqueNameFromContext, originalLanguage, md)
+            # recurse, passing in any originalLanguage we have computed
+            self.processTitleOrTitlePart(titlePart, uniqueNameFromContext, originalLanguage, md)
 
     def combineFileDescEncodingDescAndWorkListMetadata(
         self,
@@ -295,10 +464,13 @@ class MeiMetadataReader:
         encodingDescMD: m21.metadata.Metadata | None,
         workListMD: m21.metadata.Metadata | None
     ) -> m21.metadata.Metadata:
-        output = m21.metadata.Metadata()
+        if workListMD is not None:
+            output = workListMD
+        else:
+            output = m21.metadata.Metadata()
         return output
 
-    def updateWithBackMatter(self, back: Element):
+    def updateWithBackMatter(self, back: Element, md: m21.metadata.Metadata):
         # back/div@type="textTranslation"/lg@lang=""/l@type="humdrum:HTX"@lang=""
         return
 

@@ -34,7 +34,10 @@ class MeiElement:
 
         if isinstance(elem, Element):
             self.tag = elem.tag
-            self.name = self.tag.split(':')[-1]
+            if self.tag.startswith('{') and '}' in self.tag:
+                self.name = self.tag.split('}')[-1]
+            else:
+                self.name = self.tag
             self.attrib = elem.attrib
             self.text = elem.text or ''
             self.tail = elem.tail or ''
@@ -46,7 +49,10 @@ class MeiElement:
 
         # isinstance(elem, str)
         self.tag = elem
-        self.name = self.tag.split(':')[-1]
+        if self.tag.startswith('{') and '}' in self.tag:
+            self.name = self.tag.split('}')[-1]
+        else:
+            self.name = self.tag
         if attrib:
             self.attrib = attrib
 
