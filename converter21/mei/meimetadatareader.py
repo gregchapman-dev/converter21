@@ -98,29 +98,29 @@ class MeiMetadataReader:
 
             for relation in relations:
                 rel: str = relation.attrib.get('rel', '')
-                target: str = work.attrib.get('target', '')
-                relType: str = work.attrib.get('type', '')
+                target: str = relation.attrib.get('target', '')
+                relType: str = relation.attrib.get('type', '')
                 parentsTypeName: str = ''
                 childrenTypeName: str = ''
                 if rel == 'isPartOf' and target:
                     # our MEI exporter writes  @rel="isPartOf" @type= in order to make clear
                     # which Humdrum-style relationship we are describing.
                     if relType == 'isMemberOfCollection':
-                        parentsTypeName = 'collections'
-                        childrenTypeName = 'members'
+                        parentsTypeName = 'meiCollections'
+                        childrenTypeName = 'meiMembers'
                     elif relType == 'isMemberOfGroup':
-                        parentsTypeName = 'groups'
-                        childrenTypeName = 'members'
+                        parentsTypeName = 'meiGroups'
+                        childrenTypeName = 'meiMembers'
                     elif relType == 'isChildOfParent':
-                        parentsTypeName = 'parents'
-                        childrenTypeName = 'children'
+                        parentsTypeName = 'meiParents'
+                        childrenTypeName = 'meiChildren'
                     else:
                         # default for 'isPartOf' is 'isMemberOfCollection'
-                        parentsTypeName = 'collections'
-                        childrenTypeName = 'members'
+                        parentsTypeName = 'meiCollections'
+                        childrenTypeName = 'meiMembers'
 
-                    if not work.annotations.get(parentsTypeName, []):
-                        work.annotations[parentsTypeName] = []
+                    if getattr(work, parentsTypeName, None) is None:
+                        setattr(work, parentsTypeName, [])
 
                     for xmlId in target.split(' '):
                         xmlId = MeiShared.removeOctothorpe(xmlId)
@@ -134,18 +134,20 @@ class MeiMetadataReader:
                         if not group:
                             continue
 
-                        work.annotations[parentsTypeName].append(group)
-                        if not group.annotations.get(childrenTypeName, []):
-                            group.annotations[childrenTypeName] = []
-                        group.annotations[childrenTypeName].append(work)
+                        getattr(work, parentsTypeName).append(group)
+                        if getattr(group, childrenTypeName, None) is None:
+                            setattr(group, childrenTypeName, [])
+                        getattr(group, childrenTypeName).append(work)
                 elif rel == 'hasPart' and target:
                     # same, but backward
                     # 'hasPart' is interpreted as 'hasCollectionMember' (our MEI writer
                     # doesn't write rel="hasPart", so we have no further info)
-                    parentsTypeName = 'collections'
-                    childrenTypeName = 'members'
-                    if not work.annotations.get(childrenTypeName, []):
-                        work.annotations[childrenTypeName] = []
+                    parentsTypeName = 'meiCollections'
+                    childrenTypeName = 'meiMembers'
+
+                    if getattr(work, childrenTypeName, None) is None:
+                        setattr(work, childrenTypeName, [])
+
                     for xmlId in target.split(' '):
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         member: MeiElement | None = (
@@ -158,17 +160,19 @@ class MeiMetadataReader:
                         if not member:
                             continue
 
-                        work.annotations[childrenTypeName].append(member)
-                        if not member.annotations.get(parentsTypeName, []):
-                            member.annotations[parentsTypeName] = []
-                        member.annotations[parentsTypeName].append(work)
+                        getattr(work, childrenTypeName).append(group)
+                        if getattr(group, parentsTypeName, None) is None:
+                            setattr(group, parentsTypeName, [])
+                        getattr(group, parentsTypeName).append(work)
                 elif rel == 'host' and target:
                     # handle this, even though it's not strictly allowed.
                     # It implies 'parent'/'child'
-                    parentsTypeName = 'parents'
-                    childrenTypeName = 'children'
-                    if not work.annotations.get(parentsTypeName, []):
-                        work.annotations[parentsTypeName] = []
+                    parentsTypeName = 'meiParents'
+                    childrenTypeName = 'meiChildren'
+
+                    if getattr(work, parentsTypeName, None) is None:
+                        setattr(work, parentsTypeName, [])
+
                     for xmlId in target.split(' '):
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         parent: MeiElement | None = (
@@ -181,10 +185,10 @@ class MeiMetadataReader:
                         if not parent:
                             continue
 
-                        work.annotations[parentsTypeName].append(parent)
-                        if not parent.annotations.get(childrenTypeName, []):
-                            parent.annotations[childrenTypeName] = []
-                        parent.annotations[childrenTypeName].append(work)
+                        getattr(work, parentsTypeName).append(group)
+                        if getattr(group, childrenTypeName, None) is None:
+                            setattr(group, childrenTypeName, [])
+                        getattr(group, childrenTypeName).append(work)
 
         # First pass at categorizing works.  Use work@type (only values that could have
         # been set by our MEI writer).  But also rule out non-typed works with children
@@ -203,7 +207,7 @@ class MeiMetadataReader:
             if workType == 'group':
                 groupWorks.add(work)
                 continue
-            if work.annotations.get('children', []) or work.annotations.get('members', []):
+            if getattr(work, 'meiChildren', []) or getattr(work, 'meiMembers', []):
                 continue
 
             mainWorks.add(work)
@@ -215,9 +219,9 @@ class MeiMetadataReader:
         # This is redundant for MEI files we wrote, but non-redundant for MEI files
         # we didn't write.
         for mainWork in mainWorks:
-            parentWorks.update(mainWork.annotations.get('parents', []))
-            groupWorks.update(mainWork.annotations.get('groups', []))
-            collectionWorks.update(mainWork.annotations.get('collections', []))
+            parentWorks.update(getattr(mainWork, 'meiParents', []))
+            groupWorks.update(getattr(mainWork, 'meiGroups', []))
+            collectionWorks.update(getattr(mainWork, 'meiCollections', []))
 
         # Pull only titles out of the parent/group/collection/associated works.  There's
         # no other metadata here that can map to music21 or Humdrum metadata.
@@ -225,22 +229,22 @@ class MeiMetadataReader:
         for work in parentWorks:
             titleElements = work.findAll('title', recurse=False)
             for titleEl in titleElements:
-                self.processTitleOrTitlePart(titleEl, 'parentTitle', '', md)
+                self.processTitleOrTitlePart(titleEl, 'humdrum:OPR', '', md)
 
         for work in groupWorks:
             titleElements = work.findAll('title', recurse=False)
             for titleEl in titleElements:
-                self.processTitleOrTitlePart(titleEl, 'groupTitle', '', md)
+                self.processTitleOrTitlePart(titleEl, 'humdrum:GTL', '', md)
 
         for work in collectionWorks:
             titleElements = work.findAll('title', recurse=False)
             for titleEl in titleElements:
-                self.processTitleOrTitlePart(titleEl, 'collectionDesignation', '', md)
+                self.processTitleOrTitlePart(titleEl, 'humdrum:GCO', '', md)
 
         for work in associatedWorks:
             titleElements = work.findAll('title', recurse=False)
             for titleEl in titleElements:
-                self.processTitleOrTitlePart(titleEl, 'associatedWork', '', md)
+                self.processTitleOrTitlePart(titleEl, 'humdrum:GAW', '', md)
 
         # OK, now for the main works, we process everything we see (including any titles)
         for work in mainWorks:
@@ -254,7 +258,7 @@ class MeiMetadataReader:
         if element.name == 'identifier':
             self.processIdentifier(element, md)
         elif element.name == 'title':
-            self.processTitleOrTitlePart(element, 'title', '', md)
+            self.processTitleOrTitlePart(element, '', '', md)
         elif element.name == 'composer':
             self.processComposer(element, md)
         elif element.name == 'lyricist':
@@ -384,52 +388,60 @@ class MeiMetadataReader:
     def processTitleOrTitlePart(
         self,
         elem: MeiElement,
-        uniqueNameFromContext: str,
+        analogFromContext: str,
         originalLanguage: str,
         md: m21.metadata.Metadata
     ) -> None:
+        # analogFromContext: if set, it means that we only produce that bit of metadata from this
+        # title and/or titlePart(s).  Ignore other things like 'movementName', 'alternativeTitle',
+        # etc.
         text: str
-        _styleDict: dict[str, str]
-        if elem.name == 'title':
-            text = elem.text
-        else:
-            text, _styleDict = MeiShared.textFromElem(elem)
+        # title might have embedded <titlePart>s, so only grab that first bit of text
+        text = elem.text
         text = text.strip()
         if text:
+            skipIt: bool = False
             typeStr: str = elem.get('type', '')
             lang: str | None = elem.get('xml:lang')
             label: str = elem.get('label', '')
             analog: str = elem.get('analog', '')
-            uniqueName: str = uniqueNameFromContext
-            if analog.startswith('humdrum:'):
-                hdKey: str = analog[8:]
-                uniqueName = M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
-                    hdKey,
-                    ''
-                )
-                if hdKey and not uniqueName:
-                    uniqueName = analog
-                if not uniqueName:
-                    uniqueName = uniqueNameFromContext
+            if analogFromContext:
+                if analog == analogFromContext:
+                    pass  # take analog and run with it
+                elif analog.startswith('humdrum:'):
+                    skipIt = True
+                elif typeStr in ('alternative', 'popular', 'movementName', 'number'
+                            'movementNumber', 'opusNumber', 'actNumber', 'sceneNumber'):
+                    skipIt = True
+                else:
+                    # e.g. typeStr is None, 'main', 'uniform', 'translated', 'somethingElse'
+                    # Don't skip it; call it analogFromContext.
+                    analog = analogFromContext
             else:
-                if uniqueName == 'title':
+                if not analog.startswith('humdrum:'):
+                    # use typeStr to compute what analog should have been
                     if typeStr == 'alternative':
-                        uniqueName = 'alternativeTitle'
+                        analog = 'humdrum:OTA'
                         if label == 'popular':
                             # verovio:iohumdrum.cpp writes @type="alternative" @label="popular"
                             # for 'humdrum:OTP' aka. 'popularTitle'
-                            uniqueName = 'popularTitle'
+                            analog = 'humdrum:OTP'
                     elif typeStr == 'popular':
                         # This is what converter21's MEI exporter writes, and hopefully someday
                         # verovio will, too.
-                        uniqueName = 'popularTitle'
+                        analog = 'humdrum:OTP'
                     elif typeStr in ('movementName', 'number',
                             'movementNumber', 'opusNumber',
                             'actNumber', 'sceneNumber'):
-                        uniqueName = typeStr
+                        analog = (
+                            'humdrum:'
+                            + M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey[
+                                typeStr
+                            ]
+                        )
                     else:
-                        # e.g. nothing, 'main', 'uniform', 'translated', 'somethingElse'
-                        uniqueName = 'title'
+                        # e.g. typeStr is None, 'main', 'uniform', 'translated', 'somethingElse'
+                        analog = 'humdrum:OTL'
 
             if not originalLanguage and lang and typeStr in ('', 'main', 'uniform'):
                 # We trust the first title we see with @type=="main"/"uniform"/None
@@ -446,8 +458,9 @@ class MeiMetadataReader:
                 # to say they are translated.
                 isTranslated = lang != originalLanguage
 
-            value = m21.metadata.Text(data=text, language=lang, isTranslated=isTranslated)
-            M21Utilities.addIfNotADuplicate(md, uniqueName, value)
+            if not skipIt:
+                value = m21.metadata.Text(data=text, language=lang, isTranslated=isTranslated)
+                M21Utilities.addIfNotADuplicate(md, analog, value)
 
         # Process <titlePart> sub-elements (unless this elem is already a titlePart)
         if elem.name == 'titlePart':
@@ -456,7 +469,7 @@ class MeiMetadataReader:
         titleParts: list[MeiElement] = elem.findAll('titlePart', recurse=False)
         for titlePart in titleParts:
             # recurse, passing in any originalLanguage we have computed
-            self.processTitleOrTitlePart(titlePart, uniqueNameFromContext, originalLanguage, md)
+            self.processTitleOrTitlePart(titlePart, analogFromContext, originalLanguage, md)
 
     def combineFileDescEncodingDescAndWorkListMetadata(
         self,

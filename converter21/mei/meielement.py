@@ -30,7 +30,6 @@ class MeiElement:
         self.text: str = ''
         self.tail: str = ''
         self.subElements: list[MeiElement] = []
-        self.annotations: dict[str, t.Any] = {}  # this is just for making external notes
 
         if isinstance(elem, Element):
             self.tag = elem.tag
