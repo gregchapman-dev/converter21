@@ -34,6 +34,7 @@ class MeiMetadataReader:
             return
 
         self.meiHeadElement: MeiElement = MeiElement(meiHead)
+        self.madsAuthorityDataByID: dict[str, MeiElement] = self.gatherMADSAuthorityData()
 
         fileDescMD: m21.metadata.Metadata | None = None
         encodingDescMD: m21.metadata.Metadata | None = None
@@ -61,6 +62,15 @@ class MeiMetadataReader:
 #         meiHeadElementStr: str = self.meiHeadElement.__repr__()
         meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
         self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
+
+    def gatherMADSAuthorityData(self) -> dict[str, MeiElement]:
+        output: dict[str, MeiElement] = {}
+        madsElements: list[MeiElement] = self.meiHeadElement.findAll('mads')
+        for mads in madsElements:
+            madsID: str = mads.get('ID', '')
+            if madsID:
+                output[madsID] = mads
+        return output
 
     def processFileDesc(self, fileDescElement: MeiElement) -> m21.metadata.Metadata:
         output = m21.metadata.Metadata()
@@ -301,15 +311,26 @@ class MeiMetadataReader:
 
         M21Utilities.addIfNotADuplicate(md, analog, text)
 
+    def getMadsAuthorityDataForElement(self, element: Element | MeiElement) -> MeiElement | None:
+        output: MeiElement | None = None
+        authURI: str = element.get('auth.uri', '')
+        if authURI:
+            authURI = MeiShared.removeOctothorpe(authURI)
+            if authURI in self.madsAuthorityDataByID:
+                output = self.madsAuthorityDataByID[authURI]
+        return output
+
     def processComposer(self, element: MeiElement, md: m21.metadata.Metadata):
         names: list[str] = []
         types: list[str] = []
         analogs: list[str] = []
         elementNames: list[str] = []
+        madsElements: list[MeiElement | None] = []
 
         analog: str = element.get('analog', '')
         typeStr: str = element.get('type', '')
         cert: str = element.get('cert', '')
+        mads: MeiElement | None = self.getMadsAuthorityDataForElement(element)
 
         name: str = element.text
         name = name.strip()
@@ -326,6 +347,8 @@ class MeiMetadataReader:
                 else:
                     analog = 'humdrum:COM'
             M21Utilities.addIfNotADuplicate(md, analog, name)
+            if mads is not None:
+                self.processComposerMADSInfo(mads, md)
 
         # Whether or not <composer> held a name, check all persName/corpName/name
         # subElements as well.
@@ -342,8 +365,10 @@ class MeiMetadataReader:
                     types.append(typeStr)
                     analogs.append(analog)
                     elementNames.append(elementName)
+                    madsElements.append(self.getMadsAuthorityDataForElement(nameEl))
 
-        for name, typeStr, analog, elementName in zip(names, types, analogs, elementNames):
+        for name, typeStr, analog, elementName, mads in zip(
+                names, types, analogs, elementNames, madsElements):
             if not analog.startswith('humdrum:'):
                 # compute what analog should be (make it start with 'humdrum:')
                 if elementName == 'corpName':
@@ -357,6 +382,67 @@ class MeiMetadataReader:
                 else:
                     analog = 'humdrum:COM'
             M21Utilities.addIfNotADuplicate(md, analog, name)
+            if mads is not None:
+                self.processComposerMADSInfo(mads, md)
+
+    def processComposerMADSInfo(self, mads: MeiElement, md: m21.metadata.Metadata):
+        # we currently only look at the first variant, for an alias
+        variant: MeiElement | None = mads.findFirst('variant')
+        if variant is not None:
+            variantType: str = variant.get('type', '')
+            otherType: str = variant.get('otherType', '')
+            if (variantType == 'abbreviation'
+                    or (variantType == 'other'
+                        and otherType in ('humdrum:COL', 'alias', 'stageName'))):
+                # this is a composerAlias
+                nameEl: MeiElement | None = variant.findFirst('name')
+                if nameEl is not None:
+                    namePart: MeiElement | None = nameEl.findFirst('namePart')
+                    if namePart is not None:
+                        name: str = namePart.text
+                        name = name.strip()
+                        if name:
+                            M21Utilities.addIfNotADuplicate(md, 'humdrum:COL', name)
+
+        # look at personInfo for birthDate/deathDate/birthPlace/deathPlace/nationality
+        personInfo: MeiElement | None = mads.findFirst('personInfo')
+        if personInfo is not None:
+            birthDateEl: MeiElement | None = personInfo.findFirst('birthDate')
+            deathDateEl: MeiElement | None = personInfo.findFirst('deathDate')
+            birthPlaceEl: MeiElement | None = personInfo.findFirst('birthPlace')
+            deathPlaceEl: MeiElement | None = personInfo.findFirst('deathPlace')
+            nationalityEl: MeiElement | None = personInfo.findFirst('nationality')
+            if birthDateEl is not None and deathDateEl is not None:
+                # add 'humdrum:CDT' metadata item
+                birthIsoDate: str = birthDateEl.text.strip()
+                deathIsoDate: str = deathDateEl.text.strip()
+                if birthIsoDate and deathIsoDate:
+                    m21Dates = M21Utilities.m21DateListFromIsoDateList([birthIsoDate, deathIsoDate])
+                    cdtDateBetween = m21.metadata.DateBetween(m21Dates)
+                    if md._isStandardNamespaceName('humdrum:CDT'):
+                        M21Utilities.addIfNotADuplicate(md, 'humdrum:CDT', cdtDateBetween)
+                    else:
+                        # can't use a Date, have to use a string, and it has to be a Humdrum string
+                        M21Utilities.addIfNotADuplicate(
+                            md,
+                            'humdrum:CDT',
+                            M21Utilities.stringFromM21DateObject(cdtDateBetween)
+                        )
+            if birthPlaceEl is not None:
+                # add 'humdrum:CBL' metadata item
+                name = birthPlaceEl.text.strip()
+                if name:
+                    M21Utilities.addIfNotADuplicate(md, 'humdrum:CBL', name)
+            if deathPlaceEl is not None:
+                # add 'humdrum:CDL' metadata item
+                name = deathPlaceEl.text.strip()
+                if name:
+                    M21Utilities.addIfNotADuplicate(md, 'humdrum:CDL', name)
+            if nationalityEl is not None:
+                # add 'humdrum:CNT' metadata item
+                name = nationalityEl.text.strip()
+                if name:
+                    M21Utilities.addIfNotADuplicate(md, 'humdrum:CNT', name)
 
     def processLyricist(self, element: MeiElement, md: m21.metadata.Metadata):
         pass
