@@ -277,6 +277,8 @@ class MeiMetadataReader:
             self.processLibrettist(element, md)
         elif element.name == 'funder':
             self.processFunder(element, md)
+        elif element.name == 'contributor':
+            self.processContributor(element, '', md)
         elif element.name == 'creation':
             self.processCreation(element, md)
         elif element.name == 'history':
@@ -444,14 +446,76 @@ class MeiMetadataReader:
                 if name:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:CNT', name)
 
+    def processContributor(
+        self,
+        element: MeiElement,
+        humdrumAnalog: str,
+        md: m21.metadata.Metadata
+    ):
+        names: list[str] = []
+        analogs: list[str] = []
+        analog: str = element.get('analog', '')
+        contrib: m21.metadata.Contributor | None = None
+        role: str = ''
+
+        name: str = element.text
+        name = name.strip()
+        if name:
+            # <element>name</element>
+            if not analog.startswith('humdrum:'):
+                # compute what analog should be (make it start with 'humdrum:')
+                if humdrumAnalog:
+                    analog = humdrumAnalog
+                else:
+                    # must be <contributor>, so call it 'otherContributor' and
+                    # set up a Contributor with role = @role
+                    analog = 'otherContributor'
+                    role = element.get('role', '')
+                    contrib = m21.metadata.Contributor(name=name, role=role)
+            if contrib is not None:
+                M21Utilities.addIfNotADuplicate(md, analog, contrib)
+                contrib = None
+            else:
+                M21Utilities.addIfNotADuplicate(md, analog, name)
+
+        # Whether or not <element> held a name, check all persName/corpName/name
+        # subElements as well.
+        for elementName in ('persName', 'corpName', 'name'):
+            nameEls: list[MeiElement] = element.findAll(elementName, recurse=False)
+            for nameEl in nameEls:
+                _styleDict: dict[str, str]
+                name, _styleDict = MeiShared.textFromElem(nameEl)
+                name = name.strip()
+                if name:
+                    analog = nameEl.get('analog', '')
+                    names.append(name)
+                    analogs.append(analog)
+
+        for name, analog in zip(names, analogs):
+            if not analog.startswith('humdrum:'):
+                # compute what analog should be (make it start with 'humdrum:')
+                if humdrumAnalog:
+                    analog = humdrumAnalog
+                else:
+                    # must be <contributor>, so call it 'otherContributor' and
+                    # set up a Contributor with role = @role
+                    analog = 'otherContributor'
+                    role = element.get('role', '')
+                    contrib = m21.metadata.Contributor(name=name, role=role)
+            if contrib is not None:
+                M21Utilities.addIfNotADuplicate(md, analog, contrib)
+                contrib = None
+            else:
+                M21Utilities.addIfNotADuplicate(md, analog, name)
+
     def processLyricist(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        self.processContributor(element, 'humdrum:LYR', md)
 
     def processLibrettist(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        self.processContributor(element, 'humdrum:LIB', md)
 
     def processFunder(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        self.processContributor(element, 'humdrum:OCO', md)
 
     def processCreation(self, element: MeiElement, md: m21.metadata.Metadata):
         pass
