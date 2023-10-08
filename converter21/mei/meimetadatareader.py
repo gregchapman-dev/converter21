@@ -301,7 +301,7 @@ class MeiMetadataReader:
             return
 
         analog: str = element.get('analog', '')
-        if not analog.startswith('humdrum:'):
+        if not M21Utilities.isUsableMetadataKey(md, analog):
             # compute what analog should be (make it start with 'humdrum:')
             if text.startswith('Koechel') or text.startswith('Köchel'):
                 analog = 'humdrum:SCA'
@@ -338,7 +338,7 @@ class MeiMetadataReader:
         name = name.strip()
         if name:
             # <composer>name</composer>
-            if not analog.startswith('humdrum:'):
+            if not M21Utilities.isUsableMetadataKey(md, analog):
                 # compute what analog should be (make it start with 'humdrum:')
                 if typeStr == 'alias':
                     analog = 'humdrum:COL'
@@ -371,7 +371,7 @@ class MeiMetadataReader:
 
         for name, typeStr, analog, elementName, mads in zip(
                 names, types, analogs, elementNames, madsElements):
-            if not analog.startswith('humdrum:'):
+            if not M21Utilities.isUsableMetadataKey(md, analog):
                 # compute what analog should be (make it start with 'humdrum:')
                 if elementName == 'corpName':
                     analog = 'humdrum:COC'
@@ -462,7 +462,7 @@ class MeiMetadataReader:
         name = name.strip()
         if name:
             # <element>name</element>
-            if not analog.startswith('humdrum:'):
+            if not M21Utilities.isUsableMetadataKey(md, analog):
                 # compute what analog should be (make it start with 'humdrum:')
                 if humdrumAnalog:
                     analog = humdrumAnalog
@@ -492,8 +492,8 @@ class MeiMetadataReader:
                     analogs.append(analog)
 
         for name, analog in zip(names, analogs):
-            if not analog.startswith('humdrum:'):
-                # compute what analog should be (make it start with 'humdrum:')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                # compute what analog should be
                 if humdrumAnalog:
                     analog = humdrumAnalog
                 else:
@@ -558,7 +558,7 @@ class MeiMetadataReader:
             if analogFromContext:
                 if analog == analogFromContext:
                     pass  # take analog and run with it
-                elif analog.startswith('humdrum:'):
+                elif M21Utilities.isUsableMetadataKey(md, analog):
                     skipIt = True
                 elif typeStr in ('alternative', 'popular', 'movementName', 'number'
                             'movementNumber', 'opusNumber', 'actNumber', 'sceneNumber'):
@@ -568,7 +568,7 @@ class MeiMetadataReader:
                     # Don't skip it; call it analogFromContext.
                     analog = analogFromContext
             else:
-                if not analog.startswith('humdrum:'):
+                if not M21Utilities.isUsableMetadataKey(md, analog):
                     # use typeStr to compute what analog should have been
                     if typeStr == 'alternative':
                         analog = 'humdrum:OTA'

@@ -1675,9 +1675,47 @@ class M21Utilities:
         return valueStr
 
     @staticmethod
+    def isUsableMetadataKey(md: m21.metadata.Metadata, key: str) -> bool:
+        # returns true if key is a standard uniqueName, a standard namespaceName,
+        # a non-standard namespaceName that we can convert into a standard
+        # uniqueName/namespaceName (e.g. 'dcterm:title' can be converted to
+        # 'dcterms:title'), or a 'humdrum:XXX' name that we are willing to
+        # use as if it were a standard namespaceName (but is actually a custom
+        # key).
+        if md._isStandardUniqueName(key):
+            return True
+        if md._isStandardNamespaceName(key):
+            return True
+        if key.startswith('humdrum:'):
+            return True
+
+        # Let's see if we can make a standard namespaceName from it.
+        if key.startswith('dcterm:'):
+            key = key.replace('dcterm:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                return True
+            return False
+
+        if key.startswith('dc:'):
+            key = key.replace('dc:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                return True
+            return False
+
+        if key.startswith('marc:'):
+            key = key.replace('marc:', 'marcrel:')
+            if md._isStandardNamespaceName(key):
+                return True
+            return False
+
+        return False
+
+    @staticmethod
     def addIfNotADuplicate(md: m21.metadata.Metadata, key: str, value: t.Any):
         # Note that we specifically support 'humdrum:XXX' keys that do not map
-        # to uniqueNames (using them as custom keys).
+        # to uniqueNames (using them as custom keys).  We also support a few
+        # alternative namespaces ('dc:' and 'dcterm:' for 'dcterms:' and
+        # 'marc:' for 'marcrel:').
         uniqueName: str | None = None
         if md._isStandardUniqueName(key):
             uniqueName = key
@@ -1691,6 +1729,18 @@ class M21Utilities:
             if not uniqueName:
                 M21Utilities.addCustomIfNotADuplicate(md, key, value)
                 return
+        elif key.startswith('dcterm:'):
+            key = key.replace('dcterm:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                uniqueName = md.namespaceNameToUniqueName(key)
+        elif key.startswith('dc:'):
+            key = key.replace('dc:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                uniqueName = md.namespaceNameToUniqueName(key)
+        elif key.startswith('marc:'):
+            key = key.replace('marc:', 'marcrel:')
+            if md._isStandardNamespaceName(key):
+                uniqueName = md.namespaceNameToUniqueName(key)
 
         if isinstance(value, str):
             value = m21.metadata.Text(value, isTranslated=False)
