@@ -2938,7 +2938,7 @@ class M21Convert:
 
         if humdrumValue.encodingScheme == 'humdrum:date':
             # convert to m21.metadata.DateXxxx
-            m21Value = M21Utilities.m21DateObjectFromString(str(humdrumValue))
+            m21Value = M21Utilities.m21DatePrimitiveFromString(str(humdrumValue))
             if m21Value is None:
                 # wouldn't convert to DateXxxx, leave it as Text
                 m21Value = humdrumValue

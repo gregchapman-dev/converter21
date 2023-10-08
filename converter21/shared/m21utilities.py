@@ -1134,7 +1134,7 @@ class M21Utilities:
         if isinstance(dateObj, m21.metadata.Text):
             # convert to DatePrimitive
             do: m21.metadata.DatePrimitive | None = (
-                M21Utilities.m21DateObjectFromString(str(dateObj))
+                M21Utilities.m21DatePrimitiveFromString(str(dateObj))
             )
             if do is None:
                 return ''
@@ -1200,7 +1200,7 @@ class M21Utilities:
     _dateDividerSymbols: tuple[str, ...] = ('-', '^', '|')
 
     @staticmethod
-    def m21DateObjectFromString(
+    def m21DatePrimitiveFromString(
         string: str
     ) -> m21.metadata.DatePrimitive | None:
         typeNeeded: t.Type = m21.metadata.DateSingle

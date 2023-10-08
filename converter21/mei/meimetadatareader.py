@@ -302,7 +302,7 @@ class MeiMetadataReader:
 
         analog: str = element.get('analog', '')
         if not M21Utilities.isUsableMetadataKey(md, analog):
-            # compute what analog should be (make it start with 'humdrum:')
+            # compute what analog should be
             if text.startswith('Koechel') or text.startswith('Köchel'):
                 analog = 'humdrum:SCA'
             if text.startswith('BWV'):
@@ -339,7 +339,7 @@ class MeiMetadataReader:
         if name:
             # <composer>name</composer>
             if not M21Utilities.isUsableMetadataKey(md, analog):
-                # compute what analog should be (make it start with 'humdrum:')
+                # compute what analog should be
                 if typeStr == 'alias':
                     analog = 'humdrum:COL'
                 elif cert == 'medium':
@@ -372,7 +372,7 @@ class MeiMetadataReader:
         for name, typeStr, analog, elementName, mads in zip(
                 names, types, analogs, elementNames, madsElements):
             if not M21Utilities.isUsableMetadataKey(md, analog):
-                # compute what analog should be (make it start with 'humdrum:')
+                # compute what analog should be
                 if elementName == 'corpName':
                     analog = 'humdrum:COC'
                 elif typeStr == 'alias':
@@ -463,7 +463,7 @@ class MeiMetadataReader:
         if name:
             # <element>name</element>
             if not M21Utilities.isUsableMetadataKey(md, analog):
-                # compute what analog should be (make it start with 'humdrum:')
+                # compute what analog should be
                 if humdrumAnalog:
                     analog = humdrumAnalog
                 else:
@@ -518,10 +518,96 @@ class MeiMetadataReader:
         self.processContributor(element, 'humdrum:OCO', md)
 
     def processCreation(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        dates: list[MeiElement] = element.findAll('date', recurse=False)
+        countries: list[MeiElement] = element.findAll('country', recurse=False)
+        settlements: list[MeiElement] = element.findAll('settlement', recurse=False)
+        geogNames: list[MeiElement] = element.findAll('geogName', recurse=False)
+        dedicatees: list[MeiElement] = element.findAll('dedicatee', recurse=False)
+
+        for date in dates:
+            analog: str = date.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                analog = 'humdrum:ODT'
+
+            m21DateObj: m21.metadata.DatePrimitive | str = (
+                self.m21DatePrimitiveOrStringFromDateElement(date)
+            )
+            if m21DateObj:
+                M21Utilities.addIfNotADuplicate(md, analog, m21DateObj)
+
+        for country in countries:
+            text: str = country.text.strip()
+            if not text:
+                continue
+            analog = country.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                analog = 'humdrum:OCY'
+            M21Utilities.addIfNotADuplicate(md, analog, text)
+
+        for settlement in settlements:
+            text = settlement.text.strip()
+            if not text:
+                continue
+            analog = settlement.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                analog = 'humdrum:OPC'
+            M21Utilities.addIfNotADuplicate(md, analog, text)
+
+        for geogName in geogNames:
+            text = geogName.text.strip()
+            if not text:
+                continue
+            analog = geogName.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                if geogName.get('type', '') == 'coordinates':
+                    analog = 'humdrum:ARL'
+                else:
+                    analog = 'humdrum:ARE'
+            M21Utilities.addIfNotADuplicate(md, analog, text)
+
+        for dedicatee in dedicatees:
+            text = dedicatee.text.strip()
+            if not text:
+                continue
+            analog = dedicatee.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                analog = 'humdrum:ODE'
+            M21Utilities.addIfNotADuplicate(md, analog, text)
 
     def processHistory(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        # this can contain a list of <p> and/or <lg> elements, with the <lg>
+        # elements each containing a list of <l> elements.  @xml:lang can be
+        # found on <p>, <lg>, or <l> elements.  l@xml:lang overrides the
+        # containing lg@xml:lang.
+        for subElem in element.findAll('*', recurse=False):
+            if subElem.name not in ('p', 'lg'):
+                continue
+            if subElem.name == 'p':
+                self.processHistoryLine(subElem, '', md)
+            elif subElem.name == 'lg':
+                lgLang: str = subElem.get('xml:lang', '')
+                for lineEl in subElem.findAll('l', recurse=False):
+                    self.processHistoryLine(lineEl, lgLang, md)
+
+    def processHistoryLine(
+        self,
+        element: MeiElement,
+        defaultLang: str,
+        md: m21.metadata.Metadata,
+    ):
+        text: str = element.text.strip()
+        if not text:
+            return
+
+        analog: str = element.get('analog', '')
+        if not M21Utilities.isUsableMetadataKey(md, analog):
+            analog = 'humdrum:HAO'
+        lang: str = element.get('xml:lang', '')
+        if not lang:
+            lang = defaultLang
+
+        mdText = m21.metadata.Text(text, language=lang)
+        M21Utilities.addIfNotADuplicate(md, analog, mdText)
 
     def processLangUsage(self, element: MeiElement, md: m21.metadata.Metadata):
         pass
@@ -636,6 +722,66 @@ class MeiMetadataReader:
     def updateWithBackMatter(self, back: Element, md: m21.metadata.Metadata):
         # back/div@type="textTranslation"/lg@lang=""/l@type="humdrum:HTX"@lang=""
         return
+
+    def m21DatePrimitiveOrStringFromDateElement(
+        self,
+        dateEl: MeiElement
+    ) -> m21.metadata.DatePrimitive | str:
+        m21DateObj: m21.metadata.DatePrimitive | str | None
+        isodate: str = dateEl.get('isodate', '')
+        if isodate:
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(isodate)
+            if m21DateObj is None:
+                # try it as humdrum date/zeit
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(isodate)
+            if m21DateObj is not None:
+                return m21DateObj
+
+        dateStart: str = dateEl.get('notbefore', '') or dateEl.get('startdate', '')
+        dateEnd: str = dateEl.get('notafter', '') or dateEl.get('enddate', '')
+        # These are isodates, but if they don't parse, we'll try them as humdrum date/zeit
+        if dateStart and dateEnd:
+            betweenDates: str = dateStart + '/' + dateEnd
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(betweenDates)
+            if m21DateObj is None:
+                betweenDates = dateStart + '-' + dateEnd
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(betweenDates)
+            if m21DateObj is not None:
+                return m21DateObj
+
+        if dateStart:
+            afterDate: str = dateStart + '/..'
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(afterDate)
+            if m21DateObj is None:
+                afterDate = '>' + dateStart
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(afterDate)
+            if m21DateObj is not None:
+                return m21DateObj
+
+        if dateEnd:
+            beforeDate: str = '../' + dateEnd
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(beforeDate)
+            if m21DateObj is None:
+                beforeDate = '<' + dateEnd
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(beforeDate)
+            if m21DateObj is not None:
+                return m21DateObj
+
+        # If nothing else is present (and parseable), go for dateEl.text.
+        # If _that_ is present, but not parseable, warn, and return it as a str.
+        text: str = dateEl.text.strip()
+        if text:
+            m21DateObj = M21Utilities.m21DatePrimitiveFromString(text)
+            if m21DateObj is None:
+                # try it as isodate
+                m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(text)
+            if m21DateObj is not None:
+                return m21DateObj
+            environLocal.warn(_MISSED_DATE.format(text))
+            return text
+
+        return ''
+
 
 class MeiMetadataReaderOLD:
     def __init__(self, meiHead: Element) -> None:
@@ -916,8 +1062,11 @@ class MeiMetadataReaderOLD:
             elif el.tag == f'{MEI_NS}publisher':
                 self._contributorFromElement(el, tagPath, md)
             elif el.tag == f'{MEI_NS}date':
-                m21DateObj: m21.metadata.DatePrimitive | str = self.m21DateFromDateElement(el)
-                M21Utilities.addIfNotADuplicate(md, 'electronicReleaseDate', m21DateObj)
+                m21DateObj: m21.metadata.DatePrimitive | str = (
+                    self.m21DatePrimitiveOrStringFromDateElement(el)
+                )
+                if m21DateObj:
+                    M21Utilities.addIfNotADuplicate(md, 'electronicReleaseDate', m21DateObj)
             elif el.tag == f'{MEI_NS}respStmt':
                 self._respStmtFromElement(el, tagPath, md)
             else:
@@ -1036,7 +1185,7 @@ class MeiMetadataReaderOLD:
 
         self.firstWorkProcessed = True
 
-    def m21DateFromDateElement(
+    def m21DatePrimitiveOrStringFromDateElement(
         self,
         dateEl: Element
     ) -> m21.metadata.DatePrimitive | str:
@@ -1046,47 +1195,51 @@ class MeiMetadataReaderOLD:
             m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(isodate)
             if m21DateObj is None:
                 # try it as humdrum date/zeit
-                m21DateObj = M21Utilities.m21DateObjectFromString(isodate)
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(isodate)
             if m21DateObj is not None:
-                # if m21DateObj is None, we'll fall through and
-                # try to parse date.text, since @isodate was a fail.
                 return m21DateObj
-
-        if dateEl.text:
-            m21DateObj = M21Utilities.m21DateObjectFromString(dateEl.text)
-            if m21DateObj is None:
-                # try it as isodate
-                m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(dateEl.text)
-            if m21DateObj is None:
-                environLocal.warn(_MISSED_DATE.format(dateEl.text))
-                return dateEl.text
-            return m21DateObj
 
         dateStart = dateEl.get('notbefore') or dateEl.get('startdate')
         dateEnd = dateEl.get('notafter') or dateEl.get('enddate')
+        # These are isodates, but if they don't parse, we'll try them as humdrum date/zeit
         if dateStart and dateEnd:
-            betweenDates: str = dateStart + '-' + dateEnd
-            m21DateObj = M21Utilities.m21DateObjectFromString(betweenDates)
+            betweenDates: str = dateStart + '/' + dateEnd
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(betweenDates)
             if m21DateObj is None:
-                environLocal.warn(_MISSED_DATE.format(betweenDates))
-                return betweenDates
-            return m21DateObj
+                betweenDates = dateStart + '-' + dateEnd
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(betweenDates)
+            if m21DateObj is not None:
+                return m21DateObj
 
         if dateStart:
-            afterDate: str = '>' + dateStart
-            m21DateObj = M21Utilities.m21DateObjectFromString(afterDate)
+            afterDate: str = dateStart + '/..'
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(afterDate)
             if m21DateObj is None:
-                environLocal.warn(_MISSED_DATE.format(afterDate))
-                return afterDate
-            return m21DateObj
+                afterDate = '>' + dateStart
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(afterDate)
+            if m21DateObj is not None:
+                return m21DateObj
 
         if dateEnd:
-            beforeDate: str = '<' + dateEnd
-            m21DateObj = M21Utilities.m21DateObjectFromString(beforeDate)
+            beforeDate: str = '../' + dateEnd
+            m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(beforeDate)
             if m21DateObj is None:
-                environLocal.warn(_MISSED_DATE.format(beforeDate))
-                return beforeDate
-            return m21DateObj
+                beforeDate = '<' + dateEnd
+                m21DateObj = M21Utilities.m21DatePrimitiveFromString(beforeDate)
+            if m21DateObj is not None:
+                return m21DateObj
+
+        # If nothing else is present (and parseable), go for dateEl.text.
+        # If _that_ is present, but not parseable, warn, and return it as a str.
+        if dateEl.text:
+            m21DateObj = M21Utilities.m21DatePrimitiveFromString(dateEl.text)
+            if m21DateObj is None:
+                # try it as isodate
+                m21DateObj = M21Utilities.m21DatePrimitiveFromIsoDate(dateEl.text)
+            if m21DateObj is not None:
+                return m21DateObj
+            environLocal.warn(_MISSED_DATE.format(dateEl.text))
+            return dateEl.text
 
         return ''
 
@@ -1103,9 +1256,11 @@ class MeiMetadataReaderOLD:
         geogNames: list[Element] = elem.findall(f'{MEI_NS}geogName')
 
         if date is not None:
-            m21Date: m21.metadata.DatePrimitive | str = self.m21DateFromDateElement(date)
-            if m21Date:
-                md.add('dateCreated', m21Date)
+            m21DateObj: m21.metadata.DatePrimitive | str = (
+                self.m21DatePrimitiveOrStringFromDateElement(date)
+            )
+            if m21DateObj:
+                md.add('dateCreated', m21DateObj)
 
         for geogName in geogNames:
             name: str = geogName.text or ''
