@@ -681,7 +681,29 @@ class MeiMetadataReader:
             M21Utilities.addIfNotADuplicate(md, analog, text)
 
     def processClassification(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        for termList in element.findAll('termList', recurse=False):
+            for term in termList.findAll('term', recurse=False):
+                text: str = term.text.strip()
+                if not text:
+                    continue
+
+                analog: str = term.get('analog', '')
+                label: str = term.get('label', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    # Two of the possible classifications ('humdrum:AMD'
+                    # aka 'mode' and 'humdrum:AMT' aka 'meter') have specific
+                    # text formatting required.  So we will skip those if
+                    # we don't see those two exact analogs.
+                    if label == 'form':
+                        analog = 'humdrum:AFR'
+                    elif label == 'genre':
+                        analog = 'humdrum:AGN'
+                    elif label == 'style':
+                        analog = 'humdrum:AST'
+                    else:
+                        continue
+
+                M21Utilities.addIfNotADuplicate(md, analog, text)
 
     def processExpressionList(self, element: MeiElement, md: m21.metadata.Metadata):
         for expression in element.findAll('expression', recurse=False):
