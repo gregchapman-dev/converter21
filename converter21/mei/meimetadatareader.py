@@ -21,6 +21,7 @@ from converter21.mei import MeiElement
 environLocal = m21.environment.Environment('converter21.mei.meimetadatareader')
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
+_XMLLANG = '{http://www.w3.org/XML/1998/namespace}lang'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 
 _MISSED_DATE = 'Unable to decipher an MEI date "{}". Leaving as str.'
@@ -136,7 +137,7 @@ class MeiMetadataReader:
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         group: MeiElement | None = (
                             workListElement.findFirstWithAttributeValue(
-                                'xml:id',
+                                _XMLID,
                                 xmlId,
                                 recurse=False
                             )
@@ -162,7 +163,7 @@ class MeiMetadataReader:
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         member: MeiElement | None = (
                             workListElement.findFirstWithAttributeValue(
-                                'xml:id',
+                                _XMLID,
                                 xmlId,
                                 recurse=False
                             )
@@ -187,7 +188,7 @@ class MeiMetadataReader:
                         xmlId = MeiShared.removeOctothorpe(xmlId)
                         parent: MeiElement | None = (
                             workListElement.findFirstWithAttributeValue(
-                                'xml:id',
+                                _XMLID,
                                 xmlId,
                                 recurse=False
                             )
@@ -280,17 +281,26 @@ class MeiMetadataReader:
         elif element.name == 'contributor':
             self.processContributor(element, '', md)
         elif element.name == 'creation':
-            self.processCreation(element, md)
+            self.processCreation(element, md, context='mainWork')
         elif element.name == 'history':
-            self.processHistory(element, md)
+            self.processElementContainingLines(element, 'humdrum:HAO', md)
         elif element.name == 'langUsage':
             self.processLangUsage(element, md)
         elif element.name == 'notesStmt':
-            self.processNotesStmt(element, md)
+            self.processNotesStmt(element, 'humdrum:ONB', md)
         elif element.name == 'classification':
             self.processClassification(element, md)
         elif element.name == 'expressionList':
             self.processExpressionList(element, md)
+
+    def processNotesStmt(
+        self,
+        element: MeiElement,
+        defaultAnalog: str,
+        md: m21.metadata.Metadata
+    ):
+        for elem in element.findAll('annot', recurse=False):
+            self.processElementContainingLines(elem, defaultAnalog, md)
 
     def processIdentifier(self, element: MeiElement, md: m21.metadata.Metadata):
         text: str
@@ -517,7 +527,20 @@ class MeiMetadataReader:
     def processFunder(self, element: MeiElement, md: m21.metadata.Metadata):
         self.processContributor(element, 'humdrum:OCO', md)
 
-    def processCreation(self, element: MeiElement, md: m21.metadata.Metadata):
+    def processCreation(
+        self,
+        element: MeiElement,
+        md: m21.metadata.Metadata,
+        context: str
+    ):
+        # context == 'mainWork' means main (encoded) work, grab everything you see
+        # context == 'mainWork/expression' means an expression of the work, grab
+        #   date and geogName, but only if analog is usable, or date@type/geogName@role
+        #   tell you it's a performance.
+        # context == anything else, ignore
+        if context not in ('mainWork', 'mainWork/expression'):
+            return
+
         dates: list[MeiElement] = element.findAll('date', recurse=False)
         countries: list[MeiElement] = element.findAll('country', recurse=False)
         settlements: list[MeiElement] = element.findAll('settlement', recurse=False)
@@ -527,7 +550,22 @@ class MeiMetadataReader:
         for date in dates:
             analog: str = date.get('analog', '')
             if not M21Utilities.isUsableMetadataKey(md, analog):
-                analog = 'humdrum:ODT'
+                if context == 'mainWork/expression':
+                    typeStr: str = date.get('type', '')
+                    if typeStr == 'firstPerformance':
+                        analog = 'humdrum:MPD'
+                    elif typeStr == 'performance':
+                        analog = 'humdrum:MDT'
+                    else:
+                        # skip this date; we don't know what it represents
+                        continue
+                elif context == 'mainWork':
+                    analog = 'humdrum:ODT'
+                else:
+                    # We shouldn't get here because we return early above, but if
+                    # we ever do get here, skip this date; we don't know what it
+                    # represents.
+                    continue
 
             m21DateObj: m21.metadata.DatePrimitive | str = (
                 self.m21DatePrimitiveOrStringFromDateElement(date)
@@ -535,23 +573,24 @@ class MeiMetadataReader:
             if m21DateObj:
                 M21Utilities.addIfNotADuplicate(md, analog, m21DateObj)
 
-        for country in countries:
-            text: str = country.text.strip()
-            if not text:
-                continue
-            analog = country.get('analog', '')
-            if not M21Utilities.isUsableMetadataKey(md, analog):
-                analog = 'humdrum:OCY'
-            M21Utilities.addIfNotADuplicate(md, analog, text)
+        if context == 'mainWork':
+            for country in countries:
+                text: str = country.text.strip()
+                if not text:
+                    continue
+                analog = country.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    analog = 'humdrum:OCY'
+                M21Utilities.addIfNotADuplicate(md, analog, text)
 
-        for settlement in settlements:
-            text = settlement.text.strip()
-            if not text:
-                continue
-            analog = settlement.get('analog', '')
-            if not M21Utilities.isUsableMetadataKey(md, analog):
-                analog = 'humdrum:OPC'
-            M21Utilities.addIfNotADuplicate(md, analog, text)
+            for settlement in settlements:
+                text = settlement.text.strip()
+                if not text:
+                    continue
+                analog = settlement.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    analog = 'humdrum:OPC'
+                M21Utilities.addIfNotADuplicate(md, analog, text)
 
         for geogName in geogNames:
             text = geogName.text.strip()
@@ -559,40 +598,61 @@ class MeiMetadataReader:
                 continue
             analog = geogName.get('analog', '')
             if not M21Utilities.isUsableMetadataKey(md, analog):
-                if geogName.get('type', '') == 'coordinates':
-                    analog = 'humdrum:ARL'
+                if context == 'mainWork/expression':
+                    if geogName.get('role', '') == 'performanceLocation':
+                        analog = 'humdrum:MLC'
+                    else:
+                        # skip this geogName; we don't know what it represents
+                        continue
+                elif context == 'mainWork':
+                    if geogName.get('type', '') == 'coordinates':
+                        analog = 'humdrum:ARL'
+                    else:
+                        analog = 'humdrum:ARE'
                 else:
-                    analog = 'humdrum:ARE'
+                    # We shouldn't get here because we return early above, but if
+                    # we ever do get here, skip this geogName; we don't know what
+                    # it represents.
+                    continue
+
             M21Utilities.addIfNotADuplicate(md, analog, text)
 
-        for dedicatee in dedicatees:
-            text = dedicatee.text.strip()
-            if not text:
-                continue
-            analog = dedicatee.get('analog', '')
-            if not M21Utilities.isUsableMetadataKey(md, analog):
-                analog = 'humdrum:ODE'
-            M21Utilities.addIfNotADuplicate(md, analog, text)
+        if context == 'mainWork':
+            for dedicatee in dedicatees:
+                text = dedicatee.text.strip()
+                if not text:
+                    continue
+                analog = dedicatee.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    analog = 'humdrum:ODE'
+                M21Utilities.addIfNotADuplicate(md, analog, text)
 
-    def processHistory(self, element: MeiElement, md: m21.metadata.Metadata):
+    def processElementContainingLines(
+        self,
+        element: MeiElement,
+        defaultAnalog: str,
+        md: m21.metadata.Metadata
+    ):
         # this can contain a list of <p> and/or <lg> elements, with the <lg>
         # elements each containing a list of <l> elements.  @xml:lang can be
-        # found on <p>, <lg>, or <l> elements.  l@xml:lang overrides the
-        # containing lg@xml:lang.
+        # found on <p>, <lg>, or <l> elements.  <l>'s @xml:lang overrides the
+        # containing <lg>'s @xml:lang.
         for subElem in element.findAll('*', recurse=False):
             if subElem.name not in ('p', 'lg'):
                 continue
+            defaultLang: str = ''
             if subElem.name == 'p':
-                self.processHistoryLine(subElem, '', md)
+                self.processLineWithLanguage(subElem, defaultLang, defaultAnalog, md)
             elif subElem.name == 'lg':
-                lgLang: str = subElem.get('xml:lang', '')
+                defaultLang = subElem.get(_XMLLANG, '')
                 for lineEl in subElem.findAll('l', recurse=False):
-                    self.processHistoryLine(lineEl, lgLang, md)
+                    self.processLineWithLanguage(lineEl, defaultLang, defaultAnalog, md)
 
-    def processHistoryLine(
+    def processLineWithLanguage(
         self,
         element: MeiElement,
         defaultLang: str,
+        defaultAnalog: str,
         md: m21.metadata.Metadata,
     ):
         text: str = element.text.strip()
@@ -601,8 +661,8 @@ class MeiMetadataReader:
 
         analog: str = element.get('analog', '')
         if not M21Utilities.isUsableMetadataKey(md, analog):
-            analog = 'humdrum:HAO'
-        lang: str = element.get('xml:lang', '')
+            analog = defaultAnalog
+        lang: str = element.get(_XMLLANG, '')
         if not lang:
             lang = defaultLang
 
@@ -610,16 +670,26 @@ class MeiMetadataReader:
         M21Utilities.addIfNotADuplicate(md, analog, mdText)
 
     def processLangUsage(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        for language in element.findAll('language', recurse=False):
+            text: str = language.text.strip()
+            if not text:
+                continue
 
-    def processNotesStmt(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+            analog: str = language.get('analog', '')
+            if not analog:
+                analog = 'humdrum:TXO'
+            M21Utilities.addIfNotADuplicate(md, analog, text)
 
     def processClassification(self, element: MeiElement, md: m21.metadata.Metadata):
         pass
 
     def processExpressionList(self, element: MeiElement, md: m21.metadata.Metadata):
-        pass
+        for expression in element.findAll('expression', recurse=False):
+            self.processExpression(expression, md)
+
+    def processExpression(self, element: MeiElement, md: m21.metadata.Metadata):
+        for creation in element.findAll('creation', recurse=False):
+            self.processCreation(creation, md, context='mainWork/expression')
 
     def processTitleOrTitlePart(
         self,
@@ -638,7 +708,7 @@ class MeiMetadataReader:
         if text:
             skipIt: bool = False
             typeStr: str = elem.get('type', '')
-            lang: str | None = elem.get('xml:lang')
+            lang: str | None = elem.get(_XMLLANG)
             label: str = elem.get('label', '')
             analog: str = elem.get('analog', '')
             if analogFromContext:
@@ -983,7 +1053,7 @@ class MeiMetadataReaderOLD:
 
         uniqueName: str = 'title'
         typeStr: str = elem.get('type', '')
-        lang: str | None = elem.get('xml:lang')
+        lang: str | None = elem.get(_XMLLANG)
         label: str = elem.get('label', '')
         analog: str = elem.get('analog', '')
         if analog:
