@@ -199,7 +199,6 @@ from music21 import environment
 from music21 import expressions
 from music21 import interval
 from music21 import key
-from music21 import metadata
 from music21 import meter
 from music21 import note
 from music21 import spanner
@@ -2612,123 +2611,15 @@ class MeiReader:
             return m21.metadata.Metadata()
 
         meiMetadataReader = MeiMetadataReader(meiHead)
-        meta: m21.metadata.Metadata = meiMetadataReader.m21Metadata
+        meiMetadataReader.processMetadata()
 
-#         # we look for basic metadata in first <work>, <manifestation>, or <fileDesc> found,
-#         # in that order.
-#         work = self.documentRoot.find(f'.//{MEI_NS}work')
-#         if work is None:
-#             work = self.documentRoot.find(f'.//{MEI_NS}manifestation')
-#         if work is None:
-#             work = self.documentRoot.find(f'.//{MEI_NS}fileDesc')
-#
-#         if work is not None:
-#             # title, subtitle, and movement name
-#             meta = self.metaSetTitle(work, meta)
-#             # composer
-#             meta = self.metaSetComposer(work, meta)
-#             # date
-#             meta = self.metaSetDate(work, meta)
+        # We also need to look in music/back/div@type=textTranslation for any
+        # translations of vocal text.
+        back: Element | None = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}back')
+        if back is not None:
+            meiMetadataReader.processMusicBackElement(back)
 
-        return meta
-
-    @staticmethod
-    def metaSetTitle(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
-        '''
-        From a <work> element, find the title, subtitle, and movement name (<tempo> element)
-        and store the values in a :class:`Metadata` object.
-
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
-            to find.
-        :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
-        :return: The ``meta`` argument, having relevant metadata added.
-        '''
-        # title, subtitle, and movement name
-        subtitle = None
-        for title in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}title'):
-            if title.get('type', '') in ('subtitle', 'subordinate'):
-                subtitle = title.text
-            elif meta.title is None:
-                meta.title = title.text
-
-        if subtitle:
-            # Since m21.Metadata doesn't actually have a "subtitle" attribute, we'll put the
-            # subtitle in the title.
-            meta.title = f'{meta.title} ({subtitle})'
-
-        tempoEl = work.find(f'./{MEI_NS}tempo')
-        if tempoEl is not None:
-            meta.movementName = tempoEl.text
-
-        return meta
-
-    @staticmethod
-    def metaSetComposer(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
-        '''
-        From a <work> element, find the composer(s) and store the values in a :class:`Metadata`
-        object.
-
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
-            to find.
-        :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
-        :return: The ``meta`` argument, having relevant metadata added.
-        '''
-        composers = []
-        persName: Element | None
-        for persName in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}respStmt/{MEI_NS}persName'):
-            if persName is not None and persName.get('role') == 'composer' and persName.text:
-                composers.append(persName.text)
-        for composer in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}composer'):
-            if composer.text:
-                composers.append(composer.text)
-            else:
-                persName = composer.find(f'./{MEI_NS}persName')
-                if persName is not None and persName.text:
-                    composers.append(persName.text)
-        if len(composers) == 1:
-            meta.composer = composers[0]
-        elif len(composers) > 1:
-            meta.composers = composers
-
-        return meta
-
-    def metaSetDate(self, work: Element, meta: metadata.Metadata) -> metadata.Metadata:
-        '''
-        From a <work> element, find the date (range) of composition and store the values in a
-        :class:`Metadata` object.
-
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
-            to find.
-        :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
-        :return: The ``meta`` argument, having relevant metadata added.
-        '''
-        date = work.find(f'./{MEI_NS}history/{MEI_NS}creation/{MEI_NS}date')
-        if date is not None:  # must use explicit "is not None" for an Element
-            isodate: str | None = date.get('isodate')
-            if date.text or isodate:
-                dateStr: str
-                if isodate:
-                    dateStr = isodate
-                else:
-                    if t.TYPE_CHECKING:
-                        # because not isodate, and (date.text or isodate) is True
-                        assert date.text is not None
-                    dateStr = date.text
-
-                theDate = metadata.Date()
-                try:
-                    theDate.loadStr(dateStr.replace('-', '/'))
-                except ValueError:
-                    environLocal.warn(_MISSED_DATE.format(dateStr))
-                else:
-                    meta.dateCreated = theDate
-            else:
-                dateStart = date.get('notbefore') or date.get('startdate')
-                dateEnd = date.get('notafter') or date.get('enddate')
-                if dateStart and dateEnd:
-                    meta.dateCreated = metadata.DateBetween((dateStart, dateEnd))
-
-        return meta
+        return meiMetadataReader.m21Metadata
 
     @staticmethod
     def scaleToTuplet(

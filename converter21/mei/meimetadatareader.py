@@ -14,9 +14,10 @@ import re
 
 import music21 as m21
 
-from converter21.shared import M21Utilities
+from converter21.mei import MeiElementError
 from converter21.mei import MeiShared
 from converter21.mei import MeiElement
+from converter21.shared import M21Utilities
 
 environLocal = m21.environment.Environment('converter21.mei.meimetadatareader')
 
@@ -29,13 +30,18 @@ _MISSED_DATE = 'Unable to decipher an MEI date "{}". Leaving as str.'
 
 class MeiMetadataReader:
     def __init__(self, meiHead: Element) -> None:
-        self.m21Metadata: m21.metadata.Metadata = m21.metadata.Metadata()
         if meiHead.tag != f'{MEI_NS}meiHead':
-            environLocal.warn('MeiMetadataReader must be initialized with an <meiHead> element.')
-            return
+            raise MeiElementError(
+                'MeiMetadataReader must be initialized with an <meiHead> element.'
+            )
 
+        self.meiHead: Element = meiHead
         self.meiHeadElement: MeiElement = MeiElement(meiHead)
-        self.madsAuthorityDataByID: dict[str, MeiElement] = self.gatherMADSAuthorityData()
+        self.madsAuthorityDataByID: dict[str, MeiElement] = {}
+        self.m21Metadata: m21.metadata.Metadata = m21.metadata.Metadata()
+
+    def processMetadata(self) -> None:
+        self.madsAuthorityDataByID = self.gatherMADSAuthorityData()
 
         fileDescMD: m21.metadata.Metadata | None = None
         encodingDescMD: m21.metadata.Metadata | None = None
@@ -59,14 +65,14 @@ class MeiMetadataReader:
 
         # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
         # entire <meiHead> element (in case someone wants to parse out more info than we do).
-        meiHeadXmlStr: str = tostring(meiHead, encoding='unicode')
+        meiHeadXmlStr: str = tostring(self.meiHead, encoding='unicode')
 #         meiHeadElementStr: str = self.meiHeadElement.__repr__()
         meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
         self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
 
     def gatherMADSAuthorityData(self) -> dict[str, MeiElement]:
         output: dict[str, MeiElement] = {}
-        madsElements: list[MeiElement] = self.meiHeadElement.findAll('mads')
+        madsElements: list[MeiElement] = self.meiHeadElement.findAll('mads', recurse=True)
         for mads in madsElements:
             madsID: str = mads.get('ID', '')
             if madsID:
@@ -99,11 +105,11 @@ class MeiMetadataReader:
         # annotate the works, with 'parent'/'child', 'group'/'member', or
         # 'collection'/'member' links.
         for work in works:
-            relationList: MeiElement | None = work.findFirst('relationList')
+            relationList: MeiElement | None = work.findFirst('relationList', recurse=False)
             if relationList is None:
                 continue
 
-            relations: list[MeiElement] = relationList.findAll('relation')
+            relations: list[MeiElement] = relationList.findAll('relation', recurse=False)
             if not relations:
                 continue
 
@@ -399,7 +405,7 @@ class MeiMetadataReader:
 
     def processComposerMADSInfo(self, mads: MeiElement, md: m21.metadata.Metadata):
         # we currently only look at the first variant, for an alias
-        variant: MeiElement | None = mads.findFirst('variant')
+        variant: MeiElement | None = mads.findFirst('variant', recurse=False)
         if variant is not None:
             variantType: str = variant.get('type', '')
             otherType: str = variant.get('otherType', '')
@@ -407,9 +413,9 @@ class MeiMetadataReader:
                     or (variantType == 'other'
                         and otherType in ('humdrum:COL', 'alias', 'stageName'))):
                 # this is a composerAlias
-                nameEl: MeiElement | None = variant.findFirst('name')
+                nameEl: MeiElement | None = variant.findFirst('name', recurse=False)
                 if nameEl is not None:
-                    namePart: MeiElement | None = nameEl.findFirst('namePart')
+                    namePart: MeiElement | None = nameEl.findFirst('namePart', recurse=False)
                     if namePart is not None:
                         name: str = namePart.text
                         name = name.strip()
@@ -417,13 +423,13 @@ class MeiMetadataReader:
                             M21Utilities.addIfNotADuplicate(md, 'humdrum:COL', name)
 
         # look at personInfo for birthDate/deathDate/birthPlace/deathPlace/nationality
-        personInfo: MeiElement | None = mads.findFirst('personInfo')
+        personInfo: MeiElement | None = mads.findFirst('personInfo', recurse=False)
         if personInfo is not None:
-            birthDateEl: MeiElement | None = personInfo.findFirst('birthDate')
-            deathDateEl: MeiElement | None = personInfo.findFirst('deathDate')
-            birthPlaceEl: MeiElement | None = personInfo.findFirst('birthPlace')
-            deathPlaceEl: MeiElement | None = personInfo.findFirst('deathPlace')
-            nationalityEl: MeiElement | None = personInfo.findFirst('nationality')
+            birthDateEl: MeiElement | None = personInfo.findFirst('birthDate', recurse=False)
+            deathDateEl: MeiElement | None = personInfo.findFirst('deathDate', recurse=False)
+            birthPlaceEl: MeiElement | None = personInfo.findFirst('birthPlace', recurse=False)
+            deathPlaceEl: MeiElement | None = personInfo.findFirst('deathPlace', recurse=False)
+            nationalityEl: MeiElement | None = personInfo.findFirst('nationality', recurse=False)
             if birthDateEl is not None and deathDateEl is not None:
                 # add 'humdrum:CDT' metadata item
                 birthIsoDate: str = birthDateEl.text.strip()
@@ -662,6 +668,10 @@ class MeiMetadataReader:
         analog: str = element.get('analog', '')
         if not M21Utilities.isUsableMetadataKey(md, analog):
             analog = defaultAnalog
+        if not analog:
+            # if there is no analog, and no default analog, just skip it.
+            return
+
         lang: str = element.get(_XMLLANG, '')
         if not lang:
             lang = defaultLang
@@ -873,6 +883,16 @@ class MeiMetadataReader:
             return text
 
         return ''
+
+    def processMusicBackElement(self, back: Element | MeiElement):
+        if isinstance(back, Element):
+            back = MeiElement(back)
+        for div in back.findAll('div', recurse=False):
+            defaultAnalog: str = ''
+            typeStr: str = div.get('type', '')
+            if typeStr == 'textTranslation':
+                defaultAnalog = 'humdrum:HTX'
+            self.processElementContainingLines(div, defaultAnalog, self.m21Metadata)
 
 
 class MeiMetadataReaderOLD:
