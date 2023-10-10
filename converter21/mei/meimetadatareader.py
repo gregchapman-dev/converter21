@@ -72,6 +72,9 @@ class MeiMetadataReader:
 
     def gatherMADSAuthorityData(self) -> dict[str, MeiElement]:
         output: dict[str, MeiElement] = {}
+        # We recurse to find all <mads> elements anywhere in <meiHead>.  Our writer puts
+        # them in the main <work> element's <extMeta><madsCollection>, but others might
+        # put them in <meiHead><extMeta><madsCollection>.  We'll find them all here.
         madsElements: list[MeiElement] = self.meiHeadElement.findAll('mads', recurse=True)
         for mads in madsElements:
             madsID: str = mads.get('ID', '')
@@ -80,12 +83,14 @@ class MeiMetadataReader:
         return output
 
     def processFileDesc(self, fileDescElement: MeiElement) -> m21.metadata.Metadata:
-        output = m21.metadata.Metadata()
-        return output
+        md = m21.metadata.Metadata()
+        return md
 
     def processEncodingDesc(self, encodingDescElement: MeiElement) -> m21.metadata.Metadata:
-        output = m21.metadata.Metadata()
-        return output
+        md = m21.metadata.Metadata()
+        for editorialDecl in encodingDescElement.findAll('editorialDecl', recurse=False):
+            self.processElementContainingParagraphsAndLineGroups(editorialDecl, '', '', md)
+        return md
 
     def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
@@ -289,7 +294,7 @@ class MeiMetadataReader:
         elif element.name == 'creation':
             self.processCreation(element, md, context='mainWork')
         elif element.name == 'history':
-            self.processElementContainingLines(element, 'humdrum:HAO', md)
+            self.processElementContainingParagraphsAndLineGroups(element, '', 'humdrum:HAO', md)
         elif element.name == 'langUsage':
             self.processLangUsage(element, md)
         elif element.name == 'notesStmt':
@@ -305,8 +310,14 @@ class MeiMetadataReader:
         defaultAnalog: str,
         md: m21.metadata.Metadata
     ):
+        defaultLang: str = element.get(_XMLLANG, '')
         for elem in element.findAll('annot', recurse=False):
-            self.processElementContainingLines(elem, defaultAnalog, md)
+            self.processElementContainingParagraphsAndLineGroups(
+                elem,
+                defaultLang,
+                defaultAnalog,
+                md
+            )
 
     def processIdentifier(self, element: MeiElement, md: m21.metadata.Metadata):
         text: str
@@ -633,9 +644,10 @@ class MeiMetadataReader:
                     analog = 'humdrum:ODE'
                 M21Utilities.addIfNotADuplicate(md, analog, text)
 
-    def processElementContainingLines(
+    def processElementContainingParagraphsAndLineGroups(
         self,
         element: MeiElement,
+        defaultLang: str,
         defaultAnalog: str,
         md: m21.metadata.Metadata
     ):
@@ -643,16 +655,29 @@ class MeiMetadataReader:
         # elements each containing a list of <l> elements.  @xml:lang can be
         # found on <p>, <lg>, or <l> elements.  <l>'s @xml:lang overrides the
         # containing <lg>'s @xml:lang.
+        localDefaultLang: str = element.get(_XMLLANG, '')
+        if not localDefaultLang:
+            localDefaultLang = defaultLang
         for subElem in element.findAll('*', recurse=False):
             if subElem.name not in ('p', 'lg'):
                 continue
-            defaultLang: str = ''
             if subElem.name == 'p':
-                self.processLineWithLanguage(subElem, defaultLang, defaultAnalog, md)
+                # <p> can contain text.  It can also contain <lg>, so in that case,
+                # <p> is an element containing lines...
+                if subElem.text.strip():
+                    self.processLineWithLanguage(subElem, localDefaultLang, defaultAnalog, md)
+                self.processElementContainingParagraphsAndLineGroups(
+                    subElem,
+                    localDefaultLang,
+                    defaultAnalog,
+                    md
+                )
             elif subElem.name == 'lg':
-                defaultLang = subElem.get(_XMLLANG, '')
+                lgLang: str = subElem.get(_XMLLANG, '')
+                if not lgLang:
+                    lgLang = localDefaultLang
                 for lineEl in subElem.findAll('l', recurse=False):
-                    self.processLineWithLanguage(lineEl, defaultLang, defaultAnalog, md)
+                    self.processLineWithLanguage(lineEl, lgLang, defaultAnalog, md)
 
     def processLineWithLanguage(
         self,
@@ -665,7 +690,12 @@ class MeiMetadataReader:
         if not text:
             return
 
-        analog: str = element.get('analog', '')
+        analog: str
+        if element.name == 'l':
+            analog = element.get('type', '')
+        else:
+            analog = element.get('analog', '')
+
         if not M21Utilities.isUsableMetadataKey(md, analog):
             analog = defaultAnalog
         if not analog:
@@ -676,7 +706,10 @@ class MeiMetadataReader:
         if not lang:
             lang = defaultLang
 
-        mdText = m21.metadata.Text(text, language=lang)
+        if lang:
+            mdText = m21.metadata.Text(text, language=lang)
+        else:
+            mdText = m21.metadata.Text(text)
         M21Utilities.addIfNotADuplicate(md, analog, mdText)
 
     def processLangUsage(self, element: MeiElement, md: m21.metadata.Metadata):
@@ -815,15 +848,31 @@ class MeiMetadataReader:
         encodingDescMD: m21.metadata.Metadata | None,
         workListMD: m21.metadata.Metadata | None
     ) -> m21.metadata.Metadata:
-        if workListMD is not None:
-            output = workListMD
-        else:
-            output = m21.metadata.Metadata()
-        return output
+        # Take everything from fileDescMD.
+        # Take everything from workListMD, replacing anything already there (i.e. overriding
+        # anything from fileDescMD)
+        # Add everything from encodingDescMD (it shouldn't overlap)
+        output = m21.metadata.Metadata()
+        key: str
+        value: list[m21.metadata.ValueType]
+        if fileDescMD is not None:
+            for key, value in fileDescMD._contents.items():
+                output._contents[key] = value
 
-    def updateWithBackMatter(self, back: Element, md: m21.metadata.Metadata):
-        # back/div@type="textTranslation"/lg@lang=""/l@type="humdrum:HTX"@lang=""
-        return
+        if workListMD is not None:
+            for key, value in workListMD._contents.items():
+                # override anything from fileDescMD that has the same key as
+                # something from workListMD.
+                output._contents[key] = value
+
+        if encodingDescMD is not None:
+            for key, value in encodingDescMD._contents.items():
+                # add everything from encodingDescMD without throwing anything away
+                # (except 'software', which is already there, and doesn't need a duplicate)
+                if key != 'software':
+                    output._contents[key] = output._contents.get(key, []) + value
+
+        return output
 
     def m21DatePrimitiveOrStringFromDateElement(
         self,
@@ -887,12 +936,21 @@ class MeiMetadataReader:
     def processMusicBackElement(self, back: Element | MeiElement):
         if isinstance(back, Element):
             back = MeiElement(back)
+        backLang: str = back.get(_XMLLANG, '')
         for div in back.findAll('div', recurse=False):
+            divLang: str = div.get(_XMLLANG, '')
+            if not divLang:
+                divLang = backLang
             defaultAnalog: str = ''
             typeStr: str = div.get('type', '')
             if typeStr == 'textTranslation':
                 defaultAnalog = 'humdrum:HTX'
-            self.processElementContainingLines(div, defaultAnalog, self.m21Metadata)
+            self.processElementContainingParagraphsAndLineGroups(
+                div,
+                divLang,
+                defaultAnalog,
+                self.m21Metadata
+            )
 
 
 class MeiMetadataReaderOLD:
