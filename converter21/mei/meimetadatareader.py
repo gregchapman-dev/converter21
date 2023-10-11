@@ -84,7 +84,104 @@ class MeiMetadataReader:
 
     def processFileDesc(self, fileDescElement: MeiElement) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
+        for subElement in fileDescElement.findAll('*', recurse=False):
+            self.processFileDescSubElement(subElement, md)
+
         return md
+
+    def processFileDescSubElement(self, element: MeiElement, md: m21.metadata.Metadata):
+        if element.name == 'titleStmt':
+            self.processTitleStmt(element, md)
+        elif element.name == 'editionStmt':
+            # Info about a different edition of this file.
+            # Nothing interesting to music21 here?
+            pass  # self.processEditionStmt(element, md)
+        elif element.name == 'extent':
+            # Size information about this file.
+            # Nothing interesting to music21 here?
+            pass  # self.processExtent(element, md)
+        elif element.name == 'pubStmt':
+            self.processPubStmt(element, md)
+        elif element.name == 'seriesStmt':
+            self.processSeriesStmt(element, md)
+        elif element.name == 'notesStmt':
+            self.processNotesStmt(element, 'humdrum:ONB', md)
+        elif element.name == 'sourceDesc':
+            self.processSourceDesc(element, md)
+
+    def processTitleStmt(self, element: MeiElement, md: m21.metadata.Metadata):
+        for subEl in element.findAll('*', recurse=False):
+            if subEl.name == 'title':
+                self.processTitleOrTitlePart(subEl, '', '', md)
+            elif subEl.name == 'composer':
+                self.processComposer(subEl, md)
+            elif subEl.name == 'lyricist':
+                self.processContributor(subEl, 'humdrum:LYR', '', md)
+            elif subEl.name == 'librettist':
+                self.processContributor(subEl, 'humdrum:LIB', '', md)
+            elif subEl.name == 'funder':
+                self.processContributor(subEl, 'humdrum:OCO', '', md)
+            elif subEl.name == 'editor':
+                self.processContributor(subEl, 'humdrum:EED', '', md)
+            elif subEl.name == 'respStmt':
+                self.processRespStmt(subEl, md)
+            elif subEl.name in ('arranger', 'author', 'contributor', 'sponsor'):
+                self.processContributor(subEl, '', '', md)
+
+    def processPubStmt(self, element: MeiElement, md: m21.metadata.Metadata):
+        for subEl in element.findAll('*', recurse=False):
+            if subEl.name != 'unpub':
+                # Our MEI writer only writes <unpub>. For published MEI files, we will need
+                # to parse everything in <pubStmt>, pulling out things that our MEI writer
+                # would have written in fileDesc/sourceDesc/source@type="digital".
+                environLocal.warn('fileDesc/pubStmt contents present but not processed')
+                break
+
+    def processSeriesStmt(self, element: MeiElement, md: m21.metadata.Metadata):
+        if element.findAll('*', recurse=False):
+            environLocal.warn('fileDesc/seriesStmt contents present but not processed')
+
+    def processSourceDesc(self, element: MeiElement, md: m21.metadata.Metadata):
+        for sourceEl in element.findAll('source', recurse=False):
+            self.processSource(sourceEl, md)
+
+    def processSource(self, element: MeiElement, md: m21.metadata.Metadata):
+        sourceType: str = element.get('type', '')
+        for subEl in element.findAll('*', recurse=False):
+            if subEl.name == 'bibl':
+                self.processSourceBibl(subEl, sourceType, md)
+            elif subEl.name == 'biblStruct':
+                self.processSourceBiblStruct(subEl, sourceType, md)
+
+    def processSourceBibl(
+        self,
+        element: MeiElement,
+        sourceType: str,
+        md: m21.metadata.Metadata
+    ):
+        environLocal.warn(
+            f'fileDesc/sourceDesc/source@type="{sourceType}"/bibl not processed'
+        )
+
+    def processSourceBiblStruct(
+        self,
+        element: MeiElement,
+        sourceType: str,
+        md: m21.metadata.Metadata
+    ):
+        environLocal.warn(
+            f'fileDesc/sourceDesc/source@type="{sourceType}"/biblStuct not processed'
+        )
+
+    def processRespStmt(self, element: MeiElement, md: m21.metadata.Metadata):
+        defaultRole: str = ''
+        for subEl in element.findAll('*', recurse=False):
+            if subEl.name == 'resp':
+                defaultRole = subEl.text.strip()
+            elif subEl.name in ('name', 'persName', 'corpName'):
+                # defaultRole will be overridden by @role, if present
+                # if name element has @analog, that will override everything.
+                self.processContributor(subEl, '', defaultRole, md)
 
     def processEncodingDesc(self, encodingDescElement: MeiElement) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
@@ -284,13 +381,15 @@ class MeiMetadataReader:
         elif element.name == 'composer':
             self.processComposer(element, md)
         elif element.name == 'lyricist':
-            self.processLyricist(element, md)
+            self.processContributor(element, 'humdrum:LYR', '', md)
         elif element.name == 'librettist':
-            self.processLibrettist(element, md)
+            self.processContributor(element, 'humdrum:LIB', '', md)
         elif element.name == 'funder':
-            self.processFunder(element, md)
+            self.processContributor(element, 'humdrum:OCO', '', md)
         elif element.name == 'contributor':
-            self.processContributor(element, '', md)
+            self.processContributor(element, '', '', md)
+        elif element.name == 'sponsor':
+            self.processContributor(element, '', '', md)
         elif element.name == 'creation':
             self.processCreation(element, md, context='mainWork')
         elif element.name == 'history':
@@ -477,6 +576,7 @@ class MeiMetadataReader:
         self,
         element: MeiElement,
         humdrumAnalog: str,
+        defaultRole: str,
         md: m21.metadata.Metadata
     ):
         names: list[str] = []
@@ -494,10 +594,20 @@ class MeiMetadataReader:
                 if humdrumAnalog:
                     analog = humdrumAnalog
                 else:
-                    # must be <contributor>, so call it 'otherContributor' and
-                    # set up a Contributor with role = @role
+                    # must be <contributor> or some other m21-unsupported contributor,
+                    # so call it 'otherContributor' and set up a Contributor with
+                    # role = @role (if <contributor>) else role = element.name.
                     analog = 'otherContributor'
-                    role = element.get('role', '')
+                    if element.name == 'contributor':
+                        role = element.get('role', '')
+                        if not role:
+                            role = defaultRole
+                    else:
+                        # defaultRole _overrides_ element.name (used for <persName> et al)
+                        if defaultRole:
+                            role = defaultRole
+                        else:
+                            role = element.name
                     contrib = m21.metadata.Contributor(name=name, role=role)
             if contrib is not None:
                 M21Utilities.addIfNotADuplicate(md, analog, contrib)
@@ -534,15 +644,6 @@ class MeiMetadataReader:
                 contrib = None
             else:
                 M21Utilities.addIfNotADuplicate(md, analog, name)
-
-    def processLyricist(self, element: MeiElement, md: m21.metadata.Metadata):
-        self.processContributor(element, 'humdrum:LYR', md)
-
-    def processLibrettist(self, element: MeiElement, md: m21.metadata.Metadata):
-        self.processContributor(element, 'humdrum:LIB', md)
-
-    def processFunder(self, element: MeiElement, md: m21.metadata.Metadata):
-        self.processContributor(element, 'humdrum:OCO', md)
 
     def processCreation(
         self,
