@@ -185,8 +185,22 @@ class MeiMetadataReader:
 
     def processEncodingDesc(self, encodingDescElement: MeiElement) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
-        for editorialDecl in encodingDescElement.findAll('editorialDecl', recurse=False):
-            self.processElementContainingParagraphsAndLineGroups(editorialDecl, '', '', md)
+        for subEl in encodingDescElement.findAll('*', recurse=False):
+            if subEl.name == 'editorialDecl':
+                self.processElementContainingParagraphsAndLineGroups(editorialDecl, '', '', md)
+            elif subEl.name == 'appInfo':
+                for application in subEl.findAll('application', recurse=False):
+                    name: MeiElement | None = application.findFirst('name', recurse=False)
+                    if name is None:
+                        continue
+                    appName: str = name.text.strip()
+                    if not appName:
+                        continue
+                    version: str = application.get('version', '')
+                    if version:
+                        appName += ' ' + version
+                    M21Utilities.addIfNotADuplicate(md, 'software', appName)
+
         return md
 
     def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
@@ -634,10 +648,20 @@ class MeiMetadataReader:
                 if humdrumAnalog:
                     analog = humdrumAnalog
                 else:
-                    # must be <contributor>, so call it 'otherContributor' and
-                    # set up a Contributor with role = @role
+                    # must be <contributor> or some other m21-unsupported contributor,
+                    # so call it 'otherContributor' and set up a Contributor with
+                    # role = @role (if <contributor>) else role = element.name.
                     analog = 'otherContributor'
-                    role = element.get('role', '')
+                    if element.name == 'contributor':
+                        role = element.get('role', '')
+                        if not role:
+                            role = defaultRole
+                    else:
+                        # defaultRole _overrides_ element.name (used for <persName> et al)
+                        if defaultRole:
+                            role = defaultRole
+                        else:
+                            role = element.name
                     contrib = m21.metadata.Contributor(name=name, role=role)
             if contrib is not None:
                 M21Utilities.addIfNotADuplicate(md, analog, contrib)
