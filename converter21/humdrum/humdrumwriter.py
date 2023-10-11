@@ -42,6 +42,7 @@ from converter21.humdrum import ToolTremolo
 
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
+from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -739,7 +740,13 @@ class HumdrumWriter:
             atLine += 1
 
         # what's left in allItems goes at the bottom of the file
+        # If converter21 isn't in 'software', add it in the exported file.
+        converter21IsThere: bool = False
         for uniqueName, value in allItems:
+            if (uniqueName == 'software'
+                    and str(value) == SharedConstants._CONVERTER21_NAME_AND_VERSION):
+                converter21IsThere = True
+
             if uniqueName.startswith('humdrumraw:') or uniqueName.startswith('humdrum:'):
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
                     0, uniqueName, value
@@ -785,6 +792,13 @@ class HumdrumWriter:
                     refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
                         0, uniqueName, value
                     )
+            if refLineStr is not None:
+                outfile.appendLine(refLineStr, asGlobalToken=True)
+
+        if not converter21IsThere:
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                0, 'software', SharedConstants._CONVERTER21_NAME_AND_VERSION
+            )
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 

@@ -18,6 +18,7 @@ from converter21.mei import MeiElementError
 from converter21.mei import MeiShared
 from converter21.mei import MeiElement
 from converter21.shared import M21Utilities
+from converter21.shared import SharedConstants
 
 environLocal = m21.environment.Environment('converter21.mei.meimetadatareader')
 
@@ -201,6 +202,13 @@ class MeiMetadataReader:
                         appName += ' ' + version
                     M21Utilities.addIfNotADuplicate(md, 'software', appName)
 
+        # Here's a fine place to add the fact that it was converter21 that parsed the MEI
+        # to create this music21 score.
+        M21Utilities.addIfNotADuplicate(
+            md,
+            'software',
+            SharedConstants._CONVERTER21_NAME_AND_VERSION
+        )
         return md
 
     def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
@@ -979,23 +987,35 @@ class MeiMetadataReader:
         # Add everything from encodingDescMD (it shouldn't overlap)
         output = m21.metadata.Metadata()
         key: str
-        value: list[m21.metadata.ValueType]
+        values: list[m21.metadata.ValueType]
         if fileDescMD is not None:
-            for key, value in fileDescMD._contents.items():
-                output._contents[key] = value
+            for key, values in fileDescMD._contents.items():
+                output._contents[key] = values
 
         if workListMD is not None:
-            for key, value in workListMD._contents.items():
-                # override anything from fileDescMD that has the same key as
+            for key, values in workListMD._contents.items():
+                # Override anything from fileDescMD that has the same key as
                 # something from workListMD.
-                output._contents[key] = value
+                output._contents[key] = values
 
         if encodingDescMD is not None:
-            for key, value in encodingDescMD._contents.items():
-                # add everything from encodingDescMD without throwing anything away
-                # (except 'software', which is already there, and doesn't need a duplicate)
-                if key != 'software':
-                    output._contents[key] = output._contents.get(key, []) + value
+            # Add everything from encodingDescMD without throwing anything away
+            for key, values in encodingDescMD._contents.items():
+                # Check for duplicates
+                existingValues: list[m21.metadata.ValueType] = output._contents.get(key, [])
+                newValues: list[m21.metadata.ValueType] = []
+                if not existingValues:
+                    newValues = values
+                else:
+                    for value in values:
+                        dupeFound: bool = False
+                        for existingValue in existingValues:
+                            if value == existingValue:
+                                dupeFound = True
+                                break
+                        if not dupeFound:
+                            newValues.append(value)
+                output._contents[key] = existingValues + newValues
 
         return output
 

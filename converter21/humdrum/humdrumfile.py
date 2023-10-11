@@ -36,6 +36,7 @@ from converter21.humdrum import Convert
 from converter21.humdrum import M21Convert
 from converter21.shared import M21StaffGroupDescriptionTree
 from converter21.shared import M21Utilities
+from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -9791,12 +9792,14 @@ class HumdrumFile(HumdrumFileContent):
         return newk
 
     def _createScoreMetadata(self) -> None:
-        if not self._biblio:
-            # there is no metadata to be had
-            return
-
         m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
+
+        # first add a 'software' entry for this importer
+        m21Metadata.add(
+            'software',
+            SharedConstants._CONVERTER21_NAME_AND_VERSION
+        )
 
         for k, v in self._biblio:
             parsedKey: str

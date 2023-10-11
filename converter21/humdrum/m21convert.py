@@ -3042,7 +3042,7 @@ class M21Convert:
                     # we generate 'XXX', 'XXX1', 'XXX2', etc
                     hdKey += str(idx)
             else:
-                # must be free-form personal key... pass it thru as is (no indexing)
+                # must be free-form custom key... pass it thru as is (no indexing)
                 hdKey = uniqueName
 
             if value.language:

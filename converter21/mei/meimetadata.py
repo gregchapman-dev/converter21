@@ -18,6 +18,7 @@ import music21 as m21
 # from converter21.mei import MeiInternalError
 from converter21.mei import MeiElement
 from converter21.shared import M21Utilities
+from converter21.shared import SharedConstants
 
 environLocal = m21.environment.Environment('converter21.mei.meimetadata')
 
@@ -1236,6 +1237,7 @@ class MeiMetadata:
     def makeEncodingDescElement(self) -> MeiElement | None:
         encodingNotes: list[MeiMetadataItem] = self.contents.get('RNB', [])
         encodingWarnings: list[MeiMetadataItem] = self.contents.get('RWB', [])
+        softwares: list[MeiMetadataItem] = self.contents.get('software', [])
         if not encodingNotes and not encodingWarnings:
             return None
 
@@ -1268,6 +1270,21 @@ class MeiMetadata:
                 line.text = warning.meiValue
                 if warning.value.language and not allTheSameLanguage:
                     line.attrib['xml:lang'] = warning.value.language.lower()
+
+        converter21AlreadyThere: bool = False
+        appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
+        for software in softwares:
+            application: MeiElement = appInfo.appendSubElement('application')
+            name: MeiElement = application.appendSubElement('name')
+            name.text = software.meiValue
+            if software.meiValue == SharedConstants._CONVERTER21_NAME_AND_VERSION:
+                converter21AlreadyThere = True
+
+        # add converter21 if it wasn't already there
+        if not converter21AlreadyThere:
+            application = appInfo.appendSubElement('application')
+            name = application.appendSubElement('name')
+            name.text = SharedConstants._CONVERTER21_NAME_AND_VERSION
 
         return encodingDesc
 

@@ -1743,7 +1743,10 @@ class M21Utilities:
                 uniqueName = md.namespaceNameToUniqueName(key)
 
         if isinstance(value, str):
-            value = m21.metadata.Text(value, isTranslated=False)
+            if uniqueName == 'software':
+                value = m21.metadata.Text(value)
+            else:
+                value = m21.metadata.Text(value, isTranslated=False)
         if uniqueName:
             value = md._convertValue(uniqueName, value)
 
