@@ -187,7 +187,7 @@ class MeiMetadataReader:
         md = m21.metadata.Metadata()
         for subEl in encodingDescElement.findAll('*', recurse=False):
             if subEl.name == 'editorialDecl':
-                self.processElementContainingParagraphsAndLineGroups(editorialDecl, '', '', md)
+                self.processElementContainingParagraphsAndLineGroups(subEl, '', '', md)
             elif subEl.name == 'appInfo':
                 for application in subEl.findAll('application', recurse=False):
                     name: MeiElement | None = application.findFirst('name', recurse=False)
