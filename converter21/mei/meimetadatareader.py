@@ -160,9 +160,147 @@ class MeiMetadataReader:
         sourceType: str,
         md: m21.metadata.Metadata
     ):
-        environLocal.warn(
-            f'fileDesc/sourceDesc/source@type="{sourceType}"/bibl not processed'
-        )
+        context: str = 'source:' + sourceType
+        subEls: list[MeiElement] = element.findAll('*', recurse=False)
+        if not subEls:
+            # just get the text, and call it an original document title
+            text: str = element.text.strip()
+            if text:
+                M21Utilities.addIfNotADuplicate(md, 'humdrum:YOR', text)
+            return
+
+        for subEl in subEls:
+            if subEl.name == 'identifier':
+                self.processIdentifier(subEl, md)
+            elif subEl.name == 'title':
+                if sourceType in ('digital', 'printed', ''):
+                    if not md['title']:
+                        # There was no <title> in <fileDesc> or in any such <source>
+                        # so far, so this will have to do.
+                        self.processTitleOrTitlePart(subEl, 'humdrum:OTL', '', md)
+                elif sourceType == 'recording':
+                    self.processTitleOrTitlePart(subEl, 'humdrum:RTL', '', md)
+                elif sourceType == 'unpub':
+                    self.processTitleOrTitlePart(subEl, 'humdrum:SMS', '', md)
+                else:
+                    self.processTitleOrTitlePart(subEl, '', '', md)
+            elif subEl.name == 'composer':
+                self.processComposer(subEl, md)
+            elif subEl.name == 'contributor':
+                self.processContributor(subEl, '', '', md)
+            elif subEl.name == 'dedicatee':
+                self.processContributor(subEl, 'humdrum:ODE', '', md)
+            elif subEl.name == 'distributor':
+                self.processContributor(subEl, '', '', md)
+            elif subEl.name == 'editor':
+                if sourceType == 'digital':
+                    self.processContributor(subEl, 'humdrum:EED', '', md)
+                elif sourceType in ('printed', ''):
+                    self.processContributor(subEl, 'humdrum:PED', '', md)
+                elif sourceType == 'unpub':
+                    self.processContributor(subEl, 'humdrum:YOE', '', md)
+            elif subEl.name == 'funder':
+                self.processContributor(subEl, 'humdrum:OCO', '', md)
+            elif subEl.name == 'librettist':
+                self.processContributor(subEl, 'humdrum:LIB', '', md)
+            elif subEl.name == 'lyricist':
+                self.processContributor(subEl, 'humdrum:LYR', '', md)
+            elif subEl.name == 'publisher':
+                if sourceType == 'digital':
+                    self.processContributor(subEl, 'humdrum:YEP', '', md)
+                elif sourceType in ('printed', ''):
+                    self.processContributor(subEl, 'humdrum:PPR', '', md)
+            elif subEl.name == 'sponsor':
+                self.processContributor(subEl, '', '', md)
+            elif subEl.name in ('name', 'persName', 'corpName'):
+                self.processContributor(subEl, '', '', md)
+            elif subEl.name == 'recipient':
+                self.processContributor(subEl, '', '', md)
+            elif subEl.name == 'repository':
+                if sourceType == 'unpub':
+                    self.processRepository(subEl, 'humdrum:SML', md)
+            elif subEl.name == 'respStmt':
+                self.processRespStmt(subEl, md)
+            elif subEl.name == 'imprint':
+                self.processImprint(subEl, md, sourceType)
+            elif subEl.name == 'availability':
+                self.processAvailability(subEl, md, sourceType)
+            elif subEl.name == 'relatedItem':
+                if sourceType in ('printed', '') and subEl.get('rel', '') == 'host':
+                    bibl: MeiElement | None = subEl.findFirst('bibl', recurse=False)
+                    if bibl is None:
+                        continue
+                    for titleEl in bibl.findAll('title', recurse=False):
+                        self.processTitleOrTitlePart(titleEl, 'humdrum:PTL', '', md)
+
+                    for biblScope in bibl.findAll('biblScope', recurse=False):
+                        if (biblScope.get('type', '') == 'volumeNumber'
+                                or biblScope.get('analog', '') == 'humdrum:OVM'):
+                            text, _styleDict = MeiShared.textFromElem(biblScope)
+                            text = text.strip()
+                            if not text:
+                                continue
+                            M21Utilities.addIfNotADuplicate(md, 'humdrum:OVM', text)
+            elif subEl.name == 'textLang':
+                analog: str = subEl.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    if sourceType == 'digital':
+                        analog = 'humdrum:TXL'
+                    else:
+                        continue
+                text = subEl.text.strip()
+                if not text:
+                    continue
+                M21Utilities.addIfNotADuplicate(md, analog, text)
+            elif subEl.name == 'creation':
+                self.processCreation(subEl, md, context=context)
+            elif subEl.name == 'date':
+                analog = subEl.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    typeStr: str = subEl.get('type', '')
+                    if typeStr == 'copyrightDate':
+                        analog = 'humdrum:YOY'
+                    else:
+                        continue
+
+                m21DateObj: m21.metadata.DatePrimitive | str = (
+                    self.m21DatePrimitiveOrStringFromDateElement(subEl)
+                )
+                if m21DateObj:
+                    M21Utilities.addIfNotADuplicate(md, analog, m21DateObj)
+            elif subEl.name == 'annot':
+                defaultLang: str = subEl.get(_XMLLANG, '')
+                defaultAnalog: str = ''
+                if subEl.get('type', '') == 'manuscriptAccessAcknowledgment':
+                    defaultAnalog = 'humdrum:SMA'
+
+                self.processElementContainingParagraphsAndLineGroups(
+                    subEl,
+                    defaultLang,
+                    defaultAnalog,
+                    md
+                )
+
+    def processAvailability(self, element: MeiElement, md: m21.metadata.Metadata, sourceType: str):
+        for useRestrict in element.findAll('useRestrict', recurse=False):
+            text: str = useRestrict.text.strip()
+            if not text:
+                continue
+
+            analog: str = useRestrict.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                # compute what analog should be
+                typeStr: str = useRestrict.get('type', '')
+                if typeStr == 'copyrightStatement':
+                    analog = 'humdrum:YEM'
+                elif typeStr == 'copyrightCountry':
+                    analog = 'humdrum:YEN'
+                elif typeStr == '' and sourceType == 'digital':
+                    analog = 'humdrum:YEC'
+                else:
+                    continue
+
+            M21Utilities.addIfNotADuplicate(md, analog, text)
 
     def processSourceBiblStruct(
         self,
@@ -170,9 +308,110 @@ class MeiMetadataReader:
         sourceType: str,
         md: m21.metadata.Metadata
     ):
-        environLocal.warn(
-            f'fileDesc/sourceDesc/source@type="{sourceType}"/biblStuct not processed'
-        )
+        analytics: list[MeiElement] = element.findAll('analytic', recurse=False)
+        monographs: list[MeiElement] = element.findAll('monogr', recurse=False)
+
+        for analytic in analytics:
+            self.processAnalytic(analytic, sourceType, md)
+        for monograph in monographs:
+            self.processSourceBibl(monograph, sourceType, md)
+
+    def processAnalytic(
+        self,
+        element: MeiElement,
+        sourceType: str,
+        md: m21.metadata.Metadata
+    ):
+        # We ignore it for all but recording sources
+        if sourceType != 'recording':
+            return
+
+        for subEl in element.findAll('biblScope', recurse=False):
+            text: str = subEl.text.strip()
+            if not text:
+                continue
+
+            analog: str = subEl.get('analog', '')
+            if not M21Utilities.isUsableMetadataKey(md, analog):
+                # compute what analog should be
+                if (subEl.get('type', '') == 'trackNumber'
+                        or subEl.get('unit', '') == 'track'):
+                    analog = 'humdrum:RC#'
+                else:
+                    continue
+
+            M21Utilities.addIfNotADuplicate(md, analog, text)
+
+
+    def processImprint(self, element: MeiElement, md: m21.metadata.Metadata, sourceType: str):
+        for subEl in element.findAll('*', recurse=False):
+            analog: str = subEl.get('analog', '')
+            if subEl.name == 'publisher':
+                if sourceType == 'digital':
+                    self.processContributor(subEl, 'humdrum:YEP', '', md)
+                elif sourceType in ('printed', ''):
+                    self.processContributor(subEl, 'humdrum:PPR', '', md)
+            elif subEl.name in ('name', 'persName', 'corpName'):
+                if M21Utilities.isUsableMetadataKey(md, analog):
+                    self.processContributor(subEl, analog, '', md)
+                elif sourceType == 'recorded':
+                    if subEl.get('role', '') == 'production/distribution':
+                        self.processContributor(subEl, 'humdrum:RRD', '', md)
+
+            elif subEl.name == 'geogName':
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    if subEl.get('role', '') == 'recordingLocation':
+                        analog = 'humdrum:RLC'
+                    else:
+                        continue
+                text: str = subEl.text.strip()
+                if not text:
+                    continue
+                M21Utilities.addIfNotADuplicate(md, analog, text)
+
+            elif subEl.name == 'date':
+                analog = subEl.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    typeStr: str = subEl.get('type', '')
+                    if sourceType == 'digital':
+                        if typeStr == 'releaseDate':
+                            analog = 'humdrum:YER'
+                        elif typeStr == 'encodingDate':
+                            analog = 'humdrum:END'
+                        else:
+                            continue
+                    elif sourceType == 'recording':
+                        if typeStr == 'releaseDate':
+                            analog = 'humdrum:RRD'
+                        elif typeStr == 'recordingDate':
+                            analog = 'humdrum:RDT'
+                        else:
+                            continue
+
+                m21DateObj: m21.metadata.DatePrimitive | str = (
+                    self.m21DatePrimitiveOrStringFromDateElement(subEl)
+                )
+                if m21DateObj:
+                    M21Utilities.addIfNotADuplicate(md, analog, m21DateObj)
+
+    def processRepository(
+        self,
+        element: MeiElement,
+        defaultAnalog: str,
+        md: m21.metadata.Metadata
+    ):
+        text: str = element.text.strip()
+        if not text:
+            return
+
+        analog: str = element.get('analog', '')
+        if not M21Utilities.isUsableMetadataKey(md, analog):
+            if defaultAnalog:
+                analog = defaultAnalog
+            else:
+                return
+
+        M21Utilities.addIfNotADuplicate(md, analog, text)
 
     def processRespStmt(self, element: MeiElement, md: m21.metadata.Metadata):
         defaultRole: str = ''
@@ -448,13 +687,16 @@ class MeiMetadataReader:
         if not text:
             return
 
+        typeStr: str = element.get('type', '')
         analog: str = element.get('analog', '')
         if not M21Utilities.isUsableMetadataKey(md, analog):
             # compute what analog should be
             if text.startswith('Koechel') or text.startswith('Köchel'):
                 analog = 'humdrum:SCA'
-            if text.startswith('BWV'):
+            elif text.startswith('BWV'):
                 analog = 'humdrum:SCT'
+            elif typeStr == 'albumCatalogNumber':
+                analog = 'humdrum:RC#'
             else:
                 # we can't interpret this identifier
                 return
@@ -631,6 +873,15 @@ class MeiMetadataReader:
                         else:
                             role = element.name
                     contrib = m21.metadata.Contributor(name=name, role=role)
+
+            if contrib is None and analog.startswith('humdrum:'):
+                # we might need to convert to 'otherContributor'
+                hdKey: str = analog[8:]
+                if hdKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
+                    role = M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[hdKey]
+                    analog = 'otherContributor'
+                    contrib = m21.metadata.Contributor(name=name, role=role)
+
             if contrib is not None:
                 M21Utilities.addIfNotADuplicate(md, analog, contrib)
                 contrib = None
@@ -671,6 +922,15 @@ class MeiMetadataReader:
                         else:
                             role = element.name
                     contrib = m21.metadata.Contributor(name=name, role=role)
+
+            if contrib is None and analog.startswith('humdrum:'):
+                # we might need to convert to 'otherContributor'
+                hdKey = analog[8:]
+                if hdKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
+                    role = M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[hdKey]
+                    analog = 'otherContributor'
+                    contrib = m21.metadata.Contributor(name=name, role=role)
+
             if contrib is not None:
                 M21Utilities.addIfNotADuplicate(md, analog, contrib)
                 contrib = None
@@ -688,7 +948,8 @@ class MeiMetadataReader:
         #   date and geogName, but only if analog is usable, or date@type/geogName@role
         #   tell you it's a performance.
         # context == anything else, ignore
-        if context not in ('mainWork', 'mainWork/expression'):
+        if (context not in ('mainWork', 'mainWork/expression')
+                and not context.startswith('source')):
             return
 
         dates: list[MeiElement] = element.findAll('date', recurse=False)
@@ -709,12 +970,10 @@ class MeiMetadataReader:
                     else:
                         # skip this date; we don't know what it represents
                         continue
-                elif context == 'mainWork':
+                elif context == 'mainWork' or context.startswith('source'):
                     analog = 'humdrum:ODT'
                 else:
-                    # We shouldn't get here because we return early above, but if
-                    # we ever do get here, skip this date; we don't know what it
-                    # represents.
+                    # Skip this date; we don't know what it represents.
                     continue
 
             m21DateObj: m21.metadata.DatePrimitive | str = (
@@ -723,7 +982,7 @@ class MeiMetadataReader:
             if m21DateObj:
                 M21Utilities.addIfNotADuplicate(md, analog, m21DateObj)
 
-        if context == 'mainWork':
+        if context == 'mainWork' or context.startswith('source'):
             for country in countries:
                 text: str = country.text.strip()
                 if not text:
@@ -754,20 +1013,18 @@ class MeiMetadataReader:
                     else:
                         # skip this geogName; we don't know what it represents
                         continue
-                elif context == 'mainWork':
+                elif context == 'mainWork' or context.startswith('source'):
                     if geogName.get('type', '') == 'coordinates':
                         analog = 'humdrum:ARL'
                     else:
                         analog = 'humdrum:ARE'
                 else:
-                    # We shouldn't get here because we return early above, but if
-                    # we ever do get here, skip this geogName; we don't know what
-                    # it represents.
+                    # Skip this geogName; we don't know what it represents.
                     continue
 
             M21Utilities.addIfNotADuplicate(md, analog, text)
 
-        if context == 'mainWork':
+        if context == 'mainWork' or context.startswith('source'):
             for dedicatee in dedicatees:
                 text = dedicatee.text.strip()
                 if not text:
@@ -830,10 +1087,10 @@ class MeiMetadataReader:
             analog = element.get('analog', '')
 
         if not M21Utilities.isUsableMetadataKey(md, analog):
-            analog = defaultAnalog
-        if not analog:
-            # if there is no analog, and no default analog, just skip it.
-            return
+            if defaultAnalog:
+                analog = defaultAnalog
+            else:
+                return
 
         lang: str = element.get(_XMLLANG, '')
         if not lang:

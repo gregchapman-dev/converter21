@@ -1503,7 +1503,7 @@ class M21Utilities:
         'ONM': 'number',                # number (e.g. number of song within ABC multi-song file)
         'OVM': 'volumeNumber',          # volume number (e.g. '6' or 'Vol. 6')
         'ODE': 'dedicatedTo',           # dedicated to
-        'OCO': '',                      # commissioned by
+        'OCO': 'commissionedBy',        # commissioned by
         'OCL': 'transcriber',           # collected/transcribed by
         'ONB': '',                      # free form note related to title or identity of work
         'ODT': 'dateCreated',           # date or period of composition (**date or **zeit format)

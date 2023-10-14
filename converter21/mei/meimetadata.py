@@ -52,6 +52,14 @@ class MeiMetadataItem:
             self.humdrumRefKey = (
                 M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(self.key, '')
             )
+            if self.uniqueName == 'otherContributor' and not self.humdrumRefKey:
+                if t.TYPE_CHECKING:
+                    assert isinstance(self.value, m21.metadata.Contributor)
+                role: str = self.value.role
+                self.humdrumRefKey = (
+                    M21Utilities.m21OtherContributorRoleToHumdrumReferenceKey.get(role, '')
+                )
+
         elif self.key.startswith('humdrum:'):
             hdKey: str = self.key[8:]
             if hdKey in M21Utilities.validHumdrumReferenceKeys:
@@ -359,7 +367,7 @@ class MeiMetadata:
             bibl.subElements.extend(self.simpleComposerElements)
 
         arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
-        editors: list[MeiMetadataItem] = self.contents.get('YOE', [])
+        editors: list[MeiMetadataItem] = self.contents.get('PED', [])
         orchestrators: list[MeiMetadataItem] = self.contents.get('LOR', [])
         translators: list[MeiMetadataItem] = self.contents.get('TRN', [])
         collectors: list[MeiMetadataItem] = self.contents.get('OCL', [])
