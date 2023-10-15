@@ -1570,6 +1570,16 @@ class M21Utilities:
     validHumdrumReferenceKeys: tuple[str, ...] = tuple(hdKey for hdKey in
         humdrumReferenceKeyToM21MetadataPropertyUniqueName.keys())
 
+    customHumdrumReferenceKeysThatAreDates: tuple[str, ...] = (
+        'CDT',
+        'RDT',
+        'MRD',
+        'MPD',
+        'MDT',
+        'YOY',
+        'END'
+    )
+
     humdrumReferenceKeyToM21OtherContributorRole: dict[str, str] = {
         'MPN': 'performer',
         'MPS': 'suspected performer',
@@ -1675,7 +1685,11 @@ class M21Utilities:
         return valueStr
 
     @staticmethod
-    def isUsableMetadataKey(md: m21.metadata.Metadata, key: str) -> bool:
+    def isUsableMetadataKey(
+        md: m21.metadata.Metadata,
+        key: str,
+        includeHumdrumCustomKeys: bool = True
+    ) -> bool:
         # returns true if key is a standard uniqueName, a standard namespaceName,
         # a non-standard namespaceName that we can convert into a standard
         # uniqueName/namespaceName (e.g. 'dcterm:title' can be converted to
@@ -1687,7 +1701,21 @@ class M21Utilities:
         if md._isStandardNamespaceName(key):
             return True
         if key.startswith('humdrum:'):
-            return True
+            if includeHumdrumCustomKeys:
+                return True
+            else:
+                # is it standard?  Yes, if it maps to a uniqueName
+                uniqueName: str = (
+                    M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                        key[8:],
+                        ''
+                    )
+                )
+                if uniqueName:
+                    # humdrum key that maps to uniqueName; always welcome
+                    return True
+                # custom humdrum key, and we've been asked not to include them
+                return False
 
         # Let's see if we can make a standard namespaceName from it.
         if key.startswith('dcterm:'):

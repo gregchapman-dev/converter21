@@ -88,6 +88,7 @@
 !!!GTL: group title (e.g. "The Seasons")
 !!!GAW: title of associated work, such as a play or film
 !!!GCO: collection designation (e.g. "Norton Scores")
+!!!ACO: collection designation 2
 !!!PUB: publication status "published"/"unpublished"
 !!!PED: publication editor
 !!!PPR: first publisher
@@ -128,7 +129,6 @@
 !!!EFL: 1/1
 !!!EST: encoding status (usually deleted before distribution)
 !!!VTS: checksum (excluding the VTS line itself)
-!!!ACO: collection designation
 !!!AFR: form designation
 !!!AGN: genre designation
 !!!AST: style, period, or type of work designation

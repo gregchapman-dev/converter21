@@ -9751,7 +9751,7 @@ class HumdrumFile(HumdrumFileContent):
         isHumdrumStandardKey: bool = (
             isParseable
             and len(parsedKey) >= 3
-            and parsedKey[0:3] in M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName
+            and parsedKey[0:3] in M21Utilities.validHumdrumReferenceKeys
         )
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
@@ -9827,6 +9827,18 @@ class HumdrumFile(HumdrumFileContent):
                     contrib = m21.metadata.Contributor(name=parsedValue, role=role)
                     M21Utilities.addIfNotADuplicate(m21Metadata, 'otherContributor', contrib)
                     continue
+
+                if parsedKey in M21Utilities.customHumdrumReferenceKeysThatAreDates:
+                    # Fix up the date Text we have, by converting to DatePrimitive and
+                    # back to string.
+                    dateObj: m21.metadata.DatePrimitive | None = (
+                        M21Utilities.m21DatePrimitiveFromString(str(parsedValue))
+                    )
+                    if dateObj is not None:
+                        text: str = M21Utilities.stringFromM21DateObject(dateObj)
+                        # pylint: disable=protected-access
+                        parsedValue._data = text
+                        # pylint: enable=protected-access
 
                 # Treat any other standard Humdrum keys as if they are true music21 keys.
                 # Use 'humdrum:???' because there is no uniqueName (yet; I'll try to get

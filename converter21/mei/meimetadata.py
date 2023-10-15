@@ -1346,7 +1346,10 @@ class MeiMetadata:
         parentWorkTitles: list[MeiMetadataItem] = self.contents.get('OPR', [])
         groupWorkTitles: list[MeiMetadataItem] = self.contents.get('GTL', [])
         associatedWorkTitles: list[MeiMetadataItem] = self.contents.get('GAW', [])
+        # GCO and ACO have the same definition: "Collection designation, such
+        # as Norton Scores, Smithsonian Collection, etc."
         collectionWorkTitles: list[MeiMetadataItem] = self.contents.get('GCO', [])
+        collectionWorkTitles.extend(self.contents.get('ACO', []))
 
         parentWorkXmlId: str = ''
         groupWorkXmlId: str = ''
