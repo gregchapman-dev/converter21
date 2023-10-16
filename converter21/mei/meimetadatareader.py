@@ -268,6 +268,26 @@ class MeiMetadataReader:
                 )
                 if m21DateObj:
                     M21Utilities.addIfNotADuplicate(md, analog, m21DateObj)
+            elif subEl.name == 'edition':
+                analog = subEl.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    if sourceType != 'digital':
+                        continue
+                    typeStr: str = subEl.get('type', '')
+                    if typeStr == 'version':
+                        analog = 'humdrum:EEV'
+                    else:
+                        continue
+                text = subEl.text.strip()
+                M21Utilities.addIfNotADuplicate(md, analog, text)
+            elif subEl.name == 'extent':
+                analog = subEl.get('analog', '')
+                if not M21Utilities.isUsableMetadataKey(md, analog):
+                    # don't process unless analog is usable; the text format
+                    # is very specific.
+                    continue
+                text = subEl.text.strip()
+                M21Utilities.addIfNotADuplicate(md, analog, text)
             elif subEl.name == 'annot':
                 defaultLang: str = subEl.get(_XMLLANG, '')
                 defaultAnalog: str = ''
