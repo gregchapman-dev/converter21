@@ -273,7 +273,7 @@ class MeiMetadataReader:
                 if not M21Utilities.isUsableMetadataKey(md, analog):
                     if sourceType != 'digital':
                         continue
-                    typeStr: str = subEl.get('type', '')
+                    typeStr = subEl.get('type', '')
                     if typeStr == 'version':
                         analog = 'humdrum:EEV'
                     else:
