@@ -73,6 +73,17 @@ class MeiMetadataItem:
         # convert self.value to an appropriate string (no html escaping yet)
         self.meiValue: str = M21Utilities.m21MetadataValueToString(self.value)
 
+        # Add any other attributes set by converter21 importers (e.g. MEI importer
+        # will have set value.meiVersion to 'version', which we will translate to
+        # @version="version")
+        self.meiOtherAttribs: dict[str, str] = {}
+        otherAttribs: set[str] = getattr(self.value, 'c21OtherAttribs', set())
+        for attrib in otherAttribs:
+            if attrib in ('meiVersion', 'humdrumVersion'):
+                version: str = getattr(self.value, attrib, '')
+            if version:
+                self.meiOtherAttribs['version'] = version
+
 class MeiMetadata:
     def __init__(self, m21Metadata: m21.metadata.Metadata) -> None:
         self.m21Metadata: m21.metadata.Metadata = m21Metadata
@@ -1302,53 +1313,68 @@ class MeiMetadata:
         encodingNotes: list[MeiMetadataItem] = self.contents.get('RNB', [])
         encodingWarnings: list[MeiMetadataItem] = self.contents.get('RWB', [])
         softwares: list[MeiMetadataItem] = self.contents.get('software', [])
-        if not encodingNotes and not encodingWarnings:
+
+        converter21AlreadyThere: bool = False
+        for software in softwares:
+            if software.meiValue == SharedConstants._CONVERTER21_NAME:
+                version = software.meiOtherAttribs.get('version', '')
+                if version == SharedConstants._CONVERTER21_VERSION:
+                    converter21AlreadyThere = True
+
+        if not encodingNotes and not encodingWarnings and not converter21AlreadyThere:
             return None
 
         encodingDesc: MeiElement = MeiElement('encodingDesc')
-        editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
-        p: MeiElement = editorialDecl.appendSubElement('p')
 
-        language: str | None
-        allTheSameLanguage: bool
-        line: MeiElement
-        if encodingNotes:
-            language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
-            lineGroup: MeiElement = p.appendSubElement('lg')
-            if allTheSameLanguage and language:
-                lineGroup.attrib['xml:lang'] = language
-            for note in encodingNotes:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                line = lineGroup.appendSubElement('l', {'type': 'humdrum:RNB'})
-                line.text = note.meiValue
-                if note.value.language and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = note.value.language.lower()
-        if encodingWarnings:
-            language, allTheSameLanguage = self.getTextListLanguage(encodingWarnings)
-            lineGroup = p.appendSubElement('lg')
-            if allTheSameLanguage and language:
-                lineGroup.attrib['xml:lang'] = language
-            for warning in encodingWarnings:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                line = lineGroup.appendSubElement('l', {'type': 'humdrum:RWB'})
-                line.text = warning.meiValue
-                if warning.value.language and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = warning.value.language.lower()
+        if encodingNotes or encodingWarnings:
+            editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
+            p: MeiElement = editorialDecl.appendSubElement('p')
 
-        converter21AlreadyThere: bool = False
-        appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
-        for software in softwares:
+            language: str | None
+            allTheSameLanguage: bool
+            line: MeiElement
+            if encodingNotes:
+                language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
+                lineGroup: MeiElement = p.appendSubElement('lg')
+                if allTheSameLanguage and language:
+                    lineGroup.attrib['xml:lang'] = language
+                for note in encodingNotes:
+                    # <l> does not take @analog, so use @type instead (says Perry)
+                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:RNB'})
+                    line.text = note.meiValue
+                    if note.value.language and not allTheSameLanguage:
+                        line.attrib['xml:lang'] = note.value.language.lower()
+
+            if encodingWarnings:
+                language, allTheSameLanguage = self.getTextListLanguage(encodingWarnings)
+                lineGroup = p.appendSubElement('lg')
+                if allTheSameLanguage and language:
+                    lineGroup.attrib['xml:lang'] = language
+                for warning in encodingWarnings:
+                    # <l> does not take @analog, so use @type instead (says Perry)
+                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:RWB'})
+                    line.text = warning.meiValue
+                    if warning.value.language and not allTheSameLanguage:
+                        line.attrib['xml:lang'] = warning.value.language.lower()
+
+        if softwares or not converter21AlreadyThere:
+            appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
             application: MeiElement = appInfo.appendSubElement('application')
-            name: MeiElement = application.appendSubElement('name')
-            name.text = software.meiValue
-            if software.meiValue == SharedConstants._CONVERTER21_NAME_AND_VERSION:
-                converter21AlreadyThere = True
+            name: MeiElement
 
-        # add converter21 if it wasn't already there
-        if not converter21AlreadyThere:
-            application = appInfo.appendSubElement('application')
-            name = application.appendSubElement('name')
-            name.text = SharedConstants._CONVERTER21_NAME_AND_VERSION
+            # add converter21 if it wasn't already there
+            if not converter21AlreadyThere:
+                name = application.appendSubElement(
+                    'name',
+                    {
+                        'version': SharedConstants._CONVERTER21_VERSION
+                    }
+                )
+                name.text = SharedConstants._CONVERTER21_NAME
+
+            for software in softwares:
+                name = application.appendSubElement('name', software.meiOtherAttribs)
+                name.text = software.meiValue
 
         return encodingDesc
 

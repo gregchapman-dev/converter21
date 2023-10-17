@@ -445,6 +445,18 @@ class MeiMetadataReader:
 
     def processEncodingDesc(self, encodingDescElement: MeiElement) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
+
+        # Here's a fine place to add the fact that it was converter21 that parsed the MEI
+        # to create this music21 score.
+        M21Utilities.addIfNotADuplicate(
+            md,
+            'software',
+            SharedConstants._CONVERTER21_NAME,
+            {
+                'meiVersion': SharedConstants._CONVERTER21_VERSION
+            }
+        )
+
         for subEl in encodingDescElement.findAll('*', recurse=False):
             if subEl.name == 'editorialDecl':
                 self.processElementContainingParagraphsAndLineGroups(subEl, '', '', md)
@@ -456,18 +468,17 @@ class MeiMetadataReader:
                     appName: str = name.text.strip()
                     if not appName:
                         continue
+                    other: dict[str, str] = {}
                     version: str = application.get('version', '')
                     if version:
-                        appName += ' ' + version
-                    M21Utilities.addIfNotADuplicate(md, 'software', appName)
+                        other['meiVersion'] = version
+                    M21Utilities.addIfNotADuplicate(
+                        md,
+                        'software',
+                        appName,
+                        other
+                    )
 
-        # Here's a fine place to add the fact that it was converter21 that parsed the MEI
-        # to create this music21 score.
-        M21Utilities.addIfNotADuplicate(
-            md,
-            'software',
-            SharedConstants._CONVERTER21_NAME_AND_VERSION
-        )
         return md
 
     def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:

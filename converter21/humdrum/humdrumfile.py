@@ -9798,7 +9798,14 @@ class HumdrumFile(HumdrumFileContent):
         # first add a 'software' entry for this importer
         m21Metadata.add(
             'software',
-            SharedConstants._CONVERTER21_NAME_AND_VERSION
+            SharedConstants._CONVERTER21_NAME
+        )
+
+        addedValue: m21.metadata.ValueType = m21Metadata['software'][-1]
+        M21Utilities.addOtherMetadataAttrib(
+            addedValue,
+            'humdrumVersion',
+            SharedConstants._CONVERTER21_VERSION
         )
 
         for k, v in self._biblio:

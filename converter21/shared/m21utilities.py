@@ -1739,7 +1739,12 @@ class M21Utilities:
         return False
 
     @staticmethod
-    def addIfNotADuplicate(md: m21.metadata.Metadata, key: str, value: t.Any):
+    def addIfNotADuplicate(
+        md: m21.metadata.Metadata,
+        key: str,
+        value: t.Any,
+        other: dict[str, str] | None = None
+    ):
         # Note that we specifically support 'humdrum:XXX' keys that do not map
         # to uniqueNames (using them as custom keys).  We also support a few
         # alternative namespaces ('dc:' and 'dcterm:' for 'dcterms:' and
@@ -1755,7 +1760,7 @@ class M21Utilities:
                 ''
             )
             if not uniqueName:
-                M21Utilities.addCustomIfNotADuplicate(md, key, value)
+                M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
                 return
         elif key.startswith('dcterm:'):
             key = key.replace('dcterm:', 'dcterms:')
@@ -1778,19 +1783,66 @@ class M21Utilities:
         if uniqueName:
             value = md._convertValue(uniqueName, value)
 
+        if other:
+            for k, v in other.items():
+                M21Utilities.addOtherMetadataAttrib(value, k, v)
+                c21OtherAttribs: set[str] = set()
+                if hasattr(value, 'c21OtherAttribs'):
+                    c21OtherAttribs = getattr(value, 'c21OtherAttribs')
+                c21OtherAttribs.add(k)
+                setattr(value, 'c21OtherAttribs', c21OtherAttribs)
+                setattr(value, k, v)
+
         if uniqueName is None:
             uniqueName = ''
 
         for val in md[uniqueName]:
-            if val == value:
+            if M21Utilities.mdValueEqual(val, value):
                 return
         md.add(uniqueName, value)
+
+    @staticmethod
+    def addOtherMetadataAttrib(value: m21.metadata.ValueType, k: str, v: str):
+        c21OtherAttribs: set[str] = set()
+        if hasattr(value, 'c21OtherAttribs'):
+            c21OtherAttribs = getattr(value, 'c21OtherAttribs')
+        c21OtherAttribs.add(k)
+        setattr(value, 'c21OtherAttribs', c21OtherAttribs)
+        setattr(value, k, v)
+
+    @staticmethod
+    def mdValueEqual(v1: m21.metadata.ValueType, v2: m21.metadata.ValueType) -> bool:
+        if isinstance(v1, m21.metadata.Text) and isinstance(v2, m21.metadata.Text):
+            # don't compare .isTranslated, it's often lost in various file formats.
+            if v1._data != v2._data:
+                return False
+            if v1.language != v2.language:
+                return False
+        else:
+            if v1 != v2:
+                return False
+
+        # check other attributes set by converter21 importers
+        # (e.g. MEI importer adds 'meiVersion')
+        c21OtherAttribs1: set[str] = set()
+        c21OtherAttribs2: set[str] = set()
+        if hasattr(v1, 'c21OtherAttribs'):
+            c21OtherAttribs1 = getattr(v1, 'c21OtherAttribs')
+        if hasattr(v2, 'c21OtherAttribs'):
+            c21OtherAttribs2 = getattr(v2, 'c21OtherAttribs')
+        if len(c21OtherAttribs1) != len(c21OtherAttribs2):
+            return False
+        for v1Attr, v2Attr in zip(c21OtherAttribs1, c21OtherAttribs2):
+            if getattr(v1, v1Attr) != getattr(v2, v2Attr):
+                return False
+        return True
 
     @staticmethod
     def addCustomIfNotADuplicate(
         md: m21.metadata.Metadata,
         key: str,
-        value: str | m21.metadata.Text
+        value: str | m21.metadata.Text,
+        other: dict[str, str] | None = None
     ):
         if isinstance(value, str):
             value = m21.metadata.Text(value, isTranslated=False)
