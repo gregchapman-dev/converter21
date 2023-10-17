@@ -318,10 +318,22 @@ class MeiMetadataReader:
                     analog = 'humdrum:YEM'
                 elif typeStr == 'copyrightCountry':
                     analog = 'humdrum:YEN'
-                elif typeStr == '' and sourceType == 'digital':
-                    analog = 'humdrum:YEC'
-                elif typeStr == '' and sourceType == 'pubStmt':
-                    analog = 'humdrum:YEM'
+                elif typeStr == 'copyright':
+                    if sourceType in ('printed', ''):
+                        analog = 'mei:printedSourceCopyright'
+                    elif sourceType == 'digital':
+                        analog = 'humdrum:YEC'
+                    else:
+                        continue
+                elif typeStr == '':
+                    if sourceType in ('printed', ''):
+                        analog = 'mei:printedSourceCopyright'
+                    if sourceType == 'digital':
+                        analog = 'humdrum:YEC'
+                    elif sourceType == 'pubStmt':
+                        analog = 'humdrum:YEM'
+                    else:
+                        continue
                 else:
                     continue
 
@@ -374,19 +386,22 @@ class MeiMetadataReader:
             if subEl.name == 'publisher':
                 if sourceType == 'digital':
                     self.processContributor(subEl, 'humdrum:YEP', '', md)
-                elif sourceType in ('printed', ''):
+                elif sourceType == 'printed':
                     self.processContributor(subEl, 'humdrum:PPR', '', md)
+                else:
+                    self.processContributor(subEl, '', '', md)
             elif subEl.name in ('name', 'persName', 'corpName'):
-                if M21Utilities.isUsableMetadataKey(md, analog):
-                    self.processContributor(subEl, analog, '', md)
-                elif sourceType == 'recorded':
+                if sourceType == 'recorded':
                     if subEl.get('role', '') == 'production/distribution':
                         self.processContributor(subEl, 'humdrum:RRD', '', md)
-
+                else:
+                    self.processContributor(subEl, analog, '', md)
             elif subEl.name == 'geogName':
                 if not M21Utilities.isUsableMetadataKey(md, analog):
                     if subEl.get('role', '') == 'recordingLocation':
                         analog = 'humdrum:RLC'
+                    elif sourceType in ('printed', ''):
+                        analog = 'humdrum:PPP'
                     else:
                         continue
                 text: str = subEl.text.strip()
@@ -412,6 +427,13 @@ class MeiMetadataReader:
                             analog = 'humdrum:RDT'
                         else:
                             continue
+                    elif sourceType in ('printed', ''):
+                        if typeStr == 'copyright':
+                            analog = 'mei:printedSourceCopyright'
+                        else:
+                            analog = 'humdrum:PDT'
+                    else:
+                        continue
 
                 m21DateObj: m21.metadata.DatePrimitive | str = (
                     self.m21DatePrimitiveOrStringFromDateElement(subEl, analog, md)
@@ -914,7 +936,7 @@ class MeiMetadataReader:
                     # check to see if role maps to an official music21 role (a.k.a. uniqueName)
                     # and if so, use that for role instead (and use it for analog, as well,
                     # instead of 'otherContributor').
-                    uniqueNm = M21Utilities.meiRoleToUniqueName.get(role, '')
+                    uniqueNm = M21Utilities.meiRoleToUniqueName(md, role)
                     if uniqueNm:
                         role = uniqueNm
                         analog = uniqueNm
@@ -963,11 +985,21 @@ class MeiMetadataReader:
                         if not role:
                             role = defaultRole
                     else:
-                        # defaultRole _overrides_ element.name (used for <persName> et al)
-                        if defaultRole:
-                            role = defaultRole
-                        else:
-                            role = element.name
+                        # defaultRole _overrides_ element.name, but not @role
+                        # (used for <persName> et al)
+                        role = element.get('role', '')
+                        if not role:
+                            if defaultRole:
+                                role = defaultRole
+                            else:
+                                role = element.name
+                        # Check to see if role maps to an official music21 role (a.k.a. uniqueName)
+                        # and if so, use that for role instead (and use it for analog, as well,
+                        # instead of 'otherContributor').
+                    uniqueNm = M21Utilities.meiRoleToUniqueName(md, role)
+                    if uniqueNm:
+                        role = uniqueNm
+                        analog = uniqueNm
                     contrib = m21.metadata.Contributor(name=name, role=role)
 
             if contrib is None and analog.startswith('humdrum:'):
@@ -1401,7 +1433,7 @@ class MeiMetadataReader:
                 if mustBeString:
                     return M21Utilities.stringFromM21DateObject(m21DateObj)
                 return m21DateObj
-            environLocal.warn(_MISSED_DATE.format(text))
+            # not parseable as date, just return the text
             return text
 
         return ''

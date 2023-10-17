@@ -1594,9 +1594,17 @@ class M21Utilities:
         'sourceEditor': 'PED',
     }
 
-    meiRoleToUniqueName: dict[str, str] = {
-        'encoder': 'electronicEncoder'
-    }
+    validMeiMetadataKeys: tuple[str, ...] = (
+        'mei:printedSourceCopyright',
+    )
+
+    @staticmethod
+    def meiRoleToUniqueName(md: m21.metadata.Metadata, role: str) -> str:
+        if md._isStandardUniqueName(role):
+            return role
+        if role == 'encoder':
+            return 'electronicEncoder'
+        return ''
 
     @staticmethod
     def contributorRoleToHumdrumReferenceKey(role: str) -> str:
@@ -1750,9 +1758,9 @@ class M21Utilities:
         other: dict[str, str] | None = None
     ):
         # Note that we specifically support 'humdrum:XXX' keys that do not map
-        # to uniqueNames (using them as custom keys).  We also support a few
-        # alternative namespaces ('dc:' and 'dcterm:' for 'dcterms:' and
-        # 'marc:' for 'marcrel:').
+        # to uniqueNames and 'mei:blahblah' keys (using them as custom keys).
+        # We also support a few alternative namespaces ('dc:' and 'dcterm:' for
+        # 'dcterms:' and 'marc:' for 'marcrel:').
         uniqueName: str | None = None
         if md._isStandardUniqueName(key):
             uniqueName = key
@@ -1764,6 +1772,10 @@ class M21Utilities:
                 ''
             )
             if not uniqueName:
+                M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
+                return
+        elif key.startswith('mei:'):
+            if key in M21Utilities.validMeiMetadataKeys:
                 M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
                 return
         elif key.startswith('dcterm:'):
@@ -1780,10 +1792,8 @@ class M21Utilities:
                 uniqueName = md.namespaceNameToUniqueName(key)
 
         if isinstance(value, str):
-            if uniqueName == 'software':
-                value = m21.metadata.Text(value)
-            else:
-                value = m21.metadata.Text(value, isTranslated=False)
+            value = m21.metadata.Text(value)
+
         if uniqueName:
             value = md._convertValue(uniqueName, value)
 
@@ -1851,6 +1861,6 @@ class M21Utilities:
         if isinstance(value, str):
             value = m21.metadata.Text(value, isTranslated=False)
         for val in md.getCustom(key):
-            if val == value:
+            if M21Utilities.mdValueEqual(val, value):
                 return
         md.addCustom(key, value)

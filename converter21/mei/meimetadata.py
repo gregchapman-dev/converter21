@@ -47,6 +47,7 @@ class MeiMetadataItem:
 
         self.uniqueName: str = ''
         self.humdrumRefKey: str = ''
+        self.meiMetadataKey: str = ''
         if md._isStandardUniqueName(self.key):
             self.uniqueName = self.key
             self.humdrumRefKey = (
@@ -64,9 +65,14 @@ class MeiMetadataItem:
             hdKey: str = self.key[8:]
             if hdKey in M21Utilities.validHumdrumReferenceKeys:
                 self.humdrumRefKey = hdKey
+        elif self.key.startswith('mei:'):
+            if self.key in M21Utilities.validMeiMetadataKeys:
+                self.meiMetadataKey = self.key
 
-        # self.isCustom is True if we don't have a uniqueName or humdrumRefKey
-        self.isCustom: bool = not self.uniqueName and not self.humdrumRefKey
+        # self.isCustom is True if we don't have a uniqueName or humdrumRefKey or meiMetadataKey
+        self.isCustom: bool = (
+            not self.uniqueName and not self.humdrumRefKey and not self.meiMetadataKey
+        )
 
         self.isContributor: bool = md._isContributorUniqueName(self.uniqueName)
 
@@ -93,7 +99,12 @@ class MeiMetadata:
         self.contents: dict[str, list[MeiMetadataItem]] = {}
         for m21Item in m21Metadata.all(returnPrimitives=True, returnSorted=False):
             meiItem = MeiMetadataItem(m21Item, m21Metadata)
-            key: str = meiItem.humdrumRefKey or meiItem.uniqueName or meiItem.key
+            key: str = (
+                meiItem.humdrumRefKey
+                or meiItem.uniqueName
+                or meiItem.meiMetadataKey
+                or meiItem.key
+            )
             currList: list[MeiMetadataItem] | None = self.contents.get(key, None)
             if currList is None:
                 self.contents[key] = [meiItem]
@@ -178,7 +189,7 @@ class MeiMetadata:
         if digitalSource is not None:
             sourceDesc.subElements.append(digitalSource)
 
-        publishedSource: MeiElement | None = self.makePublishedSource()
+        publishedSource: MeiElement | None = self.makePrintedSource()
         if publishedSource is not None:
             sourceDesc.subElements.append(publishedSource)
 
@@ -372,7 +383,7 @@ class MeiMetadata:
             return None
         return source
 
-    def makePublishedSource(self) -> MeiElement | None:
+    def makePrintedSource(self) -> MeiElement | None:
         if not self.anyExist('LAR', 'PED', 'LOR', 'TRN', 'OCL', 'OVM', 'PTL',
                 'PPR', 'PDT', 'PPP', 'PC#'):
             return None
@@ -388,6 +399,9 @@ class MeiMetadata:
         datesPublished: list[MeiMetadataItem] = self.contents.get('PDT', [])
         locationsPublished: list[MeiMetadataItem] = self.contents.get('PPP', [])
         publisherCatalogNumbers: list[MeiMetadataItem] = self.contents.get('PC#', [])
+        printedSourceCopyrights: list[MeiMetadataItem] = (
+            self.contents.get('mei:printedSourceCopyright', [])
+        )
 
         source: MeiElement = MeiElement('source', {'type': 'printed'})
         bibl: MeiElement = source.appendSubElement('bibl')
@@ -499,6 +513,17 @@ class MeiMetadata:
                         }
                     )
                     geogNameEl.text = locationPublished.meiValue
+
+            if printedSourceCopyrights:
+                availability: MeiElement = bibl.appendSubElement('availability')
+                for printedSourceCopyright in printedSourceCopyrights:
+                    useRestrict: MeiElement = availability.appendSubElement(
+                        'useRestrict',
+                        {
+                            'type': 'copyright'
+                        }
+                    )
+                    useRestrict.text = printedSourceCopyright.meiValue
 
             for volumeName, volumeNumber in zip(volumeNames, volumeNumbers):
                 relatedItem: MeiElement = bibl.appendSubElement(
