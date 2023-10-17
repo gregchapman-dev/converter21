@@ -131,16 +131,17 @@ class MeiMetadataReader:
 
     def processPubStmt(self, element: MeiElement, md: m21.metadata.Metadata):
         for subEl in element.findAll('*', recurse=False):
-            if subEl.name != 'unpub':
-                # Our MEI writer only writes <unpub>. For published MEI files, we will need
-                # to parse everything in <pubStmt>, pulling out things that our MEI writer
-                # would have written in fileDesc/sourceDesc/source@type="digital".
-                environLocal.warn('fileDesc/pubStmt contents present but not processed')
-                break
+            if subEl.name == 'date':
+                m21DateObj: m21.metadata.DatePrimitive | str = (
+                    self.m21DatePrimitiveOrStringFromDateElement(subEl, 'humdrum:YER', md)
+                )
+                if m21DateObj:
+                    M21Utilities.addIfNotADuplicate(md, 'humdrum:YER', m21DateObj)
 
     def processSeriesStmt(self, element: MeiElement, md: m21.metadata.Metadata):
-        if element.findAll('*', recurse=False):
-            environLocal.warn('fileDesc/seriesStmt contents present but not processed')
+        for subEl in element.findAll('*', recurse=False):
+            if subEl.name == 'title':
+                self.processTitleOrTitlePart(subEl, 'humdrum:GCO', '', md)
 
     def processSourceDesc(self, element: MeiElement, md: m21.metadata.Metadata):
         for sourceEl in element.findAll('source', recurse=False):
@@ -1079,6 +1080,12 @@ class MeiMetadataReader:
         localDefaultLang: str = element.get(_XMLLANG, '')
         if not localDefaultLang:
             localDefaultLang = defaultLang
+
+        if element.text.strip():
+            # This element might have straight text, and as such, is itself a
+            # lineWithLanguage.
+            self.processLineWithLanguage(element, localDefaultLang, defaultAnalog, md)
+
         for subElem in element.findAll('*', recurse=False):
             if subElem.name not in ('p', 'lg'):
                 continue

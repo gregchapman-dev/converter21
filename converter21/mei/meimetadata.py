@@ -1359,21 +1359,24 @@ class MeiMetadata:
 
         if softwares or not converter21AlreadyThere:
             appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
-            application: MeiElement = appInfo.appendSubElement('application')
-            name: MeiElement
 
             # add converter21 if it wasn't already there
             if not converter21AlreadyThere:
-                name = application.appendSubElement(
-                    'name',
+                application: MeiElement = appInfo.appendSubElement(
+                    'application',
                     {
                         'version': SharedConstants._CONVERTER21_VERSION
                     }
                 )
+                name: MeiElement = application.appendSubElement('name')
                 name.text = SharedConstants._CONVERTER21_NAME
 
             for software in softwares:
-                name = application.appendSubElement('name', software.meiOtherAttribs)
+                application = appInfo.appendSubElement(
+                    'application',
+                    software.meiOtherAttribs
+                )
+                name = application.appendSubElement('name')
                 name.text = software.meiValue
 
         return encodingDesc
