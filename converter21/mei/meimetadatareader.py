@@ -137,6 +137,8 @@ class MeiMetadataReader:
                 )
                 if m21DateObj:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:YER', m21DateObj)
+            elif subEl.name == 'availability':
+                self.processAvailability(subEl, md, 'pubStmt')
 
     def processSeriesStmt(self, element: MeiElement, md: m21.metadata.Metadata):
         for subEl in element.findAll('*', recurse=False):
@@ -318,6 +320,8 @@ class MeiMetadataReader:
                     analog = 'humdrum:YEN'
                 elif typeStr == '' and sourceType == 'digital':
                     analog = 'humdrum:YEC'
+                elif typeStr == '' and sourceType == 'pubStmt':
+                    analog = 'humdrum:YEM'
                 else:
                     continue
 
@@ -899,11 +903,22 @@ class MeiMetadataReader:
                         if not role:
                             role = defaultRole
                     else:
-                        # defaultRole _overrides_ element.name (used for <persName> et al)
-                        if defaultRole:
-                            role = defaultRole
-                        else:
-                            role = element.name
+                        # defaultRole _overrides_ element.name, but not @role
+                        # (used for <persName> et al)
+                        role = element.get('role', '')
+                        if not role:
+                            if defaultRole:
+                                role = defaultRole
+                            else:
+                                role = element.name
+                    # check to see if role maps to an official music21 role (a.k.a. uniqueName)
+                    # and if so, use that for role instead (and use it for analog, as well,
+                    # instead of 'otherContributor').
+                    uniqueNm = M21Utilities.meiRoleToUniqueName.get(role, '')
+                    if uniqueNm:
+                        role = uniqueNm
+                        analog = uniqueNm
+
                     contrib = m21.metadata.Contributor(name=name, role=role)
 
             if contrib is None and analog.startswith('humdrum:'):

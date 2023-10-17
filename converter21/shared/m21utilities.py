@@ -1594,6 +1594,10 @@ class M21Utilities:
         'sourceEditor': 'PED',
     }
 
+    meiRoleToUniqueName: dict[str, str] = {
+        'encoder': 'electronicEncoder'
+    }
+
     @staticmethod
     def contributorRoleToHumdrumReferenceKey(role: str) -> str:
         output: str = (
