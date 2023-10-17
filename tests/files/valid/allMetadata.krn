@@ -91,11 +91,11 @@
 !!!ACO: collection designation 2
 !!!PUB: publication status "published"/"unpublished"
 !!!PED: publication editor
-!!!PPR: first publisher
-!!PDT: date first published (**date format)
+!!!PPR: publisher's name
+!!PDT: date published (**date format)
 !!!PDT: 1970/07/08
 !!!PTL: publication (volume) title
-!!!PPP: place first published
+!!!PPP: place published
 !!!PC#: publisher's catalog number (NOT scholarly catalog)
 !!!SCT: scholarly catalog abbrev/number (e.g. "BWV 551")
 !!!SCA: scholarly catalog (unabbreviated) (e.g. "Koechel 117")

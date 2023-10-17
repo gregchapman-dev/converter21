@@ -212,7 +212,7 @@ class MeiMetadata:
         return fileDesc
 
     def makeDigitalSource(self) -> MeiElement | None:
-        if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEM', 'YEN'):
+        if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEC', 'YEM', 'YEN'):
             return None
 
         source: MeiElement = MeiElement('source', {'type': 'digital'})
@@ -233,6 +233,7 @@ class MeiMetadata:
         publishers: list[MeiMetadataItem] = self.contents.get('YEP', [])
         releaseDates: list[MeiMetadataItem] = self.contents.get('YER', [])
         encodingDates: list[MeiMetadataItem] = self.contents.get('END', [])
+        copyrights: list[MeiMetadataItem] = self.contents.get('YEC', [])
         copyrightStatements: list[MeiMetadataItem] = self.contents.get('YEM', [])
         copyrightCountries: list[MeiMetadataItem] = self.contents.get('YEN', [])
         textLanguages: list[MeiMetadataItem] = self.contents.get('TXL', [])
@@ -314,8 +315,18 @@ class MeiMetadata:
                 encodingDateEl.fillInIsodate(encodingDate.value)
                 encodingDateEl.text = encodingDate.meiValue
 
-        if copyrightStatements or copyrightCountries:
+        if copyrights or copyrightStatements or copyrightCountries:
             availability: MeiElement = bibl.appendSubElement('availability')
+            for cpyright in copyrights:
+                copyrightEl: MeiElement = availability.appendSubElement(
+                    'useRestrict',
+                    {
+                        'type': 'copyright',
+                        'analog': 'humdrum:YEC'
+                    }
+                )
+                copyrightEl.text = cpyright.meiValue
+
             for copyrightStatement in copyrightStatements:
                 copyrightStatementEl: MeiElement = availability.appendSubElement(
                     'useRestrict',
@@ -355,8 +366,31 @@ class MeiMetadata:
                 'PPR', 'PDT', 'PPP', 'PC#'):
             return None
 
+        arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
+        editors: list[MeiMetadataItem] = self.contents.get('PED', [])
+        orchestrators: list[MeiMetadataItem] = self.contents.get('LOR', [])
+        translators: list[MeiMetadataItem] = self.contents.get('TRN', [])
+        collectors: list[MeiMetadataItem] = self.contents.get('OCL', [])
+        volumeNumbers: list[MeiMetadataItem] = self.contents.get('OVM', [])
+        volumeNames: list[MeiMetadataItem] = self.contents.get('PTL', [])
+        publishers: list[MeiMetadataItem] = self.contents.get('PPR', [])
+        datesPublished: list[MeiMetadataItem] = self.contents.get('PDT', [])
+        locationsPublished: list[MeiMetadataItem] = self.contents.get('PPP', [])
+        publisherCatalogNumbers: list[MeiMetadataItem] = self.contents.get('PC#', [])
+
         source: MeiElement = MeiElement('source', {'type': 'printed'})
         bibl: MeiElement = source.appendSubElement('bibl')
+
+        for publisherCatalogNumber in publisherCatalogNumbers:
+            identifierEl: MeiElement = bibl.appendSubElement(
+                'identifier',
+                {
+                    'type': 'catalogNumber',
+                    'analog': 'humdrum:PC#'
+                }
+            )
+            identifierEl.text = publisherCatalogNumber.meiValue
+
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
         if self.simpleTitleElement is not None:
@@ -365,14 +399,6 @@ class MeiMetadata:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
             bibl.subElements.extend(self.simpleComposerElements)
-
-        arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
-        editors: list[MeiMetadataItem] = self.contents.get('PED', [])
-        orchestrators: list[MeiMetadataItem] = self.contents.get('LOR', [])
-        translators: list[MeiMetadataItem] = self.contents.get('TRN', [])
-        collectors: list[MeiMetadataItem] = self.contents.get('OCL', [])
-        volumeNumbers: list[MeiMetadataItem] = self.contents.get('OVM', [])
-        volumeNames: list[MeiMetadataItem] = self.contents.get('PTL', [])
 
         for editor in editors:
             editorEl: MeiElement = bibl.appendSubElement(
@@ -432,6 +458,36 @@ class MeiMetadata:
                     }
                 )
                 persNameEl.text = collector.meiValue
+
+            if publishers or datesPublished or locationsPublished:
+                imprint: MeiElement = bibl.appendSubElement('imprint')
+                for publisher in publishers:
+                    publisherEl: MeiElement = imprint.appendSubElement(
+                        'publisher',
+                        {
+                            'analog': 'humdrum:PPR'
+                        }
+                    )
+                    publisherEl.text = publisher.meiValue
+                for datePublished in datesPublished:
+                    dateEl: MeiElement = imprint.appendSubElement(
+                        'date',
+                        {
+                            'type': 'datePublished',
+                            'analog': 'humdrum:PDT'
+                        }
+                    )
+                    dateEl.text = datePublished.meiValue
+
+                for locationPublished in locationsPublished:
+                    geogNameEl: MeiElement = imprint.appendSubElement(
+                        'geogName',
+                        {
+                            'role': 'locationPublished',
+                            'analog': 'humdrum:PPP'
+                        }
+                    )
+                    geogNameEl.text = locationPublished.meiValue
 
             for volumeName, volumeNumber in zip(volumeNames, volumeNumbers):
                 relatedItem: MeiElement = bibl.appendSubElement(
