@@ -385,7 +385,7 @@ class MeiMetadata:
 
     def makePrintedSource(self) -> MeiElement | None:
         if not self.anyExist('LAR', 'PED', 'LOR', 'TRN', 'OCL', 'OVM', 'PTL',
-                'PPR', 'PDT', 'PPP', 'PC#'):
+                'PPR', 'PDT', 'PPP', 'PC#', 'mei:printedSourceCopyright'):
             return None
 
         arrangers: list[MeiMetadataItem] = self.contents.get('LAR', [])
@@ -484,55 +484,82 @@ class MeiMetadata:
                 )
                 persNameEl.text = collector.meiValue
 
-            if publishers or datesPublished or locationsPublished:
-                imprint: MeiElement = bibl.appendSubElement('imprint')
-                for publisher in publishers:
-                    publisherEl: MeiElement = imprint.appendSubElement(
-                        'publisher',
-                        {
-                            'analog': 'humdrum:PPR'
-                        }
-                    )
-                    publisherEl.text = publisher.meiValue
-                for datePublished in datesPublished:
-                    dateEl: MeiElement = imprint.appendSubElement(
-                        'date',
-                        {
-                            'type': 'datePublished',
-                            'analog': 'humdrum:PDT'
-                        }
-                    )
-                    dateEl.text = datePublished.meiValue
+        if publishers or datesPublished or locationsPublished:
+            imprint: MeiElement = bibl.appendSubElement('imprint')
+            for publisher in publishers:
+                publisherEl: MeiElement = imprint.appendSubElement(
+                    'publisher',
+                    {
+                        'analog': 'humdrum:PPR'
+                    }
+                )
+                publisherEl.text = publisher.meiValue
+            for datePublished in datesPublished:
+                dateEl: MeiElement = imprint.appendSubElement(
+                    'date',
+                    {
+                        'type': 'datePublished',
+                        'analog': 'humdrum:PDT'
+                    }
+                )
+                dateEl.text = datePublished.meiValue
 
-                for locationPublished in locationsPublished:
-                    geogNameEl: MeiElement = imprint.appendSubElement(
-                        'geogName',
-                        {
-                            'role': 'locationPublished',
-                            'analog': 'humdrum:PPP'
-                        }
-                    )
-                    geogNameEl.text = locationPublished.meiValue
+            for locationPublished in locationsPublished:
+                geogNameEl: MeiElement = imprint.appendSubElement(
+                    'geogName',
+                    {
+                        'role': 'locationPublished',
+                        'analog': 'humdrum:PPP'
+                    }
+                )
+                geogNameEl.text = locationPublished.meiValue
 
-            if printedSourceCopyrights:
-                availability: MeiElement = bibl.appendSubElement('availability')
-                for printedSourceCopyright in printedSourceCopyrights:
-                    useRestrict: MeiElement = availability.appendSubElement(
-                        'useRestrict',
-                        {
-                            'type': 'copyright'
-                        }
-                    )
-                    useRestrict.text = printedSourceCopyright.meiValue
+        if printedSourceCopyrights:
+            availability: MeiElement = bibl.appendSubElement('availability')
+            for printedSourceCopyright in printedSourceCopyrights:
+                useRestrict: MeiElement = availability.appendSubElement(
+                    'useRestrict',
+                    {
+                        'type': 'copyright'
+                    }
+                )
+                useRestrict.text = printedSourceCopyright.meiValue
 
-            for volumeName, volumeNumber in zip(volumeNames, volumeNumbers):
-                relatedItem: MeiElement = bibl.appendSubElement(
+        for volumeName, volumeNumber in zip(volumeNames, volumeNumbers):
+            relatedItem: MeiElement = bibl.appendSubElement(
+                'relatedItem',
+                {
+                    'rel': 'host'
+                }
+            )
+            relBibl: MeiElement = relatedItem.appendSubElement('bibl')
+            titleElement = relBibl.appendSubElement(
+                'title',
+                {
+                    'analog': 'humdrum:PTL'
+                }
+            )
+            titleElement.text = volumeName.meiValue
+
+            biblScope: MeiElement = relBibl.appendSubElement(
+                'biblScope',
+                {
+                    'analog': 'humdrum:OVM'
+                }
+            )
+            biblScope.text = volumeNumber.meiValue
+
+        if len(volumeNames) - len(volumeNumbers) > 0:
+            # we ignore any extra volume numbers, since a number without a name
+            # isn't interesting.
+            for volumeName in volumeNames[len(volumeNumbers):]:
+                relatedItem = bibl.appendSubElement(
                     'relatedItem',
                     {
                         'rel': 'host'
                     }
                 )
-                relBibl: MeiElement = relatedItem.appendSubElement('bibl')
+                relBibl = relatedItem.appendSubElement('bibl')
                 titleElement = relBibl.appendSubElement(
                     'title',
                     {
@@ -540,33 +567,6 @@ class MeiMetadata:
                     }
                 )
                 titleElement.text = volumeName.meiValue
-
-                biblScope: MeiElement = relBibl.appendSubElement(
-                    'biblScope',
-                    {
-                        'analog': 'humdrum:OVM'
-                    }
-                )
-                biblScope.text = volumeNumber.meiValue
-
-            if len(volumeNames) - len(volumeNumbers) > 0:
-                # we ignore any extra volume numbers, since a number without a name
-                # isn't interesting.
-                for volumeName in volumeNames[len(volumeNumbers):]:
-                    relatedItem = bibl.appendSubElement(
-                        'relatedItem',
-                        {
-                            'rel': 'host'
-                        }
-                    )
-                    relBibl = relatedItem.appendSubElement('bibl')
-                    titleElement = relBibl.appendSubElement(
-                        'title',
-                        {
-                            'analog': 'humdrum:PTL'
-                        }
-                    )
-                    titleElement.text = volumeName.meiValue
 
         if bibl.isEmpty():
             return None
