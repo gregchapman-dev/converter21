@@ -10,6 +10,7 @@
 
 import setuptools
 
+# must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION
 converter21version = '3.0.0'
 
 if __name__ == '__main__':

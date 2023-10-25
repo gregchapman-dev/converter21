@@ -1,0 +1,157 @@
+!!!COM: Composer's name
+!!CDT: Composers birth/death dates
+!!!CDT: 1770/-1827/
+!!!CBL: Composer's birth location
+!!!CDL: Composer's death location
+!!!CNT: Composer's nationality
+!!!COM2: The second composer's name
+!!!CDT: 1775/-1810/
+!!!CBL: The second composer's birth location
+!!!CDL: The second composer's death location
+!!!CNT: The second composer's nationality
+!!!OTL@@FR: French (untranslated) title
+!!!OTL@EN: English (translated) title
+!!!OMD@@FR: French (untranslated) movement name
+!!!OMD@EN: English (translated) movement name
+!!!unrecognizable: unrecognizable metadata item
+**kern	**kern
+*part1	*part1
+*staff2	*staff1
+*clefG2	*clefG2
+*k[b-e-a-d-g-]	*k[b-e-a-d-g-]
+*D-:	*D-:
+*M4/4	*M4/4
+=24	=24
+4d-	4e-
+4A-	4r
+4A-	4e-
+4A-	4r
+=	=
+*-	*-
+!!!system-decoration: {(s1,s2)}
+!!!COA: Attributed composer
+!!!CBL: Attributed composer's birth location
+!!!CDL: Attributed composer's death location
+!!!CDT: 1750/-1832/
+!!!CNT: Attributed composer's nationality
+!!!COS: Suspected composer
+!!!COL: Composer's abbreviated, alias, or stage name
+!!!COC: Corporate composer
+!!CDT: Composer's birth and death dates
+!!!LYR: Lyricist's name
+!!!LIB: librettist's name
+!!!LAR: music arranger's name
+!!!LOR: orchestrator's name
+!!!TXO: original language of vocal/choral text
+!!!TXL: language of the encoded vocal/choral text
+!!!TRN: translator of the text
+!!!RTL: album title
+!!!RMM: manufacturer or sponsoring company
+!!!RC#: recording company's catalog number of album
+!!RRD: release date
+!!!RRD: 2000/6/15
+!!!RLC: place of recording
+!!!RNP: producer
+!!RDT: date of recording
+!!!RDT: 1999/01/23
+!!!RT#: track number
+!!!MGN: ensemble's name
+!!!MPN: performer's name
+!!!MPS: suspected performer's name
+!!!MLC: place of performance
+!!MDT: date of performance (undocumented, but more common)
+!!!MDT: 1973/09/01
+!!!MLC: place of Sept 2, 1973 performance
+!!MRD: date of performance (documented, but rare)
+!!!MRD: 1973/09/02
+!!!MCN: conductor's name
+!!MPD: date of first performance
+!!!MPD: 1973/08/30
+!!!OTA: alternative title
+!!!OTP: popular title
+!!!OPR: title of parent work
+!!!OAC: act number (e.g. "2" or "Act 2")
+!!!OSC: scene number (e.g. "3" or "Scene 3")
+!!!OMV: movement number (e.g. "4", or "mov. 4", or...)
+!!!OPS: opus number (e.g. "23", or "Opus 23")
+!!!ONM: number (e.g. number of song within ABC multi-song file)
+!!!OVM: volume number (e.g. "6" or "Vol. 6")
+!!!ODE: dedicated to
+!!!OCO: commissioned by
+!!!OCL: collected/transcribed by
+!!!ONB@@FR: free form (French) note related to title or identity of work (line 1)
+!!!ONB@@FR: free form (French) note related to title or identity of work (line 2)
+!!ODT: date or period of composition (**date or **zeit format)
+!!!ODT: 1962/01/01-1963/4/13
+!!!OCY: country of composition
+!!!OPC: city, town, or village of composition
+!!!GTL: group title (e.g. "The Seasons")
+!!!GAW: title of associated work, such as a play or film
+!!!GCO: collection designation (e.g. "Norton Scores")
+!!!ACO: collection designation 2
+!!!PUB: publication status "published"/"unpublished"
+!!!PED: publication editor
+!!!PPR: publisher's name
+!!PDT: date published (**date format)
+!!!PDT: 1970/07/08
+!!!PTL: publication (volume) title
+!!!PPP: place published
+!!!PC#: publisher's catalog number (NOT scholarly catalog)
+!!!SCT: scholarly catalog abbrev/number (e.g. "BWV 551")
+!!!SCA: scholarly catalog (unabbreviated) (e.g. "Koechel 117")
+!!!SMS: unpublished manuscript source name
+!!!SML: unpublished manuscript location
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 1)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 2)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 3)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 4)
+!!!SMA@EN: acknowledgment (English) of manuscript access (line 5)
+!!!YEP: publisher of electronic edition
+!!!YEC: date and owner of electronic copyright
+!!YER: date electronic edition released
+!!!YER: 2023/09/20
+!!!YEM: copyright message (e.g. "All rights reserved")
+!!!YEN: country of copyright
+!!!YOR: original document from which encoded doc was prepared
+!!!YOO: original document owner
+!!YOY: original document copyright year
+!!!YOY: 1965
+!!!YOE: original document editor
+!!!EED: electronic editor
+!!!ENC: electronic encoder (person)
+!!END: encoding date
+!!!END: 2023/09/18
+!!!EMD: electronic document modification description (one/mod)
+!!!EMD: modification description 2
+!!!EMD: modification description 3
+!!!EEV: electronic edition version
+!!EFL: file number e.g. "1/4" for one of four
+!!!EFL: 1/1
+!!!EST: encoding status (usually deleted before distribution)
+!!!VTS: checksum (excluding the VTS line itself)
+!!!AFR: form designation
+!!!AGN: genre designation
+!!!AST: style, period, or type of work designation
+!!AMD: mode classification e.g. "5; Lydian"
+!!!AMD: 5; Lydian
+!!AMT: metric classification, must be one of eight names, e.g. "simple quadruple"
+!!!AMT: simple quadruple
+!!AIN: instrumentation, must be alphabetical list of *I abbrevs, space-delimited
+!!AIN (cont'd): An optional part count can be prefixed before each instrument code
+!!!AIN: clars corno fagot flt oboe
+!!!AIN: 1 cello 1 viola 2 violn
+!!ARE: geographical region of origin (list of "narrowing down" names of regions)
+!!!ARE: America, North America, United States of America, Ohio, Columbus
+!!ARL: geographical location of origin (lat/long)
+!!!ARL: 51.5/10.5@
+!!!HAO@@FR: aural history (fr) (stories about the work)
+!!!HAO@@FR: aural history (fr) line 2
+!!!HAO@EN: aural history (en) line 3
+!!!HTX@RU: freeform translation to Russian of vocal text (line 1)
+!!!HTX1@RU: freeform translation to Russian of vocal text (line 2)
+!!!RLN: Extended ASCII language code
+!!!RNB: a note (no language) about the representation (line 1)
+!!!RNB: a note (no language) about the representation (line 2)
+!!!RWB: a warning (no language) about the representation (line 1)
+!!!RWB: a warning (no language) about the representation (line 2)
+!!!RWB: a warning (no language) about the representation (line 3)

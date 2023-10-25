@@ -12,6 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from enum import IntEnum, auto
+from copy import deepcopy
 import typing as t
 
 import music21 as m21
@@ -41,6 +42,7 @@ from converter21.humdrum import ToolTremolo
 
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
+from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -140,7 +142,7 @@ class HumdrumWriter:
         # that matches the OMD (movementName) that was chosen to represent the temop in the
         # initial Humdrum header.
         self._waitingToMaybeSkipFirstTempoText: bool = True
-        self._tempoMovementName: str | None = None
+        self._tempoMovementNames: list[str] = []
 
         # The initial OMD token that was not emitted inline, but instead will be used
         # to put the metadata.movementName back the way it was (if appropriate).
@@ -348,13 +350,13 @@ class HumdrumWriter:
 
         self.spannerBundle = self._m21Score.spannerBundle
 
-        # set up _tempoMovementName for use when emitting the first measure (to
+        # set up _tempoMovementNames for use when emitting the first measure (to
         # maybe skip producing '!LO:TX' from a MetronomeMark that is described
         # perfectly already by the tempo movementName/!!!OMD.
         if self._m21Score.metadata:
             movementNames: list[str] = self._m21Score.metadata['movementName']
             if movementNames:
-                self._tempoMovementName = str(movementNames[-1])
+                self._tempoMovementNames = [str(movementName) for movementName in movementNames]
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -576,11 +578,14 @@ class HumdrumWriter:
                 # mdMovementNameItems[-1][1] is a Text value
                 lastMovementNameStr: str = str(mdMovementNameItems[-1][1])
                 if initialOMDValue.startswith(lastMovementNameStr):
-                    mname = mdMovementNameItems[-1][1]
+                    # replace in mdMovementNameItems with a deepcopy (don't change
+                    # the original metadata item!)
+                    newValue = deepcopy(mdMovementNameItems[-1][1])
                     if t.TYPE_CHECKING:
-                        assert isinstance(mname, m21.metadata.Text)
+                        assert isinstance(newValue, m21.metadata.Text)
                     initialOMDValue = M21Convert.translateSMUFLNotesToNoteNames(initialOMDValue)
-                    mname._data = initialOMDValue  # pylint: disable=protected-access
+                    newValue._data = initialOMDValue  # pylint: disable=protected-access
+                    mdMovementNameItems[-1] = (mdMovementNameItems[-1][0], newValue)
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
         atLine: int = 0
@@ -735,26 +740,65 @@ class HumdrumWriter:
             atLine += 1
 
         # what's left in allItems goes at the bottom of the file
+        # If converter21 isn't in 'software', add it in the exported file.
+        converter21IsThere: bool = False
         for uniqueName, value in allItems:
-            nsName: str | None = m21Metadata.uniqueNameToNamespaceName(uniqueName)
-            if nsName and nsName.startswith('m21FileInfo:'):
-                # We don't write fileInfo (which is about the original file, not the one we're
-                # writing) to the output Humdrum file.
-                continue
-            refLineStr = None
-            hdKeyWithoutIndex = (
-                M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
-            )
-            if hdKeyWithoutIndex is not None:
-                idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
-                hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
-                refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
-                    idx, uniqueName, value
-                )
-            else:
+            if (uniqueName == 'software'
+                    and str(value) == SharedConstants._CONVERTER21_NAME_AND_VERSION):
+                converter21IsThere = True
+
+            if uniqueName.startswith('humdrumraw:') or uniqueName.startswith('humdrum:'):
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
                     0, uniqueName, value
                 )
+            else:
+                nsName: str | None = m21Metadata.uniqueNameToNamespaceName(uniqueName)
+                if nsName and nsName.startswith('m21FileInfo:'):
+                    # We don't write fileInfo (which is about the original file, not the one we're
+                    # writing) to the output Humdrum file.
+                    continue
+                refLineStr = None
+                hdKeyWithoutIndex = None
+
+                if uniqueName == 'otherContributor':
+                    # See if we can make a valid humdrum key out of the contributor role.
+                    if t.TYPE_CHECKING:
+                        assert isinstance(value, m21.metadata.Contributor)
+                    hdKeyWithoutIndex = (
+                        M21Utilities.contributorRoleToHumdrumReferenceKey(value.role)
+                    )
+                    if hdKeyWithoutIndex is not None:
+                        idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                        hdKeyWithoutIndexToCurrentIndex[
+                            hdKeyWithoutIndex] = idx + 1  # for next time
+                        refLineStr = M21Convert.humdrumMetadataItemToHumdrumReferenceLineStr(
+                            idx, hdKeyWithoutIndex, value
+                        )
+                    if refLineStr is not None:
+                        outfile.appendLine(refLineStr, asGlobalToken=True)
+                        continue
+
+                hdKeyWithoutIndex = (
+                    M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
+                )
+
+                if hdKeyWithoutIndex is not None:
+                    idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
+                    hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
+                    refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                        idx, uniqueName, value
+                    )
+                else:
+                    refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                        0, uniqueName, value
+                    )
+            if refLineStr is not None:
+                outfile.appendLine(refLineStr, asGlobalToken=True)
+
+        if not converter21IsThere:
+            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
+                0, 'software', SharedConstants._CONVERTER21_NAME_AND_VERSION
+            )
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
@@ -1476,9 +1520,10 @@ class HumdrumWriter:
                     # We will still output the *MM as appropriate.
                     if self._waitingToMaybeSkipFirstTempoText:
                         self._waitingToMaybeSkipFirstTempoText = False
-                        if self._tempoMovementName:
-                            if m21Obj.text is not None and self._tempoMovementName in m21Obj.text:
+                        for movementName in self._tempoMovementNames:
+                            if m21Obj.text is not None and movementName in m21Obj.text:
                                 m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
+                                break
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))

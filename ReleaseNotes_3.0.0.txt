@@ -35,6 +35,7 @@ MEI import:
     - support dir/dynam/tempo with @startid instead of @tstamp
     - generate music21 StaffGroups (and PartStaffs if appropriate)
     - support tuplet display details
+    - import of metadata
 
 Humdrum export:
     - support tuplet display details (*{X}tuplet/*{X}brackettup)

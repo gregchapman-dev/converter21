@@ -7,7 +7,7 @@ import subprocess
 import music21 as m21
 from music21.base import VERSION_STR
 
-from musicdiff.annotation import AnnScore, AnnExtra
+from musicdiff.annotation import AnnScore, AnnExtra, AnnMetadataItem
 from musicdiff import Comparison
 from musicdiff import DetailLevel
 
@@ -113,7 +113,43 @@ def oplistSummary(
                         'staffgrpbartogetheredit',
                         'staffgrppartindicesedit'):
             counts['staffgroup'] += 1
-
+        # metadata
+        elif op[0] == 'mditemdel':
+            assert isinstance(op[1], AnnMetadataItem)
+            key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemins':
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[2].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemsub':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            if op[1].key != op[2].key:
+                key = 'MD:' + op[1].key + '!=' + op[2].key
+            else:
+                key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemkeyedit':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[1].key + '!=' + op[2].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemvalueedit':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
         elif op[0] == 'extradel':
             # op[1] only
             assert isinstance(op[1], AnnExtra)
@@ -224,7 +260,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
         meiwPath = Path(tempfile.gettempdir())
         meiwPath /= (meiPath.stem + '_Written')
         meiwPath = meiwPath.with_suffix('.mei')
-        with open(meiwPath, 'wb') as f:
+        with open(meiwPath, 'wt') as f:
             success = meiw.write(f)
         if not success:
             print('export failed')
@@ -270,8 +306,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
-        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
+        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)

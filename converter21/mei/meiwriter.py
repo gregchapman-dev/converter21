@@ -44,7 +44,7 @@ class MeiWriter:
         self.makeNotation: bool = True
 
         # client can set to '4' or '5' (or anything starting with '4' or '5')
-        self.meiVersion = '5'
+        self.meiVersion: str = '5'
 
     def write(self, fp) -> bool:
         if self.makeNotation:
@@ -72,22 +72,20 @@ class MeiWriter:
 
         # Write to the output MEI XML file
         # pylint: disable=line-too-long
-        prefixBytes: bytes
+        prefix: str
         if self.meiVersion.startswith('4'):
-            prefixBytes = bytes(
+            prefix = (
                 '''<?xml version="1.0" encoding="UTF-8"?>
 <?xml-model href="https://music-encoding.org/schema/4.0.1/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
 <?xml-model href="https://music-encoding.org/schema/4.0.1/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
-''',
-                encoding='utf-8',
+'''
             )
         elif self.meiVersion.startswith('5'):
-            prefixBytes = bytes(
+            prefix = (
                 '''<?xml version="1.0" encoding="UTF-8"?>
 <?xml-model href="https://music-encoding.org/schema/5.0/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
 <?xml-model href="https://music-encoding.org/schema/5.0/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
-''',
-                encoding='utf-8',
+'''
             )
         else:
             raise MeiExportError(
@@ -95,9 +93,9 @@ class MeiWriter:
             )
         # pylint: enable=line-too-long
 
-        fp.write(prefixBytes)
-        ElementTree(meiElement).write(fp)
-        fp.write(b'\n')
+        fp.write(prefix)
+        ElementTree(meiElement).write(fp, encoding='unicode')
+        fp.write('\n')
 
         # clean up all the notes-to-self MeiScore wrote in the score.
         meiScore.deannotateScore()

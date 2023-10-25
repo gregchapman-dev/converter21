@@ -9,8 +9,8 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from xml.etree.ElementTree import Element, TreeBuilder
 import typing as t
+from xml.etree.ElementTree import Element, TreeBuilder
 
 import music21 as m21
 from music21.common import opFrac
@@ -18,6 +18,8 @@ from music21.common import OffsetQL
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
+from converter21.mei import MeiMetadataItem
+from converter21.mei import MeiMetadata
 from converter21.mei import MeiMeasure
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiTemporarySpanner
@@ -39,11 +41,9 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # pylint: enable=protected-access
 
 class MeiScore:
-    Debug: bool = False  # can be set to True for more debugging
-
     def __init__(self, m21Score: m21.stream.Score, meiVersion: str) -> None:
         self.m21Score: m21.stream.Score = m21Score
-        self.meiVersion = meiVersion
+        self.meiVersion: str = meiVersion
 
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanners: list[MeiBeamSpanner] = []
@@ -79,6 +79,7 @@ class MeiScore:
         )
 
         self.measures: list[MeiMeasure] = self._getMeiMeasures()
+        self.metadata: MeiMetadata = MeiMetadata(m21Score.metadata)
 
     def _getStaffNumbersForM21Parts(self) -> dict[m21.stream.Part, int]:
         output: dict[m21.stream.Part, int] = {}
@@ -124,38 +125,61 @@ class MeiScore:
                 'meiversion': '5.0+CMN'
             })
 
-        self.makeMeiHead(tb)
+        # meiHead
+        self.metadata.makeRootElement(tb)
 
-        tb.start('music', {})
+        if self.metadata.mainWorkXmlId:
+            tb.start('music', {'decls': '#' + self.metadata.mainWorkXmlId})
+        else:
+            tb.start('music', {})
         tb.start('body', {})
         tb.start('mdiv', {})
 
         tb.start('score', {})
         self.makeScoreDefElement(tb)
+
         tb.start('section', {})
         for meim in self.measures:
             meim.makeRootElement(tb)
         tb.end('section')
+
         tb.end('score')
 
         tb.end('mdiv')
         tb.end('body')
-        tb.end('music')
 
+        # There's one bit of metadata that goes in music/back/div@type="textTranslation":
+        # humdrum:HTX
+        htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
+        if htxItems:
+            allTheSameLanguage: bool
+            theLanguage: str | None
+            theLanguage, allTheSameLanguage = MeiMetadata.getTextListLanguage(htxItems)
+
+            tb.start('back', {})
+            tb.start('div', {'type': 'textTranslation'})
+            if allTheSameLanguage and theLanguage:
+                tb.start('lg', {'xml:lang': theLanguage})
+            else:
+                tb.start('lg', {})
+
+            for htxItem in htxItems:
+                # <l> can't take @analog, so use @type instead (says Perry)
+                attrib: dict[str, str] = {'type': 'humdrum:HTX'}
+                if isinstance(htxItem.value, m21.metadata.Text):
+                    if htxItem.value.language and not allTheSameLanguage:
+                        attrib['xml:lang'] = htxItem.value.language.lower()
+                tb.start('l', attrib)
+                tb.data(htxItem.meiValue)
+                tb.end('l')
+            tb.end('lg')
+            tb.end('div')
+            tb.end('back')
+
+        tb.end('music')
         tb.end('mei')
         root: Element = tb.close()
         return root
-
-    def makeMeiHead(self, tb: TreeBuilder) -> None:
-        # Here lies metadata, in <fileDesc>, <encodingDesc>, <workList>, etc
-        tb.start('meiHead', {})
-        tb.start('fileDesc', {})
-        tb.end('fileDesc')
-        tb.start('encodingDesc', {})
-        tb.end('encodingDesc')
-        tb.start('workList', {})
-        tb.end('workList')
-        tb.end('meiHead')
 
     def makeStaffDefElement(self, part: m21.stream.Part, staffN: int, tb: TreeBuilder):
         # staffLines (defaults to 5)

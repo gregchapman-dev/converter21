@@ -1,4 +1,9 @@
 class SharedConstants:
+    # Must be kept up to date with setup.py
+    _CONVERTER21_NAME = 'converter21'
+    _CONVERTER21_VERSION = '3.0.0'
+    _CONVERTER21_NAME_AND_VERSION = _CONVERTER21_NAME + ' v' + _CONVERTER21_VERSION
+
     _SMUFL_NAME_TO_UNICODE_CHAR: dict[str, str] = {
         'space': chr(0x0020),
         'musicFlatSign': chr(0x266D),

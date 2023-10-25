@@ -46,7 +46,6 @@ from music21 import instrument
 from music21 import interval
 from music21 import key
 from music21 import layout
-from music21 import metadata
 from music21 import meter
 from music21 import note
 from music21 import pitch
@@ -149,51 +148,6 @@ class Test(unittest.TestCase):
         self.assertEqual(expected.name, actual.name)
         self.assertEqual(expected.accidental, actual.accidental)
         self.assertEqual(expected.octave, actual.octave)
-
-    def testAllPartsPresent1(self):
-        '''allPartsPresent(): one <staffDef>, no repeats'''
-        staffDefs = [mock.MagicMock(spec_set=ETree.Element)]
-        staffDefs[0].get = mock.MagicMock(return_value='1')
-        elem = mock.MagicMock(spec_set=ETree.Element)
-        elem.findall = mock.MagicMock(return_value=staffDefs)
-        expected = (('1',), '1')
-        c = MeiReader()
-        actual = c.allPartsPresent(elem)
-        self.assertEqual(expected, actual)
-
-    def testAllPartsPresent2(self):
-        '''allPartsPresent(): four <staffDef>s'''
-        staffDefs = [mock.MagicMock(spec_set=ETree.Element) for _ in range(4)]
-        for i in range(4):
-            staffDefs[i].get = mock.MagicMock(return_value=str(i + 1))
-        elem = mock.MagicMock(spec_set=ETree.Element)
-        elem.findall = mock.MagicMock(return_value=staffDefs)
-        expected = (('1', '2', '3', '4'), '1')
-        c = MeiReader()
-        actual = c.allPartsPresent(elem)
-        self.assertEqual(expected, actual)
-
-    def testAllPartsPresent3(self):
-        '''allPartsPresent(): four unique <staffDef>s, several repeats'''
-        staffDefs = [mock.MagicMock(spec_set=ETree.Element) for _ in range(12)]
-        for i in range(12):
-            staffDefs[i].get = mock.MagicMock(return_value=str((i % 4) + 1))
-        elem = mock.MagicMock(spec_set=ETree.Element)
-        elem.findall = mock.MagicMock(return_value=staffDefs)
-        expected = (('1', '2', '3', '4'), '1')
-        c = MeiReader()
-        actual = c.allPartsPresent(elem)
-        self.assertEqual(expected, actual)
-
-    def testAllPartsPresent4(self):
-        '''allPartsPresent(): error: no <staffDef>s'''
-        elem = mock.MagicMock(spec_set=ETree.Element)
-        c = MeiReader()
-        self.assertRaises(meiexceptions.MeiValidityError, c.allPartsPresent, elem)
-        try:
-            c.allPartsPresent(elem)
-        except meiexceptions.MeiValidityError as mvErr:
-            self.assertEqual(meireader._SEEMINGLY_NO_PARTS, mvErr.args[0])
 
     def testTimeSigFromAttrs(self):
         '''_timeSigFromAttrs(): that it works (integration test)'''
@@ -299,300 +253,6 @@ class Test(unittest.TestCase):
         c = MeiReader()
         actual = c.accidFromElement(elem)
         self.assertEqual(pitch.Accidental('#'), actual)
-
-    # -----------------------------------------------------------------------------
-    # class TestMetadata(unittest.TestCase):
-    # '''Tests for the metadata-fetching functions.'''
-
-    @mock.patch('converter21.mei.meireader.MeiReader.metaSetTitle')
-    @mock.patch('converter21.mei.meireader.MeiReader.metaSetComposer')
-    @mock.patch('converter21.mei.meireader.MeiReader.metaSetDate')
-    def testMakeMeta1(self, mockDate, mockComposer, mockTitle):
-        '''
-        makeMetadata() when there is no <work> element.
-        '''
-        documentRoot = mock.MagicMock(spec_set=ETree.Element)
-        documentRoot.find.return_value = None
-
-        c = MeiReader()
-        c.documentRoot = documentRoot
-        actual = c.makeMetadata()
-
-        self.assertIsInstance(actual, metadata.Metadata)
-        documentRoot.find.assert_called_once_with(f'.//{MEI_NS}work')
-        self.assertEqual(0, mockDate.call_count)
-        self.assertEqual(0, mockComposer.call_count)
-        self.assertEqual(0, mockTitle.call_count)
-
-    @mock.patch('converter21.mei.meireader.MeiReader.metaSetTitle')
-    @mock.patch('converter21.mei.meireader.MeiReader.metaSetComposer')
-    @mock.patch('converter21.mei.meireader.MeiReader.metaSetDate')
-    def testMakeMeta2(self, mockDate, mockComposer, mockTitle):
-        '''
-        makeMetadata() when there is a <work> element.
-        '''
-        documentRoot = mock.MagicMock(spec_set=ETree.Element)
-        mockWork = mock.MagicMock(spec_set=ETree.Element)
-        documentRoot.find.return_value = mockWork
-        mockDate.side_effect = lambda unused, y: y
-        mockComposer.side_effect = lambda unused, y: y
-        mockTitle.side_effect = lambda unused, y: y
-
-        c = MeiReader()
-        c.documentRoot = documentRoot
-        actual = c.makeMetadata()
-
-        self.assertIsInstance(actual, metadata.Metadata)
-        documentRoot.find.assert_called_once_with(f'.//{MEI_NS}work')
-        mockDate.assert_called_once_with(mockWork, actual)
-        mockComposer.assert_called_once_with(mockWork, actual)
-        mockTitle.assert_called_once_with(mockWork, actual)
-
-    def testMetaTitle1(self):
-        '''
-        metaSetTitle() with a title and tempo but no subtitle
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <titleStmt>
-                <title>Symphony No. 7</title>
-            </titleStmt>
-            <tempo>Adagio</tempo>
-        </work>'''
-        work = ETree.fromstring(work)
-        expTitle = 'Symphony No. 7'
-        expMovementName = 'Adagio'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetTitle(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertFalse(hasattr(meta, 'subtitle'))
-        self.assertEqual(expTitle, actual.title)
-        self.assertEqual(expMovementName, actual.movementName)
-
-    def testMetaTitle2(self):
-        '''
-        metaSetTitle() with a title, subtitle, but no tempo
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <titleStmt>
-                <title>Symphony No. 7</title>
-                <title type="subtitle">in one movement</title>
-            </titleStmt>
-        </work>'''
-        work = ETree.fromstring(work)
-        expTitle = 'Symphony No. 7 (in one movement)'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetTitle(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertFalse(hasattr(meta, 'subtitle'))
-        self.assertEqual(expTitle, actual.title)
-        self.assertIsNone(actual.movementName)
-
-    def testMetaComposer1(self):
-        '''
-        metaSetComposer() with no composers
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei"/>'''
-        work = ETree.fromstring(work)
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetComposer(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertIsNone(actual.composer)
-
-    def testMetaComposer2(self):
-        '''
-        metaSetComposer() with one composer in <respStmt>
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <titleStmt>
-                <respStmt>
-                    <persName role="composer">Jean Sibelius</persName>
-                </respStmt>
-            </titleStmt>
-        </work>'''
-        work = ETree.fromstring(work)
-        expComposer = 'Jean Sibelius'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetComposer(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expComposer, actual.composer)
-
-    def testMetaComposer3(self):
-        '''
-        metaSetComposer() with one composer in <composer>
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <titleStmt>
-                <composer>Jean Sibelius</composer>
-            </titleStmt>
-        </work>'''
-        work = ETree.fromstring(work)
-        expComposer = 'Jean Sibelius'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetComposer(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expComposer, actual.composer)
-
-    def testMetaComposer4(self):
-        '''
-        metaSetComposer() with two composers, one specified each way
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <titleStmt>
-                <respStmt>
-                    <persName role="composer">Jean Sibelius</persName>
-                </respStmt>
-                <composer>Sibelius, Jean</composer>
-            </titleStmt>
-        </work>'''
-        work = ETree.fromstring(work)
-        expComposers1 = ('Jean Sibelius', 'Sibelius, Jean')
-        expComposers2 = ('Sibelius, Jean', 'Jean Sibelius')
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetComposer(work, meta)
-
-        self.assertIs(meta, actual)
-        if actual.composers not in (expComposers1, expComposers2):
-            self.fail('composer names do not match in either order')
-
-    def testMetaDate1(self):
-        '''
-        metaSetDate() with no dates
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei"/>'''
-        work = ETree.fromstring(work)
-        expDate = None
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetDate(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expDate, actual.dateCreated)
-
-    def testMetaDate2(self):
-        '''
-        metaSetDate() with @isodate
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <history>
-                <creation>
-                    <date isodate="1924-03-02"/>
-                </creation>
-            </history>
-        </work>'''
-        work = ETree.fromstring(work)
-        expDate = '1924/03/02'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetDate(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expDate, actual.dateCreated)
-
-    def testMetaDate3(self):
-        '''
-        metaSetDate() with text
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <history>
-                <creation>
-                    <date>1924-03-02</date>
-                </creation>
-            </history>
-        </work>'''
-        work = ETree.fromstring(work)
-        expDate = '1924/03/02'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetDate(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expDate, actual.dateCreated)
-
-    @mock.patch('converter21.mei.meireader.environLocal')
-    def testMetaDate4(self, mockEnviron):
-        '''
-        metaSetDate() with text that fails
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <history>
-                <creation>
-                    <date>2 March 1924</date>
-                </creation>
-            </history>
-        </work>'''
-        work = ETree.fromstring(work)
-        expDate = None
-        expWarn = meireader._MISSED_DATE.format('2 March 1924')
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetDate(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expDate, actual.dateCreated)
-        mockEnviron.warn.assert_called_once_with(expWarn)
-
-    def testMetaDate5(self):
-        '''
-        metaSetDate() with @notbefore and @notafter
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <history>
-                <creation>
-                    <date notbefore="1915" notafter="1924"/>
-                </creation>
-            </history>
-        </work>'''
-        work = ETree.fromstring(work)
-        expDate = '1915/--/-- to 1924/--/--'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetDate(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expDate, actual.dateCreated)
-
-    def testMetaDate6(self):
-        '''
-        metaSetDate() with @startdate and @enddate
-        '''
-        work = '''<work xmlns="http://www.music-encoding.org/ns/mei">
-            <history>
-                <creation>
-                    <date startdate="1915" enddate="1924"/>
-                </creation>
-            </history>
-        </work>'''
-        work = ETree.fromstring(work)
-        expDate = '1915/--/-- to 1924/--/--'
-        meta = metadata.Metadata()
-
-        c = MeiReader()
-        actual = c.metaSetDate(work, meta)
-
-        self.assertIs(meta, actual)
-        self.assertEqual(expDate, actual.dateCreated)
 
     # -----------------------------------------------------------------------------
     # class TestAttrTranslators(unittest.TestCase):
@@ -1292,12 +952,12 @@ class Test(unittest.TestCase):
 
     # -----------------------------------------------------------------------------
     # class TestClefFromElement(unittest.TestCase):
-    # '''Tests for clefFromElement()'''
+    # '''Tests for _clefFromElement()'''
     # NOTE: in this function's integration tests, the Element.tag attribute doesn't actually matter
 
     def testIntegration1aClefFromElement(self):
         '''
-        clefFromElement(): all the elements that go in clef.clefFromString()...
+        _clefFromElement(): all the elements that go in clef.clefFromString()...
                            'shape', 'line', 'dis', and 'dis.place'
         (corresponds to testUnit1a, with real objects)
         '''
@@ -1308,7 +968,7 @@ class Test(unittest.TestCase):
         expectedClass = clef.Treble8vaClef
 
         c = MeiReader()
-        actual = c.clefFromElement(clefElem)
+        actual = c._clefFromElement(clefElem)
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1325,7 +985,7 @@ class Test(unittest.TestCase):
         expectedClass = clef.PercussionClef
 
         c = MeiReader()
-        actual = c.clefFromElement(clefElem)
+        actual = c._clefFromElement(clefElem)
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1342,7 +1002,7 @@ class Test(unittest.TestCase):
         expectedClass = clef.TabClef
 
         c = MeiReader()
-        actual = c.clefFromElement(clefElem)
+        actual = c._clefFromElement(clefElem)
 
         self.assertEqual(expectedClass, actual.__class__)
 
@@ -1468,7 +1128,7 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
     @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
-    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._clefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit1StaffFromElementStaffDefFromElement(self, mockTrans,
                                                      mockClef, mockKey, mockTime, mockInstr):
@@ -1591,7 +1251,7 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
     @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
-    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._clefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit2StaffFromElement(self, mockTrans, mockClef,
                                   mockKey, mockTime, mockInstr, mockFromString):
@@ -1675,7 +1335,7 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
     @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
-    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._clefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit3StaffFromElement(self, mockTrans, mockClef, mockKey, mockTime,
                                   mockInstr, mockFromString, mockInstrInit):
@@ -1760,7 +1420,7 @@ class Test(unittest.TestCase):
     @mock.patch('converter21.mei.meireader.MeiReader.instrDefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._timeSigFromAttrs')
     @mock.patch('converter21.mei.meireader.MeiReader._keySigFromAttrs')
-    @mock.patch('converter21.mei.meireader.MeiReader.clefFromElement')
+    @mock.patch('converter21.mei.meireader.MeiReader._clefFromElement')
     @mock.patch('converter21.mei.meireader.MeiReader._transpositionFromAttrs')
     def testUnit4StaffFromElement(self, mockTrans, mockClef, mockKey, mockTime,
                                   mockInstr, mockFromString, mockInstrInit):
@@ -2236,27 +1896,6 @@ class Test(unittest.TestCase):
             self.assertEqual('12', obj.m21TupletNum)
             self.assertEqual('400', obj.m21TupletNumbase)
             self.assertEqual('the forest', obj.m21TupletSearch)
-
-    def testTuplets6(self):
-        '''
-        tupletFromElement(): when either @num or @numbase isn't in the element, raise an
-            MeiAttributeError.
-        '''
-        # missing @numbase
-        elem = ETree.Element('tuplet', attrib={'num': '3'})
-        c = MeiReader()
-        self.assertRaises(meiexceptions.MeiAttributeError, c.tupletFromElement, elem)
-        try:
-            c.tupletFromElement(elem)
-        except meiexceptions.MeiAttributeError as err:
-            self.assertEqual(meireader._MISSING_TUPLET_DATA, err.args[0])
-        # missing @num
-        elem = ETree.Element('tuplet', attrib={'numbase': '2'})
-        self.assertRaises(meiexceptions.MeiAttributeError, c.tupletFromElement, elem)
-        try:
-            c.tupletFromElement(elem)
-        except meiexceptions.MeiAttributeError as err:
-            self.assertEqual(meireader._MISSING_TUPLET_DATA, err.args[0])
 
     @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
     @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')

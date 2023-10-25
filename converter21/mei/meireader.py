@@ -186,8 +186,7 @@ from uuid import uuid4
 # music21
 import music21 as m21
 from music21.base import Music21Object
-if hasattr(m21.common.enums, 'OrnamentDelay'):
-    from music21.common.enums import OrnamentDelay  # type: ignore
+from music21.common.enums import OrnamentDelay
 from music21.common.numberTools import opFrac
 from music21.common.types import OffsetQL
 from music21 import articulations
@@ -200,7 +199,6 @@ from music21 import environment
 from music21 import expressions
 from music21 import interval
 from music21 import key
-from music21 import metadata
 from music21 import meter
 from music21 import note
 from music21 import spanner
@@ -214,9 +212,11 @@ from converter21.mei import MeiValidityError
 from converter21.mei import MeiAttributeError
 from converter21.mei import MeiElementError
 from converter21.mei import MeiInternalError
-from converter21.mei import M21ObjectConvert
 
-from converter21.shared import SharedConstants
+from converter21.mei import M21ObjectConvert
+from converter21.mei import MeiShared
+from converter21.mei import MeiMetadataReader
+
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupDescriptionTree
 
@@ -914,9 +914,9 @@ class MeiReader:
         for eachSlur in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
         ):
-            startId: str | None = self.removeOctothorpe(eachSlur.get('startid'))
-            endId: str | None = self.removeOctothorpe(eachSlur.get('endid'))
-            if startId is not None and endId is not None:
+            startId: str = MeiShared.removeOctothorpe(eachSlur.get('startid', ''))
+            endId: str = MeiShared.removeOctothorpe(eachSlur.get('endid', ''))
+            if startId and endId:
                 thisIdLocal = str(uuid4())
                 thisSlur = spanner.Slur()
                 if t.TYPE_CHECKING:
@@ -959,9 +959,9 @@ class MeiReader:
 
         for eachTie in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
-            startId: str | None = self.removeOctothorpe(eachTie.get('startid'))
-            endId: str | None = self.removeOctothorpe(eachTie.get('endid'))
-            if startId is not None and endId is not None:
+            startId: str = MeiShared.removeOctothorpe(eachTie.get('startid', ''))
+            endId: str = MeiShared.removeOctothorpe(eachTie.get('endid', ''))
+            if startId and endId:
                 if startId in self.m21Attr and self.m21Attr[startId].get('tie', '') == 't':
                     # the startid note is already a tie end, so now it's both end and start
                     self.m21Attr[startId]['tie'] = 'ti'
@@ -1008,18 +1008,23 @@ class MeiReader:
         # pre-processing for <beamSpan> elements
         for eachBeam in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'):
-            if eachBeam.get('startid') is None or eachBeam.get('endid') is None:
+            if eachBeam.get('startid', '') or eachBeam.get('endid', ''):
                 environLocal.warn(
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<beamSpan>', '@startid and @endid')
                 )
                 continue
 
-            self.m21Attr[self.removeOctothorpe(eachBeam.get('startid'))]['m21Beam'] = 'start'
-            self.m21Attr[self.removeOctothorpe(eachBeam.get('endid'))]['m21Beam'] = 'stop'
+            self.m21Attr[
+                MeiShared.removeOctothorpe(eachBeam.get('startid', ''))
+            ]['m21Beam'] = 'start'
+
+            self.m21Attr[
+                MeiShared.removeOctothorpe(eachBeam.get('endid', ''))
+            ]['m21Beam'] = 'stop'
 
             # iterate things in the @plist attribute
             for eachXmlid in eachBeam.get('plist', '').split(' '):
-                eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                eachXmlid = MeiShared.removeOctothorpe(eachXmlid)
                 # only set to 'continue' if it wasn't previously set (to 'start' or 'stop')
                 if 'm21Beam' not in self.m21Attr[eachXmlid]:
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
@@ -1066,7 +1071,7 @@ class MeiReader:
                 # @xml:id of every affected element. In this case, tupletSpanFromElement() can
                 # use the @plist to add our custom @m21TupletNum and @m21TupletNumbase attributes.
                 for eachXmlid in eachTuplet.get('plist', '').split(' '):
-                    eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                    eachXmlid = MeiShared.removeOctothorpe(eachXmlid)
                     if eachXmlid:
                         numStr: str = eachTuplet.get('num', '')
                         if not numStr:
@@ -1096,8 +1101,8 @@ class MeiReader:
                 # For <tupletSpan> elements that don't give a @plist attribute, we have to do
                 # some guesswork and hope we find all the related elements. Right here, we're
                 # only setting the "flags" that this guesswork must be done later.
-                startid = self.removeOctothorpe(eachTuplet.get('startid'))
-                endid = self.removeOctothorpe(eachTuplet.get('endid'))
+                startid = MeiShared.removeOctothorpe(eachTuplet.get('startid', ''))
+                endid = MeiShared.removeOctothorpe(eachTuplet.get('endid', ''))
 
                 self.m21Attr[startid]['m21TupletSearch'] = 'start'
                 numStr = eachTuplet.get('num', '')
@@ -1157,8 +1162,8 @@ class MeiReader:
 
         for eachElem in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}hairpin'):
-            startId: str = self.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
-            endId: str = self.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
+            endId: str = MeiShared.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
             form: str = eachElem.get('form', '')
             dw: m21.dynamics.DynamicWedge
             if form == 'cres':
@@ -1227,8 +1232,8 @@ class MeiReader:
 
         for eachFermata in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
-            startId: str | None = self.removeOctothorpe(eachFermata.get('startid'))
-            if startId is None:
+            startId: str | None = MeiShared.removeOctothorpe(eachFermata.get('startid', ''))
+            if not startId:
                 # leave this alone, we'll handle it later in fermataFromElement
                 continue
 
@@ -1271,8 +1276,8 @@ class MeiReader:
 
         for eachTrill in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}trill'):
-            startId: str = self.removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
-            endId: str = self.removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
+            endId: str = MeiShared.removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
             tstamp2: str = eachTrill.get('tstamp2', '')
             hasExtension: bool = bool(endId) or bool(tstamp2)
             place: str = eachTrill.get('place', 'place_unspecified')
@@ -1349,7 +1354,7 @@ class MeiReader:
 
         for eachMordent in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}mordent'):
-            startId: str = self.removeOctothorpe(eachMordent.get('startid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachMordent.get('startid', ''))
             place: str = eachMordent.get('place', 'place_unspecified')
             form: str = eachMordent.get('form', '')
             long: str = eachMordent.get('long', '')
@@ -1401,7 +1406,7 @@ class MeiReader:
 
         for eachTurn in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}turn'):
-            startId: str = self.removeOctothorpe(eachTurn.get('startid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachTurn.get('startid', ''))
             place: str = eachTurn.get('place', 'place_unspecified')
             form: str = eachTurn.get('form', '')
             theType: str = eachTurn.get('type', '')
@@ -1461,8 +1466,8 @@ class MeiReader:
 
         for eachOctave in self.documentRoot.iterfind(
                 f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}octave'):
-            startId: str = self.removeOctothorpe(eachOctave.get('startid', ''))  # type: ignore
-            endId: str = self.removeOctothorpe(eachOctave.get('endid', ''))  # type: ignore
+            startId: str = MeiShared.removeOctothorpe(eachOctave.get('startid', ''))
+            endId: str = MeiShared.removeOctothorpe(eachOctave.get('endid', ''))
             amount: str = eachOctave.get('dis', '')
             direction: str = eachOctave.get('dis.place', '')
             if not amount or not direction:
@@ -1577,10 +1582,10 @@ class MeiReader:
                     # iterate things in the @plist attribute,  and reference the
                     # ArpeggioMarkSpanner from each of the notes/chords in the plist
                     for eachXmlid in plist:
-                        eachXmlid = self.removeOctothorpe(eachXmlid)  # type: ignore
+                        eachXmlid = MeiShared.removeOctothorpe(eachXmlid)
                         self.m21Attr[eachXmlid]['m21ArpeggioMarkSpanner'] = thisIdLocal
                 else:
-                    eachXmlid = self.removeOctothorpe(plist[0])  # type: ignore
+                    eachXmlid = MeiShared.removeOctothorpe(plist[0])
                     self.m21Attr[eachXmlid]['m21ArpeggioMarkType'] = arpeggioType
 
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
@@ -1618,7 +1623,7 @@ class MeiReader:
                 if theType == 'fingering':
                     continue
 
-            startId: str | None = self.removeOctothorpe(eachElem.get('startid'))
+            startId: str = MeiShared.removeOctothorpe(eachElem.get('startid', ''))
             if not startId:
                 continue
 
@@ -1639,7 +1644,7 @@ class MeiReader:
             text: str
             styleDict: dict[str, str]
 
-            text, styleDict = self.textFromElem(eachElem)
+            text, styleDict = MeiShared.textFromElem(eachElem)
             text = html.unescape(text)
             text = text.strip()
             if not text:
@@ -2593,138 +2598,28 @@ class MeiReader:
                 if b.type == 'continue':
                     b.type = 'start'
 
-    @staticmethod
-    def removeOctothorpe(xmlid: str | None) -> str | None:
-        '''
-        Given a string with an @xml:id to search for, remove a leading octothorpe, if present.
-
-        >>> from converter21.mei import MeiReader
-        >>> c = MeiReader()
-        >>> c.removeOctothorpe('110a923d-a13a-4a2e-b85c-e1d438e4c5d6')
-        '110a923d-a13a-4a2e-b85c-e1d438e4c5d6'
-        >>> c.removeOctothorpe('#e46cbe82-95fc-4522-9f7a-700e41a40c8e')
-        'e46cbe82-95fc-4522-9f7a-700e41a40c8e'
-        '''
-        if xmlid and xmlid.startswith('#'):
-            return xmlid[1:]
-        return xmlid
-
-    def makeMetadata(self) -> metadata.Metadata:
+    def makeMetadata(self) -> m21.metadata.Metadata:
         '''
         Produce metadata objects for all the metadata stored in the MEI header.
 
-        :returns: A :class:`Metadata` object with some of the metadata stored in the MEI document.
+        :returns: A :class:`Metadata` object containing the metadata from the MEI document.
         :rtype: :class:`music21.metadata.Metadata`
         '''
-        meta = metadata.Metadata()
-        work = self.documentRoot.find(f'.//{MEI_NS}work')
-        if work is not None:
-            # title, subtitle, and movement name
-            meta = self.metaSetTitle(work, meta)
-            # composer
-            meta = self.metaSetComposer(work, meta)
-            # date
-            meta = self.metaSetDate(work, meta)
 
-        return meta
+        meiHead: Element | None = self.documentRoot.find(f'.//{MEI_NS}meiHead')
+        if meiHead is None:
+            return m21.metadata.Metadata()
 
-    @staticmethod
-    def metaSetTitle(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
-        '''
-        From a <work> element, find the title, subtitle, and movement name (<tempo> element)
-        and store the values in a :class:`Metadata` object.
+        meiMetadataReader = MeiMetadataReader(meiHead)
+        meiMetadataReader.processMetadata()
 
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
-            to find.
-        :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
-        :return: The ``meta`` argument, having relevant metadata added.
-        '''
-        # title, subtitle, and movement name
-        subtitle = None
-        for title in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}title'):
-            if title.get('type', '') == 'subtitle':  # or 'subordinate', right?
-                subtitle = title.text
-            elif meta.title is None:
-                meta.title = title.text
+        # We also need to look in music/back/div@type=textTranslation for any
+        # translations of vocal text.
+        back: Element | None = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}back')
+        if back is not None:
+            meiMetadataReader.processMusicBackElement(back)
 
-        if subtitle:
-            # Since m21.Metadata doesn't actually have a "subtitle" attribute, we'll put the
-            # subtitle in the title.
-            meta.title = f'{meta.title} ({subtitle})'
-
-        tempoEl = work.find(f'./{MEI_NS}tempo')
-        if tempoEl is not None:
-            meta.movementName = tempoEl.text
-
-        return meta
-
-    @staticmethod
-    def metaSetComposer(work: Element, meta: metadata.Metadata) -> metadata.Metadata:
-        '''
-        From a <work> element, find the composer(s) and store the values in a :class:`Metadata`
-        object.
-
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
-            to find.
-        :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
-        :return: The ``meta`` argument, having relevant metadata added.
-        '''
-        composers = []
-        persName: Element | None
-        for persName in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}respStmt/{MEI_NS}persName'):
-            if persName is not None and persName.get('role') == 'composer' and persName.text:
-                composers.append(persName.text)
-        for composer in work.findall(f'./{MEI_NS}titleStmt/{MEI_NS}composer'):
-            if composer.text:
-                composers.append(composer.text)
-            else:
-                persName = composer.find(f'./{MEI_NS}persName')
-                if persName is not None and persName.text:
-                    composers.append(persName.text)
-        if len(composers) == 1:
-            meta.composer = composers[0]
-        elif len(composers) > 1:
-            meta.composers = composers
-
-        return meta
-
-    def metaSetDate(self, work: Element, meta: metadata.Metadata) -> metadata.Metadata:
-        '''
-        From a <work> element, find the date (range) of composition and store the values in a
-        :class:`Metadata` object.
-
-        :param work: A <work> :class:`~xml.etree.ElementTree.Element` with metadata you want
-            to find.
-        :param meta: The :class:`~music21.metadata.Metadata` object in which to store the metadata.
-        :return: The ``meta`` argument, having relevant metadata added.
-        '''
-        date = work.find(f'./{MEI_NS}history/{MEI_NS}creation/{MEI_NS}date')
-        if date is not None:  # must use explicit "is not None" for an Element
-            isodate: str | None = date.get('isodate')
-            if date.text or isodate:
-                dateStr: str
-                if isodate:
-                    dateStr = isodate
-                else:
-                    if t.TYPE_CHECKING:
-                        # because not isodate, and (date.text or isodate) is True
-                        assert date.text is not None
-                    dateStr = date.text
-
-                theDate = metadata.Date()
-                try:
-                    theDate.loadStr(dateStr.replace('-', '/'))
-                except ValueError:
-                    environLocal.warn(_MISSED_DATE.format(dateStr))
-                else:
-                    meta.dateCreated = theDate
-            else:
-                dateStart = date.get('notbefore') or date.get('startdate')
-                dateEnd = date.get('notafter') or date.get('enddate')
-                if dateStart and dateEnd:
-                    meta.dateCreated = metadata.DateBetween((dateStart, dateEnd))
-
-        return meta
+        return meiMetadataReader.m21Metadata
 
     @staticmethod
     def scaleToTuplet(
@@ -4152,7 +4047,7 @@ class MeiReader:
         text: str
         styleDict: dict[str, str]
 
-        text, styleDict = self.textFromElem(elem)
+        text, styleDict = MeiShared.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
     #     if 'i' == wordPos:
@@ -5994,7 +5889,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6030,7 +5925,7 @@ class MeiReader:
             Music21Object
         ]
     ]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6081,7 +5976,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6111,7 +6006,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6141,7 +6036,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6171,7 +6066,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6201,7 +6096,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6231,7 +6126,7 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[Music21Object]:
-        chosen: Element | None = self.chooseSubElement(elem)
+        chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
@@ -6731,76 +6626,6 @@ class MeiReader:
             return tempoName, noteChar, int(float(notesPerMinute) + 0.5)
 
         return None, None, None
-
-
-    @staticmethod
-    def chooseSubElement(appOrChoice: Element) -> Element | None:
-        # self will eventually be used if we have a specified choice mechanism there...
-        chosen: Element | None = None
-        if appOrChoice.tag == f'{MEI_NS}app':
-            # choose 'lem' (lemma) if present, else first 'rdg' (reading)
-            chosen = appOrChoice.find(f'{MEI_NS}lem')
-            if chosen is None:
-                chosen = appOrChoice.find(f'{MEI_NS}rdg')
-            return chosen
-
-        if appOrChoice.tag == f'{MEI_NS}choice':
-            # choose 'corr' (correction) if present,
-            # else 'reg' (regularization) if present,
-            # else first sub-element.
-            chosen = appOrChoice.find(f'{MEI_NS}corr')
-            if chosen is None:
-                chosen = appOrChoice.find(f'{MEI_NS}reg')
-            if chosen is None:
-                chosen = appOrChoice.find('*')
-            return chosen
-
-        environLocal.warn('Internal error: chooseSubElement expects <app> or <choice>')
-        return chosen  # None, if we get here
-
-    _EDITORIAL_ELEMENTS: tuple[str, ...] = (
-        f'{MEI_NS}abbr',
-        f'{MEI_NS}add',
-        f'{MEI_NS}app',
-        f'{MEI_NS}choice',
-        f'{MEI_NS}corr',
-        f'{MEI_NS}damage',
-        f'{MEI_NS}del',
-        f'{MEI_NS}expan',
-        f'{MEI_NS}orig',
-        f'{MEI_NS}ref',
-        f'{MEI_NS}reg',
-        f'{MEI_NS}restore',
-        f'{MEI_NS}sic',
-        f'{MEI_NS}subst',
-        f'{MEI_NS}supplied',
-        f'{MEI_NS}unclear',
-    )
-
-    _IGNORED_EDITORIALS: tuple[str, ...] = (
-        f'{MEI_NS}abbr',
-        f'{MEI_NS}del',
-        f'{MEI_NS}ref',
-        f'{MEI_NS}restore',  # I could support restore with a special FromElement API
-    )                        # that reverses the meaning of del and add
-
-    _PASSTHRU_EDITORIALS: tuple[str, ...] = (
-        f'{MEI_NS}add',
-        f'{MEI_NS}corr',
-        f'{MEI_NS}damage',
-        f'{MEI_NS}expan',
-        f'{MEI_NS}orig',
-        f'{MEI_NS}reg',
-        f'{MEI_NS}sic',
-        f'{MEI_NS}subst',
-        f'{MEI_NS}supplied',
-        f'{MEI_NS}unclear',
-    )
-
-    _CHOOSING_EDITORIALS: tuple[str, ...] = (
-        f'{MEI_NS}app',
-        f'{MEI_NS}choice',
-    )
 
     def octaveFromElement(
         self,
@@ -7345,90 +7170,6 @@ class MeiReader:
 
         return tempoObj
 
-    @staticmethod
-    def _glyphNameToUnicodeChar(name: str) -> str:
-        # name is things like 'noteQuarterUp', which can be looked up
-        return SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
-
-    @staticmethod
-    def _glyphNumToUnicodeChar(num: str) -> str:
-        # num can be '#xNNNN' or 'U+NNNN'
-        pattern: str = r'^(#x|U\+)([A-F0-9]+)$'
-        m = re.match(pattern, num)
-        if m is None:
-            return ''
-        return chr(int(m.group(2), 16))
-
-    def textFromElem(self, elem: Element) -> tuple[str, dict[str, str]]:
-        styleDict: dict[str, str] = {}
-        text: str = ''
-        if elem.text:
-            if elem.text[0] != '\n' or not elem.text.isspace():
-                text += elem.text
-
-        for el in elem.iterfind('*'):
-            # do whatever is appropriate given el.tag (<rend> for example)
-            if el.tag == f'{MEI_NS}rend':
-                # music21 doesn't currently support changing style in the middle of a
-                # TextExpression, so we just grab the first ones we see and save them
-                # off to use.
-                fontStyle: str = el.get('fontstyle', '')
-                fontWeight: str = el.get('fontweight', '')
-                fontFamily: str = el.get('fontfam', '')
-                justify: str = el.get('halign', '')
-                if fontStyle:
-                    styleDict['fontStyle'] = fontStyle
-                if fontWeight:
-                    styleDict['fontWeight'] = fontWeight
-                if fontFamily:
-                    styleDict['fontFamily'] = fontFamily
-                if justify:
-                    styleDict['justify'] = justify
-
-            elif el.tag in self._CHOOSING_EDITORIALS:
-                subEl: Element | None = self.chooseSubElement(el)
-                if subEl is None:
-                    continue
-                el = subEl
-            elif el.tag in self._PASSTHRU_EDITORIALS:
-                # for now assume all we care about here is the text/tail of these subElements
-                for subEl in el.iterfind('*'):
-                    if subEl.text:
-                        if subEl.text[0] != '\n' or not subEl.text.isspace():
-                            text += subEl.text
-                    if subEl.tail:
-                        if subEl.tail[0] != '\n' or not subEl.tail.isspace():
-                            text += subEl.tail
-            elif el.tag == f'{MEI_NS}lb':
-                text += '\n'
-            elif el.tag == f'{MEI_NS}symbol':
-                # This is a glyph in the SMUFL font (@glyph.auth="smufl"), with a
-                # particular name (@glyph.name="metNoteQuarterUp").  Sometimes
-                # instead of @glyph.name, there is @glyph.num, which is just the
-                # utf16 code as 'U+NNNN' or '#xNNNN'.
-                glyphAuth: str = el.get('glyph.auth', '')
-                if not glyphAuth or glyphAuth == 'smufl':
-                    glyphName: str = el.get('glyph.name', '')
-                    glyphNum: str = el.get('glyph.num', '')
-                    if glyphNum:
-                        text += self._glyphNumToUnicodeChar(glyphNum)
-                    elif glyphName:
-                        text += self._glyphNameToUnicodeChar(glyphName)
-
-            # grab the text from el
-            elText: str
-            elStyleDict: dict[str, str]
-            elText, elStyleDict = self.textFromElem(el)
-            text += elText
-            styleDict.update(elStyleDict)
-
-            # grab the text between this el and the next el
-            if el.tail:
-                if el.tail[0] != '\n' or not el.tail.isspace():
-                    text += el.tail
-
-        return text, styleDict
-
     def dirFromElement(
         self,
         elem: Element,
@@ -7467,7 +7208,7 @@ class MeiReader:
         text: str
         styleDict: dict[str, str]
 
-        text, styleDict = self.textFromElem(elem)
+        text, styleDict = MeiShared.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
         if enclose is not None:
@@ -8670,7 +8411,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialNoteChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialNoteChildrenFromElement,
             f'{MEI_NS}dot': self.dotFromElement,
@@ -8693,7 +8434,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialChordChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialChordChildrenFromElement,
             f'{MEI_NS}note': self.noteFromElement,
@@ -8715,7 +8456,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialBeamChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialBeamChildrenFromElement,
             f'{MEI_NS}clef': self.clefFromElementInLayer,
@@ -8743,7 +8484,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialTupletChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialTupletChildrenFromElement,
             f'{MEI_NS}tuplet': self.tupletFromElement,
@@ -8771,7 +8512,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialBTremChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialBTremChildrenFromElement,
             f'{MEI_NS}note': self.noteFromElement,
@@ -8791,7 +8532,7 @@ class MeiReader:
             f'{MEI_NS}orig': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}reg': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}sic': self.passThruEditorialFTremChildrenFromElement,
-            f'{MEI_NS}subst': self.passThruEditorialLayerChildrenFromElement,
+            f'{MEI_NS}subst': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}supplied': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}unclear': self.passThruEditorialFTremChildrenFromElement,
             f'{MEI_NS}note': self.noteFromElement,

@@ -36,6 +36,7 @@ from converter21.humdrum import Convert
 from converter21.humdrum import M21Convert
 from converter21.shared import M21StaffGroupDescriptionTree
 from converter21.shared import M21Utilities
+from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -50,8 +51,8 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
     HumdrumFile class is HumdrumFileContent plus conversion to music21.stream.Score
 '''
 
-# Note that these durations are expressed in quarter notes,
-# so Fraction(1,2), a.k.a "a half" actually means an eighth note,
+# Note that these durations are expressed in quarter notes, so
+# Fraction(1,2), a.k.a "a half" actually means an eighth note,
 # which has one beam.
 durationNoDotsToNumBeams: dict[HumNum, int] = {
     opFrac(Fraction(1, 2)): 1,    # eighth note has 1 beam
@@ -893,20 +894,26 @@ class HumdrumFile(HumdrumFileContent):
             if value:
                 value = html.unescape(value)
                 value = value.replace(r'\n', '\n')
+            if not value:
+                continue
+
             if key == 'OMD':
                 # only take OMDs before the firstDataLineIdx as movementName in metadata,
                 # because after the first data line, they're not movementNames, just
-                # tempo changes.
+                # tempo changes.  But only take them as movementName if they actually have
+                # a tempoName (or are just a name with no mm info).
                 if bibLine.lineIndex < firstDataLineIdx:
                     # strip off any [quarter = 128] suffix, and any 'M.M.' or 'M. M.' or etc.
-                    tempoName, _mmStr, _noteName, _bpmText = (
+                    tempoName, mmStr, noteName, bpmText = (
                         Convert.getMetronomeMarkInfo(value)
                     )
-                    if tempoName:
+                    if not tempoName and not mmStr and not noteName and not bpmText:
+                        self._biblio.append((key, value))
+                    elif tempoName:
                         tempoName.strip()
                         if tempoName:
                             value = tempoName
-                    self._biblio.append((key, value))
+                            self._biblio.append((key, value))
             else:
                 self._biblio.append((key, value))
 
@@ -8043,8 +8050,8 @@ class HumdrumFile(HumdrumFileContent):
 
                 dynText: str = self._getLayoutParameterWithDefaults(dynTok, 'DY', 't', '', '')
                 if dynText:
-                    dynText = re.sub('%s', dynamic, dynText)
-                    dynamic = dynText
+                    dynText = re.sub('%s', dynamic + ' ', dynText)
+                    dynamic = dynText.strip()
 
                 above = False
                 below = False
@@ -9727,7 +9734,7 @@ class HumdrumFile(HumdrumFileContent):
             isParseable = True
             parsedKey = m.group(1)
             langCode: str = m.group(5)
-            isTranslated: bool = langCode != '' and m.group(4) != '@@'
+            isTranslated: bool = bool(langCode) and m.group(4) != '@@'
             encodingScheme: str | None = (
                 M21Convert.humdrumReferenceKeyToEncodingScheme.get(parsedKey[0:3], None)
             )
@@ -9744,7 +9751,7 @@ class HumdrumFile(HumdrumFileContent):
         isHumdrumStandardKey: bool = (
             isParseable
             and len(parsedKey) >= 3
-            and parsedKey[0:3] in M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName
+            and parsedKey[0:3] in M21Utilities.validHumdrumReferenceKeys
         )
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
@@ -9785,12 +9792,21 @@ class HumdrumFile(HumdrumFileContent):
         return newk
 
     def _createScoreMetadata(self) -> None:
-        if not self._biblio:
-            # there is no metadata to be had
-            return
-
         m21Metadata = m21.metadata.Metadata()
         self.m21Score.metadata = m21Metadata
+
+        # first add a 'software' entry for this importer
+        m21Metadata.add(
+            'software',
+            SharedConstants._CONVERTER21_NAME
+        )
+
+        addedValue: m21.metadata.ValueType = m21Metadata['software'][-1]
+        M21Utilities.addOtherMetadataAttrib(
+            addedValue,
+            'humdrumVersion',
+            SharedConstants._CONVERTER21_VERSION
+        )
 
         for k, v in self._biblio:
             parsedKey: str
@@ -9799,24 +9815,51 @@ class HumdrumFile(HumdrumFileContent):
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
             m21UniqueName: str | None = (
-                M21Convert.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
                     parsedKey, None)
             )
             if m21UniqueName:
                 m21Value: t.Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
-                m21Metadata.add(m21UniqueName, m21Value)
+                M21Utilities.addIfNotADuplicate(m21Metadata, m21UniqueName, m21Value)
                 continue
 
-            # Doesn't match any known m21.metadata-supported metadata (or it does, and
-            # we couldn't parse it, so we'll have to treat it verbatim).
             if isStandardHumdrumKey:
-                # prepend the unparsed key with 'humdrumraw:' (raw because there are supported
-                # metadata items that use 'humdrum:' keys, and they are fully parsed), and put
-                # it in as "custom" unparsed
-                m21Metadata.addCustom('humdrumraw:' + k, v)
-            else:
-                # freeform key/value, put it in as custom
-                m21Metadata.addCustom(k, v)
+                # Check if it's a contributor (that music21 doesn't apparently support),
+                # and if so, make a Contributor with role set appropriately, and add it
+                # with music21-supported 'otherContributor'.
+                if parsedKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
+                    role: str = (
+                        M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[parsedKey]
+                    )
+                    contrib = m21.metadata.Contributor(name=parsedValue, role=role)
+                    M21Utilities.addIfNotADuplicate(m21Metadata, 'otherContributor', contrib)
+                    continue
+
+                if parsedKey in M21Utilities.customHumdrumReferenceKeysThatAreDates:
+                    # Fix up the date Text we have, by converting to DatePrimitive and
+                    # back to string.
+                    dateObj: m21.metadata.DatePrimitive | None = (
+                        M21Utilities.m21DatePrimitiveFromString(str(parsedValue))
+                    )
+                    if dateObj is not None:
+                        text: str = M21Utilities.stringFromM21DateObject(dateObj)
+                        # pylint: disable=protected-access
+                        parsedValue._data = text
+                        # pylint: enable=protected-access
+
+                # Treat any other standard Humdrum keys as if they are true music21 keys.
+                # Use 'humdrum:???' because there is no uniqueName (yet; I'll try to get
+                # them all into music21 at some point).
+                M21Utilities.addCustomIfNotADuplicate(
+                    m21Metadata,
+                    'humdrum:' + parsedKey,
+                    parsedValue
+                )
+                continue
+
+            # freeform key/value, put it in as custom (but with key prepended with
+            # 'raw:' to prevent possible overlap with music21 metadata uniqueName key).
+            m21Metadata.addCustom('raw:' + k, v)
 
     def _prepartPartInstrumentInfo(self, partStartTok: HumdrumToken, staffNum: int) -> None:
         # staffNum is 1-based, but _staffStates is 0-based

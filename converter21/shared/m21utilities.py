@@ -993,3 +993,874 @@ class M21Utilities:
         trees.sort(key=lambda tree: tree.lowestStaffNumber)
         for tree in trees:
             M21Utilities._sortStaffGroupTrees(tree.children)
+
+    @staticmethod
+    def m21DatePrimitiveFromIsoDate(
+        isodate: str
+    ) -> m21.metadata.DatePrimitive | None:
+        def removeSplitChars(isodate: str) -> str:
+            for ch in ['{', '}', '[', ']']:
+                isodate = isodate.strip(ch)
+            return isodate
+
+        def splitIsoDateList(isodate: str) -> list[str]:
+            isodate = removeSplitChars(isodate)
+            return isodate.split(',')
+
+        if not isodate:
+            return None
+        if isodate[0] in ('{', '['):
+            # list (DateSelection)
+            relevance: str = 'and' if isodate[0] == '{' else 'or'
+            m21Dates: list[m21.metadata.Date] = (
+                M21Utilities.m21DateListFromIsoDateList(splitIsoDateList(isodate))
+            )
+            return m21.metadata.DateSelection(m21Dates, relevance=relevance)
+        if '/' in isodate:
+            if '..' not in isodate:
+                # regular range (DateBetween)
+                m21Dates = M21Utilities.m21DateListFromIsoDateList(isodate.split('/'))
+                return m21.metadata.DateBetween(m21Dates[:2])
+
+            # open ended range (DateRelative)
+            if isodate.startswith('../'):
+                isodate = isodate[3:]
+                relevance = 'prior'
+            elif isodate.endswith('/..'):
+                isodate = isodate[:-3]
+                relevance = 'after'
+            else:
+                return None
+            if '/' in isodate:
+                # should not be any '/' once we remove '../' or '/..'
+                return None
+
+            m21Date: m21.metadata.Date | None = M21Utilities.m21DateFromIsoDate(isodate)
+            if m21Date is None:
+                return None
+            return m21.metadata.DateRelative(m21Date, relevance=relevance)
+
+        # single date (DateSingle)
+        m21Date = M21Utilities.m21DateFromIsoDate(isodate)
+        if m21Date is None:
+            return None
+        return m21.metadata.DateSingle(m21Date)
+
+    @staticmethod
+    def m21DateListFromIsoDateList(
+        isodates: list[str]
+    ) -> list[m21.metadata.Date]:
+        m21Dates: list[m21.metadata.Date] = []
+        for isodate in isodates:
+            m21Date: m21.metadata.Date | None = M21Utilities.m21DateFromIsoDate(isodate)
+            if m21Date is not None:
+                m21Dates.append(m21Date)
+        return m21Dates
+
+    @staticmethod
+    def m21DateFromIsoDate(
+        isodate: str
+    ) -> m21.metadata.Date | None:
+        # Requires the isodate to contain a single date and/or time, no ranges
+        # or lists of dates/times.
+        if not isodate:
+            return None
+        if '/' in isodate:
+            return None
+        if isodate[0] in ('{', '['):
+            return None
+
+        # parse the single isodate into a Date
+        date: str = ''
+        time: str = ''
+
+        if 'T' in isodate:
+            pieces: list[str] = isodate.split('T')
+            if len(pieces) != 2:
+                return None
+            date = pieces[0]
+            time = pieces[1]
+        else:
+            if '-' not in isodate and ':' not in isodate:
+                date = isodate
+            elif '-' in isodate and ':' not in isodate:
+                date = isodate
+            elif '-' not in isodate and ':' in isodate:
+                time = isodate
+            else:
+                return None
+
+        # we have date and/or time
+        year: str | None = None
+        month: str | None = None
+        day: str | None = None
+        hour: str | None = None
+        minute: str | None = None
+        second: str | None = None
+        if date:
+            datePieces: list[str] = date.split('-')
+            year = datePieces[0]
+            if len(datePieces) > 1:
+                month = datePieces[1]
+            if len(datePieces) > 2:
+                day = datePieces[2]
+
+        if time:
+            timePieces: list[str] = time.split(':')
+            if len(timePieces) >= 3:
+                hour = timePieces[0]
+                minute = timePieces[1]
+                second = timePieces[2]
+
+        try:
+            return m21.metadata.Date(
+                year=year,
+                month=month,
+                day=day,
+                hour=hour,
+                minute=minute,
+                second=second
+            )
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
+    def isoDateFromM21DatePrimitive(
+        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text
+    ) -> str:
+        isodate: str = ''
+        if isinstance(dateObj, m21.metadata.Text):
+            # convert to DatePrimitive
+            do: m21.metadata.DatePrimitive | None = (
+                M21Utilities.m21DatePrimitiveFromString(str(dateObj))
+            )
+            if do is None:
+                return ''
+            dateObj = do
+
+        isodates: list[str] = []
+        for date in dateObj._data:
+            iso: str = M21Utilities.isoDateFromM21Date(date)
+            isodates.append(iso)
+
+        if isinstance(dateObj, m21.metadata.DateSingle):
+            isodate = isodates[0]
+        elif isinstance(dateObj, m21.metadata.DateRelative):
+            if dateObj.relevance in ('prior', 'onorbefore'):
+                isodate = '../' + isodate
+            elif dateObj.relevance in ('after', 'onorafter'):
+                isodate = isodate + '/..'
+        elif isinstance(dateObj, m21.metadata.DateBetween):
+            isodate = isodates[0] + '/' + isodates[1]
+        elif isinstance(dateObj, m21.metadata.DateSelection):
+            if dateObj.relevance == 'and':
+                isodate = '{' + ','.join(isodates) + '}'
+            else:
+                isodate = '[' + ','.join(isodates) + ']'
+        return isodate
+
+    @staticmethod
+    def isoDateFromM21Date(date: m21.metadata.Date) -> str:
+        msg: list[str] = []
+        for attr in date.attrNames:
+            value = t.cast(int, getattr(date, attr))
+            if value is None:
+                break  # ignore anything after this
+
+            sub: str
+            if attr == 'year':
+                sub = '%04d' % value
+            else:
+                sub = '%02d' % value
+            msg.append(sub)
+
+        out = '-'.join(msg[:4])
+        if len(msg) > 4:
+            out += 'T' + ':'.join(msg[4:])
+        return out
+
+    # Conversions from str to m21.metadata.DatePrimitive types, and back.
+    # e.g. '1942///-1943///' -> DateBetween([Date(1942), Date(1943)])
+    # m21.metadata.DateBlah have conversions to/from str, and the strings are really close
+    # to Humdrum/MEI format, but not quite, and they don't handle some Humdrum cases at all
+    # (like the one above).  So I need to replace them here.
+
+    # str -> DateSingle | DateRelative | DateBetween | DateSelection
+
+    # approximate (i.e. not exactly, but reasonably close)
+    _dateApproximateSymbols: tuple[str, ...] = ('~', 'x')
+
+    # uncertain (i.e. maybe not correct at all)
+    _dateUncertainSymbols: tuple[str, ...] = ('?', 'z')
+
+    # date1-date2 or date1^date2 (DateBetween)
+    # date1|date2|date3|date4... (DateSelection)
+    _dateDividerSymbols: tuple[str, ...] = ('-', '^', '|')
+
+    @staticmethod
+    def m21DatePrimitiveFromString(
+        string: str
+    ) -> m21.metadata.DatePrimitive | None:
+        typeNeeded: t.Type = m21.metadata.DateSingle
+        relativeType: str = ''
+        if '<' in string[0:1]:  # this avoids string[0] crash on empty string
+            typeNeeded = m21.metadata.DateRelative
+            string = string.replace('<', '')
+            relativeType = 'before'
+        elif '>' in string[0:1]:  # this avoids string[0] crash on empty string
+            typeNeeded = m21.metadata.DateRelative
+            string = string.replace('>', '')
+            relativeType = 'after'
+
+        dateStrings: list[str] = [string]  # if we don't split it, this is what we will parse
+        for divider in M21Utilities._dateDividerSymbols:
+            if divider in string:
+                if divider == '|':
+                    typeNeeded = m21.metadata.DateSelection
+                    # split on all '|'s
+                    dateStrings = string.split(divider)
+                else:
+                    typeNeeded = m21.metadata.DateBetween
+                    # split only at first divider
+                    dateStrings = string.split(divider, 1)
+                # we assume there is only one type of divider present
+                break
+
+        del string  # to make sure we never look at it again in this method
+
+        singleRelevance: str = ''
+        if typeNeeded == m21.metadata.DateSingle:
+            # special case where a leading '~' or '?' should be removed and cause
+            # the DateSingle's relevance to be set to 'approximate' or 'uncertain'.
+            # Other DataBlah types use their relevance for other things, so leaving
+            # the '~'/'?' in place to cause yearError to be set is a better choice.
+            if '~' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
+                dateStrings[0] = dateStrings[0][1:]
+                singleRelevance = 'approximate'
+            elif '?' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
+                dateStrings[0] = dateStrings[0][1:]
+                singleRelevance = 'uncertain'
+
+        dates: list[m21.metadata.Date] = []
+        for dateString in dateStrings:
+            date: m21.metadata.Date | None = M21Utilities._dateFromString(dateString)
+            if date is None:
+                # if dateString is unparseable, give up on date parsing of this whole metadata item
+                return None
+            dates.append(date)
+
+        if typeNeeded == m21.metadata.DateSingle:
+            if singleRelevance:
+                return m21.metadata.DateSingle(dates[0], relevance=singleRelevance)
+            return m21.metadata.DateSingle(dates[0])
+
+        # the "type ignore" comments below are because DateRelative, DateBetween, and
+        # DateSelection are not declared to take a list of Dates, even though they do
+        # (DateSingle does as well, but it is declared so).
+        if typeNeeded == m21.metadata.DateRelative:
+            return m21.metadata.DateRelative(dates[0], relevance=relativeType)  # type: ignore
+
+        if typeNeeded == m21.metadata.DateBetween:
+            return m21.metadata.DateBetween(dates)  # type: ignore
+
+        if typeNeeded == m21.metadata.DateSelection:
+            return m21.metadata.DateSelection(dates)  # type: ignore
+
+        return None
+
+    @staticmethod
+    def _stripDateError(value: str) -> tuple[str, str | None]:
+        '''
+        Strip error symbols from a numerical value. Return cleaned source and
+        error symbol. Only one error symbol is expected per string.
+        '''
+        sym: tuple[str, ...] = (
+            M21Utilities._dateApproximateSymbols + M21Utilities._dateUncertainSymbols
+        )
+        found = None
+        for char in value:
+            if char in sym:
+                found = char
+                break
+        if found is None:
+            return value, None
+        if found in M21Utilities._dateApproximateSymbols:
+            value = value.replace(found, '')
+            return value, 'approximate'
+
+        # found is in M21Utilities._dateUncertainSymbols
+        value = value.replace(found, '')
+        return value, 'uncertain'
+
+    _dateAttrNames: list[str] = [
+        'year', 'month', 'day', 'hour', 'minute', 'second'
+    ]
+    _dateAttrStrFormat: list[str] = [
+        '%i', '%02.i', '%02.i', '%02.i', '%02.i', '%02.i'
+    ]
+
+    _highestSecondString: str = '59'
+
+    @staticmethod
+    def _dateFromString(dateStr: str) -> m21.metadata.Date | None:
+        # year, month, day, hour, minute are int, second is float
+        # (each can be None if not specified)
+        values: list[int | float | None] = []
+
+        # yearError, monthError, dayError, hourError, minuteError, secondError
+        valueErrors: list[str | None] = []
+        dateStr = dateStr.replace(':', '/')
+        dateStr = dateStr.replace(' ', '')
+        gotOne: bool = False
+        try:
+            for i, chunk in enumerate(dateStr.split('/')):
+                value, error = M21Utilities._stripDateError(chunk)
+                if i == 0 and len(value) >= 2:
+                    if value[0] == '@':
+                        # year with prepended '@' is B.C.E. so replace with '-'
+                        value = '-' + value[1:]
+
+                if value == '':
+                    values.append(None)
+                elif i == 5:
+                    # second is a float, but music21 has started ignoring milliseconds recently
+                    # so we convert from str to float and then to int (truncating).
+                    values.append(int(float(value)))
+                    gotOne = True
+                else:
+                    values.append(int(value))
+                    gotOne = True
+                valueErrors.append(error)
+        except ValueError:
+            # if anything failed to convert to integer, this string is unparseable
+            gotOne = False
+
+        if not gotOne:
+            # There were no parseable values in the string, so no meaningful date to return
+            return None
+
+        date: m21.metadata.Date = m21.metadata.Date()
+        for attr, attrValue, attrError in zip(M21Utilities._dateAttrNames, values, valueErrors):
+            if attrValue is not None:
+                setattr(date, attr, attrValue)
+                if attrError is not None:
+                    setattr(date, attr + 'Error', attrError)
+
+        return date
+
+    @staticmethod
+    def stringFromM21DateObject(m21Date: m21.metadata.DatePrimitive) -> str:
+        # m21Date is DateSingle, DateRelative, DateBetween, or DateSelection
+        # (all derive from DatePrimitive)
+        # pylint: disable=protected-access
+        output: str = ''
+        dateString: str
+        if isinstance(m21Date, m21.metadata.DateSelection):
+            # series of multiple dates, delimited by '|'
+            for i, date in enumerate(m21Date._data):
+                dateString = M21Utilities._stringFromDate(date)
+                if i > 0:
+                    output += '|'
+                output += dateString
+
+        elif isinstance(m21Date, m21.metadata.DateBetween):
+            # two dates, delimited by '-'
+            for i, date in enumerate(m21Date._data):
+                dateString = M21Utilities._stringFromDate(date)
+                if i > 0:
+                    output += '-'
+                output += dateString
+
+        elif isinstance(m21Date, m21.metadata.DateRelative):
+            # one date, prefixed by '<' or '>' for 'prior'/'onorbefore' or 'after'/'onorafter'
+            output = '<'  # assume before
+            if m21Date.relevance in ('after', 'onorafter'):
+                output = '>'
+
+            dateString = M21Utilities._stringFromDate(m21Date._data[0])
+            output += dateString
+
+        elif isinstance(m21Date, m21.metadata.DateSingle):
+            # one date, no prefixes
+            output = M21Utilities._stringFromDate(m21Date._data[0])
+            if m21Date.relevance == 'uncertain':
+                # [0] is the date error symbol
+                output = M21Utilities._dateUncertainSymbols[0] + output
+            elif m21Date.relevance == 'approximate':
+                # [0] is the date error symbol
+                output = M21Utilities._dateApproximateSymbols[0] + output
+
+        # pylint: enable=protected-access
+        return output
+
+    @staticmethod
+    def _stringFromDate(date: m21.metadata.Date) -> str:
+        msg = []
+        if date.hour is None and date.minute is None and date.second is None:
+            breakIndex = 3  # index
+        else:
+            breakIndex = 99999
+
+        for i in range(len(M21Utilities._dateAttrNames)):
+            if i >= breakIndex:
+                break
+            attr = M21Utilities._dateAttrNames[i]
+            value = getattr(date, attr)
+            error = getattr(date, attr + 'Error')
+            if not value:
+                msg.append('')
+            else:
+                fmt = M21Utilities._dateAttrStrFormat[i]
+                sub = fmt % int(value)
+                if i == 0:  # year
+                    # check for negative year, and replace '-' with '@'
+                    if len(sub) >= 2 and sub[0] == '-':
+                        sub = '@' + sub[1:]
+                elif i == 5:  # seconds
+                    # Check for formatted seconds starting with '60' (due to rounding) and
+                    # truncate to '59'. That's easier than doing rounding correctly
+                    # (carrying into minutes, hours, days, etc).
+                    if sub.startswith('60'):
+                        sub = M21Utilities._highestSecondString
+                if error is not None:
+                    sub += M21Utilities._dateErrorToSymbol(error)
+                msg.append(sub)
+
+        output: str = ''
+        if breakIndex == 3:
+            # just a date, so leave off any trailing '/'s
+            output = msg[0]
+            if msg[1] or msg[2]:
+                output += '/' + msg[1]
+            if msg[2]:
+                output += '/' + msg[2]
+        else:
+            # has a time, so we have to do the whole thing
+            output = (
+                msg[0] + '/' + msg[1] + '/' + msg[2] + '/' + msg[3] + ':' + msg[4] + ':' + msg[5]
+            )
+
+        return output
+
+    @staticmethod
+    def _dateErrorToSymbol(value: str) -> str:
+        if value.lower() in M21Utilities._dateApproximateSymbols + ('approximate',):
+            return M21Utilities._dateApproximateSymbols[1]  # [1] is the single value error symbol
+        if value.lower() in M21Utilities._dateUncertainSymbols + ('uncertain',):
+            return M21Utilities._dateUncertainSymbols[1]    # [1] is the single value error symbol
+        return ''
+
+    humdrumReferenceKeyToM21MetadataPropertyUniqueName: dict[str, str] = {
+        # dict value is music21's unique name or '' (if there is no m21Metadata equivalent)
+        # Authorship information:
+        'COM': 'composer',              # composer's name
+        'COA': 'attributedComposer',    # attributed composer
+        'COS': 'suspectedComposer',     # suspected composer
+        'COL': 'composerAlias',         # composer's abbreviated, alias, or stage name
+        'COC': 'composerCorporate',     # composer's corporate name
+        'CDT': '',                      # composer's birth and death dates (**zeit format)
+        'CBL': '',                      # composer's birth location
+        'CDL': '',                      # composer's death location
+        'CNT': '',                      # composer's nationality
+        'LYR': 'lyricist',              # lyricist's name
+        'LIB': 'librettist',            # librettist's name
+        'LAR': 'arranger',              # music arranger's name
+        'LOR': 'orchestrator',          # orchestrator's name
+        'TXO': 'textOriginalLanguage',  # original language of vocal/choral text
+        'TXL': 'textLanguage',          # language of the encoded vocal/choral text
+        # Recording information (if the Humdrum encodes information pertaining to an
+        # audio recording)
+        'TRN': 'translator',            # translator of the text
+        'RTL': '',                      # album title
+        'RMM': '',                      # manufacturer or sponsoring company
+        'RC#': '',                      # recording company's catalog number of album
+        'RRD': 'dateIssued',            # release date (**date format)
+        'RLC': '',                      # place of recording
+        'RNP': 'producer',              # producer's name
+        'RDT': '',                      # date of recording (**date format)
+        'RT#': '',                      # track number
+        # Performance information (if the Humdrum encodes, say, a MIDI performance)
+        'MGN': '',                      # ensemble's name
+        'MPN': '',                      # performer's name
+        'MPS': '',                      # suspected performer
+        'MRD': '',                      # date of performance (**date format)
+        'MLC': '',                      # place of performance
+        'MCN': 'conductor',             # conductor's name
+        'MPD': '',                      # date of first performance (**date format)
+        'MDT': '',                      # I've seen 'em (another way to say date of performance?)
+        # Work identification information
+        'OTL': 'title',                 # title
+        'OTP': 'popularTitle',          # popular title
+        'OTA': 'alternativeTitle',      # alternative title
+        'OPR': 'parentTitle',           # title of parent work
+        'OAC': 'actNumber',             # act number (e.g. '2' or 'Act 2')
+        'OSC': 'sceneNumber',           # scene number (e.g. '3' or 'Scene 3')
+        'OMV': 'movementNumber',        # movement number (e.g. '4', or 'mov. 4', or...)
+        'OMD': 'movementName',          # movement name
+        'OPS': 'opusNumber',            # opus number (e.g. '23', or 'Opus 23')
+        'ONM': 'number',                # number (e.g. number of song within ABC multi-song file)
+        'OVM': 'volumeNumber',          # volume number (e.g. '6' or 'Vol. 6')
+        'ODE': 'dedicatedTo',           # dedicated to
+        'OCO': 'commissionedBy',        # commissioned by
+        'OCL': 'transcriber',           # collected/transcribed by
+        'ONB': '',                      # free form note related to title or identity of work
+        'ODT': 'dateCreated',           # date or period of composition (**date or **zeit format)
+        'OCY': 'countryOfComposition',  # country of composition
+        'OPC': 'localeOfComposition',   # city, town, or village of composition
+        # Group information
+        'GTL': 'groupTitle',            # group title (e.g. 'The Seasons')
+        'GAW': 'associatedWork',        # associated work, such as a play or film
+        'GCO': 'collectionDesignation',  # collection designation (e.g. 'Norton Scores')
+        # Imprint information
+        'PUB': '',                      # publication status 'published'/'unpublished'
+        'PED': '',                      # publication editor
+        'PPR': 'firstPublisher',        # first publisher
+        'PDT': 'dateFirstPublished',    # date first published (**date format)
+        'PTL': 'publicationTitle',      # publication (volume) title
+        'PPP': 'placeFirstPublished',   # place first published
+        'PC#': 'publishersCatalogNumber',  # publisher's catalog number (NOT scholarly catalog)
+        'SCT': 'scholarlyCatalogAbbreviation',  # scholarly catalog abbrev/number (e.g. 'BWV 551')
+        'SCA': 'scholarlyCatalogName',  # scholarly catalog (unabbreviated) (e.g. 'Koechel 117')
+        'SMS': 'manuscriptSourceName',  # unpublished manuscript source name
+        'SML': 'manuscriptLocation',    # unpublished manuscript location
+        'SMA': 'manuscriptAccessAcknowledgement',  # acknowledgment of manuscript access
+        'YEP': 'electronicPublisher',   # publisher of electronic edition
+        'YEC': 'copyright',             # date and owner of electronic copyright
+        'YER': 'electronicReleaseDate',  # date electronic edition released
+        'YEM': '',                      # copyright message (e.g. 'All rights reserved')
+        'YEN': '',                      # country of copyright
+        'YOR': '',                      # original document from which encoded doc was prepared
+        'YOO': 'originalDocumentOwner',  # original document owner
+        'YOY': '',                      # original copyright year
+        'YOE': 'originalEditor',        # original editor
+        'EED': 'electronicEditor',      # electronic editor
+        'ENC': 'electronicEncoder',     # electronic encoder (person)
+        'END': '',                      # encoding date
+        'EMD': '',                      # electronic document modification description (one/mod)
+        'EEV': '',                      # electronic edition version
+        'EFL': '',                      # file number e.g. '1/4' for one of four
+        'EST': '',                      # encoding status (usually deleted before distribution)
+        'VTS': '',                      # checksum (excluding the VTS line itself)
+        # Analytic information
+        'ACO': '',  # collection designation
+        'AFR': '',  # form designation
+        'AGN': '',  # genre designation
+        'AST': '',  # style, period, or type of work designation
+        'AMD': '',  # mode classification e.g. '5; Lydian'
+        'AMT': '',  # metric classification, must be one of eight names, e.g. 'simple quadruple'
+        'AIN': '',  # instrumentation, must be alphabetical list of *I abbrevs, space-delimited
+        'ARE': '',  # geographical region of origin (list of 'narrowing down' names of regions)
+        'ARL': '',  # geographical location of origin (lat/long)
+        # Historical and background information
+        'HAO': '',  # aural history (lots of text, stories about the work)
+        'HTX': '',  # freeform translation of vocal text
+        # Representation information
+        'RLN': '',  # Extended ASCII language code
+        'RNB': '',  # a note about the representation
+        'RWB': ''   # a warning about the representation
+    }
+
+    m21MetadataPropertyUniqueNameToHumdrumReferenceKey: dict[str, str] = {
+        uniqueName: hdKey for (hdKey, uniqueName) in
+        humdrumReferenceKeyToM21MetadataPropertyUniqueName.items() if uniqueName != ''
+    }
+
+    validHumdrumReferenceKeys: tuple[str, ...] = tuple(hdKey for hdKey in
+        humdrumReferenceKeyToM21MetadataPropertyUniqueName.keys())
+
+    customHumdrumReferenceKeysThatAreDates: tuple[str, ...] = (
+        'CDT',
+        'RDT',
+        'MRD',
+        'MPD',
+        'MDT',
+        'YOY',
+        'END'
+    )
+
+    humdrumReferenceKeyToM21OtherContributorRole: dict[str, str] = {
+        'MPN': 'performer',
+        'MPS': 'suspected performer',
+        'PED': 'source editor',  # to match Verovio (instead of 'publication editor')
+    }
+
+    m21OtherContributorRoleToHumdrumReferenceKey: dict[str, str] = {
+        'performer': 'MPN',
+        'suspected performer': 'MPS',
+        'suspectedPerformer': 'MPS',
+        'source editor': 'PED',
+        'sourceEditor': 'PED',
+    }
+
+    validMeiMetadataKeys: tuple[str, ...] = (
+        'mei:printedSourceCopyright',
+    )
+
+    @staticmethod
+    def meiRoleToUniqueName(md: m21.metadata.Metadata, role: str) -> str:
+        if md._isStandardUniqueName(role):
+            return role
+        if role == 'encoder':
+            return 'electronicEncoder'
+        return ''
+
+    @staticmethod
+    def contributorRoleToHumdrumReferenceKey(role: str) -> str:
+        output: str = (
+            M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(
+                role, ''
+            )
+        )
+        if output:
+            return output
+
+        output = M21Utilities.m21OtherContributorRoleToHumdrumReferenceKey.get(
+            role, ''
+        )
+        if output:
+            return output
+
+        altRole: str
+        if ' ' in role:
+            # try converting to camelCase.
+            altRole = M21Utilities.spaceDelimitedToCamelCase(role)
+        else:
+            # try converting to space-delimited.
+            altRole = M21Utilities.camelCaseToSpaceDelimited(role)
+
+        output = (
+            M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(
+                altRole, ''
+            )
+        )
+        if output:
+            return output
+
+        output = M21Utilities.m21OtherContributorRoleToHumdrumReferenceKey.get(
+            altRole, ''
+        )
+        if output:
+            return output
+
+        return ''
+
+    @staticmethod
+    def spaceDelimitedToCamelCase(text: str) -> str:
+        output: str = ''
+        capitalizeNext: bool = False
+        for ch in text:
+            if ch == ' ':
+                capitalizeNext = True
+                continue
+
+            if capitalizeNext:
+                output += ch.upper()
+                capitalizeNext = False
+            else:
+                output += ch.lower()
+        return output
+
+    @staticmethod
+    def camelCaseToSpaceDelimited(text: str) -> str:
+        output: str = ''
+        for ch in text:
+            if ch.isupper():
+                output += ' '
+                output += ch.lower()
+            else:
+                output += ch
+        return output
+
+    @staticmethod
+    def stringFromM21Contributor(c: m21.metadata.Contributor) -> str:
+        # TODO: someday support export of multi-named Contributors
+        if not c.names:
+            return ''
+        return c.names[0]
+
+    @staticmethod
+    def m21MetadataValueToString(value: t.Any, isRaw: bool = False) -> str:
+        valueStr: str
+        if isRaw or isinstance(value, m21.metadata.Text):
+            valueStr = str(value)
+        elif isinstance(value, m21.metadata.DatePrimitive):
+            # We don't like str(DateXxxx)'s results so we do our own.
+            valueStr = M21Utilities.stringFromM21DateObject(value)
+        elif isinstance(value, m21.metadata.Contributor):
+            valueStr = M21Utilities.stringFromM21Contributor(value)
+        else:
+            # it's already a str, we hope, but if not, we convert here
+            valueStr = str(value)
+
+        return valueStr
+
+    @staticmethod
+    def isUsableMetadataKey(
+        md: m21.metadata.Metadata,
+        key: str,
+        includeHumdrumCustomKeys: bool = True
+    ) -> bool:
+        # returns true if key is a standard uniqueName, a standard namespaceName,
+        # a non-standard namespaceName that we can convert into a standard
+        # uniqueName/namespaceName (e.g. 'dcterm:title' can be converted to
+        # 'dcterms:title'), or a 'humdrum:XXX' name that we are willing to
+        # use as if it were a standard namespaceName (but is actually a custom
+        # key).
+        if md._isStandardUniqueName(key):
+            return True
+        if md._isStandardNamespaceName(key):
+            return True
+        if key.startswith('humdrum:'):
+            if includeHumdrumCustomKeys:
+                return True
+            else:
+                # is it standard?  Yes, if it maps to a uniqueName
+                uniqueName: str = (
+                    M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                        key[8:],
+                        ''
+                    )
+                )
+                if uniqueName:
+                    # humdrum key that maps to uniqueName; always welcome
+                    return True
+                # custom humdrum key, and we've been asked not to include them
+                return False
+
+        # Let's see if we can make a standard namespaceName from it.
+        if key.startswith('dcterm:'):
+            key = key.replace('dcterm:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                return True
+            return False
+
+        if key.startswith('dc:'):
+            key = key.replace('dc:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                return True
+            return False
+
+        if key.startswith('marc:'):
+            key = key.replace('marc:', 'marcrel:')
+            if md._isStandardNamespaceName(key):
+                return True
+            return False
+
+        return False
+
+    @staticmethod
+    def addIfNotADuplicate(
+        md: m21.metadata.Metadata,
+        key: str,
+        value: t.Any,
+        other: dict[str, str] | None = None
+    ):
+        # Note that we specifically support 'humdrum:XXX' keys that do not map
+        # to uniqueNames and 'mei:blahblah' keys (using them as custom keys).
+        # We also support a few alternative namespaces ('dc:' and 'dcterm:' for
+        # 'dcterms:' and 'marc:' for 'marcrel:').
+        uniqueName: str | None = None
+        if md._isStandardUniqueName(key):
+            uniqueName = key
+        elif md._isStandardNamespaceName(key):
+            uniqueName = md.namespaceNameToUniqueName(key)
+        elif key.startswith('humdrum:'):
+            uniqueName = M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                key[8:],
+                ''
+            )
+            if not uniqueName:
+                M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
+                return
+        elif key.startswith('mei:'):
+            if key in M21Utilities.validMeiMetadataKeys:
+                M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
+                return
+        elif key.startswith('dcterm:'):
+            key = key.replace('dcterm:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                uniqueName = md.namespaceNameToUniqueName(key)
+        elif key.startswith('dc:'):
+            key = key.replace('dc:', 'dcterms:')
+            if md._isStandardNamespaceName(key):
+                uniqueName = md.namespaceNameToUniqueName(key)
+        elif key.startswith('marc:'):
+            key = key.replace('marc:', 'marcrel:')
+            if md._isStandardNamespaceName(key):
+                uniqueName = md.namespaceNameToUniqueName(key)
+
+        if isinstance(value, str):
+            value = m21.metadata.Text(value)
+
+        if uniqueName:
+            value = md._convertValue(uniqueName, value)
+
+        if other:
+            for k, v in other.items():
+                M21Utilities.addOtherMetadataAttrib(value, k, v)
+                c21OtherAttribs: set[str] = set()
+                if hasattr(value, 'c21OtherAttribs'):
+                    c21OtherAttribs = getattr(value, 'c21OtherAttribs')
+                c21OtherAttribs.add(k)
+                setattr(value, 'c21OtherAttribs', c21OtherAttribs)
+                setattr(value, k, v)
+
+        if uniqueName is None:
+            uniqueName = ''
+
+        for val in md[uniqueName]:
+            if M21Utilities.mdValueEqual(val, value):
+                return
+        md.add(uniqueName, value)
+
+    @staticmethod
+    def addOtherMetadataAttrib(value: m21.metadata.ValueType, k: str, v: str):
+        c21OtherAttribs: set[str] = set()
+        if hasattr(value, 'c21OtherAttribs'):
+            c21OtherAttribs = getattr(value, 'c21OtherAttribs')
+        c21OtherAttribs.add(k)
+        setattr(value, 'c21OtherAttribs', c21OtherAttribs)
+        setattr(value, k, v)
+
+    @staticmethod
+    def mdValueEqual(v1: m21.metadata.ValueType, v2: m21.metadata.ValueType) -> bool:
+        if isinstance(v1, m21.metadata.Text) and isinstance(v2, m21.metadata.Text):
+            # don't compare .isTranslated, it's often lost in various file formats.
+            if v1._data != v2._data:
+                return False
+            if v1.language != v2.language:
+                return False
+        else:
+            if v1 != v2:
+                return False
+
+        # check other attributes set by converter21 importers
+        # (e.g. MEI importer adds 'meiVersion')
+        c21OtherAttribs1: set[str] = set()
+        c21OtherAttribs2: set[str] = set()
+        if hasattr(v1, 'c21OtherAttribs'):
+            c21OtherAttribs1 = getattr(v1, 'c21OtherAttribs')
+        if hasattr(v2, 'c21OtherAttribs'):
+            c21OtherAttribs2 = getattr(v2, 'c21OtherAttribs')
+        if len(c21OtherAttribs1) != len(c21OtherAttribs2):
+            return False
+        for v1Attr, v2Attr in zip(c21OtherAttribs1, c21OtherAttribs2):
+            if getattr(v1, v1Attr) != getattr(v2, v2Attr):
+                return False
+        return True
+
+    @staticmethod
+    def addCustomIfNotADuplicate(
+        md: m21.metadata.Metadata,
+        key: str,
+        value: str | m21.metadata.Text,
+        other: dict[str, str] | None = None
+    ):
+        if isinstance(value, str):
+            value = m21.metadata.Text(value, isTranslated=False)
+        for val in md.getCustom(key):
+            if M21Utilities.mdValueEqual(val, value):
+                return
+        md.addCustom(key, value)
