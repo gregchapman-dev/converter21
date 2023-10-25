@@ -1694,6 +1694,8 @@ class M21Utilities:
             # it's already a str, we hope, but if not, we convert here
             valueStr = str(value)
 
+        # escape any \n
+        valueStr = valueStr.replace('\n', r'\n')
         return valueStr
 
     @staticmethod
