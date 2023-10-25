@@ -3021,10 +3021,13 @@ class M21Convert:
         isRaw: bool = False
         isNonRawHumdrum: bool = False
 
-        if uniqueName.startswith('humdrumraw:'):
+        if uniqueName.startswith('raw:'):
+            uniqueName = uniqueName[4:]
+            isRaw = True
+        elif uniqueName.startswith('humdrumraw:'):
             uniqueName = uniqueName[11:]
             isRaw = True
-        if uniqueName.startswith('humdrum:'):
+        elif uniqueName.startswith('humdrum:'):
             uniqueName = uniqueName[8:]
             isNonRawHumdrum = True
 
@@ -3045,11 +3048,18 @@ class M21Convert:
                 # must be free-form custom key... pass it thru as is (no indexing)
                 hdKey = uniqueName
 
-            if value.language:
-                if value.isTranslated:
-                    hdKey += '@' + value.language.upper()
-                else:
-                    hdKey += '@@' + value.language.upper()
+            if isinstance(value, m21.metadata.Contributor):
+                if value._names[0].language:
+                    if value._names[0].isTranslated:
+                        hdKey += '@' + value._names[0].language.upper()
+                    else:
+                        hdKey += '@@' + value._names[0].language.upper()
+            elif isinstance(value, m21.metadata.Text):
+                if value.language:
+                    if value.isTranslated:
+                        hdKey += '@' + value.language.upper()
+                    else:
+                        hdKey += '@@' + value.language.upper()
 
         if t.TYPE_CHECKING:
             assert hdKey is not None
