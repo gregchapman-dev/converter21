@@ -1,6 +1,6 @@
 Changes since 2.0.1:
 
-Add MEI exporter.
+Add MEI exporter.  It exports MEI v5 by default, but can be asked to export MEI v4.
 
 MEI import:
     - refactor to share code with MEI exporter and have instance-based state
@@ -36,6 +36,7 @@ MEI import:
     - generate music21 StaffGroups (and PartStaffs if appropriate)
     - support tuplet display details
     - import of metadata
+    - imports MEI v4 and v5 (obeying @meiversion)
 
 Humdrum export:
     - support tuplet display details (*{X}tuplet/*{X}brackettup)
@@ -46,6 +47,7 @@ Humdrum export:
 Humdrum import/export:
     - support of center justification
     - tweaks to systemdecoration/StaffGroup code, now shared with MEI import/export
+    - some metadata fixes
 
 All importers/exporters:
     - support ornament accidentals (I implemented this in music21 v9)
