@@ -1583,7 +1583,8 @@ class M21Utilities:
     humdrumReferenceKeyToM21OtherContributorRole: dict[str, str] = {
         'MPN': 'performer',
         'MPS': 'suspected performer',
-        'PED': 'source editor',  # to match Verovio (instead of 'publication editor')
+        'PED': 'publication editor',  # a.k.a. 'source editor'
+        'YOE': 'manuscript editor'
     }
 
     m21OtherContributorRoleToHumdrumReferenceKey: dict[str, str] = {
@@ -1592,11 +1593,27 @@ class M21Utilities:
         'suspectedPerformer': 'MPS',
         'source editor': 'PED',
         'sourceEditor': 'PED',
+        'publication editor': 'PED',
+        'publicationEditor': 'PED',
+        'original editor': 'YOE',
+        'originalEditor': 'YOE',
     }
 
     validMeiMetadataKeys: tuple[str, ...] = (
         'mei:printedSourceCopyright',
     )
+
+    @staticmethod
+    def adjustRoleFromContext(role: str, context: str) -> str:
+        if role == 'editor':
+            if context in ('titleStmt', 'source:digital'):
+                return 'electronicEditor'
+            if context in ('source:printed', 'source:'):
+                return 'publicationEditor'
+            if context == 'source:unpub':
+                return 'originalEditor'
+            return 'editor'
+        return role
 
     @staticmethod
     def meiRoleToUniqueName(md: m21.metadata.Metadata, role: str) -> str:

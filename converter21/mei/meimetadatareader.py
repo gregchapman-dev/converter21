@@ -125,7 +125,7 @@ class MeiMetadataReader:
             elif subEl.name == 'editor':
                 self.processContributor(subEl, 'humdrum:EED', '', md)
             elif subEl.name == 'respStmt':
-                self.processRespStmt(subEl, md)
+                self.processRespStmt(subEl, md, context='titleStmt')
             elif subEl.name in ('arranger', 'author', 'contributor', 'sponsor'):
                 self.processContributor(subEl, '', '', md)
 
@@ -223,7 +223,7 @@ class MeiMetadataReader:
                 if sourceType == 'unpub':
                     self.processRepository(subEl, 'humdrum:SML', md)
             elif subEl.name == 'respStmt':
-                self.processRespStmt(subEl, md)
+                self.processRespStmt(subEl, md, context=context)
             elif subEl.name == 'imprint':
                 self.processImprint(subEl, md, sourceType)
             elif subEl.name == 'availability':
@@ -462,7 +462,7 @@ class MeiMetadataReader:
 
         M21Utilities.addIfNotADuplicate(md, analog, text)
 
-    def processRespStmt(self, element: MeiElement, md: m21.metadata.Metadata):
+    def processRespStmt(self, element: MeiElement, md: m21.metadata.Metadata, context: str = ''):
         defaultRole: str = ''
         for subEl in element.findAll('*', recurse=False):
             if subEl.name == 'resp':
@@ -470,7 +470,7 @@ class MeiMetadataReader:
             elif subEl.name in ('name', 'persName', 'corpName'):
                 # defaultRole will be overridden by @role, if present
                 # if name element has @analog, that will override everything.
-                self.processContributor(subEl, '', defaultRole, md)
+                self.processContributor(subEl, '', defaultRole, md, context=context)
 
     def processEncodingDesc(self, encodingDescElement: MeiElement) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
@@ -899,7 +899,8 @@ class MeiMetadataReader:
         element: MeiElement,
         humdrumAnalog: str,
         defaultRole: str,
-        md: m21.metadata.Metadata
+        md: m21.metadata.Metadata,
+        context: str = ''
     ):
         names: list[str] = []
         analogs: list[str] = []
@@ -921,18 +922,25 @@ class MeiMetadataReader:
                     # role = @role (if <contributor>) else role = element.name.
                     analog = 'otherContributor'
                     if element.name == 'contributor':
-                        role = element.get('role', '')
+                        role = M21Utilities.adjustRoleFromContext(
+                            element.get('role', ''),
+                            context
+                        )
                         if not role:
                             role = defaultRole
                     else:
                         # defaultRole _overrides_ element.name, but not @role
                         # (used for <persName> et al)
-                        role = element.get('role', '')
+                        role = M21Utilities.adjustRoleFromContext(
+                            element.get('role', ''),
+                            context
+                        )
                         if not role:
                             if defaultRole:
                                 role = defaultRole
                             else:
                                 role = element.name
+
                     # check to see if role maps to an official music21 role (a.k.a. uniqueName)
                     # and if so, use that for role instead (and use it for analog, as well,
                     # instead of 'otherContributor').
@@ -940,6 +948,12 @@ class MeiMetadataReader:
                     if uniqueNm:
                         role = uniqueNm
                         analog = uniqueNm
+                    else:
+                        # check to see if role maps to a humdrum reference key, and if so,
+                        # use that for analog (but leave role as-is)
+                        refKey: str = M21Utilities.contributorRoleToHumdrumReferenceKey(role)
+                        if refKey:
+                            analog = 'humdrum:' + refKey
 
                     contrib = m21.metadata.Contributor(name=name, role=role)
 
