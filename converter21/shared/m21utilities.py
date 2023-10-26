@@ -1681,7 +1681,11 @@ class M21Utilities:
         return c.names[0]
 
     @staticmethod
-    def m21MetadataValueToString(value: t.Any, isRaw: bool = False) -> str:
+    def m21MetadataValueToString(
+        value: t.Any,
+        isRaw: bool = False,
+        lineFeedOK: bool = False
+    ) -> str:
         valueStr: str
         if isRaw or isinstance(value, m21.metadata.Text):
             valueStr = str(value)
@@ -1694,8 +1698,9 @@ class M21Utilities:
             # it's already a str, we hope, but if not, we convert here
             valueStr = str(value)
 
-        # escape any \n
-        valueStr = valueStr.replace('\n', r'\n')
+        if not lineFeedOK:
+            # escape any \n
+            valueStr = valueStr.replace('\n', r'\n')
         return valueStr
 
     @staticmethod

@@ -77,7 +77,7 @@ class MeiMetadataItem:
         self.isContributor: bool = md._isContributorUniqueName(self.uniqueName)
 
         # convert self.value to an appropriate string (no html escaping yet)
-        self.meiValue: str = M21Utilities.m21MetadataValueToString(self.value)
+        self.meiValue: str = M21Utilities.m21MetadataValueToString(self.value, lineFeedOK=True)
 
         # Add any other attributes set by converter21 importers (e.g. MEI importer
         # will have set value.meiVersion to 'version', which we will translate to
@@ -234,7 +234,7 @@ class MeiMetadata:
         return fileDesc
 
     def makeDigitalSource(self) -> MeiElement | None:
-        if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEC', 'YEM', 'YEN'):
+        if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEC', 'YEM', 'YEN', 'TXL', 'ONB'):
             return None
 
         source: MeiElement = MeiElement('source', {'type': 'digital'})
@@ -259,6 +259,7 @@ class MeiMetadata:
         copyrightStatements: list[MeiMetadataItem] = self.contents.get('YEM', [])
         copyrightCountries: list[MeiMetadataItem] = self.contents.get('YEN', [])
         textLanguages: list[MeiMetadataItem] = self.contents.get('TXL', [])
+        notes: list[MeiMetadataItem] = self.contents.get('ONB', [])
 
         for editor in editors:
             editorEl: MeiElement = bibl.appendSubElement(
@@ -368,6 +369,20 @@ class MeiMetadata:
                     }
                 )
                 copyrightCountryEl.text = copyrightCountry.meiValue
+
+        if notes:
+            annot: MeiElement = bibl.appendSubElement('annot')
+            language, allTheSameLanguage = self.getTextListLanguage(notes)
+            lineGroup: MeiElement = annot.appendSubElement('lg')
+            if allTheSameLanguage and language:
+                lineGroup.attrib['xml:lang'] = language
+
+            for note in notes:
+                # <l> does not take @analog, so use @type instead (says Perry)
+                line = lineGroup.appendSubElement('l', {'type': 'humdrum:ONB'})
+                line.text = note.meiValue
+                if note.value.language and not allTheSameLanguage:
+                    line.attrib['xml:lang'] = note.value.language.lower()
 
         for textLanguage in textLanguages:
             textLanguageEl: MeiElement = bibl.appendSubElement(
@@ -1441,7 +1456,6 @@ class MeiMetadata:
         languages: list[MeiMetadataItem] = self.contents.get('TXO', [])
         histories: list[MeiMetadataItem] = self.contents.get('HAO', [])
         instrumentLists: list[MeiMetadataItem] = self.contents.get('AIN', [])
-        notes: list[MeiMetadataItem] = self.contents.get('ONB', [])
         forms: list[MeiMetadataItem] = self.contents.get('AFR', [])
         genres: list[MeiMetadataItem] = self.contents.get('AGN', [])
         modes: list[MeiMetadataItem] = self.contents.get('AMD', [])
@@ -1586,7 +1600,6 @@ class MeiMetadata:
                 or languages
                 or histories
                 or instrumentLists
-                or notes
                 or forms
                 or genres
                 or modes
@@ -1789,22 +1802,6 @@ class MeiMetadata:
 #                     outerPerfResListElement: MeiElement = perfMediumElement.appendSubElement(
 #                         'perfResList'
 #                     )
-
-            # <notesStmt>
-            if notes:
-                notesStmt: MeiElement = theWork.appendSubElement('notesStmt')
-                annot: MeiElement = notesStmt.appendSubElement('annot')
-                language, allTheSameLanguage = self.getTextListLanguage(notes)
-                lineGroup: MeiElement = annot.appendSubElement('lg')
-                if allTheSameLanguage and language:
-                    lineGroup.attrib['xml:lang'] = language
-
-                for note in notes:
-                    # <l> does not take @analog, so use @type instead (says Perry)
-                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:ONB'})
-                    line.text = note.meiValue
-                    if note.value.language and not allTheSameLanguage:
-                        line.attrib['xml:lang'] = note.value.language.lower()
 
             # <classification>
             if forms or genres or modes or meters or styles:

@@ -296,6 +296,8 @@ class MeiMetadataReader:
                 defaultAnalog: str = ''
                 if subEl.get('type', '') == 'manuscriptAccessAcknowledgment':
                     defaultAnalog = 'humdrum:SMA'
+                else:
+                    defaultAnalog = 'humdrum:ONB'
 
                 self.processElementContainingParagraphsAndLineGroups(
                     subEl,
@@ -715,8 +717,6 @@ class MeiMetadataReader:
             self.processElementContainingParagraphsAndLineGroups(element, '', 'humdrum:HAO', md)
         elif element.name == 'langUsage':
             self.processLangUsage(element, md)
-        elif element.name == 'notesStmt':
-            self.processNotesStmt(element, 'humdrum:ONB', md)
         elif element.name == 'classification':
             self.processClassification(element, md)
         elif element.name == 'expressionList':

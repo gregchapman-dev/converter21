@@ -9838,14 +9838,18 @@ class HumdrumFile(HumdrumFileContent):
                 if parsedKey in M21Utilities.customHumdrumReferenceKeysThatAreDates:
                     # Fix up the date Text we have, by converting to DatePrimitive and
                     # back to string.
-                    dateObj: m21.metadata.DatePrimitive | None = (
-                        M21Utilities.m21DatePrimitiveFromString(str(parsedValue))
-                    )
-                    if dateObj is not None:
-                        text: str = M21Utilities.stringFromM21DateObject(dateObj)
-                        # pylint: disable=protected-access
-                        parsedValue._data = text
-                        # pylint: enable=protected-access
+                    try:
+                        dateObj: m21.metadata.DatePrimitive | None = (
+                            M21Utilities.m21DatePrimitiveFromString(str(parsedValue))
+                        )
+                        if dateObj is not None:
+                            text: str = M21Utilities.stringFromM21DateObject(dateObj)
+                            # pylint: disable=protected-access
+                            parsedValue._data = text
+                            # pylint: enable=protected-access
+                    except Exception:
+                        # badly formatted date; just ignore this metadata item
+                        continue
 
                 # Treat any other standard Humdrum keys as if they are true music21 keys.
                 # Use 'humdrum:???' because there is no uniqueName (yet; I'll try to get
