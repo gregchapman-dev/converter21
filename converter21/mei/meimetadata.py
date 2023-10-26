@@ -234,7 +234,9 @@ class MeiMetadata:
         return fileDesc
 
     def makeDigitalSource(self) -> MeiElement | None:
-        if not self.anyExist('EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER', 'END', 'YEC', 'YEM', 'YEN', 'TXL', 'ONB'):
+        if not self.anyExist(
+                'EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER',
+                'END', 'YEC', 'YEM', 'YEN', 'TXL', 'ONB'):
             return None
 
         source: MeiElement = MeiElement('source', {'type': 'digital'})
