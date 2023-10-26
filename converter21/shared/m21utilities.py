@@ -1621,6 +1621,8 @@ class M21Utilities:
             return role
         if role == 'encoder':
             return 'electronicEncoder'
+        if role == 'dedicatee':
+            return 'dedicatedTo'
         return ''
 
     @staticmethod
