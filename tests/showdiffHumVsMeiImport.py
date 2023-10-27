@@ -70,13 +70,13 @@ def runTheFullTest(krnPath: Path):
     TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
     score_lin1 = AnnScore(
         score1,
-        (DetailLevel.AllObjectsWithStyleAndMetadata
+        (DetailLevel.AllObjectsWithStyle
             | TURN_OFF_REST_POSITION_COMPARISON)
     )
     print('loaded first score')
     score_lin2 = AnnScore(
         score2,
-        (DetailLevel.AllObjectsWithStyleAndMetadata
+        (DetailLevel.AllObjectsWithStyle
             | TURN_OFF_REST_POSITION_COMPARISON)
     )
     print('loaded second score')
