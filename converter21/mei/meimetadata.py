@@ -609,8 +609,24 @@ class MeiMetadata:
         recordingLocations: list[MeiMetadataItem] = self.contents.get('RLC', [])
         recordingDates: list[MeiMetadataItem] = self.contents.get('RDT', [])
         trackNumbers: list[MeiMetadataItem] = self.contents.get('RT#', [])
+        longestLen: int = 0
+        longestLen = max(
+            longestLen,
+            len(albumTitles),
+            len(albumCatalogNumbers),
+            len(ensembleNames),
+            len(performerNames),
+            len(suspectedPerformerNames),
+            len(producers),
+            len(conductors),
+            len(manufacturers),
+            len(releaseDates),
+            len(recordingLocations),
+            len(recordingDates),
+            len(trackNumbers),
+        )
 
-        for i, albumTitle in enumerate(albumTitles):
+        for i in range(0, longestLen):
             if i < len(trackNumbers):
                 analytic: MeiElement = biblStruct.appendSubElement('analytic')
                 if self.simpleTitleElement is None:
@@ -627,138 +643,162 @@ class MeiMetadata:
                 )
                 biblScope.text = trackNumbers[i].meiValue
 
-            monogr: MeiElement = biblStruct.appendSubElement('monogr')
-            albumTitleEl: MeiElement = monogr.appendSubElement(
-                'title',
-                {
-                    'analog': 'humdrum:RTL'
-                }
-            )
-            albumTitleEl.text = albumTitle.meiValue
-
-            if i < len(albumCatalogNumbers):
-                albumCatalogNumberEl: MeiElement = monogr.appendSubElement(
-                    'identifier',
-                    {
-                        'type': 'albumCatalogNumber',
-                        'analog': 'humdrum:RC#'
-                    }
-                )
-                albumCatalogNumberEl.text = albumCatalogNumbers[i].meiValue
-
-            if (i < len(ensembleNames)
+            if (i < len(albumTitles)
+                    or i < len(albumCatalogNumbers)
+                    or i < len(ensembleNames)
                     or i < len(performerNames)
                     or i < len(suspectedPerformerNames)
                     or i < len(producers)
-                    or i < len(conductors)):
-                respStmt: MeiElement = monogr.appendSubElement('respStmt')
+                    or i < len(conductors)
+                    or i < len(manufacturers)
+                    or i < len(releaseDates)
+                    or i < len(recordingLocations)
+                    or i < len(recordingDates)
+                    or i < len(recordingDates)):
+                monogr: MeiElement = biblStruct.appendSubElement('monogr')
 
-                if i < len(ensembleNames):
-                    ensembleName = ensembleNames[i]
-                    respEl = respStmt.appendSubElement('resp')
-                    respEl.text = 'performer'
-                    ensembleNameEl: MeiElement = respStmt.appendSubElement(
-                        'corpName',
+                if i < len(albumTitles):
+                    albumTitle: MeiMetadataItem = albumTitles[i]
+
+                    albumTitleEl: MeiElement = monogr.appendSubElement(
+                        'title',
                         {
-                            'type': 'ensembleName',
-                            'analog': 'humdrum:MGN'
+                            'analog': 'humdrum:RTL'
                         }
                     )
-                    ensembleNameEl.text = ensembleName.meiValue
+                    albumTitleEl.text = albumTitle.meiValue
 
-                if i < len(performerNames):
-                    performerName = performerNames[i]
-                    respEl = respStmt.appendSubElement('resp')
-                    respEl.text = 'performer'
-                    performerNameEl: MeiElement = monogr.appendSubElement(
-                        'persName',
+                if i < len(albumCatalogNumbers):
+                    albumCatalogNumber: MeiMetadataItem = albumCatalogNumbers[i]
+                    albumCatalogNumberEl: MeiElement = monogr.appendSubElement(
+                        'identifier',
                         {
-                            'analog': 'humdrum:MPN'
+                            'type': 'albumCatalogNumber',
+                            'analog': 'humdrum:RC#'
                         }
                     )
-                    performerNameEl.text = performerName.meiValue
+                    albumCatalogNumberEl.text = albumCatalogNumber.meiValue
 
-                if i < len(suspectedPerformerNames):
-                    suspectedPerformerName = suspectedPerformerNames[i]
-                    respEl = respStmt.appendSubElement('resp')
-                    respEl.text = 'performer'
-                    suspectedPerformerNameEl: MeiElement = monogr.appendSubElement(
-                        'persName',
-                        {
-                            'cert': 'medium',
-                            'analog': 'humdrum:MPS'
-                        }
-                    )
-                    suspectedPerformerNameEl.text = suspectedPerformerName.meiValue
+                if (i < len(ensembleNames)
+                        or i < len(performerNames)
+                        or i < len(suspectedPerformerNames)
+                        or i < len(producers)
+                        or i < len(conductors)):
+                    respStmt: MeiElement = monogr.appendSubElement('respStmt')
 
-                if i < len(producers):
-                    producer = producers[i]
-                    respEl = respStmt.appendSubElement('resp')
-                    respEl.text = 'producer'
-                    persNameEl: MeiElement = respStmt.appendSubElement(
-                        'name',
-                        {
-                            'analog': 'humdrum:RNP'
-                        }
-                    )
-                    persNameEl.text = producer.meiValue
+                    if i < len(ensembleNames):
+                        ensembleName: MeiMetadataItem = ensembleNames[i]
+                        respEl = respStmt.appendSubElement('resp')
+                        respEl.text = 'performer'
+                        ensembleNameEl: MeiElement = respStmt.appendSubElement(
+                            'corpName',
+                            {
+                                'type': 'ensembleName',
+                                'analog': 'humdrum:MGN'
+                            }
+                        )
+                        ensembleNameEl.text = ensembleName.meiValue
 
-                for conductor in conductors:
-                    conductor = conductors[i]
-                    respEl = respStmt.appendSubElement('resp')
-                    respEl.text = 'conductor'
-                    persNameEl = respStmt.appendSubElement(
-                        'persName',
-                        {
-                            'analog': 'humdrum:MCN'
-                        }
-                    )
-                    persNameEl.text = conductor.meiValue
+                    if i < len(performerNames):
+                        performerName: MeiMetadataItem = performerNames[i]
+                        respEl = respStmt.appendSubElement('resp')
+                        respEl.text = 'performer'
+                        performerNameEl: MeiElement = respStmt.appendSubElement(
+                            'persName',
+                            {
+                                'analog': 'humdrum:MPN'
+                            }
+                        )
+                        performerNameEl.text = performerName.meiValue
 
-        if manufacturers or releaseDates or recordingLocations or recordingDates:
-            imprint: MeiElement = monogr.appendSubElement('imprint')
+                    if i < len(suspectedPerformerNames):
+                        suspectedPerformerName: MeiMetadataItem = suspectedPerformerNames[i]
+                        respEl = respStmt.appendSubElement('resp')
+                        respEl.text = 'performer'
+                        suspectedPerformerNameEl: MeiElement = respStmt.appendSubElement(
+                            'persName',
+                            {
+                                'cert': 'medium',
+                                'analog': 'humdrum:MPS'
+                            }
+                        )
+                        suspectedPerformerNameEl.text = suspectedPerformerName.meiValue
 
-            for manufacturer in manufacturers:
-                manufacturerEl: MeiElement = imprint.appendSubElement(
-                    'corpName',
-                    {
-                        'role': 'production/distribution',
-                        'analog': 'humdrum:RMM'
-                    }
-                )
-                manufacturerEl.text = manufacturer.meiValue
+                    if i < len(producers):
+                        producer: MeiMetadataItem = producers[i]
+                        respEl = respStmt.appendSubElement('resp')
+                        respEl.text = 'producer'
+                        persNameEl: MeiElement = respStmt.appendSubElement(
+                            'name',
+                            {
+                                'analog': 'humdrum:RNP'
+                            }
+                        )
+                        persNameEl.text = producer.meiValue
 
-            for releaseDate in releaseDates:
-                releaseDateEl: MeiElement = imprint.appendSubElement(
-                    'date',
-                    {
-                        'type': 'releaseDate',
-                        'analog': 'humdrum:RRD'
-                    }
-                )
-                releaseDateEl.fillInIsodate(releaseDate.value)
-                releaseDateEl.text = releaseDate.meiValue
+                    if i < len(conductors):
+                        conductor: MeiMetadataItem = conductors[i]
+                        respEl = respStmt.appendSubElement('resp')
+                        respEl.text = 'conductor'
+                        persNameEl = respStmt.appendSubElement(
+                            'persName',
+                            {
+                                'analog': 'humdrum:MCN'
+                            }
+                        )
+                        persNameEl.text = conductor.meiValue
 
-            for recordingLocation in recordingLocations:
-                recordingLocationEl: MeiElement = imprint.appendSubElement(
-                    'geogName',
-                    {
-                        'role': 'recordingLocation',
-                        'analog': 'humdrum:RLC'
-                    }
-                )
-                recordingLocationEl.text = recordingLocation.meiValue
+                if (i < len(manufacturers)
+                        or i < len(releaseDates)
+                        or i < len(recordingLocations)
+                        or i < len(recordingDates)):
+                    imprint: MeiElement = monogr.appendSubElement('imprint')
 
-            for recordingDate in recordingDates:
-                recordingDateEl: MeiElement = imprint.appendSubElement(
-                    'date',
-                    {
-                        'type': 'recordingDate',
-                        'analog': 'humdrum:RDT'
-                    }
-                )
-                recordingDateEl.fillInIsodate(recordingDate.value)
-                recordingDateEl.text = recordingDate.meiValue
+                    if i < len(manufacturers):
+                        manufacturer: MeiMetadataItem = manufacturers[i]
+                        manufacturerEl: MeiElement = imprint.appendSubElement(
+                            'corpName',
+                            {
+                                'role': 'production/distribution',
+                                'analog': 'humdrum:RMM'
+                            }
+                        )
+                        manufacturerEl.text = manufacturer.meiValue
+
+                    if i < len(releaseDates):
+                        releaseDate: MeiMetadataItem = releaseDates[i]
+                        releaseDateEl: MeiElement = imprint.appendSubElement(
+                            'date',
+                            {
+                                'type': 'releaseDate',
+                                'analog': 'humdrum:RRD'
+                            }
+                        )
+                        releaseDateEl.fillInIsodate(releaseDate.value)
+                        releaseDateEl.text = releaseDate.meiValue
+
+                    if i < len(recordingLocations):
+                        recordingLocation: MeiMetadataItem = recordingLocations[i]
+                        recordingLocationEl: MeiElement = imprint.appendSubElement(
+                            'geogName',
+                            {
+                                'role': 'recordingLocation',
+                                'analog': 'humdrum:RLC'
+                            }
+                        )
+                        recordingLocationEl.text = recordingLocation.meiValue
+
+                    if i < len(recordingDates):
+                        recordingDate: MeiMetadataItem = recordingDates[i]
+                        recordingDateEl: MeiElement = imprint.appendSubElement(
+                            'date',
+                            {
+                                'type': 'recordingDate',
+                                'analog': 'humdrum:RDT'
+                            }
+                        )
+                        recordingDateEl.fillInIsodate(recordingDate.value)
+                        recordingDateEl.text = recordingDate.meiValue
 
         if biblStruct.isEmpty():
             return None

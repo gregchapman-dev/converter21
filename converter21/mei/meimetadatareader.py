@@ -948,12 +948,6 @@ class MeiMetadataReader:
                     if uniqueNm:
                         role = uniqueNm
                         analog = uniqueNm
-                    else:
-                        # check to see if role maps to a humdrum reference key, and if so,
-                        # use that for analog (but leave role as-is)
-                        refKey: str = M21Utilities.contributorRoleToHumdrumReferenceKey(role)
-                        if refKey:
-                            analog = 'humdrum:' + refKey
 
                     contrib = m21.metadata.Contributor(name=name, role=role)
 
