@@ -198,7 +198,7 @@ class MeiShared:
             if elem.text[0] != '\n' or not elem.text.isspace():
                 text += elem.text
 
-        for el in elem.findAll('*', recurse=True):
+        for el in elem.findAll('*', recurse=False):
             # do whatever is appropriate given el.tag (<rend> for example)
             if el.name == 'rend':
                 # music21 doesn't currently support changing style in the middle of a
