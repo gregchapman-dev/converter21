@@ -4732,7 +4732,9 @@ class MeiReader:
             theRest.stepShift = stepShift
 
         # visibility
-        checkMRestVisibility: bool = False
+        # verovio produces v5 mRest@visible="false" when it should produce v5 mSpace instead.
+        # So we always obey mRest@visible, even though it should never be seen in v5 MEI.
+        checkMRestVisibility: bool = True
         if self.meiVersion.startswith('4'):
             checkMRestVisibility = True
 
