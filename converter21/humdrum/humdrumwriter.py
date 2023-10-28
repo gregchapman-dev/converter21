@@ -740,13 +740,7 @@ class HumdrumWriter:
             atLine += 1
 
         # what's left in allItems goes at the bottom of the file
-        # If converter21 isn't in 'software', add it in the exported file.
-        converter21IsThere: bool = False
         for uniqueName, value in allItems:
-            if (uniqueName == 'software'
-                    and str(value) == SharedConstants._CONVERTER21_NAME):
-                converter21IsThere = True
-
             if (uniqueName.startswith('humdrumraw:')
                     or uniqueName.startswith('humdrum:')
                     or uniqueName.startswith('raw:')):
@@ -794,13 +788,6 @@ class HumdrumWriter:
                     refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
                         0, uniqueName, value
                     )
-            if refLineStr is not None:
-                outfile.appendLine(refLineStr, asGlobalToken=True)
-
-        if not converter21IsThere:
-            refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
-                0, 'software', SharedConstants._CONVERTER21_NAME
-            )
             if refLineStr is not None:
                 outfile.appendLine(refLineStr, asGlobalToken=True)
 
