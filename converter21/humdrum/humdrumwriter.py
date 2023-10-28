@@ -42,7 +42,6 @@ from converter21.humdrum import ToolTremolo
 
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
-from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.

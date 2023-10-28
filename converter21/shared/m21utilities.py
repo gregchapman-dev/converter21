@@ -17,6 +17,7 @@ import re
 import sys
 import copy
 import typing as t
+from typing import overload  # pycharm bug disallows alias
 from fractions import Fraction
 
 import music21 as m21
@@ -1127,53 +1128,109 @@ class M21Utilities:
         return None
 
     @staticmethod
+    @overload
     def isoDateFromM21DatePrimitive(
-        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text
+        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text,
+        returnEDTFString: t.Literal[False] = False
+    ) -> dict[str, str]:
+        pass
+
+    @staticmethod
+    @overload
+    def isoDateFromM21DatePrimitive(
+        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text,
+        returnEDTFString: t.Literal[True]
     ) -> str:
-        isodate: str = ''
+        pass
+
+    @staticmethod
+    def isoDateFromM21DatePrimitive(
+        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text,
+        returnEDTFString: bool = False
+    ) -> dict[str, str] | str:
         if isinstance(dateObj, m21.metadata.Text):
             # convert to DatePrimitive
             do: m21.metadata.DatePrimitive | None = (
                 M21Utilities.m21DatePrimitiveFromString(str(dateObj))
             )
             if do is None:
-                return ''
+                if returnEDTFString:
+                    return ''
+                return {}
             dateObj = do
+
+        if dateObj.relevance in ('uncertain', 'approximate'):
+            if not returnEDTFString:
+                # pre-EDTF isodates can't represent uncertain/approximate dates,
+                # so don't return one.  The plain text will still describe it,
+                # and should be parseable by most folks.
+                return {}
 
         isodates: list[str] = []
         for date in dateObj._data:
-            iso: str = M21Utilities.isoDateFromM21Date(date)
+            iso: str = M21Utilities.isoDateFromM21Date(date, returnEDTFString)
+            if not iso:
+                if returnEDTFString:
+                    return ''
+                return {}
             isodates.append(iso)
 
         if isinstance(dateObj, m21.metadata.DateSingle):
-            isodate = isodates[0]
+            if returnEDTFString:
+                return isodates[0]
+            return {'isodate': isodates[0]}
         elif isinstance(dateObj, m21.metadata.DateRelative):
             if dateObj.relevance in ('prior', 'onorbefore'):
-                isodate = '../' + isodate
+                if returnEDTFString:
+                    return '../' + isodates[0]
+                return {'notafter': isodates[0]}
             elif dateObj.relevance in ('after', 'onorafter'):
-                isodate = isodate + '/..'
+                if returnEDTFString:
+                    return isodates[0] + '/..'
+                return {'notbefore': isodates[0]}
         elif isinstance(dateObj, m21.metadata.DateBetween):
-            isodate = isodates[0] + '/' + isodates[1]
+            if returnEDTFString:
+                return isodates[0] + '/' + isodates[1]
+            return {
+                'startdate': isodates[0],
+                'enddate': isodates[1]
+            }
         elif isinstance(dateObj, m21.metadata.DateSelection):
-            if dateObj.relevance == 'and':
-                isodate = '{' + ','.join(isodates) + '}'
+            if returnEDTFString:
+                if dateObj.relevance == 'and':
+                    return '{' + ','.join(isodates) + '}'
+                else:
+                    return '[' + ','.join(isodates) + ']'
             else:
-                isodate = '[' + ','.join(isodates) + ']'
-        return isodate
+                return {}
+
+        if returnEDTFString:
+            return ''
+        return {}
 
     @staticmethod
-    def isoDateFromM21Date(date: m21.metadata.Date) -> str:
+    def isoDateFromM21Date(date: m21.metadata.Date, returnEDTF: bool = False) -> str:
         msg: list[str] = []
         for attr in date.attrNames:
-            value = t.cast(int, getattr(date, attr))
+            value: int = t.cast(int, getattr(date, attr))
             if value is None:
                 break  # ignore anything after this
+            suffix: str = ''
+            error: str | None = getattr(date, attr + 'Error')
+            if error:
+                if not returnEDTF:
+                    return ''  # pre-EDTF ISO dates can't describe approximate/uncertain values.
+                if error == 'uncertain':
+                    suffix = '?'
+                elif error == 'approximate':
+                    suffix = '~'
 
             sub: str
             if attr == 'year':
                 sub = '%04d' % value
             else:
                 sub = '%02d' % value
+            sub = sub + suffix
             msg.append(sub)
 
         out = '-'.join(msg[:4])

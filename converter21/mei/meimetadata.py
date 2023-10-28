@@ -1090,7 +1090,10 @@ class MeiMetadata:
             personInfo: MeiElement = mads.appendSubElement('personInfo')
             if composerBirthAndDeathDate is not None:
                 isodate: str = (
-                    M21Utilities.isoDateFromM21DatePrimitive(composerBirthAndDeathDate.value)
+                    M21Utilities.isoDateFromM21DatePrimitive(
+                        composerBirthAndDeathDate.value,
+                        returnEDTFString=True
+                    )
                 )
                 isodateBirth: str = ''
                 isodateDeath: str = ''
