@@ -7712,9 +7712,19 @@ class MeiReader:
         # would have been 4/4).
         expectedMeasureDuration: OffsetQL
         if (maxBarDuration != 0.0
-                and maxBarDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')
-                and M21Utilities.isPowerOfTwoWithDots(maxBarDuration)):
-            expectedMeasureDuration = maxBarDuration
+                and maxBarDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
+            if self.activeMeter is not None:
+                # make sure it's not longer than a bar, and if it is, at least make sure
+                # it can be represented as a dotted note/rest.
+                if maxBarDuration > self.activeMeter.barDuration.quarterLength:
+                    if M21Utilities.isPowerOfTwoWithDots(maxBarDuration):
+                        expectedMeasureDuration = maxBarDuration
+                    else:
+                        expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
+                else:
+                    expectedMeasureDuration = maxBarDuration
+            else:
+                expectedMeasureDuration = maxBarDuration
         elif self.activeMeter is not None:
             expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
         else:
