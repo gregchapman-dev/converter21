@@ -732,6 +732,17 @@ class MeiReader:
         >>> c._qlDurationFromAttr('5') == None
         True
         '''
+        if attr and ' ' in attr:
+            # special case of space delimited durs that need to be added together
+            durattrs: list[str] = attr.split(' ')
+            total: float = 0.0
+            for durattr in durattrs:
+                dur: float | None = self._attrTranslator(durattr, 'dur', self._DUR_ATTR_DICT)
+                if dur is None:
+                    return None
+                total += dur
+            return total
+
         return self._attrTranslator(attr, 'dur', self._DUR_ATTR_DICT)
 
     def _articulationsFromAttr(

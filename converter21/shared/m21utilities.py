@@ -593,7 +593,9 @@ class M21Utilities:
         0.5
         '''
         output: m21.duration.Duration = m21.duration.Duration(base)
-        output.dots = dots
+        if not output.dots:
+            # ignore dots if base ql was already requiring some dots
+            output.dots = dots
         return output
 
     @staticmethod
