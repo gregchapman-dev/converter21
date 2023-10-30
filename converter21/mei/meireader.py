@@ -7782,21 +7782,13 @@ class MeiReader:
                         staveN.insert(eachOffset, clonedObj)
 
         # Compute expectedMeasureDuration.  This is either the maximum staff duration seen
-        # in the measure (if we've seen any staffs, and that max duration is expressible
-        # as a power of two plus dots), or the duration implied by the current time
-        # signature (if we've seen a time signature), or 4.0 (assume missing time signature
-        # would have been 4/4).
+        # in the measure (if we've seen any staffs), or the duration implied by the current
+        # time signature (if we've seen a time signature), or 4.0 (assume the missing time
+        # signature would have been 4/4).
         expectedMeasureDuration: OffsetQL
         if (maxBarDuration != 0.0
                 and maxBarDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
-            if self.activeMeter is not None:
-                # make sure it's not longer than a bar.
-                if maxBarDuration > self.activeMeter.barDuration.quarterLength:
-                    expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
-                else:
-                    expectedMeasureDuration = maxBarDuration
-            else:
-                expectedMeasureDuration = maxBarDuration
+            expectedMeasureDuration = maxBarDuration
         elif self.activeMeter is not None:
             expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
         else:
