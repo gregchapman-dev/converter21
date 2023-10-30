@@ -4839,9 +4839,20 @@ class MeiReader:
             set to True.
         '''
         # NOTE: keep this in sync with mSpaceFromElement()
+        theRest: m21.note.Rest
+        if elem.get('dur') is not None:
+            theRest = self.restFromElement(elem)
+            if self.activeMeter is not None:
+                measureDur: OffsetQL = 4.0 * opFrac(
+                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+                )
 
-        theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
-        theRest.m21wasMRest = True  # type: ignore
+                if theRest.duration.quarterLength != measureDur:
+                    theRest.duration.linked = False
+                    theRest.duration.quarterLength = measureDur
+        else:
+            theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
+            theRest.m21wasMRest = True  # type: ignore
         return theRest
 
     def spaceFromElement(
@@ -4895,9 +4906,21 @@ class MeiReader:
             returned from this method is given the :attr:`m21wasMRest` attribute, set to True.
         '''
         # NOTE: keep this in sync with mRestFromElement()
+        theSpace: m21.note.Rest
+        if elem.get('dur') is not None:
+            theSpace = self.spaceFromElement(elem)
+            if self.activeMeter is not None:
+                measureDur: OffsetQL = 4.0 * opFrac(
+                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+                )
 
-        theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
-        theSpace.m21wasMRest = True  # type: ignore
+                if theSpace.duration.quarterLength != measureDur:
+                    theSpace.duration.linked = False
+                    theSpace.duration.quarterLength = measureDur
+        else:
+            theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
+            theSpace.m21wasMRest = True  # type: ignore
+
         return theSpace
 
     def chordFromElement(
