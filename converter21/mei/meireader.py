@@ -357,6 +357,12 @@ class MeiReader:
         # The current staff default durations (keyed by staffNStr)
         self.staffDefaultDurations: dict[str, str] = {}
 
+        # The current score ppq
+        self.scorePPQ: int | None = None
+
+        # The current staff ppqs (keyed by staffNStr)
+        self.staffPPQs: dict[str, int] = {}
+
         # The scoredef@midi.bpm; we'll use it later for the very first tempo
         # if there's no tempo@midi.bpm.
         self.pendingMIDIBPM: str = ''
@@ -3054,6 +3060,14 @@ class MeiReader:
         if durDefault and durDefault in self._DUR_ATTR_DICT:
             self.scoreDefaultDuration = durDefault
 
+        # --> score PPQ
+        ppqStr: str = elem.get('ppq', '')
+        if ppqStr:
+            try:
+                self.scorePPQ = int(ppqStr)
+            except Exception:
+                pass
+
         # 2.) staff-specific things (from contained <staffGrp> >> <staffDef>)
         fakeTopLevelGroup: M21StaffGroupDescriptionTree | None = None
         topLevelGroupDescs: list[M21StaffGroupDescriptionTree] = []
@@ -3129,6 +3143,12 @@ class MeiReader:
         if self.scoreDefaultDuration:
             return self.scoreDefaultDuration
         return '4'
+
+    def getPPQ(self, staffNumStr: str) -> int | None:
+        staffPPQ: int | None = self.staffPPQs.get(staffNumStr, None)
+        if staffPPQ is not None:
+            return staffPPQ
+        return self.scorePPQ
 
     _MEI_STAFFGROUP_SYMBOL_TO_M21: dict[str, str] = {
         # m21 symbol can be 'brace', 'bracket', 'square', 'line', None
@@ -3694,11 +3714,18 @@ class MeiReader:
             if clefObj is not None:
                 post['clef'] = clefObj
 
-        # --> staff-specific duration default
+        # --> staff-specific duration default and PPQ
         if self.staffNumberForDef:
             durDefault: str = elem.get('dur.default', '')
             if durDefault and durDefault in self._DUR_ATTR_DICT:
                 self.staffDefaultDurations[self.staffNumberForDef] = durDefault
+
+            ppqStr: str = elem.get('ppq', '')
+            if ppqStr:
+                try:
+                    self.staffPPQs[self.staffNumberForDef] = int(ppqStr)
+                except Exception:
+                    pass
 
         embeddedItems = self._processEmbeddedElements(
             elem.findall('*'), tagToFunction, elem.tag
@@ -4249,6 +4276,8 @@ class MeiReader:
         durGesFloat: float | None = 0.0
         numDots: int = 0
         numDotsGes: int | None = None
+        foundDurGes: bool = False
+        foundDotsGes: bool = False
         if usePlaceHolderDuration:
             durFloat = self._qlDurationFromAttr('measureDurationPlaceHolder')
             numDots = 0
@@ -4260,6 +4289,7 @@ class MeiReader:
                     raise MeiAttributeError(f'dur attribute has illegal value: "{elem.get("dur")}"')
 
             if elem.get('dur.ges'):
+                foundDurGes = True
                 durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
                 if durGesFloat is None:
                     # @dur.ges value was not found in self._DUR_ATTR_DICT
@@ -4272,7 +4302,23 @@ class MeiReader:
 
             dotsGesStr: str = elem.get('dots.ges', '')
             if dotsGesStr:
+                foundDotsGes = True
                 numDotsGes = int(dotsGesStr)
+
+            # if no dur.ges and no dots.ges, try for dur.ppq
+            if not foundDurGes and not foundDotsGes:
+                durPPQStr: str = elem.get('dur.ppq', '')
+                if durPPQStr:
+                    durPPQ: int | None = None
+                    try:
+                        durPPQ = int(durPPQStr)
+                    except Exception:
+                        pass
+                    if durPPQ is not None:
+                        ppq: int | None = self.getPPQ(self.staffNumberForNotes)
+                        if ppq:
+                            durGesFloat = float(durPPQ) / float(ppq)
+                            numDotsGes = 0  # None would make us use numDots, which is wrong
 
         if durFloat == 0.0:
             # @dur was missing
@@ -4686,6 +4732,19 @@ class MeiReader:
         theDuration: m21.duration.Duration = (
             self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
         )
+
+        # Check if rest duration is a whole note, and that's longer than activeMeter.
+        # If so, make gestural duration equal to activeMeter.
+        if theDuration.quarterLength == 4.0:
+            if self.activeMeter is not None:
+                measureDur: OffsetQL = 4.0 * opFrac(
+                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+                )
+
+                if measureDur < 4.0:
+                    theDuration.linked = False
+                    theDuration.quarterLength = measureDur
+
         theRest = note.Rest(duration=theDuration)
 
         xmlId: str | None = elem.get(_XMLID)
@@ -4780,13 +4839,21 @@ class MeiReader:
             set to True.
         '''
         # NOTE: keep this in sync with mSpaceFromElement()
-
+        theRest: m21.note.Rest
         if elem.get('dur') is not None:
-            return self.restFromElement(elem)
+            theRest = self.restFromElement(elem)
+            if self.activeMeter is not None:
+                measureDur: OffsetQL = 4.0 * opFrac(
+                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+                )
+
+                if theRest.duration.quarterLength != measureDur:
+                    theRest.duration.linked = False
+                    theRest.duration.quarterLength = measureDur
         else:
             theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
             theRest.m21wasMRest = True  # type: ignore
-            return theRest
+        return theRest
 
     def spaceFromElement(
         self,
@@ -4839,13 +4906,22 @@ class MeiReader:
             returned from this method is given the :attr:`m21wasMRest` attribute, set to True.
         '''
         # NOTE: keep this in sync with mRestFromElement()
-
+        theSpace: m21.note.Rest
         if elem.get('dur') is not None:
-            return self.spaceFromElement(elem)
+            theSpace = self.spaceFromElement(elem)
+            if self.activeMeter is not None:
+                measureDur: OffsetQL = 4.0 * opFrac(
+                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+                )
+
+                if theSpace.duration.quarterLength != measureDur:
+                    theSpace.duration.linked = False
+                    theSpace.duration.quarterLength = measureDur
         else:
             theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
             theSpace.m21wasMRest = True  # type: ignore
-            return theSpace
+
+        return theSpace
 
     def chordFromElement(
         self,
