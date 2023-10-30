@@ -4827,12 +4827,9 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with mSpaceFromElement()
 
-        if elem.get('dur') is not None:
-            return self.restFromElement(elem)
-        else:
-            theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
-            theRest.m21wasMRest = True  # type: ignore
-            return theRest
+        theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
+        theRest.m21wasMRest = True  # type: ignore
+        return theRest
 
     def spaceFromElement(
         self,
@@ -4886,12 +4883,9 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with mRestFromElement()
 
-        if elem.get('dur') is not None:
-            return self.spaceFromElement(elem)
-        else:
-            theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
-            theSpace.m21wasMRest = True  # type: ignore
-            return theSpace
+        theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
+        theSpace.m21wasMRest = True  # type: ignore
+        return theSpace
 
     def chordFromElement(
         self,
