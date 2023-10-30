@@ -4732,6 +4732,19 @@ class MeiReader:
         theDuration: m21.duration.Duration = (
             self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
         )
+
+        # Check if rest duration is a whole note, and that's longer than activeMeter.
+        # If so, make gestural duration equal to activeMeter.
+        if theDuration.quarterLength == 4.0:
+            if self.activeMeter is not None:
+                measureDur: OffsetQL = 4.0 * opFrac(
+                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+                )
+
+                if measureDur < 4.0:
+                    theDuration.linked = False
+                    theDuration.quarterLength = measureDur
+
         theRest = note.Rest(duration=theDuration)
 
         xmlId: str | None = elem.get(_XMLID)
