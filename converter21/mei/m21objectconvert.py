@@ -647,11 +647,19 @@ class M21ObjectConvert:
             durGes = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(gesDuration.type, '')
             dotsGes = str(gesDuration.dots)
 
-            # only emit @dur.ges or @dots.ges if different from @dur or @dots
+            # only emit @dur.ges if different from @dur
+            # @dots.ges is more complicated.  There is a question about
+            # whether missing @dots.ges should fall back to @dots or to '0'
+            # in the presence of @dur.ges.  So we avoid the ambiguity and
+            # if there is a @dur.ges, we _always_ emit @dots.ges, even if
+            # it's '0' or the same as @dots.
             if durGes == dur:
                 durGes = ''
-            if dotsGes == dots:
-                dotsGes = ''
+            if not durGes:
+                # There is no @dur.ges, so we can remove @dots.ges if it's the
+                # same as @dots.
+                if dotsGes == dots:
+                    dotsGes = ''
 
         # all computed, put the relevant ones in the attr dict
         if dots and dots != '0':
