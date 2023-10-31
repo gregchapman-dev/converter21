@@ -6395,10 +6395,12 @@ class MeiReader:
         # iterate all immediate children
         for eachTag in elem.iterfind('*'):
             if layerTagName == eachTag.tag:
-                layers.append(self.layerFromElement(
+                layer: m21.stream.Voice = self.layerFromElement(
                     eachTag, overrideN=currentNValue
-                ))
-                currentNValue = f'{int(layers[-1].id) + 1}'  # inefficient, but we need a string
+                )
+                if layer:
+                    layers.append(layer)
+                    currentNValue = f'{int(layers[-1].id) + 1}'  # inefficient, but we need a string
             elif eachTag.tag in tagToFunction:
                 # NB: this won't be tested until there's something in tagToFunction
                 layers.append(
