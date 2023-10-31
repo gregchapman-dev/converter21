@@ -434,6 +434,10 @@ class MeiReader:
         # It is used in various places, but mostly to compute what a @tstamp means.
         self.activeMeter: meter.TimeSignature | None = None
 
+        # inTupletElement is 0 if we are not in a tuplet element, and is > 0 to represent
+        # how many tuplet elements we are within.
+        self.inTupletElement: int = 0
+
     def run(self) -> stream.Score | stream.Part | stream.Opus:
         '''
         Run conversion of the internal MEI document to produce a music21 object.
@@ -4673,6 +4677,21 @@ class MeiReader:
                 # because scaleToTuplet always returns whatever objs it was passed (modified)
                 assert isinstance(obj, note.Note)
             theNote = obj
+        elif self.inTupletElement == 0:
+            # Check for bare @tuplet start/end without m21TupletSearch, and make
+            # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
+            # Since there is no way for @num or @numbase to be specified, assume
+            # they are '3' and '2', respectively.
+            if not elem.get('m21TupletSearch', ''):
+                tupletStr: str = elem.get('tuplet', '')
+                if tupletStr.startswith('i'):
+                    theNote.m21TupletSearch = 'start'  # type: ignore
+                    theNote.m21TupletNum = '3'  # type: ignore
+                    theNote.m21TupletNumbase = '2'  # type: ignore
+                if tupletStr.startswith('t'):
+                    theNote.m21TupletSearch = 'end'  # type: ignore
+                    theNote.m21TupletNum = '3'  # type: ignore
+                    theNote.m21TupletNumbase = '2'  # type: ignore
 
         # visibility
         if elem.get('visible') == 'false':
@@ -4776,6 +4795,21 @@ class MeiReader:
                 # because scaleToTuplet returns whatever it was passed (modified)
                 assert isinstance(obj, note.Rest)
             theRest = obj
+        elif self.inTupletElement == 0:
+            # Check for bare @tuplet start/end without m21TupletSearch, and make
+            # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
+            # Since there is no way for @num or @numbase to be specified, assume
+            # they are '3' and '2', respectively.
+            if not elem.get('m21TupletSearch', ''):
+                tupletStr: str = elem.get('tuplet', '')
+                if tupletStr.startswith('i'):
+                    theRest.m21TupletSearch = 'start'  # type: ignore
+                    theRest.m21TupletNum = '3'  # type: ignore
+                    theRest.m21TupletNumbase = '2'  # type: ignore
+                if tupletStr.startswith('t'):
+                    theRest.m21TupletSearch = 'end'  # type: ignore
+                    theRest.m21TupletNum = '3'  # type: ignore
+                    theRest.m21TupletNumbase = '2'  # type: ignore
 
         # positioning (oloc/ploc or just loc -> theRest.stepShift)
         oloc: str = elem.get('oloc', '')
@@ -4887,6 +4921,21 @@ class MeiReader:
                 # because scaleToTuplet returns the same type it was passed
                 assert isinstance(obj, note.Rest)
             theSpace = obj
+        elif self.inTupletElement == 0:
+            # Check for bare @tuplet start/end without m21TupletSearch, and make
+            # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
+            # Since there is no way for @num or @numbase to be specified, assume
+            # they are '3' and '2', respectively.
+            if not elem.get('m21TupletSearch', ''):
+                tupletStr: str = elem.get('tuplet', '')
+                if tupletStr.startswith('i'):
+                    theSpace.m21TupletSearch = 'start'  # type: ignore
+                    theSpace.m21TupletNum = '3'  # type: ignore
+                    theSpace.m21TupletNumbase = '2'  # type: ignore
+                if tupletStr.startswith('t'):
+                    theSpace.m21TupletSearch = 'end'  # type: ignore
+                    theSpace.m21TupletNum = '3'  # type: ignore
+                    theSpace.m21TupletNumbase = '2'  # type: ignore
 
         return theSpace
 
@@ -5169,6 +5218,21 @@ class MeiReader:
                 # because scaleToTuplet returns whatever type it was passed
                 assert isinstance(obj, chord.Chord)
             theChord = obj
+        elif self.inTupletElement == 0:
+            # Check for bare @tuplet start/end without m21TupletSearch, and make
+            # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
+            # Since there is no way for @num or @numbase to be specified, assume
+            # they are '3' and '2', respectively.
+            if not elem.get('m21TupletSearch', ''):
+                tupletStr: str = elem.get('tuplet', '')
+                if tupletStr.startswith('i'):
+                    theChord.m21TupletSearch = 'start'  # type: ignore
+                    theChord.m21TupletNum = '3'  # type: ignore
+                    theChord.m21TupletNumbase = '2'  # type: ignore
+                if tupletStr.startswith('t'):
+                    theChord.m21TupletSearch = 'end'  # type: ignore
+                    theChord.m21TupletNum = '3'  # type: ignore
+                    theChord.m21TupletNumbase = '2'  # type: ignore
 
         # visibility
         if elem.get('visible') == 'false':
@@ -5765,12 +5829,15 @@ class MeiReader:
         numPlaceStr: str | None = elem.get('num.place')
         numFormatStr: str | None = elem.get('num.format')
 
-        # iterate all immediate children
+        # iterate all immediate children (set self.inTupletElement so we know to ignore
+        # any @tuplet attributes)
+        self.inTupletElement += 1
         tupletMembers: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
         )
+        self.inTupletElement -= 1
 
         # "tuplet-ify" the duration of everything held within
         newElem = Element('', m21TupletNum=numStr, m21TupletNumbase=numbaseStr)
