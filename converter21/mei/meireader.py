@@ -1055,7 +1055,7 @@ class MeiReader:
 
         **This Preprocessor**
 
-        The slur preprocessor works similarly to the slur preprocessor, adding @m21TupletNum and
+        The tuplet preprocessor works similarly to the slur preprocessor, adding @m21TupletNum and
         @m21TupletNumbase attributes. The value of these attributes corresponds to the @num and
         @numbase attributes found on a <tuplet> element. This preprocessor also performs a
         significant amount of guesswork to try to handle <tupletSpan> elements that do not include
@@ -4733,18 +4733,18 @@ class MeiReader:
             self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
         )
 
-        # Check if rest duration is a whole note, and that's longer than activeMeter.
-        # If so, make gestural duration equal to activeMeter.
-        if theDuration.quarterLength == 4.0:
-            if self.activeMeter is not None:
-                measureDur: OffsetQL = 4.0 * opFrac(
-                    Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
-                )
-
-                if measureDur < 4.0:
-                    theDuration.linked = False
-                    theDuration.quarterLength = measureDur
-
+#         # Check if rest duration is a whole note, and that's longer than activeMeter.
+#         # If so, make gestural duration equal to activeMeter.
+#         if theDuration.quarterLength == 4.0:
+#             if self.activeMeter is not None:
+#                 measureDur: OffsetQL = 4.0 * opFrac(
+#                     Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+#                 )
+#
+#                 if measureDur < 4.0:
+#                     theDuration.linked = False
+#                     theDuration.quarterLength = measureDur
+#
         theRest = note.Rest(duration=theDuration)
 
         xmlId: str | None = elem.get(_XMLID)
@@ -7798,9 +7798,11 @@ class MeiReader:
         # in this <measure>
         for eachN in expectedNs:
             if eachN not in staves:
-                rest = m21.note.Rest(quarterLength=expectedMeasureDuration)
-                rest.style.hideObjectOnPrint = True
-                restVoice = stream.Voice([rest])
+                restVoice = stream.Voice()
+                self.padVoiceWithInvisibleRests(
+                    restVoice,
+                    expectedMeasureDuration
+                )
                 restVoice.id = '1'
                 staves[eachN] = stream.Measure([restVoice], number=measureNum or 0)
 
