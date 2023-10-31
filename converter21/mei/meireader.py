@@ -4349,7 +4349,7 @@ class MeiReader:
             if durGesFloat != 0.0 and numDotsGes is not None:
                 gesDuration = M21Utilities.makeDuration(durGesFloat, numDotsGes)
             elif durGesFloat != 0.0 and numDotsGes is None:
-                gesDuration = M21Utilities.makeDuration(durGesFloat, numDots)
+                gesDuration = M21Utilities.makeDuration(durGesFloat, 0)
             elif durGesFloat == 0.0 and numDotsGes is not None:
                 gesDuration = M21Utilities.makeDuration(durFloat, numDotsGes)
 
