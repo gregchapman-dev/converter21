@@ -651,14 +651,20 @@ class M21ObjectConvert:
             # @dots.ges is more complicated.  There is a question about
             # whether missing @dots.ges should fall back to @dots or to '0'
             # in the presence of @dur.ges.  So we avoid the ambiguity and
-            # if there is a @dur.ges, we _always_ emit @dots.ges, even if
-            # it's '0' or the same as @dots.
+            # if there is a @dur.ges and non-zero @dots, we _always_ emit @dots.ges,
+            # even if it's '0' or the same as @dots.  And if there is a @dur.ges and
+            # no @dots, we can skip @dots.ges only if it also represents no dots.
             if durGes == dur:
                 durGes = ''
             if not durGes:
                 # There is no @dur.ges, so we can remove @dots.ges if it's the
                 # same as @dots.
                 if dotsGes == dots:
+                    dotsGes = ''
+            else:
+                # There is a @dur.ges, so we can only remove @dots.ges if it is
+                # '0' _and_ @dots is '0'.
+                if dotsGes in ('0', '') and dots in ('0', ''):
                     dotsGes = ''
 
         # all computed, put the relevant ones in the attr dict
