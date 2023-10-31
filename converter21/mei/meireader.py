@@ -7883,11 +7883,13 @@ class MeiReader:
                 continue
             for voice in measure.voices:
                 if voice.duration.quarterLength < expectedMeasureDuration:
-                    environLocal.warn(
-                        f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
-                        f'is short by {expectedMeasureDuration - voice.duration.quarterLength} '
-                        'quarter notes; assuming this was a missing <space> at the end.'
-                    )
+                    if voice.duration.quarterLength != 0:
+                        # don't bother warning for voices that (e.g.) have only a Clef.
+                        environLocal.warn(
+                            f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
+                            f'is short by {expectedMeasureDuration - voice.duration.quarterLength} '
+                            'quarter notes; assuming this was a missing <space> at the end.'
+                        )
                     self.padVoiceWithInvisibleRests(
                         voice,
                         expectedMeasureDuration - voice.duration.quarterLength
