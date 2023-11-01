@@ -2646,7 +2646,7 @@ class MeiReader:
     def scaleToTuplet(
         objs: Music21Object | list[Music21Object],
         elem: Element
-    ) -> Music21Object | list[Music21Object]:
+    ) -> None:
         '''
         Scale the duration of some objects by a ratio indicated by a tuplet. The ``elem`` must have
         the @m21TupletNum and @m21TupletNumbase attributes set, and optionally the @m21TupletSearch
@@ -2678,10 +2678,8 @@ class MeiReader:
         :returns: ``objs`` with scaled durations.
         :rtype: (list of) :class:`~music21.base.Music21Object`
         '''
-        wasList: bool = True
         if not isinstance(objs, list):
             objs = [objs]
-            wasList = False
 
         for obj in objs:
             bracketVisible: str | None = None
@@ -2790,18 +2788,19 @@ class MeiReader:
                     obj.duration.appendTuplet(newTuplet)
 
                     if hasGesturalDuration:
-                        # put it back (tupletized)
-                        mult: OffsetQL = newTuplet.tupletMultiplier()
-                        newGesturalQL: OffsetQL = opFrac(gesturalQL * mult)
-                        obj.duration.linked = False
-                        obj.duration.quarterLength = newGesturalQL
+                        # if gestural duration came from dur.ppq, it is actually just
+                        # the tupletized visual duration, and so we should ignore it.
+                        if gesturalQL == obj.duration.quarterLength:
+                            pass  # it was just tupletized visual duration; ignore it
+                        else:
+                            # It wasn't just tupletized visual duration, it was a real
+                            # gestural duration, so we should put it back (tupletized)
+                            mult: OffsetQL = newTuplet.tupletMultiplier()
+                            newGesturalQL: OffsetQL = opFrac(gesturalQL * mult)
+                            obj.duration.linked = False
+                            obj.duration.quarterLength = newGesturalQL
 
-        if wasList:
-            return objs
-        else:
-            return objs[0]
-
-    def _guessTuplets(self, theLayer: list[Music21Object]) -> list[Music21Object]:
+    def _guessTuplets(self, theLayer: list[Music21Object]) -> None:
         # TODO: nested tuplets don't work when they're both specified with <tupletSpan>
         # TODO: adjust this to work with cross-measure tuplets (i.e., where only the
         # TODO: "start" or "end" is found in theLayer)
@@ -2900,8 +2899,6 @@ class MeiReader:
 
                     # reset the tuplet-tracking variables
                     inATuplet = False
-
-        return theLayer
 
     # Element-Based Converter Functions
     # -----------------------------------------------------------------------------
@@ -4672,11 +4669,7 @@ class MeiReader:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = self.scaleToTuplet(theNote, elem)
-            if t.TYPE_CHECKING:
-                # because scaleToTuplet always returns whatever objs it was passed (modified)
-                assert isinstance(obj, note.Note)
-            theNote = obj
+            self.scaleToTuplet(theNote, elem)
         elif self.inTupletElement == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
@@ -4790,11 +4783,7 @@ class MeiReader:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = self.scaleToTuplet(theRest, elem)
-            if t.TYPE_CHECKING:
-                # because scaleToTuplet returns whatever it was passed (modified)
-                assert isinstance(obj, note.Rest)
-            theRest = obj
+            self.scaleToTuplet(theRest, elem)
         elif self.inTupletElement == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
@@ -4916,11 +4905,7 @@ class MeiReader:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = self.scaleToTuplet(theSpace, elem)
-            if t.TYPE_CHECKING:
-                # because scaleToTuplet returns the same type it was passed
-                assert isinstance(obj, note.Rest)
-            theSpace = obj
+            self.scaleToTuplet(theSpace, elem)
         elif self.inTupletElement == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
@@ -5213,11 +5198,7 @@ class MeiReader:
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
-            obj = self.scaleToTuplet(theChord, elem)
-            if t.TYPE_CHECKING:
-                # because scaleToTuplet returns whatever type it was passed
-                assert isinstance(obj, chord.Chord)
-            theChord = obj
+            self.scaleToTuplet(theChord, elem)
         elif self.inTupletElement == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
@@ -5852,7 +5833,7 @@ class MeiReader:
         if numFormatStr is not None:
             newElem.set('m21TupletNumFormat', numFormatStr)
 
-        tupletMembers = t.cast(list[Music21Object], self.scaleToTuplet(tupletMembers, newElem))
+        self.scaleToTuplet(tupletMembers, newElem)
 
         # Set the Tuplet.type property for the first and final note in a tuplet.
         # We have to find the first and last duration-having thing, not just the
@@ -5998,7 +5979,7 @@ class MeiReader:
         )
 
         # adjust the <layer>'s elements for possible tuplets
-        theLayer = self._guessTuplets(theLayer)
+        self._guessTuplets(theLayer)
 
         # Verovio, when converting from Humdrum to MEI, has been known to put <space> fillers
         # immediately after the end of a measure's/layer's usual duration, as an errant response
