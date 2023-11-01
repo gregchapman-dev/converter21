@@ -6004,21 +6004,21 @@ class MeiReader:
         # immediately after the end of a measure's/layer's usual duration, as an errant response
         # to a *clef token in the middle of a final rest or note.  This was fixed recently, but
         # because many such MEI files have been saved, we need to ignore these.
-        if self.activeMeter is not None:
-            expectedLayerDur: OffsetQL = 4.0 * opFrac(
-                Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
-            )
-            removeThisOne: int | None = None
-            currOffset: OffsetQL = 0.
-            for i, each in enumerate(theLayer):
-                if currOffset == expectedLayerDur:
-                    if isinstance(each, note.Rest) and each.style.hideObjectOnPrint:
-                        if self._isLastDurationalElement(i, theLayer):
-                            removeThisOne = i
-                            break
-                currOffset = opFrac(currOffset + each.quarterLength)
-            if removeThisOne is not None:
-                theLayer.pop(removeThisOne)
+        # if self.activeMeter is not None:
+        #     expectedLayerDur: OffsetQL = 4.0 * opFrac(
+        #         Fraction(self.activeMeter.numerator, self.activeMeter.denominator)
+        #     )
+        #     removeThisOne: int | None = None
+        #     currOffset: OffsetQL = 0.
+        #     for i, each in enumerate(theLayer):
+        #         if currOffset == expectedLayerDur:
+        #             if isinstance(each, note.Rest) and each.style.hideObjectOnPrint:
+        #                 if self._isLastDurationalElement(i, theLayer):
+        #                     removeThisOne = i
+        #                     break
+        #         currOffset = opFrac(currOffset + each.quarterLength)
+        #     if removeThisOne is not None:
+        #         theLayer.pop(removeThisOne)
 
         for obj in theLayer:
             # Check for dir/dynam/tempo attached to the obj.
