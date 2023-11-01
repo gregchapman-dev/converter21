@@ -4302,9 +4302,9 @@ class MeiReader:
 
             if foundDots and foundDurGes and not foundDotsGes:
                 environLocal.warn(
-                    '''Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots:
-assuming gestural duration is @dur.ges with zero dots.  If you meant
-something else, please specify @dots.ges explicitly.'''
+                    'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
+                    'assuming gestural duration is @dur.ges with zero dots.  If you meant '
+                    'something else, please specify @dots.ges explicitly.'
                 )
 
             if optionalDots is not None:
