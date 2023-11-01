@@ -6414,6 +6414,8 @@ class MeiReader:
 
         Nothing is returned; the duration of affected objects is modified in-place.
         '''
+        targetQLNeedsSplit: bool = not M21Utilities.isPowerOfTwoWithDots(targetQL)
+
         for eachMeasure in staves.values():
             if not isinstance(eachMeasure, stream.Measure):
                 continue
@@ -6422,6 +6424,7 @@ class MeiReader:
                 if not isinstance(eachVoice, stream.Stream):
                     continue
 
+                modifiedRestDurationInVoice: bool = False
                 correctionOffset: OffsetQL = 0.
                 for eachObject in eachVoice:
                     if correctionOffset != 0:
@@ -6436,7 +6439,11 @@ class MeiReader:
                             opFrac(correctionOffset + (targetQL - eachObject.quarterLength))
                         )
                         eachObject.duration.quarterLength = targetQL
+                        modifiedRestDurationInVoice = True
                         del eachObject.m21wasMRest
+
+                if modifiedRestDurationInVoice and targetQLNeedsSplit:
+                    M21Utilities.splitComplexRestDurations(eachVoice)
 
     def _makeBarlines(
         self,
