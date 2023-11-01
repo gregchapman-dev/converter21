@@ -4277,6 +4277,7 @@ class MeiReader:
         durGesFloat: float | None = 0.0
         numDots: int = 0
         numDotsGes: int | None = None
+        foundDots: bool = False
         foundDurGes: bool = False
         foundDotsGes: bool = False
         if usePlaceHolderDuration:
@@ -4295,6 +4296,16 @@ class MeiReader:
                 if durGesFloat is None:
                     # @dur.ges value was not found in self._DUR_ATTR_DICT
                     raise MeiAttributeError('dur.ges attribute has illegal value: "{attr}"')
+
+            if elem.get('dots'):
+                foundDots = True
+
+            if foundDots and foundDurGes and not foundDotsGes:
+                environLocal.warn(
+                    '''Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots:
+assuming gestural duration is @dur.ges with zero dots.  If you meant
+something else, please specify @dots.ges explicitly.'''
+                )
 
             if optionalDots is not None:
                 numDots = optionalDots
