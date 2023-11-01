@@ -1978,10 +1978,10 @@ class Test(unittest.TestCase):
         expectedDurs = [1.0 for _ in range(5)]
 
         c = MeiReader()
-        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
-            self.assertEqual(expectedDurs[i], actual[i].quarterLength)
+            self.assertEqual(expectedDurs[i], theLayer[i].quarterLength)
 
     def testTuplet11a(self):
         '''
@@ -1997,10 +1997,10 @@ class Test(unittest.TestCase):
         expectedDurs = [Fraction(2, 3), Fraction(2, 3), Fraction(2, 3), 1.0, 1.0]
 
         c = MeiReader()
-        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
-            self.assertEqual(expectedDurs[i], actual[i].quarterLength)
+            self.assertEqual(expectedDurs[i], theLayer[i].quarterLength)
         for i in [0, 2]:
             self.assertFalse(hasattr(theLayer[i], 'm21TupletSearch'))
             self.assertFalse(hasattr(theLayer[i], 'm21TupletNum'))
@@ -2020,10 +2020,10 @@ class Test(unittest.TestCase):
         expectedDurs = [1.0, Fraction(2, 3), Fraction(2, 3), Fraction(2, 3), 1.0]
 
         c = MeiReader()
-        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
-            self.assertEqual(expectedDurs[i], actual[i].quarterLength)
+            self.assertEqual(expectedDurs[i], theLayer[i].quarterLength)
         for i in [1, 3]:
             self.assertFalse(hasattr(theLayer[i], 'm21TupletSearch'))
             self.assertFalse(hasattr(theLayer[i], 'm21TupletNum'))
@@ -2043,10 +2043,10 @@ class Test(unittest.TestCase):
         expectedDurs = [1.0, 1.0, Fraction(2, 3), Fraction(2, 3), Fraction(2, 3)]
 
         c = MeiReader()
-        actual = c._guessTuplets(theLayer)  # pylint: disable=protected-access
+        c._guessTuplets(theLayer)  # pylint: disable=protected-access
 
         for i in range(len(expectedDurs)):
-            self.assertEqual(expectedDurs[i], actual[i].quarterLength)
+            self.assertEqual(expectedDurs[i], theLayer[i].quarterLength)
         for i in [2, 4]:
             self.assertFalse(hasattr(theLayer[i], 'm21TupletSearch'))
             self.assertFalse(hasattr(theLayer[i], 'm21TupletNum'))
