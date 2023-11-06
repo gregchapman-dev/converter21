@@ -564,27 +564,26 @@ class MeiScore:
                 return True
             return False
 
-        partTupletSpanners: list[MeiTupletSpanner] = self.currentTupletSpanners[part]
-
-        if not gnote.duration.tuplets and partTupletSpanners:
-            partTupletSpanners = partTupletSpanners[:-1]
+        if not gnote.duration.tuplets and self.currentTupletSpanners[part]:
+            self.currentTupletSpanners[part] = self.currentTupletSpanners[part][:-1]
+            return
 
         # start any new tuplet spanners
         for tuplet in gnote.duration.tuplets:
             if (startsTuplet(tuplet)
-                    or (tuplet.type is None and not partTupletSpanners)):
+                    or (tuplet.type is None and not self.currentTupletSpanners[part])):
                 newTupletSpanner = MeiTupletSpanner(tuplet)
                 self.m21Score.append(newTupletSpanner)
-                partTupletSpanners.append(newTupletSpanner)
+                self.currentTupletSpanners[part].append(newTupletSpanner)
 
         # put this note in all the tuplet spanners
-        for spanner in partTupletSpanners:
+        for spanner in self.currentTupletSpanners[part]:
             spanner.addSpannedElements(gnote)
 
         # stop any old tuplet spanners
         for tuplet in gnote.duration.tuplets:
             if stopsTuplet(tuplet):
-                partTupletSpanners = partTupletSpanners[:-1]
+                self.currentTupletSpanners[part] = self.currentTupletSpanners[part][:-1]
 
     def annotateTies(
         self,
