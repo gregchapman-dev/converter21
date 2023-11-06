@@ -358,6 +358,10 @@ class MeiScore:
                         self.annotatePositionedRests(obj, part)
                         self.fillOttavas(obj, part)
 
+                    if self.currentTupletSpanners[part]:
+                        # assume tuplets end at end of each voice
+                        self.currentTupletSpanners[part] = []
+
                 if partTieSpanners:
                     # We must have encountered a stop in a voice before we encountered the
                     # start in a different voice.  Just run through the voices again,
@@ -561,6 +565,9 @@ class MeiScore:
             return False
 
         partTupletSpanners: list[MeiTupletSpanner] = self.currentTupletSpanners[part]
+
+        if not gnote.duration.tuplets and partTupletSpanners:
+            partTupletSpanners = partTupletSpanners[:-1]
 
         # start any new tuplet spanners
         for tuplet in gnote.duration.tuplets:
