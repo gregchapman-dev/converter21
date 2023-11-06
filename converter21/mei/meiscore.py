@@ -565,6 +565,11 @@ class MeiScore:
             return False
 
         if not gnote.duration.tuplets and self.currentTupletSpanners[part]:
+            # if gnote is a grace note, keep the tuplet running but skip the grace note
+            if gnote.duration.isGrace:
+                return
+
+            # if gnote is NOT a grace note, then stop the tuplet
             self.currentTupletSpanners[part] = self.currentTupletSpanners[part][:-1]
             return
 
