@@ -47,9 +47,10 @@ class MeiScore:
 
         self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
         self.currentBeamSpanners: list[MeiBeamSpanner] = []
-        self.currentTupletSpanners: list[MeiTupletSpanner] = []
+        self.currentTupletSpanners: dict[m21.stream.Part, list[MeiTupletSpanner]] = {}
         self.currentTieSpanners: dict[m21.stream.Part, list[tuple[MeiTieSpanner, int]]] = {}
         for part in self.m21Score.parts:
+            self.currentTupletSpanners[part] = []
             self.currentTieSpanners[part] = []
 
         # pre-scan of m21Score to set up some things
@@ -352,10 +353,14 @@ class MeiScore:
                 for voice in voices:
                     for obj in voice:
                         self.annotateBeams(obj)
-                        self.annotateTuplets(obj)
+                        self.annotateTuplets(obj, part)
                         self.annotateTies(obj, part)
                         self.annotatePositionedRests(obj, part)
                         self.fillOttavas(obj, part)
+
+                    if self.currentTupletSpanners[part]:
+                        # assume tuplets end at end of each voice
+                        self.currentTupletSpanners[part] = []
 
                 if partTieSpanners:
                     # We must have encountered a stop in a voice before we encountered the
@@ -364,6 +369,12 @@ class MeiScore:
                     for voice in voices:
                         for obj in voice:
                             self.annotateTies(obj, part, stopsOnly=True)
+
+                if self.currentTupletSpanners[part]:
+                    # We have at least one missing tuplet stop.  Assume all tuplets stop
+                    # at end of measure. This isn't strictly true, but iohumdrum.cpp makes
+                    # the same assumption (never producing a <tupletSpan>).
+                    self.currentTupletSpanners[part] = []
 
                 # once annotated, check to see if any of these objects
                 # need xml:id.
@@ -539,7 +550,7 @@ class MeiScore:
 
         self.previousBeamedNoteOrChord = noteOrChord
 
-    def annotateTuplets(self, gnote: m21.base.Music21Object) -> None:
+    def annotateTuplets(self, gnote: m21.base.Music21Object, part: m21.stream.Part) -> None:
         if not isinstance(gnote, m21.note.GeneralNote):
             return
 
@@ -553,34 +564,31 @@ class MeiScore:
                 return True
             return False
 
-#         def numStarts(tuplets: tuple[m21.duration.Tuplet, ...]) -> int:
-#             output: int = 0
-#             for tupletObj in tuplets:
-#                 if startsTuplet(tupletObj):
-#                     output += 1
-#             return output
+        if not gnote.duration.tuplets and self.currentTupletSpanners[part]:
+            # if gnote is a grace note, keep the tuplet running but skip the grace note
+            if gnote.duration.isGrace:
+                return
 
-#         if not isinstance(gnote.duration, m21.duration.GraceDuration):
-#             starts: int = numStarts(gnote.duration.tuplets)
-#             if len(gnote.duration.tuplets) - starts != len(self.currentTupletSpanners):
-#                 raise MeiExportError('malformed music21 nested tuplets')
+            # if gnote is NOT a grace note, then stop the tuplet
+            self.currentTupletSpanners[part] = self.currentTupletSpanners[part][:-1]
+            return
 
         # start any new tuplet spanners
         for tuplet in gnote.duration.tuplets:
             if (startsTuplet(tuplet)
-                    or (tuplet.type is None and not self.currentTupletSpanners)):
+                    or (tuplet.type is None and not self.currentTupletSpanners[part])):
                 newTupletSpanner = MeiTupletSpanner(tuplet)
                 self.m21Score.append(newTupletSpanner)
-                self.currentTupletSpanners.append(newTupletSpanner)
+                self.currentTupletSpanners[part].append(newTupletSpanner)
 
         # put this note in all the tuplet spanners
-        for spanner in self.currentTupletSpanners:
+        for spanner in self.currentTupletSpanners[part]:
             spanner.addSpannedElements(gnote)
 
         # stop any old tuplet spanners
         for tuplet in gnote.duration.tuplets:
             if stopsTuplet(tuplet):
-                self.currentTupletSpanners = self.currentTupletSpanners[:-1]
+                self.currentTupletSpanners[part] = self.currentTupletSpanners[part][:-1]
 
     def annotateTies(
         self,
