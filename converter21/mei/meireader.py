@@ -4300,13 +4300,6 @@ class MeiReader:
             if elem.get('dots'):
                 foundDots = True
 
-            if foundDots and foundDurGes and not foundDotsGes:
-                environLocal.warn(
-                    'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
-                    'assuming gestural duration is @dur.ges with zero dots.  If you meant '
-                    'something else, please specify @dots.ges explicitly.'
-                )
-
             if optionalDots is not None:
                 numDots = optionalDots
             else:
@@ -4316,6 +4309,13 @@ class MeiReader:
             if dotsGesStr:
                 foundDotsGes = True
                 numDotsGes = int(dotsGesStr)
+
+            if foundDots and foundDurGes and not foundDotsGes:
+                environLocal.warn(
+                    'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
+                    'assuming gestural duration is @dur.ges with zero dots.  It is recommended'
+                    'that you specify @dots.ges explicitly.'
+                )
 
             # if no dur.ges and no dots.ges, try for dur.ppq
             if not foundDurGes and not foundDotsGes:
