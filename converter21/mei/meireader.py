@@ -2788,17 +2788,11 @@ class MeiReader:
                     obj.duration.appendTuplet(newTuplet)
 
                     if hasGesturalDuration:
-                        # if gestural duration came from dur.ppq, it is actually just
-                        # the tupletized visual duration, and so we should ignore it.
-                        if gesturalQL == obj.duration.quarterLength:
-                            pass  # it was just tupletized visual duration; ignore it
-                        else:
-                            # It wasn't just tupletized visual duration, it was a real
-                            # gestural duration, so we should put it back (tupletized)
-                            mult: OffsetQL = newTuplet.tupletMultiplier()
-                            newGesturalQL: OffsetQL = opFrac(gesturalQL * mult)
-                            obj.duration.linked = False
-                            obj.duration.quarterLength = newGesturalQL
+                        # tupletize the gestural duration, too
+                        mult: OffsetQL = newTuplet.tupletMultiplier()
+                        newGesturalQL: OffsetQL = opFrac(gesturalQL * mult)
+                        obj.duration.linked = False
+                        obj.duration.quarterLength = newGesturalQL
 
     def _guessTuplets(self, theLayer: list[Music21Object]) -> None:
         # TODO: nested tuplets don't work when they're both specified with <tupletSpan>
@@ -4317,8 +4311,10 @@ class MeiReader:
                     'that you specify @dots.ges explicitly.'
                 )
 
-            # if no dur.ges and no dots.ges, try for dur.ppq
-            if not foundDurGes and not foundDotsGes:
+            # if no dur.ges and no dots.ges, try for dur.ppq (but not if we're in a tuplet,
+            # because when in a tuplet, dur.ppq is just the tupletized duration, not really
+            # a gestural duration).
+            if not foundDurGes and not foundDotsGes and not self.inTupletElement:
                 durPPQStr: str = elem.get('dur.ppq', '')
                 if durPPQStr:
                     durPPQ: int | None = None
