@@ -422,13 +422,16 @@ class M21Convert:
         vdurNumDots: int | None = None
         vdurType: str | None = None
         if vdurStr:
-            vdur = opFrac(Convert.recipToDuration(vdurStr) / tuplet.tupletMultiplier())
+            # New policy: visual durations in Humdrum files never have tuplet-y durations.
+            # Don't use tupletMultiplier on them (we correctly do this below with gestural
+            # durations, of course).
+            vdur = Convert.recipToDuration(vdurStr)
             if t.TYPE_CHECKING:
                 assert vdur is not None
             vdurNoDots, vdurNumDots = M21Utilities.computeDurationNoDotsAndNumDots(vdur)
             if vdurNumDots is None:
                 print(f'Cannot figure out vDurNoDots + vDurNumDots from {vdurStr} (on '
-                      + f'line number {token.lineNumber}), tuplet={tuplet}, ignoring'
+                      + f'line number {token.lineNumber}), ignoring'
                       'visual duration', file=sys.stderr)
             else:
                 vdurType = m21.duration.convertQuarterLengthToType(vdurNoDots)
