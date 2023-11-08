@@ -2983,10 +2983,9 @@ class HumdrumFile(HumdrumFileContent):
                 # We do this tuplet adjustment if there is no visual duration or if there
                 # is a visual duration and it looks tuplet-y (not a power of two).
                 if not durVis or not M21Utilities.isPowerOfTwo(noteDurationNoDots):
-                    numberActualNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesActual
-                    numberNormalNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesNormal
                     multiplier: Fraction = Fraction(
-                        numberActualNotesInTuplet, numberNormalNotesInTuplet
+                        noteOrChord.duration.tuplets[0].numberNotesActual,
+                        noteOrChord.duration.tuplets[0].numberNotesNormal
                     )
                     noteDurationNoDots = opFrac(noteDurationNoDots * opFrac(multiplier))
 
