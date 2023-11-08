@@ -2112,10 +2112,6 @@ class HumdrumWriter:
                 outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(
                     voiceIndex, token, event.duration
                 )
-                for layoutString in layouts:
-                    outgm.addLayoutParameter(
-                        outSlice, partIndex, staffIndex, voiceIndex, layoutString
-                    )
 
                 # check for ottava starts/stops and emit *8va or *X8va aut cetera
                 if event.isOttavaStartOrStop:
@@ -2216,6 +2212,12 @@ class HumdrumWriter:
                                     staffIndex,
                                     event.suppressTupletBracket
                                 )
+
+                # layouts go last because they need to be closest to the note.
+                for layoutString in layouts:
+                    outgm.addLayoutParameter(
+                        outSlice, partIndex, staffIndex, voiceIndex, layoutString
+                    )
 
                 vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
                 if vcount > 0:

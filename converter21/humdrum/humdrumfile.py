@@ -2980,12 +2980,15 @@ class HumdrumFile(HumdrumFileContent):
                 # actual notes vs normal notes:  In an eighth-note triplet, actual notes is 3,
                 # and normal notes is 2.  i.e. 3 actual notes are played in the duration of 2
                 # normal notes
-                numberActualNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesActual
-                numberNormalNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesNormal
-                multiplier: Fraction = Fraction(
-                    numberActualNotesInTuplet, numberNormalNotesInTuplet
-                )
-                noteDurationNoDots = opFrac(noteDurationNoDots * opFrac(multiplier))
+                # We do this tuplet adjustment if there is no visual duration or if there
+                # is a visual duration and it looks tuplet-y (not a power of two).
+                if not durVis or not M21Utilities.isPowerOfTwo(noteDurationNoDots):
+                    numberActualNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesActual
+                    numberNormalNotesInTuplet: int = noteOrChord.duration.tuplets[0].numberNotesNormal
+                    multiplier: Fraction = Fraction(
+                        numberActualNotesInTuplet, numberNormalNotesInTuplet
+                    )
+                    noteDurationNoDots = opFrac(noteDurationNoDots * opFrac(multiplier))
 
         if isinstance(noteDurationNoDots, Fraction):
             # normalize the Fraction (not sure this is actually necessary now that we are

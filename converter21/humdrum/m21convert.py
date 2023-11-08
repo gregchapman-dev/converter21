@@ -422,12 +422,16 @@ class M21Convert:
         vdurNumDots: int | None = None
         vdurType: str | None = None
         if vdurStr:
-            # New policy: visual durations in Humdrum files never have tuplet-y durations.
-            # Don't use tupletMultiplier on them (we correctly do this below with gestural
-            # durations, of course).
+            # New policy: visual durations in Humdrum files do not follow the tupletiness
+            # of the gestural duration.  Rather, they are either non-tuplety, or they have
+            # their own tupletiness (which then has to match the tupletiness of the gestural
+            # duration).  So we only use tupletMultipler on them if they are not already
+            # a power of two with dots.
             vdur = Convert.recipToDuration(vdurStr)
             if t.TYPE_CHECKING:
                 assert vdur is not None
+            if not M21Utilities.isPowerOfTwoWithDots(vdur):
+                vdur = opFrac(vdur / tuplet.tupletMultiplier())
             vdurNoDots, vdurNumDots = M21Utilities.computeDurationNoDotsAndNumDots(vdur)
             if vdurNumDots is None:
                 print(f'Cannot figure out vDurNoDots + vDurNumDots from {vdurStr} (on '
