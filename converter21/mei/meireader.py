@@ -434,9 +434,9 @@ class MeiReader:
         # It is used in various places, but mostly to compute what a @tstamp means.
         self.activeMeter: meter.TimeSignature | None = None
 
-        # inTupletElement is 0 if we are not in a tuplet element, and is > 0 to represent
-        # how many tuplet elements we are within.
-        self.inTupletElement: int = 0
+        # inTupletCount is 0 if we are not in a tuplet, and is > 0 to represent
+        # how many tuplets we are nested within.
+        self.inTupletCount: int = 0
 
     def run(self) -> stream.Score | stream.Part | stream.Opus:
         '''
@@ -4314,7 +4314,7 @@ class MeiReader:
             # if no dur.ges and no dots.ges, try for dur.ppq (but not if we're in a tuplet,
             # because when in a tuplet, dur.ppq is just the tupletized duration, not really
             # a gestural duration).
-            if not foundDurGes and not foundDotsGes and not self.inTupletElement:
+            if not foundDurGes and not foundDotsGes and not self.inTupletCount:
                 durPPQStr: str = elem.get('dur.ppq', '')
                 if durPPQStr:
                     durPPQ: int | None = None
@@ -4447,6 +4447,17 @@ class MeiReader:
         - MEI.critapp: app
         - MEI.edittrans: (all)
         '''
+        # Check for m21TupletSearch=='start' and tuplet='iNN'
+        # to increment self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'start':
+            self.inTupletCount += 1
+        elif elem.get('tuplet', '').startswith('i'):
+            self.inTupletCount += 1
+
         # make the note (no pitch yet, that has to wait until we have parsed the subelements)
         isUnpitched: bool = False
         theNote: note.Note | note.Unpitched
@@ -4677,7 +4688,7 @@ class MeiReader:
         # tuplets
         if elem.get('m21TupletNum') is not None:
             self.scaleToTuplet(theNote, elem)
-        elif self.inTupletElement == 0:
+        elif self.inTupletCount == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
             # Since there is no way for @num or @numbase to be specified, assume
@@ -4700,6 +4711,17 @@ class MeiReader:
         # stash the staff number in theNote.mei_staff (in case a spanner needs to know)
         if self.staffNumberForNotes:
             theNote.mei_staff = self.staffNumberForNotes  # type: ignore
+
+        # Check for m21TupletSearch=='end' and tuplet='tNN'
+        # to decrement self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'end':
+            self.inTupletCount -= 1
+        elif elem.get('tuplet', '').startswith('t'):
+            self.inTupletCount -= 1
 
         return theNote
 
@@ -4748,6 +4770,17 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with spaceFromElement()
 
+        # Check for m21TupletSearch=='start' and tuplet='iNN'
+        # to increment self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'start':
+            self.inTupletCount += 1
+        elif elem.get('tuplet', '').startswith('i'):
+            self.inTupletCount += 1
+
         theDuration: m21.duration.Duration = (
             self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
         )
@@ -4791,7 +4824,7 @@ class MeiReader:
         # tuplets
         if elem.get('m21TupletNum') is not None:
             self.scaleToTuplet(theRest, elem)
-        elif self.inTupletElement == 0:
+        elif self.inTupletCount == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
             # Since there is no way for @num or @numbase to be specified, assume
@@ -4850,6 +4883,17 @@ class MeiReader:
         if self.staffNumberForNotes:
             theRest.mei_staff = self.staffNumberForNotes  # type: ignore
 
+        # Check for m21TupletSearch=='end' and tuplet='tNN'
+        # to decrement self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'end':
+            self.inTupletCount -= 1
+        elif elem.get('tuplet', '').startswith('t'):
+            self.inTupletCount -= 1
+
         return theRest
 
     def mRestFromElement(
@@ -4900,6 +4944,17 @@ class MeiReader:
         '''
         # NOTE: keep this in sync with restFromElement()
 
+        # Check for m21TupletSearch=='start' and tuplet='iNN'
+        # to increment self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'start':
+            self.inTupletCount += 1
+        elif elem.get('tuplet', '').startswith('i'):
+            self.inTupletCount += 1
+
         theDuration: m21.duration.Duration = (
             self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
         )
@@ -4913,7 +4968,7 @@ class MeiReader:
         # tuplets
         if elem.get('m21TupletNum') is not None:
             self.scaleToTuplet(theSpace, elem)
-        elif self.inTupletElement == 0:
+        elif self.inTupletCount == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
             # Since there is no way for @num or @numbase to be specified, assume
@@ -4928,6 +4983,17 @@ class MeiReader:
                     theSpace.m21TupletSearch = 'end'  # type: ignore
                     theSpace.m21TupletNum = '3'  # type: ignore
                     theSpace.m21TupletNumbase = '2'  # type: ignore
+
+        # Check for m21TupletSearch=='end' and tuplet='tNN'
+        # to decrement self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'end':
+            self.inTupletCount -= 1
+        elif elem.get('tuplet', '').startswith('t'):
+            self.inTupletCount -= 1
 
         return theSpace
 
@@ -5027,6 +5093,17 @@ class MeiReader:
 
         - MEI.edittrans: (all)
         '''
+        # Check for m21TupletSearch=='start' and tuplet='iNN'
+        # to increment self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'start':
+            self.inTupletCount += 1
+        elif elem.get('tuplet', '').startswith('i'):
+            self.inTupletCount += 1
+
         # Reach back to any immediately previous tied chord and using theChord.pitches,
         # figure out which of the previous chord's notes are actually tied to theChord.
         self.withinChord = True
@@ -5206,7 +5283,7 @@ class MeiReader:
         # tuplets
         if elem.get('m21TupletNum') is not None:
             self.scaleToTuplet(theChord, elem)
-        elif self.inTupletElement == 0:
+        elif self.inTupletCount == 0:
             # Check for bare @tuplet start/end without m21TupletSearch, and make
             # it an m21TupletSearch 'start'/'end' for _guessTuplets to handle later.
             # Since there is no way for @num or @numbase to be specified, assume
@@ -5229,6 +5306,17 @@ class MeiReader:
         # stash the staff number in theChord.mei_staff (in case a spanner needs to know)
         if self.staffNumberForNotes:
             theChord.mei_staff = self.staffNumberForNotes  # type: ignore
+
+        # Check for m21TupletSearch=='end' and tuplet='tNN'
+        # to decrement self.inTupletCount.
+        # This picks up the two non-tuplet-element cases:
+        #   1. tupletSpan (m21TupletSearch was set in ppTuplets)
+        #   2. the bare @tuplet start/end (i.e. without tupletSpan)
+        # The tuplet element cases are handled in tupletFromElement.
+        if elem.get('m21TupletSearch', '') == 'end':
+            self.inTupletCount -= 1
+        elif elem.get('tuplet', '').startswith('t'):
+            self.inTupletCount -= 1
 
         self.withinChord = False
         return theChord
@@ -5817,15 +5905,15 @@ class MeiReader:
         numPlaceStr: str | None = elem.get('num.place')
         numFormatStr: str | None = elem.get('num.format')
 
-        # iterate all immediate children (set self.inTupletElement so we know to ignore
+        # iterate all immediate children (set self.inTupletCount so we know to ignore
         # any @tuplet attributes)
-        self.inTupletElement += 1
+        self.inTupletCount += 1
         tupletMembers: list[Music21Object] = self._processEmbeddedElements(
             elem.findall('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
         )
-        self.inTupletElement -= 1
+        self.inTupletCount -= 1
 
         # "tuplet-ify" the duration of everything held within
         newElem = Element('', m21TupletNum=numStr, m21TupletNumbase=numbaseStr)
