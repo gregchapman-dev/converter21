@@ -1367,6 +1367,21 @@ class M21Convert:
                     elif first == 1 and second == 16:
                         out = out.replace('1%16' + someDots, '0000' + someDots)
 
+        # now make sure that if we're in a tuplet, that the recip we produce, once we remove
+        # the dots, is not a power of two.  If it is, come up with a recip that has the exact
+        # same duration, but has more dots, so it is not a power of two with no dots.
+        if inTuplet:
+            recipNoDots: str = out.split('.', 1)[0]
+            durNoDots: HumNum = Convert.recipToDuration(recipNoDots)
+            if M21Utilities.isPowerOfTwo(durNoDots):
+                # we have a problem, try to fix by making a recip with one more dot
+                numDots: int = out.count('.')
+                desiredDurNoDots: HumNum = durNoDots / 1.5
+                newRecip: str = Convert.durationToRecip(desiredDurNoDots)
+                newNumDots: int = numDots + 1
+                newRecip += '.' * newNumDots
+                out = newRecip
+
         if vdur:
             m21VDur = m21.duration.Duration(vdur)
             vdurRecip: str = M21Convert.kernRecipFromM21Duration(m21VDur)[0]
