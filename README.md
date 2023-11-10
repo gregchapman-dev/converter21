@@ -1,9 +1,9 @@
 # converter21
-A music21-extending converter package that contains alternate music21 Humdrum and MEI converters (a Humdrum parser/writer, and a MEI parser).  converter21 is also a command line tool for conversion between various music notation file formats.
+A music21-extending converter package that contains alternate music21 Humdrum and MEI converters (a Humdrum parser/writer, and a MEI parser/writer).  converter21 is also a command line tool for conversion between various music notation file formats.
 
 The Humdrum portion of this software is derived/translated from the C++ code in [humlib](https://github.com/craigsapp/humlib), by Craig Stuart Sapp.
 
-The core of the MEI portion of this software was based on the MEI converter in [music21](https://github.com/cuthbertlab/music21), by Michael Scott Asato Cuthbert.
+The core of the MEI parsing portion of this software was based on the MEI converter in [music21](https://github.com/cuthbertlab/music21), by Michael Scott Asato Cuthbert.
 
 ## Setup
 Requires Python 3.10 or later.  Depends on [music21](https://pypi.org/project/music21) v9.1, which should also be configured (instructions [here](https://web.mit.edu/music21/doc/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://pypi.org/project/musicdiff), but converter21 itself does not.

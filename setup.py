@@ -10,7 +10,7 @@
 
 import setuptools
 
-# must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION
+# must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION et al
 converter21version = '3.0.0'
 
 if __name__ == '__main__':
@@ -18,7 +18,7 @@ if __name__ == '__main__':
         name='converter21',
         version=converter21version,
 
-        description='A music21-extending score converter package and command line tool (replaces music21\'s Humdrum and MEI parser, and adds a Humdrum writer)',
+        description='A music21-extending format converter package and command line tool (replaces music21\'s Humdrum and MEI parser, and adds a Humdrum writer and MEI writer)',
         long_description=open('README.md').read(),
         long_description_content_type='text/markdown',
 
@@ -44,7 +44,9 @@ if __name__ == '__main__':
             'format',
             'formats',
             'humdrum',
-            'MEI'
+            'kern',
+            'krn',
+            'MEI',
             'writer',
             'parser',
             'reader',

@@ -1,16 +1,21 @@
 Changes since 2.0.1:
 
-Add MEI exporter.  It exports MEI v5 by default, but can be asked to export MEI v4.
+Require music21 v9 (for several features/fixes)
 
-MEI import:
+Add MEI exporter.  It exports MEI v5 by default, but can be asked to export MEI v4.
+    - MEI export is feature-equivalent with MEI import.
+
+MEI import improvements:
+    - import MEI v4 and v5 (obeying mei@meiversion)
     - refactor to share code with MEI exporter and have instance-based state
     - handle nested beams (i.e. grace note beams within another beam group)
     - fermata placement (above, below)
     - fix some clef bugs
-    - handle rest positioning (oloc/ploc)
+    - handle rest positioning (@oloc/@ploc)
     - fix some octave/Ottava bugs
     - fix some gestural duration bugs (including some bugs in tuplets)
-    - fix dots.ges handling
+    - fix @dots.ges handling
+    - add @dur.ppq handling
     - fix activeMeter tracking
     - pad layer with spaces if it is shorter than the longest layer in any staff in the measure
     - fix handling of missing note@oct/note@oct.ges
@@ -36,23 +41,21 @@ MEI import:
     - generate music21 StaffGroups (and PartStaffs if appropriate)
     - support tuplet display details
     - import of metadata
-    - imports MEI v4 and v5 (obeying @meiversion)
 
-Humdrum export:
-    - support tuplet display details (*{X}tuplet/*{X}brackettup)
+Humdrum export improvements:
     - support ornaments
     - support ottavas
+    - fix export of tuplets, including carefully choosing non-power-of-two recip
+    - support tuplet display details (*{X}tuplet/*{X}brackettup)
     - fix export of articulations with placement
 
-Humdrum import/export:
-    - support of center justification
+Humdrum import/export improvements:
+    - support center justification
     - tweaks to systemdecoration/StaffGroup code, now shared with MEI import/export
     - some metadata fixes
 
-All importers/exporters:
+Improvements to all importers/exporters:
     - support ornament accidentals (I implemented this in music21 v9)
     - support page and system breaks
-    - support ottavas (I improved Ottava support in music21 v9)
+    - improve ottava support (I improved Ottava support in music21 v9)
     - support delayed turns (I implemented this in music21 v9)
-
-Require music21 v9 (for several features/fixes)
