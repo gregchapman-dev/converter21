@@ -65,6 +65,21 @@ class M21ObjectConvert:
                 attr['breaksec'] = str(num)
 
     @staticmethod
+    def _addTupletAttribute(obj: m21.note.GeneralNote, attr: dict[str, str]):
+        tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiTupletSpanner])
+        for tuplet in tupletSpanners:
+            if hasattr(tuplet, 'mei_tuplet'):
+                # tuplet is handled by <tuplet> element, no need for @tuplet attributes
+                continue
+
+            if tuplet.isFirst(obj):
+                attr['tuplet'] = 'i1'
+            elif tuplet.isLast(obj):
+                attr['tuplet'] = 't1'
+            else:
+                attr['tuplet'] = 'm1'
+
+    @staticmethod
     def _addStylisticAttributes(obj: m21.base.Music21Object, attr: dict[str, str]):
         if isinstance(obj, m21.note.NotRest):
             if obj.stemDirection == 'noStem':
@@ -188,6 +203,14 @@ class M21ObjectConvert:
         )
 
     @staticmethod
+    def assureXmlIds(objs: list[m21.base.Music21Object] | m21.spanner.Spanner):
+        if isinstance(objs, m21.spanner.Spanner):
+            objs = objs.getSpannedElements()
+
+        for obj in objs:
+            M21ObjectConvert.assureXmlId(obj)
+
+    @staticmethod
     def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
         # only returns something if assureXmlId has been called already on this object
         if hasattr(obj, 'mei_xml_id'):
@@ -209,6 +232,7 @@ class M21ObjectConvert:
         if hasattr(obj, 'mei_in_ftrem'):
             inFTrem = getattr(obj, 'mei_in_ftrem')
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr, inFTrem=inFTrem)
+        M21ObjectConvert._addTupletAttribute(obj, attr)
         M21ObjectConvert._addBreakSec(obj, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         M21ObjectConvert._addStemMod(obj, attr)
@@ -230,6 +254,7 @@ class M21ObjectConvert:
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
+        M21ObjectConvert._addTupletAttribute(obj, attr)
 
         oloc: str = getattr(obj, 'mei_oloc', '')
         ploc: str = getattr(obj, 'mei_ploc', '')
@@ -317,6 +342,7 @@ class M21ObjectConvert:
             if hasattr(note, 'mei_in_ftrem'):
                 inFTrem = getattr(note, 'mei_in_ftrem')
             M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr, inFTrem=inFTrem)
+            M21ObjectConvert._addTupletAttribute(note, attr)
 
         if isinstance(note, m21.note.Unpitched):
             loc: str = M21ObjectConvert.m21DisplayPitchToMeiLoc(note.displayPitch())

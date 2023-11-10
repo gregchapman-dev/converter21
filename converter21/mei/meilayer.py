@@ -94,6 +94,7 @@ class MeiLayer:
             layerAttr['n'] = layerNStr
         tb.start('layer', {'n': layerNStr})
 
+        voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 # Gather a list of beam, tuplet, fTrem spanners that start
@@ -101,7 +102,7 @@ class MeiLayer:
                 # so they will nest properly as elements.
                 beamTupletFTremStarts: list[
                     MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
-                ] = self.getOrderedBeamTupletFTremStarts(obj)
+                ] = self.getOrderedBeamTupletFTremStarts(obj, voiceBeams)
                 beamTupletFTremEnds: list[
                     MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremEnds(obj)
@@ -121,6 +122,17 @@ class MeiLayer:
                     self.processBeamTupletFTremEnd(btfe, tb)
 
         tb.end('layer')
+
+    @staticmethod
+    def getAllBeamsInVoice(
+        voice: m21.stream.Voice | m21.stream.Measure
+    ) -> set[m21.spanner.Spanner]:
+        output: set[m21.spanner.Spanner] = set()
+        for obj in voice:
+            if M21ObjectConvert.streamElementBelongsInLayer(obj):
+                beams: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiBeamSpanner])
+                output.update(beams)
+        return output
 
     _NUM_MARKS_TO_UNIT_DUR: dict[int, str] = {
         1: '8',
@@ -244,10 +256,52 @@ class MeiLayer:
     def getOrderedBeamTupletFTremStarts(
         self,
         obj: m21.base.Music21Object,
+        voiceBeams: set[m21.spanner.Spanner]
     ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
             return M21Utilities.getSpannerQuarterLength(spanner, self.meiParent.m21Measure)
+
+        def nestsReasonably(
+            tuplet: m21.spanner.Spanner,
+            voiceBeams: set[m21.spanner.Spanner]
+        ) -> bool:
+            # check each beam spanner in voiceBeams.
+            tupletSet: set[m21.note.GeneralNote] = set(tuplet.getSpannedElements())
+            for beam in voiceBeams:
+                beamSet: set[m21.note.GeneralNote] = set(beam.getSpannedElements())
+                if tupletSet.isdisjoint(beamSet):
+                    # tuplet is unrelated to this beam, move onto the next beam.
+                    continue
+
+                # tuplet overlaps with beam at least a little.
+                if tupletSet.issubset(beamSet):
+                    # tuplet contains a subset (or all) of beam's notes, and no other notes.
+                    # beam is nested inside tuplet: we're OK with this beam, move onto the
+                    # next beam.
+                    continue
+
+                # tuplet overlaps with beam, but also contains other notes.
+                if not beamSet.issubset(tupletSet):
+                    # tuplet overlaps partially with beam, plus other notes.  This CANNOT work.
+                    # beam cannot nest inside tuplet, and tuplet cannot nest inside beam.
+                    return False
+
+                # tuplet contains all notes in beam plus other notes. This can only work if
+                # the other notes are either _entire_ beams' worth of notes, or non-beamed
+                # notes.
+                for beam1 in voiceBeams:
+                    if beam1 is beam:
+                        continue
+                    beam1Set: set[m21.note.GeneralNote] = set(beam1.getSpannedElements())
+                    if beam1Set.isdisjoint(tupletSet):
+                        # no worries with this beam
+                        continue
+                    if not beam1Set.issubset(tupletSet):
+                        # beam1 is partially contained by tuplet.  Big problem.
+                        return False
+
+            return True
 
         output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
@@ -266,7 +320,17 @@ class MeiLayer:
                 if not M21Utilities.allSpannedElementsAreInHierarchy(
                     spanner, self.meiParent.m21Measure
                 ):
+                    M21ObjectConvert.assureXmlIds(spanner)
                     continue
+
+                # Tuplet is even more special.  It can interleave with beams in a way
+                # that cannot be nested.  If so, we can't emit <tuplet>, since it can't
+                # be properly nested with the <beam>s in the voice/layer, so we have to
+                # skip the tuplet here, and emit later as <tupletSpan>.
+                if isinstance(spanner, MeiTupletSpanner):
+                    if not nestsReasonably(spanner, voiceBeams):
+                        M21ObjectConvert.assureXmlIds(spanner)
+                        continue
 
                 # mark as having been emitted as <beam> or <tuplet> so we don't emit
                 # as <beamSpan> or <tupletSpan> later, in makePostStavesElements.
