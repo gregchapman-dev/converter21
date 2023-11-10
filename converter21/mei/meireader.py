@@ -2678,10 +2678,12 @@ class MeiReader:
         :returns: ``objs`` with scaled durations.
         :rtype: (list of) :class:`~music21.base.Music21Object`
         '''
+        wasList: bool = True
         if not isinstance(objs, list):
+            wasList = False
             objs = [objs]
 
-        for obj in objs:
+        for i, obj in enumerate(objs):
             bracketVisible: str | None = None
             bracketPlace: str | None = None
             numVisible: str | None = None
@@ -2747,6 +2749,10 @@ class MeiReader:
                     elif elem.get('tuplet', '').startswith('i'):
                         newTuplet.type = 'start'
                     elif elem.get('tuplet', '').startswith('t'):
+                        newTuplet.type = 'stop'
+                    elif wasList and i == 0:
+                        newTuplet.type = 'start'
+                    elif wasList and i == len(objs) - 1:
                         newTuplet.type = 'stop'
 
                     bracketVisible = elem.get('m21TupletBracketVisible')
@@ -2854,7 +2860,6 @@ class MeiReader:
                     tupletNumFormat = eachNote.m21TupletNumFormat  # type: ignore
                     del eachNote.m21TupletNumFormat  # type: ignore
 
-                del eachNote.m21TupletSearch  # type: ignore
                 del eachNote.m21TupletNum  # type: ignore
                 del eachNote.m21TupletNumbase  # type: ignore
 
@@ -2882,17 +2887,20 @@ class MeiReader:
 
                 self.scaleToTuplet(eachNote, fakeTupletElem)
 
-                if (hasattr(eachNote, 'm21TupletSearch')
-                        and eachNote.m21TupletSearch == 'end'):  # type: ignore
-                    # we've reached the end of the tuplet!
-                    eachNote.duration.tuplets[0].type = 'stop'
-
+                if hasattr(eachNote, 'm21TupletSearch'):
+                    tupletType: str = eachNote.m21TupletSearch  # type: ignore
                     del eachNote.m21TupletSearch  # type: ignore
-                    del eachNote.m21TupletNum  # type: ignore
-                    del eachNote.m21TupletNumbase  # type: ignore
+                    if tupletType == 'start':  # type: ignore
+                        eachNote.duration.tuplets[0].type = 'start'
+                    elif tupletType == 'end':  # type: ignore
+                        # we've reached the end of the tuplet!
+                        eachNote.duration.tuplets[0].type = 'stop'
 
-                    # reset the tuplet-tracking variables
-                    inATuplet = False
+                        del eachNote.m21TupletNum  # type: ignore
+                        del eachNote.m21TupletNumbase  # type: ignore
+
+                        # reset the tuplet-tracking variables
+                        inATuplet = False
 
     # Element-Based Converter Functions
     # -----------------------------------------------------------------------------
