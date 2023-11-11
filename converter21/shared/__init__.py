@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 __all__ = [
@@ -17,3 +17,5 @@ from .sharedconstants import SharedConstants
 from .m21utilities import M21Utilities
 from .m21utilities import M21StaffGroupTree
 from .m21utilities import M21StaffGroupDescriptionTree
+from .m21utilities import CannotMakeScoreFromObjectError
+from .m21utilities import NoMusic21VersionError

@@ -11,11 +11,10 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import typing as t
 
 from music21.common import opFrac
 
@@ -33,13 +32,13 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class GridVoice:
     def __init__(
-            self,
-            token: t.Optional[t.Union[HumdrumToken, str]] = None,
-            duration: HumNumIn = opFrac(0)
+        self,
+        token: HumdrumToken | str | None = None,
+        duration: HumNumIn = opFrac(0)
     ) -> None:
         if isinstance(token, str):
             token = HumdrumToken(token)
-        self._token: t.Optional[HumdrumToken] = token
+        self._token: HumdrumToken | None = token
 
         self._nextDur = opFrac(duration)
 #         self._prevDur = opFrac(0) # appears to be unused (never set to anything but zero)
@@ -73,11 +72,11 @@ class GridVoice:
     // GridVoice::getToken --
     '''
     @property
-    def token(self) -> t.Optional[HumdrumToken]:
+    def token(self) -> HumdrumToken | None:
         return self._token
 
     @token.setter
-    def token(self, newToken: t.Optional[t.Union[HumdrumToken, str]]) -> None:
+    def token(self, newToken: HumdrumToken | str | None) -> None:
         if isinstance(newToken, str):
             newToken = HumdrumToken(newToken)
         self._token = newToken

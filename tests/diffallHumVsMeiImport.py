@@ -2,15 +2,16 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
-from typing import List, Tuple
+import subprocess
+import typing as t
 import music21 as m21
 from music21.base import VERSION_STR
 
-from musicdiff.annotation import AnnScore, AnnExtra
+from musicdiff.annotation import AnnScore, AnnExtra, AnnMetadataItem
 from musicdiff import Comparison
 from musicdiff import DetailLevel
 
-# The things we're testing
+import converter21
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
 
@@ -18,7 +19,11 @@ def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Obj
     obj = score.recurse().getElementById(theID)
     return obj
 
-def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2: m21.stream.Score) -> str:
+def oplistSummary(
+    op_list: list[tuple[str, t.Any, t.Any]],
+    _score1: m21.stream.Score,
+    _score2: m21.stream.Score
+) -> str:
     output: str = ''
     counts: dict = {}
 
@@ -37,6 +42,7 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
     counts['articulation'] = 0
     counts['notestyle'] = 0
     counts['stemdirection'] = 0
+    counts['staffgroup'] = 0
 
     for op in op_list:
         # measure
@@ -97,7 +103,53 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'delarticulation',
                         'editarticulation'):
             counts['articulation'] += 1
-
+        # staffgroup
+        elif op[0] in ('staffgrpins',
+                        'staffgrpdel',
+                        'staffgrpsub',
+                        'staffgrpnameedit',
+                        'staffgrpabbreviationedit',
+                        'staffgrpsymboledit',
+                        'staffgrpbartogetheredit',
+                        'staffgrppartindicesedit'):
+            counts['staffgroup'] += 1
+        # metadata
+        elif op[0] == 'mditemdel':
+            assert isinstance(op[1], AnnMetadataItem)
+            key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemins':
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[2].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemsub':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            if op[1].key != op[2].key:
+                key = 'MD:' + op[1].key + '!=' + op[2].key
+            else:
+                key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemkeyedit':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[1].key + '!=' + op[2].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
+        elif op[0] == 'mditemvalueedit':
+            assert isinstance(op[1], AnnMetadataItem)
+            assert isinstance(op[2], AnnMetadataItem)
+            key = 'MD:' + op[1].key
+            if counts.get(key, None) is None:
+                counts[key] = 0
+            counts[key] += 1
         elif op[0] == 'extradel':
             # op[1] only
             assert isinstance(op[1], AnnExtra)
@@ -198,54 +250,28 @@ def runTheDiff(krnPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # export score back to humdrum (without any makeNotation fixups)
-
-    hdw: HumdrumWriter = HumdrumWriter(score1)
-    hdw.makeNotation = False
-    hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
-    # hdw.expandTremolos = False
+    # use verovio to convert humdrum file to mei file
 
     try:
-        success: bool = True
-        fp = Path(tempfile.gettempdir()) / krnPath.name
-        with open(fp, 'w', encoding='utf-8') as f:
-            success = hdw.write(f)
-        if not success:
-            print('export failed')
-            print('export failed', file=results)
-            results.flush()
-            return False
+        meiPath = Path(tempfile.gettempdir())
+        meiPath /= krnPath.name
+        meiPath = meiPath.with_suffix('.mei')
+        subprocess.run(
+            ['verovio', '-a', '-t', 'mei', '-o', f'{meiPath}', str(krnPath)],
+            check=True,
+            capture_output=True
+        )
     except KeyboardInterrupt:
         sys.exit(0)
     except:
-        print('export crash')
-        print('export crash', file=results)
+        print('conversion to mei with verovio failed')
+        print('conversion to mei with verovio failed', file=results)
         results.flush()
         return False
 
-    # and then try to parse the exported humdrum file
+    # import the mei file into music21
     try:
-        hfb2 = HumdrumFile(str(fp))
-        if not hfb2.isValid:
-            print('HumdrumFile2 parse failure')
-            print('HumdrumFile2 parse failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except:
-        print('HumdrumFile2 parse crash')
-        print('HumdrumFile2 parse crash', file=results)
-        results.flush()
-        return False
-
-    try:
-        score2 = hfb2.createMusic21Stream()
-        if score2 is None:
-            print('score2 creation failure')
-            print('score2 creation failure', file=results)
-            results.flush()
-            return False
+        score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
     except KeyboardInterrupt:
         sys.exit(0)
     except:
@@ -267,10 +293,20 @@ def runTheDiff(krnPath: Path, results) -> bool:
         return False
 
     # use music-score-diff to compare the two music21 scores,
-    # and return whether or not they were identical
+    # and return whether or not they were identical. Disable
+    # rest position comparison, since verovio makes them up.
     try:
-        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
-        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+        TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
+        annotatedScore1 = AnnScore(
+            score1,
+            (DetailLevel.AllObjectsWithStyle
+                | TURN_OFF_REST_POSITION_COMPARISON)
+        )
+        annotatedScore2 = AnnScore(
+            score2,
+            (DetailLevel.AllObjectsWithStyle
+                | TURN_OFF_REST_POSITION_COMPARISON)
+        )
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
@@ -306,6 +342,8 @@ parser.add_argument(
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
+
+converter21.register()
 
 listPath: Path = Path(args.list_file)
 goodPath: Path = Path(str(listPath.parent) + '/' + str(listPath.stem)

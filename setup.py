@@ -4,20 +4,21 @@
 #
 # Authors:       Greg Chapman
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
 import setuptools
 
-converter21version = '2.0.1'
+# must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION et al
+converter21version = '3.0.0'
 
 if __name__ == '__main__':
     setuptools.setup(
         name='converter21',
         version=converter21version,
 
-        description='A music21-extending score converter package and command line tool (replaces music21\'s Humdrum and MEI parser, and adds a Humdrum writer)',
+        description='A music21-extending format converter package and command line tool (replaces music21\'s Humdrum and MEI parser, and adds a Humdrum writer and MEI writer)',
         long_description=open('README.md').read(),
         long_description_content_type='text/markdown',
 
@@ -43,7 +44,9 @@ if __name__ == '__main__':
             'format',
             'formats',
             'humdrum',
-            'MEI'
+            'kern',
+            'krn',
+            'MEI',
             'writer',
             'parser',
             'reader',
@@ -54,10 +57,10 @@ if __name__ == '__main__':
 
         packages=setuptools.find_packages(),
 
-        python_requires='>=3.9',
+        python_requires='>=3.10',
 
         install_requires=[
-            'music21>=8.1',
+            'music21>=9.1',
         ],
 
         project_urls={

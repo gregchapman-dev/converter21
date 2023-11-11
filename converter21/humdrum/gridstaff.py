@@ -10,11 +10,10 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import typing as t
 
 from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import HumdrumExportError
@@ -36,7 +35,7 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class GridStaff():
     def __init__(self) -> None:
-        self.voices: t.List[t.Optional[GridVoice]] = []
+        self.voices: list[GridVoice | None] = []
         self.sides: GridSide = GridSide()
 
     def __str__(self) -> str:
@@ -101,7 +100,7 @@ class GridStaff():
             raise HumdrumInternalError(f'!!STRANGE ERROR: {self}, SLICE TYPE: {sliceType}')
 
         if layerIndex < len(self.voices):
-            voice: t.Optional[GridVoice] = self.voices[layerIndex]
+            voice: GridVoice | None = self.voices[layerIndex]
             if voice is not None and voice.token is not None:
                 if voice.token.text == nullStr:
                     # there is already a null data token here, so don't

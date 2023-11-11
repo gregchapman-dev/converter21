@@ -5,6 +5,8 @@ import sys
 import subprocess
 
 from music21.base import VERSION_STR
+import music21 as m21
+
 from musicdiff import Visualization
 from musicdiff.annotation import AnnScore
 from musicdiff import Comparison
@@ -13,6 +15,7 @@ from musicdiff import DetailLevel
 # The things we're testing
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
+import converter21
 
 def runTheFullTest(krnPath: Path):
     print(f'krn file: {krnPath}')
@@ -44,33 +47,18 @@ def runTheFullTest(krnPath: Path):
 #     xmlFile = score1.write('musicxml')
 #     print(f'MusicXML written to {xmlFile}')
 
-    hdw: HumdrumWriter = HumdrumWriter(score1)
-    hdw.makeNotation = False
-    hdw.addRecipSpine = krnPath.name == 'test-rhythms.krn'
-    # hdw.expandTremolos = False
+    meiPath = Path(tempfile.gettempdir())
+    meiPath /= krnPath.name
+    meiPath = meiPath.with_suffix('.mei')
+    subprocess.run(
+        ['verovio', '-a', '-t', 'mei', '-o', f'{meiPath}', str(krnPath)],
+        check=True,
+        capture_output=True
+    )
 
-    success: bool = True
-    fp = Path(tempfile.gettempdir()) / krnPath.name
-    with open(fp, 'w', encoding='utf-8') as f:
-        success = hdw.write(f)
+    print(f'Parsing MEI file: {meiPath}')
+    score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
 
-#     if not success:
-#         score1.show('musicxml.pdf')
-    assert success
-
-    # compare with bbdiff:
-    subprocess.run(['bbdiff', str(krnPath), str(fp)], check=False)
-
-    # and then try to parse the exported humdrum file
-
-    hfb2 = HumdrumFile(str(fp))
-#     if not hfb2.isValid:
-#         score1.show('musicxml.pdf')
-    assert hfb2.isValid
-
-    score2 = hfb2.createMusic21Stream()
-#     if score2 is None or not score2.isWellFormedNotation():
-#         score1.show('musicxml.pdf')
     assert score2 is not None
     assert score2.isWellFormedNotation()
 
@@ -78,10 +66,19 @@ def runTheFullTest(krnPath: Path):
 
     # compare the two music21 scores
     # with music-score-diff:
-    print('comparing the two m21 scores')
-    score_lin1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
+    print('comparing the two m21 scores (ignoring rest positions, because verovio invents them)')
+    TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
+    score_lin1 = AnnScore(
+        score1,
+        (DetailLevel.AllObjectsWithStyle
+            | TURN_OFF_REST_POSITION_COMPARISON)
+    )
     print('loaded first score')
-    score_lin2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+    score_lin2 = AnnScore(
+        score2,
+        (DetailLevel.AllObjectsWithStyle
+            | TURN_OFF_REST_POSITION_COMPARISON)
+    )
     print('loaded second score')
     diffList, _cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
     print('diffed the two scores:')
@@ -106,5 +103,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('input_file')
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
+
+converter21.register(converter21.ConverterName.MEI)
 
 runTheFullTest(Path(args.input_file))

@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
-from typing import List, Tuple
+import typing as t
 import music21 as m21
 from music21.base import VERSION_STR
 
@@ -18,7 +18,11 @@ def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Obj
     obj = score.recurse().getElementById(theID)
     return obj
 
-def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2: m21.stream.Score) -> str:
+def oplistSummary(
+    op_list: list[tuple[str, t.Any, t.Any]],
+    _score1: m21.stream.Score,
+    _score2: m21.stream.Score
+) -> str:
     output: str = ''
     counts: dict = {}
 
@@ -27,7 +31,9 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
     counts['measure'] = 0
     counts['voice'] = 0
     counts['note'] = 0
+    counts['gracenote'] = 0
     counts['beam'] = 0
+    counts['lyric'] = 0
     counts['accidental'] = 0
     counts['tuplet'] = 0
     counts['tie'] = 0
@@ -35,6 +41,7 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
     counts['articulation'] = 0
     counts['notestyle'] = 0
     counts['stemdirection'] = 0
+    counts['staffgroup'] = 0
 
     for op in op_list:
         # measure
@@ -53,6 +60,12 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'dotins',
                         'dotdel'):
             counts['note'] += 1
+        elif op[0] in ('graceedit', 'graceslashedit'):
+            counts['gracenote'] += 1
+        elif op[0] in ('inslyric',
+                        'dellyric',
+                        'editlyric'):
+            counts['lyric'] += 1
         elif op[0] in ('editstyle',
                        'editnoteshape',
                        'editnoteheadfill',
@@ -89,6 +102,16 @@ def oplistSummary(op_list: List[Tuple[str]], _score1: m21.stream.Score, _score2:
                         'delarticulation',
                         'editarticulation'):
             counts['articulation'] += 1
+        # staffgroup
+        elif op[0] in ('staffgrpins',
+                        'staffgrpdel',
+                        'staffgrpsub',
+                        'staffgrpnameedit',
+                        'staffgrpabbreviationedit',
+                        'staffgrpsymboledit',
+                        'staffgrpbartogetheredit',
+                        'staffgrppartindicesedit'):
+            counts['staffgroup'] += 1
 
         elif op[0] == 'extradel':
             # op[1] only
@@ -221,8 +244,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # use music-score-diff to compare the two music21 scores,
     # and return whether or not they were identical
     try:
-        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
-        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
+        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)

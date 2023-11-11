@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 from enum import IntEnum, Enum, unique, auto
@@ -72,6 +72,7 @@ class SliceType(IntEnum):
     Ottavas = auto()           # Interpretation, RegularInterpretation, Spined
     VerseLabels = auto()       # Interpretation, RegularInterpretation, Spined
     SectionNames = auto()      # Interpretation, RegularInterpretation, Spined
+    TupletDisplay = auto()     # Interpretation, RegularInterpretation, Spined
     RegularInterpretation_ = auto()
     Exclusives = auto()        # Interpretation, Manipulator, Spined
     Terminators = auto()       # Interpretation, Manipulator, Spined

@@ -1,0 +1,17 @@
+#!/bin/zsh
+
+# Compare Humdrum import vs Humdrum export/reimport
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumImportVsHumExport.py ~/Documents/test/fileList.txt"'
+
+# Compare Humdrum import vs verovio convert to MEI then MEI import
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumVsMeiImport.py ~/Documents/test/fileList2.txt"'
+
+# Compare MEI v4 import vs MEI export/reimport
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMeiExport.py ~/Documents/test/fileListMei.txt"'
+
+# Compare MEI v5 import vs MEI export/reimport
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMeiExport.py ~/Documents/test/fileListMei5.txt"'
+
+# Verovio convert Humdrum to MEI, then compare MEI import vs MEI export/reimport
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumVerovioVsMeiExport.py ~/Documents/test/fileList3.txt"'
+

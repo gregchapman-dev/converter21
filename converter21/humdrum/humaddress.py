@@ -6,26 +6,25 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-import typing as t
 
-from converter21.humdrum import HumdrumSyntaxError
+from converter21.humdrum import HumdrumSyntaxError, HumdrumInternalError
 
 class HumAddress:
     def __init__(self) -> None:
         from converter21.humdrum import HumdrumToken
         from converter21.humdrum import HumdrumLine
-        self.trackNum: t.Optional[int] = None
+        self.trackNum: int | None = None
         self._subTrack: int = -1
         self._subTrackCount: int = 0
         self._fieldIndex: int = -1
-        self._ownerLine: t.Optional[HumdrumLine] = None
+        self._ownerLine: HumdrumLine | None = None
         self._spining: str = ''
 
         # cache of self.ownerLine.trackStart(self.trackNum)
-        self._dataTypeTokenCached: t.Optional[HumdrumToken] = None
+        self._dataTypeTokenCached: HumdrumToken | None = None
 
     '''
     //////////////////////////////
@@ -63,11 +62,11 @@ class HumAddress:
     //   is used by the HumdrumFileStructure class.
     '''
     @property
-    def track(self) -> t.Optional[int]:
+    def track(self) -> int | None:
         return self.trackNum
 
     @track.setter
-    def track(self, newTrack: t.Optional[int]) -> None:
+    def track(self, newTrack: int | None) -> None:
         if newTrack is None or newTrack < 0:
             newTrack = None
         elif newTrack > 1000:
@@ -182,11 +181,14 @@ class HumAddress:
     //   a HumdrumLine, the parameter's value should be NULL.
     '''
     @property
-    def ownerLine(self):  # returns t.Optional[HumdrumLine]
+    def ownerLine(self):  # -> HumdrumLine | None:
         return self._ownerLine
 
     @ownerLine.setter
     def ownerLine(self, newOwnerLine) -> None:  # newOwnerLine: t.Optional[HumdrumLine]
+        from converter21.humdrum import HumdrumLine
+        if newOwnerLine is not None and not isinstance(newOwnerLine, HumdrumLine):
+            raise HumdrumInternalError('invalid newOwnerLine')
         self._ownerLine = newOwnerLine
         # blow away cache of dataType, because it depends on ownerLine
         self._dataTypeTokenCached = None
@@ -204,12 +206,12 @@ class HumAddress:
     '''
     //////////////////////////////
     //
-    // HumAddress::getDataType -- Return the exclusive interpretation string of the
+    // HumAddress::getDataType -- Return the exclusive interpretation
     //    token associated with the address.
     //
     '''
     @property
-    def dataType(self):  # -> HumdrumToken
+    def dataType(self):  # -> HumdrumToken:
         if self._dataTypeTokenCached is not None:
             return self._dataTypeTokenCached
 

@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -22,6 +22,11 @@ from enum import IntEnum, auto
 
 from .HumdrumConverter import HumdrumConverter
 from .MEIConverter import MEIConverter
+from .shared import M21Utilities
+
+class Music21VersionException(Exception):
+    # raised if the version of music21 is not recent enough
+    pass
 
 class ConverterName(IntEnum):
     HUMDRUM = auto()
@@ -32,13 +37,16 @@ def register(
 ):
     import music21 as m21
 
+    if not M21Utilities.m21VersionIsAtLeast((9, 0, 0, 'a11')):
+        raise Music21VersionException('music21 version needs to be 9.1 or greater')
+
     # default (if no converterNames passed in) is to register everything we have
     if not converterNames:
         converterNames = (ConverterName.HUMDRUM, ConverterName.MEI)
 
     if ConverterName.HUMDRUM in converterNames:
-        m21.converter.unregisterSubconverter(m21.converter.subConverters.ConverterHumdrum)
-        m21.converter.registerSubconverter(HumdrumConverter)
+        m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterHumdrum)
+        m21.converter.registerSubConverter(HumdrumConverter)
     if ConverterName.MEI in converterNames:
-        m21.converter.unregisterSubconverter(m21.converter.subConverters.ConverterMEI)
-        m21.converter.registerSubconverter(MEIConverter)
+        m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterMEI)
+        m21.converter.registerSubConverter(MEIConverter)

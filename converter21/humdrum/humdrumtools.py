@@ -6,7 +6,7 @@
 #                Humdrum code derived/translated from humlib (authored by
 #                       Craig Stuart Sapp <craig@ccrma.stanford.edu>)
 #
-# Copyright:     (c) 2021-2022 Greg Chapman
+# Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -23,14 +23,15 @@ from converter21.humdrum import HumdrumLine
 from converter21.humdrum import HumdrumToken
 from converter21.humdrum import HumNum
 from converter21.humdrum import Convert
+from converter21.shared import M21Utilities
 
 class ToolTremolo:
     # Tremolo expansion tool.
     def __init__(self, infile: HumdrumFile) -> None:
         self.infile: HumdrumFile = infile
-        self.markupTokens: t.List[HumdrumToken] = []
-        self.firstTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
-        self.lastTremoloLinesInTrack: t.List[t.List[t.Optional[HumdrumLine]]] = []
+        self.markupTokens: list[HumdrumToken] = []
+        self.firstTremoloLinesInTrack: list[list[HumdrumLine | None]] = []
+        self.lastTremoloLinesInTrack: list[list[HumdrumLine | None]] = []
 
     '''
     //////////////////////////////
@@ -106,7 +107,7 @@ class ToolTremolo:
     def notesFoundInTrackBetweenLineIndices(self, track: int, startIdx: int, endIdx: int) -> bool:
         # Check every line between startIdx and endIdx, NOT inclusive at either end
         for i in range(startIdx + 1, endIdx):
-            line: t.Optional[HumdrumLine] = self.infile[i]
+            line: HumdrumLine | None = self.infile[i]
             if line is None:
                 continue
             for token in line.tokens():
@@ -128,11 +129,11 @@ class ToolTremolo:
         for track, (firstLines, lastLines) in enumerate(zip(
                 self.firstTremoloLinesInTrack,
                 self.lastTremoloLinesInTrack)):
-            lastLineRemovalIndices: t.List[int] = []
-            firstLineRemovalIndices: t.List[int] = []
-            currLastLineIndex: t.Optional[int] = None
-            prevLastLineIndex: t.Optional[int] = None
-            currFirstLineIndex: t.Optional[int] = None
+            lastLineRemovalIndices: list[int] = []
+            firstLineRemovalIndices: list[int] = []
+            currLastLineIndex: int | None = None
+            prevLastLineIndex: int | None = None
+            currFirstLineIndex: int | None = None
             for idx, (firstLine, lastLine) in enumerate(zip(firstLines, lastLines)):
                 if t.TYPE_CHECKING:
                     # self.{first,last}TremoloLinesInTrack should be filled in by now
@@ -318,7 +319,7 @@ class ToolTremolo:
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token.durationFromStart
         timestamp: HumNum = opFrac(startTime + increment)
-        currTok: t.Optional[HumdrumToken] = token.nextToken(0)
+        currTok: HumdrumToken | None = token.nextToken(0)
         counter: int = 1
 
         while currTok is not None:
@@ -362,9 +363,9 @@ class ToolTremolo:
     //
     // Tool_tremolo::getNextNote --
     '''
-    def getNextNote(self, token: HumdrumToken) -> t.Optional[HumdrumToken]:
-        output: t.Optional[HumdrumToken] = None
-        current: t.Optional[HumdrumToken] = token.nextToken0
+    def getNextNote(self, token: HumdrumToken) -> HumdrumToken | None:
+        output: HumdrumToken | None = None
+        current: HumdrumToken | None = token.nextToken0
 
         while current is not None:
             if not current.isData:
@@ -389,7 +390,7 @@ class ToolTremolo:
     // Tool_tremolo::expandFingerTremolos --
     '''
     def expandFingerTremolo(self, token1: HumdrumToken) -> None:
-        token2: t.Optional[HumdrumToken] = self.getNextNote(token1)
+        token2: HumdrumToken | None = self.getNextNote(token1)
         if token2 is None:
             return
 
@@ -399,7 +400,7 @@ class ToolTremolo:
 
         value: int = int(m.group(1))
         valueHumNum: HumNum = opFrac(value)
-        if not Convert.isPowerOfTwo(valueHumNum):
+        if not M21Utilities.isPowerOfTwo(valueHumNum):
             print(f'Error: not a power of two: {token1}', file=sys.stderr)
             return
         if value < 8:
@@ -463,7 +464,7 @@ class ToolTremolo:
         # Now fill in the rest of the tremolos.
         startTime: HumNum = token1.durationFromStart
         timestamp: HumNum = opFrac(startTime + increment)
-        currTok: t.Optional[HumdrumToken] = token1.nextToken(0)
+        currTok: HumdrumToken | None = token1.nextToken(0)
         counter: int = 1
         while currTok is not None:
             if not currTok.isData:
@@ -514,7 +515,7 @@ class ToolTremolo:
         if token is None:
             return
 
-        track: t.Optional[int] = token.track
+        track: int | None = token.track
         if track is None:
             print(f'Track is not set for token: {token}', file=sys.stderr)
             return
@@ -530,7 +531,7 @@ class ToolTremolo:
         if token is None:
             return
 
-        track: t.Optional[int] = token.track
+        track: int | None = token.track
         if track is None:
             print(f'Track is not set for token: {token}', file=sys.stderr)
             return

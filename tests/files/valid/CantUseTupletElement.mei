@@ -1,0 +1,68 @@
+<mei xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0.0">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title>Trumpet Concerto in E major
+            <titlePart type="subordinate">S 49</titlePart>
+            <titlePart type="subordinate">an electronic transcription</titlePart>
+        </title>
+        <composer>
+          <persName role="creator" codedval="118554751" auth.uri="http://d-nb.info/gnd/" auth="GND">Johann Nepomuk Hummel</persName>
+        </composer>
+        <respStmt>
+          <persName role="encoder">Maja Hartwig</persName>
+          <persName role="encoder">Kristina Richts</persName>
+        </respStmt>
+      </titleStmt>
+    </fileDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+            <scoreDef meter.count="4" meter.unit="4" meter.sym="common" key.sig="4s" key.mode="major">
+                <staffGrp bar.thru="false">
+                    <staffDef n="8" xml:id="P8" lines="5" clef.line="2" clef.shape="G" key.sig="4s"
+                        key.mode="major">
+                        <label>Solo Trumpet in C</label>
+                        <labelAbbr>S. C Tpt.</labelAbbr>
+                    </staffDef>
+                </staffGrp>
+            </scoreDef>
+            <section>
+                <measure n="371">
+                  <staff n="8">
+                    <layer n="1">
+                      <rest xml:id="d1e302117" dur="16" tuplet="i1"/>
+                      <beam>
+                        <note xml:id="d1e302132" pname="c" oct="4" dur="16" tuplet="m1" stem.dir="up"
+                          accid.ges="s"/>
+                        <note xml:id="d1e302157" pname="d" oct="4" dur="16" tuplet="t1" stem.dir="up"/>
+                        <note xml:id="d1e302182" pname="e" oct="4" dur="16" tuplet="i1" stem.dir="up"/>
+                        <note xml:id="d1e302207" pname="f" oct="4" dur="16" tuplet="m1" stem.dir="up"
+                          accid.ges="s"/>
+                        <note xml:id="d1e302232" pname="g" oct="4" dur="16" tuplet="t1" stem.dir="up"
+                          accid.ges="s"/>
+                      </beam>
+                      <beam>
+                        <note xml:id="d1e302259" pname="a" oct="4" dur="16" stem.dir="down"/>
+                        <note xml:id="d1e302277" pname="b" oct="4" dur="16" stem.dir="down"/>
+                        <note xml:id="d1e302295" pname="c" oct="5" dur="16" stem.dir="down"
+                          accid.ges="s"/>
+                        <note xml:id="d1e302315" pname="d" oct="5" dur="16" stem.dir="down"/>
+                      </beam>
+                      <note xml:id="d1e302333" pname="e" oct="5" dur="2" stem.dir="down"/>
+                    </layer>
+                  </staff>
+                  <tupletSpan staff="8" num="3" numbase="2" num.visible="true" num.place="above"
+                    num.format="count" startid="#d1e302117" endid="#d1e302157"/>
+                  <tupletSpan staff="8" num="3" numbase="2" num.visible="true" num.place="above"
+                    num.format="count" startid="#d1e302182" endid="#d1e302232"/>
+                  <trill tstamp="3" place="above" staff="8" startid="#d1e302333"/>
+                </measure>
+            </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

@@ -1,0 +1,57 @@
+Humdrum import changes (since converter21 v1.4.1):
+
+Support lyrics with *ij (italicize them)
+Support ottavas
+Support visual duration of tuplet members
+More accurate trill/turn/mordent placement
+Better duplicate clef handling
+More accurate dynamics placement/duration
+Dynamics are actually per part (not per staff)
+Handle text direction before first barline of first measure
+Better unescaping of text
+Fix beaming to use visual duration
+Improve tempo handling
+Improve fermata handling
+Improve barline handling
+Recip-less grace notes are stemless quarter-notes
+Improve stem direction handling
+Improve key/keysig handling
+Rewrite accidental visibility handling
+
+Humdrum export changes (since converter21 v1.4.1):
+
+Support export of dotted/dashed barlines
+Support export of sf and sfz to 'z' and 'zz'
+Support visual duration of tuplet members
+Improve tempo handling
+Improve cresc/decresc (a.k.a. hairpin) handling
+More accurate dynamics placement
+Dynamics are actually per part (not per staff)
+Better escaping of text
+Recip-less grace notes are stemless quarter-notes
+Fix grace-note positioning around clef/timesig changes
+
+MEI import changes (starting from music21 v7's MEI importer):
+
+Support <fermata>, <trill>, <mordent>, <turn>, <octave>, <arpeggio>, <keysig>, <metersig>
+Support tremolos <bTrem> and <fTrem>
+Support <hairpin>, <dynam>, <tempo>, <dir>, <ending>
+Support staff items with @tstamp/@tstamp2 (things like hairpin, mordent, etc)
+Improved text handling in elements:
+	Support text that is broken up by embedded elements, or embedded in a <rend> element
+	Support styled text (as described by <rend> element)
+Improved beaming (including beam breaks)
+Support accidental display status, location, style
+Improved lyrics support
+Improved note/chord/rest support:
+	Support cue-sized notes/chords/rests
+	Support accented vs unaccented grace notes/chords
+	Support colored notes/chords/rests
+	Support note head shape, stem direction/length/visibility
+	Support invisible notes/chords/rests
+	Better handling of articulations/etc on notes within chords
+Improved clef handling
+Improved instrument handling
+Simple support for editorial elements (user selection for <app> and <choice> is not yet
+    implemented, I just make a reasonable default choice):
+	<app>, <lem>, <rdg>, <choice>, <corr>,<reg>, <add>, <del>, <damage>, <expan>, <orig>

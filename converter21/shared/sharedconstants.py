@@ -1,7 +1,10 @@
-import typing as t
-
 class SharedConstants:
-    _SMUFL_NAME_TO_UNICODE_CHAR: t.Dict[str, str] = {
+    # Must be kept up to date with setup.py
+    _CONVERTER21_NAME = 'converter21'
+    _CONVERTER21_VERSION = '3.0.0'
+    _CONVERTER21_NAME_AND_VERSION = _CONVERTER21_NAME + ' v' + _CONVERTER21_VERSION
+
+    _SMUFL_NAME_TO_UNICODE_CHAR: dict[str, str] = {
         'space': chr(0x0020),
         'musicFlatSign': chr(0x266D),
         'musicNaturalSign': chr(0x266E),
@@ -556,7 +559,7 @@ class SharedConstants:
         'articSoftAccentBelow': chr(0xED41),
     }
 
-    _SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME: t.Dict[str, str] = {
+    _SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME: dict[str, str] = {
         _SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWhole']: 'double-whole',
         _SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWholeSquare']: 'breve',
         _SMUFL_NAME_TO_UNICODE_CHAR['metNoteWhole']: 'whole',
