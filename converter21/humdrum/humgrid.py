@@ -139,9 +139,9 @@ class HumGrid:
             return 0
 
         # if there is at least one measure (with at least one slice)
-        # return the number of staves in the specified part in the last slice
+        # return the number of staves in the specified part in the first slice
         # of the first measure.
-        return len(self.measures[0].slices[-1].parts[partIndex].staves)
+        return len(self.measures[0].slices[0].parts[partIndex].staves)
 
     '''
     //////////////////////////////
