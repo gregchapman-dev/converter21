@@ -1571,6 +1571,10 @@ class HumdrumToken(HumHash):
     //////////////////////////////
     //
     // HumdrumToken::isInstrumentDesignation -- Such as *Iclars for B-flat clarinet.
+    //   Instrument codes can also contain "_" characters and capital letters
+    //   as long as they are not at the start of the code after "I".
+    //   This algorithm does not check past the first letter of the code,
+    //   which has to be lower case letter.
     '''
     @property
     def isInstrumentCode(self) -> bool:
@@ -1579,10 +1583,7 @@ class HumdrumToken(HumHash):
             return False
         if not self.text.startswith('*I'):
             return False
-        if not self.text[2:].isalpha():
-            # return False for '*I""blah', "*I'Blah", etc
-            return False
-        if not self.text[2:].islower():
+        if not self.text[2].islower():
             return False
         return True
 
@@ -1591,16 +1592,9 @@ class HumdrumToken(HumHash):
     '''
     @property
     def isInstrumentClassCode(self) -> bool:
-        if len(self.text) < 4:
-            # has to be '*IC' and at least one lower-case letter
-            return False
-        if not self.text.startswith('*IC'):
-            return False
-        if not self.text[3:].isalpha():
-            return False
-        if not self.text[3:].islower():
-            return False
-        return True
+        if self.text.startswith('*IC'):
+            return True
+        return False
 
     '''
     //////////////////////////////
