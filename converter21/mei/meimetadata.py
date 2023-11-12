@@ -1406,10 +1406,35 @@ class MeiMetadata:
                 if version == SharedConstants._CONVERTER21_VERSION:
                     converter21AlreadyThere = True
 
-        if not encodingNotes and not encodingWarnings and not converter21AlreadyThere:
+        if (not encodingNotes
+                and not encodingWarnings
+                and not softwares
+                and converter21AlreadyThere):
             return None
 
         encodingDesc: MeiElement = MeiElement('encodingDesc')
+
+        if softwares or not converter21AlreadyThere:
+            appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
+
+            # add converter21 if it wasn't already there
+            if not converter21AlreadyThere:
+                application: MeiElement = appInfo.appendSubElement(
+                    'application',
+                    {
+                        'version': SharedConstants._CONVERTER21_VERSION
+                    }
+                )
+                name: MeiElement = application.appendSubElement('name')
+                name.text = SharedConstants._CONVERTER21_NAME
+
+            for software in softwares:
+                application = appInfo.appendSubElement(
+                    'application',
+                    software.meiOtherAttribs
+                )
+                name = application.appendSubElement('name')
+                name.text = software.meiValue
 
         if encodingNotes or encodingWarnings:
             editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
@@ -1441,28 +1466,6 @@ class MeiMetadata:
                     line.text = warning.meiValue
                     if warning.value.language and not allTheSameLanguage:
                         line.attrib['xml:lang'] = warning.value.language.lower()
-
-        if softwares or not converter21AlreadyThere:
-            appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
-
-            # add converter21 if it wasn't already there
-            if not converter21AlreadyThere:
-                application: MeiElement = appInfo.appendSubElement(
-                    'application',
-                    {
-                        'version': SharedConstants._CONVERTER21_VERSION
-                    }
-                )
-                name: MeiElement = application.appendSubElement('name')
-                name.text = SharedConstants._CONVERTER21_NAME
-
-            for software in softwares:
-                application = appInfo.appendSubElement(
-                    'application',
-                    software.meiOtherAttribs
-                )
-                name = application.appendSubElement('name')
-                name.text = software.meiValue
 
         return encodingDesc
 
