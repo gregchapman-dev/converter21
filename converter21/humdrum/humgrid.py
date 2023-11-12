@@ -139,9 +139,26 @@ class HumGrid:
             return 0
 
         # if there is at least one measure (with at least one slice)
-        # return the number of staves in the specified part in the first slice
+        # return the number of staves in the specified part in the last slice
         # of the first measure.
-        return len(self.measures[0].slices[0].parts[partIndex].staves)
+        return len(self.measures[0].slices[-1].parts[partIndex].staves)
+
+# Here's an attempt to be even better (there are some 2 piano scores that are wrong above)
+# but it made no difference.
+#         firstDataSlice: GridSlice | None = None
+#         for theSlice in self.measures[0].slices:
+#             if theSlice.isDataSlice:
+#                 firstDataSlice = theSlice
+#                 break
+#
+#         if firstDataSlice is None:
+#             return 0
+#
+#         return len(firstDataSlice.parts[partIndex].staves)
+#
+# Here's different attempt (matches a fix in humlib) that makes some scores better but
+# makes more scores worse, and one even crashes (because partIndex is out of range).
+#         return len(self.measures[0].slices[0].parts[partIndex].staves)
 
     '''
     //////////////////////////////
