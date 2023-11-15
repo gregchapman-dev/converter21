@@ -163,8 +163,7 @@ class MeiMetadata:
 
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        if self.simpleTitleElement is not None:
-            titleStmt.subElements.append(self.simpleTitleElement)
+        titleStmt.subElements.append(self.simpleTitleElement)
 
         # pubStmt describes the MEI file we are writing.  It is, of course,
         # unpublished, so we use <unpub> to say that.  This pubStmt will
@@ -179,8 +178,8 @@ class MeiMetadata:
 
         # sourceDesc: There are potentially multiple sources here, depending on what
         # metadata items we find.  One for the digital source, one for the published
-        # printed source, one for a recorded source album (with maybe one for the
-        # recorded source album track), and one for an unpublished manuscript source.
+        # printed source, one for a recorded source, and one for an unpublished
+        # manuscript source.
         # if sourceDesc ends up empty, we will not add it, so create separately and
         # only append if not empty.
         sourceDesc: MeiElement = MeiElement('sourceDesc')
@@ -1181,7 +1180,7 @@ class MeiMetadata:
         if firstLang:
             titleElement.attrib['xml:lang'] = firstLang
 
-        if bestTitle and bestMovementName:
+        if bestTitle and bestMovementName and bestTitle.meiValue != bestMovementName.meiValue:
             titleElement.text = bestTitle.meiValue + ', ' + bestMovementName.meiValue
         elif bestTitle:
             titleElement.text = bestTitle.meiValue
