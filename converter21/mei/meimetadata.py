@@ -177,9 +177,9 @@ class MeiMetadata:
         )
 
         # sourceDesc: There are potentially multiple sources here, depending on what
-        # metadata items we find.  One for the digital source, one for the published
-        # printed source, one for a recorded source, and one for an unpublished
-        # manuscript source.
+        # metadata items we find.  One for the digital source, one for the printed
+        # source, one for a recorded source, and one for an unpublished manuscript
+        # source.
         # if sourceDesc ends up empty, we will not add it, so create separately and
         # only append if not empty.
         sourceDesc: MeiElement = MeiElement('sourceDesc')
@@ -188,22 +188,22 @@ class MeiMetadata:
         if digitalSource is not None:
             sourceDesc.subElements.append(digitalSource)
 
-        publishedSource: MeiElement | None = self.makePrintedSource()
-        if publishedSource is not None:
-            sourceDesc.subElements.append(publishedSource)
+        printedSource: MeiElement | None = self.makePrintedSource()
+        if printedSource is not None:
+            sourceDesc.subElements.append(printedSource)
 
-        if digitalSource is not None and publishedSource is not None:
+        if digitalSource is not None and printedSource is not None:
             digitalSourceBibl: MeiElement | None = (
                 digitalSource.findFirst('bibl', recurse=False)
             )
-            publishedSourceBibl: MeiElement | None = (
-                publishedSource.findFirst('bibl', recurse=False)
+            printedSourceBibl: MeiElement | None = (
+                printedSource.findFirst('bibl', recurse=False)
             )
             # relate them to eachother with 'otherFormat'.  They are the same,
             # just in different formats (printed vs digital).
-            if digitalSourceBibl is not None and publishedSourceBibl is not None:
+            if digitalSourceBibl is not None and printedSourceBibl is not None:
                 digitalSourceBibl.attrib['xml:id'] = 'source0_digital'
-                publishedSourceBibl.attrib['xml:id'] = 'source1_printed'
+                printedSourceBibl.attrib['xml:id'] = 'source1_printed'
                 digitalSourceBibl.appendSubElement(
                     'relatedItem',
                     {
@@ -211,7 +211,7 @@ class MeiMetadata:
                         'target': '#source1_printed'
                     }
                 )
-                publishedSourceBibl.appendSubElement(
+                printedSourceBibl.appendSubElement(
                     'relatedItem',
                     {
                         'rel': 'otherFormat',
@@ -242,8 +242,7 @@ class MeiMetadata:
         bibl: MeiElement = source.appendSubElement('bibl')
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        if self.simpleTitleElement is not None:
-            bibl.subElements.append(self.simpleTitleElement)
+        bibl.subElements.append(self.simpleTitleElement)
         if not self.simpleComposerElements:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
@@ -434,8 +433,7 @@ class MeiMetadata:
 
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        if self.simpleTitleElement is not None:
-            bibl.subElements.append(self.simpleTitleElement)
+        bibl.subElements.append(self.simpleTitleElement)
         if not self.simpleComposerElements:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
@@ -590,7 +588,7 @@ class MeiMetadata:
 
     def makeRecordedSource(self) -> MeiElement | None:
         if not self.anyExist('RTL', 'RC#', 'MGN', 'MPN', 'MPS', 'RNP',
-                'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'MLC'):
+                'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'RT#'):
             return None
 
         source: MeiElement = MeiElement('source', {'type': 'recording'})
@@ -630,8 +628,7 @@ class MeiMetadata:
                 analytic: MeiElement = biblStruct.appendSubElement('analytic')
                 if self.simpleTitleElement is None:
                     self.simpleTitleElement = self.makeSimpleTitleElement()
-                if self.simpleTitleElement is not None:
-                    analytic.subElements.append(self.simpleTitleElement)
+                analytic.subElements.append(self.simpleTitleElement)
                 biblScope = analytic.appendSubElement(
                     'biblScope',
                     {
@@ -652,7 +649,6 @@ class MeiMetadata:
                     or i < len(manufacturers)
                     or i < len(releaseDates)
                     or i < len(recordingLocations)
-                    or i < len(recordingDates)
                     or i < len(recordingDates)):
                 monogr: MeiElement = biblStruct.appendSubElement('monogr')
 
@@ -906,12 +902,12 @@ class MeiMetadata:
             if allTheSameLanguage and language:
                 lineGroup.attrib['xml:lang'] = language
 
-        for acknowledgment in acknowledgments:
-            # <l> does not take @analog, so use @type instead (says Perry)
-            line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
-            line.text = acknowledgment.meiValue
-            if acknowledgment.value.language and not allTheSameLanguage:
-                line.attrib['xml:lang'] = acknowledgment.value.language.lower()
+            for acknowledgment in acknowledgments:
+                # <l> does not take @analog, so use @type instead (says Perry)
+                line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
+                line.text = acknowledgment.meiValue
+                if acknowledgment.value.language and not allTheSameLanguage:
+                    line.attrib['xml:lang'] = acknowledgment.value.language.lower()
 
         if bibl.isEmpty():
             return None

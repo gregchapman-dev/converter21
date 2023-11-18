@@ -1236,7 +1236,7 @@ class M21Utilities:
             msg.append(sub)
 
         out = '-'.join(msg[:4])
-        if len(msg) > 4:
+        if len(msg) >= 4:
             out += 'T' + ':'.join(msg[4:])
         return out
 
