@@ -1045,7 +1045,7 @@ class MeiMetadata:
             nameElement.attrib['auth.uri'] = '#' + madsXmlId
 
             # There is extra info about the composer, that will need to go
-            # in <extMeta><madsCollection><mads>
+            # in <work><extMeta><madsCollection><mads>
             if self.madsCollection is None:
                 schemaLoc: str = (
                     'http://www.loc.gov/mads/v2 https://www.loc.gov/standards/mads/mads-2-1.xsd'
@@ -1082,45 +1082,49 @@ class MeiMetadata:
                 namePart.text = composerAlias.meiValue
 
             # extra info goes in <mads><personInfo>
-            personInfo: MeiElement = mads.appendSubElement('personInfo')
-            if composerBirthAndDeathDate is not None:
-                isodate: str = (
-                    M21Utilities.isoDateFromM21DatePrimitive(
-                        composerBirthAndDeathDate.value,
-                        returnEDTFString=True
+            if (composerBirthAndDeathDate is not None
+                    or composerBirthPlace is not None
+                    or composerDeathPlace is not None
+                    or composerNationality is not None):
+                personInfo: MeiElement = mads.appendSubElement('personInfo')
+                if composerBirthAndDeathDate is not None:
+                    isodate: str = (
+                        M21Utilities.isoDateFromM21DatePrimitive(
+                            composerBirthAndDeathDate.value,
+                            returnEDTFString=True
+                        )
                     )
-                )
-                isodateBirth: str = ''
-                isodateDeath: str = ''
-                isodateBirth, isodateDeath = isodate.split('/')
-                birthDate: MeiElement = personInfo.appendSubElement(
-                    'birthDate',
-                    {
-                        'encoding': 'edtf'
-                    }
-                )
-                birthDate.text = isodateBirth
-
-                if isodateDeath:
-                    deathDate: MeiElement = personInfo.appendSubElement(
-                        'deathDate',
+                    isodateBirth: str = ''
+                    isodateDeath: str = ''
+                    isodateBirth, isodateDeath = isodate.split('/')
+                    birthDate: MeiElement = personInfo.appendSubElement(
+                        'birthDate',
                         {
                             'encoding': 'edtf'
                         }
                     )
-                    deathDate.text = isodateDeath
+                    birthDate.text = isodateBirth
 
-            if composerBirthPlace is not None:
-                birthPlace: MeiElement = personInfo.appendSubElement('birthPlace')
-                birthPlace.text = composerBirthPlace.meiValue
+                    if isodateDeath:
+                        deathDate: MeiElement = personInfo.appendSubElement(
+                            'deathDate',
+                            {
+                                'encoding': 'edtf'
+                            }
+                        )
+                        deathDate.text = isodateDeath
 
-            if composerDeathPlace is not None:
-                deathPlace: MeiElement = personInfo.appendSubElement('deathPlace')
-                deathPlace.text = composerDeathPlace.meiValue
+                if composerBirthPlace is not None:
+                    birthPlace: MeiElement = personInfo.appendSubElement('birthPlace')
+                    birthPlace.text = composerBirthPlace.meiValue
 
-            if composerNationality is not None:
-                nationality: MeiElement = personInfo.appendSubElement('nationality')
-                nationality.text = composerNationality.meiValue
+                if composerDeathPlace is not None:
+                    deathPlace: MeiElement = personInfo.appendSubElement('deathPlace')
+                    deathPlace.text = composerDeathPlace.meiValue
+
+                if composerNationality is not None:
+                    nationality: MeiElement = personInfo.appendSubElement('nationality')
+                    nationality.text = composerNationality.meiValue
 
         return output
 
