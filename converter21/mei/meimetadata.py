@@ -1143,7 +1143,7 @@ class MeiMetadata:
                 continue
 
             if requiredLanguage:
-                if mmItem.value.language.lower() == requiredLanguage.lower():
+                if mmItem.value.language and mmItem.value.language.lower() == requiredLanguage.lower():
                     bestName = mmItem
                     break
             else:
