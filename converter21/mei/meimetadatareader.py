@@ -1250,8 +1250,13 @@ class MeiMetadataReader:
         # title and/or titlePart(s).  Ignore other things like 'movementName', 'alternativeTitle',
         # etc.
         text: str
-        # title might have embedded <titlePart>s, so only grab that first bit of text
-        text = elem.text
+        if elem.name == 'title':
+            # title might have embedded <titlePart>s, so only grab that first bit of text.
+            # But _do_ parse any <lb> etc before that first <titlePart>.
+            text, _ = MeiShared.textFromElem(elem, endAt='titlePart')
+        else:
+            text, _ = MeiShared.textFromElem(elem)
+
         text = text.strip()
         if text:
             skipIt: bool = False

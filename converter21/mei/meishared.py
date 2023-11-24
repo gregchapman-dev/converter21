@@ -187,7 +187,7 @@ class MeiShared:
         return chosen  # None, if we get here
 
     @staticmethod
-    def textFromElem(elem: Element | MeiElement) -> tuple[str, dict[str, str]]:
+    def textFromElem(elem: Element | MeiElement, endAt: str = '') -> tuple[str, dict[str, str]]:
         # can take Element by converting directly to MeiElement
         if isinstance(elem, Element):
             elem = MeiElement(elem)
@@ -200,6 +200,12 @@ class MeiShared:
 
         for el in elem.findAll('*', recurse=False):
             # do whatever is appropriate given el.tag (<rend> for example)
+
+            if endAt and el.name == endAt:
+                # for example, <title> text ends at first <titlePart>, but needs to parse <lb>.
+                # in that case, endAt == 'titlePart'.
+                break
+
             if el.name == 'rend':
                 # music21 doesn't currently support changing style in the middle of a
                 # TextExpression, so we just grab the first ones we see and save them
