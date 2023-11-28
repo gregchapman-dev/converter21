@@ -1643,7 +1643,6 @@ class M21Utilities:
         'MPN': 'performer',
         'MPS': 'suspected performer',
         'PED': 'publication editor',  # a.k.a. 'source editor'
-        'YOE': 'manuscript editor'
     }
 
     m21OtherContributorRoleToHumdrumReferenceKey: dict[str, str] = {
@@ -1654,8 +1653,6 @@ class M21Utilities:
         'sourceEditor': 'PED',
         'publication editor': 'PED',
         'publicationEditor': 'PED',
-        'original editor': 'YOE',
-        'originalEditor': 'YOE',
     }
 
     validMeiMetadataKeys: tuple[str, ...] = (
