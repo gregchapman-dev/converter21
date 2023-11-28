@@ -9816,10 +9816,21 @@ class HumdrumFile(HumdrumFileContent):
             isStandardHumdrumKey: bool
             parsedKey, parsedValue, isStandardHumdrumKey = self._parseReferenceItem(k, v)
 
+            if parsedKey == 'MRD':
+                # 'MRD' and 'MDT' mean exactly the same thing.  I prefer the MDT spelling.
+                parsedKey = 'MDT'
+
             m21UniqueName: str | None = (
                 M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
                     parsedKey, None)
             )
+
+            if not m21UniqueName:
+                # check for ACO, which like GCO, maps to 'collectionDesignation' (so can't be
+                # filled in with a value in humdrumReferenceKeyToM21MetadataPropertyUniqueName)
+                if parsedKey == 'ACO':
+                    m21UniqueName = 'collectionDesignation'
+
             if m21UniqueName:
                 m21Value: t.Any = M21Convert.humdrumMetadataValueToM21MetadataValue(parsedValue)
                 M21Utilities.addIfNotADuplicate(m21Metadata, m21UniqueName, m21Value)
