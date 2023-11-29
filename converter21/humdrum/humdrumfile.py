@@ -9848,17 +9848,28 @@ class HumdrumFile(HumdrumFileContent):
                     continue
 
                 if parsedKey in M21Utilities.customHumdrumReferenceKeysThatAreDates:
-                    # Fix up the date Text we have, by converting to DatePrimitive and
-                    # back to string.
+                    # Fix up the date Text we have, by converting to DatePrimitive or
+                    # DatePrimitive range, and back to string.
                     try:
                         dateObj: m21.metadata.DatePrimitive | None = (
                             M21Utilities.m21DatePrimitiveFromString(str(parsedValue))
                         )
+                        # pylint: disable=protected-access
                         if dateObj is not None:
                             text: str = M21Utilities.stringFromM21DateObject(dateObj)
-                            # pylint: disable=protected-access
                             parsedValue._data = text
-                            # pylint: enable=protected-access
+                        else:
+                            # Try a DatePrimitive range instead
+                            startDateObj: m21.metadata.DatePrimitive | None
+                            endDateObj: m21.metadata.DatePrimitive | None
+                            startDateObj, endDateObj = (
+                                M21Utilities.m21DatePrimitiveRangeFromString(str(parsedValue))
+                            )
+                            if startDateObj is not None and endDateObj is not None:
+                                parsedValue._data = M21Utilities.stringFromM21DatePrimitiveRange(
+                                    startDateObj, endDateObj
+                                )
+                        # pylint: enable=protected-access
                     except Exception:
                         # badly formatted date; just ignore this metadata item
                         continue

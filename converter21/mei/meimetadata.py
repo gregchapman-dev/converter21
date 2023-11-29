@@ -1088,31 +1088,45 @@ class MeiMetadata:
                     or composerNationality is not None):
                 personInfo: MeiElement = mads.appendSubElement('personInfo')
                 if composerBirthAndDeathDate is not None:
-                    isodate: str = (
+                    isodateAttrs: dict[str, str] = (
                         M21Utilities.isoDateFromM21DatePrimitive(
                             composerBirthAndDeathDate.value,
-                            returnEDTFString=True
+                            edtf=True
                         )
                     )
-                    isodateBirth: str = ''
-                    isodateDeath: str = ''
-                    isodateBirth, isodateDeath = isodate.split('/')
-                    birthDate: MeiElement = personInfo.appendSubElement(
-                        'birthDate',
-                        {
-                            'encoding': 'edtf'
-                        }
-                    )
-                    birthDate.text = isodateBirth
 
-                    if isodateDeath:
-                        deathDate: MeiElement = personInfo.appendSubElement(
-                            'deathDate',
-                            {
-                                'encoding': 'edtf'
-                            }
-                        )
-                        deathDate.text = isodateDeath
+                    # isodateAttrs will either contain 'edtf', or it will
+                    # contain one or both of 'startedtf' and 'endedtf',
+                    # or it will be empty.
+                    isodate: str = isodateAttrs.get('edtf', '')
+                    isodateBirth: str = isodateAttrs.get('startedtf', '')
+                    isodateDeath: str = isodateAttrs.get('endedtf', '')
+                    if isodate or isodateBirth or isodateDeath:
+                        if not isodateBirth and not isodateDeath:
+                            # all we have is isodate
+                            isodateBirthDeath: list[str] = isodate.split('/')
+                            if len(isodateBirthDeath) > 0:
+                                isodateBirth = isodateBirthDeath[0]
+                            if len(isodateBirthDeath) > 1:
+                                isodateDeath = isodateBirthDeath[1]
+
+                        if isodateBirth:
+                            birthDate: MeiElement = personInfo.appendSubElement(
+                                'birthDate',
+                                {
+                                    'encoding': 'edtf'
+                                }
+                            )
+                            birthDate.text = isodateBirth
+
+                        if isodateDeath:
+                            deathDate: MeiElement = personInfo.appendSubElement(
+                                'deathDate',
+                                {
+                                    'encoding': 'edtf'
+                                }
+                            )
+                            deathDate.text = isodateDeath
 
                 if composerBirthPlace is not None:
                     birthPlace: MeiElement = personInfo.appendSubElement('birthPlace')

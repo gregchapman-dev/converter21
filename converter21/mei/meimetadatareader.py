@@ -867,27 +867,39 @@ class MeiMetadataReader:
                 birthIsoDate: str = birthDateEl.text.strip()
                 deathIsoDate: str = deathDateEl.text.strip()
                 if birthIsoDate and deathIsoDate:
-                    m21Dates = M21Utilities.m21DateListFromIsoDateList([birthIsoDate, deathIsoDate])
-                    cdtDateBetween = m21.metadata.DateBetween(m21Dates)
-                    if md._isStandardNamespaceName('humdrum:CDT'):
-                        M21Utilities.addIfNotADuplicate(md, 'humdrum:CDT', cdtDateBetween)
-                    else:
-                        # can't use a Date, have to use a string, and it has to be a Humdrum string
+                    m21BirthDatePrimitive: m21.metadata.DatePrimitive | None = (
+                        M21Utilities.m21DatePrimitiveFromIsoDate(birthIsoDate)
+                    )
+                    m21DeathDatePrimitive: m21.metadata.DatePrimitive | None = (
+                        M21Utilities.m21DatePrimitiveFromIsoDate(deathIsoDate)
+                    )
+                    if m21BirthDatePrimitive is not None and m21DeathDatePrimitive is not None:
+                        # if ever 'humdrum:CDT' is officially added to music21, the value
+                        # will have to be a DatePrimitive (which will have to be extended
+                        # to support ranges of DatePrimitives).  For now it's always a
+                        # Humdrum string, which can support them.
+                        cdtDateBetween: str = M21Utilities.stringFromM21DatePrimitiveRange(
+                            m21BirthDatePrimitive, m21DeathDatePrimitive
+                        )
+
                         M21Utilities.addIfNotADuplicate(
                             md,
                             'humdrum:CDT',
-                            M21Utilities.stringFromM21DateObject(cdtDateBetween)
+                            cdtDateBetween
                         )
+
             if birthPlaceEl is not None:
                 # add 'humdrum:CBL' metadata item
                 name = birthPlaceEl.text.strip()
                 if name:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:CBL', name)
+
             if deathPlaceEl is not None:
                 # add 'humdrum:CDL' metadata item
                 name = deathPlaceEl.text.strip()
                 if name:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:CDL', name)
+
             if nationalityEl is not None:
                 # add 'humdrum:CNT' metadata item
                 name = nationalityEl.text.strip()
