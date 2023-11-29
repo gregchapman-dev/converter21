@@ -9752,8 +9752,7 @@ class HumdrumFile(HumdrumFileContent):
         # This includes parsed keys such as: 'COM-viaf-url' because it starts with COM.
         isHumdrumStandardKey: bool = (
             isParseable
-            and len(parsedKey) >= 3
-            and parsedKey[0:3] in M21Utilities.validHumdrumReferenceKeys
+            and parsedKey in M21Utilities.validHumdrumReferenceKeys
         )
         return (parsedKey, parsedValue, isHumdrumStandardKey)
 
