@@ -1012,6 +1012,11 @@ class M21Utilities:
 
         if not isodate:
             return None
+
+        # if it looks like a non-iso-date (contains 'num1/num2/num3') give up
+        if re.match(r'[\d]+/[\d]+/[\d]+', isodate):
+            return None
+
         if isodate[0] in ('{', '['):
             # list (DateSelection)
             relevance: str = 'and' if isodate[0] == '{' else 'or'
@@ -1262,6 +1267,13 @@ class M21Utilities:
     def m21DatePrimitiveFromString(
         string: str
     ) -> m21.metadata.DatePrimitive | None:
+        if not string:
+            return None
+
+        # if it looks like an isodate (contains 'num1-num2-num3') give up
+        if re.match(r'[\d]+-[\d]+-[\d]+', string):
+            return None
+
         typeNeeded: t.Type = m21.metadata.DateSingle
         relativeType: str = ''
         if '<' in string[0:1]:  # this avoids string[0] crash on empty string
