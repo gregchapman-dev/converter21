@@ -12,6 +12,7 @@ from musicdiff import DetailLevel
 
 # The things we're testing
 import converter21
+from converter21.humdrum import HumdrumFile
 from converter21.mei import MeiWriter
 
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
@@ -198,14 +199,30 @@ def oplistSummary(
     return output
 
 # returns True if the test passed (no musicdiff differences found)
-def runTheDiff(meiPath: Path, results) -> bool:
-    print(f'{meiPath}: ', end='')
-    print(f'{meiPath}: ', end='', file=results)
+def runTheDiff(krnPath: Path, results) -> bool:
+    print(f'{krnPath}: ', end='')
+    print(f'{krnPath}: ', end='', file=results)
     results.flush()
 
     # import into HumdrumFile
     try:
-        score1 = m21.converter.parse(meiPath, format='mei', forceSource=True)
+        hfb = HumdrumFile(str(krnPath))
+        if not hfb.isValid:
+            print('HumdrumFile1 parse failure')
+            print('HumdrumFile1 parse failure', file=results)
+            results.flush()
+            return False
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except:
+        print('HumdrumFile1 parse crash')
+        print('HumdrumFile1 parse crash', file=results)
+        results.flush()
+        return False
+
+    # import HumdrumFile into music21 stream
+    try:
+        score1 = hfb.createMusic21Stream()
         if score1 is None:
             print('score1 creation failure')
             print('score1 creation failure', file=results)
@@ -233,7 +250,7 @@ def runTheDiff(meiPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # export score back to humdrum (without any makeNotation fixups)
+    # export score to MEI (without any makeNotation fixups)
 
     meiw: MeiWriter = MeiWriter(score1)
     meiw.makeNotation = False
@@ -241,7 +258,7 @@ def runTheDiff(meiPath: Path, results) -> bool:
     try:
         success: bool = True
         meiwPath = Path(tempfile.gettempdir())
-        meiwPath /= (meiPath.stem + '_Written')
+        meiwPath /= (krnPath.stem + '_Written')
         meiwPath = meiwPath.with_suffix('.mei')
         with open(meiwPath, 'wt') as f:
             success = meiw.write(f)
@@ -319,10 +336,10 @@ def runTheDiff(meiPath: Path, results) -> bool:
     main entry point (parse arguments and do conversion)
 '''
 parser = argparse.ArgumentParser(
-            description='Loop over listfile (list of .mei files), importing and then exporting back to .mei, comparing original .mei with exported .mei.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .mei file paths that had no musicdiff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
+            description='Loop over listfile (list of .krn files), importing and then exporting to .mei, comparing original .krn with exported .mei.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn file paths that had no musicdiff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
 parser.add_argument(
         'list_file',
-        help='file containing a list of the .mei files to compare (full paths)')
+        help='file containing a list of the .krn files to compare (full paths)')
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()

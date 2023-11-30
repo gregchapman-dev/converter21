@@ -15,3 +15,6 @@ osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do scr
 # Verovio convert Humdrum to MEI, then compare MEI import vs MEI export/reimport
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumVerovioVsMeiExport.py ~/Documents/test/fileList3.txt"'
 
+# Compare Humdrum import vs MEI export/reimport
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumImportVsMeiExport.py ~/Documents/test/fileList4.txt"'
+
