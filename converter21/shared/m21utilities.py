@@ -1012,8 +1012,8 @@ class M21Utilities:
         if not isodate:
             return None
 
-        # if it looks like a non-iso-date (contains 'num1/num2/num3') give up
-        if re.match(r'[\d]+/[\d]+/[\d]+', isodate):
+        # if it looks like a non-iso-date (contains more than one '/') give up
+        if isodate.count('/') > 1:
             return None
 
         if isodate[0] in ('{', '['):
@@ -1326,8 +1326,8 @@ class M21Utilities:
         if not string:
             return None
 
-        # if it looks like an isodate (contains 'num1-num2-num3') give up
-        if re.match(r'[\d]+-[\d]+-[\d]+', string):
+        # if it looks like an isodate (contains too many '-'s) give up
+        if string.count('-') > 1:
             return None
 
         typeNeeded: t.Type = m21.metadata.DateSingle
