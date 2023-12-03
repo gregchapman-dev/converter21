@@ -1048,10 +1048,23 @@ class M21Utilities:
             return m21.metadata.DateRelative(m21Date, relevance=relevance)
 
         # single date (DateSingle)
+        singleError: str = ''
+        if isodate[-1] == '~':
+            isodate = isodate[:-1]
+            singleError = 'approximate'
+        elif isodate[-1] == '?':
+            isodate = isodate[:-1]
+            singleError = 'uncertain'
+
         m21Date = M21Utilities.m21DateFromIsoDate(isodate)
         if m21Date is None:
             return None
-        return m21.metadata.DateSingle(m21Date)
+
+        output: m21.metadata.DateSingle = m21.metadata.DateSingle(m21Date)
+        if singleError:
+            output.relevance = singleError
+
+        return output
 
     @staticmethod
     def m21DateListFromIsoDateList(
@@ -1150,12 +1163,20 @@ class M21Utilities:
         if doStart is None or doEnd is None:
             return {}
 
+        singleError: str = (
+            doStart.relevance if isinstance(doStart, m21.metadata.DateSingle) else ''
+        )
         output: dict[str, str] = {}
         startIsoDates: list[str] = []
         for date in doStart._data:
             iso: str = M21Utilities.isoDateFromM21Date(date, edtf=True)
             if not iso:
                 return {}
+
+            if singleError == 'approximate':
+                iso = iso + '~'
+            elif singleError == 'uncertain':
+                iso = iso + '?'
 
             startIsoDates.append(iso)
 
@@ -1174,11 +1195,17 @@ class M21Utilities:
             else:
                 output['startedtf'] = '[' + ','.join(startIsoDates) + ']'
 
+        singleError = doEnd.relevance if isinstance(doEnd, m21.metadata.DateSingle) else ''
         endIsoDates: list[str] = []
         for date in doEnd._data:
             iso = M21Utilities.isoDateFromM21Date(date, edtf=True)
             if not iso:
                 return {}
+
+            if singleError == 'approximate':
+                iso = iso + '~'
+            elif singleError == 'uncertain':
+                iso = iso + '?'
 
             endIsoDates.append(iso)
 
@@ -1361,14 +1388,16 @@ class M21Utilities:
         if typeNeeded == m21.metadata.DateSingle:
             # special case where a leading '~' or '?' should be removed and cause
             # the DateSingle's relevance to be set to 'approximate' or 'uncertain'.
-            # Other DataBlah types use their relevance for other things, so leaving
-            # the '~'/'?' in place to cause yearError to be set is a better choice.
             if '~' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'approximate'
             elif '?' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'uncertain'
+        else:
+            if '~' in dateStrings[0][0:1] or '?' in dateStrings[0][0:1]:
+                # fail, so we can try a range of m21DatePrimitives.
+                return None
 
         dates: list[m21.metadata.Date] = []
         for dateString in dateStrings:
@@ -1584,10 +1613,12 @@ class M21Utilities:
         m21StartDatePrimitive: m21.metadata.DatePrimitive,
         m21EndDatePrimitive: m21.metadata.DatePrimitive
     ) -> str:
-        # The usual case: both elements of range are DateSingle.
+        # The usual case: both elements of range are DateSingle, with no overall error.
         # We make a DateBetween, and then return the Humdrum string for that.
         if (isinstance(m21StartDatePrimitive, m21.metadata.DateSingle)
-                and isinstance(m21EndDatePrimitive, m21.metadata.DateSingle)):
+                and not m21StartDatePrimitive.relevance
+                and isinstance(m21EndDatePrimitive, m21.metadata.DateSingle)
+                and not m21EndDatePrimitive.relevance):
             return M21Utilities.stringFromM21DateObject(
                 m21.metadata.DateBetween([
                     m21StartDatePrimitive._data[0],
