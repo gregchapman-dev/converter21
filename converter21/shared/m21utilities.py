@@ -1395,9 +1395,10 @@ class M21Utilities:
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'uncertain'
         else:
-            if '~' in dateStrings[0][0:1] or '?' in dateStrings[0][0:1]:
-                # fail, so we can try a range of m21DatePrimitives.
-                return None
+            for dateString in dateStrings:
+                if '~' in dateString[0:1] or '?' in dateString[0:1]:
+                    # fail, so we can try a range of m21DatePrimitives
+                    return None
 
         dates: list[m21.metadata.Date] = []
         for dateString in dateStrings:
