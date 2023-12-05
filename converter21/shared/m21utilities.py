@@ -1357,6 +1357,17 @@ class M21Utilities:
         if string.count('-') > 1:
             return None
 
+        # check for a zeit date range that is too complicated for DateBetween (needs
+        # a range of DatePrimitives, not a range of Dates).
+        if string.count('-') == 1:
+            for dateStr in string.split('-'):
+                if ('~' in dateStr[0:1]
+                        or '?' in dateStr[0:1]
+                        or '>' in dateStr[0:1]
+                        or '<' in dateStr[0:1]):
+                    # fail, so we can try a range of DatePrimitives
+                    return None
+
         typeNeeded: t.Type = m21.metadata.DateSingle
         relativeType: str = ''
         if '<' in string[0:1]:  # this avoids string[0] crash on empty string
@@ -1395,6 +1406,8 @@ class M21Utilities:
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'uncertain'
         else:
+            # This is a bit redundant with the initial check above, but it rejects
+            # a few more cases, like an approximate DateRelative.
             for dateString in dateStrings:
                 if '~' in dateString[0:1] or '?' in dateString[0:1]:
                     # fail, so we can try a range of m21DatePrimitives
