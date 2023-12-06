@@ -17,7 +17,6 @@ import re
 import sys
 import copy
 import typing as t
-from typing import overload  # pycharm bug disallows alias
 from fractions import Fraction
 
 import music21 as m21
@@ -1012,6 +1011,11 @@ class M21Utilities:
 
         if not isodate:
             return None
+
+        # if it looks like a non-iso-date (contains more than one '/') give up
+        if isodate.count('/') > 1:
+            return None
+
         if isodate[0] in ('{', '['):
             # list (DateSelection)
             relevance: str = 'and' if isodate[0] == '{' else 'or'
@@ -1044,10 +1048,23 @@ class M21Utilities:
             return m21.metadata.DateRelative(m21Date, relevance=relevance)
 
         # single date (DateSingle)
+        singleError: str = ''
+        if isodate[-1] == '~':
+            isodate = isodate[:-1]
+            singleError = 'approximate'
+        elif isodate[-1] == '?':
+            isodate = isodate[:-1]
+            singleError = 'uncertain'
+
         m21Date = M21Utilities.m21DateFromIsoDate(isodate)
         if m21Date is None:
             return None
-        return m21.metadata.DateSingle(m21Date)
+
+        output: m21.metadata.DateSingle = m21.metadata.DateSingle(m21Date)
+        if singleError:
+            output.relevance = singleError
+
+        return output
 
     @staticmethod
     def m21DateListFromIsoDateList(
@@ -1130,39 +1147,114 @@ class M21Utilities:
         return None
 
     @staticmethod
-    @overload
+    def edtfNestedDateRangeFromString(string: str) -> dict[str, str]:
+        dateStrings: list[str] = string.split('-')
+        if len(dateStrings) != 2:
+            return {}
+
+        startDateStr: str = dateStrings[0]
+        endDateStr: str = dateStrings[1]
+        doStart: m21.metadata.DatePrimitive | None = (
+            M21Utilities.m21DatePrimitiveFromString(startDateStr)
+        )
+        doEnd: m21.metadata.DatePrimitive | None = (
+            M21Utilities.m21DatePrimitiveFromString(endDateStr)
+        )
+        if doStart is None or doEnd is None:
+            return {}
+
+        singleError: str = (
+            doStart.relevance if isinstance(doStart, m21.metadata.DateSingle) else ''
+        )
+        output: dict[str, str] = {}
+        startIsoDates: list[str] = []
+        for date in doStart._data:
+            iso: str = M21Utilities.isoDateFromM21Date(date, edtf=True)
+            if not iso:
+                return {}
+
+            if singleError == 'approximate':
+                iso = iso + '~'
+            elif singleError == 'uncertain':
+                iso = iso + '?'
+
+            startIsoDates.append(iso)
+
+        if isinstance(doStart, m21.metadata.DateSingle):
+            output['startedtf'] = startIsoDates[0]
+        elif isinstance(doStart, m21.metadata.DateRelative):
+            if doStart.relevance in ('prior', 'onorbefore'):
+                output['startedtf'] = '../' + startIsoDates[0]
+            elif doStart.relevance in ('after', 'onorafter'):
+                output['startedtf'] = startIsoDates[0] + '/..'
+        elif isinstance(doStart, m21.metadata.DateBetween):
+            output['startedtf'] = startIsoDates[0] + '/' + startIsoDates[1]
+        elif isinstance(doStart, m21.metadata.DateSelection):
+            if doStart.relevance == 'and':
+                output['startedtf'] = '{' + ','.join(startIsoDates) + '}'
+            else:
+                output['startedtf'] = '[' + ','.join(startIsoDates) + ']'
+
+        singleError = doEnd.relevance if isinstance(doEnd, m21.metadata.DateSingle) else ''
+        endIsoDates: list[str] = []
+        for date in doEnd._data:
+            iso = M21Utilities.isoDateFromM21Date(date, edtf=True)
+            if not iso:
+                return {}
+
+            if singleError == 'approximate':
+                iso = iso + '~'
+            elif singleError == 'uncertain':
+                iso = iso + '?'
+
+            endIsoDates.append(iso)
+
+        if isinstance(doEnd, m21.metadata.DateSingle):
+            output['endedtf'] = endIsoDates[0]
+        elif isinstance(doEnd, m21.metadata.DateRelative):
+            if doEnd.relevance in ('prior', 'onorbefore'):
+                output['endedtf'] = '../' + endIsoDates[0]
+            elif doEnd.relevance in ('after', 'onorafter'):
+                output['endedtf'] = endIsoDates[0] + '/..'
+        elif isinstance(doEnd, m21.metadata.DateBetween):
+            output['endedtf'] = endIsoDates[0] + '/' + endIsoDates[1]
+        elif isinstance(doEnd, m21.metadata.DateSelection):
+            if doEnd.relevance == 'and':
+                output['endedtf'] = '{' + ','.join(endIsoDates) + '}'
+            else:
+                output['endedtf'] = '[' + ','.join(endIsoDates) + ']'
+
+        return output
+
+    @staticmethod
     def isoDateFromM21DatePrimitive(
         dateObj: m21.metadata.DatePrimitive | m21.metadata.Text,
-        returnEDTFString: t.Literal[False] = False
+        edtf: bool = False
     ) -> dict[str, str]:
-        pass
-
-    @staticmethod
-    @overload
-    def isoDateFromM21DatePrimitive(
-        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text,
-        returnEDTFString: t.Literal[True]
-    ) -> str:
-        pass
-
-    @staticmethod
-    def isoDateFromM21DatePrimitive(
-        dateObj: m21.metadata.DatePrimitive | m21.metadata.Text,
-        returnEDTFString: bool = False
-    ) -> dict[str, str] | str:
         if isinstance(dateObj, m21.metadata.Text):
             # convert to DatePrimitive
             do: m21.metadata.DatePrimitive | None = (
                 M21Utilities.m21DatePrimitiveFromString(str(dateObj))
             )
             if do is None:
-                if returnEDTFString:
-                    return ''
+                if edtf:
+                    # take one final shot: it might be a "nested" humdrum date range,
+                    # e.g. 1525^1526-1594 (which means a range from (1525 or 1526) to 1594)
+                    # This is not representable in music21 (except as Text), but can be
+                    # represented in two edtf dates (birth and death, for example,
+                    # where birth is '1525/1526' and death is '1594').
+                    # So, here we try to return two edtf dates: 'startedtf': '1525/1526'
+                    # and 'endedtf': '1594'.  If this is a composer birth/death date
+                    # date going into MADS <birthDate> and <deathDate> elements, that
+                    # code will need to tease this apart and make those two elements
+                    # of it.
+                    return M21Utilities.edtfNestedDateRangeFromString(str(dateObj))
                 return {}
+
             dateObj = do
 
         if dateObj.relevance in ('uncertain', 'approximate'):
-            if not returnEDTFString:
+            if not edtf:
                 # pre-EDTF isodates can't represent uncertain/approximate dates,
                 # so don't return one.  The plain text will still describe it,
                 # and should be parseable by most folks.
@@ -1170,48 +1262,44 @@ class M21Utilities:
 
         isodates: list[str] = []
         for date in dateObj._data:
-            iso: str = M21Utilities.isoDateFromM21Date(date, returnEDTFString)
+            iso: str = M21Utilities.isoDateFromM21Date(date, edtf)
             if not iso:
-                if returnEDTFString:
-                    return ''
                 return {}
             isodates.append(iso)
 
         if isinstance(dateObj, m21.metadata.DateSingle):
-            if returnEDTFString:
-                return isodates[0]
+            if edtf:
+                return {'edtf': isodates[0]}
             return {'isodate': isodates[0]}
         elif isinstance(dateObj, m21.metadata.DateRelative):
             if dateObj.relevance in ('prior', 'onorbefore'):
-                if returnEDTFString:
-                    return '../' + isodates[0]
+                if edtf:
+                    return {'edtf': '../' + isodates[0]}
                 return {'notafter': isodates[0]}
             elif dateObj.relevance in ('after', 'onorafter'):
-                if returnEDTFString:
-                    return isodates[0] + '/..'
+                if edtf:
+                    return {'edtf': isodates[0] + '/..'}
                 return {'notbefore': isodates[0]}
         elif isinstance(dateObj, m21.metadata.DateBetween):
-            if returnEDTFString:
-                return isodates[0] + '/' + isodates[1]
+            if edtf:
+                return {'edtf': isodates[0] + '/' + isodates[1]}
             return {
                 'startdate': isodates[0],
                 'enddate': isodates[1]
             }
         elif isinstance(dateObj, m21.metadata.DateSelection):
-            if returnEDTFString:
+            if edtf:
                 if dateObj.relevance == 'and':
-                    return '{' + ','.join(isodates) + '}'
+                    return {'edtf': '{' + ','.join(isodates) + '}'}
                 else:
-                    return '[' + ','.join(isodates) + ']'
+                    return {'edtf': '[' + ','.join(isodates) + ']'}
             else:
                 return {}
 
-        if returnEDTFString:
-            return ''
         return {}
 
     @staticmethod
-    def isoDateFromM21Date(date: m21.metadata.Date, returnEDTF: bool = False) -> str:
+    def isoDateFromM21Date(date: m21.metadata.Date, edtf: bool = False) -> str:
         msg: list[str] = []
         for attr in date.attrNames:
             value: int = t.cast(int, getattr(date, attr))
@@ -1220,7 +1308,7 @@ class M21Utilities:
             suffix: str = ''
             error: str | None = getattr(date, attr + 'Error')
             if error:
-                if not returnEDTF:
+                if not edtf:
                     return ''  # pre-EDTF ISO dates can't describe approximate/uncertain values.
                 if error == 'uncertain':
                     suffix = '?'
@@ -1236,7 +1324,7 @@ class M21Utilities:
             msg.append(sub)
 
         out = '-'.join(msg[:4])
-        if len(msg) > 4:
+        if len(msg) >= 4:
             out += 'T' + ':'.join(msg[4:])
         return out
 
@@ -1262,6 +1350,24 @@ class M21Utilities:
     def m21DatePrimitiveFromString(
         string: str
     ) -> m21.metadata.DatePrimitive | None:
+        if not string:
+            return None
+
+        # if it looks like an isodate (contains too many '-'s) give up
+        if string.count('-') > 1:
+            return None
+
+        # check for a zeit date range that is too complicated for DateBetween (needs
+        # a range of DatePrimitives, not a range of Dates).
+        if string.count('-') == 1:
+            for dateStr in string.split('-'):
+                if ('~' in dateStr[0:1]
+                        or '?' in dateStr[0:1]
+                        or '>' in dateStr[0:1]
+                        or '<' in dateStr[0:1]):
+                    # fail, so we can try a range of DatePrimitives
+                    return None
+
         typeNeeded: t.Type = m21.metadata.DateSingle
         relativeType: str = ''
         if '<' in string[0:1]:  # this avoids string[0] crash on empty string
@@ -1293,14 +1399,19 @@ class M21Utilities:
         if typeNeeded == m21.metadata.DateSingle:
             # special case where a leading '~' or '?' should be removed and cause
             # the DateSingle's relevance to be set to 'approximate' or 'uncertain'.
-            # Other DataBlah types use their relevance for other things, so leaving
-            # the '~'/'?' in place to cause yearError to be set is a better choice.
             if '~' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'approximate'
             elif '?' in dateStrings[0][0:1]:  # avoids crash on empty dateStrings[0]
                 dateStrings[0] = dateStrings[0][1:]
                 singleRelevance = 'uncertain'
+        else:
+            # This is a bit redundant with the initial check above, but it rejects
+            # a few more cases, like an approximate DateRelative.
+            for dateString in dateStrings:
+                if '~' in dateString[0:1] or '?' in dateString[0:1]:
+                    # fail, so we can try a range of m21DatePrimitives
+                    return None
 
         dates: list[m21.metadata.Date] = []
         for dateString in dateStrings:
@@ -1511,6 +1622,50 @@ class M21Utilities:
             return M21Utilities._dateUncertainSymbols[1]    # [1] is the single value error symbol
         return ''
 
+    @staticmethod
+    def stringFromM21DatePrimitiveRange(
+        m21StartDatePrimitive: m21.metadata.DatePrimitive,
+        m21EndDatePrimitive: m21.metadata.DatePrimitive
+    ) -> str:
+        # The usual case: both elements of range are DateSingle, with no overall error.
+        # We make a DateBetween, and then return the Humdrum string for that.
+        if (isinstance(m21StartDatePrimitive, m21.metadata.DateSingle)
+                and not m21StartDatePrimitive.relevance
+                and isinstance(m21EndDatePrimitive, m21.metadata.DateSingle)
+                and not m21EndDatePrimitive.relevance):
+            return M21Utilities.stringFromM21DateObject(
+                m21.metadata.DateBetween([
+                    m21StartDatePrimitive._data[0],
+                    m21EndDatePrimitive._data[0]
+                ])
+            )
+
+        # Funky case: either or both of the elements is NOT a DateSingle.
+        # We get a Humdrum string for each of them (using '^' as the range separator)
+        # and then combine them with a '-' between them.
+        startString: str = M21Utilities.stringFromM21DateObject(m21StartDatePrimitive)
+        endString: str = M21Utilities.stringFromM21DateObject(m21EndDatePrimitive)
+
+        startString = startString.replace('-', '^')
+        endString = endString.replace('-', '^')
+
+        return startString + '-' + endString
+
+    @staticmethod
+    def m21DatePrimitiveRangeFromString(
+        string: str
+    ) -> tuple[m21.metadata.DatePrimitive | None, m21.metadata.DatePrimitive | None]:
+        startDatePrimitive: m21.metadata.DatePrimitive | None = None
+        endDatePrimitive: m21.metadata.DatePrimitive | None = None
+        dateStrings: list[str] = string.split('-')
+        if len(dateStrings) != 2:
+            return None, None
+
+        startDatePrimitive = M21Utilities.m21DatePrimitiveFromString(dateStrings[0])
+        endDatePrimitive = M21Utilities.m21DatePrimitiveFromString(dateStrings[1])
+        return startDatePrimitive, endDatePrimitive
+
+
     humdrumReferenceKeyToM21MetadataPropertyUniqueName: dict[str, str] = {
         # dict value is music21's unique name or '' (if there is no m21Metadata equivalent)
         # Authorship information:
@@ -1643,7 +1798,6 @@ class M21Utilities:
         'MPN': 'performer',
         'MPS': 'suspected performer',
         'PED': 'publication editor',  # a.k.a. 'source editor'
-        'YOE': 'manuscript editor'
     }
 
     m21OtherContributorRoleToHumdrumReferenceKey: dict[str, str] = {
@@ -1654,8 +1808,6 @@ class M21Utilities:
         'sourceEditor': 'PED',
         'publication editor': 'PED',
         'publicationEditor': 'PED',
-        'original editor': 'YOE',
-        'originalEditor': 'YOE',
     }
 
     validMeiMetadataKeys: tuple[str, ...] = (

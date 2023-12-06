@@ -2,7 +2,6 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
-import subprocess
 import typing as t
 import music21 as m21
 from music21.base import VERSION_STR
@@ -11,9 +10,10 @@ from musicdiff.annotation import AnnScore, AnnExtra, AnnMetadataItem
 from musicdiff import Comparison
 from musicdiff import DetailLevel
 
+# The things we're testing
 import converter21
 from converter21.humdrum import HumdrumFile
-from converter21.humdrum import HumdrumWriter
+from converter21.mei import MeiWriter
 
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
     obj = score.recurse().getElementById(theID)
@@ -198,7 +198,7 @@ def oplistSummary(
 
     return output
 
-# returns True if the test passed (no music-score-diff differences found)
+# returns True if the test passed (no musicdiff differences found)
 def runTheDiff(krnPath: Path, results) -> bool:
     print(f'{krnPath}: ', end='')
     print(f'{krnPath}: ', end='', file=results)
@@ -250,28 +250,39 @@ def runTheDiff(krnPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # use verovio to convert humdrum file to mei file
+    # export score to MEI (without any makeNotation fixups)
+
+    meiw: MeiWriter = MeiWriter(score1)
+    meiw.makeNotation = False
 
     try:
-        meiPath = Path(tempfile.gettempdir())
-        meiPath /= krnPath.name
-        meiPath = meiPath.with_suffix('.mei')
-        subprocess.run(
-            ['verovio', '-a', '-t', 'mei', '-o', f'{meiPath}', str(krnPath)],
-            check=True,
-            capture_output=True
-        )
+        success: bool = True
+        meiwPath = Path(tempfile.gettempdir())
+        meiwPath /= (krnPath.stem + '_Written')
+        meiwPath = meiwPath.with_suffix('.mei')
+        with open(meiwPath, 'wt') as f:
+            success = meiw.write(f)
+        if not success:
+            print('export failed')
+            print('export failed', file=results)
+            results.flush()
+            return False
     except KeyboardInterrupt:
         sys.exit(0)
     except:
-        print('conversion to mei with verovio failed')
-        print('conversion to mei with verovio failed', file=results)
+        print('export crash')
+        print('export crash', file=results)
         results.flush()
         return False
 
-    # import the mei file into music21
+    # and then try to parse the exported MEI file
     try:
-        score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
+        score2 = m21.converter.parse(meiwPath, format='mei', forceSource=True)
+        if score2 is None:
+            print('score2 creation failure')
+            print('score2 creation failure', file=results)
+            results.flush()
+            return False
     except KeyboardInterrupt:
         sys.exit(0)
     except:
@@ -292,21 +303,11 @@ def runTheDiff(krnPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # use music-score-diff to compare the two music21 scores,
-    # and return whether or not they were identical. Disable
-    # rest position comparison, since verovio makes them up.
+    # use musicdiff to compare the two music21 scores,
+    # and return whether or not they were identical
     try:
-        TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
-        annotatedScore1 = AnnScore(
-            score1,
-            (DetailLevel.AllObjectsWithStyleAndMetadata
-                | TURN_OFF_REST_POSITION_COMPARISON)
-        )
-        annotatedScore2 = AnnScore(
-            score2,
-            (DetailLevel.AllObjectsWithStyleAndMetadata
-                | TURN_OFF_REST_POSITION_COMPARISON)
-        )
+        annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
+        annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
@@ -335,7 +336,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
     main entry point (parse arguments and do conversion)
 '''
 parser = argparse.ArgumentParser(
-            description='Loop over listfile (list of .krn files), importing and then exporting back to .krn, comparing original .krn with exported .krn.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn file paths that had no music-score-diff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
+            description='Loop over listfile (list of .krn files), importing and then exporting to .mei, comparing original .krn with exported .mei.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn file paths that had no musicdiff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
 parser.add_argument(
         'list_file',
         help='file containing a list of the .krn files to compare (full paths)')
@@ -368,9 +369,6 @@ with open(goodPath, 'w', encoding='utf-8') as goodf:
                     print(file, file=resultsf)
                     resultsf.flush()
                     continue
-
-#                 if file != '/Users/gregc/Documents/test/humdrum_beethoven_piano_sonatas/kern/sonata02-3.krn':
-#                     continue
 
                 if runTheDiff(Path(file), resultsf):
                     resultsf.flush()

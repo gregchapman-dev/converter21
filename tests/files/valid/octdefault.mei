@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.0">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title><!-- ... --></title>
+      </titleStmt>
+      <pubStmt>
+        <unpub><!-- ... --></unpub>
+      </pubStmt>
+    </fileDesc>
+    <revisionDesc>
+      <change>
+        <respStmt>
+          <persName>Andreas Nolda</persName>
+        </respStmt>
+        <changeDesc>
+          <p>Initial version.</p>
+        </changeDesc>
+        <date isodate="2023-09-07"/>
+      </change>
+    </revisionDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+          <scoreDef keysig="0" meter.count="2" meter.unit="2" dur.default="2" oct.default="3">
+            <staffGrp>
+              <staffDef n="1" lines="5" clef.line="2" clef.shape="G"/>
+            </staffGrp>
+          </scoreDef>
+          <section>
+            <measure n="1">
+              <staff n="1">
+                <layer n="1">
+                  <note pname="a"/><!-- wrong pitch (scoreDef/@oct.default not considered) -->
+                  <note pname="a" oct="4"/>
+                </layer>
+              </staff>
+            </measure>
+          </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

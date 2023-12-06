@@ -163,8 +163,7 @@ class MeiMetadata:
 
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        if self.simpleTitleElement is not None:
-            titleStmt.subElements.append(self.simpleTitleElement)
+        titleStmt.subElements.append(self.simpleTitleElement)
 
         # pubStmt describes the MEI file we are writing.  It is, of course,
         # unpublished, so we use <unpub> to say that.  This pubStmt will
@@ -178,9 +177,9 @@ class MeiMetadata:
         )
 
         # sourceDesc: There are potentially multiple sources here, depending on what
-        # metadata items we find.  One for the digital source, one for the published
-        # printed source, one for a recorded source album (with maybe one for the
-        # recorded source album track), and one for an unpublished manuscript source.
+        # metadata items we find.  One for the digital source, one for the printed
+        # source, one for a recorded source, and one for an unpublished manuscript
+        # source.
         # if sourceDesc ends up empty, we will not add it, so create separately and
         # only append if not empty.
         sourceDesc: MeiElement = MeiElement('sourceDesc')
@@ -189,22 +188,22 @@ class MeiMetadata:
         if digitalSource is not None:
             sourceDesc.subElements.append(digitalSource)
 
-        publishedSource: MeiElement | None = self.makePrintedSource()
-        if publishedSource is not None:
-            sourceDesc.subElements.append(publishedSource)
+        printedSource: MeiElement | None = self.makePrintedSource()
+        if printedSource is not None:
+            sourceDesc.subElements.append(printedSource)
 
-        if digitalSource is not None and publishedSource is not None:
+        if digitalSource is not None and printedSource is not None:
             digitalSourceBibl: MeiElement | None = (
                 digitalSource.findFirst('bibl', recurse=False)
             )
-            publishedSourceBibl: MeiElement | None = (
-                publishedSource.findFirst('bibl', recurse=False)
+            printedSourceBibl: MeiElement | None = (
+                printedSource.findFirst('bibl', recurse=False)
             )
             # relate them to eachother with 'otherFormat'.  They are the same,
             # just in different formats (printed vs digital).
-            if digitalSourceBibl is not None and publishedSourceBibl is not None:
+            if digitalSourceBibl is not None and printedSourceBibl is not None:
                 digitalSourceBibl.attrib['xml:id'] = 'source0_digital'
-                publishedSourceBibl.attrib['xml:id'] = 'source1_printed'
+                printedSourceBibl.attrib['xml:id'] = 'source1_printed'
                 digitalSourceBibl.appendSubElement(
                     'relatedItem',
                     {
@@ -212,7 +211,7 @@ class MeiMetadata:
                         'target': '#source1_printed'
                     }
                 )
-                publishedSourceBibl.appendSubElement(
+                printedSourceBibl.appendSubElement(
                     'relatedItem',
                     {
                         'rel': 'otherFormat',
@@ -243,8 +242,7 @@ class MeiMetadata:
         bibl: MeiElement = source.appendSubElement('bibl')
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        if self.simpleTitleElement is not None:
-            bibl.subElements.append(self.simpleTitleElement)
+        bibl.subElements.append(self.simpleTitleElement)
         if not self.simpleComposerElements:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
@@ -435,8 +433,7 @@ class MeiMetadata:
 
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
-        if self.simpleTitleElement is not None:
-            bibl.subElements.append(self.simpleTitleElement)
+        bibl.subElements.append(self.simpleTitleElement)
         if not self.simpleComposerElements:
             self.simpleComposerElements = self.makeSimpleComposerElements()
         if self.simpleComposerElements:
@@ -591,7 +588,7 @@ class MeiMetadata:
 
     def makeRecordedSource(self) -> MeiElement | None:
         if not self.anyExist('RTL', 'RC#', 'MGN', 'MPN', 'MPS', 'RNP',
-                'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'MLC'):
+                'MCN', 'RMM', 'RRD', 'RLC', 'RDT', 'RT#'):
             return None
 
         source: MeiElement = MeiElement('source', {'type': 'recording'})
@@ -631,8 +628,7 @@ class MeiMetadata:
                 analytic: MeiElement = biblStruct.appendSubElement('analytic')
                 if self.simpleTitleElement is None:
                     self.simpleTitleElement = self.makeSimpleTitleElement()
-                if self.simpleTitleElement is not None:
-                    analytic.subElements.append(self.simpleTitleElement)
+                analytic.subElements.append(self.simpleTitleElement)
                 biblScope = analytic.appendSubElement(
                     'biblScope',
                     {
@@ -653,7 +649,6 @@ class MeiMetadata:
                     or i < len(manufacturers)
                     or i < len(releaseDates)
                     or i < len(recordingLocations)
-                    or i < len(recordingDates)
                     or i < len(recordingDates)):
                 monogr: MeiElement = biblStruct.appendSubElement('monogr')
 
@@ -907,12 +902,12 @@ class MeiMetadata:
             if allTheSameLanguage and language:
                 lineGroup.attrib['xml:lang'] = language
 
-        for acknowledgment in acknowledgments:
-            # <l> does not take @analog, so use @type instead (says Perry)
-            line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
-            line.text = acknowledgment.meiValue
-            if acknowledgment.value.language and not allTheSameLanguage:
-                line.attrib['xml:lang'] = acknowledgment.value.language.lower()
+            for acknowledgment in acknowledgments:
+                # <l> does not take @analog, so use @type instead (says Perry)
+                line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
+                line.text = acknowledgment.meiValue
+                if acknowledgment.value.language and not allTheSameLanguage:
+                    line.attrib['xml:lang'] = acknowledgment.value.language.lower()
 
         if bibl.isEmpty():
             return None
@@ -1050,7 +1045,7 @@ class MeiMetadata:
             nameElement.attrib['auth.uri'] = '#' + madsXmlId
 
             # There is extra info about the composer, that will need to go
-            # in <extMeta><madsCollection><mads>
+            # in <work><extMeta><madsCollection><mads>
             if self.madsCollection is None:
                 schemaLoc: str = (
                     'http://www.loc.gov/mads/v2 https://www.loc.gov/standards/mads/mads-2-1.xsd'
@@ -1087,45 +1082,63 @@ class MeiMetadata:
                 namePart.text = composerAlias.meiValue
 
             # extra info goes in <mads><personInfo>
-            personInfo: MeiElement = mads.appendSubElement('personInfo')
-            if composerBirthAndDeathDate is not None:
-                isodate: str = (
-                    M21Utilities.isoDateFromM21DatePrimitive(
-                        composerBirthAndDeathDate.value,
-                        returnEDTFString=True
+            if (composerBirthAndDeathDate is not None
+                    or composerBirthPlace is not None
+                    or composerDeathPlace is not None
+                    or composerNationality is not None):
+                personInfo: MeiElement = mads.appendSubElement('personInfo')
+                if composerBirthAndDeathDate is not None:
+                    isodateAttrs: dict[str, str] = (
+                        M21Utilities.isoDateFromM21DatePrimitive(
+                            composerBirthAndDeathDate.value,
+                            edtf=True
+                        )
                     )
-                )
-                isodateBirth: str = ''
-                isodateDeath: str = ''
-                isodateBirth, isodateDeath = isodate.split('/')
-                birthDate: MeiElement = personInfo.appendSubElement(
-                    'birthDate',
-                    {
-                        'encoding': 'edtf'
-                    }
-                )
-                birthDate.text = isodateBirth
 
-                if isodateDeath:
-                    deathDate: MeiElement = personInfo.appendSubElement(
-                        'deathDate',
-                        {
-                            'encoding': 'edtf'
-                        }
-                    )
-                    deathDate.text = isodateDeath
+                    # isodateAttrs will either contain 'edtf', or it will
+                    # contain one or both of 'startedtf' and 'endedtf',
+                    # or it will be empty.
+                    isodate: str = isodateAttrs.get('edtf', '')
+                    isodateBirth: str = isodateAttrs.get('startedtf', '')
+                    isodateDeath: str = isodateAttrs.get('endedtf', '')
+                    if isodate or isodateBirth or isodateDeath:
+                        if not isodateBirth and not isodateDeath:
+                            # all we have is isodate
+                            isodateBirthDeath: list[str] = isodate.split('/')
+                            if len(isodateBirthDeath) > 0:
+                                isodateBirth = isodateBirthDeath[0]
+                            if len(isodateBirthDeath) > 1:
+                                isodateDeath = isodateBirthDeath[1]
 
-            if composerBirthPlace is not None:
-                birthPlace: MeiElement = personInfo.appendSubElement('birthPlace')
-                birthPlace.text = composerBirthPlace.meiValue
+                        if isodateBirth:
+                            birthDate: MeiElement = personInfo.appendSubElement(
+                                'birthDate',
+                                {
+                                    'encoding': 'edtf'
+                                }
+                            )
+                            birthDate.text = isodateBirth
 
-            if composerDeathPlace is not None:
-                deathPlace: MeiElement = personInfo.appendSubElement('deathPlace')
-                deathPlace.text = composerDeathPlace.meiValue
+                        if isodateDeath:
+                            deathDate: MeiElement = personInfo.appendSubElement(
+                                'deathDate',
+                                {
+                                    'encoding': 'edtf'
+                                }
+                            )
+                            deathDate.text = isodateDeath
 
-            if composerNationality is not None:
-                nationality: MeiElement = personInfo.appendSubElement('nationality')
-                nationality.text = composerNationality.meiValue
+                if composerBirthPlace is not None:
+                    birthPlace: MeiElement = personInfo.appendSubElement('birthPlace')
+                    birthPlace.text = composerBirthPlace.meiValue
+
+                if composerDeathPlace is not None:
+                    deathPlace: MeiElement = personInfo.appendSubElement('deathPlace')
+                    deathPlace.text = composerDeathPlace.meiValue
+
+                if composerNationality is not None:
+                    nationality: MeiElement = personInfo.appendSubElement('nationality')
+                    nationality.text = composerNationality.meiValue
 
         return output
 
@@ -1144,7 +1157,8 @@ class MeiMetadata:
                 continue
 
             if requiredLanguage:
-                if mmItem.value.language.lower() == requiredLanguage.lower():
+                if (mmItem.value.language
+                        and mmItem.value.language.lower() == requiredLanguage.lower()):
                     bestName = mmItem
                     break
             else:
@@ -1181,7 +1195,7 @@ class MeiMetadata:
         if firstLang:
             titleElement.attrib['xml:lang'] = firstLang
 
-        if bestTitle and bestMovementName:
+        if bestTitle and bestMovementName and bestTitle.meiValue != bestMovementName.meiValue:
             titleElement.text = bestTitle.meiValue + ', ' + bestMovementName.meiValue
         elif bestTitle:
             titleElement.text = bestTitle.meiValue
@@ -1406,10 +1420,35 @@ class MeiMetadata:
                 if version == SharedConstants._CONVERTER21_VERSION:
                     converter21AlreadyThere = True
 
-        if not encodingNotes and not encodingWarnings and not converter21AlreadyThere:
+        if (not encodingNotes
+                and not encodingWarnings
+                and not softwares
+                and converter21AlreadyThere):
             return None
 
         encodingDesc: MeiElement = MeiElement('encodingDesc')
+
+        if softwares or not converter21AlreadyThere:
+            appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
+
+            # add converter21 if it wasn't already there
+            if not converter21AlreadyThere:
+                application: MeiElement = appInfo.appendSubElement(
+                    'application',
+                    {
+                        'version': SharedConstants._CONVERTER21_VERSION
+                    }
+                )
+                name: MeiElement = application.appendSubElement('name')
+                name.text = SharedConstants._CONVERTER21_NAME
+
+            for software in softwares:
+                application = appInfo.appendSubElement(
+                    'application',
+                    software.meiOtherAttribs
+                )
+                name = application.appendSubElement('name')
+                name.text = software.meiValue
 
         if encodingNotes or encodingWarnings:
             editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
@@ -1441,28 +1480,6 @@ class MeiMetadata:
                     line.text = warning.meiValue
                     if warning.value.language and not allTheSameLanguage:
                         line.attrib['xml:lang'] = warning.value.language.lower()
-
-        if softwares or not converter21AlreadyThere:
-            appInfo: MeiElement = encodingDesc.appendSubElement('appInfo')
-
-            # add converter21 if it wasn't already there
-            if not converter21AlreadyThere:
-                application: MeiElement = appInfo.appendSubElement(
-                    'application',
-                    {
-                        'version': SharedConstants._CONVERTER21_VERSION
-                    }
-                )
-                name: MeiElement = application.appendSubElement('name')
-                name.text = SharedConstants._CONVERTER21_NAME
-
-            for software in softwares:
-                application = appInfo.appendSubElement(
-                    'application',
-                    software.meiOtherAttribs
-                )
-                name = application.appendSubElement('name')
-                name.text = software.meiValue
 
         return encodingDesc
 
