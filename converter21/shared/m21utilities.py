@@ -1233,7 +1233,7 @@ class M21Utilities:
         elif isinstance(doEnd, m21.metadata.DateBetween):
             # DateBetween for the ending of a DatePrimitive range is actually a
             # selection within a range: [date1..date2], not a full range: date1/date2.
-            output['endedtf'] = '[' + startIsoDates[0] + '..' + startIsoDates[1] + ']'
+            output['endedtf'] = '[' + endIsoDates[0] + '..' + endIsoDates[1] + ']'
         elif isinstance(doEnd, m21.metadata.DateSelection):
             if doEnd.relevance == 'and':
                 output['endedtf'] = '{' + ','.join(endIsoDates) + '}'
