@@ -1009,6 +1009,10 @@ class M21Utilities:
             isodate = removeSplitChars(isodate)
             return isodate.split(',')
 
+        def splitIsoDateRangeSelection(isodate: str) -> list[str]:
+            isodate = removeSplitChars(isodate)
+            return isodate.split('..')
+
         if not isodate:
             return None
 
@@ -1017,12 +1021,18 @@ class M21Utilities:
             return None
 
         if isodate[0] in ('{', '['):
+            if isodate[0] == '[' and '..' in isodate:
+                # it's a selection that is a range.  We can represent this as a DateBetween.
+                m21Dates: list[m21.metadata.Date] = (
+                    M21Utilities.m21DateListFromIsoDateList(splitIsoDateRangeSelection(isodate))
+                )
+                return m21.metadata.DateBetween(m21Dates)
+
             # list (DateSelection)
             relevance: str = 'and' if isodate[0] == '{' else 'or'
-            m21Dates: list[m21.metadata.Date] = (
-                M21Utilities.m21DateListFromIsoDateList(splitIsoDateList(isodate))
-            )
+            m21Dates = M21Utilities.m21DateListFromIsoDateList(splitIsoDateList(isodate))
             return m21.metadata.DateSelection(m21Dates, relevance=relevance)
+
         if '/' in isodate:
             if '..' not in isodate:
                 # regular range (DateBetween)
@@ -1038,6 +1048,7 @@ class M21Utilities:
                 relevance = 'after'
             else:
                 return None
+
             if '/' in isodate:
                 # should not be any '/' once we remove '../' or '/..'
                 return None
@@ -1045,6 +1056,7 @@ class M21Utilities:
             m21Date: m21.metadata.Date | None = M21Utilities.m21DateFromIsoDate(isodate)
             if m21Date is None:
                 return None
+
             return m21.metadata.DateRelative(m21Date, relevance=relevance)
 
         # single date (DateSingle)
@@ -1188,7 +1200,9 @@ class M21Utilities:
             elif doStart.relevance in ('after', 'onorafter'):
                 output['startedtf'] = startIsoDates[0] + '/..'
         elif isinstance(doStart, m21.metadata.DateBetween):
-            output['startedtf'] = startIsoDates[0] + '/' + startIsoDates[1]
+            # DateBetween for the beginning of a DatePrimitive range is actually a
+            # selection within a range: [date1..date2], not a full range: date1/date2.
+            output['startedtf'] = '[' + startIsoDates[0] + '..' + startIsoDates[1] + ']'
         elif isinstance(doStart, m21.metadata.DateSelection):
             if doStart.relevance == 'and':
                 output['startedtf'] = '{' + ','.join(startIsoDates) + '}'
@@ -1217,7 +1231,9 @@ class M21Utilities:
             elif doEnd.relevance in ('after', 'onorafter'):
                 output['endedtf'] = endIsoDates[0] + '/..'
         elif isinstance(doEnd, m21.metadata.DateBetween):
-            output['endedtf'] = endIsoDates[0] + '/' + endIsoDates[1]
+            # DateBetween for the ending of a DatePrimitive range is actually a
+            # selection within a range: [date1..date2], not a full range: date1/date2.
+            output['endedtf'] = '[' + startIsoDates[0] + '..' + startIsoDates[1] + ']'
         elif isinstance(doEnd, m21.metadata.DateSelection):
             if doEnd.relevance == 'and':
                 output['endedtf'] = '{' + ','.join(endIsoDates) + '}'
