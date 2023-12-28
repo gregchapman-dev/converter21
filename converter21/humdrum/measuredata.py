@@ -61,13 +61,13 @@ class MeasureData:
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
         # leftBarlineStyle describes the left barline of this measure
-        self.leftBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
+        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
         # rightBarlineStyle describes the right barline of this measure
-        self.rightBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
+        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
         # measureStyle is a combination of this measure's leftBarlineStyle and
         # the previous measure's rightBarlineStyle.  It's the style we use when
         # writing a barline ('=') token.
-        self.measureStyle: MeasureStyle = MeasureStyle.NoBarline
+        self.measureStyle: MeasureStyle = MeasureStyle.Regular
 
         self.leftBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
         self.rightBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
@@ -171,15 +171,9 @@ class MeasureData:
         self.leftBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.leftBarline)
         self.rightBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.rightBarline)
 
-        # measure index 0 only: pretend there is a left barline (hidden) if there is none
-        # That first barline in Humdrum files is important for parse-ability.
-        if self.measureIndex == 0:
-            if self.leftBarlineStyle == MeasureStyle.NoBarline:
-                self.leftBarlineStyle = MeasureStyle.Invisible
-
         # Grab the previous measure's right barline style (if there is one) and
         # combine it with our left barline style, giving our measureStyle.
-        prevRightMeasureStyle: MeasureStyle = MeasureStyle.NoBarline
+        prevRightMeasureStyle: MeasureStyle = MeasureStyle.Regular
         if self._prevMeasData is not None:
             prevRightMeasureStyle = self._prevMeasData.rightBarlineStyle
         self.measureStyle = M21Convert.combineTwoMeasureStyles(self.leftBarlineStyle,
