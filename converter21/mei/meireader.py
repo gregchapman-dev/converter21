@@ -2773,7 +2773,11 @@ class MeiReader:
                         newTuplet.placement = None  # type: ignore
 
                     # bracket visibility
-                    if bracketVisible is None or bracketVisible == 'true':
+                    if bracketVisible is None:
+                        # not actually supported as unspecified in music21's m21ToXml.py (yet),
+                        # treated as False
+                        newTuplet.bracket = None  # type: ignore
+                    elif bracketVisible == 'true':
                         newTuplet.bracket = True
                     elif bracketVisible == 'false':
                         newTuplet.bracket = False

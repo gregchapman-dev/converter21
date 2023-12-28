@@ -1097,9 +1097,10 @@ class M21ObjectConvert:
         attr['numbase'] = str(startTuplet.numberNotesNormal)
 
         # bracket visibility (MEI default is 'true', so we don't set that)
-        bracketIsVisible: bool = bool(startTuplet.bracket)  # False, True, or 'slur'
-        if not bracketIsVisible:
-            attr['bracket.visible'] = 'false'
+        bracketIsVisible: bool = bool(startTuplet.bracket)  # False, True, or 'slur' (or None)
+        if startTuplet.bracket is not None:
+            if not bracketIsVisible:
+                attr['bracket.visible'] = 'false'
 
         # number visibility and format
         numIsVisible: bool = (
