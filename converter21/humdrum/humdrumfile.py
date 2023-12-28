@@ -1192,8 +1192,20 @@ class HumdrumFile(HumdrumFileContent):
             self._allMeasuresPerStaff[measureIndex]
         )
 
+        line: HumdrumLine = self._lines[endLineIdx]
+        firstToken: HumdrumToken | None = line[0]
+        if firstToken is None:
+            return
+
+        if not firstToken.isBarline:
+            # This is the last measure and it ends without a final barline.
+            # Put an invisible right barline in every currentMeasurePerPart.
+            for m in currentMeasurePerStaff:
+                m.rightBarline = m21.bar.Barline('none')
+            return
+
         lastStaffIndex: int = -1
-        for endToken in self._lines[endLineIdx].tokens():
+        for endToken in line.tokens():
             if endToken is None:
                 # can this even happen?
                 continue
@@ -1211,7 +1223,8 @@ class HumdrumFile(HumdrumFileContent):
                 continue
             lastStaffIndex = staffIndex
 
-            if not endToken.isBarline:  # no barline at all, move on to next measure
+            if not endToken.isBarline:
+                # shouldn't ever happen because we checked this before looping over endToken
                 continue
 
             endBar: str = endToken.text
