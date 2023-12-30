@@ -11,7 +11,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-import copy
+# import copy
 from xml.etree.ElementTree import TreeBuilder
 import typing as t
 
@@ -146,15 +146,13 @@ class MeiLayer:
         nextStaffChangeIdx: int = 0
         if extraStaffChanges:
             numStaffChanges = len(extraStaffChanges)
-            nextStaffChange = copy.deepcopy(extraStaffChanges[0])
+            nextStaffChange = extraStaffChanges[0]
 
         voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 # First check if the next staffChange should go just before
-                # this object.  Don't worry about staffChanges at the very
-                # end of a measure/layer; those are handled at the MeiStaff
-                # level with a <staffDef> before the next measure.
+                # this object.
                 if nextStaffChange is not None:
                     staffChangeObject = nextStaffChange[0]
                     staffChangeOffset: OffsetQL = nextStaffChange[1]
@@ -169,7 +167,7 @@ class MeiLayer:
 
                         nextStaffChangeIdx += 1
                         if nextStaffChangeIdx < numStaffChanges:
-                            nextStaffChange = copy.deepcopy(extraStaffChanges[0])
+                            nextStaffChange = extraStaffChanges[0]
                         else:
                             nextStaffChange = None
 
@@ -196,6 +194,19 @@ class MeiLayer:
                     tb.end('bTrem')
                 for btfe in beamTupletFTremEnds:
                     self.processBeamTupletFTremEnd(btfe, tb)
+
+        # if there are any more staff changes put them at the very end of the layer.
+        while nextStaffChange is not None:
+            if self.layerIndexWithinMeasure == 0:
+                M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+            else:
+                M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+
+            nextStaffChangeIdx += 1
+            if nextStaffChangeIdx < numStaffChanges:
+                nextStaffChange = extraStaffChanges[0]
+            else:
+                nextStaffChange = None
 
         tb.end('layer')
 
