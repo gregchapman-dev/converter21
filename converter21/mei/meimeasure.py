@@ -37,23 +37,26 @@ class MeiMeasure:
         self,
         m21Measures: list[m21.stream.Measure],
         prevMeiMeasure,  # MeiMeasure | None
-        staffNumbersForM21Parts: dict[m21.stream.Part, int],
+        parentScore,  # MeiScore
         spannerBundle: m21.spanner.SpannerBundle,
-        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> None:
         '''
-            m21Measures: a list of simultaneous measures, one per staff
-            staffNumbersForM21Parts: a dictionary of staff numbers, keyed by Part/PartStaff
+            parentScore: the parent MeiScore
+            m21Measures: a list of simultaneous measures, one per Part/PartStaff
+            prevMeiMeasure: the immediately previous MeiMeasure
+            spannerBundle: the spanner bundle containing all spanners in the score
         '''
+        if t.TYPE_CHECKING:
+            from converter21.mei import MeiScore
+            assert isinstance(parentScore, MeiScore)
+            assert isinstance(prevMeiMeasure, MeiMeasure) or prevMeiMeasure is None
+
         self.m21Measures: list[m21.stream.Measure] = m21Measures
         self.nextMeiMeasure: MeiMeasure | None = None
         self.prevMeiMeasure: MeiMeasure | None = prevMeiMeasure
         if prevMeiMeasure is not None:
             prevMeiMeasure.nextMeiMeasure = self
 
-        # self.staffNumbersForM21Parts = staffNumbersForM21Parts
-        self.spannerBundle = spannerBundle
-        self.scoreMeterStream = scoreMeterStream
         self.staves: list[MeiStaff] = []
         self.measureNumStr: str = ''
         for m in m21Measures:
@@ -61,11 +64,13 @@ class MeiMeasure:
                 # m.measureNumberWithSuffix() always returns a non-empty string.
                 # At the very least, it will return '0'.
                 self.measureNumStr = m.measureNumberWithSuffix()
-            part: m21.stream.Part | None = self._getPartFor(m, list(staffNumbersForM21Parts.keys()))
+            part: m21.stream.Part | None = (
+                self._getPartFor(m, list(parentScore.staffNumbersForM21Parts.keys()))
+            )
             if part is None:
                 raise MeiInternalError('Found a Measure that\'s not in a Part.')
-            nStr: str = str(staffNumbersForM21Parts[part])
-            staff = MeiStaff(nStr, m, part, spannerBundle, scoreMeterStream)
+            nStr: str = str(parentScore.staffNumbersForM21Parts[part])
+            staff = MeiStaff(nStr, m, parentScore, spannerBundle)
             self.staves.append(staff)
 
     @staticmethod

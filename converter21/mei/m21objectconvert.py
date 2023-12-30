@@ -220,6 +220,26 @@ class M21ObjectConvert:
         return ''
 
     @staticmethod
+    def convertM21ObjectToMeiSameAs(obj: m21.base.Music21Object, tb: TreeBuilder):
+        if not isinstance(obj, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
+            raise MeiInternalError('convertM21ObjectToMeiSameAs only supports clef/timesig/keysig')
+
+        # This obj has already been emitted with the appropriate xml:id, and here
+        # we just emit a stub object with @sameas set to that same xml:id.
+        attr: dict[str, str] = {'sameas': M21ObjectConvert.getXmlId(obj, required=True)}
+        if isinstance(obj, m21.clef.Clef):
+            tb.start('clef', attr)
+            tb.end('clef')
+        elif isinstance(obj, m21.meter.TimeSignature):
+            tb.start('meterSig', attr)
+            tb.end('meterSig')
+        elif isinstance(obj, m21.key.KeySignature):
+            tb.start('keySig', attr)
+            tb.end('keySig')
+        else:
+            raise MeiInternalError('unsupported @sameas object type: {obj.classes[0]}')
+
+    @staticmethod
     def m21ChordToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
@@ -808,30 +828,45 @@ class M21ObjectConvert:
     def makeTstamp2(
         endObject: m21.base.Music21Object,
         m21StartMeasure: m21.stream.Measure,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         meterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> str:
-        # count steps from m21StartMeasure to measure containing endObject in m21Part
+        # count steps from m21StartMeasure to measure containing endObject in m21Score
         measureStepCount: int = -1
         endOffsetInMeasure: OffsetQL | None = None
         counting: bool = False
-        endOffsetInScore: OffsetQL | None = (
-            M21Utilities.safeGetOffsetInHierarchy(endObject, m21Part)
-        )
-        if endOffsetInScore is None:
-            raise MeiInternalError('makeTstamp2: failed to find endObject in m21Part')
+        endOffsetInScore: OffsetQL | None = None
+        m21StartPart: m21.stream.Part | None = None
+        m21EndPart: m21.stream.Part | None = None
 
-        for meas in m21Part:
-            if not isinstance(meas, m21.stream.Measure):
-                continue  # don't count RepeatBrackets!
+        for part in m21Score.parts:
+            if M21Utilities.safeGetOffsetInHierarchy(m21StartMeasure, part) is not None:
+                m21StartPart = part
+                break
 
-            if meas is m21StartMeasure:
+        if m21StartPart is None:
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Score')
+
+        for part in m21Score.parts:
+            endOffsetInScore = M21Utilities.safeGetOffsetInHierarchy(endObject, part)
+            if endOffsetInScore is not None:
+                m21EndPart = part
+                break
+
+        if endOffsetInScore is None or m21EndPart is None:
+            raise MeiInternalError('makeTstamp2: failed to find endObject in m21Score')
+
+        startPartMeasures: list[m21.stream.Measure] = list(m21StartPart[m21.stream.Measure])
+        endPartMeasures: list[m21.stream.Measure] = list(m21EndPart[m21.stream.Measure])
+
+        for startMeas, endMeas in zip(startPartMeasures, endPartMeasures):
+            if startMeas is m21StartMeasure:
                 # We found the start measure! Start counting steps.
                 measureStepCount = 0
                 counting = True
 
             if counting:
-                endOffsetInMeasure = M21Utilities.safeGetOffsetInHierarchy(endObject, meas)
+                endOffsetInMeasure = M21Utilities.safeGetOffsetInHierarchy(endObject, endMeas)
                 if endOffsetInMeasure is not None:
                     # We found the end measure!
                     break
@@ -840,11 +875,11 @@ class M21ObjectConvert:
                 measureStepCount += 1
 
         if measureStepCount == -1:
-            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Part')
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Score')
 
         if endOffsetInMeasure is None:
             raise MeiInternalError(
-                'makeTstamp2: failed to find endObject in or after m21StartMeasure in m21Part'
+                'makeTstamp2: failed to find endObject in or after m21StartMeasure in m21Score'
             )
 
         # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
@@ -863,7 +898,7 @@ class M21ObjectConvert:
         first: m21.base.Music21Object,
         last: m21.base.Music21Object | None,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
     ):
@@ -875,7 +910,7 @@ class M21ObjectConvert:
 
         if not isinstance(first, m21.note.GeneralNote):
             attr['tstamp'] = M21ObjectConvert.makeTstamp(
-                offsetInScore=first.getOffsetInHierarchy(m21Part),
+                offsetInScore=first.getOffsetInHierarchy(m21Score),
                 offsetInMeasure=first.getOffsetInHierarchy(m21Measure),
                 meterStream=scoreMeterStream
             )
@@ -891,7 +926,7 @@ class M21ObjectConvert:
             attr['tstamp2'] = M21ObjectConvert.makeTstamp2(
                 endObject=last,
                 m21StartMeasure=m21Measure,
-                m21Part=m21Part,
+                m21Score=m21Score,
                 meterStream=scoreMeterStream
             )
         else:
@@ -917,7 +952,7 @@ class M21ObjectConvert:
     def postStavesSpannerToMei(
         spanner: m21.spanner.Spanner,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder
@@ -942,7 +977,7 @@ class M21ObjectConvert:
             first,
             last,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
@@ -1030,7 +1065,7 @@ class M21ObjectConvert:
                             note,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             scoreMeterStream,
                             tb=None,
@@ -1080,7 +1115,7 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         arpeggio: m21.expressions.ArpeggioMark,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder
@@ -1145,7 +1180,7 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         trill: m21.expressions.Trill,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder | None,
@@ -1199,7 +1234,7 @@ class M21ObjectConvert:
                 gn,
                 last,
                 staffNStr,
-                m21Part,
+                m21Score,
                 m21Measure,
                 scoreMeterStream
             )
@@ -1235,7 +1270,7 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         turn: m21.expressions.Turn,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
@@ -1246,7 +1281,7 @@ class M21ObjectConvert:
             gn,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
@@ -1276,7 +1311,7 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         mordent: m21.expressions.GeneralMordent,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
@@ -1287,7 +1322,7 @@ class M21ObjectConvert:
             gn,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
@@ -1313,7 +1348,7 @@ class M21ObjectConvert:
         obj: m21.note.GeneralNote | m21.bar.Barline,
         fermata: m21.expressions.Fermata,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
@@ -1324,7 +1359,7 @@ class M21ObjectConvert:
             obj,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
@@ -1397,7 +1432,7 @@ class M21ObjectConvert:
     def convertPostStaveStreamElement(
         obj: m21.base.Music21Object,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
@@ -1408,7 +1443,7 @@ class M21ObjectConvert:
             obj,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
