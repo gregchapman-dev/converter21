@@ -197,6 +197,7 @@ class MeiLayer:
 
         # if there are any more staff changes put them at the very end of the layer.
         while nextStaffChange is not None:
+            staffChangeObject = nextStaffChange[0]
             if self.layerIndexWithinMeasure == 0:
                 M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
             else:
