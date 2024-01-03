@@ -146,7 +146,7 @@ class MeiLayer:
         nextStaffChangeIdx: int = 0
         if extraStaffChanges:
             numStaffChanges = len(extraStaffChanges)
-            nextStaffChange = extraStaffChanges[0]
+            nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
 
         voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
         for obj in self.m21Voice:
@@ -167,7 +167,7 @@ class MeiLayer:
 
                         nextStaffChangeIdx += 1
                         if nextStaffChangeIdx < numStaffChanges:
-                            nextStaffChange = extraStaffChanges[0]
+                            nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
                         else:
                             nextStaffChange = None
 
@@ -204,7 +204,7 @@ class MeiLayer:
 
             nextStaffChangeIdx += 1
             if nextStaffChangeIdx < numStaffChanges:
-                nextStaffChange = extraStaffChanges[0]
+                nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
             else:
                 nextStaffChange = None
 
