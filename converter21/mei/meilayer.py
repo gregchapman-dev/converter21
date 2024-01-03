@@ -16,7 +16,7 @@ from xml.etree.ElementTree import TreeBuilder
 import typing as t
 
 import music21 as m21
-from music21.common import OffsetQL
+from music21.common import OffsetQL, opFrac
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
@@ -149,27 +149,32 @@ class MeiLayer:
             nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
 
         voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
+        lastOffsetEmitted: OffsetQL = 0.
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                # First check if the next staffChange should go just before
+                # First check if the next staffChanges should go just before
                 # this object.
-                if nextStaffChange is not None:
+                objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
+                    self.parentStaff.m21Measure
+                )
+                while nextStaffChange is not None:
                     staffChangeObject = nextStaffChange[0]
                     staffChangeOffset: OffsetQL = nextStaffChange[1]
-                    objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
-                        self.parentStaff.m21Measure
-                    )
-                    if staffChangeOffset <= objOffsetInMeasure:
-                        if self.layerIndexWithinMeasure == 0:
-                            M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
-                        else:
-                            M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+                    if staffChangeOffset > objOffsetInMeasure:
+                        # done with any staff changes that belong at this offset
+                        break
 
-                        nextStaffChangeIdx += 1
-                        if nextStaffChangeIdx < numStaffChanges:
-                            nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
-                        else:
-                            nextStaffChange = None
+                    if not hasattr(staffChangeObject, 'mei_emitted'):
+                        M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                        staffChangeObject.mei_emitted = True  # type: ignore
+                    else:
+                        M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+
+                    nextStaffChangeIdx += 1
+                    if nextStaffChangeIdx < numStaffChanges:
+                        nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
+                    else:
+                        nextStaffChange = None
 
                 # Next, gather a list of beam, tuplet, fTrem spanners that start
                 # with this obj.  Sort them by duration (longest first),
@@ -188,6 +193,7 @@ class MeiLayer:
 
                 # Emit the object itself
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+                lastOffsetEmitted = opFrac(objOffsetInMeasure + obj.duration.quarterLength)
 
                 # Process any nested element ends
                 if endBTremNeeded:
@@ -196,12 +202,16 @@ class MeiLayer:
                     self.processBeamTupletFTremEnd(btfe, tb)
 
         # if there are any more staff changes put them at the very end of the layer.
+        # But only if their offset is correct for end of layer.  If not, skip them.
         while nextStaffChange is not None:
             staffChangeObject = nextStaffChange[0]
-            if self.layerIndexWithinMeasure == 0:
-                M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
-            else:
-                M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+            staffChangeOffset = nextStaffChange[1]
+            if staffChangeOffset == lastOffsetEmitted:
+                if not hasattr(staffChangeObject, 'mei_emitted'):
+                    M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                    staffChangeObject.mei_emitted = True  # type: ignore
+                else:
+                    M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
 
             nextStaffChangeIdx += 1
             if nextStaffChangeIdx < numStaffChanges:
