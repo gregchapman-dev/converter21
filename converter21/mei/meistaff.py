@@ -90,6 +90,9 @@ class MeiStaff:
                 ]
             ] = []
 
+#             if self.m21Measure.measureNumber in (138, '138') and self.staffNStr == "2":
+#                 print('hey')
+
             firstSeen: list[str] = []
             staffDefEmitted: bool = False
             for el in self.m21Measure:

@@ -409,9 +409,6 @@ class M21ObjectConvert:
     def m21LyricsToMei(lyrics: list[m21.note.Lyric], tb: TreeBuilder):
         for verse in lyrics:
             attr: dict[str, str] = {}
-            xmlId: str = M21ObjectConvert.getXmlId(obj)
-            if xmlId:
-                attr['xml:id'] = xmlId
             label: str = ''
             if verse.number:
                 attr['n'] = str(verse.number)
@@ -448,9 +445,6 @@ class M21ObjectConvert:
     @staticmethod
     def m21SyllableToMei(lyric: m21.note.Lyric, tb: TreeBuilder):
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
-        if xmlId:
-            attr['xml:id'] = xmlId
         wordPos: str | None = M21ObjectConvert._M21_SYLLABIC_TO_WORD_POS.get(lyric.syllabic, None)
         if wordPos:
             attr['wordpos'] = wordPos
@@ -1141,7 +1135,7 @@ class M21ObjectConvert:
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21ObjectConvert.getXmlId(arpeggio)
         if xmlId:
             attr['xml:id'] = xmlId
         attr['startid'] = f'#{M21ObjectConvert.getXmlId(gn, required=True)}'
@@ -1693,7 +1687,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21ObjectConvert.getXmlId(barline)
         if xmlId:
             attr['xml:id'] = xmlId
         form: str
