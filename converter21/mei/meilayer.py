@@ -164,11 +164,15 @@ class MeiLayer:
                         # done with any staff changes that belong at this offset
                         break
 
-                    if not hasattr(staffChangeObject, 'mei_emitted'):
-                        M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
-                        staffChangeObject.mei_emitted = True  # type: ignore
-                    else:
-                        M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+                    if staffChangeOffset == objOffsetInMeasure:
+                        # if offsets not equal, then we just skip this one (in this layer)
+                        # because it isn't between objects, so not relevant.  The
+                        # equivalent staff change in other layer(s) will have to do.
+                        if not hasattr(staffChangeObject, 'mei_emitted'):
+                            M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                            staffChangeObject.mei_emitted = True  # type: ignore
+                        else:
+                            M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
 
                     nextStaffChangeIdx += 1
                     if nextStaffChangeIdx < numStaffChanges:

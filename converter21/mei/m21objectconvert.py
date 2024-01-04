@@ -409,6 +409,9 @@ class M21ObjectConvert:
     def m21LyricsToMei(lyrics: list[m21.note.Lyric], tb: TreeBuilder):
         for verse in lyrics:
             attr: dict[str, str] = {}
+            xmlId: str = M21ObjectConvert.getXmlId(obj)
+            if xmlId:
+                attr['xml:id'] = xmlId
             label: str = ''
             if verse.number:
                 attr['n'] = str(verse.number)
@@ -445,7 +448,9 @@ class M21ObjectConvert:
     @staticmethod
     def m21SyllableToMei(lyric: m21.note.Lyric, tb: TreeBuilder):
         attr: dict[str, str] = {}
-        # attr['con'] = 'd'  # music21 always uses dashes between syllables
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         wordPos: str | None = M21ObjectConvert._M21_SYLLABIC_TO_WORD_POS.get(lyric.syllabic, None)
         if wordPos:
             attr['wordpos'] = wordPos
@@ -499,6 +504,9 @@ class M21ObjectConvert:
                 )
             )
             attr: dict[str, str] = {}  # above/below, etc
+            xmlId: str = M21ObjectConvert.getXmlId(artic)
+            if xmlId:
+                attr['xml:id'] = xmlId
             if name:
                 attr['artic'] = name
                 M21ObjectConvert._addStylisticAttributes(artic, attr)
@@ -528,6 +536,9 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         # default to shape == sign
         shape: str = M21ObjectConvert._M21_CLEF_SIGN_TO_MEI_CLEF_SHAPE.get(obj.sign, obj.sign)
@@ -588,6 +599,9 @@ class M21ObjectConvert:
             assert isinstance(obj, m21.key.KeySignature)
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         if isinstance(obj, m21.key.Key):
             # we know tonic (aka pname) and mode
@@ -615,6 +629,9 @@ class M21ObjectConvert:
             assert isinstance(obj, m21.meter.TimeSignature)
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         # This is a weird attribute order, but it matches what Verovio does,
         # which makes bbdiff comparisons work better.
@@ -961,6 +978,9 @@ class M21ObjectConvert:
         last: m21.base.Music21Object = spanner.getLast()
         tag: str = ''
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(spanner)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         if isinstance(spanner, MeiBeamSpanner):
             if hasattr(spanner, 'mei_beam'):
@@ -1121,6 +1141,9 @@ class M21ObjectConvert:
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         attr['startid'] = f'#{M21ObjectConvert.getXmlId(gn, required=True)}'
         M21ObjectConvert.fillInArpeggioAttributes(arpeggio, attr)
         tb.start('arpeg', attr)
@@ -1229,6 +1252,9 @@ class M21ObjectConvert:
                 last = trillExtension.getLast()
 
             attr = {}
+            xmlId: str = M21ObjectConvert.getXmlId(trill)
+            if xmlId:
+                attr['xml:id'] = xmlId
             M21ObjectConvert._fillInStandardPostStavesAttributes(
                 attr,
                 gn,
@@ -1276,6 +1302,9 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(turn)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             gn,
@@ -1317,6 +1346,9 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(mordent)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             gn,
@@ -1354,6 +1386,9 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(fermata)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             obj,
@@ -1438,6 +1473,9 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ):
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             obj,
@@ -1655,6 +1693,9 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         form: str
         if isinstance(barline, m21.bar.Repeat):
             form = M21ObjectConvert._M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE[
