@@ -65,6 +65,13 @@ class MeiStaff:
 
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
+        extraStaffChanges: list[
+            tuple[
+                m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
+                OffsetQL
+            ]
+        ] = []
+
         if not self.theOneLayerIsTheMeasureItself:
             # Process any clef/timesig/keysig at offset 0 in enclosing measure (but
             # if the m21Measure itself is the first measure in the part, skip the
@@ -83,12 +90,6 @@ class MeiStaff:
             # clef/timesig/keysig in the first layer being fully specified, and the
             # other clefs/timesigs/keysigs simply being marked as being @sameas the
             # clef/timesig/keysig in the first layer.
-            extraStaffChanges: list[
-                tuple[
-                    m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
-                    OffsetQL
-                ]
-            ] = []
 
 #             if self.m21Measure.measureNumber in (138, '138') and self.staffNStr == "2":
 #                 print('hey')
