@@ -4977,6 +4977,10 @@ class MeiReader:
         if xmlId is not None:
             theSpace.id = xmlId
 
+        # yes, sometimes hairpins/dirs/dynams/tempos are attached to spaces
+        self.addHairpins(elem, theSpace)
+        self.addDirsDynamsTempos(elem, theSpace)
+
         # tuplets
         if elem.get('m21TupletNum') is not None:
             self.scaleToTuplet(theSpace, elem)
