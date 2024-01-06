@@ -91,8 +91,8 @@ class MeiStaff:
             # other clefs/timesigs/keysigs simply being marked as being @sameas the
             # clef/timesig/keysig in the first layer.
 
-#             if self.m21Measure.measureNumber in (138, '138') and self.staffNStr == "2":
-#                 print('hey')
+            # if self.m21Measure.measureNumber in (138, '138') and self.staffNStr == "2":
+            #     print('hey')
 
             firstSeen: list[str] = []
             staffDefEmitted: bool = False

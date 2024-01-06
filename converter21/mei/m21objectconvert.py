@@ -1263,7 +1263,7 @@ class M21ObjectConvert:
             raise MeiInternalError('trillToMei called without attr or tree builder')
 
         # in both cases we add to attr here
-        if trill.accidental is not None:
+        if trill.accidental is not None and trill.accidental.displayStatus:
             accid: str = M21ObjectConvert.m21AccidToMeiAccid(trill.accidental.name)
             if trill.direction == 'up':
                 attr['accidupper'] = accid
@@ -1309,10 +1309,10 @@ class M21ObjectConvert:
             scoreMeterStream
         )
 
-        if turn.upperAccidental is not None:
+        if turn.upperAccidental is not None and turn.upperAccidental.displayStatus:
             accidupper: str = M21ObjectConvert.m21AccidToMeiAccid(turn.upperAccidental.name)
             attr['accidupper'] = accidupper
-        if turn.lowerAccidental is not None:
+        if turn.lowerAccidental is not None and turn.lowerAccidental.displayStatus:
             accidlower: str = M21ObjectConvert.m21AccidToMeiAccid(turn.lowerAccidental.name)
             attr['accidlower'] = accidlower
 
@@ -1353,7 +1353,7 @@ class M21ObjectConvert:
             scoreMeterStream
         )
 
-        if mordent.accidental is not None:
+        if mordent.accidental is not None and mordent.accidental.displayStatus:
             accid: str = M21ObjectConvert.m21AccidToMeiAccid(mordent.accidental.name)
             if mordent.direction == 'up':
                 attr['accidupper'] = accid
