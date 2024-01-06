@@ -904,6 +904,66 @@ class M21ObjectConvert:
         return f'{measureStepCount}m+{beatStr}'
 
     @staticmethod
+    def makeTstamp2FromScoreOffset(
+        endOffsetInScore: OffsetQL,
+        m21StartMeasure: m21.stream.Measure,
+        m21Score: m21.stream.Score,
+        meterStream: m21.stream.Stream[m21.meter.TimeSignature]
+    ) -> str:
+        # count steps from m21StartMeasure to measure containing endScoreOffset in m21Score
+        measureStepCount: int = -1
+        endOffsetInMeasure: OffsetQL | None = None
+        counting: bool = False
+        m21Part: m21.stream.Part | None = None
+
+        for part in m21Score.parts:
+            if M21Utilities.safeGetOffsetInHierarchy(m21StartMeasure, part) is not None:
+                m21Part = part
+                break
+
+        if m21Part is None:
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Score')
+
+        partMeasures: list[m21.stream.Measure] = list(m21Part[m21.stream.Measure])
+
+        for meas in partMeasures:
+            if meas is m21StartMeasure:
+                # We found the start measure! Start counting steps.
+                measureStepCount = 0
+                counting = True
+
+            if counting:
+                endOffsetInMeasure = opFrac(endOffsetInScore - meas.getOffsetInHierarchy(m21Score))
+                if 0 <= endOffsetInMeasure <= meas.duration.quarterLength:
+                    # We found the end measure!
+                    break
+                # gotta keep searching
+                endOffsetInMeasure = None
+
+            if counting:
+                measureStepCount += 1
+
+        if measureStepCount == -1:
+            raise MeiInternalError(
+                'makeTstamp2FromScoreOffset: failed to find m21StartMeasure in m21Score'
+            )
+
+        if endOffsetInMeasure is None:
+            raise MeiInternalError(
+                'makeTstamp2FromScoreoffset: failed to find endOffsetInScore in m21Score'
+            )
+
+        # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
+        beat: float = M21ObjectConvert._offsetToBeat(
+            opFrac(endOffsetInMeasure),
+            M21Utilities.getActiveTimeSigFromMeterStream(endOffsetInScore, meterStream)
+        )
+
+        # use as many decimal places as you need, between min of 1 and max of 6
+        beatStr: str = M21ObjectConvert.floatToStringWithDecimalPlacesMinMax(beat, 1, 6)
+        return f'{measureStepCount}m+{beatStr}'
+
+    @staticmethod
     def _fillInStandardPostStavesAttributes(
         attr: dict[str, str],
         first: m21.base.Music21Object,
@@ -912,6 +972,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        forceTstamp2AtEndOfLast: bool = False,
     ):
         attr['staff'] = staffNStr  # TODO: what about "1 2"
 
@@ -933,7 +994,17 @@ class M21ObjectConvert:
             return
 
         # unique last element, we need @tstamp2 or @endid
-        if not isinstance(last, m21.note.GeneralNote):
+        if forceTstamp2AtEndOfLast:
+            offsetAtEndOfLast: OffsetQL = opFrac(
+                last.getOffsetInHierarchy(m21Score) + last.duration.quarterLength
+            )
+            attr['tstamp2'] = M21ObjectConvert.makeTstamp2FromScoreOffset(
+                endOffsetInScore=offsetAtEndOfLast,
+                m21StartMeasure=m21Measure,
+                m21Score=m21Score,
+                meterStream=scoreMeterStream
+            )
+        elif not isinstance(last, m21.note.GeneralNote):
             attr['tstamp2'] = M21ObjectConvert.makeTstamp2(
                 endObject=last,
                 m21StartMeasure=m21Measure,
@@ -968,6 +1039,7 @@ class M21ObjectConvert:
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder
     ) -> None:
+        forceTstamp2: bool = False
         first: m21.base.Music21Object = spanner.getFirst()
         last: m21.base.Music21Object = spanner.getLast()
         tag: str = ''
@@ -986,6 +1058,14 @@ class M21ObjectConvert:
                 # already emitted as <tuplet> within <layer>
                 return
 
+        if isinstance(spanner, m21.dynamics.DynamicWedge):
+            # music21 defines a DynamicWedge as ending at the end of spanner.getLast()
+            # MEI defines a hairpin as ending at the beginning of @endid
+            # So we always have to emit a tstamp2 for hairpins, because we have no
+            # easy way of searching for a different object that might have the
+            # correct offset.
+            forceTstamp2 = True
+
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             first,
@@ -993,7 +1073,8 @@ class M21ObjectConvert:
             staffNStr,
             m21Score,
             m21Measure,
-            scoreMeterStream
+            scoreMeterStream,
+            forceTstamp2AtEndOfLast=forceTstamp2,
         )
 
         if isinstance(spanner, m21.spanner.Slur):
