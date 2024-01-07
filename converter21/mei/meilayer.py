@@ -11,14 +11,15 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+# import copy
 from xml.etree.ElementTree import TreeBuilder
-# import typing as t
+import typing as t
 
 import music21 as m21
-from music21.common import OffsetQL
+from music21.common import OffsetQL, opFrac
 
 # from converter21.mei import MeiExportError
-# from converter21.mei import MeiInternalError
+from converter21.mei import MeiInternalError
 from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
@@ -43,17 +44,60 @@ class MeiLayer:
     def __init__(
         self,
         m21Voice: m21.stream.Voice | m21.stream.Measure,
-        meiParent,  # MeiStaff
+        parentStaff,  # MeiStaff
+        parentScore,  # MeiScore
         spannerBundle: m21.spanner.SpannerBundle,
-        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> None:
         from converter21.mei import MeiStaff
+        if t.TYPE_CHECKING:
+            from converter21.mei import MeiScore
+            assert isinstance(parentScore, MeiScore)
         self.m21Voice: m21.stream.Voice | m21.stream.Measure = m21Voice
-        self.meiParent: MeiStaff = meiParent
+        self.parentStaff: MeiStaff = parentStaff
         self.spannerBundle: m21.spanner.SpannerBundle = spannerBundle
-        self.scoreMeterStream = scoreMeterStream
+        self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
+            parentScore.scoreMeterStream
+        )
+        self.layerIndexWithinMeasure = self.computeLayerIndex(m21Voice, parentStaff.m21Measure)
+        self.layerOffsetWithinMeasure = self.computeLayerOffset(m21Voice, parentStaff.m21Measure)
 
-    def makeRootElement(self, tb: TreeBuilder):
+    @staticmethod
+    def computeLayerIndex(
+        m21Voice: m21.stream.Voice | m21.stream.Measure,
+        m21Measure: m21.stream.Measure
+    ) -> int:
+        if m21Voice is m21Measure:
+            return 0
+
+        for idx, voice in enumerate(m21Measure[m21.stream.Voice]):
+            if voice is m21Voice:
+                return idx
+
+        raise MeiInternalError('m21Voice not within m21Measure')
+
+    @staticmethod
+    def computeLayerOffset(
+        m21Voice: m21.stream.Voice | m21.stream.Measure,
+        m21Measure: m21.stream.Measure
+    ) -> OffsetQL:
+        if m21Voice is m21Measure:
+            return 0.
+
+        offset: OffsetQL | None = M21Utilities.safeGetOffsetInHierarchy(m21Voice, m21Measure)
+        if offset is None:
+            raise MeiInternalError('m21Voice not within m21Measure')
+        return offset
+
+    def makeRootElement(self, tb: TreeBuilder, **keywords):
+        extraStaffChanges: list[
+            tuple[
+                m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
+                OffsetQL
+            ]
+        ] = []
+        if 'extraStaffChanges' in keywords:
+            extraStaffChanges = keywords['extraStaffChanges']
+
         # The following voice id fix-up code is patterned after similar code
         # in music21's MusicXML writer.  The idea is to handle three cases
         # (any or all of which may be in play within any given measure):
@@ -77,13 +121,13 @@ class MeiLayer:
                 # measures, for instance).  Use it, and set nextFreeVoiceNumber to use
                 # the next higher integer (so we will dance around this id).
                 layerNStr = str(self.m21Voice.id)
-                self.meiParent.nextFreeVoiceNumber = self.m21Voice.id + 1
+                self.parentStaff.nextFreeVoiceNumber = self.m21Voice.id + 1
             elif isinstance(self.m21Voice.id, int):
                 # This voice id is actually a memory location, so we need to change it
                 # to a low number so it can be used in MEI.  Dance around any previously
                 # assigned low int voice ids by using nextFreeVoiceNumber.
-                layerNStr = str(self.meiParent.nextFreeVoiceNumber)
-                self.meiParent.nextFreeVoiceNumber += 1
+                layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
+                self.parentStaff.nextFreeVoiceNumber += 1
             elif isinstance(self.m21Voice.id, str):
                 layerNStr = self.m21Voice.id
             else:
@@ -94,10 +138,49 @@ class MeiLayer:
             layerAttr['n'] = layerNStr
         tb.start('layer', {'n': layerNStr})
 
+        nextStaffChange: None | tuple[
+            m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
+            OffsetQL
+        ] = None
+        numStaffChanges: int = 0
+        nextStaffChangeIdx: int = 0
+        if extraStaffChanges:
+            numStaffChanges = len(extraStaffChanges)
+            nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
+
         voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
+        lastOffsetEmitted: OffsetQL = 0.
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                # Gather a list of beam, tuplet, fTrem spanners that start
+                # First check if the next staffChanges should go just before
+                # this object.
+                objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
+                    self.parentStaff.m21Measure
+                )
+                while nextStaffChange is not None:
+                    staffChangeObject = nextStaffChange[0]
+                    staffChangeOffset: OffsetQL = nextStaffChange[1]
+                    if staffChangeOffset > objOffsetInMeasure:
+                        # done with any staff changes that belong at this offset
+                        break
+
+                    if staffChangeOffset == objOffsetInMeasure:
+                        # if offsets not equal, then we just skip this one (in this layer)
+                        # because it isn't between objects, so not relevant.  The
+                        # equivalent staff change in other layer(s) will have to do.
+                        if not hasattr(staffChangeObject, 'mei_emitted'):
+                            M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                            staffChangeObject.mei_emitted = True  # type: ignore
+                        else:
+                            M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+
+                    nextStaffChangeIdx += 1
+                    if nextStaffChangeIdx < numStaffChanges:
+                        nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
+                    else:
+                        nextStaffChange = None
+
+                # Next, gather a list of beam, tuplet, fTrem spanners that start
                 # with this obj.  Sort them by duration (longest first),
                 # so they will nest properly as elements.
                 beamTupletFTremStarts: list[
@@ -107,19 +190,38 @@ class MeiLayer:
                     MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremEnds(obj)
 
-                # process any nested element starts
+                # Process any nested element starts
                 for btfs in beamTupletFTremStarts:
                     self.processBeamTupletFTremStart(btfs, tb)
                 endBTremNeeded: bool = self.processBTremState(obj, tb)
 
-                # emit the object itself
+                # Emit the object itself
                 M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+                lastOffsetEmitted = opFrac(objOffsetInMeasure + obj.duration.quarterLength)
 
-                # process any nested element ends
+                # Process any nested element ends
                 if endBTremNeeded:
                     tb.end('bTrem')
                 for btfe in beamTupletFTremEnds:
                     self.processBeamTupletFTremEnd(btfe, tb)
+
+        # if there are any more staff changes put them at the very end of the layer.
+        # But only if their offset is correct for end of layer.  If not, skip them.
+        while nextStaffChange is not None:
+            staffChangeObject = nextStaffChange[0]
+            staffChangeOffset = nextStaffChange[1]
+            if staffChangeOffset == lastOffsetEmitted:
+                if not hasattr(staffChangeObject, 'mei_emitted'):
+                    M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                    staffChangeObject.mei_emitted = True  # type: ignore
+                else:
+                    M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
+
+            nextStaffChangeIdx += 1
+            if nextStaffChangeIdx < numStaffChanges:
+                nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
+            else:
+                nextStaffChange = None
 
         tb.end('layer')
 
@@ -260,7 +362,7 @@ class MeiLayer:
     ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
-            return M21Utilities.getSpannerQuarterLength(spanner, self.meiParent.m21Measure)
+            return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Measure)
 
         def nestsReasonably(
             tuplet: m21.spanner.Spanner,
@@ -318,7 +420,7 @@ class MeiLayer:
             # emit a <beamSpan> or <tupletSpan> instead, later.
             if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
                 if not M21Utilities.allSpannedElementsAreInHierarchy(
-                    spanner, self.meiParent.m21Measure
+                    spanner, self.parentStaff.m21Measure
                 ):
                     M21ObjectConvert.assureXmlIds(spanner)
                     continue
@@ -357,7 +459,7 @@ class MeiLayer:
     ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
-            return M21Utilities.getSpannerQuarterLength(spanner, self.meiParent.m21Measure)
+            return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Measure)
 
         output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
@@ -390,9 +492,9 @@ class MeiLayer:
         return output
 
     def makePostStavesElements(self, tb: TreeBuilder):
-        m21Part: m21.stream.Part = self.meiParent.m21Part
-        m21Measure: m21.stream.Measure = self.meiParent.m21Measure
-        staffNStr: str = self.meiParent.staffNStr
+        m21Score: m21.stream.Score = self.parentStaff.m21Score
+        m21Measure: m21.stream.Measure = self.parentStaff.m21Measure
+        staffNStr: str = self.parentStaff.staffNStr
         for obj in self.m21Voice:
             # Lots of stuff from a MeiLayer goes in the post-staves elements:
             # 1. Some elements in this voice (e.g. Dynamic, TextExpression, TempoIndication)
@@ -400,7 +502,7 @@ class MeiLayer:
                 M21ObjectConvert.convertPostStaveStreamElement(
                     obj,
                     staffNStr,
-                    m21Part,
+                    m21Score,
                     m21Measure,
                     self.scoreMeterStream,
                     tb
@@ -414,7 +516,7 @@ class MeiLayer:
                     M21ObjectConvert.postStavesSpannerToMei(
                         spanner,
                         staffNStr,
-                        m21Part,
+                        m21Score,
                         m21Measure,
                         self.scoreMeterStream,
                         tb
@@ -427,7 +529,7 @@ class MeiLayer:
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,
                                 staffNStr,
-                                m21Part,
+                                m21Score,
                                 m21Measure,
                                 self.scoreMeterStream,
                                 tb
@@ -448,7 +550,7 @@ class MeiLayer:
                             obj,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             self.scoreMeterStream,
                             tb
@@ -460,7 +562,7 @@ class MeiLayer:
                             obj,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             self.scoreMeterStream,
                             tb
@@ -472,7 +574,7 @@ class MeiLayer:
                             obj,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             self.scoreMeterStream,
                             tb
@@ -484,7 +586,7 @@ class MeiLayer:
                             obj,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             self.scoreMeterStream,
                             tb
@@ -496,7 +598,7 @@ class MeiLayer:
                             obj,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             self.scoreMeterStream,
                             tb

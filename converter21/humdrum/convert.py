@@ -1395,7 +1395,7 @@ class Convert:
     def diatonicChromaticToTrans(d: int, c: int) -> str:
         return 'd' + str(d) + 'c' + str(c)
 
-    _humdrumBarlineStyleFromMeasureStyle: dict[MeasureStyle, str | None] = {
+    _humdrumBarlineStyleFromMeasureStyle: dict[MeasureStyle, str] = {
         MeasureStyle.Double: '||',
         MeasureStyle.HeavyHeavy: '!!',
         MeasureStyle.HeavyLight: '!|',
@@ -1407,7 +1407,6 @@ class Convert:
         MeasureStyle.Invisible: '-',
         MeasureStyle.Regular: '',
         MeasureStyle.Heavy: '!',
-        MeasureStyle.NoBarline: None,
         MeasureStyle.RepeatBackwardRegular: ':|',
         MeasureStyle.RepeatBackwardHeavy: ':!',
         MeasureStyle.RepeatBackwardHeavyLight: ':!|',
@@ -1431,8 +1430,8 @@ class Convert:
     }
 
     @staticmethod
-    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> str | None:
-        output: str | None = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
+    def measureStyleToHumdrumBarlineStyleStr(measureStyle: MeasureStyle) -> str:
+        output: str = Convert._humdrumBarlineStyleFromMeasureStyle[measureStyle]
         return output
 
     _humdrumFermataStyleFromFermataStyle: dict[FermataStyle, str] = {

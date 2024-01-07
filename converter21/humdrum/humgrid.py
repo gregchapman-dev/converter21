@@ -21,7 +21,6 @@ from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import Convert
 
 from converter21.humdrum import SliceType
-from converter21.humdrum import MeasureStyle
 from converter21.humdrum import GridVoice
 from converter21.humdrum import GridStaff
 from converter21.humdrum import GridPart
@@ -989,15 +988,6 @@ class HumGrid:
             if measure.duration == 0:
                 continue
 
-            hasBarline: bool = False
-            for mStyle in measure.measureStylePerStaff:
-                if mStyle != MeasureStyle.NoBarline:
-                    hasBarline = True
-                    break
-
-            if not hasBarline:
-                continue
-
             mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
             measure.slices.insert(0, mslice)  # barline is first slice in measure
 
@@ -1053,15 +1043,6 @@ class HumGrid:
 
         measure: GridMeasure = self.measures[-1]
 
-        hasBarline: bool = False
-        for mStyle in measure.rightBarlineStylePerStaff:
-            if mStyle != MeasureStyle.NoBarline:
-                hasBarline = True
-                break
-
-        if not hasBarline:
-            return
-
         modelSlice: GridSlice = self.measures[-1].slices[-1]
         if modelSlice is None:
             return
@@ -1095,10 +1076,7 @@ class HumGrid:
     // HumGrid::createBarToken --
     '''
     def createBarToken(self, measure: GridMeasure, staffIndex: int) -> str | None:
-        measureStyle: str | None = self.getMeasureStyle(measure, staffIndex)
-        if measureStyle is None:  # a.k.a. measureStyle == MeasureStyle.NoBarline
-            return None
-
+        measureStyle: str = self.getMeasureStyle(measure, staffIndex)
         token: str
         measureNumStr: str = measure.measureNumberString
 
@@ -1185,12 +1163,10 @@ class HumGrid:
     // HumGrid::getBarStyle --
     '''
     @staticmethod
-    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str | None:
-        output: str | None = Convert.measureStyleToHumdrumBarlineStyleStr(
+    def getMeasureStyle(measure: GridMeasure, staffIndex: int) -> str:
+        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(
             measure.measureStyle(staffIndex)
         )
-        if output is None:
-            return None
 
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.fermataStyle(staffIndex)
@@ -1199,11 +1175,9 @@ class HumGrid:
 
     @staticmethod
     def getLastBarlineStyle(measure: GridMeasure, staffIndex: int) -> str | None:
-        output: str | None = Convert.measureStyleToHumdrumBarlineStyleStr(
+        output: str = Convert.measureStyleToHumdrumBarlineStyleStr(
             measure.rightBarlineStyle(staffIndex)
         )
-        if output is None:
-            return None
 
         output += Convert.fermataStyleToHumdrumFermataStyleStr(
             measure.rightBarlineFermataStyle(staffIndex)

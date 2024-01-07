@@ -2773,7 +2773,11 @@ class MeiReader:
                         newTuplet.placement = None  # type: ignore
 
                     # bracket visibility
-                    if bracketVisible is None or bracketVisible == 'true':
+                    if bracketVisible is None:
+                        # not actually supported as unspecified in music21's m21ToXml.py (yet),
+                        # treated as False
+                        newTuplet.bracket = None  # type: ignore
+                    elif bracketVisible == 'true':
                         newTuplet.bracket = True
                     elif bracketVisible == 'false':
                         newTuplet.bracket = False
@@ -4972,6 +4976,10 @@ class MeiReader:
         xmlId: str | None = elem.get(_XMLID)
         if xmlId is not None:
             theSpace.id = xmlId
+
+        # yes, sometimes hairpins/dirs/dynams/tempos are attached to spaces
+        self.addHairpins(elem, theSpace)
+        self.addDirsDynamsTempos(elem, theSpace)
 
         # tuplets
         if elem.get('m21TupletNum') is not None:

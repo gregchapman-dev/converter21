@@ -220,6 +220,26 @@ class M21ObjectConvert:
         return ''
 
     @staticmethod
+    def convertM21ObjectToMeiSameAs(obj: m21.base.Music21Object, tb: TreeBuilder):
+        if not isinstance(obj, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
+            raise MeiInternalError('convertM21ObjectToMeiSameAs only supports clef/timesig/keysig')
+
+        # This obj has already been emitted with the appropriate xml:id, and here
+        # we just emit a stub object with @sameas set to that same xml:id.
+        attr: dict[str, str] = {'sameas': M21ObjectConvert.getXmlId(obj, required=True)}
+        if isinstance(obj, m21.clef.Clef):
+            tb.start('clef', attr)
+            tb.end('clef')
+        elif isinstance(obj, m21.meter.TimeSignature):
+            tb.start('meterSig', attr)
+            tb.end('meterSig')
+        elif isinstance(obj, m21.key.KeySignature):
+            tb.start('keySig', attr)
+            tb.end('keySig')
+        else:
+            raise MeiInternalError('unsupported @sameas object type: {obj.classes[0]}')
+
+    @staticmethod
     def m21ChordToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
@@ -425,7 +445,6 @@ class M21ObjectConvert:
     @staticmethod
     def m21SyllableToMei(lyric: m21.note.Lyric, tb: TreeBuilder):
         attr: dict[str, str] = {}
-        # attr['con'] = 'd'  # music21 always uses dashes between syllables
         wordPos: str | None = M21ObjectConvert._M21_SYLLABIC_TO_WORD_POS.get(lyric.syllabic, None)
         if wordPos:
             attr['wordpos'] = wordPos
@@ -479,6 +498,9 @@ class M21ObjectConvert:
                 )
             )
             attr: dict[str, str] = {}  # above/below, etc
+            xmlId: str = M21ObjectConvert.getXmlId(artic)
+            if xmlId:
+                attr['xml:id'] = xmlId
             if name:
                 attr['artic'] = name
                 M21ObjectConvert._addStylisticAttributes(artic, attr)
@@ -508,6 +530,9 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         # default to shape == sign
         shape: str = M21ObjectConvert._M21_CLEF_SIGN_TO_MEI_CLEF_SHAPE.get(obj.sign, obj.sign)
@@ -568,6 +593,9 @@ class M21ObjectConvert:
             assert isinstance(obj, m21.key.KeySignature)
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         if isinstance(obj, m21.key.Key):
             # we know tonic (aka pname) and mode
@@ -595,6 +623,9 @@ class M21ObjectConvert:
             assert isinstance(obj, m21.meter.TimeSignature)
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         # This is a weird attribute order, but it matches what Verovio does,
         # which makes bbdiff comparisons work better.
@@ -808,30 +839,45 @@ class M21ObjectConvert:
     def makeTstamp2(
         endObject: m21.base.Music21Object,
         m21StartMeasure: m21.stream.Measure,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         meterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> str:
-        # count steps from m21StartMeasure to measure containing endObject in m21Part
+        # count steps from m21StartMeasure to measure containing endObject in m21Score
         measureStepCount: int = -1
         endOffsetInMeasure: OffsetQL | None = None
         counting: bool = False
-        endOffsetInScore: OffsetQL | None = (
-            M21Utilities.safeGetOffsetInHierarchy(endObject, m21Part)
-        )
-        if endOffsetInScore is None:
-            raise MeiInternalError('makeTstamp2: failed to find endObject in m21Part')
+        endOffsetInScore: OffsetQL | None = None
+        m21StartPart: m21.stream.Part | None = None
+        m21EndPart: m21.stream.Part | None = None
 
-        for meas in m21Part:
-            if not isinstance(meas, m21.stream.Measure):
-                continue  # don't count RepeatBrackets!
+        for part in m21Score.parts:
+            if M21Utilities.safeGetOffsetInHierarchy(m21StartMeasure, part) is not None:
+                m21StartPart = part
+                break
 
-            if meas is m21StartMeasure:
+        if m21StartPart is None:
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Score')
+
+        for part in m21Score.parts:
+            endOffsetInScore = M21Utilities.safeGetOffsetInHierarchy(endObject, part)
+            if endOffsetInScore is not None:
+                m21EndPart = part
+                break
+
+        if endOffsetInScore is None or m21EndPart is None:
+            raise MeiInternalError('makeTstamp2: failed to find endObject in m21Score')
+
+        startPartMeasures: list[m21.stream.Measure] = list(m21StartPart[m21.stream.Measure])
+        endPartMeasures: list[m21.stream.Measure] = list(m21EndPart[m21.stream.Measure])
+
+        for startMeas, endMeas in zip(startPartMeasures, endPartMeasures):
+            if startMeas is m21StartMeasure:
                 # We found the start measure! Start counting steps.
                 measureStepCount = 0
                 counting = True
 
             if counting:
-                endOffsetInMeasure = M21Utilities.safeGetOffsetInHierarchy(endObject, meas)
+                endOffsetInMeasure = M21Utilities.safeGetOffsetInHierarchy(endObject, endMeas)
                 if endOffsetInMeasure is not None:
                     # We found the end measure!
                     break
@@ -840,11 +886,71 @@ class M21ObjectConvert:
                 measureStepCount += 1
 
         if measureStepCount == -1:
-            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Part')
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Score')
 
         if endOffsetInMeasure is None:
             raise MeiInternalError(
-                'makeTstamp2: failed to find endObject in or after m21StartMeasure in m21Part'
+                'makeTstamp2: failed to find endObject in or after m21StartMeasure in m21Score'
+            )
+
+        # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
+        beat: float = M21ObjectConvert._offsetToBeat(
+            opFrac(endOffsetInMeasure),
+            M21Utilities.getActiveTimeSigFromMeterStream(endOffsetInScore, meterStream)
+        )
+
+        # use as many decimal places as you need, between min of 1 and max of 6
+        beatStr: str = M21ObjectConvert.floatToStringWithDecimalPlacesMinMax(beat, 1, 6)
+        return f'{measureStepCount}m+{beatStr}'
+
+    @staticmethod
+    def makeTstamp2FromScoreOffset(
+        endOffsetInScore: OffsetQL,
+        m21StartMeasure: m21.stream.Measure,
+        m21Score: m21.stream.Score,
+        meterStream: m21.stream.Stream[m21.meter.TimeSignature]
+    ) -> str:
+        # count steps from m21StartMeasure to measure containing endScoreOffset in m21Score
+        measureStepCount: int = -1
+        endOffsetInMeasure: OffsetQL | None = None
+        counting: bool = False
+        m21Part: m21.stream.Part | None = None
+
+        for part in m21Score.parts:
+            if M21Utilities.safeGetOffsetInHierarchy(m21StartMeasure, part) is not None:
+                m21Part = part
+                break
+
+        if m21Part is None:
+            raise MeiInternalError('makeTstamp2: failed to find m21StartMeasure in m21Score')
+
+        partMeasures: list[m21.stream.Measure] = list(m21Part[m21.stream.Measure])
+
+        for meas in partMeasures:
+            if meas is m21StartMeasure:
+                # We found the start measure! Start counting steps.
+                measureStepCount = 0
+                counting = True
+
+            if counting:
+                endOffsetInMeasure = opFrac(endOffsetInScore - meas.getOffsetInHierarchy(m21Score))
+                if 0 <= endOffsetInMeasure <= meas.duration.quarterLength:
+                    # We found the end measure!
+                    break
+                # gotta keep searching
+                endOffsetInMeasure = None
+
+            if counting:
+                measureStepCount += 1
+
+        if measureStepCount == -1:
+            raise MeiInternalError(
+                'makeTstamp2FromScoreOffset: failed to find m21StartMeasure in m21Score'
+            )
+
+        if endOffsetInMeasure is None:
+            raise MeiInternalError(
+                'makeTstamp2FromScoreoffset: failed to find endOffsetInScore in m21Score'
             )
 
         # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
@@ -863,9 +969,10 @@ class M21ObjectConvert:
         first: m21.base.Music21Object,
         last: m21.base.Music21Object | None,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        forceTstamp2AtEndOfLast: bool = False,
     ):
         attr['staff'] = staffNStr  # TODO: what about "1 2"
 
@@ -875,7 +982,7 @@ class M21ObjectConvert:
 
         if not isinstance(first, m21.note.GeneralNote):
             attr['tstamp'] = M21ObjectConvert.makeTstamp(
-                offsetInScore=first.getOffsetInHierarchy(m21Part),
+                offsetInScore=first.getOffsetInHierarchy(m21Score),
                 offsetInMeasure=first.getOffsetInHierarchy(m21Measure),
                 meterStream=scoreMeterStream
             )
@@ -887,11 +994,21 @@ class M21ObjectConvert:
             return
 
         # unique last element, we need @tstamp2 or @endid
-        if not isinstance(last, m21.note.GeneralNote):
+        if forceTstamp2AtEndOfLast:
+            offsetAtEndOfLast: OffsetQL = opFrac(
+                last.getOffsetInHierarchy(m21Score) + last.duration.quarterLength
+            )
+            attr['tstamp2'] = M21ObjectConvert.makeTstamp2FromScoreOffset(
+                endOffsetInScore=offsetAtEndOfLast,
+                m21StartMeasure=m21Measure,
+                m21Score=m21Score,
+                meterStream=scoreMeterStream
+            )
+        elif not isinstance(last, m21.note.GeneralNote):
             attr['tstamp2'] = M21ObjectConvert.makeTstamp2(
                 endObject=last,
                 m21StartMeasure=m21Measure,
-                m21Part=m21Part,
+                m21Score=m21Score,
                 meterStream=scoreMeterStream
             )
         else:
@@ -917,15 +1034,19 @@ class M21ObjectConvert:
     def postStavesSpannerToMei(
         spanner: m21.spanner.Spanner,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder
     ) -> None:
+        forceTstamp2: bool = False
         first: m21.base.Music21Object = spanner.getFirst()
         last: m21.base.Music21Object = spanner.getLast()
         tag: str = ''
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(spanner)
+        if xmlId:
+            attr['xml:id'] = xmlId
 
         if isinstance(spanner, MeiBeamSpanner):
             if hasattr(spanner, 'mei_beam'):
@@ -937,14 +1058,23 @@ class M21ObjectConvert:
                 # already emitted as <tuplet> within <layer>
                 return
 
+        if isinstance(spanner, m21.dynamics.DynamicWedge):
+            # music21 defines a DynamicWedge as ending at the end of spanner.getLast()
+            # MEI defines a hairpin as ending at the beginning of @endid
+            # So we always have to emit a tstamp2 for hairpins, because we have no
+            # easy way of searching for a different object that might have the
+            # correct offset.
+            forceTstamp2 = True
+
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             first,
             last,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
-            scoreMeterStream
+            scoreMeterStream,
+            forceTstamp2AtEndOfLast=forceTstamp2,
         )
 
         if isinstance(spanner, m21.spanner.Slur):
@@ -1030,7 +1160,7 @@ class M21ObjectConvert:
                             note,
                             expr,
                             staffNStr,
-                            m21Part,
+                            m21Score,
                             m21Measure,
                             scoreMeterStream,
                             tb=None,
@@ -1080,12 +1210,15 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         arpeggio: m21.expressions.ArpeggioMark,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(arpeggio)
+        if xmlId:
+            attr['xml:id'] = xmlId
         attr['startid'] = f'#{M21ObjectConvert.getXmlId(gn, required=True)}'
         M21ObjectConvert.fillInArpeggioAttributes(arpeggio, attr)
         tb.start('arpeg', attr)
@@ -1096,10 +1229,18 @@ class M21ObjectConvert:
         attr['num'] = str(startTuplet.numberNotesActual)
         attr['numbase'] = str(startTuplet.numberNotesNormal)
 
-        # bracket visibility (MEI default is 'true', so we don't set that)
-        bracketIsVisible: bool = bool(startTuplet.bracket)  # False, True, or 'slur'
-        if not bracketIsVisible:
+        # bracket visibility (startTuplet.bracket can be False, True, 'slur', or None)
+        bracketIsVisible: bool | None = None
+        if startTuplet.bracket is False:
             attr['bracket.visible'] = 'false'
+            bracketIsVisible = False
+        elif startTuplet.bracket is True:
+            attr['bracket.visible'] = 'true'
+            bracketIsVisible = True
+        elif startTuplet.bracket == 'slur':
+            # MEI has no support for curved tuplet brackets, go with "visible"
+            attr['bracket.visible'] = 'true'
+            bracketIsVisible = True
 
         # number visibility and format
         numIsVisible: bool = (
@@ -1117,10 +1258,12 @@ class M21ObjectConvert:
             attr['num.visible'] = 'false'
 
         # placement (MEI has two: num and bracket placement, but music21 only has one)
+        # Note that we check isVisible is not False, so we set placement if visibility
+        # is True or even if it is unspecified.
         if startTuplet.placement is not None:
-            if bracketIsVisible:
+            if bracketIsVisible is not False:
                 attr['bracket.place'] = startTuplet.placement
-            if numIsVisible:
+            if numIsVisible is not False:
                 attr['num.place'] = startTuplet.placement
 
     @staticmethod
@@ -1135,7 +1278,7 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         trill: m21.expressions.Trill,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder | None,
@@ -1184,12 +1327,15 @@ class M21ObjectConvert:
                 last = trillExtension.getLast()
 
             attr = {}
+            xmlId: str = M21ObjectConvert.getXmlId(trill)
+            if xmlId:
+                attr['xml:id'] = xmlId
             M21ObjectConvert._fillInStandardPostStavesAttributes(
                 attr,
                 gn,
                 last,
                 staffNStr,
-                m21Part,
+                m21Score,
                 m21Measure,
                 scoreMeterStream
             )
@@ -1198,7 +1344,7 @@ class M21ObjectConvert:
             raise MeiInternalError('trillToMei called without attr or tree builder')
 
         # in both cases we add to attr here
-        if trill.accidental is not None:
+        if trill.accidental is not None and trill.accidental.displayStatus:
             accid: str = M21ObjectConvert.m21AccidToMeiAccid(trill.accidental.name)
             if trill.direction == 'up':
                 attr['accidupper'] = accid
@@ -1225,26 +1371,29 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         turn: m21.expressions.Turn,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(turn)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             gn,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
 
-        if turn.upperAccidental is not None:
+        if turn.upperAccidental is not None and turn.upperAccidental.displayStatus:
             accidupper: str = M21ObjectConvert.m21AccidToMeiAccid(turn.upperAccidental.name)
             attr['accidupper'] = accidupper
-        if turn.lowerAccidental is not None:
+        if turn.lowerAccidental is not None and turn.lowerAccidental.displayStatus:
             accidlower: str = M21ObjectConvert.m21AccidToMeiAccid(turn.lowerAccidental.name)
             attr['accidlower'] = accidlower
 
@@ -1266,23 +1415,26 @@ class M21ObjectConvert:
         gn: m21.note.GeneralNote,
         mordent: m21.expressions.GeneralMordent,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(mordent)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             gn,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
 
-        if mordent.accidental is not None:
+        if mordent.accidental is not None and mordent.accidental.displayStatus:
             accid: str = M21ObjectConvert.m21AccidToMeiAccid(mordent.accidental.name)
             if mordent.direction == 'up':
                 attr['accidupper'] = accid
@@ -1303,18 +1455,21 @@ class M21ObjectConvert:
         obj: m21.note.GeneralNote | m21.bar.Barline,
         fermata: m21.expressions.Fermata,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(fermata)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             obj,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
@@ -1387,18 +1542,21 @@ class M21ObjectConvert:
     def convertPostStaveStreamElement(
         obj: m21.base.Music21Object,
         staffNStr: str,
-        m21Part: m21.stream.Part,
+        m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         tb: TreeBuilder,
     ):
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        if xmlId:
+            attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
             obj,
             None,
             staffNStr,
-            m21Part,
+            m21Score,
             m21Measure,
             scoreMeterStream
         )
@@ -1610,6 +1768,9 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
+        xmlId: str = M21ObjectConvert.getXmlId(barline)
+        if xmlId:
+            attr['xml:id'] = xmlId
         form: str
         if isinstance(barline, m21.bar.Repeat):
             form = M21ObjectConvert._M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE[

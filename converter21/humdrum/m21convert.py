@@ -2701,13 +2701,11 @@ class M21Convert:
                         theLookup[(vStyle1, vStyle2)] = MeasureVisualStyle.Invisible
                         continue
 
-                    # Regular and NoBarline don't add anything
-                    if (vStyle1 is MeasureVisualStyle.Regular
-                            or vStyle1 is MeasureVisualStyle.NoBarline):
+                    # Regular doesn't add anything
+                    if (vStyle1 is MeasureVisualStyle.Regular):
                         theLookup[(vStyle1, vStyle2)] = vStyle2
                         continue
-                    if (vStyle2 is MeasureVisualStyle.Regular
-                            or vStyle2 is MeasureVisualStyle.NoBarline):
+                    if (vStyle2 is MeasureVisualStyle.Regular):
                         theLookup[(vStyle1, vStyle2)] = vStyle1
                         continue
 
@@ -2786,7 +2784,7 @@ class M21Convert:
         vStyle: MeasureVisualStyle = MeasureVisualStyle.Regular
         mType: MeasureType = MeasureType.NotRepeat
         if m21Barline is None:
-            return MeasureStyle.NoBarline
+            return MeasureStyle.Regular
 
         if isinstance(m21Barline, m21.bar.Repeat):
             if m21Barline.direction == 'start':

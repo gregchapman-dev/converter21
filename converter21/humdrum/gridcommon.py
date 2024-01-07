@@ -93,7 +93,6 @@ class SliceType(IntEnum):
 class MeasureVisualStyle(IntEnum):
     # this enum is sorted so that we can use max() to pick between
     # previous right barline and current left barline visual style
-    NoBarline = auto()
     Regular = auto()
     Double = auto()
     HeavyHeavy = auto()
@@ -131,7 +130,6 @@ class MeasureStyle(Enum):
     Invisible = (MeasureVisualStyle.Invisible, MeasureType.NotRepeat)
     Regular = (MeasureVisualStyle.Regular, MeasureType.NotRepeat)
     Heavy = (MeasureVisualStyle.Heavy, MeasureType.NotRepeat)
-    NoBarline = (MeasureVisualStyle.NoBarline, MeasureType.NotRepeat)
 
     RepeatBackwardRegular = (MeasureVisualStyle.Regular, MeasureType.RepeatBackward)
     RepeatBackwardHeavy = (MeasureVisualStyle.Heavy, MeasureType.RepeatBackward)
@@ -157,7 +155,7 @@ class MeasureStyle(Enum):
     RepeatBothHeavyLightHeavy = (MeasureVisualStyle.HeavyLightHeavy, MeasureType.RepeatBoth)
     RepeatBothLightHeavyLight = (MeasureVisualStyle.LightHeavyLight, MeasureType.RepeatBoth)
 
-    # This is just here so clients can do blah.measureType and blah.measureVisualType instead
+    # This is just here so clients can do blah.vStyle and blah.mType instead
     # of having to know the layout of the tuple.
     def __init__(self, vStyle: MeasureVisualStyle, mType: MeasureType) -> None:
         self.vStyle = vStyle

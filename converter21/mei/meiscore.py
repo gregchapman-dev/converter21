@@ -106,9 +106,8 @@ class MeiScore:
             meiMeas = MeiMeasure(
                 measureStack,
                 prevMeiMeasure,
-                self.staffNumbersForM21Parts,
-                self.spannerBundle,
-                self.scoreMeterStream)
+                self,
+                self.spannerBundle)
             output.append(meiMeas)
 
         return output
