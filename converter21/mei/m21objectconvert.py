@@ -1597,7 +1597,7 @@ class M21ObjectConvert:
                 else:
                     # figure out @midi.bpm from obj.number, converting from referent
                     # to quarter note (e.g. referent might be half note)
-                    attr['midi.bpm'] = obj.number * obj.referent.quarterLength
+                    attr['midi.bpm'] = str(obj.number * obj.referent.quarterLength)
 
                     tb.start(tag, attr)
                     # also construct "blah=128" or whatever, using SMUFL for noteheads, and
