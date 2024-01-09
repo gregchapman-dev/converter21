@@ -49,6 +49,10 @@ def runTheFullTest(krnPath: Path):
     print('annotated Humdrum score')
     score_lin3 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
     print('annotated exported MEI score')
+    if score_lin2.n_of_parts != score_lin3.n_of_parts:
+        print(f'numParts {score_lin2.n_of_parts} vs {score_lin3.n_of_parts}')
+        return
+
     diffList, _cost = Comparison.annotated_scores_diff(score_lin2, score_lin3)
     print('diffed the two scores:')
     numDiffs = len(diffList)

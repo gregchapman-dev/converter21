@@ -291,6 +291,15 @@ def runTheDiff(inputPath: Path, results) -> bool:
     try:
         annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
         annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
+        if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
+            print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')
+            print(
+                f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}',
+                file=results
+            )
+            results.flush()
+            return False
+
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
