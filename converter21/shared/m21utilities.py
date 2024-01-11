@@ -936,7 +936,8 @@ class M21Utilities:
     @staticmethod
     def getStaffGroupTrees(
         staffGroups: list[m21.layout.StaffGroup],
-        staffNumbersByM21Part: dict[m21.stream.Part, int]
+        staffNumbersByM21Part: dict[m21.stream.Part, int],
+        m21PartsByStaffNumber: dict[int, m21.stream.Part]
     ) -> list[M21StaffGroupTree]:
         topLevelParents: list[M21StaffGroupTree] = []
 
@@ -946,6 +947,24 @@ class M21Utilities:
         staffGroupTrees: list[M21StaffGroupTree] = [
             M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
         ]
+        # if there are any left-over staves, make a StaffGroupTree for each of them individually.
+        leftOverStaffNumbers: set[int] = set()
+        for sn in m21PartsByStaffNumber:
+            leftOverStaffNumbers.add(sn)
+        for sgt in staffGroupTrees:
+            for sn in sgt.staffNums:
+                leftOverStaffNumbers.discard(sn)
+
+        leftOverStaffGroups: list[m21.layout.StaffGroup] = []
+        for sn in leftOverStaffNumbers:
+            sg = m21.layout.StaffGroup()
+            sg.addSpannedElements(m21PartsByStaffNumber[sn])
+            leftOverStaffGroups.append(sg)
+
+        leftOverStaffGroupTrees: list[M21StaffGroupTree] = [
+            M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in leftOverStaffGroups
+        ]
+        staffGroupTrees += leftOverStaffGroupTrees
         staffGroupTrees.sort(key=lambda tree: tree.numStaves)
 
         # Hook up each child node to the parent with the smallest superset of the child's staves.

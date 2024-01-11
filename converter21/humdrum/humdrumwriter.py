@@ -802,11 +802,17 @@ class HumdrumWriter:
         staffNumbersByM21Part: dict[m21.stream.Part, int] = (
             self._getGlobalStaffNumbersForM21Parts(self._scoreData)
         )
+        m21PartsByStaffNumber: dict[int, m21.stream.Part] = {
+            value: key for key, value in staffNumbersByM21Part.items()
+        }
+
         staffGroups: list[m21.layout.StaffGroup] = (
             list(self.spannerBundle.getByClass(m21.layout.StaffGroup))
         )
         staffGroupTrees: list[M21StaffGroupTree] = (
-            M21Utilities.getStaffGroupTrees(staffGroups, staffNumbersByM21Part)
+            M21Utilities.getStaffGroupTrees(
+                staffGroups, staffNumbersByM21Part, m21PartsByStaffNumber
+            )
         )
 
         for sgtree in staffGroupTrees:

@@ -1595,21 +1595,28 @@ class M21ObjectConvert:
                 if obj.numberImplicit:
                     M21ObjectConvert.emitStyledTextElement(obj.text, style, tag, attr, tb)
                 else:
-                    # figure out @midi.bpm from obj.number, converting from referent
-                    # to quarter note (e.g. referent might be half note)
-                    attr['midi.bpm'] = str(obj.number * obj.referent.quarterLength)
+                    number: int | float | None = obj.number
+                    if number is None:
+                        number = obj.numberSounding
+                    if number is not None:
+                        # figure out @midi.bpm from number, converting from referent
+                        # to quarter note (e.g. referent might be half note)
+                        attr['midi.bpm'] = str(number * obj.referent.quarterLength)
 
-                    tb.start(tag, attr)
-                    # also construct "blah=128" or whatever, using SMUFL for noteheads, and
-                    # append it to the text before calling tb.data().  It will need a <rend>
-                    # element in the middle of the text (thus it's mixed text and elements)
-                    M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
-                    tb.end(tag)
+                        tb.start(tag, attr)
+                        # also construct "blah=128" or whatever, using SMUFL for noteheads, and
+                        # append it to the text before calling tb.data().  It will need a <rend>
+                        # element in the middle of the text (thus it's mixed text and elements)
+                        M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
+                        tb.end(tag)
 
     @staticmethod
     def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):
+        if mm.text is None:
+            return
+
         tb.data(mm.text)
-        if not mm.numberImplicit:
+        if not mm.numberImplicit and mm.number is not None:
             tb.data(' ')
             tb.start('rend', {'fontfam': 'smufl'})
             noteHead: str = M21ObjectConvert._getNoteHeadSMUFLUnicodeForReferent(mm.referent)

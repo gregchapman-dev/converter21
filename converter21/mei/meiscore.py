@@ -75,7 +75,8 @@ class MeiScore:
         self.staffGroupTrees: list[M21StaffGroupTree] = (
             M21Utilities.getStaffGroupTrees(
                 list(m21Score[m21.layout.StaffGroup]),
-                self.staffNumbersForM21Parts
+                self.staffNumbersForM21Parts,
+                self.m21PartsForStaffNumbers
             )
         )
 
