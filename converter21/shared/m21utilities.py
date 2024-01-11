@@ -941,9 +941,7 @@ class M21Utilities:
     ) -> list[M21StaffGroupTree]:
         topLevelParents: list[M21StaffGroupTree] = []
 
-        # Start with the tree being completely flat. Sort it by number of staves, so
-        # we can bail early when searching for smallest parent, since the first one
-        # we find will be the smallest.
+        # Start with the tree being completely flat.
         staffGroupTrees: list[M21StaffGroupTree] = [
             M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
         ]
@@ -956,12 +954,16 @@ class M21Utilities:
             for sn in sgt.staffNums:
                 leftOverStaffNumbers.discard(sn)
 
-        leftOverStaffGroup: m21.layout.StaffGroup = m21.layout.StaffGroup()
-        for sn in leftOverStaffNumbers:
-            leftOverStaffGroup.addSpannedElements(m21PartsByStaffNumber[sn])
+        if leftOverStaffNumbers:
+            leftOverStaffGroup: m21.layout.StaffGroup = m21.layout.StaffGroup()
+            for sn in leftOverStaffNumbers:
+                leftOverStaffGroup.addSpannedElements(m21PartsByStaffNumber[sn])
 
-        leftOverStaffGroupTree = M21StaffGroupTree(leftOverStaffGroup, staffNumbersByM21Part)
-        staffGroupTrees.append(leftOverStaffGroupTree)
+            leftOverStaffGroupTree = M21StaffGroupTree(leftOverStaffGroup, staffNumbersByM21Part)
+            staffGroupTrees.append(leftOverStaffGroupTree)
+
+        # Sort it by number of staves, so we can bail early when searching for smallest parent,
+        # since the first one we find will be the smallest.
         staffGroupTrees.sort(key=lambda tree: tree.numStaves)
 
         # Hook up each child node to the parent with the smallest superset of the child's staves.
