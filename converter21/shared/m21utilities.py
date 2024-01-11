@@ -947,7 +947,8 @@ class M21Utilities:
         staffGroupTrees: list[M21StaffGroupTree] = [
             M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
         ]
-        # if there are any left-over staves, make a StaffGroupTree for each of them individually.
+
+        # if there are any left-over staves, make a StaffGroupTree for the whole score.
         leftOverStaffNumbers: set[int] = set()
         for sn in m21PartsByStaffNumber:
             leftOverStaffNumbers.add(sn)
@@ -955,16 +956,12 @@ class M21Utilities:
             for sn in sgt.staffNums:
                 leftOverStaffNumbers.discard(sn)
 
-        leftOverStaffGroups: list[m21.layout.StaffGroup] = []
+        leftOverStaffGroup: m21.layout.StaffGroup = m21.layout.StaffGroup()
         for sn in leftOverStaffNumbers:
-            sg = m21.layout.StaffGroup()
-            sg.addSpannedElements(m21PartsByStaffNumber[sn])
-            leftOverStaffGroups.append(sg)
+            leftOverStaffGroup.addSpannedElements(m21PartsByStaffNumber[sn])
 
-        leftOverStaffGroupTrees: list[M21StaffGroupTree] = [
-            M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in leftOverStaffGroups
-        ]
-        staffGroupTrees += leftOverStaffGroupTrees
+        leftOverStaffGroupTree = M21StaffGroupTree(leftOverStaffGroup, staffNumbersByM21Part)
+        staffGroupTrees.append(leftOverStaffGroupTree)
         staffGroupTrees.sort(key=lambda tree: tree.numStaves)
 
         # Hook up each child node to the parent with the smallest superset of the child's staves.
