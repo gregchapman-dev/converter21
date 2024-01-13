@@ -958,13 +958,13 @@ class M21Utilities:
         leftOverStaffNumbersList: list[int] = list(leftOverStaffNumbers)
         leftOverStaffNumbersList.sort()
         if leftOverStaffNumbersList:
+            startNewRange: bool = True
             for i in range(0, len(leftOverStaffNumbersList)):
                 thisStaffNum: int = leftOverStaffNumbersList[i]
                 staffNumStart: int
-                if i == 0:
-                    # first left over staff number
+                if startNewRange:
                     staffNumStart = thisStaffNum
-                    continue
+                    startNewRange = False
 
                 if (i < len(leftOverStaffNumbersList) - 1
                         and leftOverStaffNumbersList[i + 1] == thisStaffNum + 1):
@@ -984,8 +984,7 @@ class M21Utilities:
                 )
 
                 # set up for next staffGroup range
-                if i < len(leftOverStaffNumbersList) - 1:
-                    staffNumStart = leftOverStaffNumbersList[i + 1]
+                startNewRange = True
 
         # Sort it by number of staves, so we can bail early when searching for smallest parent,
         # since the first one we find will be the smallest.
