@@ -959,38 +959,33 @@ class M21Utilities:
         leftOverStaffNumbersList.sort()
         if leftOverStaffNumbersList:
             for i in range(0, len(leftOverStaffNumbersList)):
-                minStaffNum: int
-                maxStaffNum: int
-                if i != 0:
-                    if leftOverStaffNumbersList[i] == maxStaffNum + 1:
-                        maxStaffNum += 1
-                        continue
+                thisStaffNum: int = leftOverStaffNumbersList[i]
+                staffNumStart: int
+                if i == 0:
+                    # first left over staff number
+                    staffNumStart = thisStaffNum
+                    continue
 
-                    # we have a staffGroup range
-                    sg: m21.layout.StaffGroup = m21.layout.StaffGroup()
-                    sg.barTogether = False
-                    sg.symbol = None
-                    for sn in range(minStaffNum, maxStaffNum + 1):
-                        sg.addSpannedElements(m21PartsByStaffNumber[sn])
+                if (i < len(leftOverStaffNumbersList) - 1
+                        and leftOverStaffNumbersList[i + 1] == thisStaffNum + 1):
+                    # not at end of contiguous range yet
+                    continue
 
-                    staffGroupTrees.append(
-                        M21StaffGroupTree(sg, staffNumbersByM21Part)
-                    )
+                # we are at end of contiguous range (either because the next
+                # staff number jumps, or because there is no next staff number)
+                sg: m21.layout.StaffGroup = m21.layout.StaffGroup()
+                sg.barTogether = False
+                sg.symbol = None
+                for sn in range(staffNumStart, thisStaffNum + 1):
+                    sg.addSpannedElements(m21PartsByStaffNumber[sn])
 
-                # set up for next (or very first) staffGroup range
-                minStaffNum = leftOverStaffNumbersList[i]
-                maxStaffNum = leftOverStaffNumbersList[i]
+                staffGroupTrees.append(
+                    M21StaffGroupTree(sg, staffNumbersByM21Part)
+                )
 
-                # if this is the last staffNum in the score, we need to process it now
-                # because the loop is about to exit.
-                if i == len(leftOverStaffNumbersList) - 1:
-                    sg = m21.layout.StaffGroup()
-                    sg.barTogether = False
-                    sg.symbol = None
-                    sg.addSpannedElements(m21PartsByStaffNumber[minStaffNum])
-                    staffGroupTrees.append(
-                        M21StaffGroupTree(sg, staffNumbersByM21Part)
-                    )
+                # set up for next staffGroup range
+                if i < len(leftOverStaffNumbersList) - 1:
+                    staffNumStart = leftOverStaffNumbersList[i + 1]
 
         # Sort it by number of staves, so we can bail early when searching for smallest parent,
         # since the first one we find will be the smallest.
