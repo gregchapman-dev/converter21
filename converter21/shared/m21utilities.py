@@ -961,27 +961,23 @@ class M21Utilities:
             for i in range(0, len(leftOverStaffNumbersList)):
                 minStaffNum: int
                 maxStaffNum: int
-                if i == 0:
-                    minStaffNum = leftOverStaffNumbersList[i]
-                    maxStaffNum = leftOverStaffNumbersList[i]
-                    continue
+                if i != 0:
+                    if leftOverStaffNumbersList[i] == maxStaffNum + 1:
+                        maxStaffNum += 1
+                        continue
 
-                if leftOverStaffNumbersList[i] == maxStaffNum + 1:
-                    maxStaffNum += 1
-                    continue
+                    # we have a staffGroup range
+                    sg: m21.layout.StaffGroup = m21.layout.StaffGroup()
+                    sg.barTogether = False
+                    sg.symbol = None
+                    for sn in range(minStaffNum, maxStaffNum + 1):
+                        sg.addSpannedElements(m21PartsByStaffNumber[sn])
 
-                # we have a staffGroup range
-                sg: m21.layout.StaffGroup = m21.layout.StaffGroup()
-                sg.barTogether = False
-                sg.symbol = None
-                for sn in range(minStaffNum, maxStaffNum + 1):
-                    sg.addSpannedElements(m21PartsByStaffNumber[sn])
+                    staffGroupTrees.append(
+                        M21StaffGroupTree(sg, staffNumbersByM21Part)
+                    )
 
-                staffGroupTrees.append(
-                    M21StaffGroupTree(sg, staffNumbersByM21Part)
-                )
-
-                # set up for next staffGroup range
+                # set up for next (or very first) staffGroup range
                 minStaffNum = leftOverStaffNumbersList[i]
                 maxStaffNum = leftOverStaffNumbersList[i]
 
