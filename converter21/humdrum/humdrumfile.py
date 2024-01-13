@@ -11001,9 +11001,16 @@ class HumdrumFile(HumdrumFileContent):
             if m21Inst is None:
                 m21Inst = m21.instrument.Instrument(iName)
 
+            # clear out any transposition that iName implied to music21, since we need to
+            # only trust the Humdrum transposition information (iTranspose).
+            if m21Inst is not None:
+                m21Inst.transposition = None
+
             if iAbbrev and iAbbrev != iName:
                 m21Inst.instrumentAbbreviation = iAbbrev
             if iTranspose:
+                # Here's where we pick up the exact instrument transposition
+                # from iTranspose, and put it in the instrument we've created.
                 transposeFromWrittenToSounding: m21.interval.Interval | None = (
                     M21Convert.m21IntervalFromTranspose(iTranspose)
                 )
