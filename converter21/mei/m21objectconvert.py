@@ -949,9 +949,11 @@ class M21ObjectConvert:
             )
 
         if endOffsetInMeasure is None:
-            raise MeiInternalError(
-                'makeTstamp2FromScoreoffset: failed to find endOffsetInScore in m21Score'
+            print(
+                'endOffsetInScore is before startMeasure.  Ending at startMeasure offset 0.',
+                file=sys.stderr
             )
+            endOffsetInMeasure = 0.0
 
         # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
         beat: float = M21ObjectConvert._offsetToBeat(
