@@ -676,11 +676,24 @@ class M21ObjectConvert:
         dur = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(duration.type, '')
         dots = str(duration.dots)
 
-        if isinstance(duration, m21.duration.GraceDuration):
-            if duration.slash:
+        if isinstance(duration, m21.duration.AppoggiaturaDuration):
+            grace = 'acc'
+        elif isinstance(duration, m21.duration.GraceDuration):
+            # might be accented or unaccented.  duration.slash isn't always reliable
+            # (historically), but we can use it as a fallback.
+            # Check duration.stealTimePrevious and duration.stealTimeFollowing first.
+            if duration.stealTimePrevious is not None:
                 grace = 'unacc'
-            else:
+            elif duration.stealTimeFollowing is not None:
                 grace = 'acc'
+            elif duration.slash is True:
+                grace = 'unacc'
+            elif duration.slash is False:
+                grace = 'acc'
+            else:
+                # by default, GraceDuration with no other indications (slash is None)
+                # is assumed to be unaccented.
+                grace = 'unacc'
         elif not duration.linked:
             # duration is not linked and not grace, so we have to
             # compute @dur.ges and @dots.ges

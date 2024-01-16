@@ -868,15 +868,32 @@ class M21Convert:
     @staticmethod
     def kernGraceTypeFromM21Duration(m21Duration: m21.duration.Duration) -> str:
         isNonGrace: bool = not m21Duration.isGrace
-        isAppoggiatura: bool = isinstance(m21Duration, m21.duration.AppoggiaturaDuration)
 
         if isNonGrace:
             return ''
 
-        if isAppoggiatura:
+        if isinstance(m21Duration, m21.duration.AppoggiaturaDuration):
+            # AppoggiaturaDurations are always accented
             return 'qq'
 
-        # it's a grace, but not an appoggiatura
+        if t.TYPE_CHECKING:
+            # because non-grace and AppoggiaturaDuration have already returned
+            assert isinstance(m21Duration, m21.duration.GraceDuration)
+
+        # GraceDurations might be accented or unaccented.
+        # duration.slash isn't always reliable (historically), but we can use it
+        # as a fallback.
+        # Check duration.stealTimePrevious and duration.stealTimeFollowing first.
+        if m21Duration.stealTimePrevious is not None:
+            return 'q'
+        if m21Duration.stealTimeFollowing is not None:
+            return 'qq'
+        if m21Duration.slash is True:
+            return 'q'
+        if m21Duration.slash is False:
+            return 'qq'
+
+        # by default GraceDuration with no other indications means unaccented grace note.
         return 'q'
 
     @staticmethod
