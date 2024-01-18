@@ -152,11 +152,26 @@ class MeiLayer:
         lastOffsetEmitted: OffsetQL = 0.
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                # First check if the next staffChanges should go just before
-                # this object.
                 objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
                     self.parentStaff.m21Measure
                 )
+
+                # First, check to make sure we don't need to fill a gap
+                # (with one or more invisible rests).
+                if objOffsetInMeasure > lastOffsetEmitted:
+                    gapDuration = opFrac(objOffsetInMeasure - lastOffsetEmitted)
+                    durations: list[m21.duration.Duration] = (
+                        M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
+                    )
+                    for duration in durations:
+                        m21Space = m21.note.Rest(duration)
+                        m21Space.style.hideObjectOnPrint = True
+                        M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
+
+                    lastOffsetEmitted = objOffsetInMeasure
+
+                # Next, check if the next staffChanges should go just before
+                # this object.
                 while nextStaffChange is not None:
                     staffChangeObject = nextStaffChange[0]
                     staffChangeOffset: OffsetQL = nextStaffChange[1]
