@@ -149,7 +149,19 @@ class MeiLayer:
             nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
 
         voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
+        gapDuration: OffsetQL
+        durations: list[OffsetQL]
         lastOffsetEmitted: OffsetQL = 0.
+        if isinstance(self.m21Voice, m21.stream.Voice):
+            voiceOffset: OffsetQL = self.m21Voice.getOffsetInHierarchy(self.parentStaff.m21Measure)
+            if voiceOffset != 0:
+                durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(voiceOffset)
+                for duration in durations:
+                    m21Space = m21.note.Rest(duration)
+                    m21Space.style.hideObjectOnPrint = True
+                    M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
+                lastOffsetEmitted = voiceOffset
+
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
@@ -160,7 +172,7 @@ class MeiLayer:
                 # (with one or more invisible rests).
                 if objOffsetInMeasure > lastOffsetEmitted:
                     gapDuration = opFrac(objOffsetInMeasure - lastOffsetEmitted)
-                    durations: list[m21.duration.Duration] = (
+                    durations = (
                         M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
                     )
                     for duration in durations:
