@@ -14,7 +14,7 @@ import sys
 import typing as t
 
 import music21 as m21
-from music21.common import opFrac
+from music21.common import opFrac, OffsetQL
 
 # from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum, HumNumIn
@@ -257,20 +257,22 @@ class MeasureData:
         event: EventData
         durations: list[HumNum]
         startTime: HumNum
+        currentEmittedTime: OffsetQL = self.startTime
+
         if emptyStartDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the beginning of m21Stream
             durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyStartDuration)
             startTime = self.startTime
             for duration in durations:
-                m21StartRest: m21.note.Rest = m21.note.Rest(
-                    duration=m21.duration.Duration(duration)
-                )
+                m21StartRest: m21.note.Rest = m21.note.Rest(duration)
                 m21StartRest.style.hideObjectOnPrint = True
                 event = EventData(m21StartRest, -1, voiceIndex, self, offsetInScore=startTime)
                 if event is not None:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
+
+            currentEmittedTime = startTime
 
         elementList: list[m21.base.Music21Object] = list(
             m21Stream.recurse().getElementsNotOfClass(m21.stream.Stream)
@@ -290,6 +292,23 @@ class MeasureData:
                     noteOrChord.humdrum_sf_or_sfz = element  # type: ignore
                     continue
 
+            # handle any gaps between elements by emitting hidden rest(s)
+            elStartTime: OffsetQL = self.startTime + element.getOffsetInHierarchy(self.m21Measure)
+            if elStartTime > currentEmittedTime:
+                durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
+                    elStartTime - currentEmittedTime
+                )
+                for duration in durations:
+                    m21GapRest: m21.note.Rest = m21.note.Rest(duration)
+                    m21GapRest.style.hideObjectOnPrint = True
+                    event = EventData(
+                        m21GapRest, -1, voiceIndex, self, offsetInScore=currentEmittedTime
+                    )
+                    if event is not None:
+                        self.events.append(event)
+
+                currentEmittedTime = elStartTime
+
             event = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
                 self.events.append(event)
@@ -305,6 +324,8 @@ class MeasureData:
                 extraEvents: list[EventData] = self._parseDynamicWedgesStartedOrStoppedAt(event)
                 if extraEvents:
                     self.events += extraEvents
+
+            currentEmittedTime = opFrac(currentEmittedTime + element.quarterLength)
 
         if emptyEndDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
