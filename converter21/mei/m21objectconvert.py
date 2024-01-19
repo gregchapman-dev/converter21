@@ -1900,6 +1900,12 @@ class M21ObjectConvert:
         if isinstance(obj, m21.stream.Stream):
             return False
 
+        if isinstance(obj, m21.harmony.ChordSymbol):
+            # special case that looks handleable (isinstance(Chord) is True),
+            # but must be skipped (if not .writeAsChord).
+            if not obj.writeAsChord:
+                return False
+
         for className in obj.classes:
             if className in M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG:
                 return False

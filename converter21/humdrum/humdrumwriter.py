@@ -2070,6 +2070,12 @@ class HumdrumWriter:
         event: EventData | None,
         nowTime: HumNumIn
     ) -> None:
+        if event is not None and isinstance(event.m21Object, m21.harmony.ChordSymbol):
+            # special case that looks handleable (isinstance(Chord) is True),
+            # but must be skipped (if not .writeAsChord).
+            if not event.m21Object.writeAsChord:
+                return
+
         partIndex: int   # event.partIndex
         staffIndex: int  # event.staffIndex
         voiceIndex: int  # event.voiceIndex
