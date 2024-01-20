@@ -129,18 +129,27 @@ class M21ObjectConvert:
         style: m21.style.Style | None = None
         if obj.hasStyleInformation:
             style = obj.style
+        objHasPlacement: bool = hasattr(obj, 'placement')
+        styleHasPlacement: bool = style is not None and hasattr(style, 'placement')
+
         alignVertical: str = ''
         if style is not None and hasattr(style, 'alignVertical'):
             alignVertical = getattr(style, 'alignVertical')
 
         placement: str | None = None
-        if hasattr(obj, 'placement'):
+        if objHasPlacement:
             placement = getattr(obj, 'placement')
-        elif style is not None and hasattr(style, 'placement'):
+        elif styleHasPlacement:
             placement = getattr(style, 'placement')
 
         if placement is None:
-            if style is None or style.absoluteY is None:
+            # last chance for placement (but only if obj or style has a .placement
+            # field) is style.absoluteY > or < 0
+            if not objHasPlacement and not styleHasPlacement:
+                return None
+            if t.TYPE_CHECKING:
+                assert style is not None
+            if style.absoluteY is None:
                 return None
 
             if style.absoluteY > 0:
