@@ -1516,7 +1516,7 @@ class M21Convert:
         if style:
             # absoluteY overrides placement
             if style.absoluteY is not None:
-                if style.absoluteY >= 0.0:
+                if style.absoluteY > 0.0:
                     placementString = ':a'
                 else:
                     placementString = ':b'
