@@ -147,9 +147,7 @@ class M21ObjectConvert:
             # field) is style.absoluteY > or < 0
             if not objHasPlacement and not styleHasPlacement:
                 return None
-            if t.TYPE_CHECKING:
-                assert style is not None
-            if style.absoluteY is None:
+            if style is None or style.absoluteY is None:
                 return None
 
             if style.absoluteY > 0:
