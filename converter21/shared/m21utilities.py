@@ -936,58 +936,16 @@ class M21Utilities:
     @staticmethod
     def getStaffGroupTrees(
         staffGroups: list[m21.layout.StaffGroup],
-        staffNumbersByM21Part: dict[m21.stream.Part, int],
-        m21PartsByStaffNumber: dict[int, m21.stream.Part]
+        staffNumbersByM21Part: dict[m21.stream.Part, int]
     ) -> list[M21StaffGroupTree]:
         topLevelParents: list[M21StaffGroupTree] = []
 
-        # Start with the tree being completely flat.
+        # Start with the tree being completely flat. Sort it by number of staves, so
+        # we can bail early when searching for smallest parent, since the first one
+        # we find will be the smallest.
         staffGroupTrees: list[M21StaffGroupTree] = [
             M21StaffGroupTree(sg, staffNumbersByM21Part) for sg in staffGroups
         ]
-
-        # if there are any left-over staves, make a StaffGroupTree (with no barthru and no symbol)
-        # for each contiguously-numbered group of staves.
-        leftOverStaffNumbers: set[int] = set()
-        for sn in m21PartsByStaffNumber:
-            leftOverStaffNumbers.add(sn)
-        for sgt in staffGroupTrees:
-            for sn in sgt.staffNums:
-                leftOverStaffNumbers.discard(sn)
-
-        leftOverStaffNumbersList: list[int] = list(leftOverStaffNumbers)
-        leftOverStaffNumbersList.sort()
-        if leftOverStaffNumbersList:
-            startNewRange: bool = True
-            for i in range(0, len(leftOverStaffNumbersList)):
-                thisStaffNum: int = leftOverStaffNumbersList[i]
-                staffNumStart: int
-                if startNewRange:
-                    staffNumStart = thisStaffNum
-                    startNewRange = False
-
-                if (i < len(leftOverStaffNumbersList) - 1
-                        and leftOverStaffNumbersList[i + 1] == thisStaffNum + 1):
-                    # not at end of contiguous range yet
-                    continue
-
-                # we are at end of contiguous range (either because the next
-                # staff number jumps, or because there is no next staff number)
-                sg: m21.layout.StaffGroup = m21.layout.StaffGroup()
-                sg.barTogether = False
-                sg.symbol = None
-                for sn in range(staffNumStart, thisStaffNum + 1):
-                    sg.addSpannedElements(m21PartsByStaffNumber[sn])
-
-                staffGroupTrees.append(
-                    M21StaffGroupTree(sg, staffNumbersByM21Part)
-                )
-
-                # set up for next staffGroup range
-                startNewRange = True
-
-        # Sort it by number of staves, so we can bail early when searching for smallest parent,
-        # since the first one we find will be the smallest.
         staffGroupTrees.sort(key=lambda tree: tree.numStaves)
 
         # Hook up each child node to the parent with the smallest superset of the child's staves.
