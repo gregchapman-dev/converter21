@@ -80,7 +80,10 @@ class M21ObjectConvert:
                 attr['tuplet'] = 'm1'
 
     @staticmethod
-    def _addStylisticAttributes(obj: m21.base.Music21Object, attr: dict[str, str]):
+    def _addStylisticAttributes(
+        obj: m21.base.Music21Object | m21.style.StyleMixin,
+        attr: dict[str, str]
+    ):
         if isinstance(obj, m21.note.NotRest):
             if obj.stemDirection == 'noStem':
                 attr['stem.visible'] = 'false'
@@ -122,7 +125,7 @@ class M21ObjectConvert:
                     attr['cue'] = 'true'
 
     @staticmethod
-    def m21PlacementToMei(obj: m21.base.Music21Object) -> str | None:
+    def m21PlacementToMei(obj: m21.base.Music21Object | m21.style.StyleMixin) -> str | None:
         style: m21.style.Style | None = None
         if obj.hasStyleInformation:
             style = obj.style
@@ -137,7 +140,13 @@ class M21ObjectConvert:
             placement = getattr(style, 'placement')
 
         if placement is None:
-            return None
+            if style is None or style.absoluteY is None:
+                return None
+
+            if style.absoluteY > 0:
+                placement = 'above'
+            elif style.absoluteY < 0:
+                placement = 'below'
 
         if placement == 'below' and alignVertical == 'middle':
             return 'between'
@@ -414,6 +423,8 @@ class M21ObjectConvert:
                 attr['n'] = str(verse.number)
             if verse.identifier and verse.identifier != verse.number:
                 label = str(verse.identifier)
+            M21ObjectConvert._addStylisticAttributes(verse, attr)
+
             tb.start('verse', attr)
             if label:
                 tb.start('label', {})

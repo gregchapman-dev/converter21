@@ -4182,6 +4182,7 @@ class MeiReader:
 
         nStr: str | None = elem.get('n')
         label: str | None = elem.get('label')  # will be overridden if we see <label>
+        place: str | None = elem.get('place')
         syllables: list[note.Lyric] = []
 
         for subElement in self._processEmbeddedElements(
@@ -4207,6 +4208,10 @@ class MeiReader:
                 environLocal.warn(_BAD_VERSE_NUMBER.format(nStr))
         if label is not None:
             verse.identifier = label
+        if place in ('above', 'below'):
+            if t.TYPE_CHECKING:
+                assert isinstance(verse.style, m21.style.TextStylePlacement)
+            verse.style.placement = place
 
         if len(syllables) == 1:
             return verse
