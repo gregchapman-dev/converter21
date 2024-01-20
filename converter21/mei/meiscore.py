@@ -314,6 +314,7 @@ class MeiScore:
             staffNums.append(staffNum)
 
         tb.end('staffGrp')
+        staffNums.sort()
         return staffNums
 
     def _findTopStaffGroupTreeStartingWith(self, staffNum: int) -> M21StaffGroupTree | None:
