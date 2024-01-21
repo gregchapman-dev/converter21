@@ -7868,7 +7868,6 @@ class HumdrumFile(HumdrumFileContent):
             force = True
             forceBelow = True
         elif ss.dynamPos == 0 and ss.dynamPosDefined:
-            force = True
             forceCenter = True
         elif ss.hasLyrics:
             forceAbove = True
@@ -8255,7 +8254,6 @@ class HumdrumFile(HumdrumFileContent):
             force = True
         elif ss.dynamPos == 0 and ss.dynamPosDefined:
             forceCenter = True
-            force = True
         elif ss.hasLyrics:
             forceAbove = True
 
