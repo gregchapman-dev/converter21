@@ -7859,7 +7859,7 @@ class HumdrumFile(HumdrumFileContent):
         forceCenter: bool = False
         trackDiff: int = 0
         staffAdj: int = ss.dynamStaffAdj
-        force: bool = False
+        force: bool = False  # actually force, not just prefer if unspecified
 
         if ss.dynamPos > 0:
             force = True
@@ -7868,6 +7868,7 @@ class HumdrumFile(HumdrumFileContent):
             force = True
             forceBelow = True
         elif ss.dynamPos == 0 and ss.dynamPosDefined:
+            force = True
             forceCenter = True
         elif ss.hasLyrics:
             forceAbove = True
@@ -7971,17 +7972,17 @@ class HumdrumFile(HumdrumFileContent):
                 # dynamics are set to bold (like verovio, only if other style stuff set)
                 m21sf.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
-            if above or forceAbove:
+            if above or (force and forceAbove) or (forceAbove and not below and not center):
                 if hasattr(m21sf, 'placement'):
                     m21sf.placement = 'above'
                 else:
                     m21sf.style.absoluteY = 'above'
-            elif below or forceBelow:
+            elif below or (force and forceBelow) or (forceBelow and not above and not center):
                 if hasattr(m21sf, 'placement'):
                     m21sf.placement = 'below'
                 else:
                     m21sf.style.absoluteY = 'below'
-            elif center or forceCenter:
+            elif center or (force and forceCenter) or (forceCenter and not above and not below):
                 # center means below, and vertically centered between this staff and the one below
                 m21sf.style.alignVertical = 'middle'
                 if hasattr(m21sf, 'placement'):
@@ -8166,17 +8167,18 @@ class HumdrumFile(HumdrumFileContent):
 
                 # verticalgroup: str = dyntok.layoutParameter('DY', 'vg')
                 # Q: is there a music21 equivalent to MEI's verticalgroup?
-                if above or forceAbove:
+                if above or (force and forceAbove) or (forceAbove and not below and not center):
                     if hasattr(m21Dynamic, 'placement'):
                         m21Dynamic.placement = 'above'
                     else:
                         m21Dynamic.style.absoluteY = 'above'
-                elif below or forceBelow:
+                elif below or (force and forceBelow) or (forceBelow and not above and not center):
                     if hasattr(m21Dynamic, 'placement'):
                         m21Dynamic.placement = 'below'
                     else:
                         m21Dynamic.style.absoluteY = 'below'
-                elif center or forceCenter:
+                elif center or (force and forceCenter) or (
+                        forceCenter and not above and not below):
                     # center means below, and vertically centered between
                     # this staff and the one below
                     m21Dynamic.style.alignVertical = 'middle'
@@ -8244,12 +8246,16 @@ class HumdrumFile(HumdrumFileContent):
         forceAbove: bool = False
         forceBelow: bool = False
         forceCenter: bool = False
+        force: bool = False  # actually force, not just prefer if unspecified
         if ss.dynamPos > 0:
             forceAbove = True
+            force = True
         elif ss.dynamPos < 0:
             forceBelow = True
+            force = True
         elif ss.dynamPos == 0 and ss.dynamPosDefined:
             forceCenter = True
+            force = True
         elif ss.hasLyrics:
             forceAbove = True
 
@@ -8295,7 +8301,7 @@ class HumdrumFile(HumdrumFileContent):
             # because we like putting fake spanned objects up in the measure.
             measure = self.getMeasureForStaff(measureIndex, newStaffIndex)
 
-            if (center or forceCenter) and not above and not below:
+            if center or (force and forceCenter) or (forceCenter and not above and not below):
                 # center means below, and vertically centered between this staff and the one below
                 if t.TYPE_CHECKING:
                     assert isinstance(m21Hairpin.style, m21.style.TextStyle)
@@ -8304,17 +8310,16 @@ class HumdrumFile(HumdrumFileContent):
                     m21Hairpin.placement = 'below'
                 else:
                     m21Hairpin.style.absoluteY = 'below'
-            else:
-                if above or forceAbove:
-                    if hasattr(m21Hairpin, 'placement'):
-                        m21Hairpin.placement = 'above'
-                    else:
-                        m21Hairpin.style.absoluteY = 'above'
-                elif below or forceBelow:
-                    if hasattr(m21Hairpin, 'placement'):
-                        m21Hairpin.placement = 'below'
-                    else:
-                        m21Hairpin.style.absoluteY = 'below'
+            elif above or (force and forceAbove) or (forceAbove and not below and not center):
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'above'
+                else:
+                    m21Hairpin.style.absoluteY = 'above'
+            elif below or (force and forceBelow) or (forceBelow and not above and not center):
+                if hasattr(m21Hairpin, 'placement'):
+                    m21Hairpin.placement = 'below'
+                else:
+                    m21Hairpin.style.absoluteY = 'below'
 
             color = self._getLoColor(dynTok, 'HP')
             if color:
@@ -8441,24 +8446,23 @@ class HumdrumFile(HumdrumFileContent):
             if newStaffIndex != staffIndex:
                 measure = self.getMeasureForStaff(measureIndex, newStaffIndex)
 
-            if (center or forceCenter) and not above and not below:
+            if center or (force and forceCenter) or (forceCenter and not above and not below):
                 # center means below, and vertically centered between this staff and the one below
                 m21TextExp.style.alignVertical = 'middle'
                 if hasattr(m21TextExp, 'placement'):
                     m21TextExp.placement = 'below'
                 else:
                     m21TextExp.style.absoluteY = 'below'
-            else:
-                if above or forceAbove:
-                    if hasattr(m21TextExp, 'placement'):
-                        m21TextExp.placement = 'above'
-                    else:
-                        m21TextExp.style.absoluteY = 'above'
-                elif below or forceBelow:
-                    if hasattr(m21TextExp, 'placement'):
-                        m21TextExp.placement = 'below'
-                    else:
-                        m21TextExp.style.absoluteY = 'below'
+            elif above or (force and forceAbove) or (forceAbove and not below and not center):
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'above'
+                else:
+                    m21TextExp.style.absoluteY = 'above'
+            elif below or (force and forceBelow) or (forceBelow and not above and not center):
+                if hasattr(m21TextExp, 'placement'):
+                    m21TextExp.placement = 'below'
+                else:
+                    m21TextExp.style.absoluteY = 'below'
 
             if measure is not None:
                 measure.insert(dynamicOffsetInVoice, m21TextExp)
