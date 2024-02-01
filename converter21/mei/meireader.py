@@ -7727,9 +7727,9 @@ class MeiReader:
         # track the bar's duration
         maxBarDuration: OffsetQL = 0.0
 
-        # First we have to peek into first layer of first staff to see if there is a meterSig, because if so,
-        # it will apply to tstamp computations for anything else we see in this measure.
-        foundOne: bool = False
+        # First we have to peek into first layer of first staff to see if there is a
+        # meterSig, because if so, it will apply to tstamp computations for anything
+        # else we see in this measure.
         eachElem: Element
         for eachStaff in elem.iterfind(f'{MEI_NS}staff'):
             for eachLayer in eachStaff.iterfind(f'{MEI_NS}layer'):

@@ -16,7 +16,7 @@ from copy import deepcopy
 import typing as t
 
 import music21 as m21
-from music21.common import opFrac
+from music21.common import opFrac, OffsetQL
 
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
@@ -2302,47 +2302,66 @@ class HumdrumWriter:
         event: EventData,
         extraDynamics: list[tuple[int, int, m21.dynamics.Dynamic]]
     ) -> None:
-        dynamics: list[tuple[int, int, str]] = []
+        dynamics: list[tuple[int, int, OffsetQL, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
         eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
 
         if eventIsDynamicWedge:
-            dynamics.append((event.partIndex, event.staffIndex, event.getDynamicWedgeString()))
+            dynamics.append((
+                event.partIndex,
+                event.staffIndex,
+                event.startTime,
+                event.getDynamicWedgeString()
+            ))
 
         for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
-            dynamics.append((partIndex, staffIndex, dstring))
+            dynamics.append((partIndex, staffIndex, dynamic.offset, dstring))
 
         if not dynamics:
             # we shouldn't have been called
             return
 
         # The following dictionaries are keyed by partIndex (no staffIndex here)
-        dynTokens: dict[int, HumdrumToken] = {}
+        dynTokens: dict[int, tuple[OffsetQL, HumdrumToken]] = {}
         moreThanOneDynamic: dict[int, bool] = {}
         currentDynamicIndex: dict[int, int] = {}
 
-        for partIndex, staffIndex, dstring in dynamics:
+        for partIndex, staffIndex, offset, dstring in dynamics:
             if not dstring:
                 continue
 
             if dynTokens.get(partIndex, None) is None:
-                dynTokens[partIndex] = HumdrumToken(dstring)
+                dynTokens[partIndex] = offset, HumdrumToken(dstring)
                 moreThanOneDynamic[partIndex] = False
             else:
-                dynTokens[partIndex].text += ' ' + dstring
+                dynTokens[partIndex][1].text += ' ' + dstring
                 moreThanOneDynamic[partIndex] = True
                 currentDynamicIndex[partIndex] = 1  # ':n=' is 1-based
 
-        # dynTokens key is tuple[int, int], value is token
-        for partIndex, token in dynTokens.items():
+        # dynTokens key is partIndex, value is tuple(offset, token)
+        for partIndex, (offset, token) in dynTokens.items():
             if outSlice is None:
-                # we better make one, timestamped at end of measure, type Notes (even though it
-                # will only have '.' in the **kern spines, and a 'p' (or whatever) in the
-                # **dynam spine)
-                outSlice = GridSlice(outgm, outgm.timestamp + outgm.duration, SliceType.Notes)
-                outSlice.initializeBySlice(outgm.slices[-1])
+                # Find one, timestamped at or just before offset, type Notes.
+                # Yes, the offset might be wrong (see opus133.mxl first measure,
+                # first staff, 'f' at offset=7/24ql, which ends up at offset=0).
+                # But to get that right, we'd have to add a voice with invisible
+                # rests, and that seems excessive right now.  Better to get the
+                # dynamic in, even at slightly wrong offset, than drop it on the
+                # floor.
+                theSlice: GridSlice | None = None
+                for testSlice in outgm.slices:
+                    if not testSlice.isNoteSlice:
+                        continue
+                    if testSlice.timestamp > offset:
+                        break
+                    theSlice = testSlice
+
+                if theSlice is None:
+                    theSlice = outgm.slices[-1]
+
+                outSlice = theSlice
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
