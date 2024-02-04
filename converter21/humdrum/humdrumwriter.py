@@ -16,11 +16,12 @@ from copy import deepcopy
 import typing as t
 
 import music21 as m21
-from music21.common import opFrac, OffsetQL
+from music21.common import opFrac
 
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
+from converter21.humdrum import Convert
 
 from converter21.humdrum import EventData
 from converter21.humdrum import MeasureData, SimultaneousEvents
@@ -1973,6 +1974,27 @@ class HumdrumWriter:
         elif isSystemBreak:
             outgm.addGlobalComment('!!LO:LB:g=z', nowTime)
 
+    def insertSliceByTimestamp(self, slices: list[GridSlice], theSlice: GridSlice):
+        if not slices:
+            slices.append(theSlice)
+            return
+
+        if slices[0].timestamp > theSlice.timestamp:
+            slices.insert(0, theSlice)
+            return
+
+        # travel backwards in the slices list until the correct
+        # time position is found.  insertionIdx goes from len(slices)
+        # down to 1 (thus we have to handle 0 above)
+        insertionIdx: int = len(slices)
+        for walkSlice in reversed(slices):
+            if walkSlice.timestamp <= theSlice.timestamp:
+                slices.insert(insertionIdx, theSlice)
+                return
+            insertionIdx -= 1
+
+        # How did we get here? Can't be!
+        raise HumdrumInternalError('insertion by timestamp failed')
 
     '''
     /////////////////////////////
@@ -1990,20 +2012,7 @@ class HumdrumWriter:
 
         outSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Notes, self.staffCounts)
 
-        if len(outgm.slices) == 0:
-            outgm.slices.append(outSlice)
-        else:
-            # insert into correct time position in measure
-            lastTime: HumNum = outgm.slices[-1].timestamp
-            if nowTime >= lastTime:
-                outgm.slices.append(outSlice)
-            else:
-                # travel backwards in the measure until the correct
-                # time position is found.
-                for i, walkSlice in enumerate(reversed(outgm.slices)):
-                    if walkSlice.timestamp <= nowTime:
-                        outgm.slices.insert(i, outSlice)
-                        break
+        self.insertSliceByTimestamp(outgm.slices, outSlice)
 
         for ne in nowEvents:
             events: list[EventData] = ne.nonZeroDur
@@ -2290,19 +2299,32 @@ class HumdrumWriter:
         # might need postNoteText processing, but it looks like that's only for a case
         # ... where '**blah' (a humdrum exInterp) occurs in a musicXML direction node. (Why?!?)
 
+    def sliceStartsNoteInPart(self, theSlice: GridSlice, partIndex: int) -> bool:
+        if not theSlice.isNoteSlice:
+            return False
+
+        part: GridPart = theSlice.parts[partIndex]
+        for staff in part.staves:
+            for voice in staff.voices:
+                if voice is not None and voice.token is not None and not voice.token.isNull:
+                    # found a note in this part
+                    return True
+
+        return False
+
     '''
     //////////////////////////////
     //
     // Tool_musicxml2hum::addDynamic -- extract any dynamics for the event
     '''
-    @staticmethod
     def _addDynamics(
+        self,
         outSlice: GridSlice,
         outgm: GridMeasure,
         event: EventData,
         extraDynamics: list[tuple[int, int, m21.dynamics.Dynamic]]
     ) -> None:
-        dynamics: list[tuple[int, int, OffsetQL, str]] = []
+        dynamics: list[tuple[int, int, HumNum, str]] = []
 
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
         eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
@@ -2317,14 +2339,16 @@ class HumdrumWriter:
 
         for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
-            dynamics.append((partIndex, staffIndex, dynamic.offset, dstring))
+            dynamics.append((
+                partIndex, staffIndex, dynamic.getOffsetInHierarchy(self._m21Score), dstring
+            ))
 
         if not dynamics:
             # we shouldn't have been called
             return
 
         # The following dictionaries are keyed by partIndex (no staffIndex here)
-        dynTokens: dict[int, tuple[OffsetQL, HumdrumToken]] = {}
+        dynTokens: dict[int, tuple[HumNum, HumdrumToken]] = {}
         moreThanOneDynamic: dict[int, bool] = {}
         currentDynamicIndex: dict[int, int] = {}
 
@@ -2343,16 +2367,21 @@ class HumdrumWriter:
         # dynTokens key is partIndex, value is tuple(offset, token)
         for partIndex, (offset, token) in dynTokens.items():
             if outSlice is None:
-                # Find one, timestamped at or just before offset, type Notes.
-                # Yes, the offset might be wrong (see opus133.mxl first measure,
-                # first staff, 'f' at offset=7/24ql, which ends up at offset=0).
-                # But to get that right, we'd have to add a voice with invisible
-                # rests, and that seems excessive right now.  Better to get the
-                # dynamic in, even at slightly wrong offset, than drop it on the
-                # floor.
+                # Find one, timestamped at or just before offset (type Notes),
+                # with a note starting in any voice in any staff in the part
+                # (that's so we can split off another voice right there, which
+                # we can't do if we're in the middle of a note in the part).
+                # If it is at the right offset, just use it. If it's just before
+                # the right offset, make a new slice (initialized from the one
+                # you found), and add a voice to (partIndex, staffIndex).  Then
+                # put an appropriate invisible rest in that voice to make up the
+                # distance to the dynamic.  Insert just after the slice you found,
+                # and then add _another_ similar slice (initialized from the one
+                # you inserted), with an invisible rest in that same voice that
+                # takes up the rest of the measure, as well as the dynamic.
                 theSlice: GridSlice | None = None
                 for testSlice in outgm.slices:
-                    if not testSlice.isNoteSlice:
+                    if not self.sliceStartsNoteInPart(testSlice, partIndex):
                         continue
                     if testSlice.timestamp > offset:
                         break
@@ -2361,7 +2390,70 @@ class HumdrumWriter:
                 if theSlice is None:
                     theSlice = outgm.slices[-1]
 
-                outSlice = theSlice
+                if theSlice.timestamp == offset:
+                    # If it is at the right offset, just use it.
+                    outSlice = theSlice
+                else:
+                    # Add an extra voice in this part/staff to theSlice, containing
+                    # an invisible rest with duration enough to reach the dynamic offset.
+                    # Add more slices as necessary so the rest durations are expressible
+                    # as powerOfTwo + numDots.
+                    # Make a new slice that has an invisible rest with timestamp == offset
+                    # and duration == measureDuration - offset in that same voice.  New
+                    # slice also gets the dynamic, which now is at the correct offset.  Add
+                    # more slices as necessary so the rest durations are expressible as
+                    # powerOfTwo + numDots.
+                    measureEndTimestamp: HumNum = opFrac(outgm.timestamp + outgm.duration)
+                    firstRestDuration: HumNum = opFrac(offset - theSlice.timestamp)
+                    firstRestDurations: list[HumNum] = (
+                        M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(firstRestDuration)
+                    )
+                    secondRestDuration: HumNum = opFrac(
+                        (measureEndTimestamp - theSlice.timestamp) - firstRestDuration
+                    )
+                    secondRestDurations: list[HumNum] = (
+                        M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(secondRestDuration)
+                    )
+
+                    theSlice.parts[partIndex].staves[staffIndex].voices.append(
+                        GridVoice(f'{Convert.durationToRecip(firstRestDurations[0])}ryy')
+                    )
+                    newTimestamp: HumNum = opFrac(theSlice.timestamp + firstRestDurations[0])
+
+                    for i in range(1, len(firstRestDurations)):
+                        newSlice = GridSlice(
+                            outgm,
+                            newTimestamp,
+                            SliceType.Notes
+                        )
+                        newSlice.initializeBySlice(theSlice)
+                        newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
+                            GridVoice(f'{Convert.durationToRecip(firstRestDurations[i])}ryy')
+                        )
+                        self.insertSliceByTimestamp(outgm.slices, newSlice)
+                        newTimestamp = opFrac(newTimestamp + firstRestDurations[i])
+
+                    newSlice = GridSlice(outgm, newTimestamp, SliceType.Notes)
+                    newSlice.initializeBySlice(theSlice)
+                    newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
+                        GridVoice(f'{Convert.durationToRecip(secondRestDurations[0])}ryy')
+                    )
+                    self.insertSliceByTimestamp(outgm.slices, newSlice)
+                    newTimestamp = opFrac(newTimestamp + secondRestDurations[0])
+                    outSlice = newSlice  # This is the slice that gets the dynamic
+
+                    for i in range(1, len(secondRestDurations)):
+                        newSlice = GridSlice(
+                            outgm,
+                            newTimestamp,
+                            SliceType.Notes
+                        )
+                        newSlice.initializeBySlice(theSlice)
+                        newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
+                            GridVoice(f'{Convert.durationToRecip(secondRestDurations[i])}ryy')
+                        )
+                        self.insertSliceByTimestamp(outgm.slices, newSlice)
+                        newTimestamp = opFrac(newTimestamp + secondRestDurations[i])
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
