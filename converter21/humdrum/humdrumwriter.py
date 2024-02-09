@@ -13,6 +13,7 @@
 import sys
 from enum import IntEnum, auto
 from copy import deepcopy
+from fractions import Fraction
 import typing as t
 
 import music21 as m21
@@ -1371,7 +1372,7 @@ class HumdrumWriter:
             status = status and self._convertNowEvents(gm, nowEvents, processTime)
         # end loop over slices (i.e. events in the measure across all partstaves)
 
-        if self._currentTexts or self._currentDynamics or self._currentTempos:
+        if self._currentTexts or self._currentTempos:
             # one more _addEvent (no slice, no event) to flush out these
             # things that have to be exported as a side-effect of the next
             # durational event (but we've hit end of measure, so there is
@@ -1379,6 +1380,9 @@ class HumdrumWriter:
             # move to the next measure... which we are NOT).
             self._addEvent(None, gm, None, processTime)
 
+        if self._currentDynamics:
+            self._addUnassociatedDynamics(gm, self._currentDynamics)
+            self._currentDynamics = []
         # if self._offsetHarmony:
             # self._insertOffsetHarmonyIntoMeasure(gm)
         # if self._offsetFiguredBass:
@@ -2282,17 +2286,12 @@ class HumdrumWriter:
                 self._addTempos(outSlice, outgm, self._currentTempos)
                 self._currentTempos = []  # they've all been added
 
-        if (event is not None and event.isDynamicWedgeStartOrStop) or self._currentDynamics:
-            # self._currentDynamics contains any zero-duration (unassociated) dynamics ('pp' et al)
-            # that could be in any part/staff.
+        if event is not None and event.isDynamicWedgeStartOrStop:
             # event has a single dynamic wedge start or stop, that is in this part/staff.
-            if t.TYPE_CHECKING:
-                assert isinstance(outSlice, GridSlice)
-                assert isinstance(event, EventData)
-            self._addDynamics(outSlice, outgm, event, self._currentDynamics)
-            self._currentDynamics = []
-            if event is not None and event.isDynamicWedgeStartOrStop:
-                event.reportDynamicToOwner()  # reports that dynamics exist in this part/staff
+            # if t.TYPE_CHECKING:
+            assert isinstance(outSlice, GridSlice)
+            self._addEventDynamics(outSlice, outgm, event)
+            event.reportDynamicToOwner()  # reports that dynamics exist in this part/staff
 
         # might need special hairpin ending processing here (or might be musicXML-specific).
 
@@ -2317,30 +2316,115 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::addDynamic -- extract any dynamics for the event
     '''
-    def _addDynamics(
+    def _addEventDynamics(
         self,
         outSlice: GridSlice,
         outgm: GridMeasure,
-        event: EventData,
-        extraDynamics: list[tuple[int, int, m21.dynamics.Dynamic]]
+        event: EventData
     ) -> None:
-        dynamics: list[tuple[int, int, HumNum, str]] = []
-
         eventIsDynamicWedge: bool = event is not None and event.isDynamicWedgeStartOrStop
         eventIsDynamicWedgeStart: bool = event is not None and event.isDynamicWedgeStart
 
-        if eventIsDynamicWedge:
-            dynamics.append((
-                event.partIndex,
-                event.staffIndex,
-                event.startTime,
-                event.getDynamicWedgeString()
-            ))
+        if not eventIsDynamicWedge:
+            # we shouldn't have been called
+            return
+
+        partIndex: int = event.partIndex
+        dstring: str = event.getDynamicWedgeString()
+        if not dstring:
+            return
+
+        token = HumdrumToken(dstring)
+
+        moreThanOneDynamic: bool = False
+        currentDynamicIndex: int = 1  # ':n=' is 1-based
+
+        existingDynamicsToken: HumdrumToken | None = (
+            outSlice.parts[partIndex].dynamics
+        )
+        if existingDynamicsToken is None:
+            outSlice.parts[partIndex].dynamics = token
+        else:
+            existingDynamicsToken.text += ' ' + token.text
+            moreThanOneDynamic = True
+
+        # add any necessary layout params for the one DynamicWedge start or stop that is this
+        # event (but only if it's a start)
+        if eventIsDynamicWedgeStart:
+            if t.TYPE_CHECKING:
+                assert isinstance(event.m21Object, m21.dynamics.DynamicWedge)
+
+            dparam: str | None = (
+                M21Convert.getDynamicWedgeStartParameters(event.m21Object, event.staffIndex)
+            )
+            if dparam:
+                fullParam: str = '!LO:HP'
+                if moreThanOneDynamic:
+                    fullParam += ':n=' + str(currentDynamicIndex)
+                    currentDynamicIndex += 1
+                fullParam += dparam
+                outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
+
+    def _addInvisibleRestVoice(
+        self,
+        timestamp: HumNum,
+        duration: HumNum,
+        outgm: GridMeasure,
+        slicePattern: GridSlice,
+        partIndex: int,
+        staffIndex: int,
+        voiceIndex: int
+    ) -> GridSlice:
+        # creates/inserts (or finds/reuses) a slice at timestamp, to add a new voice containing
+        # an invisible rest of the requested duration.
+        foundSlice: GridSlice | None = None
+        for testSlice in outgm.slices:
+            if not testSlice.isNoteSlice:
+                continue
+            if testSlice.timestamp > timestamp:
+                break
+            if testSlice.timestamp == timestamp:
+                if (len(testSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex):
+                    foundSlice = testSlice
+                    break
+
+        if foundSlice is not None:
+            newSlice = foundSlice
+            newSlice.parts[partIndex].staves[staffIndex].voices.append(
+                GridVoice(f'{Convert.durationToRecip(duration)}ryy')
+            )
+            # no need to insert, since we found it in outgm already
+        else:
+            newSlice = GridSlice(outgm, timestamp, SliceType.Notes)
+            newSlice.initializeBySlice(slicePattern)
+            if len(newSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex:
+                newSlice.parts[partIndex].staves[staffIndex].voices.append(
+                    GridVoice(f'{Convert.durationToRecip(duration)}ryy')
+                )
+            elif len(newSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex + 1:
+                newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
+                    GridVoice(f'{Convert.durationToRecip(duration)}ryy')
+                )
+
+            self.insertSliceByTimestamp(outgm.slices, newSlice)
+
+        return newSlice
+
+    def _addUnassociatedDynamics(
+        self,
+        outgm: GridMeasure,
+        extraDynamics: list[tuple[int, int, m21.dynamics.Dynamic]]
+    ) -> None:
+        dynamics: list[tuple[int, int, m21.dynamics.Dynamic, HumNum, str]] = []
 
         for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
             dynamics.append((
-                partIndex, staffIndex, dynamic.getOffsetInHierarchy(self._m21Score), dstring
+                partIndex,
+                staffIndex,
+                dynamic,
+                dynamic.getOffsetInHierarchy(self._m21Score),
+                dstring
             ))
 
         if not dynamics:
@@ -2352,7 +2436,7 @@ class HumdrumWriter:
         moreThanOneDynamic: dict[int, bool] = {}
         currentDynamicIndex: dict[int, int] = {}
 
-        for partIndex, staffIndex, offset, dstring in dynamics:
+        for partIndex, staffIndex, dynamic, offset, dstring in dynamics:
             if not dstring:
                 continue
 
@@ -2366,94 +2450,111 @@ class HumdrumWriter:
 
         # dynTokens key is partIndex, value is tuple(offset, token)
         for partIndex, (offset, token) in dynTokens.items():
-            if outSlice is None:
-                # Find one, timestamped at or just before offset (type Notes),
-                # with a note starting in any voice in any staff in the part
-                # (that's so we can split off another voice right there, which
-                # we can't do if we're in the middle of a note in the part).
-                # If it is at the right offset, just use it. If it's just before
-                # the right offset, make a new slice (initialized from the one
-                # you found), and add a voice to (partIndex, staffIndex).  Then
-                # put an appropriate invisible rest in that voice to make up the
-                # distance to the dynamic.  Insert just after the slice you found,
-                # and then add _another_ similar slice (initialized from the one
-                # you inserted), with an invisible rest in that same voice that
-                # takes up the rest of the measure, as well as the dynamic.
-                theSlice: GridSlice | None = None
-                for testSlice in outgm.slices:
-                    if not self.sliceStartsNoteInPart(testSlice, partIndex):
-                        continue
-                    if testSlice.timestamp > offset:
-                        break
-                    theSlice = testSlice
+            # if offset == opFrac(Fraction(2569, 24)):
+            #     print('hey')
 
-                if theSlice is None:
-                    theSlice = outgm.slices[-1]
+            # Find a slice, timestamped at or just before offset (type Notes),
+            # with a note starting in any voice in any staff in the part
+            # (that's so we can split off another voice right there, which
+            # we can't do if we're in the middle of a note in the part).
+            # If it is at the right offset, just use it. If it's just before
+            # the right offset, make a new slice (initialized from the one
+            # you found), and add a voice to (partIndex, staffIndex).  Then
+            # put an appropriate invisible rest in that voice to make up the
+            # distance to the dynamic.  Insert just after the slice you found,
+            # and then add _another_ similar slice (initialized from the one
+            # you inserted), with an invisible rest in that same voice that
+            # takes up the rest of the measure, as well as the dynamic.
+            outSlice: GridSlice
+            theSlice: GridSlice | None = None
+            for testSlice in outgm.slices:
+                if not self.sliceStartsNoteInPart(testSlice, partIndex):
+                    continue
+                if testSlice.timestamp > offset:
+                    break
+                theSlice = testSlice
 
-                if theSlice.timestamp == offset:
-                    # If it is at the right offset, just use it.
-                    outSlice = theSlice
-                else:
-                    # Add an extra voice in this part/staff to theSlice, containing
-                    # an invisible rest with duration enough to reach the dynamic offset.
-                    # Add more slices as necessary so the rest durations are expressible
-                    # as powerOfTwo + numDots.
-                    # Make a new slice that has an invisible rest with timestamp == offset
-                    # and duration == measureDuration - offset in that same voice.  New
-                    # slice also gets the dynamic, which now is at the correct offset.  Add
-                    # more slices as necessary so the rest durations are expressible as
-                    # powerOfTwo + numDots.
-                    measureEndTimestamp: HumNum = opFrac(outgm.timestamp + outgm.duration)
-                    firstRestDuration: HumNum = opFrac(offset - theSlice.timestamp)
-                    firstRestDurations: list[HumNum] = (
-                        M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(firstRestDuration)
+            if theSlice is None:
+                raise HumdrumInternalError('No appropriate Note slice found in measure')
+
+            if theSlice.timestamp == offset:
+                # If it is at the right offset, just use it.
+                outSlice = theSlice
+            else:
+                # Add an extra voice in this part/staff to theSlice, containing
+                # an invisible rest with duration enough to reach the dynamic offset.
+                # Add more slices as necessary so the rest durations are expressible
+                # as powerOfTwo + numDots.
+                # Make a new slice that has an invisible rest with timestamp == offset
+                # and duration == measureDuration - offset in that same voice.  New
+                # slice also gets the dynamic, which now is at the correct offset.  Add
+                # more slices as necessary so the rest durations are expressible as
+                # powerOfTwo + numDots.
+                measureEndTimestamp: HumNum = opFrac(outgm.timestamp + outgm.duration)
+                firstRestDuration: HumNum = opFrac(offset - theSlice.timestamp)
+                firstRestDurations: list[HumNum] = (
+                    M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
+                        firstRestDuration,
+                        tupletsOK=True
                     )
-                    secondRestDuration: HumNum = opFrac(
-                        (measureEndTimestamp - theSlice.timestamp) - firstRestDuration
+                )
+                secondRestDuration: HumNum = opFrac(
+                    (measureEndTimestamp - theSlice.timestamp) - firstRestDuration
+                )
+                secondRestDurations: list[HumNum] = (
+                    M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
+                        secondRestDuration,
+                        tupletsOK=True
                     )
-                    secondRestDurations: list[HumNum] = (
-                        M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(secondRestDuration)
+                )
+
+                numVoicesBeforeAppending: int = (
+                    len(theSlice.parts[partIndex].staves[staffIndex].voices)
+                )
+                theSlice.parts[partIndex].staves[staffIndex].voices.append(
+                    GridVoice(f'{Convert.durationToRecip(firstRestDurations[0])}ryy')
+                )
+                newTimestamp: HumNum = opFrac(theSlice.timestamp + firstRestDurations[0])
+
+                for i in range(1, len(firstRestDurations)):
+                    newSlice = self._addInvisibleRestVoice(
+                        newTimestamp,
+                        firstRestDurations[i],
+                        outgm,
+                        theSlice,
+                        partIndex,
+                        staffIndex,
+                        numVoicesBeforeAppending
                     )
+                    newTimestamp = opFrac(newTimestamp + firstRestDurations[i])
 
-                    theSlice.parts[partIndex].staves[staffIndex].voices.append(
-                        GridVoice(f'{Convert.durationToRecip(firstRestDurations[0])}ryy')
+                # Do I need a new slice?  There might be an existing slice that I
+                # can append a voice to.  It would be a Note slice at newTimestamp,
+                # with one fewer voices than I need in this part/staff
+                newSlice = self._addInvisibleRestVoice(
+                    newTimestamp,
+                    secondRestDurations[0],
+                    outgm,
+                    theSlice,
+                    partIndex,
+                    staffIndex,
+                    numVoicesBeforeAppending
+                )
+
+                newTimestamp = opFrac(newTimestamp + secondRestDurations[0])
+                outSlice = newSlice  # This is the slice that gets the dynamic
+
+                for i in range(1, len(secondRestDurations)):
+                    newSlice = self._addInvisibleRestVoice(
+                        newTimestamp,
+                        secondRestDurations[i],
+                        outgm,
+                        theSlice,
+                        partIndex,
+                        staffIndex,
+                        numVoicesBeforeAppending
                     )
-                    newTimestamp: HumNum = opFrac(theSlice.timestamp + firstRestDurations[0])
-
-                    for i in range(1, len(firstRestDurations)):
-                        newSlice = GridSlice(
-                            outgm,
-                            newTimestamp,
-                            SliceType.Notes
-                        )
-                        newSlice.initializeBySlice(theSlice)
-                        newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
-                            GridVoice(f'{Convert.durationToRecip(firstRestDurations[i])}ryy')
-                        )
-                        self.insertSliceByTimestamp(outgm.slices, newSlice)
-                        newTimestamp = opFrac(newTimestamp + firstRestDurations[i])
-
-                    newSlice = GridSlice(outgm, newTimestamp, SliceType.Notes)
-                    newSlice.initializeBySlice(theSlice)
-                    newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
-                        GridVoice(f'{Convert.durationToRecip(secondRestDurations[0])}ryy')
-                    )
-                    self.insertSliceByTimestamp(outgm.slices, newSlice)
-                    newTimestamp = opFrac(newTimestamp + secondRestDurations[0])
-                    outSlice = newSlice  # This is the slice that gets the dynamic
-
-                    for i in range(1, len(secondRestDurations)):
-                        newSlice = GridSlice(
-                            outgm,
-                            newTimestamp,
-                            SliceType.Notes
-                        )
-                        newSlice.initializeBySlice(theSlice)
-                        newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
-                            GridVoice(f'{Convert.durationToRecip(secondRestDurations[i])}ryy')
-                        )
-                        self.insertSliceByTimestamp(outgm.slices, newSlice)
-                        newTimestamp = opFrac(newTimestamp + secondRestDurations[i])
+                    newTimestamp = opFrac(newTimestamp + secondRestDurations[i])
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
@@ -2465,29 +2566,10 @@ class HumdrumWriter:
                 moreThanOneDynamic[partIndex] = True
                 currentDynamicIndex[partIndex] = 1  # ':n=' is 1-based
 
-        # add any necessary layout params
-        dparam: str | None
-        fullParam: str
-
-        # first the one DynamicWedge start or stop that is this event (but only if it's a start)
-        if eventIsDynamicWedgeStart:
-            if t.TYPE_CHECKING:
-                assert isinstance(event.m21Object, m21.dynamics.DynamicWedge)
-
-            dparam = M21Convert.getDynamicWedgeStartParameters(event.m21Object, event.staffIndex)
+            # add any necessary layout params for the dynamics we emitted
+            dparam: str | None = M21Convert.getDynamicParameters(dynamic, staffIndex)
             if dparam:
-                fullParam = '!LO:HP'
-                if moreThanOneDynamic[partIndex]:
-                    fullParam += ':n=' + str(currentDynamicIndex[partIndex])
-                    currentDynamicIndex[partIndex] += 1
-                fullParam += dparam
-                outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
-
-        # next the Dynamic objects ('pp', etc) in extraDynamics
-        for partIndex, staffIndex, dynamic in extraDynamics:
-            dparam = M21Convert.getDynamicParameters(dynamic, staffIndex)
-            if dparam:
-                fullParam = '!LO:DY'
+                fullParam: str = '!LO:DY'
 
                 if moreThanOneDynamic[partIndex]:
                     fullParam += ':n=' + str(currentDynamicIndex[partIndex])

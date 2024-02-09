@@ -652,8 +652,18 @@ class M21Utilities:
         # None signals that we couldn't actually find a power-of-two duration
         return (dd, None)
 
+    TUPLET_MULTIPLIER_LIST: list[OffsetQL] = [
+        Fraction(2, 3),
+        Fraction(3, 2),
+        Fraction(4, 3),
+        Fraction(3, 4),
+    ]
+
     @staticmethod
-    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: OffsetQLIn) -> list[OffsetQL]:
+    def getPowerOfTwoDurationsWithDotsAddingTo(
+        quarterLength: OffsetQLIn,
+        tupletsOK: bool = False
+    ) -> list[OffsetQL]:
         output: list[OffsetQL] = []
         ql: OffsetQL = opFrac(quarterLength)
 
@@ -675,6 +685,21 @@ class M21Utilities:
                 # power of two + maybe some dots
                 output.append(ql)
                 return output
+
+        # we couldn't compute a full list. Attempt some tuplets (if tupletsOK)
+        if not tupletsOK:
+            # we couldn't compute a full list so just return the original param
+            return [opFrac(quarterLength)]
+
+        tupletMultiplier: OffsetQL = Fraction(3, 2)
+        tupletMultiplier = opFrac(tupletMultiplier)
+        ql = opFrac(quarterLength * tupletMultiplier)
+        output = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(ql, tupletsOK=False)
+        if len(output) > 1:
+            return [opFrac(out / tupletMultiplier) for out in output]
+
+        if M21Utilities.isPowerOfTwoWithDots(output[0]):
+            return [opFrac(output[0] / tupletMultiplier)]
 
         # we couldn't compute a full list so just return the original param
         return [opFrac(quarterLength)]

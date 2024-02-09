@@ -3816,7 +3816,7 @@ class HumdrumFile(HumdrumFileContent):
         # FakeRestTokens, etc. are filtered out for the analysis.
         durItems: list[HumdrumToken] = []
 
-        # indexmapping == maping from a duritem index to a layerdata index.
+        # indexmapping == mapping from a duritem index to a layerdata index.
         indexMapping: list[int] = []
 
         # indexmapping2 == mapping from a layerdata index to a duritem index,
@@ -4144,6 +4144,7 @@ class HumdrumFile(HumdrumFileContent):
             if numNotesActual[i] < 0:
                 numNotesActual[i] = -numNotesActual[i]
 
+        haveGoodDurationNormal: bool = False
         for i in range(0, len(durItems)):
             if tupletDurs[i] is None:
                 durationTupleNormal[i] = None
@@ -4181,7 +4182,6 @@ class HumdrumFile(HumdrumFileContent):
                 # is 3), see if the partial duration is 1/3 or 2/3 of a reasonable tuplet duration.
                 # A reasonable tuplet duration is (first) a power-of-two duration, and (next) a
                 # dotted power-of-two duration.
-                haveGoodDurationNormal: bool = False
 
                 # try (first) for power of two full tuplet duration
                 proposedTupletDur: HumNum
@@ -4214,8 +4214,47 @@ class HumdrumFile(HumdrumFileContent):
                         haveGoodDurationNormal = True
                         break
 
-                if not haveGoodDurationNormal:
-                    print('Cannot figure out a reasonable tuplet duration', file=sys.stderr)
+                if haveGoodDurationNormal:
+                    continue
+
+                # try (next) for double-dotted power of two full tuplet duration
+                for numNotes in reversed(range(1, numNotesActual[i])):
+                    proposedTupletDur = opFrac(
+                        tupletDursI / opFrac(Fraction(numNotes, numNotesActual[i]))
+                    )
+                    tupletDurWithoutDoubleDot: HumNum = opFrac(
+                        proposedTupletDur / opFrac(Fraction(7, 4))
+                    )
+                    if M21Utilities.isPowerOfTwo(tupletDurWithoutDoubleDot):
+                        durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
+                            proposedTupletDur
+                        )
+                        haveGoodDurationNormal = True
+                        break
+
+                if haveGoodDurationNormal:
+                    continue
+
+                # try (next) for triple-dotted power of two full tuplet duration
+                for numNotes in reversed(range(1, numNotesActual[i])):
+                    proposedTupletDur = opFrac(
+                        tupletDursI / opFrac(Fraction(numNotes, numNotesActual[i]))
+                    )
+                    tupletDurWithoutTripleDot: HumNum = opFrac(
+                        proposedTupletDur / opFrac(Fraction(15, 8))
+                    )
+                    if M21Utilities.isPowerOfTwo(tupletDurWithoutTripleDot):
+                        durationTupleNormal[i] = m21.duration.durationTupleFromQuarterLength(
+                            proposedTupletDur
+                        )
+                        haveGoodDurationNormal = True
+                        break
+
+        # At this point, if we see a durationTuple.type='inexpressible', we will
+        # simply split that tuplet apart into it's constituent notes, making
+        # each of those notes a tuplet in its own right, recomputing its durationTuple
+        # on the fly (but using the tuplet's tupletMultiplier for all the new one-note
+        # tuplets).
 
         tgs = []
         for i, layerTok in enumerate(layerData):
