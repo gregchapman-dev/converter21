@@ -293,7 +293,9 @@ class MeasureData:
                     continue
 
             # handle any gaps between elements by emitting hidden rest(s)
-            elStartTime: OffsetQL = self.startTime + element.getOffsetInHierarchy(self.m21Measure)
+            elStartTime: OffsetQL = opFrac(
+                self.startTime + element.getOffsetInHierarchy(self.m21Measure)
+            )
             if elStartTime > currentEmittedTime:
                 durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
                     elStartTime - currentEmittedTime

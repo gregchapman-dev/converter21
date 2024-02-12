@@ -1755,6 +1755,8 @@ class HumdrumFile(HumdrumFileContent):
         measureKey: tuple[int | None, int],
         layerIndex: int
     ) -> None:
+        if measureKey == (6937, 6951):
+            print('hey')
         staffIndex: int = self._staffStartsIndexByTrack[track]
         if staffIndex < 0:
             # not a kern/mens spine
@@ -2852,7 +2854,7 @@ class HumdrumFile(HumdrumFileContent):
             newState.m21Tuplet = self._makeTuplet(
                 tg.numNotesActual,
                 tg.numNotesNormal,
-                tg.durationTupleNormal,
+                None,  # tg.durationTupleNormal,
                 tg.numScale
             )
             # start the tuplet
@@ -4312,6 +4314,12 @@ class HumdrumFile(HumdrumFileContent):
 
         self._mergeTupletsCuttingBeam(tgs)
 #        self._resolveTupletBeamTie(tgs) # this is MEI-specific; music21 doesn't care
+
+        # music21-specific: tuplet duration must be expressible with powerOfTwo + dots.
+        # If it isn't, we have to split it up until it does (worst case, every single
+        # note becomes its own tuplet).
+        # self._fixTupletsWithInexpressibleDuration(tgs)
+
         self._assignTupletScalings(tgs)
 
         # in iohumdrum.cpp this is called after return from prepareBeamAndTupletGroups()
@@ -4599,6 +4607,61 @@ class HumdrumFile(HumdrumFileContent):
         # rather than apply a scaleAdjust (like iohumdrum.cpp does), we make music21
         # happy by realizing that we haven't change the scale at all here, we've just
         # changed the numNotesActual and numNotesNormal (above)
+
+    @staticmethod
+    def _fixTupletsWithInexpressibleDuration(tgs: list[HumdrumBeamAndTuplet]) -> None:
+        # newtgs is a list of items in tuplets. We need all the tuplets, not just the bad ones,
+        # so we can renumber them all.
+        newtgs: list[HumdrumBeamAndTuplet] = []
+        for tg in tgs:
+            if tg.group >= 0:
+                newtgs.append(tg)
+
+        inBadTuplet: list[bool] = [False] * len(newtgs)
+        currTupletIsBad: bool = False
+        badExists: bool = False
+        for i, tg in enumerate(newtgs):
+            if tg.tupletStart:
+                # this is first note in tuplet
+                currTupletIsBad = False
+                if (tg.durationTupleNormal is not None
+                        and tg.durationTupleNormal.type == 'inexpressible'):
+                    currTupletIsBad = True
+                    badExists = True
+
+            inBadTuplet[i] = currTupletIsBad
+
+        if not badExists:
+            return
+
+        for i, tg in enumerate(newtgs):
+            # for now, don't try to be too smart, just split the bad tuplets into
+            # single-note tuplets
+            if not inBadTuplet[i]:
+                continue
+
+            # This is a member of a bad tuplet: split it out into its own tuplet.
+            tg.durationTupleNormal = m21.duration.durationTupleFromQuarterLength(
+                tg.duration * tg.numNotesActual
+            )
+
+            tg.tupletStart = 0
+            tg.tupletEnd = 0
+
+            for j in range(i + 1, len(newtgs)):
+                if newtgs[j].tupletStart:
+                    newtgs[j].tupletStart += 1
+                if newtgs[j].tupletEnd:
+                    newtgs[j].tupletEnd += 1
+
+        # recalculate tuplet groups from new tupletStart and tupletEnd group nums
+        currGroup: int = 0
+        for tg in newtgs:
+            if tg.tupletStart:
+                currGroup = tg.tupletStart
+            tg.group = currGroup
+            if tg.tupletEnd:
+                currGroup = 0
 
     @staticmethod
     def _findTupletEndByBeamWithDottedPow2Duration(
@@ -11433,6 +11496,9 @@ class HumdrumFile(HumdrumFileContent):
         layerIndex: int,
         measureKey: tuple[int | None, int]
     ) -> None:
+        if measureKey == (6937, 6951):
+            print('hey')
+
         if not layerData:
             # empty layer?!
             return

@@ -30,6 +30,9 @@ class CannotMakeScoreFromObjectError(Exception):
 class NoMusic21VersionError(Exception):
     pass
 
+class Converter21InternalError(Exception):
+    pass
+
 
 # pylint: disable=protected-access
 
@@ -652,13 +655,6 @@ class M21Utilities:
         # None signals that we couldn't actually find a power-of-two duration
         return (dd, None)
 
-    TUPLET_MULTIPLIER_LIST: list[OffsetQL] = [
-        Fraction(2, 3),
-        Fraction(3, 2),
-        Fraction(4, 3),
-        Fraction(3, 4),
-    ]
-
     @staticmethod
     def getPowerOfTwoDurationsWithDotsAddingTo(
         quarterLength: OffsetQLIn,
@@ -686,23 +682,147 @@ class M21Utilities:
                 output.append(ql)
                 return output
 
-        # we couldn't compute a full list. Attempt some tuplets (if tupletsOK)
-        if not tupletsOK:
-            # we couldn't compute a full list so just return the original param
-            return [opFrac(quarterLength)]
-
-        tupletMultiplier: OffsetQL = Fraction(3, 2)
-        tupletMultiplier = opFrac(tupletMultiplier)
-        ql = opFrac(quarterLength * tupletMultiplier)
-        output = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(ql, tupletsOK=False)
-        if len(output) > 1:
-            return [opFrac(out / tupletMultiplier) for out in output]
-
-        if M21Utilities.isPowerOfTwoWithDots(output[0]):
-            return [opFrac(output[0] / tupletMultiplier)]
-
         # we couldn't compute a full list so just return the original param
         return [opFrac(quarterLength)]
+
+    @staticmethod
+    def getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+        totalDuration: OffsetQLIn,
+        crossing: OffsetQLIn,
+    ) -> tuple[list[OffsetQL], list[OffsetQL]]:
+        output1: list[OffsetQL] = []
+        output2: list[OffsetQL] = []
+        totalDuration = opFrac(totalDuration)
+        crossing = opFrac(crossing)
+        secondDur: OffsetQL = opFrac(totalDuration - crossing)
+        needTuplet: bool = False
+
+        if crossing == 0:
+            output1 = []
+        elif M21Utilities.isPowerOfTwoWithDots(crossing):
+            output1 = [crossing]
+        else:
+            output1 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(crossing)
+            if len(output1) == 1:
+                # problem: we'll need a tuplet to get to crossing
+                output1 = []
+                needTuplet = True
+
+        if not needTuplet:
+            if secondDur == 0:
+                output2 = []
+            elif M21Utilities.isPowerOfTwoWithDots(secondDur):
+                output2 = [secondDur]
+            else:
+                output2 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(secondDur)
+                if len(output2) == 1:
+                    # problem: we'll need a tuplet to get from crossing to totalDuration
+                    output1 = []
+                    output2 = []
+                    needTuplet = True
+
+        if not needTuplet:
+            return (output1, output2)
+
+        # we need a tuplet for some reason
+
+        # Easiest case: totalDuration is powerOfTwoWithDots (only crossing is tuplet-y)
+        if M21Utilities.isPowerOfTwoWithDots(totalDuration):
+            tupletDur: OffsetQL = totalDuration
+            crossingFrac: Fraction = Fraction(crossing)
+            qLen: OffsetQL = opFrac(Fraction(1, crossingFrac.denominator))
+            tuplets: list[m21.duration.Tuplet] = m21.duration.quarterLengthToTuplet(
+                qLen,
+                maxToReturn=1)
+            if not tuplets:
+                raise Converter21InternalError('Cannot compute crossing tuplet')
+            tupletMultiplier: OffsetQL = tuplets[0].tupletMultiplier()
+            output1, output2 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+                opFrac(totalDuration / tupletMultiplier),
+                opFrac(crossing / tupletMultiplier)
+            )
+            output1 = [opFrac(out1 * tupletMultiplier) for out1 in output1]
+            output2 = [opFrac(out2 * tupletMultiplier) for out2 in output2]
+            return output1, output2
+
+        # case 2: totalDuration is representable by a list of powerOfTwoWithDots durations
+        # (only crossing is tuplet-y).
+        totalDurs: list[OffsetQL] = (
+            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(totalDuration)
+        )
+        if len(totalDurs) > 1:
+            # Figure out which element of totalDurs contains the crossing point,
+            # recurse on that element (as totalDuration), and then construct
+            # the output lists from all of the computed lists.
+            newTotalDur: OffsetQL = 0.
+            newCrossing: OffsetQL = 0.
+            foundIdx: int = -1
+            curOffset: OffsetQL = 0.
+            for i, partialDur in enumerate(totalDurs):
+                nextOffset: OffsetQL = opFrac(curOffset + partialDur)
+                if curOffset <= crossing < nextOffset:
+                    newTotalDur = partialDur
+                    newCrossing = opFrac(crossing - curOffset)
+                    foundIdx = i
+                    break
+                curOffset = nextOffset
+
+            if foundIdx == -1:
+                raise Converter21InternalError('Could not find crossing in totalDuration')
+
+            beforeCrossing: list[OffsetQL]
+            afterCrossing: list[OffsetQL]
+            beforeCrossing, afterCrossing = (
+                M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+                    newTotalDur,
+                    newCrossing
+                )
+            )
+
+            # Construct new lists:
+            # 1. pre-foundIdx durations
+            # 2. foundIdx became beforeCrossing and afterCrossing
+            # 3. post-foundIdx durations
+            # So...
+            # output1 = pre-foundIdx durations + beforeCrossing
+            # output2 = afterCrossing + post-foundIdx durations
+            if foundIdx == 0:
+                output1 = beforeCrossing
+            else:
+                output1 = totalDurs[:foundIdx - 1] + beforeCrossing
+            if foundIdx == len(totalDurs) - 1:
+                output2 = afterCrossing
+            else:
+                output2 = afterCrossing + totalDurs[foundIdx + 1:]
+            return output1, output2
+
+        # case 3: totalDuration is itself tuplet-y (e.g. 10/3), and crossing is NOT.
+        # case 3a: totalDuration is itself tuplet-y (e.g. 10/3), and so is crossing.
+        totalDurFrac: Fraction = Fraction(totalDuration)
+        totalDurQLen: OffsetQL = opFrac(Fraction(1, totalDurFrac.denominator))
+        crossingFrac = Fraction(crossing)
+        crossingQLen: OffsetQL = opFrac(Fraction(1, crossingFrac.denominator))
+        tuplets = m21.duration.quarterLengthToTuplet(totalDurQLen, maxToReturn=1)
+        if not tuplets:
+            raise Converter21InternalError('Cannot compute totalDuration tuplet')
+        tupletMultiplier = tuplets[0].tupletMultiplier()
+        tuplets = m21.duration.quarterLengthToTuplet(crossingQLen, maxToReturn=1)
+        if tuplets:
+            # case 3a:
+            # multiply the multipliers (as if we had two nested tuplets)
+            # unless they are the same
+            crossingTupletMultiplier: OffsetQL = tuplets[0].tupletMultiplier()
+            if crossingTupletMultiplier != tupletMultiplier:
+                tupletMultiplier = opFrac(crossingTupletMultiplier * tupletMultiplier)
+
+        output1, output2 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+            opFrac(totalDuration / tupletMultiplier),
+            opFrac(crossing / tupletMultiplier)
+        )
+        output1 = [opFrac(out1 * tupletMultiplier) for out1 in output1]
+        output2 = [opFrac(out2 * tupletMultiplier) for out2 in output2]
+        return output1, output2
+
 
     @staticmethod
     def splitComplexRestDurations(s: m21.stream.Stream) -> None:

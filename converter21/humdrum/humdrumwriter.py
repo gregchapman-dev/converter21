@@ -2492,19 +2492,15 @@ class HumdrumWriter:
                 # powerOfTwo + numDots.
                 measureEndTimestamp: HumNum = opFrac(outgm.timestamp + outgm.duration)
                 firstRestDuration: HumNum = opFrac(offset - theSlice.timestamp)
-                firstRestDurations: list[HumNum] = (
-                    M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
-                        firstRestDuration,
-                        tupletsOK=True
-                    )
-                )
                 secondRestDuration: HumNum = opFrac(
                     (measureEndTimestamp - theSlice.timestamp) - firstRestDuration
                 )
-                secondRestDurations: list[HumNum] = (
-                    M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
-                        secondRestDuration,
-                        tupletsOK=True
+                firstRestDurations: list[HumNum]
+                secondRestDurations: list[HumNum]
+                firstRestDurations, secondRestDurations = (
+                    M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+                        firstRestDuration + secondRestDuration,
+                        firstRestDuration
                     )
                 )
 
