@@ -728,7 +728,6 @@ class M21Utilities:
 
         # Easiest case: totalDuration is powerOfTwoWithDots (only crossing is tuplet-y)
         if M21Utilities.isPowerOfTwoWithDots(totalDuration):
-            tupletDur: OffsetQL = totalDuration
             crossingFrac: Fraction = Fraction(crossing)
             qLen: OffsetQL = opFrac(Fraction(1, crossingFrac.denominator))
             tuplets: list[m21.duration.Tuplet] = m21.duration.quarterLengthToTuplet(
@@ -796,33 +795,10 @@ class M21Utilities:
                 output2 = afterCrossing + totalDurs[foundIdx + 1:]
             return output1, output2
 
-        # case 3: totalDuration is itself tuplet-y (e.g. 10/3), and crossing is NOT.
-        # case 3a: totalDuration is itself tuplet-y (e.g. 10/3), and so is crossing.
-        totalDurFrac: Fraction = Fraction(totalDuration)
-        totalDurQLen: OffsetQL = opFrac(Fraction(1, totalDurFrac.denominator))
-        crossingFrac = Fraction(crossing)
-        crossingQLen: OffsetQL = opFrac(Fraction(1, crossingFrac.denominator))
-        tuplets = m21.duration.quarterLengthToTuplet(totalDurQLen, maxToReturn=1)
-        if not tuplets:
-            raise Converter21InternalError('Cannot compute totalDuration tuplet')
-        tupletMultiplier = tuplets[0].tupletMultiplier()
-        tuplets = m21.duration.quarterLengthToTuplet(crossingQLen, maxToReturn=1)
-        if tuplets:
-            # case 3a:
-            # multiply the multipliers (as if we had two nested tuplets)
-            # unless they are the same
-            crossingTupletMultiplier: OffsetQL = tuplets[0].tupletMultiplier()
-            if crossingTupletMultiplier != tupletMultiplier:
-                tupletMultiplier = opFrac(crossingTupletMultiplier * tupletMultiplier)
-
-        output1, output2 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
-            opFrac(totalDuration / tupletMultiplier),
-            opFrac(crossing / tupletMultiplier)
+        # case 3: totalDuration is itself tuplet-y (e.g. 10/3).
+        raise Converter21InternalError(
+            'totalDuration must representable by a list of powerOfTwoWithDots durations.'
         )
-        output1 = [opFrac(out1 * tupletMultiplier) for out1 in output1]
-        output2 = [opFrac(out2 * tupletMultiplier) for out2 in output2]
-        return output1, output2
-
 
     @staticmethod
     def splitComplexRestDurations(s: m21.stream.Stream) -> None:

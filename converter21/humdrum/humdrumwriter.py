@@ -13,7 +13,7 @@
 import sys
 from enum import IntEnum, auto
 from copy import deepcopy
-from fractions import Fraction
+# from fractions import Fraction
 import typing as t
 
 import music21 as m21
@@ -2481,25 +2481,20 @@ class HumdrumWriter:
                 # If it is at the right offset, just use it.
                 outSlice = theSlice
             else:
-                # Add an extra voice in this part/staff to theSlice, containing
-                # an invisible rest with duration enough to reach the dynamic offset.
-                # Add more slices as necessary so the rest durations are expressible
-                # as powerOfTwo + numDots.
+                # Add an extra voice in this part/staff, containing invisible rests
+                # with duration enough to reach the dynamic offset (each rest duration
+                # must be expressible as powerOfTwo + numDots.
                 # Make a new slice that has an invisible rest with timestamp == offset
                 # and duration == measureDuration - offset in that same voice.  New
                 # slice also gets the dynamic, which now is at the correct offset.  Add
                 # more slices as necessary so the rest durations are expressible as
                 # powerOfTwo + numDots.
-                measureEndTimestamp: HumNum = opFrac(outgm.timestamp + outgm.duration)
-                firstRestDuration: HumNum = opFrac(offset - theSlice.timestamp)
-                secondRestDuration: HumNum = opFrac(
-                    (measureEndTimestamp - theSlice.timestamp) - firstRestDuration
-                )
+                firstRestDuration: HumNum = opFrac(offset - outgm.timestamp)
                 firstRestDurations: list[HumNum]
                 secondRestDurations: list[HumNum]
                 firstRestDurations, secondRestDurations = (
                     M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
-                        firstRestDuration + secondRestDuration,
+                        outgm.duration,
                         firstRestDuration
                     )
                 )
@@ -2507,12 +2502,9 @@ class HumdrumWriter:
                 numVoicesBeforeAppending: int = (
                     len(theSlice.parts[partIndex].staves[staffIndex].voices)
                 )
-                theSlice.parts[partIndex].staves[staffIndex].voices.append(
-                    GridVoice(f'{Convert.durationToRecip(firstRestDurations[0])}ryy')
-                )
-                newTimestamp: HumNum = opFrac(theSlice.timestamp + firstRestDurations[0])
+                newTimestamp: HumNum = 0.
 
-                for i in range(1, len(firstRestDurations)):
+                for i in range(0, len(firstRestDurations)):
                     newSlice = self._addInvisibleRestVoice(
                         newTimestamp,
                         firstRestDurations[i],
@@ -2524,23 +2516,7 @@ class HumdrumWriter:
                     )
                     newTimestamp = opFrac(newTimestamp + firstRestDurations[i])
 
-                # Do I need a new slice?  There might be an existing slice that I
-                # can append a voice to.  It would be a Note slice at newTimestamp,
-                # with one fewer voices than I need in this part/staff
-                newSlice = self._addInvisibleRestVoice(
-                    newTimestamp,
-                    secondRestDurations[0],
-                    outgm,
-                    theSlice,
-                    partIndex,
-                    staffIndex,
-                    numVoicesBeforeAppending
-                )
-
-                newTimestamp = opFrac(newTimestamp + secondRestDurations[0])
-                outSlice = newSlice  # This is the slice that gets the dynamic
-
-                for i in range(1, len(secondRestDurations)):
+                for i in range(0, len(secondRestDurations)):
                     newSlice = self._addInvisibleRestVoice(
                         newTimestamp,
                         secondRestDurations[i],
@@ -2550,6 +2526,9 @@ class HumdrumWriter:
                         staffIndex,
                         numVoicesBeforeAppending
                     )
+                    if i == 0:
+                        # this is the slice that gets the dynamic
+                        outSlice = newSlice
                     newTimestamp = opFrac(newTimestamp + secondRestDurations[i])
 
             existingDynamicsToken: HumdrumToken | None = (
