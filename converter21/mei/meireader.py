@@ -8050,7 +8050,7 @@ class MeiReader:
     @staticmethod
     def padVoiceWithInvisibleRests(voice: m21.stream.Voice, addedDuration: OffsetQL):
         qls: list[OffsetQL] = (
-            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(addedDuration)
+            M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(addedDuration)
         )
         durations: list[m21.duration.Duration] = []
         for ql in qls:

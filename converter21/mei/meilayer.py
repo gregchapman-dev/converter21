@@ -155,7 +155,7 @@ class MeiLayer:
         if isinstance(self.m21Voice, m21.stream.Voice):
             voiceOffset: OffsetQL = self.m21Voice.getOffsetInHierarchy(self.parentStaff.m21Measure)
             if voiceOffset != 0:
-                durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(voiceOffset)
+                durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(voiceOffset)
                 for duration in durations:
                     m21Space = m21.note.Rest(duration)
                     m21Space.style.hideObjectOnPrint = True
@@ -173,7 +173,7 @@ class MeiLayer:
                 if objOffsetInMeasure > lastOffsetEmitted:
                     gapDuration = opFrac(objOffsetInMeasure - lastOffsetEmitted)
                     durations = (
-                        M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
+                        M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(gapDuration)
                     )
                     for duration in durations:
                         m21Space = m21.note.Rest(duration)

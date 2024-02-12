@@ -262,7 +262,9 @@ class MeasureData:
         if emptyStartDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the beginning of m21Stream
-            durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyStartDuration)
+            durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(
+                emptyStartDuration
+            )
             startTime = self.startTime
             for duration in durations:
                 m21StartRest: m21.note.Rest = m21.note.Rest(duration)
@@ -297,7 +299,7 @@ class MeasureData:
                 self.startTime + element.getOffsetInHierarchy(self.m21Measure)
             )
             if elStartTime > currentEmittedTime:
-                durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(
+                durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(
                     elStartTime - currentEmittedTime
                 )
                 for duration in durations:
@@ -332,7 +334,7 @@ class MeasureData:
         if emptyEndDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the end of m21Stream
-            durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyEndDuration)
+            durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(emptyEndDuration)
             startTime = opFrac(self.startTime + self.duration - opFrac(emptyEndDuration))
             for duration in durations:
                 m21EndRest: m21.note.Rest = m21.note.Rest(duration=m21.duration.Duration(duration))

@@ -1543,7 +1543,7 @@ class HumdrumFile(HumdrumFileContent):
         output: list[FakeRestToken] = []
         durFromBarline: HumNum = opFrac(durationFromBarline)
         restDurations: list[HumNum] = (
-            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(gapDuration)
+            M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(gapDuration)
         )
         for restDuration in restDurations:
             output.append(FakeRestToken(restDuration, durFromBarline))
@@ -1755,8 +1755,6 @@ class HumdrumFile(HumdrumFileContent):
         measureKey: tuple[int | None, int],
         layerIndex: int
     ) -> None:
-        if measureKey == (6937, 6951):
-            print('hey')
         staffIndex: int = self._staffStartsIndexByTrack[track]
         if staffIndex < 0:
             # not a kern/mens spine
@@ -11496,9 +11494,6 @@ class HumdrumFile(HumdrumFileContent):
         layerIndex: int,
         measureKey: tuple[int | None, int]
     ) -> None:
-        if measureKey == (6937, 6951):
-            print('hey')
-
         if not layerData:
             # empty layer?!
             return

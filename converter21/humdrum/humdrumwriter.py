@@ -22,7 +22,7 @@ from music21.common import opFrac
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
 from converter21.humdrum import M21Convert
-from converter21.humdrum import Convert
+# from converter21.humdrum import Convert
 
 from converter21.humdrum import EventData
 from converter21.humdrum import MeasureData, SimultaneousEvents
@@ -2368,7 +2368,7 @@ class HumdrumWriter:
     def _addInvisibleRestVoice(
         self,
         timestamp: HumNum,
-        duration: HumNum,
+        duration: m21.duration.Duration,
         outgm: GridMeasure,
         slicePattern: GridSlice,
         partIndex: int,
@@ -2391,7 +2391,7 @@ class HumdrumWriter:
         if foundSlice is not None:
             newSlice = foundSlice
             newSlice.parts[partIndex].staves[staffIndex].voices.append(
-                GridVoice(f'{Convert.durationToRecip(duration)}ryy')
+                GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
             )
             # no need to insert, since we found it in outgm already
         else:
@@ -2399,11 +2399,11 @@ class HumdrumWriter:
             newSlice.initializeBySlice(slicePattern)
             if len(newSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex:
                 newSlice.parts[partIndex].staves[staffIndex].voices.append(
-                    GridVoice(f'{Convert.durationToRecip(duration)}ryy')
+                    GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
                 )
             elif len(newSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex + 1:
                 newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
-                    GridVoice(f'{Convert.durationToRecip(duration)}ryy')
+                    GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
                 )
 
             self.insertSliceByTimestamp(outgm.slices, newSlice)
@@ -2490,8 +2490,8 @@ class HumdrumWriter:
                 # more slices as necessary so the rest durations are expressible as
                 # powerOfTwo + numDots.
                 firstRestDuration: HumNum = opFrac(offset - outgm.timestamp)
-                firstRestDurations: list[HumNum]
-                secondRestDurations: list[HumNum]
+                firstRestDurations: list[m21.duration.Duration]
+                secondRestDurations: list[m21.duration.Duration]
                 firstRestDurations, secondRestDurations = (
                     M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
                         outgm.duration,
@@ -2502,7 +2502,7 @@ class HumdrumWriter:
                 numVoicesBeforeAppending: int = (
                     len(theSlice.parts[partIndex].staves[staffIndex].voices)
                 )
-                newTimestamp: HumNum = 0.
+                newTimestamp: HumNum = outgm.timestamp
 
                 for i in range(0, len(firstRestDurations)):
                     newSlice = self._addInvisibleRestVoice(
@@ -2514,7 +2514,7 @@ class HumdrumWriter:
                         staffIndex,
                         numVoicesBeforeAppending
                     )
-                    newTimestamp = opFrac(newTimestamp + firstRestDurations[i])
+                    newTimestamp = opFrac(newTimestamp + firstRestDurations[i].quarterLength)
 
                 for i in range(0, len(secondRestDurations)):
                     newSlice = self._addInvisibleRestVoice(
@@ -2529,7 +2529,7 @@ class HumdrumWriter:
                     if i == 0:
                         # this is the slice that gets the dynamic
                         outSlice = newSlice
-                    newTimestamp = opFrac(newTimestamp + secondRestDurations[i])
+                    newTimestamp = opFrac(newTimestamp + secondRestDurations[i].quarterLength)
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
