@@ -17,7 +17,7 @@ from copy import deepcopy
 import typing as t
 
 import music21 as m21
-from music21.common import opFrac
+from music21.common import opFrac, OffsetQL
 
 from converter21.humdrum import HumdrumExportError, HumdrumInternalError
 from converter21.humdrum import HumNum, HumNumIn
@@ -907,11 +907,14 @@ class HumdrumWriter:
         # First, count parts (and each part's measures)
         partCount: int = 0
         measureCount: list[int] = []
+        measureOffsets: list[list[OffsetQL]] = []  # list (len partCount) of list of measure offsets
         for part in score.parts:  # includes PartStaffs, too
             partCount += 1
             measureCount.append(0)
-            for _ in part.getElementsByClass('Measure'):
+            measureOffsets.append([])
+            for meas in part.getElementsByClass('Measure'):
                 measureCount[-1] += 1
+                measureOffsets[-1].append(meas.getOffsetInHierarchy(score))
 
         if partCount == 0:
             return False
@@ -922,6 +925,14 @@ class HumdrumWriter:
                 raise HumdrumExportError(
                     'ERROR: cannot handle parts with different measure counts'
                 )
+
+        for measIdx in range(0, mCount0):
+            measureOffsetPart0 = measureOffsets[0][measIdx]
+            for partIdx in range(1, partCount):
+                if measureOffsets[partIdx][measIdx] != measureOffsetPart0:
+                    raise HumdrumExportError(
+                        'ERROR: cannot handle parts whose measure offsets don\'t match'
+                    )
 
         self._scoreData = ScoreData(score, self)
 
