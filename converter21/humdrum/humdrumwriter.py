@@ -2415,7 +2415,10 @@ class HumdrumWriter:
         outgm: GridMeasure,
         extraDynamics: list[tuple[int, int, m21.dynamics.Dynamic]]
     ) -> None:
-        dynamics: list[tuple[int, int, m21.dynamics.Dynamic, HumNum, str]] = []
+        dynamics: list[tuple[int, int, m21.dynamics.Dynamic, HumNum, HumdrumToken]] = []
+        # The following dictionaries are keyed by partIndex (no staffIndex here)
+        moreThanOneDynamic: dict[int, bool] = {}
+        currentDynamicIndex: dict[int, int] = {}
 
         for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
@@ -2424,32 +2427,17 @@ class HumdrumWriter:
                 staffIndex,
                 dynamic,
                 dynamic.getOffsetInHierarchy(self._m21Score),
-                dstring
+                HumdrumToken(dstring)
             ))
+            moreThanOneDynamic[partIndex] = False
+            currentDynamicIndex[partIndex] = 1
 
         if not dynamics:
             # we shouldn't have been called
             return
 
-        # The following dictionaries are keyed by partIndex (no staffIndex here)
-        dynTokens: dict[int, tuple[HumNum, HumdrumToken]] = {}
-        moreThanOneDynamic: dict[int, bool] = {}
-        currentDynamicIndex: dict[int, int] = {}
-
-        for partIndex, staffIndex, dynamic, offset, dstring in dynamics:
-            if not dstring:
-                continue
-
-            if dynTokens.get(partIndex, None) is None:
-                dynTokens[partIndex] = offset, HumdrumToken(dstring)
-                moreThanOneDynamic[partIndex] = False
-            else:
-                dynTokens[partIndex][1].text += ' ' + dstring
-                moreThanOneDynamic[partIndex] = True
-                currentDynamicIndex[partIndex] = 1  # ':n=' is 1-based
-
-        # dynTokens key is partIndex, value is tuple(offset, token)
-        for partIndex, (offset, token) in dynTokens.items():
+        # dynamics key is partIndex, value is tuple(offset, token)
+        for partIndex, staffIndex, dynamic, offset, token in dynamics:
             # if offset == opFrac(Fraction(2569, 24)):
             #     print('hey')
 
