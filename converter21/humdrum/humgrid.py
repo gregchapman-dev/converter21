@@ -552,9 +552,11 @@ class HumGrid:
                             vitok: HumdrumToken | None = vi.token
                             if vitok is not None:
                                 if vitok.text != '.':
-                                    raise HumdrumInternalError(
+                                    # raise HumdrumInternalError(
+                                    print(
                                         f'Note ({token.text}) duration overlaps next note '
                                         + f'in voice ({vitok.text})'
+                                        , file=sys.stderr
                                     )
                     gs.setNullTokenLayer(voicei, sliceType, sliceDur)
                     timeLeft = opFrac(timeLeft - sliceDur)

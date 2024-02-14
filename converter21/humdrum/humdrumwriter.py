@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from enum import IntEnum, auto
-from copy import deepcopy
+from copy import copy, deepcopy
 # from fractions import Fraction
 import typing as t
 
@@ -2376,7 +2376,7 @@ class HumdrumWriter:
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
 
-    def _addInvisibleRestVoice(
+    def _appendInvisibleRestVoice(
         self,
         timestamp: HumNum,
         duration: m21.duration.Duration,
@@ -2384,7 +2384,7 @@ class HumdrumWriter:
         slicePattern: GridSlice,
         partIndex: int,
         staffIndex: int,
-        voiceIndex: int
+        minVoiceIndex: int
     ) -> GridSlice:
         # creates/inserts (or finds/reuses) a slice at timestamp, to add a new voice containing
         # an invisible rest of the requested duration.
@@ -2395,31 +2395,97 @@ class HumdrumWriter:
             if testSlice.timestamp > timestamp:
                 break
             if testSlice.timestamp == timestamp:
-                if (len(testSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex):
-                    foundSlice = testSlice
-                    break
+                foundSlice = testSlice
+                break
 
+        currLength: int
         if foundSlice is not None:
             newSlice = foundSlice
+
+            # append nulls to voices to get us to minVoiceIndex
+            currLength = len(newSlice.parts[partIndex].staves[staffIndex].voices)
+            for i in range(currLength, minVoiceIndex):
+                newSlice.parts[partIndex].staves[staffIndex].voices.append(GridVoice())
+
+            # append our invisible rest voice
             newSlice.parts[partIndex].staves[staffIndex].voices.append(
                 GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
             )
             # no need to insert, since we found it in outgm already
+
         else:
             newSlice = GridSlice(outgm, timestamp, SliceType.Notes)
             newSlice.initializeBySlice(slicePattern)
-            if len(newSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex:
-                newSlice.parts[partIndex].staves[staffIndex].voices.append(
-                    GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
-                )
-            elif len(newSlice.parts[partIndex].staves[staffIndex].voices) == voiceIndex + 1:
-                newSlice.parts[partIndex].staves[staffIndex].voices[-1] = (
-                    GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
-                )
+
+            # append nulls to voices to get us to minVoiceIndex
+            currLength = len(newSlice.parts[partIndex].staves[staffIndex].voices)
+            for i in range(currLength, minVoiceIndex):
+                newSlice.parts[partIndex].staves[staffIndex].voices.append(GridVoice())
+
+            # append our invisible rest voice
+            newSlice.parts[partIndex].staves[staffIndex].voices.append(
+                GridVoice(f'{M21Convert.kernRecipFromM21Duration(duration)[0]}ryy')
+            )
 
             self.insertSliceByTimestamp(outgm.slices, newSlice)
 
         return newSlice
+
+    def _finishAddingInvisibleRestVoice(
+        self,
+        outgm: GridMeasure,
+        partIndex: int,
+        staffIndex: int,
+        minVoiceIndex: int
+    ):
+        # Now add that voice (using empty GridVoice objects) in every slice other than the
+        # new ones.
+        foundFirstNote: bool = False
+        for theSlice in outgm.slices:
+            if not foundFirstNote:
+                # skip any leading non-Note slices (but after the first note slice we'll
+                # deal with non-Note slices)
+                if not theSlice.isNoteSlice:
+                    continue
+                foundFirstNote = True
+
+            # pad out to the minVoiceIndex (as usual)
+            currLength = len(theSlice.parts[partIndex].staves[staffIndex].voices)
+            for i in range(currLength, minVoiceIndex):
+                theSlice.parts[partIndex].staves[staffIndex].voices.append(GridVoice())
+
+            # one more empty voice (the invisible rest voice) if it isn't already there
+            if len(theSlice.parts[partIndex].staves[staffIndex].voices) == minVoiceIndex:
+                theSlice.parts[partIndex].staves[staffIndex].voices.append(GridVoice())
+                continue
+            if len(theSlice.parts[partIndex].staves[staffIndex].voices) > minVoiceIndex:
+                token: HumdrumToken | None
+                token = theSlice.parts[partIndex].staves[staffIndex].voices[-1].token
+                if token is not None and token.text.endswith('ryy'):
+                    # the invisible rest voice is already there (note that we can't use
+                    # HumdrumToken.isRest/isInvisible, since it depends on the token being
+                    # in a HumdrumFile object (which it is not).  That's OK, we know that
+                    # the invisible rest voice tokens always end in 'ryy'.
+                    continue
+                theSlice.parts[partIndex].staves[staffIndex].voices.append(GridVoice())
+                continue
+
+            # should never get here if the pad out code above works properly
+            raise HumdrumExportError(f'Padding out to voice {minVoiceIndex} failed.')
+
+    def _getStartingNumVoices(self, outgm: GridMeasure, partIndex: int, staffIndex: int) -> int:
+        numVoices: int = 0
+        for theSlice in outgm.slices:
+            if not self.sliceStartsNoteInPart(theSlice, partIndex):
+                continue
+            if not (0 <= partIndex < len(theSlice.parts)):
+                break
+            if not (0 <= staffIndex < len(theSlice.parts[partIndex].staves)):
+                break
+
+            numVoices = len(theSlice.parts[partIndex].staves[staffIndex].voices)
+            break
+        return numVoices
 
     def _addUnassociatedDynamics(
         self,
@@ -2430,6 +2496,9 @@ class HumdrumWriter:
         # The following dictionaries are keyed by partIndex (no staffIndex here)
         moreThanOneDynamic: dict[int, bool] = {}
         currentDynamicIndex: dict[int, int] = {}
+
+        if outgm.measureNumberString == '133':
+            print('hey')
 
         for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
@@ -2466,14 +2535,17 @@ class HumdrumWriter:
             # takes up the rest of the measure, as well as the dynamic.
             outSlice: GridSlice
             theSlice: GridSlice | None = None
+            firstNoteSlice: GridSlice | None = None
             for testSlice in outgm.slices:
                 if not self.sliceStartsNoteInPart(testSlice, partIndex):
                     continue
+                if firstNoteSlice is None:
+                    firstNoteSlice = testSlice
                 if testSlice.timestamp > offset:
                     break
                 theSlice = testSlice
 
-            if theSlice is None:
+            if theSlice is None or firstNoteSlice is None:
                 raise HumdrumInternalError('No appropriate Note slice found in measure')
 
             if theSlice.timestamp == offset:
@@ -2498,37 +2570,46 @@ class HumdrumWriter:
                     )
                 )
 
-                numVoicesBeforeAppending: int = (
-                    len(theSlice.parts[partIndex].staves[staffIndex].voices)
+                # take a copy of the pattern before adding the next subspine, since
+                # we will be modifying firstNoteSlice as we add the subspine.
+                # GridSlice(oldSlice) doesn't propagate voices, but initializeBySlice does.
+                slicePattern: GridSlice = GridSlice(
+                    outgm,
+                    firstNoteSlice.timestamp,
+                    firstNoteSlice.sliceType
                 )
+                slicePattern.initializeBySlice(firstNoteSlice)
+                minVoiceIndex: int = len(slicePattern.parts[partIndex].staves[staffIndex].voices)
                 newTimestamp: HumNum = outgm.timestamp
 
                 for i in range(0, len(firstRestDurations)):
-                    newSlice = self._addInvisibleRestVoice(
+                    newSlice = self._appendInvisibleRestVoice(
                         newTimestamp,
                         firstRestDurations[i],
                         outgm,
-                        theSlice,
+                        slicePattern,
                         partIndex,
                         staffIndex,
-                        numVoicesBeforeAppending
+                        minVoiceIndex
                     )
                     newTimestamp = opFrac(newTimestamp + firstRestDurations[i].quarterLength)
 
                 for i in range(0, len(secondRestDurations)):
-                    newSlice = self._addInvisibleRestVoice(
+                    newSlice = self._appendInvisibleRestVoice(
                         newTimestamp,
                         secondRestDurations[i],
                         outgm,
-                        theSlice,
+                        slicePattern,
                         partIndex,
                         staffIndex,
-                        numVoicesBeforeAppending
+                        minVoiceIndex
                     )
                     if i == 0:
                         # this is the slice that gets the dynamic
                         outSlice = newSlice
                     newTimestamp = opFrac(newTimestamp + secondRestDurations[i].quarterLength)
+
+                self._finishAddingInvisibleRestVoice(outgm, partIndex, staffIndex, minVoiceIndex)
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
