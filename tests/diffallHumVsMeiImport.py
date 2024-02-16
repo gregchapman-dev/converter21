@@ -217,9 +217,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
             return False
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('HumdrumFile1 parse crash')
-        print('HumdrumFile1 parse crash', file=results)
+    except Exception as e:
+        print(f'HumdrumFile1 parse crash: {e}')
+        print(f'HumdrumFile1 parse crash: {e}', file=results)
         results.flush()
         return False
 
@@ -233,9 +233,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
             return False
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('score1 creation crash')
-        print('score1 creation crash', file=results)
+    except Exception as e:
+        print(f'score1 creation crash: {e}')
+        print(f'score1 creation crash: {e}', file=results)
         results.flush()
         return False
 
@@ -277,9 +277,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
         score2 = m21.converter.parse(meiPath, format='mei', forceSource=True)
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('score2 creation crash')
-        print('score2 creation crash', file=results)
+    except Exception as e:
+        print(f'score2 creation crash: {e}')
+        print(f'score2 creation crash: {e}', file=results)
         results.flush()
         return False
 
@@ -334,9 +334,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
         return True
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('musicdiff crashed')
-        print('musicdiff crashed', file=results)
+    except Exception as e:
+        print(f'musicdiff crashed: {e}')
+        print(f'musicdiff crashed: {e}', file=results)
         results.flush()
         return False
     return True

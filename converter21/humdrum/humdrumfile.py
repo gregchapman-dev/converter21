@@ -1113,7 +1113,7 @@ class HumdrumFile(HumdrumFileContent):
         currentMeasurePerStaff: list[m21.stream.Measure] = []
         for i in range(0, self.staffCount):
             ss: StaffStateVariables = self._staffStates[i]
-            measure: m21.stream.Measure = m21.stream.Measure(measureNumber)
+            measure: m21.stream.Measure = m21.stream.Measure(number=measureNumber)
             currentMeasurePerStaff.append(measure)
             if t.TYPE_CHECKING:
                 # By the time we get here, all the m21Parts are set up.
