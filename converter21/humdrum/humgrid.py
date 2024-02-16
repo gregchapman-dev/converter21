@@ -1043,7 +1043,10 @@ class HumGrid:
 
         measure: GridMeasure = self.measures[-1]
 
-        modelSlice: GridSlice = self.measures[-1].slices[-1]
+        if not measure.slices:
+            return
+
+        modelSlice: GridSlice = measure.slices[-1]
         if modelSlice is None:
             return
 
