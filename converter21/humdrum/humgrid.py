@@ -140,7 +140,22 @@ class HumGrid:
         # if there is at least one measure (with at least one slice)
         # return the number of staves in the specified part in the last slice
         # of the first measure.
-        return len(self.measures[0].slices[-1].parts[partIndex].staves)
+        # We actually want the last slice with spines in measure 0, not the last slice.
+        # This is the cause of the crash exporting to Humdrum from
+        # m21_corpus/incorrect_time_signature_pv.mxl (the last spine is
+        # TS=12 (p0:)(s0:)(v0:)!!LO:LB:g=z sside: []  pside: []
+        # which has no spines (and thus only one part), so is a really bad
+        # slice to index into parts.
+        lastSpinedSlice: GridSlice | None = None
+        for theSlice in reversed(self.measures[0].slices):
+            if theSlice.hasSpines:
+                lastSpinedSlice = theSlice
+                break
+
+        if lastSpinedSlice is None:
+            return 0
+
+        return len(lastSpinedSlice.parts[partIndex].staves)
 
 # Here's an attempt to be even better (there are some 2 piano scores that are wrong above)
 # but it made no difference.

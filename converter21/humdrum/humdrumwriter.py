@@ -2444,10 +2444,13 @@ class HumdrumWriter:
         for theSlice in outgm.slices:
             if not foundFirstNote:
                 # skip any leading non-Note slices (but after the first note slice we'll
-                # deal with non-Note slices)
+                # deal with any spiny slices)
                 if not theSlice.isNoteSlice:
                     continue
                 foundFirstNote = True
+
+            if not theSlice.hasSpines:
+                continue
 
             # pad out to the minVoiceIndex (as usual)
             currLength = len(theSlice.parts[partIndex].staves[staffIndex].voices)
