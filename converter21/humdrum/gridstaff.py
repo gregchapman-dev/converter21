@@ -106,13 +106,10 @@ class GridStaff():
                     # there is already a null data token here, so don't
                     # replace it.
                     return
-                # raise HumdrumExportError(
-                print(
+                raise HumdrumExportError(
                     f'Warning, existing token: \'{voice.token.text}\' where '
                     'a null token should be.'
-                    , file=sys.stderr
                 )
-                return
 
         token: HumdrumToken = HumdrumToken(nullStr)
         self.setTokenLayer(layerIndex, token, nextDur)

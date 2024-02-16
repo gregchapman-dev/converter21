@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from enum import IntEnum, auto
-from copy import copy, deepcopy
+from copy import deepcopy
 # from fractions import Fraction
 import typing as t
 
@@ -2459,8 +2459,10 @@ class HumdrumWriter:
                 theSlice.parts[partIndex].staves[staffIndex].voices.append(GridVoice())
                 continue
             if len(theSlice.parts[partIndex].staves[staffIndex].voices) > minVoiceIndex:
-                token: HumdrumToken | None
-                token = theSlice.parts[partIndex].staves[staffIndex].voices[-1].token
+                token: HumdrumToken | None = None
+                voice: GridVoice | None = theSlice.parts[partIndex].staves[staffIndex].voices[-1]
+                if voice is not None:
+                    token = voice.token
                 if token is not None and token.text.endswith('ryy'):
                     # the invisible rest voice is already there (note that we can't use
                     # HumdrumToken.isRest/isInvisible, since it depends on the token being
@@ -2497,9 +2499,6 @@ class HumdrumWriter:
         moreThanOneDynamic: dict[int, bool] = {}
         currentDynamicIndex: dict[int, int] = {}
 
-        if outgm.measureNumberString == '133':
-            print('hey')
-
         for partIndex, staffIndex, dynamic in extraDynamics:
             dstring = M21Convert.getDynamicString(dynamic)
             dynamics.append((
@@ -2518,9 +2517,6 @@ class HumdrumWriter:
 
         # dynamics key is partIndex, value is tuple(offset, token)
         for partIndex, staffIndex, dynamic, offset, token in dynamics:
-            # if offset == opFrac(Fraction(2569, 24)):
-            #     print('hey')
-
             # Find a slice, timestamped at or just before offset (type Notes),
             # with a note starting in any voice in any staff in the part
             # (that's so we can split off another voice right there, which

@@ -552,11 +552,9 @@ class HumGrid:
                             vitok: HumdrumToken | None = vi.token
                             if vitok is not None:
                                 if vitok.text != '.':
-                                    # raise HumdrumInternalError(
-                                    print(
+                                    raise HumdrumInternalError(
                                         f'Note ({token.text}) duration overlaps next note '
                                         + f'in voice ({vitok.text})'
-                                        , file=sys.stderr
                                     )
                     gs.setNullTokenLayer(voicei, sliceType, sliceDur)
                     timeLeft = opFrac(timeLeft - sliceDur)
@@ -1649,19 +1647,51 @@ class HumGrid:
         newSlices: list[GridSlice] = []
         output: GridSlice | None = None
 
+        hadExpand: bool = False
         # deal with *^ manipulators
         output = self.checkManipulatorExpand(currSlice)
         while output is not None:
+            hadExpand = True
             newSlices.append(output)
             output = self.checkManipulatorExpand(currSlice)
 
         # deal with *v manipulators
+        firstContract: bool = True
         output = self.checkManipulatorContract(currSlice)
         while output is not None:
+            if firstContract and hadExpand:
+                # we need to perform any final simple expansions in currSlice, because
+                # we are about to add some more slices to do contractions, and therefore
+                # the slice after currSlice cannot be counted on to be already expanded
+                # (because it was our target).
+                self.performSimpleExpansion(output, currSlice)
+
             newSlices.append(output)
             output = self.checkManipulatorContract(currSlice)
+            firstContract = False
 
         return newSlices
+
+    def performSimpleExpansion(self, prevManipSlice: GridSlice, currManipSlice: GridSlice):
+        # for each '*^' in prevSlice, add a '*' voice in currSlice
+        for p, part in enumerate(prevManipSlice.parts):
+            for s, staff in enumerate(part.staves):
+                newStaff = currManipSlice.parts[p].staves[s]
+                v = 0
+                newV = 0
+                while v in range(0, len(staff.voices)):
+                    voice = staff.voices[v]
+                    if voice is None:
+                        continue
+                    token: HumdrumToken | None = voice.token
+                    if token is None:
+                        continue
+                    if token.text == '*^':
+                        newVoice = self.createVoice('*', 'L', 0, p, s)
+                        newStaff.voices.insert(newV + 1, newVoice)
+                        newV += 1
+                    v += 1
+                    newV += 1
 
     '''
     //////////////////////////////
