@@ -1959,6 +1959,69 @@ class HumdrumFile(HumdrumFileContent):
         if insertedIntoVoice:
             voice.coreElementsChanged()
 
+        if self._isInvisibleRestVoice(voice):
+            # converter21's Humdrum exporter adds invisible rest voices to position
+            # things like Dynamics at an appropriate score offset.  If we can
+            # place those Dynamics in the enclosing Measure (at the right offset),
+            # we can remove the voice.
+            self._removeVoiceFromMeasure(currentMeasurePerStaff[staffIndex], voice)
+
+    @staticmethod
+    def _isInvisibleRestVoice(voice: m21.stream.Voice) -> bool:
+        for element in voice:
+            if isinstance(
+                element,
+                (
+                    m21.dynamics.Dynamic,
+                    m21.expressions.TextExpression,
+                    m21.tempo.TempoIndication,
+                    m21.spanner.SpannerAnchor,
+                    m21.bar.Barline
+                )
+            ):
+                continue
+            if not isinstance(element, m21.note.Rest):
+                return False
+            if not element.hasStyleInformation:
+                return False
+            if not element.style.hideObjectOnPrint:
+                return False
+        return True
+
+    @staticmethod
+    def _removeVoiceFromMeasure(measure: m21.stream.Measure, voice: m21.stream.Voice):
+        for element in voice:
+            offsetInMeasure: HumNum
+
+            if isinstance(
+                element,
+                (
+                    m21.dynamics.Dynamic,
+                    m21.expressions.TextExpression,
+                    m21.tempo.TempoIndication,
+                    m21.spanner.SpannerAnchor
+                )
+            ):
+                offsetInMeasure = element.getOffsetInHierarchy(measure)
+                measure.insert(offsetInMeasure, element)
+                continue
+
+            spanners: list[m21.spanner.Spanner] = list(element.getSpannerSites())
+            if spanners:
+                # must be an invisible rest being used as a SpannerAnchor.
+                # Make a SpannerAnchor to replace it (and insert into measure).
+                # Replace all spanner references to element with references to
+                # the new anchor.
+                anchor = m21.spanner.SpannerAnchor()
+                offsetInMeasure = element.getOffsetInHierarchy(measure)
+                measure.insert(offsetInMeasure, anchor)
+
+                for spanner in spanners:
+                    spanner.replaceSpannedElement(element, anchor)
+
+        measure.remove(voice)
+
+
     '''
         _processInterpretationLayerToken
             returns whether or not anything was inserted into the voice
