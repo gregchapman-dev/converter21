@@ -2032,11 +2032,10 @@ class HumdrumFile(HumdrumFileContent):
                 # Replace all spanner references to element with references to
                 # the new anchor.
                 anchor = m21.spanner.SpannerAnchor()
-                offsetInMeasure = element.getOffsetInHierarchy(measure)
-                measure.insert(offsetInMeasure, anchor)
-
                 for spanner in spanners:
                     spanner.replaceSpannedElement(element, anchor)
+                offsetInMeasure = element.getOffsetInHierarchy(measure)
+                measure.insert(offsetInMeasure, anchor)
 
         measure.remove(voice)
 
