@@ -1658,16 +1658,42 @@ class HumdrumFile(HumdrumFileContent):
         measureKey: tuple[int | None, int],
         layerCount: int
     ) -> None:
-        # do the layers backward, so highest in the score (right-most in humdrum)
-        # comes first in the m21Score
-        # There are a lot of humdrum scores where this is not correct ordering, so I'm
-        # reverting this change (back to doing the layers forward).  We might want an
+        # layers go forward, even though staves/parts go backward.  We might want an
         # option (for import here, and export elsewhere) to allow the user to specify
-        # their preference.
+        # their layer order preference.  (There are tools to flip them around.)
 
         # for layerIndex in range(layerCount-1, -1, -1):
         for layerIndex in range(0, layerCount):
             self._convertStaffLayer(track, measureKey, layerIndex)
+
+        # converter21's Humdrum exporter adds invisible rest voices to position
+        # things like Dynamics/etc at an appropriate score offset.  If we can
+        # place those Dynamics/etc in the enclosing Measure (at the right offset),
+        # we can remove the voice.
+        staffIndex: int = self._staffStartsIndexByTrack[track]
+        if staffIndex < 0:
+            # not a kern/mens spine
+            return
+
+        measureIndex: int = self.measureIndexFromKey(measureKey)
+        measure: m21.stream.Measure = (
+            self._allMeasuresPerStaff[measureIndex][staffIndex]
+        )
+
+        # Don't remove the only voice in the measure
+        if len(tuple(measure.voices)) <= 1:
+            return
+
+        voicesToRemove: list[m21.stream.Voice] = []
+
+        for voice in measure.voices:
+            if self._isInvisibleRestVoice(voice):
+                voicesToRemove.append(voice)
+
+        # Removal loop is separate, so we don't delete from the measure while iterating
+        # over the measure.
+        for voice in voicesToRemove:
+            self._removeVoiceFromMeasure(measure, voice)
 
         # Q: what about checkClefBufferForSameAs... sounds like it is (mostly?) undoing
         # Q: the extra clef copies we added in _generateStaffLayerTokensForMeasure()
@@ -1958,13 +1984,6 @@ class HumdrumFile(HumdrumFileContent):
 
         if insertedIntoVoice:
             voice.coreElementsChanged()
-
-        if self._isInvisibleRestVoice(voice):
-            # converter21's Humdrum exporter adds invisible rest voices to position
-            # things like Dynamics at an appropriate score offset.  If we can
-            # place those Dynamics in the enclosing Measure (at the right offset),
-            # we can remove the voice.
-            self._removeVoiceFromMeasure(currentMeasurePerStaff[staffIndex], voice)
 
     @staticmethod
     def _isInvisibleRestVoice(voice: m21.stream.Voice) -> bool:
