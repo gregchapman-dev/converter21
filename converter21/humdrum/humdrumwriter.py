@@ -2309,18 +2309,29 @@ class HumdrumWriter:
         # might need postNoteText processing, but it looks like that's only for a case
         # ... where '**blah' (a humdrum exInterp) occurs in a musicXML direction node. (Why?!?)
 
-    def sliceStartsNoteInPart(self, theSlice: GridSlice, partIndex: int) -> bool:
+    def sliceStartsNote(
+        self,
+        theSlice: GridSlice,
+        partIndex: int,
+        staffIndex: int
+    ) -> int | None:
+        # if slice starts a note in partIndex/staffIndex, return voiceIndex of that note
+        # if not, return None
+
         if not theSlice.isNoteSlice:
-            return False
+            # grace notes don't count
+            return None
 
-        part: GridPart = theSlice.parts[partIndex]
-        for staff in part.staves:
-            for voice in staff.voices:
-                if voice is not None and voice.token is not None and not voice.token.isNull:
-                    # found a note in this part
-                    return True
+        if 0 <= partIndex < len(theSlice.parts):
+            part: GridPart = theSlice.parts[partIndex]
+            if 0 <= staffIndex < len(part.staves):
+                staff: GridStaff = theSlice.parts[partIndex].staves[staffIndex]
+                for voiceIndex, voice in enumerate(staff.voices):
+                    if voice is not None and voice.token is not None and not voice.token.isNull:
+                        # found a note in this staff
+                        return voiceIndex
 
-        return False
+        return None
 
     '''
     //////////////////////////////
@@ -2478,19 +2489,153 @@ class HumdrumWriter:
             # should never get here if the pad out code above works properly
             raise HumdrumExportError(f'Padding out to voice {minVoiceIndex} failed.')
 
-    def _getStartingNumVoices(self, outgm: GridMeasure, partIndex: int, staffIndex: int) -> int:
-        numVoices: int = 0
-        for theSlice in outgm.slices:
-            if not self.sliceStartsNoteInPart(theSlice, partIndex):
-                continue
-            if not (0 <= partIndex < len(theSlice.parts)):
-                break
-            if not (0 <= staffIndex < len(theSlice.parts[partIndex].staves)):
-                break
+    def _produceOutputSliceForUnassociatedM21Object(
+        self,
+        outgm: GridMeasure,
+        partIndex: int,
+        staffIndex: int,
+        m21Obj: m21.base.Music21Object,
+        offsetInScore: HumNum
+    ) -> tuple[GridSlice, int]:
+        # returns the output GridSlice, as well as the voiceIndex of
+        # the added voice
 
-            numVoices = len(theSlice.parts[partIndex].staves[staffIndex].voices)
-            break
-        return numVoices
+        # Find a slice, timestamped at or just before offsetInScore, with
+        # a note starting in any voice in the requested staff in the part.
+        # If it is at the right offsetInScore, just use it. If it's not,
+        # add a voice to (partIndex, staffIndex), filled with invisible
+        # rests (the full duration of the measure), such that one of the
+        # rests starts at offsetInScore.
+        outSlice: GridSlice | None = None
+        voiceIndex: int | None = None
+        theSlice: GridSlice | None = None
+        firstNoteSlice: GridSlice | None = None
+        for testSlice in outgm.slices:
+            testVoiceIndex: int | None = self.sliceStartsNote(testSlice, partIndex, staffIndex)
+            if testVoiceIndex is None:
+                continue
+            if firstNoteSlice is None:
+                firstNoteSlice = testSlice
+            if testSlice.timestamp > offsetInScore:
+                break
+            theSlice = testSlice
+            voiceIndex = testVoiceIndex
+
+        if theSlice is None or firstNoteSlice is None or voiceIndex is None:
+            raise HumdrumInternalError('No appropriate Note slice found in measure')
+
+        if theSlice.timestamp == offsetInScore:
+            # If it is at the right offsetInScore, just use it.
+            # voiceIndex is already set
+            outSlice = theSlice
+        else:
+            # Add an extra voice in this part/staff, containing invisible rests
+            # with duration enough to reach the object offset (each rest duration
+            # must be expressible as powerOfTwo + numDots.
+            # Make a new slice that has an invisible rest with timestamp == offsetInScore
+            # and duration == measureDuration - offsetInScore in that same voice.  New
+            # slice also gets the dynamic, which now is at the correct offset.  Add
+            # more slices as necessary so the rest durations are expressible as
+            # powerOfTwo + numDots.
+            firstRestDuration: HumNum = opFrac(offsetInScore - outgm.timestamp)
+            firstRestDurations: list[m21.duration.Duration]
+            secondRestDurations: list[m21.duration.Duration]
+            firstRestDurations, secondRestDurations = (
+                M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+                    outgm.duration,
+                    firstRestDuration
+                )
+            )
+
+            # take a copy of the pattern before adding the next subspine, since
+            # we will be modifying firstNoteSlice as we add the subspine.
+            # GridSlice(oldSlice) doesn't propagate voices, but initializeBySlice does.
+            slicePattern: GridSlice = GridSlice(
+                outgm,
+                firstNoteSlice.timestamp,
+                firstNoteSlice.sliceType
+            )
+            slicePattern.initializeBySlice(firstNoteSlice)
+            minVoiceIndex: int = len(slicePattern.parts[partIndex].staves[staffIndex].voices)
+            newTimestamp: HumNum = outgm.timestamp
+
+            for i in range(0, len(firstRestDurations)):
+                newSlice = self._appendInvisibleRestVoice(
+                    newTimestamp,
+                    firstRestDurations[i],
+                    outgm,
+                    slicePattern,
+                    partIndex,
+                    staffIndex,
+                    minVoiceIndex
+                )
+                newTimestamp = opFrac(newTimestamp + firstRestDurations[i].quarterLength)
+
+            for i in range(0, len(secondRestDurations)):
+                newSlice = self._appendInvisibleRestVoice(
+                    newTimestamp,
+                    secondRestDurations[i],
+                    outgm,
+                    slicePattern,
+                    partIndex,
+                    staffIndex,
+                    minVoiceIndex
+                )
+                if i == 0:
+                    # this is the slice that gets the m21Obj
+                    outSlice = newSlice
+                    voiceIndex = len(outSlice.parts[partIndex].staves[staffIndex].voices) - 1
+
+                newTimestamp = opFrac(newTimestamp + secondRestDurations[i].quarterLength)
+
+            self._finishAddingInvisibleRestVoice(outgm, partIndex, staffIndex, minVoiceIndex)
+
+        if outSlice is None or voiceIndex is None:
+            raise HumdrumInternalError(
+                f'Failed to produce outSlice at offsetInScore = {offsetInScore}'
+            )
+
+        return outSlice, voiceIndex
+
+#     def _addUnassociatedTexts(
+#         self,
+#         outgm: GridMeasure,
+#         extraTexts: list[tuple[int, int, m21.expressions.TextExpression]]
+#     ) -> None:
+#         texts: list[tuple[int, int, m21.expressions.TextExpression, HumNum]]
+#
+#         for partIndex, staffIndex, textExp in extraTexts:
+#             texts.append((
+#                 partIndex,
+#                 staffIndex,
+#                 textExp,
+#                 textExp.getOffsetInHierarchy(self._m21Score)
+#             ))
+#
+#         if not texts:
+#             # we shouldn't have been called
+#             return
+#
+#         # texts element is (partIndex, staffIndex, textExp, offset)
+#         for partIndex, staffIndex, textExp, offset in texts:
+#             outSlice: GridSlice
+#             voiceIndex: int
+#             outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+#                 outgm,
+#                 partIndex,
+#                 staffIndex,
+#                 textExp,
+#                 offset
+#             )
+#
+#             self._addText(
+#                 outSlice,
+#                 outgm,
+#                 partIndex,
+#                 staffIndex,
+#                 voiceIndex,
+#                 textExpression
+#             )
 
     def _addUnassociatedDynamics(
         self,
@@ -2518,97 +2663,16 @@ class HumdrumWriter:
             # we shouldn't have been called
             return
 
-        # dynamics key is partIndex, value is tuple(offset, token)
-        for partIndex, staffIndex, dynamic, offset, token in dynamics:
-            # Find a slice, timestamped at or just before offset (type Notes),
-            # with a note starting in any voice in any staff in the part
-            # (that's so we can split off another voice right there, which
-            # we can't do if we're in the middle of a note in the part).
-            # If it is at the right offset, just use it. If it's just before
-            # the right offset, make a new slice (initialized from the one
-            # you found), and add a voice to (partIndex, staffIndex).  Then
-            # put an appropriate invisible rest in that voice to make up the
-            # distance to the dynamic.  Insert just after the slice you found,
-            # and then add _another_ similar slice (initialized from the one
-            # you inserted), with an invisible rest in that same voice that
-            # takes up the rest of the measure, as well as the dynamic.
+        # dynamics element is (partIndex, staffIndex, dynamic, offset, token)
+        for partIndex, staffIndex, dynamic, offsetInScore, token in dynamics:
             outSlice: GridSlice
-            theSlice: GridSlice | None = None
-            firstNoteSlice: GridSlice | None = None
-            for testSlice in outgm.slices:
-                if not self.sliceStartsNoteInPart(testSlice, partIndex):
-                    continue
-                if firstNoteSlice is None:
-                    firstNoteSlice = testSlice
-                if testSlice.timestamp > offset:
-                    break
-                theSlice = testSlice
-
-            if theSlice is None or firstNoteSlice is None:
-                raise HumdrumInternalError('No appropriate Note slice found in measure')
-
-            if theSlice.timestamp == offset:
-                # If it is at the right offset, just use it.
-                outSlice = theSlice
-            else:
-                # Add an extra voice in this part/staff, containing invisible rests
-                # with duration enough to reach the dynamic offset (each rest duration
-                # must be expressible as powerOfTwo + numDots.
-                # Make a new slice that has an invisible rest with timestamp == offset
-                # and duration == measureDuration - offset in that same voice.  New
-                # slice also gets the dynamic, which now is at the correct offset.  Add
-                # more slices as necessary so the rest durations are expressible as
-                # powerOfTwo + numDots.
-                firstRestDuration: HumNum = opFrac(offset - outgm.timestamp)
-                firstRestDurations: list[m21.duration.Duration]
-                secondRestDurations: list[m21.duration.Duration]
-                firstRestDurations, secondRestDurations = (
-                    M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
-                        outgm.duration,
-                        firstRestDuration
-                    )
-                )
-
-                # take a copy of the pattern before adding the next subspine, since
-                # we will be modifying firstNoteSlice as we add the subspine.
-                # GridSlice(oldSlice) doesn't propagate voices, but initializeBySlice does.
-                slicePattern: GridSlice = GridSlice(
-                    outgm,
-                    firstNoteSlice.timestamp,
-                    firstNoteSlice.sliceType
-                )
-                slicePattern.initializeBySlice(firstNoteSlice)
-                minVoiceIndex: int = len(slicePattern.parts[partIndex].staves[staffIndex].voices)
-                newTimestamp: HumNum = outgm.timestamp
-
-                for i in range(0, len(firstRestDurations)):
-                    newSlice = self._appendInvisibleRestVoice(
-                        newTimestamp,
-                        firstRestDurations[i],
-                        outgm,
-                        slicePattern,
-                        partIndex,
-                        staffIndex,
-                        minVoiceIndex
-                    )
-                    newTimestamp = opFrac(newTimestamp + firstRestDurations[i].quarterLength)
-
-                for i in range(0, len(secondRestDurations)):
-                    newSlice = self._appendInvisibleRestVoice(
-                        newTimestamp,
-                        secondRestDurations[i],
-                        outgm,
-                        slicePattern,
-                        partIndex,
-                        staffIndex,
-                        minVoiceIndex
-                    )
-                    if i == 0:
-                        # this is the slice that gets the dynamic
-                        outSlice = newSlice
-                    newTimestamp = opFrac(newTimestamp + secondRestDurations[i].quarterLength)
-
-                self._finishAddingInvisibleRestVoice(outgm, partIndex, staffIndex, minVoiceIndex)
+            outSlice, _voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+                outgm,
+                partIndex,
+                staffIndex,
+                dynamic,
+                offsetInScore
+            )
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
