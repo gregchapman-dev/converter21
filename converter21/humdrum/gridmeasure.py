@@ -964,7 +964,7 @@ class GridMeasure:
     '''
     def addLayoutParameter(
         self,
-        associatedSlice: GridSlice,
+        associatedSlice: GridSlice | None,
         partIndex: int,
         staffIndex: int,
         voiceIndex: int,

@@ -126,7 +126,9 @@ class HumdrumWriter:
         # current state of *brackettup/*Xbrackettup
         self._tupletBracketsSuppressed: dict[int, dict[int, bool]] = {}
 
-        # temporary data (to be emitted with next durational object)
+        # temporary data (to be emitted at the appropriate timestamp when we're
+        # done with the measure).
+
         # First elements of text tuple are part index, staff index, voice index
         self._currentTexts: list[tuple[int, int, int, m21.expressions.TextExpression]] = []
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
@@ -1383,17 +1385,18 @@ class HumdrumWriter:
             status = status and self._convertNowEvents(gm, nowEvents, processTime)
         # end loop over slices (i.e. events in the measure across all partstaves)
 
-        if self._currentTexts or self._currentTempos:
-            # one more _addEvent (no slice, no event) to flush out these
-            # things that have to be exported as a side-effect of the next
-            # durational event (but we've hit end of measure, so there is
-            # no such event to process, unless we're willing to let them
-            # move to the next measure... which we are NOT).
-            self._addEvent(None, gm, None, processTime)
-
         if self._currentDynamics:
             self._addUnassociatedDynamics(gm, self._currentDynamics)
             self._currentDynamics = []
+
+        if self._currentTexts:
+            self._addUnassociatedTexts(gm, self._currentTexts)
+            self._currentTexts = []
+
+        if self._currentTempos:
+            self._addUnassociatedTempos(gm, self._currentTempos)
+            self._currentTempos = []
+
         # if self._offsetHarmony:
             # self._insertOffsetHarmonyIntoMeasure(gm)
         # if self._offsetFiguredBass:
@@ -1520,7 +1523,7 @@ class HumdrumWriter:
                     # during the immediately following call to
                     # appendNonZeroEvents() -> addEvent()
                     self._currentTexts.append((pindex, sindex, vindex, m21Obj))
-                elif isinstance(m21Obj, m21.tempo.MetronomeMark):
+                elif isinstance(m21Obj, m21.tempo.TempoIndication):
                     # if we haven't done this yet, check if mm text matches the first movement
                     # name (OMD) and if so, make a note to skip the tempo text output (!LO:TX) as
                     # redundant with first OMD.
@@ -1528,9 +1531,15 @@ class HumdrumWriter:
                     if self._waitingToMaybeSkipFirstTempoText:
                         self._waitingToMaybeSkipFirstTempoText = False
                         for movementName in self._tempoMovementNames:
-                            if m21Obj.text is not None and movementName in m21Obj.text:
+                            tempoName: str | None = None
+                            if isinstance(m21Obj, (m21.tempo.MetronomeMark, m21.tempo.TempoText)):
+                                tempoName = m21Obj.text
+                            elif isinstance(m21Obj, m21.tempo.MetricModulation):
+                                tempoName = m21Obj.newMetronome.text
+                            if tempoName is not None and movementName in tempoName:
                                 m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
                                 break
+
                     self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
@@ -2276,26 +2285,13 @@ class HumdrumWriter:
         #             self._currentBrackets[partIndex] = []
         #             self._addBrackets(outSlice, outgm, event, nowTime, partIndex)
 
-            if (event is not None and event.texts) or self._currentTexts:
-                # self._currentTexts contains any zero-duration (unassociated) TextExpressions,
-                # that could be in any part/staff/voice.  We'll take the opportunity to add them
-                # now.
+            if event is not None and event.texts:
                 # event.texts contains any TextExpressions associated with this note (in this
                 # part/staff/voice).
                 if t.TYPE_CHECKING:
                     assert isinstance(outSlice, GridSlice)
                     assert isinstance(event, EventData)
-                self._addTexts(outSlice, outgm, event, self._currentTexts)
-                self._currentTexts = []  # they've all been added
-
-            if self._currentTempos:
-                # self._currentTempos contains all the TempoIndications that could be in any part.
-                # There is no event.tempos (music21 tempos are always unassociated).  But we take
-                # the opportunity to add them now.
-                if t.TYPE_CHECKING:
-                    assert isinstance(outSlice, GridSlice)
-                self._addTempos(outSlice, outgm, self._currentTempos)
-                self._currentTempos = []  # they've all been added
+                self._addTexts(outSlice, outgm, event)
 
         if event is not None and event.isDynamicWedgeStartOrStop:
             # event has a single dynamic wedge start or stop, that is in this part/staff.
@@ -2313,22 +2309,37 @@ class HumdrumWriter:
         self,
         theSlice: GridSlice,
         partIndex: int,
-        staffIndex: int
+        staffIndex: int | None
     ) -> int | None:
         # if slice starts a note in partIndex/staffIndex, return voiceIndex of that note
         # if not, return None
 
         if not theSlice.isNoteSlice:
-            # grace notes don't count
             return None
 
         if 0 <= partIndex < len(theSlice.parts):
             part: GridPart = theSlice.parts[partIndex]
-            if 0 <= staffIndex < len(part.staves):
-                staff: GridStaff = theSlice.parts[partIndex].staves[staffIndex]
+            staff: GridStaff
+            if staffIndex is None:
+                # any staff will do
+                for staff in part.staves:
+                    for voice in staff.voices:
+                        if voice is None:
+                            continue
+                        if voice.token is None:
+                            continue
+                        if not voice.token.isNull:
+                            # found a note in one of these staves (voiceIndex is irrelevant)
+                            return -1
+            elif 0 <= staffIndex < len(part.staves):
+                staff = theSlice.parts[partIndex].staves[staffIndex]
                 for voiceIndex, voice in enumerate(staff.voices):
-                    if voice is not None and voice.token is not None and not voice.token.isNull:
-                        # found a note in this staff
+                    if voice is None:
+                        continue
+                    if voice.token is None:
+                        continue
+                    if not voice.token.isNull:
+                        # found a note in one of these staves (voiceIndex is irrelevant)
                         return voiceIndex
 
         return None
@@ -2493,10 +2504,10 @@ class HumdrumWriter:
         self,
         outgm: GridMeasure,
         partIndex: int,
-        staffIndex: int,
+        staffIndex: int | None,
         m21Obj: m21.base.Music21Object,
         offsetInScore: HumNum
-    ) -> tuple[GridSlice, int]:
+    ) -> tuple[GridSlice | None, int]:
         # returns the output GridSlice, as well as the voiceIndex of
         # the added voice
 
@@ -2547,6 +2558,12 @@ class HumdrumWriter:
                 )
             )
 
+            if not secondRestDurations:
+                # we don't need this invisible-rests voice at all because the offsetInScore
+                # is exactly at the end of the measure.  Just return None, -1, and the
+                # caller will have to treat it specially.
+                return None, -1
+
             # take a copy of the pattern before adding the next subspine, since
             # we will be modifying firstNoteSlice as we add the subspine.
             # GridSlice(oldSlice) doesn't propagate voices, but initializeBySlice does.
@@ -2556,6 +2573,8 @@ class HumdrumWriter:
                 firstNoteSlice.sliceType
             )
             slicePattern.initializeBySlice(firstNoteSlice)
+            if staffIndex is None:
+                staffIndex = 0
             minVoiceIndex: int = len(slicePattern.parts[partIndex].staves[staffIndex].voices)
             newTimestamp: HumNum = outgm.timestamp
 
@@ -2597,45 +2616,57 @@ class HumdrumWriter:
 
         return outSlice, voiceIndex
 
-#     def _addUnassociatedTexts(
-#         self,
-#         outgm: GridMeasure,
-#         extraTexts: list[tuple[int, int, m21.expressions.TextExpression]]
-#     ) -> None:
-#         texts: list[tuple[int, int, m21.expressions.TextExpression, HumNum]]
-#
-#         for partIndex, staffIndex, textExp in extraTexts:
-#             texts.append((
-#                 partIndex,
-#                 staffIndex,
-#                 textExp,
-#                 textExp.getOffsetInHierarchy(self._m21Score)
-#             ))
-#
-#         if not texts:
-#             # we shouldn't have been called
-#             return
-#
-#         # texts element is (partIndex, staffIndex, textExp, offset)
-#         for partIndex, staffIndex, textExp, offset in texts:
-#             outSlice: GridSlice
-#             voiceIndex: int
-#             outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
-#                 outgm,
-#                 partIndex,
-#                 staffIndex,
-#                 textExp,
-#                 offset
-#             )
-#
-#             self._addText(
-#                 outSlice,
-#                 outgm,
-#                 partIndex,
-#                 staffIndex,
-#                 voiceIndex,
-#                 textExpression
-#             )
+    def _addUnassociatedTexts(
+        self,
+        outgm: GridMeasure,
+        extraTexts: list[tuple[int, int, int, m21.expressions.TextExpression]]
+    ) -> None:
+        texts: list[tuple[int, int, int, m21.expressions.TextExpression, HumNum]] = []
+
+        for partIndex, staffIndex, defaultVoiceIndex, textExp in extraTexts:
+            texts.append((
+                partIndex,
+                staffIndex,
+                defaultVoiceIndex,
+                textExp,
+                textExp.getOffsetInHierarchy(self._m21Score)
+            ))
+
+        if not texts:
+            # we shouldn't have been called
+            return
+
+        # texts element is (partIndex, staffIndex, textExp, offset)
+        for partIndex, staffIndex, defaultVoiceIndex, textExp, offset in texts:
+            outSlice: GridSlice | None
+            outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+                outgm,
+                partIndex,
+                staffIndex,
+                textExp,
+                offset
+            )
+
+            if outSlice is None:
+                # special case: this textExp goes at the very end of the measure
+                # (after all the slices).
+                self._addText(
+                    None,  # no slice means at end of outgm
+                    outgm,
+                    partIndex,
+                    staffIndex,
+                    defaultVoiceIndex,
+                    textExp
+                )
+            else:
+                self._addText(
+                    outSlice,
+                    outgm,
+                    partIndex,
+                    staffIndex,
+                    voiceIndex,
+                    textExp
+                )
 
     def _addUnassociatedDynamics(
         self,
@@ -2665,7 +2696,7 @@ class HumdrumWriter:
 
         # dynamics element is (partIndex, staffIndex, dynamic, offset, token)
         for partIndex, staffIndex, dynamic, offsetInScore, token in dynamics:
-            outSlice: GridSlice
+            outSlice: GridSlice | None
             outSlice, _voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
                 outgm,
                 partIndex,
@@ -2673,6 +2704,10 @@ class HumdrumWriter:
                 dynamic,
                 offsetInScore
             )
+
+            if outSlice is None:
+                # we have no way of putting a dynamic at the very end of a measure.
+                raise HumdrumExportError('Cannot support dynamic at very end of measure')
 
             existingDynamicsToken: HumdrumToken | None = (
                 outSlice.parts[partIndex].dynamics
@@ -2706,7 +2741,6 @@ class HumdrumWriter:
         outSlice: GridSlice,
         outgm: GridMeasure,
         event: EventData,
-        extraTexts: list[tuple[int, int, int, m21.expressions.TextExpression]]
     ) -> None:
         if event is not None:
             partIndex: int = event.partIndex
@@ -2717,12 +2751,6 @@ class HumdrumWriter:
                               partIndex, staffIndex, voiceIndex,
                               textExpression)
 
-        # extraTexts come each with their own partIndex, staffIndex, voiceIndex
-        for partIndex, staffIndex, voiceIndex, textExpression in extraTexts:
-            self._addText(outSlice, outgm,
-                          partIndex, staffIndex, voiceIndex,
-                          textExpression)
-
     '''
     //////////////////////////////
     //
@@ -2730,7 +2758,7 @@ class HumdrumWriter:
     '''
     @staticmethod
     def _addText(
-        outSlice: GridSlice,
+        outSlice: GridSlice | None,
         outgm: GridMeasure,
         partIndex: int,
         staffIndex: int,
@@ -2745,12 +2773,24 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::addTempos -- Add tempo indication for a note.
     '''
-    def _addTempos(
+    def _addUnassociatedTempos(
         self,
-        outSlice: GridSlice,
         outgm: GridMeasure,
-        tempos: list[tuple[int, m21.tempo.TempoIndication]]
+        extraTempos: list[tuple[int, m21.tempo.TempoIndication]]
     ) -> None:
+        tempos: list[tuple[int, m21.tempo.TempoIndication, HumNum]] = []
+
+        for partIndex, tempoIndication in extraTempos:
+            tempos.append((
+                partIndex,
+                tempoIndication,
+                tempoIndication.getOffsetInHierarchy(self._m21Score)
+            ))
+
+        if not tempos:
+            # we shouldn't have been called
+            return
+
         # we have to deduplicate because sometimes MusicXML export from music21 adds
         # extra metronome marks when exporting from PartStaffs.
         # We only want one metronome mark in this slice, preferably in the top-most part
@@ -2763,7 +2803,7 @@ class HumdrumWriter:
 
         # First, sort by partIndex (highest first)
         # Then loop over all the tempos, adding only the first one you see of each unique mark
-        def partIndexOf(tempo: tuple[int, m21.tempo.TempoIndication]) -> int:
+        def partIndexOf(tempo: tuple[int, m21.tempo.TempoIndication, HumNum]) -> int:
             return tempo[0]
 
         def isAlreadyEmitted(_tempo: m21.tempo.TempoIndication) -> bool:
@@ -2788,10 +2828,35 @@ class HumdrumWriter:
 #             return False
 
         sortedTempos = sorted(tempos, key=partIndexOf, reverse=True)
-        for partIndex, tempoIndication in sortedTempos:
-            if not isAlreadyEmitted(tempoIndication):
-                self._addTempo(outSlice, outgm, partIndex, tempoIndication)
-                emittedTempos.append(tempoIndication)
+
+        # tempos element is (partIndex, tempoIndication, offset)
+        for partIndex, tempoIndication, offset in sortedTempos:
+            if isAlreadyEmitted(tempoIndication):
+                continue
+
+            outSlice: GridSlice | None
+            outSlice, _voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+                outgm,
+                partIndex,
+                None,
+                tempoIndication,
+                offset
+            )
+
+            timestamp: HumNum
+            if outSlice is not None:
+                timestamp = outSlice.timestamp
+            else:
+                timestamp = offset
+
+            self._addTempo(
+                timestamp,
+                outgm,
+                partIndex,
+                tempoIndication
+            )
+
+            emittedTempos.append(tempoIndication)
 
     '''
     //////////////////////////////
@@ -2800,7 +2865,7 @@ class HumdrumWriter:
     '''
     def _addTempo(
         self,
-        outSlice: GridSlice,
+        timestamp: HumNum,
         outgm: GridMeasure,
         partIndex: int,
         tempoIndication: m21.tempo.TempoIndication
@@ -2819,7 +2884,7 @@ class HumdrumWriter:
         staffIndex: int = 0
         voiceIndex: int = 0
         if mmTokenStr:
-            outgm.addTempoToken(mmTokenStr, outSlice.timestamp,
+            outgm.addTempoToken(mmTokenStr, timestamp,
                                 partIndex, staffIndex, voiceIndex,
                                 self.staffCounts)
 
@@ -2832,7 +2897,7 @@ class HumdrumWriter:
                 self.initialOMDToken = tempoOMD
             else:
                 # emit it now instead (it's a tempo change partway through the score)
-                outgm.addGlobalReference(tempoOMD, outSlice.timestamp)
+                outgm.addGlobalReference(tempoOMD, timestamp)
 
     '''
     //////////////////////////////
