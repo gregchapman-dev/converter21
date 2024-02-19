@@ -319,7 +319,7 @@ class GridMeasure:
             if gridSlice.timestamp > ts:
                 gs = GridSlice(self, ts, sliceType, staffCounts)
                 gs.addToken(tok, part, staff, voice)
-                self.slices.insert(insertPoint, gs)
+                self.slices.insert(idx, gs)
                 return gs
 
         # Couldn't find a place for the token, so place at end of measure
@@ -1079,8 +1079,9 @@ class GridMeasure:
                     if 0 <= voiceIdx < len(staff.voices):
                         voice: GridVoice | None = staff.voices[voiceIdx]
                         if voice is not None and voice.token is not None:
-                            if not voice.token.text.startswith('!LO:TX'):
-                                # it is a non-text layout; we stop here
+                            if voice.token.text.startswith('!LO:TX'):
+                                # it is a text layout;
+                                # we've passed any non-text layouts; we stop here
                                 return testIdx + 1
 
         return 0
