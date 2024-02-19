@@ -1027,7 +1027,8 @@ class GridMeasure:
                 staffIndex,
                 voiceIndex
             )
-            insertSlice = self.slices[insertPoint]
+            if insertPoint < len(self.slices):
+                insertSlice = self.slices[insertPoint]
 
         # if we get here, we couldn't use the previous slice, so we need to insert
         # a new Layout slice to use, just before the associated slice.
