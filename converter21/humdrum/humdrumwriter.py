@@ -2766,7 +2766,14 @@ class HumdrumWriter:
         textExpression: m21.expressions.TextExpression
     ) -> None:
         textString: str = M21Convert.textLayoutParameterFromM21TextExpression(textExpression)
-        outgm.addLayoutParameter(outSlice, partIndex, staffIndex, voiceIndex, textString)
+        outgm.addLayoutParameter(
+            outSlice,
+            partIndex,
+            staffIndex,
+            voiceIndex,
+            textString,
+            beforeAnyNonTextLayouts=True
+        )
 
     '''
     //////////////////////////////
