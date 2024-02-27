@@ -870,6 +870,9 @@ class HumdrumFile(HumdrumFileContent):
         # I give you beethoven piano sonata21-3.krn as an example.  First OMD is
         # 'Rondo: Allegretto moderato', and last OMD (in a measure in the middle
         # of the movement) is 'Prestissimo'.  The movement name is 'Rondo: Allegretto'. --gregc
+        # Note: if we end up with an OMD ('movementName') metadata item and
+        # an OTL ('title') metadata item, and they are exactly the same, then we
+        # ignore the title, and retain the movementName.
         firstDataLineIdx: int = self.lineCount  # one off the end
         for line in self._lines:
             if line.isData:
@@ -916,6 +919,20 @@ class HumdrumFile(HumdrumFileContent):
                             self._biblio.append((key, value))
             else:
                 self._biblio.append((key, value))
+
+        titles: list[str] = []
+        movementNames: list[str] = []
+        for k, v in self._biblio:
+            if k == 'OMD':
+                movementNames.append(v)
+                continue
+            if k == 'OTL':
+                titles.append(v)
+                continue
+
+        if len(titles) == 1 and len(movementNames) == 1:
+            if titles[0] == movementNames[0]:
+                self._biblio.remove(('OTL', titles[0]))
 
     '''
     //////////////////////////////
