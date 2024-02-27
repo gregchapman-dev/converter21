@@ -9701,6 +9701,54 @@ class HumdrumFile(HumdrumFileContent):
 #         for i, listOfLayersForStaff in enumerate(self._currentMeasureLayerTokens):
 #             output[i] = len(listOfLayersForStaff)
 
+    _SCORE_FILENAME_SUFFIXES: list[str] = [
+        '.xml',
+        '.musicxml',
+        '.mxl',
+        '.mei',
+        '.krn',
+        '.ly',
+        '.html',
+        '.txt',
+        '.volpiano',
+        '.vp',
+        '.scl',
+        '.tntxt',
+        '.tinynotation',
+        '.nwctxt',
+        '.nwc',
+        '.mid',
+        '.midi',
+        '.abc',
+        '.rntxt',
+        '.rntext',
+        '.romantext',
+        '.rtxt',
+        '.cttxt',
+        '.har',
+        '.clercqTemperley',
+        '.capx',
+        '.md',
+        '.musedata',
+        '.zip',
+    ]
+
+    def _isFileNameish(self, name: str) -> bool:
+        # Save time by returning false if there's no '.' at all in the name.
+        if '.' not in name:
+            return False
+
+        # return True if name ends with a known score file suffix.
+        for suffix in self._SCORE_FILENAME_SUFFIXES:
+            if name.endswith(suffix):
+                return True
+
+        # True if name ends in any '.xyz' where x, y, and z are alphanumeric.
+        if len(name) >= 4 and name[-4] == '.':
+            if name[-3].isalnum() and name[-2].isalnum() and name[-1].isalnum():
+                return True
+
+        return False
 
     def _checkForOmd(self, measureKey: tuple[int | None, int]) -> None:
         startLineIdx, endLineIdx = measureKey
@@ -9768,6 +9816,9 @@ class HumdrumFile(HumdrumFileContent):
         if midibpm <= 0:
             # check for nearby *MM marker after OMD
             midibpm = self._getMmTempoForward(omdToken)
+
+        if self._isFileNameish(value):
+            return
 
         omdToken.setValue('auto', 'OMD handled', True)
         # put the metronome mark in this measure of staff 0 (highest staff on the page)
