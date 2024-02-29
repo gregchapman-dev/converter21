@@ -1681,13 +1681,13 @@ class M21Convert:
             return str(intNum)
         return str(num)
 
-    # getMMTokenAndOMDFromM21TempoIndication returns (mmTokenStr, tempoTextLayout).
+    # getMMTokenAndTempoTextFromM21TempoIndication returns (mmTokenStr, tempoTextLayout).
     @staticmethod
-    def getMMTokenAndOMDFromM21TempoIndication(
+    def getMMTokenAndTempoTextFromM21TempoIndication(
         tempo: m21.tempo.TempoIndication
     ) -> tuple[str, str]:
         mmTokenStr: str = ''
-        tempoOMD: str = ''
+        tempoText: str = ''
 
         textExp: m21.expressions.TextExpression | None = None
         contentString: str = ''
@@ -1699,8 +1699,8 @@ class M21Convert:
                 return ('', '')
             contentString = M21Convert.translateSMUFLNotesToNoteNames(textExp.content)
             contentString = M21Convert._cleanSpacesAndColons(contentString)
-            tempoOMD = '!!!OMD: ' + contentString
-            return ('', tempoOMD)
+            tempoText = contentString
+            return ('', tempoText)
 
         # a MetricModulation describes a change from one MetronomeMark to another
         # (it carries extra info for analysis purposes).  We just get the new
@@ -1719,17 +1719,16 @@ class M21Convert:
             # We have some text (like 'Andante') to display
             contentString = M21Convert.translateSMUFLNotesToNoteNames(textExp.content)
             contentString = M21Convert._cleanSpacesAndColons(contentString)
-            tempoOMD = '!!!OMD: ' + contentString
+            tempoText = contentString
 
-        if tempo.number is not None:
-            # even if the number is implicit, go ahead and generate a *MM for it.
+        if tempo.number is not None and not tempo.numberImplicit:
             # Note that we always round to integer to emit *MM (we round to integer
             # when we parse it, too).
             quarterBPM: float | None = tempo.getQuarterBPM()
             if quarterBPM is not None:
                 mmTokenStr = '*MM' + M21Convert._floatOrIntString(int(quarterBPM + 0.5))
 
-        return (mmTokenStr, tempoOMD)
+        return (mmTokenStr, tempoText)
 
     # @staticmethod
     # def bpmTextLayoutParameterFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:

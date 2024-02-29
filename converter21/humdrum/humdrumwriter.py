@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 from enum import IntEnum, auto
-from copy import deepcopy
+# from copy import deepcopy
 # from fractions import Fraction
 import typing as t
 
@@ -141,15 +141,20 @@ class HumdrumWriter:
         # we stash any ottava stops here, to be emitted at the appropriate timestamp
         self.pendingOttavaStopsForPartAndStaff: dict[int, dict[int, list[PendingOttavaStop]]] = {}
 
-        # whether or not we should avoid output of the first MetronomeMark (as !LO:TX or !!!OMD)
-        # that matches the OMD (movementName) that was chosen to represent the temop in the
-        # initial Humdrum header.
-        self._waitingToMaybeSkipFirstTempoText: bool = True
-        self._tempoMovementNames: list[str] = []
-
-        # The initial OMD token that was not emitted inline, but instead will be used
-        # to put the metadata.movementName back the way it was (if appropriate).
-        self.initialOMDToken: str | None = None
+        # We write a movementName independent from the initial tempo (because that's what
+        # music21 contains, independent movementName and initial tempo).  But Humdrum (when
+        # read by Verovio or converter21) will assume that in the absence of a global :omd:
+        # tempo layout just before the first time signature, the initial !!!OMD should also
+        # be interpreted as the initial tempo.  So we _never_ write only an initial !!!OMD.
+        # We always also write an :omd: tempo layout just before the first time signature.
+        # And if there is actually no initial tempo, that :omd: tempo layout will not have
+        # any text (e.g. '!!LO:TX:omd:tempo:t='), which will not be considered a tempo, but
+        # will prevent the initial !!!OMD being interpreted as a tempo.
+        # Here we stash the tempoLayout and '*MMnnn' that represent the initial tempo.
+        # These will be written early on, and the tempo they came from will be marked to
+        # be ignored during normal object export.
+        self._firstTempoLayout: str = ''
+        self._firstMMTokenStr: str = ''
 
     def tupletsSuppressed(
         self,
@@ -353,13 +358,26 @@ class HumdrumWriter:
 
         self.spannerBundle = self._m21Score.spannerBundle
 
-        # set up _tempoMovementNames for use when emitting the first measure (to
-        # maybe skip producing '!LO:TX' from a MetronomeMark that is described
-        # perfectly already by the tempo movementName/!!!OMD.
-        if self._m21Score.metadata:
-            movementNames: list[str] = self._m21Score.metadata['movementName']
-            if movementNames:
-                self._tempoMovementNames = [str(movementName) for movementName in movementNames]
+        # set up _firstTempoLayout ('!!LO:TX:omd:t=something') for use when emitting
+        # the first time signature (might have no text if there is none).
+        parts: tuple[m21.stream.Part, ...] = tuple(self._m21Score.parts)
+        if parts:
+            topmostPart: m21.stream.Part = parts[0]
+            startingTempos: list[m21.tempo.TempoIndication] = list(
+                topmostPart[m21.tempo.TempoIndication].getElementsByOffsetInHierarchy(0.)
+            )
+            if startingTempos:
+                startingTempo: m21.tempo.TempoIndication = startingTempos[0]
+                mmTokenStr: str = ''  # e.g. '*MM128'
+                tempoText: str = ''  # e.g. '[eighth]=82','Andantino [eighth]=82'
+                mmTokenStr, tempoText = (
+                    M21Convert.getMMTokenAndTempoTextFromM21TempoIndication(startingTempo)
+                )
+                self._firstTempoLayout = '!!LO:TX:tempo:omd:t=' + tempoText
+                self._firstMMTokenStr = mmTokenStr
+                startingTempo.humdrum_tempo_already_handled = True  # type: ignore
+            else:
+                self._firstTempoLayout = '!!LO:TX:tempo:omd:t='
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -570,25 +588,6 @@ class HumdrumWriter:
         mdCopyrightItems: list[
             tuple[str, m21.metadata.ValueType]
         ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
-
-        # extra step: see if mdMovementNameItems[-1] matches self.initialOMDToken,
-        # and if so, put any '[half-dot] = 63'-style suffix back on the
-        # movementName before we emit it as the initial OMD.
-        if mdMovementNameItems:
-            if self.initialOMDToken is not None:
-                # initialOMDToken is a str of the form '!!!OMD: blah'
-                initialOMDValue: str = self.initialOMDToken[8:]
-                # mdMovementNameItems[-1][1] is a Text value
-                lastMovementNameStr: str = str(mdMovementNameItems[-1][1])
-                if initialOMDValue.startswith(lastMovementNameStr):
-                    # replace in mdMovementNameItems with a deepcopy (don't change
-                    # the original metadata item!)
-                    newValue = deepcopy(mdMovementNameItems[-1][1])
-                    if t.TYPE_CHECKING:
-                        assert isinstance(newValue, m21.metadata.Text)
-                    initialOMDValue = M21Convert.translateSMUFLNotesToNoteNames(initialOMDValue)
-                    newValue._data = initialOMDValue  # pylint: disable=protected-access
-                    mdMovementNameItems[-1] = (mdMovementNameItems[-1][0], newValue)
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
         atLine: int = 0
@@ -1524,23 +1523,11 @@ class HumdrumWriter:
                     # appendNonZeroEvents() -> addEvent()
                     self._currentTexts.append((pindex, sindex, vindex, m21Obj))
                 elif isinstance(m21Obj, m21.tempo.TempoIndication):
-                    # if we haven't done this yet, check if mm text matches the first movement
-                    # name (OMD) and if so, make a note to skip the tempo text output (!LO:TX) as
-                    # redundant with first OMD.
-                    # We will still output the *MM as appropriate.
-                    if self._waitingToMaybeSkipFirstTempoText:
-                        self._waitingToMaybeSkipFirstTempoText = False
-                        for movementName in self._tempoMovementNames:
-                            tempoName: str | None = None
-                            if isinstance(m21Obj, (m21.tempo.MetronomeMark, m21.tempo.TempoText)):
-                                tempoName = m21Obj.text
-                            elif isinstance(m21Obj, m21.tempo.MetricModulation):
-                                tempoName = m21Obj.newMetronome.text
-                            if tempoName is not None and movementName in tempoName:
-                                m21Obj.humdrumTempoIsFromInitialOMD = True  # type: ignore
-                                break
-
-                    self._currentTempos.append((pindex, m21Obj))
+                    # If we have already decided to write this tempo as
+                    # !!LO:TX:omd:t='something' just before the first time
+                    # signature, we can just skip it here.
+                    if not hasattr(m21Obj, 'humdrum_tempo_already_handled'):
+                        self._currentTempos.append((pindex, m21Obj))
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
                     zeroDurEvent.reportDynamicToOwner()
@@ -1580,7 +1567,18 @@ class HumdrumWriter:
             self._addKeySigLine(outgm, keySigs, nowTime, hasKeyDesignation)
 
         if hasTimeSig:
+            # first tempo layout goes before first timesig line
+            if self._firstTempoLayout:
+                outgm.appendGlobalLayout(self._firstTempoLayout, nowTime)
+                # appendGlobalLayout only needs to happen once
+                self._firstTempoLayout = ''
+
             self._addTimeSigLine(outgm, timeSigs, nowTime, hasMeterSig)
+
+            # first *MMnnn goes after first timesig line
+            if self._firstMMTokenStr:
+                self._addTempoTokenLine(outgm, self._firstMMTokenStr, nowTime)
+                self._firstMMTokenStr = ''
 
 #         if hasOttava:
 #             self._addOttavaLine(outgm, ottavas, nowTime)
@@ -1780,6 +1778,37 @@ class HumdrumWriter:
             if token is not None:
                 staff = part.staves[staffIdx]
                 staff.setTokenLayer(voice0, token, durationZero)
+
+        # go back and fill in all None tokens with null interpretations
+        self._fillEmpties(part, '*')
+
+    def _addTempoTokenLine(
+        self,
+        outgm: GridMeasure,
+        tempoStr: str,
+        nowTime: HumNumIn,
+    ) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
+        gridSlice: GridSlice = GridSlice(outgm, nowTime, SliceType.Tempos, self.staffCounts)
+        outgm.slices.append(gridSlice)
+
+        for part in gridSlice.parts:
+            self._insertTempoToken(tempoStr, part)
+
+    def _insertTempoToken(
+        self,
+        tempoStr: str,
+        part: GridPart
+    ) -> None:
+        if part is None:
+            return
+
+        durationZero: HumNum = opFrac(0)
+        voice0: int = 0
+        for staff in part.staves:
+            staff.setTokenLayer(voice0, HumdrumToken(tempoStr), durationZero)
 
         # go back and fill in all None tokens with null interpretations
         self._fillEmpties(part, '*')
@@ -2877,15 +2906,10 @@ class HumdrumWriter:
         partIndex: int,
         tempoIndication: m21.tempo.TempoIndication
     ) -> None:
-        wasInitialOMD: bool = False
-        if hasattr(tempoIndication, 'humdrumTempoIsFromInitialOMD'):
-            wasInitialOMD = tempoIndication.humdrumTempoIsFromInitialOMD  # type: ignore
-            delattr(tempoIndication, 'humdrumTempoIsFromInitialOMD')
-
         mmTokenStr: str = ''  # e.g. '*MM128'
-        tempoOMD: str = ''  # e.g. '!!!OMD: [eighth]=82','!!!OMD: Andantino [eighth]=82'
-        mmTokenStr, tempoOMD = (
-            M21Convert.getMMTokenAndOMDFromM21TempoIndication(tempoIndication)
+        tempoText: str = ''  # e.g. '[eighth]=82','Andantino [eighth]=82'
+        mmTokenStr, tempoText = (
+            M21Convert.getMMTokenAndTempoTextFromM21TempoIndication(tempoIndication)
         )
 
         staffIndex: int = 0
@@ -2895,16 +2919,14 @@ class HumdrumWriter:
                                 partIndex, staffIndex, voiceIndex,
                                 self.staffCounts)
 
-        if tempoOMD:
-            if wasInitialOMD:
-                # Stash tempoOMD off because it might have extra '[half-dot]=63'-style
-                # text in it that was stripped from the movementName in the metadata
-                # (no-one wants that in a title), and we should restore it when writing
-                # the initial OMD to the output Humdrum file.
-                self.initialOMDToken = tempoOMD
-            else:
-                # emit it now instead (it's a tempo change partway through the score)
-                outgm.addGlobalReference(tempoOMD, timestamp)
+        if tempoText:
+            outgm.addLayoutParameter(
+                None,
+                partIndex,
+                staffIndex,
+                voiceIndex,
+                '!LO:TX:tempo:t=' + tempoText
+            )
 
     '''
     //////////////////////////////
