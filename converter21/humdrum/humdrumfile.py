@@ -9195,6 +9195,9 @@ class HumdrumFile(HumdrumFileContent):
                 placement = 'below'
             else:
                 placement = 'above'
+        else:
+            # default to 'above' to match Verovio
+            placement = 'above'
 
         if isSic:
             if verboseType == 'text':
@@ -9230,6 +9233,12 @@ class HumdrumFile(HumdrumFileContent):
         if self._isTempoish(text):
             tempo = self._createMetronomeMark(text, token)
             tempoOrDirection = tempo
+
+        if tempoOrDirection is None:
+            if token.isTimeSignature:
+                # Special case for !!LO:TX just before time sig (always considered a tempo)
+                tempo = self._createMetronomeMark(text, token)
+                tempoOrDirection = tempo
 
         if tempoOrDirection is None:
             if isTempo:
@@ -9271,6 +9280,9 @@ class HumdrumFile(HumdrumFileContent):
         elif italic:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
         elif bold:
+            tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
+        elif tempo:
+            # default tempo to bold
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
         if justification == 1:
@@ -9701,55 +9713,6 @@ class HumdrumFile(HumdrumFileContent):
 #         for i, listOfLayersForStaff in enumerate(self._currentMeasureLayerTokens):
 #             output[i] = len(listOfLayersForStaff)
 
-    _SCORE_FILENAME_SUFFIXES: list[str] = [
-        '.xml',
-        '.musicxml',
-        '.mxl',
-        '.mei',
-        '.krn',
-        '.ly',
-        '.html',
-        '.txt',
-        '.volpiano',
-        '.vp',
-        '.scl',
-        '.tntxt',
-        '.tinynotation',
-        '.nwctxt',
-        '.nwc',
-        '.mid',
-        '.midi',
-        '.abc',
-        '.rntxt',
-        '.rntext',
-        '.romantext',
-        '.rtxt',
-        '.cttxt',
-        '.har',
-        '.clercqTemperley',
-        '.capx',
-        '.md',
-        '.musedata',
-        '.zip',
-    ]
-
-    def _isFileNameish(self, name: str) -> bool:
-        # Save time by returning false if there's no '.' at all in the name.
-        if '.' not in name:
-            return False
-
-        # return True if name ends with a known score file suffix.
-        for suffix in self._SCORE_FILENAME_SUFFIXES:
-            if name.endswith(suffix):
-                return True
-
-        # True if name ends in any '.xyz' where x, y, and z are alphanumeric.
-        if len(name) >= 4 and name[-4] == '.':
-            if name[-3].isalnum() and name[-2].isalnum() and name[-1].isalnum():
-                return True
-
-        return False
-
     def _checkForOmd(self, measureKey: tuple[int | None, int]) -> None:
         startLineIdx, endLineIdx = measureKey
         if startLineIdx is None:
@@ -9800,6 +9763,12 @@ class HumdrumFile(HumdrumFileContent):
             return
         value = value.replace(r'\n', '\n')
 
+        hasOmdText: bool = self._hasOmdText(measureKey)
+        if hasOmdText:
+            # Do not print the !!!OMD: reference record since there is an
+            # alternate !!LO:TX:omd: entry that will be printed instead.
+            return
+
         omdToken: HumdrumToken | None = self._lines[index][0]
         if t.TYPE_CHECKING:
             # omdToken contains the OMD we found (or we would have returned by now)
@@ -9816,9 +9785,6 @@ class HumdrumFile(HumdrumFileContent):
         if midibpm <= 0:
             # check for nearby *MM marker after OMD
             midibpm = self._getMmTempoForward(omdToken)
-
-        if self._isFileNameish(value):
-            return
 
         omdToken.setValue('auto', 'OMD handled', True)
         # put the metronome mark in this measure of staff 0 (highest staff on the page)
@@ -9840,6 +9806,26 @@ class HumdrumFile(HumdrumFileContent):
             )
             currentMeasurePerStaff[staffIndex].coreInsert(0, tempo)
             currentMeasurePerStaff[staffIndex].coreElementsChanged()
+
+    def _hasOmdText(self, measureKey: tuple[int | None, int]) -> bool:
+        startLineIdx, endLineIdx = measureKey
+        if startLineIdx is None:
+            # this method should not be called without a startLineIdx in measureKey
+            raise HumdrumInternalError('Invalid measureKey')
+
+        for i in range(startLineIdx, endLineIdx):
+            line: HumdrumLine = self._lines[i]
+            if line.hasSpines:
+                continue
+
+            token: HumdrumToken | None = line[0]
+            if token is not None and token.text:
+                m = re.match(r'^!!LO:TX.*:omd(:|$)', token.text)
+                if m:
+                    return True
+
+        return False
+
 
     '''
     //////////////////////////////
