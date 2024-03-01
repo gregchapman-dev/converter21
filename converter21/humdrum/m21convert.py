@@ -1721,7 +1721,8 @@ class M21Convert:
             contentString = M21Convert._cleanSpacesAndColons(contentString)
             tempoText = contentString
 
-        if tempo.number is not None and not tempo.numberImplicit:
+        if tempo.number is not None:
+            # Produce *MM even for implicit numbers.
             # Note that we always round to integer to emit *MM (we round to integer
             # when we parse it, too).
             quarterBPM: float | None = tempo.getQuarterBPM()

@@ -2579,6 +2579,12 @@ class HumdrumFile(HumdrumFileContent):
         if not token.isTempo:
             return
 
+        isAlreadyHandled: bool = token.getValueBool('auto', 'MM handled')
+        if isAlreadyHandled:
+            # this *MM has already been incorporated into a MetronomeMark (via
+            # processing an OMD or a !!LO:TX:omd:t=whatever)
+            return
+
         # bail if you see a nearby OMD just before this token, since the processing
         # of that non-initial OMD (see _checkForOmd) has handled this *MM for us.
         # If the nearby OMD is partway through a measure, though, it will not have
@@ -9498,17 +9504,17 @@ class HumdrumFile(HumdrumFileContent):
         Actually returns any *MM# tempo value at or after the input token,
         and returns 0 if nothing found.
     '''
-    def _getMmTempoForward(self, token: HumdrumToken | None) -> int:
+    def _getMmTempoForward(self, token: HumdrumToken | None) -> tuple[int, HumdrumToken | None]:
         current: HumdrumToken | None = token
         if current and current.isData:
             current = self.nextTokenIncludingGlobalToken(current)
 
         while current and not current.isData:
             if current.isTempo:
-                return current.tempoBPM
+                return current.tempoBPM, current
             current = self.nextTokenIncludingGlobalToken(current)
 
-        return 0
+        return 0, None
 
     '''
         _myMetronomeMarkInit: calls m21.tempo.MetronomeMark() and then puts the style back to
@@ -9601,13 +9607,18 @@ class HumdrumFile(HumdrumFileContent):
 
         if not tempoName and not noteName and not bpmText:
             # raw text
+            mmNumberToken: HumdrumToken | None = None
             mmNumber = None
             if midiBPM > 0:
                 mmNumber = midiBPM
             else:
                 mmNumber = self._getMmTempo(token)  # nearby (previous) *MM
                 if mmNumber <= 0:
+                    mmNumber, mmNumberToken = self._getMmTempoForward(token)
+                if mmNumber <= 0:
                     mmNumber = None
+                if mmNumber is not None and mmNumberToken is not None:
+                    mmNumberToken.setValue('auto', 'MM handled', True)
 
             mmText = text.strip()  # strip leading and trailing whitespace
             if mmText == '':
@@ -9784,7 +9795,8 @@ class HumdrumFile(HumdrumFileContent):
         midibpm: int = self._getMmTempoBeforeOMD(omdToken)
         if midibpm <= 0:
             # check for nearby *MM marker after OMD
-            midibpm = self._getMmTempoForward(omdToken)
+            midibpm, _ = self._getMmTempoForward(omdToken)
+
 
         omdToken.setValue('auto', 'OMD handled', True)
         # put the metronome mark in this measure of staff 0 (highest staff on the page)
