@@ -9598,6 +9598,8 @@ class HumdrumFile(HumdrumFileContent):
         mmNumber: int | None
         mmReferent: m21.duration.Duration | None
 
+        mmNumberToken: HumdrumToken | None = None
+
         text = html.unescape(text)
         text = text.replace(r'\n', '\n')
 
@@ -9607,7 +9609,6 @@ class HumdrumFile(HumdrumFileContent):
 
         if not tempoName and not noteName and not bpmText:
             # raw text
-            mmNumberToken: HumdrumToken | None = None
             mmNumber = None
             if midiBPM > 0:
                 mmNumber = midiBPM
@@ -9647,13 +9648,19 @@ class HumdrumFile(HumdrumFileContent):
         mmNumber = midiBPM
         if mmNumber <= 0:
             mmNumber = self._getMmTempo(token)  # nearby (previous) *MM
+        if mmNumber <= 0:
+            mmNumber, mmNumberToken = self._getMmTempoForward(token)
+        if mmNumber <= 0:
+            mmNumber = None
+        if mmNumber is not None and mmNumberToken is not None:
+            mmNumberToken.setValue('auto', 'MM handled', True)
 
         if bpmText and (bpmText[-1] == ')' or bpmText[-1] == ']'):
             bpmText = bpmText[0:-1]
         if bpmText:
             # bpmText overrides nearby *MM and passed in midiBPM
             mmNumber = int(float(bpmText) + 0.5)
-        if mmNumber <= 0:
+        if mmNumber is not None and mmNumber <= 0:
             mmNumber = None
 
         if mmNumber is not None or mmText is not None or mmReferent is not None:
