@@ -148,7 +148,7 @@ class HumdrumWriter:
         # be interpreted as the initial tempo.  So we _never_ write only an initial !!!OMD.
         # We always also write an :omd: tempo layout just before the first time signature.
         # And if there is actually no initial tempo, that :omd: tempo layout will not have
-        # any text (e.g. '!!LO:TX:omd:tempo:t='), which will not be considered a tempo, but
+        # any text (e.g. '!!LO:TX:omd:t='), which will not be considered a tempo, but
         # will prevent the initial !!!OMD being interpreted as a tempo.
         # Here we stash the tempoLayout and '*MMnnn' that represent the initial tempo.
         # These will be written early on, and the tempo they came from will be marked to
@@ -373,11 +373,11 @@ class HumdrumWriter:
                 mmTokenStr, tempoText = (
                     M21Convert.getMMTokenAndTempoTextFromM21TempoIndication(startingTempo)
                 )
-                self._firstTempoLayout = '!!LO:TX:tempo:omd:t=' + tempoText
+                self._firstTempoLayout = '!!LO:TX:omd:t=' + tempoText
                 self._firstMMTokenStr = mmTokenStr
                 startingTempo.humdrum_tempo_already_handled = True  # type: ignore
             else:
-                self._firstTempoLayout = '!!LO:TX:tempo:omd:t='
+                self._firstTempoLayout = '!!LO:TX:omd:t='
 
         # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
         # 1. convert self._m21Score to HumGrid
@@ -2920,13 +2920,7 @@ class HumdrumWriter:
                                 self.staffCounts)
 
         if tempoText:
-            outgm.addLayoutParameter(
-                None,
-                partIndex,
-                staffIndex,
-                voiceIndex,
-                '!LO:TX:tempo:t=' + tempoText
-            )
+            outgm.addGlobalReference('!!!OMD: ' + tempoText, timestamp)
 
     '''
     //////////////////////////////
