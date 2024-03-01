@@ -1568,7 +1568,7 @@ class HumdrumWriter:
 
         if hasTimeSig:
             # first tempo layout goes before first timesig line
-            if self._firstTempoLayout:
+            if self._firstTempoLayout and nowTime == 0.:
                 outgm.appendGlobalLayout(self._firstTempoLayout, nowTime)
                 # appendGlobalLayout only needs to happen once
                 self._firstTempoLayout = ''
@@ -1576,7 +1576,7 @@ class HumdrumWriter:
             self._addTimeSigLine(outgm, timeSigs, nowTime, hasMeterSig)
 
             # first *MMnnn goes after first timesig line
-            if self._firstMMTokenStr:
+            if self._firstMMTokenStr and nowTime == 0.:
                 self._addTempoTokenLine(outgm, self._firstMMTokenStr, nowTime)
                 self._firstMMTokenStr = ''
 
