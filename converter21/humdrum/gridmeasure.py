@@ -970,6 +970,35 @@ class GridMeasure:
             if verseLabel is not None:
                 newStaff.sides.setVerse(i, verseLabel)
 
+
+    def addLayoutParameterAtTime(
+        self,
+        timestamp: HumNum,
+        partIndex: int,
+        locomment: str,
+        beforeAnyNonTextLayouts: bool = False
+    ) -> None:
+        # find the associated data slice at the timestamp
+        associatedSlice: GridSlice | None = None
+
+        for theSlice in self.slices:
+            if not theSlice.isDataSlice:
+                continue
+            if theSlice.timestamp >= timestamp:
+                associatedSlice = theSlice
+                break
+
+        staffIndex: int = 0
+        voiceIndex: int = 0
+        self.addLayoutParameter(
+            associatedSlice,
+            partIndex,
+            staffIndex,
+            voiceIndex,
+            locomment,
+            beforeAnyNonTextLayouts=beforeAnyNonTextLayouts
+        )
+
     '''
     //////////////////////////////
     //

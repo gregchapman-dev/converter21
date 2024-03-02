@@ -2915,12 +2915,22 @@ class HumdrumWriter:
         staffIndex: int = 0
         voiceIndex: int = 0
         if mmTokenStr:
-            outgm.addTempoToken(mmTokenStr, timestamp,
-                                partIndex, staffIndex, voiceIndex,
-                                self.staffCounts)
+            outgm.addTempoToken(
+                mmTokenStr,
+                timestamp,
+                partIndex,
+                staffIndex,
+                voiceIndex,
+                self.staffCounts
+            )
 
         if tempoText:
-            outgm.addGlobalReference('!!!OMD: ' + tempoText, timestamp)
+            outgm.addLayoutParameterAtTime(
+                timestamp,
+                partIndex,
+                '!LO:TX:t=' + tempoText,
+                beforeAnyNonTextLayouts=True
+            )
 
     '''
     //////////////////////////////
