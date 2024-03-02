@@ -2610,9 +2610,10 @@ class HumdrumFile(HumdrumFileContent):
         if not self._isLastStaffTempo(token):
             return
 
+        nearbyUnhandledOMD: HumdrumLine | None = None
         if not tempoName:
             # if there's a nearby unhandled OMD, get the tempoName from there.
-            nearbyUnhandledOMD: HumdrumLine | None = self._getNearbyUnhandledOmdLine(token)
+            nearbyUnhandledOMD = self._getNearbyUnhandledOmdLine(token)
             if nearbyUnhandledOMD is not None:
                 firstTok: HumdrumToken | None = nearbyUnhandledOMD[0]
                 if firstTok is not None and self._isTempoish(firstTok.text):
@@ -2634,7 +2635,10 @@ class HumdrumFile(HumdrumFileContent):
         if mmText is not None or mmNumber is not None:
             # We insert this tempo at the beginning of the measure
             # OMD and *MM have no way of specifying placement or fontStyle,
-            # so we default to the usual: 'above' and 'bold'
+            # so we default to the usual: 'above' and 'bold'.
+            if mmText is not None and self._isTempoish(mmText):
+                # convert [quarter] (etc) to actual SMUFL quarter note
+                mmText = Convert.getTempoText(mmText)
             tempo: m21.tempo.MetronomeMark = self._myMetronomeMarkInit(
                 number=mmNumber, text=mmText
             )
@@ -2645,6 +2649,9 @@ class HumdrumFile(HumdrumFileContent):
                 tempo.placement = 'above'  # type: ignore
             else:
                 tempo.style.absoluteY = 'above'
+
+            # TODO: If nearbyUnhandledOMD is actually '!!LO:TX:omd:t=', then we should
+            # TODO: override that default 'bold'/'above' with anything specified there.
 
             tempoOffsetInMeasure: HumNum = token.durationFromBarline
 
