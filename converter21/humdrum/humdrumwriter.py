@@ -2924,13 +2924,15 @@ class HumdrumWriter:
                 self.staffCounts
             )
 
-        if tempoText:
+        if tempoText and partIndex != 0:
             outgm.addLayoutParameterAtTime(
                 timestamp,
                 partIndex,
                 '!LO:TX:t=' + tempoText,
                 beforeAnyNonTextLayouts=True
             )
+        else:
+            outgm.addGlobalReference('!!!OMD: ' + tempoText, timestamp)
 
     '''
     //////////////////////////////
