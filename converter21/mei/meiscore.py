@@ -216,6 +216,7 @@ class MeiScore:
                 clef = clefs[0]
         if clef is not None:
             M21ObjectConvert.m21ClefToMei(clef, tb)
+            clef.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial clef found in part {staffN}')
 
@@ -231,6 +232,7 @@ class MeiScore:
                 keySig = keySigs[0]
         if keySig is not None:
             M21ObjectConvert.m21KeySigToMei(keySig, tb)
+            keySig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial key signature found in part {staffN}')
 
@@ -246,6 +248,7 @@ class MeiScore:
                 meterSig = meterSigs[0]
         if meterSig is not None:
             M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
+            meterSig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial time signature found in part {staffN}')
 

@@ -547,6 +547,9 @@ class M21ObjectConvert:
             # no clef, nothing to see here
             return
 
+        if hasattr(obj, 'mei_handled_already'):
+            return
+
         attr: dict[str, str] = {}
         xmlId: str = M21ObjectConvert.getXmlId(obj)
         if xmlId:
@@ -610,6 +613,9 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.key.KeySignature)
 
+        if hasattr(obj, 'mei_handled_already'):
+            return
+
         attr: dict[str, str] = {}
         xmlId: str = M21ObjectConvert.getXmlId(obj)
         if xmlId:
@@ -639,6 +645,9 @@ class M21ObjectConvert:
     def m21TimeSigToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.meter.TimeSignature)
+
+        if hasattr(obj, 'mei_handled_already'):
+            return
 
         attr: dict[str, str] = {}
         xmlId: str = M21ObjectConvert.getXmlId(obj)
