@@ -4,7 +4,7 @@ class SharedConstants:
     _CONVERTER21_VERSION = '3.0.1'
     _CONVERTER21_NAME_AND_VERSION = _CONVERTER21_NAME + ' v' + _CONVERTER21_VERSION
 
-    _SMUFL_NAME_TO_UNICODE_CHAR: dict[str, str] = {
+    SMUFL_NAME_TO_UNICODE_CHAR: dict[str, str] = {
         'space': chr(0x0020),
         'musicFlatSign': chr(0x266D),
         'musicNaturalSign': chr(0x266E),
@@ -559,18 +559,33 @@ class SharedConstants:
         'articSoftAccentBelow': chr(0xED41),
     }
 
-    _SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME: dict[str, str] = {
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWhole']: 'double-whole',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWholeSquare']: 'breve',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteWhole']: 'whole',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteHalfUp']: 'half',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNoteQuarterUp']: 'quarter',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote8thUp']: '8th',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote16thUp']: '16th',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote32ndUp']: '32nd',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote64thUp']: '64th',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote128thUp']: '128th',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote256thUp']: '256th',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote512thUp']: '512th',
-        _SMUFL_NAME_TO_UNICODE_CHAR['metNote1024thUp']: '1024th'
+    SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME: dict[str, str] = {
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWhole']: 'double-whole',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWholeSquare']: 'breve',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteWhole']: 'whole',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteHalfUp']: 'half',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteQuarterUp']: 'quarter',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote8thUp']: '8th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote16thUp']: '16th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote32ndUp']: '32nd',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote64thUp']: '64th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote128thUp']: '128th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote256thUp']: '256th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote512thUp']: '512th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote1024thUp']: '1024th'
+    }
+
+    SMUFL_METRONOME_MARK_NOTE_CHARS_TO_MUSIC21_FULL_NAME: dict[str, str] = {
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteDoubleWhole']: 'Breve',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteWhole']: 'Whole',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteHalfUp']: 'Half',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNoteQuarterUp']: 'Quarter',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote8thUp']: '8th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote16thUp']: '16th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote32ndUp']: '32nd',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote64thUp']: '64th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote128thUp']: '128th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote256thUp']: '256th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote512thUp']: '512th',
+        SMUFL_NAME_TO_UNICODE_CHAR['metNote1024thUp']: '1024th'
     }

@@ -1627,7 +1627,7 @@ class M21Convert:
         # Check first, and if no SMUFL note found, return the text untouched.
         smuflNoteFound: bool = False
         for char in text:
-            if char in SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
+            if char in SharedConstants.SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
                 smuflNoteFound = True
                 break
         if not smuflNoteFound:
@@ -1640,19 +1640,19 @@ class M21Convert:
                 numCharsToSkip -= 1
                 continue
 
-            if char in SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
+            if char in SharedConstants.SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
                 output += (
                     '['
-                    + SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME[char]
+                    + SharedConstants.SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME[char]
                 )
                 j = i + 1
                 while text[j] in (
-                    SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot'],
+                    SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot'],
                     chr(0x2009),  # thin space, inserted around notes sometimes
-                    chr(0x200A),  # thin space, inserted sometimes as well
+                    chr(0x200A),  # hair (very thin) space, inserted sometimes as well
                 ):
                     if text[j] in (chr(0x2009), chr(0x200A)):
-                        pass  # just skip the thin space
+                        pass  # just skip the thin/hair space
                     else:
                         output += '-dot'
                     j += 1
@@ -1661,7 +1661,7 @@ class M21Convert:
                 continue
 
             if char in (chr(0x2009), chr(0x200A)):  # thin space, inserted sometimes
-                continue  # just skip the thin space
+                continue  # just skip the thin/hair space
 
             if char == chr(0x00A0):
                 # convert nbsp to regular space (Humdrum doesn't want nbsp's in tempo text)

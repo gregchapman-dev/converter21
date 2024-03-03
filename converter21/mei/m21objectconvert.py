@@ -1657,7 +1657,9 @@ class M21ObjectConvert:
         if mm.text is None:
             return
 
-        tb.data(mm.text)
+        if not mm.textImplicit:
+            tb.data(mm.text)
+
         if not mm.numberImplicit and mm.number is not None:
             tb.data(' ')
             tb.start('rend', {'fontfam': 'smufl'})
@@ -1745,10 +1747,10 @@ class M21ObjectConvert:
         noteHeadSMUFLName: str = M21ObjectConvert._M21_DURATION_TYPE_TO_SMUFL_MM_NOTE_HEAD.get(
             referent.type, 'metNoteQuarterUp'
         )
-        output: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR[noteHeadSMUFLName]
+        output: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR[noteHeadSMUFLName]
 
         if referent.dots:
-            dotUnicode: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot']
+            dotUnicode: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot']
             output += dotUnicode * referent.dots
 
         return output
