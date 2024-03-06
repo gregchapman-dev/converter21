@@ -149,14 +149,41 @@ class MeiLayer:
             nextStaffChange = extraStaffChanges[nextStaffChangeIdx]
 
         voiceBeams: set[m21.spanner.Spanner] = self.getAllBeamsInVoice(self.m21Voice)
+        gapDuration: OffsetQL
+        durations: list[OffsetQL]
         lastOffsetEmitted: OffsetQL = 0.
+        if isinstance(self.m21Voice, m21.stream.Voice):
+            voiceOffset: OffsetQL = self.m21Voice.getOffsetInHierarchy(self.parentStaff.m21Measure)
+            if voiceOffset != 0:
+                durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(voiceOffset)
+                for duration in durations:
+                    m21Space = m21.note.Rest(duration)
+                    m21Space.style.hideObjectOnPrint = True
+                    M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
+                lastOffsetEmitted = voiceOffset
+
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                # First check if the next staffChanges should go just before
-                # this object.
                 objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
                     self.parentStaff.m21Measure
                 )
+
+                # First, check to make sure we don't need to fill a gap
+                # (with one or more invisible rests).
+                if objOffsetInMeasure > lastOffsetEmitted:
+                    gapDuration = opFrac(objOffsetInMeasure - lastOffsetEmitted)
+                    durations = (
+                        M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(gapDuration)
+                    )
+                    for duration in durations:
+                        m21Space = m21.note.Rest(duration)
+                        m21Space.style.hideObjectOnPrint = True
+                        M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
+
+                    lastOffsetEmitted = objOffsetInMeasure
+
+                # Next, check if the next staffChanges should go just before
+                # this object.
                 while nextStaffChange is not None:
                     staffChangeObject = nextStaffChange[0]
                     staffChangeOffset: OffsetQL = nextStaffChange[1]

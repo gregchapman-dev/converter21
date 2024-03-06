@@ -31,6 +31,7 @@ def oplistSummary(
     counts['measure'] = 0
     counts['voice'] = 0
     counts['note'] = 0
+    counts['noteoffset'] = 0
     counts['gracenote'] = 0
     counts['beam'] = 0
     counts['lyric'] = 0
@@ -60,6 +61,8 @@ def oplistSummary(
                         'dotins',
                         'dotdel'):
             counts['note'] += 1
+        elif op[0] in ('editnoteoffset'):
+            counts['noteoffset'] += 1
         elif op[0] in ('graceedit', 'graceslashedit'):
             counts['gracenote'] += 1
         elif op[0] in ('inslyric',
@@ -213,9 +216,9 @@ def runTheDiff(meiPath: Path, results) -> bool:
             return False
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('score1 creation crash')
-        print('score1 creation crash', file=results)
+    except Exception as e:
+        print(f'score1 creation crash: {e}')
+        print(f'score1 creation crash: {e}', file=results)
         results.flush()
         return False
 
@@ -252,9 +255,9 @@ def runTheDiff(meiPath: Path, results) -> bool:
             return False
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('export crash')
-        print('export crash', file=results)
+    except Exception as e:
+        print(f'export crash: {e}')
+        print(f'export crash: {e}', file=results)
         results.flush()
         return False
 
@@ -268,9 +271,9 @@ def runTheDiff(meiPath: Path, results) -> bool:
             return False
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('score2 creation crash')
-        print('score2 creation crash', file=results)
+    except Exception as e:
+        print(f'score2 creation crash: {e}')
+        print(f'score2 creation crash: {e}', file=results)
         results.flush()
         return False
 
@@ -291,6 +294,15 @@ def runTheDiff(meiPath: Path, results) -> bool:
     try:
         annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
         annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
+        if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
+            print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')
+            print(
+                f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}',
+                file=results
+            )
+            results.flush()
+            return False
+
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
@@ -306,9 +318,9 @@ def runTheDiff(meiPath: Path, results) -> bool:
         return True
     except KeyboardInterrupt:
         sys.exit(0)
-    except:
-        print('musicdiff crashed')
-        print('musicdiff crashed', file=results)
+    except Exception as e:
+        print(f'musicdiff crashed: {e}')
+        print(f'musicdiff crashed: {e}', file=results)
         results.flush()
         return False
     return True

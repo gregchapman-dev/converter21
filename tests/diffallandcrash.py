@@ -31,6 +31,7 @@ def oplistSummary(
     counts['measure'] = 0
     counts['voice'] = 0
     counts['note'] = 0
+    counts['noteoffset'] = 0
     counts['gracenote'] = 0
     counts['beam'] = 0
     counts['lyric'] = 0
@@ -60,6 +61,8 @@ def oplistSummary(
                         'dotins',
                         'dotdel'):
             counts['note'] += 1
+        elif op[0] in ('editnoteoffset'):
+            counts['noteoffset'] += 1
         elif op[0] in ('graceedit', 'graceslashedit'):
             counts['gracenote'] += 1
         elif op[0] in ('inslyric',
@@ -245,6 +248,15 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # and return whether or not they were identical
     annotatedScore1 = AnnScore(score1, DetailLevel.AllObjectsWithStyle)
     annotatedScore2 = AnnScore(score2, DetailLevel.AllObjectsWithStyle)
+    if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
+        print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')
+        print(
+            f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}',
+            file=results
+        )
+        results.flush()
+        return False
+
     op_list, _cost = Comparison.annotated_scores_diff(
                                     annotatedScore1, annotatedScore2)
     numDiffs = len(op_list)

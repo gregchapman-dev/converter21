@@ -281,8 +281,10 @@ class GridMeasure:
         part: int,
         staff: int,
         voice: int,
-        staffCounts: list[int]
+        staffCounts: list[int],
+        beforeAnyLayouts: bool = False
     ) -> GridSlice:
+        # beforeAnyLayouts == True only works if the timestamp lands us exactly on a data slice
         ts: HumNum = opFrac(timestamp)
         gs: GridSlice
 
@@ -303,12 +305,15 @@ class GridMeasure:
 
             if gridSlice.timestamp == ts and gridSlice.isDataSlice:
                 # found the correct timestamp, but no slice of the right type at the
-                # timestamp, so add the new slice before the data slice (eventually
-                # keeping track of the order in which the other non-data slices should
-                # be placed).
+                # timestamp, so add the new slice before the data slice (and, if
+                # requested, before any layouts preceding this data slice).
+                insertPoint: int = idx
+                if beforeAnyLayouts:
+                    insertPoint = self.startIdxOfLayoutGroupBefore(insertPoint)
+
                 gs = GridSlice(self, ts, sliceType, staffCounts)
                 gs.addToken(tok, part, staff, voice)
-                self.slices.insert(idx, gs)
+                self.slices.insert(insertPoint, gs)
                 return gs
 
             if gridSlice.timestamp > ts:
@@ -339,8 +344,16 @@ class GridMeasure:
         voice: int,
         staffCounts: list[int]
     ) -> GridSlice:
-        return self.addTokenOfSliceType(tok, timestamp, SliceType.Tempos,
-                                        part, staff, voice, staffCounts)
+        return self.addTokenOfSliceType(
+            tok,
+            timestamp,
+            SliceType.Tempos,
+            part,
+            staff,
+            voice,
+            staffCounts,
+            beforeAnyLayouts=True
+        )
 
     '''
     //////////////////////////////
@@ -957,6 +970,35 @@ class GridMeasure:
             if verseLabel is not None:
                 newStaff.sides.setVerse(i, verseLabel)
 
+
+    def addLayoutParameterAtTime(
+        self,
+        timestamp: HumNum,
+        partIndex: int,
+        locomment: str,
+        beforeAnyNonTextLayouts: bool = False
+    ) -> None:
+        # find the associated data slice at the timestamp
+        associatedSlice: GridSlice | None = None
+
+        for theSlice in self.slices:
+            if not theSlice.isDataSlice:
+                continue
+            if theSlice.timestamp >= timestamp:
+                associatedSlice = theSlice
+                break
+
+        staffIndex: int = 0
+        voiceIndex: int = 0
+        self.addLayoutParameter(
+            associatedSlice,
+            partIndex,
+            staffIndex,
+            voiceIndex,
+            locomment,
+            beforeAnyNonTextLayouts=beforeAnyNonTextLayouts
+        )
+
     '''
     //////////////////////////////
     //
@@ -964,11 +1006,12 @@ class GridMeasure:
     '''
     def addLayoutParameter(
         self,
-        associatedSlice: GridSlice,
+        associatedSlice: GridSlice | None,
         partIndex: int,
         staffIndex: int,
         voiceIndex: int,
-        locomment: str
+        locomment: str,
+        beforeAnyNonTextLayouts: bool = False
     ) -> None:
         # add this '!LO:' string just before this associatedSlice
         if len(self.slices) == 0:
@@ -992,25 +1035,37 @@ class GridMeasure:
                 # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
                 return
 
-        # see if the previous slice is a layout slice we can use
-        prevIdx: int = associatedSliceIdx - 1
-        prevSlice: GridSlice = self.slices[prevIdx]
-        if prevSlice.isLocalLayoutSlice:
-            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
-            prevVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(prevStaff.voices,
-                                                                              voiceIndex)
-            if prevVoice.token is None or prevVoice.token.text == '!':
-                prevVoice.token = HumdrumToken(locomment)
-                return
+        if not beforeAnyNonTextLayouts:
+            # see if the previous slice is a layout slice we can use
+            prevIdx: int = associatedSliceIdx - 1
+            prevSlice: GridSlice = self.slices[prevIdx]
+            if prevSlice.isLocalLayoutSlice:
+                prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
+                prevVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(prevStaff.voices,
+                                                                                  voiceIndex)
+                if prevVoice.token is None or prevVoice.token.text == '!':
+                    prevVoice.token = HumdrumToken(locomment)
+                    return
+
+        insertPoint: int = associatedSliceIdx
+        insertSlice: GridSlice | None = associatedSlice
+        if beforeAnyNonTextLayouts:
+            insertPoint = self.startIdxOfNonTextLayoutGroupBefore(
+                associatedSliceIdx,
+                partIndex,
+                staffIndex,
+                voiceIndex
+            )
+            if insertPoint < len(self.slices):
+                insertSlice = self.slices[insertPoint]
 
         # if we get here, we couldn't use the previous slice, so we need to insert
         # a new Layout slice to use, just before the associated slice.
-        insertPoint: int = associatedSliceIdx
         newSlice: GridSlice
 
-        if associatedSlice is not None:
-            newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Layouts)
-            newSlice.initializeBySlice(associatedSlice)
+        if insertSlice is not None:
+            newSlice = GridSlice(self, insertSlice.timestamp, SliceType.Layouts)
+            newSlice.initializeBySlice(insertSlice)
             self.slices.insert(insertPoint, newSlice)
         else:
             newSlice = GridSlice(self, self.timestamp + self.duration, SliceType.Layouts)
@@ -1021,6 +1076,46 @@ class GridMeasure:
         newVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(newStaff.voices,
                                                                          voiceIndex)
         newVoice.token = HumdrumToken(locomment)
+
+    def startIdxOfLayoutGroupBefore(self, sliceIdx: int) -> int:
+        for testIdx in reversed(range(0, sliceIdx)):
+            # loop backward from sliceIdx-1 to 0
+            # We are counting on layout slices having zero duration,
+            # since we need to not change timestamps as we walk them.
+            if self.slices[testIdx].sliceType != SliceType.Layouts:
+                return testIdx + 1
+        return 0
+
+    def startIdxOfNonTextLayoutGroupBefore(
+        self,
+        sliceIdx: int,
+        partIdx: int,
+        staffIdx: int,
+        voiceIdx: int
+    ) -> int:
+        for testIdx in reversed(range(0, sliceIdx)):
+            # loop backward from sliceIdx-1 to 0
+            # We are counting on layout slices having zero duration,
+            # since we need to not change timestamps as we walk them.
+            if self.slices[testIdx].sliceType != SliceType.Layouts:
+                # it is not a layout slice; we stop here
+                return testIdx + 1
+
+            # it is a layout slice.  Is this voice a non-text layout (i.e. not '!LO:TX')?
+            if 0 <= partIdx < len(self.slices[testIdx].parts):
+                part: GridPart = self.slices[testIdx].parts[partIdx]
+                if 0 <= staffIdx < len(part.staves):
+                    staff: GridStaff = part.staves[staffIdx]
+                    if 0 <= voiceIdx < len(staff.voices):
+                        voice: GridVoice | None = staff.voices[voiceIdx]
+                        if voice is not None and voice.token is not None:
+                            if voice.token.text.startswith('!LO:TX'):
+                                # it is a text layout;
+                                # we've passed any non-text layouts; we stop here
+                                return testIdx + 1
+
+        return 0
+
 
     '''
     //////////////////////////////

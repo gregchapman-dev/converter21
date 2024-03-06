@@ -4182,6 +4182,7 @@ class MeiReader:
 
         nStr: str | None = elem.get('n')
         label: str | None = elem.get('label')  # will be overridden if we see <label>
+        place: str | None = elem.get('place')
         syllables: list[note.Lyric] = []
 
         for subElement in self._processEmbeddedElements(
@@ -4207,6 +4208,10 @@ class MeiReader:
                 environLocal.warn(_BAD_VERSE_NUMBER.format(nStr))
         if label is not None:
             verse.identifier = label
+        if place in ('above', 'below'):
+            if t.TYPE_CHECKING:
+                assert isinstance(verse.style, m21.style.TextStylePlacement)
+            verse.style.placement = place
 
         if len(syllables) == 1:
             return verse
@@ -7722,6 +7727,29 @@ class MeiReader:
         # track the bar's duration
         maxBarDuration: OffsetQL = 0.0
 
+        # First we have to peek into first layer of first staff to see if there is a
+        # meterSig, because if so, it will apply to tstamp computations for anything
+        # else we see in this measure.
+        eachElem: Element
+        for eachStaff in elem.iterfind(f'{MEI_NS}staff'):
+            for eachLayer in eachStaff.iterfind(f'{MEI_NS}layer'):
+                for eachElem in eachLayer.iterfind('*'):
+                    if eachElem.tag == f'{MEI_NS}meterSig':
+                        newMeter: m21.meter.TimeSignature | None = self.timeSigFromElement(eachElem)
+                        if newMeter is not None:
+                            self.activeMeter = newMeter
+                            break
+
+                    if eachElem.get('dur') is not None:
+                        # assume we have stepped past any meterSig, stop looking
+                        break
+
+                # we always quit looking after first layer
+                break
+
+            # we always quit looking after first staff
+            break
+
         # iterate all immediate children
         for eachElem in elem.iterfind('*'):
             nStr: str | None = eachElem.get('n')
@@ -8022,7 +8050,7 @@ class MeiReader:
     @staticmethod
     def padVoiceWithInvisibleRests(voice: m21.stream.Voice, addedDuration: OffsetQL):
         qls: list[OffsetQL] = (
-            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(addedDuration)
+            M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(addedDuration)
         )
         durations: list[m21.duration.Duration] = []
         for ql in qls:

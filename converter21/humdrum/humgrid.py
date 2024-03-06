@@ -140,7 +140,22 @@ class HumGrid:
         # if there is at least one measure (with at least one slice)
         # return the number of staves in the specified part in the last slice
         # of the first measure.
-        return len(self.measures[0].slices[-1].parts[partIndex].staves)
+        # We actually want the last slice with spines in measure 0, not the last slice.
+        # This is the cause of the crash exporting to Humdrum from
+        # m21_corpus/incorrect_time_signature_pv.mxl (the last spine is
+        # TS=12 (p0:)(s0:)(v0:)!!LO:LB:g=z sside: []  pside: []
+        # which has no spines (and thus only one part), so is a really bad
+        # slice to index into parts.
+        lastSpinedSlice: GridSlice | None = None
+        for theSlice in reversed(self.measures[0].slices):
+            if theSlice.hasSpines:
+                lastSpinedSlice = theSlice
+                break
+
+        if lastSpinedSlice is None:
+            return 0
+
+        return len(lastSpinedSlice.parts[partIndex].staves)
 
 # Here's an attempt to be even better (there are some 2 piano scores that are wrong above)
 # but it made no difference.
@@ -1043,7 +1058,10 @@ class HumGrid:
 
         measure: GridMeasure = self.measures[-1]
 
-        modelSlice: GridSlice = self.measures[-1].slices[-1]
+        if not measure.slices:
+            return
+
+        modelSlice: GridSlice = measure.slices[-1]
         if modelSlice is None:
             return
 
@@ -1647,19 +1665,51 @@ class HumGrid:
         newSlices: list[GridSlice] = []
         output: GridSlice | None = None
 
+        hadExpand: bool = False
         # deal with *^ manipulators
         output = self.checkManipulatorExpand(currSlice)
         while output is not None:
+            hadExpand = True
             newSlices.append(output)
             output = self.checkManipulatorExpand(currSlice)
 
         # deal with *v manipulators
+        firstContract: bool = True
         output = self.checkManipulatorContract(currSlice)
         while output is not None:
+            if firstContract and hadExpand:
+                # we need to perform any final simple expansions in currSlice, because
+                # we are about to add some more slices to do contractions, and therefore
+                # the slice after currSlice cannot be counted on to be already expanded
+                # (because it was our target).
+                self.performSimpleExpansion(output, currSlice)
+
             newSlices.append(output)
             output = self.checkManipulatorContract(currSlice)
+            firstContract = False
 
         return newSlices
+
+    def performSimpleExpansion(self, prevManipSlice: GridSlice, currManipSlice: GridSlice):
+        # for each '*^' in prevSlice, add a '*' voice in currSlice
+        for p, part in enumerate(prevManipSlice.parts):
+            for s, staff in enumerate(part.staves):
+                newStaff = currManipSlice.parts[p].staves[s]
+                v = 0
+                newV = 0
+                while v in range(0, len(staff.voices)):
+                    voice = staff.voices[v]
+                    if voice is None:
+                        continue
+                    token: HumdrumToken | None = voice.token
+                    if token is None:
+                        continue
+                    if token.text == '*^':
+                        newVoice = self.createVoice('*', 'L', 0, p, s)
+                        newStaff.voices.insert(newV + 1, newVoice)
+                        newV += 1
+                    v += 1
+                    newV += 1
 
     '''
     //////////////////////////////

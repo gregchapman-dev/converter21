@@ -544,7 +544,7 @@ class Convert:
         output += first
 
         # Add the musical symbols (notes and dots), adding a space between them
-        dotChar: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+        dotChar: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
         counter: int = 0
         for i, char in enumerate(second):
             if i > 0:
@@ -598,33 +598,33 @@ class Convert:
             finaltext = re.sub(r'\.+$', '', finaltext)
 
         if finaltext in ('quarter', '4'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteQuarterUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteQuarterUp', '')
         elif finaltext in ('half', '2'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteHalfUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteHalfUp', '')
         elif finaltext in ('whole', '1'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteWhole', '')
         elif finaltext in ('breve', 'double-whole', '0'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteDoubleWhole', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNoteDoubleWhole', '')
         elif finaltext in ('eighth', '8', '8th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote8thUp', '')
         elif finaltext in ('sixteenth', '16', '16th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote16thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote16thUp', '')
         elif finaltext in ('32', '32nd'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote32ndUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote32ndUp', '')
         elif finaltext in ('64', '64th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote64thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote64thUp', '')
         elif finaltext in ('128', '128th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote128thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote128thUp', '')
         elif finaltext in ('256', '256th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote256thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote256thUp', '')
         elif finaltext in ('512', '512th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote512thUp', '')
         elif finaltext in ('1024', '1024th'):
-            output = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
+            output = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metNote1024thUp', '')
 
         if dots > 0:
             output += (
-                SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get('metAugmentationDot', '')
                 * dots
             )
 

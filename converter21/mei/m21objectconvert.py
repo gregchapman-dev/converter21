@@ -80,7 +80,10 @@ class M21ObjectConvert:
                 attr['tuplet'] = 'm1'
 
     @staticmethod
-    def _addStylisticAttributes(obj: m21.base.Music21Object, attr: dict[str, str]):
+    def _addStylisticAttributes(
+        obj: m21.base.Music21Object | m21.style.StyleMixin,
+        attr: dict[str, str]
+    ):
         if isinstance(obj, m21.note.NotRest):
             if obj.stemDirection == 'noStem':
                 attr['stem.visible'] = 'false'
@@ -122,22 +125,35 @@ class M21ObjectConvert:
                     attr['cue'] = 'true'
 
     @staticmethod
-    def m21PlacementToMei(obj: m21.base.Music21Object) -> str | None:
+    def m21PlacementToMei(obj: m21.base.Music21Object | m21.style.StyleMixin) -> str | None:
         style: m21.style.Style | None = None
         if obj.hasStyleInformation:
             style = obj.style
+        objHasPlacement: bool = hasattr(obj, 'placement')
+        styleHasPlacement: bool = style is not None and hasattr(style, 'placement')
+
         alignVertical: str = ''
         if style is not None and hasattr(style, 'alignVertical'):
             alignVertical = getattr(style, 'alignVertical')
 
         placement: str | None = None
-        if hasattr(obj, 'placement'):
+        if objHasPlacement:
             placement = getattr(obj, 'placement')
-        elif style is not None and hasattr(style, 'placement'):
+        elif styleHasPlacement:
             placement = getattr(style, 'placement')
 
         if placement is None:
-            return None
+            # last chance for placement (but only if obj or style has a .placement
+            # field) is style.absoluteY > or < 0
+            if not objHasPlacement and not styleHasPlacement:
+                return None
+            if style is None or style.absoluteY is None:
+                return None
+
+            if style.absoluteY > 0:
+                placement = 'above'
+            elif style.absoluteY < 0:
+                placement = 'below'
 
         if placement == 'below' and alignVertical == 'middle':
             return 'between'
@@ -414,6 +430,8 @@ class M21ObjectConvert:
                 attr['n'] = str(verse.number)
             if verse.identifier and verse.identifier != verse.number:
                 label = str(verse.identifier)
+            M21ObjectConvert._addStylisticAttributes(verse, attr)
+
             tb.start('verse', attr)
             if label:
                 tb.start('label', {})
@@ -529,6 +547,9 @@ class M21ObjectConvert:
             # no clef, nothing to see here
             return
 
+        if hasattr(obj, 'mei_handled_already'):
+            return
+
         attr: dict[str, str] = {}
         xmlId: str = M21ObjectConvert.getXmlId(obj)
         if xmlId:
@@ -592,6 +613,9 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.key.KeySignature)
 
+        if hasattr(obj, 'mei_handled_already'):
+            return
+
         attr: dict[str, str] = {}
         xmlId: str = M21ObjectConvert.getXmlId(obj)
         if xmlId:
@@ -621,6 +645,9 @@ class M21ObjectConvert:
     def m21TimeSigToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.meter.TimeSignature)
+
+        if hasattr(obj, 'mei_handled_already'):
+            return
 
         attr: dict[str, str] = {}
         xmlId: str = M21ObjectConvert.getXmlId(obj)
@@ -676,11 +703,24 @@ class M21ObjectConvert:
         dur = M21ObjectConvert._M21_DUR_TYPE_TO_MEI_DUR.get(duration.type, '')
         dots = str(duration.dots)
 
-        if isinstance(duration, m21.duration.GraceDuration):
-            if duration.slash:
+        if isinstance(duration, m21.duration.AppoggiaturaDuration):
+            grace = 'acc'
+        elif isinstance(duration, m21.duration.GraceDuration):
+            # might be accented or unaccented.  duration.slash isn't always reliable
+            # (historically), but we can use it as a fallback.
+            # Check duration.stealTimePrevious and duration.stealTimeFollowing first.
+            if duration.stealTimePrevious is not None:
                 grace = 'unacc'
-            else:
+            elif duration.stealTimeFollowing is not None:
                 grace = 'acc'
+            elif duration.slash is True:
+                grace = 'unacc'
+            elif duration.slash is False:
+                grace = 'acc'
+            else:
+                # by default, GraceDuration with no other indications (slash is None)
+                # is assumed to be unaccented.
+                grace = 'unacc'
         elif not duration.linked:
             # duration is not linked and not grace, so we have to
             # compute @dur.ges and @dots.ges
@@ -949,9 +989,11 @@ class M21ObjectConvert:
             )
 
         if endOffsetInMeasure is None:
-            raise MeiInternalError(
-                'makeTstamp2FromScoreoffset: failed to find endOffsetInScore in m21Score'
+            print(
+                'endOffsetInScore is before startMeasure.  Ending at startMeasure offset 0.',
+                file=sys.stderr
             )
+            endOffsetInMeasure = 0.0
 
         # we have measureStepCount; now we need to compute beats from endOffsetInMeasure
         beat: float = M21ObjectConvert._offsetToBeat(
@@ -1595,21 +1637,30 @@ class M21ObjectConvert:
                 if obj.numberImplicit:
                     M21ObjectConvert.emitStyledTextElement(obj.text, style, tag, attr, tb)
                 else:
-                    # figure out @midi.bpm from obj.number, converting from referent
-                    # to quarter note (e.g. referent might be half note)
-                    attr['midi.bpm'] = obj.number * obj.referent.quarterLength
+                    number: int | float | None = obj.number
+                    if number is None:
+                        number = obj.numberSounding
+                    if number is not None:
+                        # figure out @midi.bpm from number, converting from referent
+                        # to quarter note (e.g. referent might be half note)
+                        attr['midi.bpm'] = str(number * obj.referent.quarterLength)
 
-                    tb.start(tag, attr)
-                    # also construct "blah=128" or whatever, using SMUFL for noteheads, and
-                    # append it to the text before calling tb.data().  It will need a <rend>
-                    # element in the middle of the text (thus it's mixed text and elements)
-                    M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
-                    tb.end(tag)
+                        tb.start(tag, attr)
+                        # also construct "blah=128" or whatever, using SMUFL for noteheads, and
+                        # append it to the text before calling tb.data().  It will need a <rend>
+                        # element in the middle of the text (thus it's mixed text and elements)
+                        M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
+                        tb.end(tag)
 
     @staticmethod
     def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):
-        tb.data(mm.text)
-        if not mm.numberImplicit:
+        if mm.text is None:
+            return
+
+        if not mm.textImplicit:
+            tb.data(mm.text)
+
+        if not mm.numberImplicit and mm.number is not None:
             tb.data(' ')
             tb.start('rend', {'fontfam': 'smufl'})
             noteHead: str = M21ObjectConvert._getNoteHeadSMUFLUnicodeForReferent(mm.referent)
@@ -1696,10 +1747,10 @@ class M21ObjectConvert:
         noteHeadSMUFLName: str = M21ObjectConvert._M21_DURATION_TYPE_TO_SMUFL_MM_NOTE_HEAD.get(
             referent.type, 'metNoteQuarterUp'
         )
-        output: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR[noteHeadSMUFLName]
+        output: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR[noteHeadSMUFLName]
 
         if referent.dots:
-            dotUnicode: str = SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot']
+            dotUnicode: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot']
             output += dotUnicode * referent.dots
 
         return output
@@ -1877,6 +1928,12 @@ class M21ObjectConvert:
     def streamElementBelongsInLayer(obj: m21.base.Music21Object) -> bool:
         if isinstance(obj, m21.stream.Stream):
             return False
+
+        if isinstance(obj, m21.harmony.ChordSymbol):
+            # special case that looks handleable (isinstance(Chord) is True),
+            # but must be skipped (if not .writeAsChord).
+            if not obj.writeAsChord:
+                return False
 
         for className in obj.classes:
             if className in M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG:

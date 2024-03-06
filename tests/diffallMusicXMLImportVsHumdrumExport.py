@@ -12,8 +12,7 @@ from musicdiff import DetailLevel
 
 # The things we're testing
 import converter21
-from converter21.humdrum import HumdrumFile
-from converter21.mei import MeiWriter
+from converter21.humdrum import HumdrumWriter
 
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
     obj = score.recurse().getElementById(theID)
@@ -202,30 +201,14 @@ def oplistSummary(
     return output
 
 # returns True if the test passed (no musicdiff differences found)
-def runTheDiff(krnPath: Path, results) -> bool:
-    print(f'{krnPath}: ', end='')
-    print(f'{krnPath}: ', end='', file=results)
+def runTheDiff(inputPath: Path, results) -> bool:
+    print(f'{inputPath}: ', end='')
+    print(f'{inputPath}: ', end='', file=results)
     results.flush()
 
-    # import into HumdrumFile
+    # import into music21
     try:
-        hfb = HumdrumFile(str(krnPath))
-        if not hfb.isValid:
-            print('HumdrumFile1 parse failure')
-            print('HumdrumFile1 parse failure', file=results)
-            results.flush()
-            return False
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except Exception as e:
-        print(f'HumdrumFile1 parse crash: {e}')
-        print(f'HumdrumFile1 parse crash: {e}', file=results)
-        results.flush()
-        return False
-
-    # import HumdrumFile into music21 stream
-    try:
-        score1 = hfb.createMusic21Stream()
+        score1 = m21.converter.parse(inputPath, format='musicxml', forceSource=True)
         if score1 is None:
             print('score1 creation failure')
             print('score1 creation failure', file=results)
@@ -253,18 +236,18 @@ def runTheDiff(krnPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # export score to MEI (without any makeNotation fixups)
+    # export score back to Humdrum (without any makeNotation fixups)
 
-    meiw: MeiWriter = MeiWriter(score1)
-    meiw.makeNotation = False
+    humdrumw: HumdrumWriter = HumdrumWriter(score1)
+    humdrumw.makeNotation = False
 
     try:
         success: bool = True
-        meiwPath = Path(tempfile.gettempdir())
-        meiwPath /= (krnPath.stem + '_Written')
-        meiwPath = meiwPath.with_suffix('.mei')
-        with open(meiwPath, 'wt') as f:
-            success = meiw.write(f)
+        humdrumwPath = Path(tempfile.gettempdir())
+        humdrumwPath /= (inputPath.stem + '_Written')
+        humdrumwPath = humdrumwPath.with_suffix('.krn')
+        with open(humdrumwPath, 'wt') as f:
+            success = humdrumw.write(f)
         if not success:
             print('export failed')
             print('export failed', file=results)
@@ -278,9 +261,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
         results.flush()
         return False
 
-    # and then try to parse the exported MEI file
+    # and then try to parse the exported Humdrum file
     try:
-        score2 = m21.converter.parse(meiwPath, format='mei', forceSource=True)
+        score2 = m21.converter.parse(humdrumwPath, format='humdrum', forceSource=True)
         if score2 is None:
             print('score2 creation failure')
             print('score2 creation failure', file=results)
@@ -348,10 +331,10 @@ def runTheDiff(krnPath: Path, results) -> bool:
     main entry point (parse arguments and do conversion)
 '''
 parser = argparse.ArgumentParser(
-            description='Loop over listfile (list of .krn files), importing and then exporting to .mei, comparing original .krn with exported .mei.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn file paths that had no musicdiff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
+            description='Loop over listfile (list of .musicxml files), importing and then exporting back to .krn, comparing original .musicxml with exported .krn.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .musicxml file paths that had no musicdiff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
 parser.add_argument(
         'list_file',
-        help='file containing a list of the .krn files to compare (full paths)')
+        help='file containing a list of the .musicxml/.mxl files to compare (full paths)')
 
 print('music21 version:', VERSION_STR, file=sys.stderr)
 args = parser.parse_args()
