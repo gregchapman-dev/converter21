@@ -1348,10 +1348,12 @@ class MeiMetadataReader:
         encodingDescMD: m21.metadata.Metadata | None,
         workListMD: m21.metadata.Metadata | None
     ) -> m21.metadata.Metadata:
-        # Take everything from fileDescMD.
-        # Take everything from workListMD, replacing anything already there (i.e. overriding
-        # anything from fileDescMD)
-        # Add everything from encodingDescMD (it shouldn't overlap)
+        # 1. Take everything from fileDescMD.
+        # 2. Take everything from workListMD, replacing anything already there (i.e. overriding
+        # anything from fileDescMD).
+        # 3. Add everything from encodingDescMD (it shouldn't overlap).
+        # 4. If 'title' and 'movementName' are identical singletons, get rid of 'title', it's
+        # really the movementName.
         output = m21.metadata.Metadata()
         key: str
         values: list[m21.metadata.ValueType]
@@ -1383,6 +1385,15 @@ class MeiMetadataReader:
                         if not dupeFound:
                             newValues.append(value)
                 output._contents[key] = existingValues + newValues
+
+        # if there is a single title and a single movementName, and they are exactly the same,
+        # get rid of the title (it's only there because Verovio and converter21 put a combination
+        # title in the fileDesc, and really, it's only the movementName that was really there.)
+        titles: list[m21.metadata.ValueType] = output._contents.get('title', [])
+        movementNames: list[m21.metadata.ValueType] = output._contents.get('movementName', [])
+        if len(titles) == 1 and len(movementNames) == 1:
+            if titles[0] == movementNames[0]:
+                del output._contents['title']
 
         return output
 

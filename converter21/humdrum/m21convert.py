@@ -868,15 +868,32 @@ class M21Convert:
     @staticmethod
     def kernGraceTypeFromM21Duration(m21Duration: m21.duration.Duration) -> str:
         isNonGrace: bool = not m21Duration.isGrace
-        isAppoggiatura: bool = isinstance(m21Duration, m21.duration.AppoggiaturaDuration)
 
         if isNonGrace:
             return ''
 
-        if isAppoggiatura:
+        if isinstance(m21Duration, m21.duration.AppoggiaturaDuration):
+            # AppoggiaturaDurations are always accented
             return 'qq'
 
-        # it's a grace, but not an appoggiatura
+        if t.TYPE_CHECKING:
+            # because non-grace and AppoggiaturaDuration have already returned
+            assert isinstance(m21Duration, m21.duration.GraceDuration)
+
+        # GraceDurations might be accented or unaccented.
+        # duration.slash isn't always reliable (historically), but we can use it
+        # as a fallback.
+        # Check duration.stealTimePrevious and duration.stealTimeFollowing first.
+        if m21Duration.stealTimePrevious is not None:
+            return 'q'
+        if m21Duration.stealTimeFollowing is not None:
+            return 'qq'
+        if m21Duration.slash is True:
+            return 'q'
+        if m21Duration.slash is False:
+            return 'qq'
+
+        # by default GraceDuration with no other indications means unaccented grace note.
         return 'q'
 
     @staticmethod
@@ -1499,7 +1516,7 @@ class M21Convert:
         if style:
             # absoluteY overrides placement
             if style.absoluteY is not None:
-                if style.absoluteY >= 0.0:
+                if style.absoluteY > 0.0:
                     placementString = ':a'
                 else:
                     placementString = ':b'
@@ -1610,7 +1627,7 @@ class M21Convert:
         # Check first, and if no SMUFL note found, return the text untouched.
         smuflNoteFound: bool = False
         for char in text:
-            if char in SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
+            if char in SharedConstants.SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
                 smuflNoteFound = True
                 break
         if not smuflNoteFound:
@@ -1623,19 +1640,19 @@ class M21Convert:
                 numCharsToSkip -= 1
                 continue
 
-            if char in SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
+            if char in SharedConstants.SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME:
                 output += (
                     '['
-                    + SharedConstants._SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME[char]
+                    + SharedConstants.SMUFL_METRONOME_MARK_NOTE_CHARS_TO_HUMDRUM_NOTE_NAME[char]
                 )
                 j = i + 1
                 while text[j] in (
-                    SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot'],
+                    SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['metAugmentationDot'],
                     chr(0x2009),  # thin space, inserted around notes sometimes
-                    chr(0x200A),  # thin space, inserted sometimes as well
+                    chr(0x200A),  # hair (very thin) space, inserted sometimes as well
                 ):
                     if text[j] in (chr(0x2009), chr(0x200A)):
-                        pass  # just skip the thin space
+                        pass  # just skip the thin/hair space
                     else:
                         output += '-dot'
                     j += 1
@@ -1644,7 +1661,7 @@ class M21Convert:
                 continue
 
             if char in (chr(0x2009), chr(0x200A)):  # thin space, inserted sometimes
-                continue  # just skip the thin space
+                continue  # just skip the thin/hair space
 
             if char == chr(0x00A0):
                 # convert nbsp to regular space (Humdrum doesn't want nbsp's in tempo text)
@@ -1664,13 +1681,13 @@ class M21Convert:
             return str(intNum)
         return str(num)
 
-    # getMMTokenAndOMDFromM21TempoIndication returns (mmTokenStr, tempoTextLayout).
+    # getMMTokenAndTempoTextFromM21TempoIndication returns (mmTokenStr, tempoTextLayout).
     @staticmethod
-    def getMMTokenAndOMDFromM21TempoIndication(
+    def getMMTokenAndTempoTextFromM21TempoIndication(
         tempo: m21.tempo.TempoIndication
     ) -> tuple[str, str]:
         mmTokenStr: str = ''
-        tempoOMD: str = ''
+        tempoText: str = ''
 
         textExp: m21.expressions.TextExpression | None = None
         contentString: str = ''
@@ -1682,8 +1699,8 @@ class M21Convert:
                 return ('', '')
             contentString = M21Convert.translateSMUFLNotesToNoteNames(textExp.content)
             contentString = M21Convert._cleanSpacesAndColons(contentString)
-            tempoOMD = '!!!OMD: ' + contentString
-            return ('', tempoOMD)
+            tempoText = contentString
+            return ('', tempoText)
 
         # a MetricModulation describes a change from one MetronomeMark to another
         # (it carries extra info for analysis purposes).  We just get the new
@@ -1702,17 +1719,17 @@ class M21Convert:
             # We have some text (like 'Andante') to display
             contentString = M21Convert.translateSMUFLNotesToNoteNames(textExp.content)
             contentString = M21Convert._cleanSpacesAndColons(contentString)
-            tempoOMD = '!!!OMD: ' + contentString
+            tempoText = contentString
 
         if tempo.number is not None:
-            # even if the number is implicit, go ahead and generate a *MM for it.
+            # Produce *MM even for implicit numbers.
             # Note that we always round to integer to emit *MM (we round to integer
             # when we parse it, too).
             quarterBPM: float | None = tempo.getQuarterBPM()
             if quarterBPM is not None:
                 mmTokenStr = '*MM' + M21Convert._floatOrIntString(int(quarterBPM + 0.5))
 
-        return (mmTokenStr, tempoOMD)
+        return (mmTokenStr, tempoText)
 
     # @staticmethod
     # def bpmTextLayoutParameterFromM21MetronomeMark(tempo: m21.tempo.MetronomeMark) -> str:
@@ -2701,13 +2718,11 @@ class M21Convert:
                         theLookup[(vStyle1, vStyle2)] = MeasureVisualStyle.Invisible
                         continue
 
-                    # Regular and NoBarline don't add anything
-                    if (vStyle1 is MeasureVisualStyle.Regular
-                            or vStyle1 is MeasureVisualStyle.NoBarline):
+                    # Regular doesn't add anything
+                    if (vStyle1 is MeasureVisualStyle.Regular):
                         theLookup[(vStyle1, vStyle2)] = vStyle2
                         continue
-                    if (vStyle2 is MeasureVisualStyle.Regular
-                            or vStyle2 is MeasureVisualStyle.NoBarline):
+                    if (vStyle2 is MeasureVisualStyle.Regular):
                         theLookup[(vStyle1, vStyle2)] = vStyle1
                         continue
 
@@ -2786,7 +2801,7 @@ class M21Convert:
         vStyle: MeasureVisualStyle = MeasureVisualStyle.Regular
         mType: MeasureType = MeasureType.NotRepeat
         if m21Barline is None:
-            return MeasureStyle.NoBarline
+            return MeasureStyle.Regular
 
         if isinstance(m21Barline, m21.bar.Repeat):
             if m21Barline.direction == 'start':

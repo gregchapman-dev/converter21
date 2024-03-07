@@ -516,6 +516,7 @@ class MeiMetadata:
                         'analog': 'humdrum:PDT'
                     }
                 )
+                dateEl.fillInIsodate(datePublished.value)
                 dateEl.text = datePublished.meiValue
 
             for locationPublished in locationsPublished:

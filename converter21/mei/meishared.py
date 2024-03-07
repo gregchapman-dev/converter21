@@ -112,7 +112,7 @@ class MeiShared:
     @staticmethod
     def _glyphNameToUnicodeChar(name: str) -> str:
         # name is things like 'noteQuarterUp', which can be looked up
-        return SharedConstants._SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
+        return SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR.get(name, '')
 
     @staticmethod
     def _glyphNumToUnicodeChar(num: str) -> str:

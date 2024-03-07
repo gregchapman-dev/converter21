@@ -10,9 +10,10 @@
 # ------------------------------------------------------------------------------
 import sys
 from xml.etree.ElementTree import TreeBuilder
-# import typing as t
+import typing as t
 
 import music21 as m21
+from music21.common import OffsetQL
 # from music21.common import opFrac
 
 # from converter21.mei import MeiExportError
@@ -37,15 +38,17 @@ class MeiStaff:
         self,
         staffNStr: str,
         m21Measure: m21.stream.Measure,
-        m21Part: m21.stream.Part,
+        parentScore,  # MeiScore
         spannerBundle: m21.spanner.SpannerBundle,
-        scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature]
     ) -> None:
+        if t.TYPE_CHECKING:
+            from converter21.mei import MeiScore
+            assert isinstance(parentScore, MeiScore)
+
         self.staffNStr: str = staffNStr
         self.m21Measure = m21Measure
-        self.m21Part = m21Part
-        self.spannerBundle = spannerBundle
-        self.scoreMeterStream = scoreMeterStream
+        self.m21Score = parentScore.m21Score
+        self.scoreMeterStream = parentScore.scoreMeterStream
         self.nextFreeVoiceNumber = 1
         self.layers: list[MeiLayer] = []
         self.theOneLayerIsTheMeasureItself = False
@@ -58,27 +61,46 @@ class MeiStaff:
             self.theOneLayerIsTheMeasureItself = True
 
         for voice in voices:
-            self.layers.append(MeiLayer(voice, self, spannerBundle, scoreMeterStream))
+            self.layers.append(MeiLayer(voice, self, parentScore, spannerBundle))
 
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
+        extraStaffChanges: list[
+            tuple[
+                m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
+                OffsetQL
+            ]
+        ] = []
+
         if not self.theOneLayerIsTheMeasureItself:
             # Process any clef/timesig/keysig at offset 0 in enclosing measure (but
-            # if the m21Measure itself is the first measure in the m21Part, skip
-            # the very first clef, timesig and keysig, since those initial ones are
+            # if the m21Measure itself is the first measure in the part, skip the
+            # very first clef, timesig and keysig, since those initial ones are
             # handled in the original <scoredef>).
-            # We assume that any clef/timesig/keysig at non-zero measure offset will
-            # be sitting alongside the notes (e.g. in a Voice), and can just be emitted
-            # like a note, without this <staffdef> wrapper.
+
+            # The clefs/timesigs/keysigs at non-zero measure offset will either be
+            # sitting alongside the notes (e.g. in a Voice), or they will not be at
+            # the Voice level (i.e. they will be at the Measure level).
+
+            # The clefs/timesigs/keysigs at Voice level can just be emitted in that
+            # MeiLayer like a note, without this <staffDef> wrapper.
+
+            # The clefs/timesigs/keysigs at Measure level will need to be emitted
+            # in all the MeiLayers (again without the <staffDef> wrapper), with the
+            # clef/timesig/keysig in the first layer being fully specified, and the
+            # other clefs/timesigs/keysigs simply being marked as being @sameas the
+            # clef/timesig/keysig in the first layer.
+
             firstSeen: list[str] = []
             staffDefEmitted: bool = False
             for el in self.m21Measure:
-                if el.offset == 0:
-                    if isinstance(
-                        el,
-                        (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)
-                    ):
-                        if self.m21Measure.offset == 0:
+                if isinstance(
+                    el,
+                    (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)
+                ):
+                    elOffsetInMeasure: OffsetQL = el.getOffsetInHierarchy(self.m21Measure)
+                    if elOffsetInMeasure == 0:
+                        if self.m21Measure.getOffsetInHierarchy(self.m21Score) == 0:
                             # very first measure in part:
                             # skip the first clef, the first timesig, and first keysig
                             if isinstance(el, m21.clef.Clef):
@@ -98,16 +120,20 @@ class MeiStaff:
                             tb.start('staffDef', {'n': self.staffNStr})
                             staffDefEmitted = True
                         M21ObjectConvert.convertM21ObjectToMei(el, tb)
+                    else:
+                        # gather up non-zero offset clefs/timesigs/keysigs to emit in MeiLayer
+                        if len(self.layers) > 1:
+                            # we'll need an xmlId for any sameas references from extra layers.
+                            M21ObjectConvert.assureXmlId(el)
+                        extraStaffChanges.append((el, elOffsetInMeasure))
+
             if staffDefEmitted:
                 tb.end('staffDef')
 
         tb.start('staff', {'n': self.staffNStr})
         for layer in self.layers:
-            layer.makeRootElement(tb)
-        # 888 process any final barline in the Measure (MeiStaff)
+            layer.makeRootElement(tb, extraStaffChanges=extraStaffChanges)
         tb.end('staff')
-
-
 
     def makePostStavesElements(self, tb: TreeBuilder):
         for layer in self.layers:
@@ -123,7 +149,7 @@ class MeiStaff:
                     M21ObjectConvert.convertPostStaveStreamElement(
                         obj,
                         self.staffNStr,
-                        self.m21Part,
+                        self.m21Score,
                         self.m21Measure,
                         self.scoreMeterStream,
                         tb
@@ -137,7 +163,7 @@ class MeiStaff:
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,
                                 self.staffNStr,
-                                self.m21Part,
+                                self.m21Score,
                                 self.m21Measure,
                                 self.scoreMeterStream,
                                 tb
@@ -150,7 +176,7 @@ class MeiStaff:
                     self.m21Measure.rightBarline,
                     self.m21Measure.rightBarline.pause,
                     self.staffNStr,
-                    self.m21Part,
+                    self.m21Score,
                     self.m21Measure,
                     self.scoreMeterStream,
                     tb

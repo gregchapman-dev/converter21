@@ -14,7 +14,7 @@ import sys
 import typing as t
 
 import music21 as m21
-from music21.common import opFrac
+from music21.common import opFrac, OffsetQL
 
 # from converter21.humdrum import HumdrumExportError
 from converter21.humdrum import HumNum, HumNumIn
@@ -61,13 +61,13 @@ class MeasureData:
         self._duration: HumNum = opFrac(-1)
         self._timeSigDur: HumNum = opFrac(-1)
         # leftBarlineStyle describes the left barline of this measure
-        self.leftBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
+        self.leftBarlineStyle: MeasureStyle = MeasureStyle.Regular
         # rightBarlineStyle describes the right barline of this measure
-        self.rightBarlineStyle: MeasureStyle = MeasureStyle.NoBarline
+        self.rightBarlineStyle: MeasureStyle = MeasureStyle.Regular
         # measureStyle is a combination of this measure's leftBarlineStyle and
         # the previous measure's rightBarlineStyle.  It's the style we use when
         # writing a barline ('=') token.
-        self.measureStyle: MeasureStyle = MeasureStyle.NoBarline
+        self.measureStyle: MeasureStyle = MeasureStyle.Regular
 
         self.leftBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
         self.rightBarlineFermataStyle: FermataStyle = FermataStyle.NoFermata
@@ -171,15 +171,9 @@ class MeasureData:
         self.leftBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.leftBarline)
         self.rightBarlineStyle = M21Convert.measureStyleFromM21Barline(self.m21Measure.rightBarline)
 
-        # measure index 0 only: pretend there is a left barline (hidden) if there is none
-        # That first barline in Humdrum files is important for parse-ability.
-        if self.measureIndex == 0:
-            if self.leftBarlineStyle == MeasureStyle.NoBarline:
-                self.leftBarlineStyle = MeasureStyle.Invisible
-
         # Grab the previous measure's right barline style (if there is one) and
         # combine it with our left barline style, giving our measureStyle.
-        prevRightMeasureStyle: MeasureStyle = MeasureStyle.NoBarline
+        prevRightMeasureStyle: MeasureStyle = MeasureStyle.Regular
         if self._prevMeasData is not None:
             prevRightMeasureStyle = self._prevMeasData.rightBarlineStyle
         self.measureStyle = M21Convert.combineTwoMeasureStyles(self.leftBarlineStyle,
@@ -263,20 +257,24 @@ class MeasureData:
         event: EventData
         durations: list[HumNum]
         startTime: HumNum
+        currentEmittedTime: OffsetQL = self.startTime
+
         if emptyStartDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the beginning of m21Stream
-            durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyStartDuration)
+            durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(
+                emptyStartDuration
+            )
             startTime = self.startTime
             for duration in durations:
-                m21StartRest: m21.note.Rest = m21.note.Rest(
-                    duration=m21.duration.Duration(duration)
-                )
+                m21StartRest: m21.note.Rest = m21.note.Rest(duration)
                 m21StartRest.style.hideObjectOnPrint = True
                 event = EventData(m21StartRest, -1, voiceIndex, self, offsetInScore=startTime)
                 if event is not None:
                     self.events.append(event)
                 startTime = opFrac(startTime + duration)
+
+            currentEmittedTime = startTime
 
         elementList: list[m21.base.Music21Object] = list(
             m21Stream.recurse().getElementsNotOfClass(m21.stream.Stream)
@@ -296,6 +294,25 @@ class MeasureData:
                     noteOrChord.humdrum_sf_or_sfz = element  # type: ignore
                     continue
 
+            # handle any gaps between elements by emitting hidden rest(s)
+            elStartTime: OffsetQL = opFrac(
+                self.startTime + element.getOffsetInHierarchy(self.m21Measure)
+            )
+            if elStartTime > currentEmittedTime:
+                durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(
+                    elStartTime - currentEmittedTime
+                )
+                for duration in durations:
+                    m21GapRest: m21.note.Rest = m21.note.Rest(duration)
+                    m21GapRest.style.hideObjectOnPrint = True
+                    event = EventData(
+                        m21GapRest, -1, voiceIndex, self, offsetInScore=currentEmittedTime
+                    )
+                    if event is not None:
+                        self.events.append(event)
+
+                currentEmittedTime = elStartTime
+
             event = EventData(element, elementIndex, voiceIndex, self)
             if event is not None:
                 self.events.append(event)
@@ -312,10 +329,12 @@ class MeasureData:
                 if extraEvents:
                     self.events += extraEvents
 
+            currentEmittedTime = opFrac(currentEmittedTime + element.quarterLength)
+
         if emptyEndDuration > 0:
             # make m21 hidden rests totalling this duration, and pretend they
             # were at the end of m21Stream
-            durations = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(emptyEndDuration)
+            durations = M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(emptyEndDuration)
             startTime = opFrac(self.startTime + self.duration - opFrac(emptyEndDuration))
             for duration in durations:
                 m21EndRest: m21.note.Rest = m21.note.Rest(duration=m21.duration.Duration(duration))

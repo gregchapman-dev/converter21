@@ -18,6 +18,7 @@ import sys
 import copy
 import typing as t
 from fractions import Fraction
+from copy import deepcopy
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
@@ -28,6 +29,9 @@ class CannotMakeScoreFromObjectError(Exception):
 
 
 class NoMusic21VersionError(Exception):
+    pass
+
+class Converter21InternalError(Exception):
     pass
 
 
@@ -653,7 +657,9 @@ class M21Utilities:
         return (dd, None)
 
     @staticmethod
-    def getPowerOfTwoDurationsWithDotsAddingTo(quarterLength: OffsetQLIn) -> list[OffsetQL]:
+    def getPowerOfTwoQuarterLengthsWithDotsAddingTo(
+        quarterLength: OffsetQLIn,
+    ) -> list[OffsetQL]:
         output: list[OffsetQL] = []
         ql: OffsetQL = opFrac(quarterLength)
 
@@ -678,6 +684,163 @@ class M21Utilities:
 
         # we couldn't compute a full list so just return the original param
         return [opFrac(quarterLength)]
+
+    @staticmethod
+    def getPowerOfTwoDurationsWithDotsAddingTo(
+        quarterLength: OffsetQLIn,
+    ) -> list[m21.duration.Duration]:
+        # Unlike getPowerOfTwoQuarterLengthsWithDotsAddingTo, this one returns
+        # an empty list when it cannot do the job.
+        qlList: list[OffsetQL] = (
+            M21Utilities.getPowerOfTwoQuarterLengthsWithDotsAddingTo(quarterLength)
+        )
+        if len(qlList) == 1 and not M21Utilities.isPowerOfTwoWithDots(qlList[0]):
+            return []
+        return [m21.duration.Duration(ql) for ql in qlList]
+
+    @staticmethod
+    def getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+        totalDuration: OffsetQLIn,
+        crossing: OffsetQLIn,
+    ) -> tuple[list[m21.duration.Duration], list[m21.duration.Duration]]:
+        output1: list[m21.duration.Duration] = []
+        output2: list[m21.duration.Duration] = []
+        totalDuration = opFrac(totalDuration)
+        crossing = opFrac(crossing)
+        secondDur: OffsetQL = opFrac(totalDuration - crossing)
+        needTuplet: bool = False
+
+        if crossing == 0:
+            output1 = []
+        elif M21Utilities.isPowerOfTwoWithDots(crossing):
+            output1 = [m21.duration.Duration(crossing)]
+        else:
+            output1 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(crossing)
+            if not output1:
+                # problem: we'll need a tuplet to get to crossing
+                needTuplet = True
+
+        if not needTuplet:
+            if secondDur == 0:
+                output2 = []
+            elif M21Utilities.isPowerOfTwoWithDots(secondDur):
+                output2 = [m21.duration.Duration(secondDur)]
+            else:
+                output2 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(secondDur)
+                if not output2:
+                    # problem: we'll need a tuplet to get from crossing to totalDuration
+                    output1 = []
+                    needTuplet = True
+
+        if not needTuplet:
+            return (output1, output2)
+
+        # we need a tuplet for some reason
+
+        # Easiest case: totalDuration is powerOfTwoWithDots (only crossing is tuplet-y)
+        if M21Utilities.isPowerOfTwoWithDots(totalDuration):
+            crossingFrac: Fraction = Fraction(crossing)
+            qLen: OffsetQL = opFrac(Fraction(1, crossingFrac.denominator))
+            tuplets: list[m21.duration.Tuplet] = m21.duration.quarterLengthToTuplet(
+                qLen,
+                maxToReturn=1)
+            if not tuplets:
+                raise Converter21InternalError('Cannot compute crossing tuplet')
+
+            # Figure out similar tuplet that covers all of totalDuration
+            tupletElementQL: OffsetQL = totalDuration
+            while M21Utilities.isPowerOfTwoWithDots(tupletElementQL):
+                tupletElementQL = tupletElementQL / float(tuplets[0].numberNotesActual)
+
+            tuplets = m21.duration.quarterLengthToTuplet(
+                tupletElementQL
+            )
+            if not tuplets:
+                raise Converter21InternalError('Cannot compute totalDuration tuplet')
+
+            tuplet: m21.duration.Tuplet = deepcopy(tuplets[0])
+            tuplet.numberNotesActual = int(totalDuration / tupletElementQL)
+            tuplet.numberNotesNormal = int(
+                tuplet.numberNotesActual * tuplets[0].tupletMultiplier()
+            )
+            tupletStart: m21.duration.Tuplet = deepcopy(tuplet)
+            tupletStart.type = 'start'
+            tupletStop: m21.duration.Tuplet = deepcopy(tuplet)
+            tupletStop.type = 'stop'
+
+
+            tupletMultiplier: OffsetQL = tuplets[0].tupletMultiplier()
+            output1, output2 = M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+                opFrac(totalDuration / tupletMultiplier),
+                opFrac(crossing / tupletMultiplier)
+            )
+
+            for i, dur in enumerate(output1 + output2):
+                if i == 0:
+                    dur.tuplets = (tupletStart,)
+                elif i == len(output1 + output2) - 1:
+                    dur.tuplets = (tupletStop,)
+                else:
+                    dur.tuplets = (tuplet,)
+
+            return output1, output2
+
+        # case 2: totalDuration is representable by a list of powerOfTwoWithDots durations
+        # (only crossing is tuplet-y).
+        totalDurs: list[m21.duration.Duration] = (
+            M21Utilities.getPowerOfTwoDurationsWithDotsAddingTo(totalDuration)
+        )
+        if totalDurs:
+            # Figure out which element of totalDurs contains the crossing point,
+            # recurse on that element (as totalDuration), and then construct
+            # the output lists from all of the computed lists.
+            newTotalQL: OffsetQL = 0.
+            newCrossing: OffsetQL = 0.
+            foundIdx: int = -1
+            curOffset: OffsetQL = 0.
+            for i, partialDur in enumerate(totalDurs):
+                partialQL: OffsetQL = partialDur.quarterLength
+                nextOffset: OffsetQL = opFrac(curOffset + partialQL)
+                if curOffset <= crossing < nextOffset:
+                    newTotalQL = partialQL
+                    newCrossing = opFrac(crossing - curOffset)
+                    foundIdx = i
+                    break
+                curOffset = nextOffset
+
+            if foundIdx == -1:
+                raise Converter21InternalError('Could not find crossing in totalDuration')
+
+            beforeCrossing: list[m21.duration.Duration]
+            afterCrossing: list[m21.duration.Duration]
+            beforeCrossing, afterCrossing = (
+                M21Utilities.getPowerOfTwoDurationsWithDotsAddingToAndCrossing(
+                    newTotalQL,
+                    newCrossing
+                )
+            )
+
+            # Construct new lists:
+            # 1. pre-foundIdx durations
+            # 2. foundIdx became beforeCrossing and afterCrossing
+            # 3. post-foundIdx durations
+            # So...
+            # output1 = pre-foundIdx durations + beforeCrossing
+            # output2 = afterCrossing + post-foundIdx durations
+            if foundIdx == 0:
+                output1 = beforeCrossing
+            else:
+                output1 = totalDurs[:foundIdx - 1] + beforeCrossing
+            if foundIdx == len(totalDurs) - 1:
+                output2 = afterCrossing
+            else:
+                output2 = afterCrossing + totalDurs[foundIdx + 1:]
+            return output1, output2
+
+        # case 3: totalDuration is itself tuplet-y (e.g. 10/3).
+        raise Converter21InternalError(
+            'totalDuration must representable by a list of powerOfTwoWithDots durations.'
+        )
 
     @staticmethod
     def splitComplexRestDurations(s: m21.stream.Stream) -> None:
@@ -1009,6 +1172,10 @@ class M21Utilities:
             isodate = removeSplitChars(isodate)
             return isodate.split(',')
 
+        def splitIsoDateRangeSelection(isodate: str) -> list[str]:
+            isodate = removeSplitChars(isodate)
+            return isodate.split('..')
+
         if not isodate:
             return None
 
@@ -1017,12 +1184,18 @@ class M21Utilities:
             return None
 
         if isodate[0] in ('{', '['):
+            if isodate[0] == '[' and '..' in isodate:
+                # it's a selection that is a range.  We can represent this as a DateBetween.
+                m21Dates: list[m21.metadata.Date] = (
+                    M21Utilities.m21DateListFromIsoDateList(splitIsoDateRangeSelection(isodate))
+                )
+                return m21.metadata.DateBetween(m21Dates)
+
             # list (DateSelection)
             relevance: str = 'and' if isodate[0] == '{' else 'or'
-            m21Dates: list[m21.metadata.Date] = (
-                M21Utilities.m21DateListFromIsoDateList(splitIsoDateList(isodate))
-            )
+            m21Dates = M21Utilities.m21DateListFromIsoDateList(splitIsoDateList(isodate))
             return m21.metadata.DateSelection(m21Dates, relevance=relevance)
+
         if '/' in isodate:
             if '..' not in isodate:
                 # regular range (DateBetween)
@@ -1038,6 +1211,7 @@ class M21Utilities:
                 relevance = 'after'
             else:
                 return None
+
             if '/' in isodate:
                 # should not be any '/' once we remove '../' or '/..'
                 return None
@@ -1045,6 +1219,7 @@ class M21Utilities:
             m21Date: m21.metadata.Date | None = M21Utilities.m21DateFromIsoDate(isodate)
             if m21Date is None:
                 return None
+
             return m21.metadata.DateRelative(m21Date, relevance=relevance)
 
         # single date (DateSingle)
@@ -1188,7 +1363,9 @@ class M21Utilities:
             elif doStart.relevance in ('after', 'onorafter'):
                 output['startedtf'] = startIsoDates[0] + '/..'
         elif isinstance(doStart, m21.metadata.DateBetween):
-            output['startedtf'] = startIsoDates[0] + '/' + startIsoDates[1]
+            # DateBetween for the beginning of a DatePrimitive range is actually a
+            # selection within a range: [date1..date2], not a full range: date1/date2.
+            output['startedtf'] = '[' + startIsoDates[0] + '..' + startIsoDates[1] + ']'
         elif isinstance(doStart, m21.metadata.DateSelection):
             if doStart.relevance == 'and':
                 output['startedtf'] = '{' + ','.join(startIsoDates) + '}'
@@ -1217,7 +1394,9 @@ class M21Utilities:
             elif doEnd.relevance in ('after', 'onorafter'):
                 output['endedtf'] = endIsoDates[0] + '/..'
         elif isinstance(doEnd, m21.metadata.DateBetween):
-            output['endedtf'] = endIsoDates[0] + '/' + endIsoDates[1]
+            # DateBetween for the ending of a DatePrimitive range is actually a
+            # selection within a range: [date1..date2], not a full range: date1/date2.
+            output['endedtf'] = '[' + endIsoDates[0] + '..' + endIsoDates[1] + ']'
         elif isinstance(doEnd, m21.metadata.DateSelection):
             if doEnd.relevance == 'and':
                 output['endedtf'] = '{' + ','.join(endIsoDates) + '}'

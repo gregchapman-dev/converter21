@@ -75,7 +75,7 @@ class MeiScore:
         self.staffGroupTrees: list[M21StaffGroupTree] = (
             M21Utilities.getStaffGroupTrees(
                 list(m21Score[m21.layout.StaffGroup]),
-                self.staffNumbersForM21Parts
+                self.staffNumbersForM21Parts,
             )
         )
 
@@ -83,6 +83,10 @@ class MeiScore:
         self.metadata: MeiMetadata = MeiMetadata(m21Score.metadata)
 
     def _getStaffNumbersForM21Parts(self) -> dict[m21.stream.Part, int]:
+        # If this routine ever changes the fact that staff numbers are in the same
+        # monotonically increasing order as m21Score.parts, starting at 1, incrementing
+        # by 1 for each Part, then makeStaffGrpOrStaffDefElementStartingAt() will need
+        # to be updated to match (it counts on that fact).
         output: dict[m21.stream.Part, int] = {}
         for staffIdx, part in enumerate(self.m21Score.parts):
             output[part] = staffIdx + 1  # staff numbers are 1-based
@@ -106,9 +110,8 @@ class MeiScore:
             meiMeas = MeiMeasure(
                 measureStack,
                 prevMeiMeasure,
-                self.staffNumbersForM21Parts,
-                self.spannerBundle,
-                self.scoreMeterStream)
+                self,
+                self.spannerBundle)
             output.append(meiMeas)
 
         return output
@@ -213,6 +216,7 @@ class MeiScore:
                 clef = clefs[0]
         if clef is not None:
             M21ObjectConvert.m21ClefToMei(clef, tb)
+            clef.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial clef found in part {staffN}')
 
@@ -228,6 +232,7 @@ class MeiScore:
                 keySig = keySigs[0]
         if keySig is not None:
             M21ObjectConvert.m21KeySigToMei(keySig, tb)
+            keySig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial key signature found in part {staffN}')
 
@@ -243,6 +248,7 @@ class MeiScore:
                 meterSig = meterSigs[0]
         if meterSig is not None:
             M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
+            meterSig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial time signature found in part {staffN}')
 
@@ -311,18 +317,55 @@ class MeiScore:
             staffNums.append(staffNum)
 
         tb.end('staffGrp')
+        staffNums.sort()
         return staffNums
+
+    def _findTopStaffGroupTreeStartingWith(self, staffNum: int) -> M21StaffGroupTree | None:
+        # self.staffGroupTrees is sorted by numStaves, so we need the last tree we saw
+        # to get the topmost staffGroupTree that starts with staffNum.
+        topTreeSoFar: M21StaffGroupTree | None = None
+        for sgTree in self.staffGroupTrees:
+            if sgTree.lowestStaffNumber == staffNum:
+                topTreeSoFar = sgTree
+        return topTreeSoFar
+
+    def makeStaffGrpOrStaffDefElementStartingAt(self, staffNum: int, tb: TreeBuilder) -> int:
+        # Assumption: staff numbers are in the same monotonically increasing order
+        # as m21Score.parts, starting at 1, incrementing by 1 for each Part.  This
+        # assumption can be seen to be true in _getStaffNumbersForM21Parts().
+        sgTree: M21StaffGroupTree | None = self._findTopStaffGroupTreeStartingWith(staffNum)
+        if sgTree is None:
+            m21Part: m21.stream.Part = self.m21PartsForStaffNumbers[staffNum]
+            self.makeStaffDefElement(m21Part, staffNum, tb)
+            return staffNum + 1
+
+        staffNums: list[int] = self.makeStaffGrpElement(sgTree, tb)
+        return staffNums[-1] + 1
+
+    def _nonGroupedStavesExist(self) -> bool:
+        groupedStaffNums: set[int] = set()
+        for sgTree in self.staffGroupTrees:
+            groupedStaffNums.update(sgTree.staffNums)
+        for sn in self.m21PartsForStaffNumbers:
+            if sn not in groupedStaffNums:
+                return True
+        return False
+
 
     def makeScoreDefElement(self, tb: TreeBuilder) -> None:
         tb.start('scoreDef', {})
-        if len(self.staffGroupTrees) > 1:
-            # we'll need a top-level staffGrp to hold them (just make it out of thin air)
+        madeFakeTopLevelStaffGrp: bool = False
+        if len(self.staffGroupTrees) > 1 or self._nonGroupedStavesExist():
+            # we'll need a top-level staffGrp to hold the multiple staffGroups/staffDefs
+            # (just make it out of thin air)
             tb.start('staffGrp', {})
+            madeFakeTopLevelStaffGrp = True
 
-        for sgtree in self.staffGroupTrees:
-            self.makeStaffGrpElement(sgtree, tb)
+        nextStaffNum: int = 1
+        while nextStaffNum in self.m21PartsForStaffNumbers:
+            nextStaffNum = self.makeStaffGrpOrStaffDefElementStartingAt(nextStaffNum, tb)
 
-        if len(self.staffGroupTrees) > 1:
+        if madeFakeTopLevelStaffGrp:
             # close out the top-level staffGrp we made out of thin air
             tb.end('staffGrp')
 

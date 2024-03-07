@@ -14,41 +14,43 @@ from musicdiff import DetailLevel
 
 # The things we're testing
 from converter21.humdrum import HumdrumFile
-from converter21.mei import MeiWriter
+from converter21.humdrum import HumdrumWriter
 import converter21
 
-def runTheFullTest(krnPath: Path):
-    print(f'krn file: {krnPath}')
+def runTheFullTest(inputPath: Path):
+    print(f'MusicXML file: {inputPath}')
 
-    print(f'Parsing Humdrum file: {krnPath}')
-    score1 = m21.converter.parse(krnPath, format='humdrum', forceSource=True)
+    print(f'Parsing MusicXML file: {inputPath}')
+    score1 = m21.converter.parse(inputPath, format='musicxml', forceSource=True)
 
     assert score1 is not None
     assert score1.isWellFormedNotation()
 
-    meiw: MeiWriter = MeiWriter(score1)
-    meiw.makeNotation = False
+    humdrumw: HumdrumWriter = HumdrumWriter(score1)
+    humdrumw.makeNotation = False
 
     success: bool = True
-    meiwPath = Path(tempfile.gettempdir())
-    meiwPath /= (krnPath.stem + '_Written')
-    meiwPath = meiwPath.with_suffix('.mei')
-    with open(meiwPath, 'wt') as f:
-        success = meiw.write(f)
+    humdrumwPath = Path(tempfile.gettempdir())
+    humdrumwPath /= (inputPath.stem + '_Written')
+    humdrumwPath = humdrumwPath.with_suffix('.krn')
+    print(f'Writing Humdrum file: {humdrumwPath}')
+    with open(humdrumwPath, 'wt') as f:
+        success = humdrumw.write(f)
 
     assert success
 
-    print(f'Parsing converter21-produced MEI file: {meiwPath}')
+    print(f'Parsing written Humdrum file: {humdrumwPath}')
+    score2 = m21.converter.parse(humdrumwPath, format='humdrum', forceSource=True)
+    assert score2 is not None
+    assert score2.isWellFormedNotation()
 
-    score2 = m21.converter.parse(meiwPath, format='mei', forceSource=True)
-
-    # compare the two music21 (MEI) scores
+    # compare the two music21 (Humdrum) scores
     # with music-score-diff:
-    print('comparing the two scores')
+    print('comparing the two music21 scores')
     score_lin2 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
-    print('annotated Humdrum score')
+    print('loaded imported MusicXML score')
     score_lin3 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
-    print('annotated exported MEI score')
+    print('loaded exported Humdrum score')
     if score_lin2.n_of_parts != score_lin3.n_of_parts:
         print(f'numParts {score_lin2.n_of_parts} vs {score_lin3.n_of_parts}')
         return
@@ -63,8 +65,8 @@ def runTheFullTest(krnPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
-#     print('Humdrum score written to: ', score1.write('musicxml', makeNotation=False))
-#     print('Exported MEI score written to: ', score2.write('musicxml', makeNotation=False))
+#     print('imported MusicXML score written to: ', score1.write('musicxml', makeNotation=False))
+#     print('exported Humdrum score written to: ', score2.write('musicxml', makeNotation=False))
     return
 
 # ------------------------------------------------------------------------------
