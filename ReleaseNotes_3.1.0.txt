@@ -25,26 +25,26 @@ MEI importer/exporter:
 MEI importer:
     - Fix timestamp computation (notice meter changes inside layers before computing
         any timestamps in that measure).
-    - Allow <space> to be used as a @startid or @endid in a staff item (e.g. <hairpin>).
+    - Allow <space> to be used as a `@startid` or `@endid` in a staff item (e.g. <hairpin>).
 
 MEI exporter:
     - MetronomeMark implicit text no longer emitted in <tempo>.
     - Fix duplicated clefs/keySigs/meterSigs; if you emit in staffdef, don't emit
         again later at start of layer.
     - Actually emit clef/key/timesig changes that aren't at start of measure.
-    - @midi.bpm must be exported as a string (fixes an MEI export crash).
-    - If @tstamp2 is going to be in a previous measure, don't crash, just put it at the beginning
+    - `@midi.bpm` must be exported as a string (fixes an MEI export crash).
+    - If `@tstamp2` is going to be in a previous measure, don't crash, just put it at the beginning
         of this measure.
-    - Add missing @isodate for "datePublished".
+    - Add missing `@isodate` for "datePublished".
     - Fix handling of spanners that start and end in different Parts (we were crashing).
-    - Emit ornament accidentals only if visible (there is no @accid.ges on
+    - Emit ornament accidentals only if visible (there is no `@accid.ges` on
         ornamentals, unfortunately, or we would use that for invisible accidentals).
-    - MEI hairpins end at start of @endid.  Unfortunately, music21 DynamicWedges
-        end at _end_ of dw.getLast().  So we can't use dw.getLast() as @endid.  Instead
-        we now emit a @tstamp2 at the ending offset of dw.getLast().
+    - MEI hairpins end at start of `@endid`.  Unfortunately, music21 DynamicWedges
+        end at _end_ of dw.getLast().  So we can't use dw.getLast() as `@endid`.  Instead
+        we now emit a `@tstamp2` at the ending offset of dw.getLast().
 
 Humdrum importer/exporter:
-    - Fix handling of OMD that is not Tempo (picked up !LO:TX:omd: import support from
+    - Fix handling of OMD that is not Tempo (picked up `!LO:TX:omd:` import support from
         Verovio, then started emitting that in Humdrum export).
     - Support export of non-note-associated (i.e. timestamped) dynamics/directions/tempos
         by adding a voice full of invisible rests, one of which lands at the desired offset.
