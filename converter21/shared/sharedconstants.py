@@ -1,7 +1,7 @@
 class SharedConstants:
     # Must be kept up to date with setup.py
     _CONVERTER21_NAME = 'converter21'
-    _CONVERTER21_VERSION = '3.0.1'
+    _CONVERTER21_VERSION = '3.1.0'
     _CONVERTER21_NAME_AND_VERSION = _CONVERTER21_NAME + ' v' + _CONVERTER21_VERSION
 
     SMUFL_NAME_TO_UNICODE_CHAR: dict[str, str] = {
