@@ -28,9 +28,8 @@ class MEIConverter(SubConverter):
     '''
     registerFormats = ('mei',)
     registerInputExtensions = ('mei',)
-    # NOTE: we're only working on import for now
     # registerShowFormats = ('mei',)
-    # registerOutputExtensions = ('mei',)
+    registerOutputExtensions = ('mei',)
 
     def parseData(
         self,
