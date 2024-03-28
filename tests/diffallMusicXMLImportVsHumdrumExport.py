@@ -31,7 +31,7 @@ def oplistSummary(
     counts['measure'] = 0
     counts['voice'] = 0
     counts['note'] = 0
-    counts['noteoffset'] = 0
+    counts['space'] = 0
     counts['gracenote'] = 0
     counts['beam'] = 0
     counts['lyric'] = 0
@@ -61,8 +61,10 @@ def oplistSummary(
                         'dotins',
                         'dotdel'):
             counts['note'] += 1
-        elif op[0] in ('editnoteoffset'):
-            counts['noteoffset'] += 1
+        elif op[0] in ('editspace',
+                        'insspace',
+                        'delspace'):
+            counts['space'] += 1
         elif op[0] in ('graceedit', 'graceslashedit'):
             counts['gracenote'] += 1
         elif op[0] in ('inslyric',
