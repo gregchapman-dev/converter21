@@ -1,5 +1,13 @@
+# git checkout main
+# git merge develop
+# Fix any conflicts, add, commit, push to origin
+
+# Edit setup.py to change version number and maybe dependencies.
 # FIRST edit setup.py to change version number and maybe dependencies.
 # MAYBE README, too, if dependencies changed.
+# git add setup.py README etc
+# git commit
+# git push origin
 
 # Clean up previous stuff:
 rm -r __pycache__
@@ -22,3 +30,8 @@ python3 -m twine upload --repository testpypi dist/*
 python3 -m twine upload dist/*
 
 # Go to github and make a release there as well (tag=vN.n.n)
+
+# git checkout develop
+# git merge --squash main
+# git commit
+# git push origin
