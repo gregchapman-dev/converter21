@@ -407,9 +407,9 @@ class HumdrumWriter:
                 outgrid.setVerseCount(p, s, verseCount)
 
         # transfer harmony counts from parts to HumGrid:
-        # for p, partData in enumerate(self._scoreData.parts):
-        #     harmonyCount: int = partData.harmonyCount
-        #     outgrid.setHarmonyCount(p, harmonyCount)
+        for p, partData in enumerate(self._scoreData.parts):
+            if partData.hasHarmony:
+                outgrid.setHarmonyPresent(p)
 
         # transfer dynamics boolean for part to HumGrid
         for p, partData in enumerate(self._scoreData.parts):
@@ -1396,11 +1396,6 @@ class HumdrumWriter:
             self._addUnassociatedTempos(gm, self._currentTempos)
             self._currentTempos = []
 
-        # if self._offsetHarmony:
-            # self._insertOffsetHarmonyIntoMeasure(gm)
-        # if self._offsetFiguredBass:
-            # self._insertOffsetFiguredBassIntoMeasure(gm)
-
         return status
 
     '''
@@ -1542,8 +1537,7 @@ class HumdrumWriter:
                             self._addEventToList(graceBefore, zeroDurEvent)
                     else:
                         # this is a zero-duration GeneralNote, but not a gracenote.
-                        # Just ignore it; it's only here to be in a Spanner (like
-                        # DynamicWedge), and we've already handled that.
+                        # Just ignore it (shouldn't happen).
                         pass
                 elif isinstance(m21Obj, (m21.layout.PageLayout, m21.layout.SystemLayout)):
                     self._processPrintElement(outgm, m21Obj, nowTime)
@@ -2124,17 +2118,11 @@ class HumdrumWriter:
     '''
     def _addEvent(
         self,
-        outSlice: GridSlice | None,
+        outSlice: GridSlice,
         outgm: GridMeasure,
         event: EventData | None,
         nowTime: HumNumIn
     ) -> None:
-        if event is not None and isinstance(event.m21Object, m21.harmony.ChordSymbol):
-            # special case that looks handleable (isinstance(Chord) is True),
-            # but must be skipped (if not .writeAsChord).
-            if not event.m21Object.writeAsChord:
-                return
-
         partIndex: int   # event.partIndex
         staffIndex: int  # event.staffIndex
         voiceIndex: int  # event.voiceIndex
@@ -2160,152 +2148,159 @@ class HumdrumWriter:
 
         tokenString: str = ''
         layouts: list[str] = []
-        if event is None or not event.isDynamicWedgeStartOrStop:
-            if event is not None:
-                if t.TYPE_CHECKING:
-                    assert isinstance(outSlice, GridSlice)
+        if event is None:
+            return
 
-                tokenString, layouts = event.getNoteKernTokenStringAndLayouts()
-                if '@' in tokenString:
-                    self._hasTremolo = True
+        if event.isChordSymbol:
+            hcount: int = self._addHarmony(
+                outSlice.parts[partIndex], event
+            )
+            if hcount > 0:
+                event.reportHarmonyToOwner()
 
-                if self.Debug:
-                    print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
-                    print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
-                    print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
-                    print(f'STn: {event.staffNumber}', end='\t', file=sys.stderr)
-                    print(f'Vn: {event.voiceNumber}', end='\t', file=sys.stderr)
-                    print(f'STi: {event.staffIndex}', end='\t', file=sys.stderr)
-                    print(f'Vi: {event.voiceIndex}', end='\t', file=sys.stderr)
-                    print(f'eName: {event.name}', file=sys.stderr)
+            # LATER: implement figured bass
+            #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex],
+            #                                               event, nowTime, partIndex)
+            #         if fcount > 0:
+            #             event.reportFiguredBassToOwner()
+            return
 
-                token = HumdrumToken(tokenString)
-                outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(
-                    voiceIndex, token, event.duration
+        if event.isDynamicWedgeStartOrStop:
+            # event has a single dynamic wedge start or stop, that is in this part/staff.
+            # if t.TYPE_CHECKING:
+            assert isinstance(outSlice, GridSlice)
+            self._addEventDynamics(outSlice, outgm, event)
+            event.reportDynamicToOwner()  # reports that dynamics exist in this part/staff
+            return
+
+        tokenString, layouts = event.getNoteKernTokenStringAndLayouts()
+        if '@' in tokenString:
+            self._hasTremolo = True
+
+        if self.Debug:
+            print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
+            print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
+            print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
+            print(f'STn: {event.staffNumber}', end='\t', file=sys.stderr)
+            print(f'Vn: {event.voiceNumber}', end='\t', file=sys.stderr)
+            print(f'STi: {event.staffIndex}', end='\t', file=sys.stderr)
+            print(f'Vi: {event.voiceIndex}', end='\t', file=sys.stderr)
+            print(f'eName: {event.name}', file=sys.stderr)
+
+        token = HumdrumToken(tokenString)
+        outSlice.parts[partIndex].staves[staffIndex].setTokenLayer(
+            voiceIndex, token, event.duration
+        )
+
+        # check for ottava starts/stops and emit *8va or *X8va aut cetera
+        if event.isOttavaStartOrStop:
+            starts: list[str]
+            stops: list[str]
+            starts, stops = event.getOttavaTokenStrings()
+            if starts:
+                # any starts go before this slice
+                outgm.addOttavaTokensBefore(
+                    starts,
+                    outSlice,
+                    partIndex,
+                    staffIndex,
+                    voiceIndex
+                )
+            if stops:
+                # any stops go after the full duration of this event,
+                # which might be many slices from now (maybe even in
+                # a different measure) so we have to stash them off
+                # and insert them later.
+                self.storePendingOttavaStops(
+                    stops,
+                    opFrac(event.startTime + event.duration),
+                    partIndex,
+                    staffIndex,
+                    voiceIndex
                 )
 
-                # check for ottava starts/stops and emit *8va or *X8va aut cetera
-                if event.isOttavaStartOrStop:
-                    starts: list[str]
-                    stops: list[str]
-                    starts, stops = event.getOttavaTokenStrings()
-                    if starts:
-                        # any starts go before this slice
-                        outgm.addOttavaTokensBefore(
-                            starts,
+        # implement tuplet number/bracket visibility
+        # *tuplet means display tuplets (default)
+        # *Xtuplet means suppress tuplets (both num and bracket are suppressed)
+        # *brackettup means display tuplet brackets (default, but only makes a
+        # difference if tuplet is displayed)
+        # *Xbrackettup means suppress tuplet brackets (only makes a difference if tuplet
+        # is displayed)
+        if event.isTupletStart:
+            if self.tupletsSuppressed(partIndex, staffIndex):
+                if not event.suppressTupletNum:
+                    outgm.addTupletDisplayTokenBefore(
+                        '*tuplet',
+                        outSlice,
+                        partIndex,
+                        staffIndex,
+                        voiceIndex
+                    )
+                    self.setTupletsSuppressed(partIndex, staffIndex, False)
+
+                    # Also check to make sure *brackettup is in the right state,
+                    # since Humdrum is about to start paying attention to it.
+                    if (self.tupletBracketsSuppressed(partIndex, staffIndex)
+                            != event.suppressTupletBracket):
+                        s1: str = '*brackettup'
+                        if event.suppressTupletBracket:
+                            s1 = '*Xbrackettup'
+                        outgm.addTupletDisplayTokenBefore(
+                            s1,
                             outSlice,
                             partIndex,
                             staffIndex,
                             voiceIndex
                         )
-                    if stops:
-                        # any stops go after the full duration of this event,
-                        # which might be many slices from now (maybe even in
-                        # a different measure) so we have to stash them off
-                        # and insert them later.
-                        self.storePendingOttavaStops(
-                            stops,
-                            opFrac(event.startTime + event.duration),
+                        self.setTupletBracketsSuppressed(
+                            partIndex,
+                            staffIndex,
+                            event.suppressTupletBracket
+                        )
+            else:
+                # Tuplets are not currently suppressed (*tuplet is current in force)
+                if event.suppressTupletNum:
+                    outgm.addTupletDisplayTokenBefore(
+                        '*Xtuplet',
+                        outSlice,
+                        partIndex,
+                        staffIndex,
+                        voiceIndex
+                    )
+                    self.setTupletsSuppressed(partIndex, staffIndex, True)
+
+                    # We don't check state of *brackettup here, since it doesn't matter.
+                    # We'll update it next time we emit *tuplet to turn tuplets back on.
+                else:
+                    # Tuplets are on, and we're leaving them on.  Better check that
+                    # *brackettup state doesn't need to change.
+                    if (self.tupletBracketsSuppressed(partIndex, staffIndex)
+                            != event.suppressTupletBracket):
+                        s2: str = '*brackettup'
+                        if event.suppressTupletBracket:
+                            s2 = '*Xbrackettup'
+                        outgm.addTupletDisplayTokenBefore(
+                            s2,
+                            outSlice,
                             partIndex,
                             staffIndex,
                             voiceIndex
                         )
+                        self.setTupletBracketsSuppressed(
+                            partIndex,
+                            staffIndex,
+                            event.suppressTupletBracket
+                        )
 
-                # implement tuplet number/bracket visibility
-                # *tuplet means display tuplets (default)
-                # *Xtuplet means suppress tuplets (both num and bracket are suppressed)
-                # *brackettup means display tuplet brackets (default, but only makes a
-                # difference if tuplet is displayed)
-                # *Xbrackettup means suppress tuplet brackets (only makes a difference if tuplet
-                # is displayed)
-                if event.isTupletStart:
-                    if self.tupletsSuppressed(partIndex, staffIndex):
-                        if not event.suppressTupletNum:
-                            outgm.addTupletDisplayTokenBefore(
-                                '*tuplet',
-                                outSlice,
-                                partIndex,
-                                staffIndex,
-                                voiceIndex
-                            )
-                            self.setTupletsSuppressed(partIndex, staffIndex, False)
+        # layouts go last because they need to be closest to the note.
+        for layoutString in layouts:
+            outgm.addLayoutParameter(
+                outSlice, partIndex, staffIndex, voiceIndex, layoutString
+            )
 
-                            # Also check to make sure *brackettup is in the right state,
-                            # since Humdrum is about to start paying attention to it.
-                            if (self.tupletBracketsSuppressed(partIndex, staffIndex)
-                                    != event.suppressTupletBracket):
-                                s1: str = '*brackettup'
-                                if event.suppressTupletBracket:
-                                    s1 = '*Xbrackettup'
-                                outgm.addTupletDisplayTokenBefore(
-                                    s1,
-                                    outSlice,
-                                    partIndex,
-                                    staffIndex,
-                                    voiceIndex
-                                )
-                                self.setTupletBracketsSuppressed(
-                                    partIndex,
-                                    staffIndex,
-                                    event.suppressTupletBracket
-                                )
-                    else:
-                        # Tuplets are not currently suppressed (*tuplet is current in force)
-                        if event.suppressTupletNum:
-                            outgm.addTupletDisplayTokenBefore(
-                                '*Xtuplet',
-                                outSlice,
-                                partIndex,
-                                staffIndex,
-                                voiceIndex
-                            )
-                            self.setTupletsSuppressed(partIndex, staffIndex, True)
-
-                            # We don't check state of *brackettup here, since it doesn't matter.
-                            # We'll update it next time we emit *tuplet to turn tuplets back on.
-                        else:
-                            # Tuplets are on, and we're leaving them on.  Better check that
-                            # *brackettup state doesn't need to change.
-                            if (self.tupletBracketsSuppressed(partIndex, staffIndex)
-                                    != event.suppressTupletBracket):
-                                s2: str = '*brackettup'
-                                if event.suppressTupletBracket:
-                                    s2 = '*Xbrackettup'
-                                outgm.addTupletDisplayTokenBefore(
-                                    s2,
-                                    outSlice,
-                                    partIndex,
-                                    staffIndex,
-                                    voiceIndex
-                                )
-                                self.setTupletBracketsSuppressed(
-                                    partIndex,
-                                    staffIndex,
-                                    event.suppressTupletBracket
-                                )
-
-                # layouts go last because they need to be closest to the note.
-                for layoutString in layouts:
-                    outgm.addLayoutParameter(
-                        outSlice, partIndex, staffIndex, voiceIndex, layoutString
-                    )
-
-                vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
-                if vcount > 0:
-                    event.reportVerseCountToOwner(vcount)
-
-                hcount: int = self._addHarmony(
-                    outSlice.parts[partIndex], event, nowTime, partIndex
-                )
-                if hcount > 0:
-                    pass
-                    # event.reportHarmonyCountToOwner(hcount)
-
-        # LATER: implement figured bass
-        #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex],
-        #                                               event, nowTime, partIndex)
-        #         if fcount > 0:
-        #             event.reportFiguredBassToOwner()
+        vcount: int = self._addLyrics(outgm, outSlice, partIndex, staffIndex, event)
+        if vcount > 0:
+            event.reportVerseCountToOwner(vcount)
 
         # LATER: implement brackets for *lig/*Xlig and *col/*Xcol
         #         if self._currentBrackets[partIndex]:
@@ -2314,20 +2309,13 @@ class HumdrumWriter:
         #             self._currentBrackets[partIndex] = []
         #             self._addBrackets(outSlice, outgm, event, nowTime, partIndex)
 
-            if event is not None and event.texts:
-                # event.texts contains any TextExpressions associated with this note (in this
-                # part/staff/voice).
-                if t.TYPE_CHECKING:
-                    assert isinstance(outSlice, GridSlice)
-                    assert isinstance(event, EventData)
-                self._addTexts(outSlice, outgm, event)
-
-        if event is not None and event.isDynamicWedgeStartOrStop:
-            # event has a single dynamic wedge start or stop, that is in this part/staff.
-            # if t.TYPE_CHECKING:
-            assert isinstance(outSlice, GridSlice)
-            self._addEventDynamics(outSlice, outgm, event)
-            event.reportDynamicToOwner()  # reports that dynamics exist in this part/staff
+        if event.texts:
+            # event.texts contains any TextExpressions associated with this note (in this
+            # part/staff/voice).
+            if t.TYPE_CHECKING:
+                assert isinstance(outSlice, GridSlice)
+                assert isinstance(event, EventData)
+            self._addTexts(outSlice, outgm, event)
 
         # might need special hairpin ending processing here (or might be musicXML-specific).
 
@@ -3045,11 +3033,17 @@ class HumdrumWriter:
     '''
     def _addHarmony(
         self,
-        part: GridPart,  # LATER: needs implementation
+        part: GridPart,
         event: EventData,
-        nowTime: HumNumIn,
-        partIndex: int
     ) -> int:
-        if self or part or event or nowTime or partIndex:
+        if not event.isChordSymbol:
             return 0
-        return 0
+
+        if t.TYPE_CHECKING:
+            assert isinstance(event.m21Object, m21.harmony.ChordSymbol)
+
+        tokenStr: str = M21Convert.m21ChordSymToHarmonyText(event.m21Object, dataType='**mxhm')
+        if tokenStr:
+            part.harmony = HumdrumToken(tokenStr)
+        return 1
+

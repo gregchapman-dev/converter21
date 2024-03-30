@@ -268,6 +268,86 @@ class M21Convert:
 
         return M21Convert.m21PitchName(subTokenStr) + octaveStr
 
+    MORE_CHORD_ALIASES: dict[str, str] = {
+        'augmented-ninth': 'augmented-dominant-ninth'
+    }
+    @staticmethod
+    def getM21ChordSymFromHarmonyText(
+        tokenStr: str,
+        dataType: str = '**mxhm'
+    ) -> m21.harmony.ChordSymbol:
+        if dataType != '**mxhm':
+            raise HumdrumInternalError('Harmony type "{dataType}" not supported')
+
+        # mxhm data is of the form '<root> <chord-type>', where root is '<A..G><#|-> and
+        # chord type is things like 'major', 'minor-seventh', etc.  The root works just
+        # fine for music21, but we need to look up 'major' -> '', 'minor-seventh' -> 'm7',
+        # etc.
+        strings: list[str] = tokenStr.split()
+        if len(strings) != 2:
+            raise HumdrumInternalError(f'malformed **mxhm harmony: "{tokenStr}"')
+
+        root: str = strings[0]
+        kind: str = strings[1]
+        bass: str = ''
+
+        if not root:
+            raise HumdrumInternalError(f'malformed **mxhm harmony: "{tokenStr}"')
+
+        if '/' in kind:
+            # there's a specified bass note (e.g. 'C major/D')
+            kindAndBass: list[str] = kind.split('/')
+            if len(kindAndBass) != 2:
+                raise HumdrumInternalError(f'malformed **mxhm harmony: "{tokenStr}"')
+            kind = kindAndBass[0]
+            bass = kindAndBass[1]
+
+        # convert from MusicXML/Humdrum kind to music21 kind ('dominant' -> 'dominant-seventh')
+        if kind in m21.harmony.CHORD_ALIASES:
+            kind = m21.harmony.CHORD_ALIASES[kind]
+        if kind in M21Convert.MORE_CHORD_ALIASES:
+            kind = M21Convert.MORE_CHORD_ALIASES[kind]
+        if kind not in m21.harmony.CHORD_TYPES:
+            kind = ''
+
+        output = m21.harmony.ChordSymbol(bass=bass, root=root, kind=kind)
+        return output
+
+    @staticmethod
+    def m21ChordSymToHarmonyText(
+        cs: m21.harmony.ChordSymbol,
+        dataType: str = '**mxhm'
+    ) -> str:
+        if dataType != '**mxhm':
+            raise HumdrumInternalError('Harmony type "{dataType}" not supported')
+
+        root: str = ''
+        csRoot: m21.pitch.Pitch | None = cs.root()
+        if csRoot is not None:
+            root = csRoot.name
+
+        kind: str = cs.chordKind or ''
+        # reverse alias kind back into MusicXML/Humdrum-land ('dominant-seventh' -> 'dominant')
+        for alias in m21.harmony.CHORD_ALIASES:
+            if m21.harmony.CHORD_ALIASES[alias] == kind:
+                kind = alias
+
+        bass: str = ''
+        csBass: m21.pitch.Pitch | None = cs.bass()
+        if csBass is not None and csBass.name != root:
+            bass = csBass.name
+
+        output: str = root
+        if root and kind:
+            output += ' '
+        output += kind
+
+        if bass:
+            output += '/' + bass
+
+        return output
+
+
     @staticmethod
     def m21Articulations(
         tokenStr: str,

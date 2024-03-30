@@ -21,7 +21,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import music21 as m21
-from music21.common import opFrac
+from music21.common import OffsetQL, opFrac
 
 from music21.common.enums import OrnamentDelay
 from converter21.humdrum import HumdrumInternalError, HumdrumSyntaxError
@@ -1653,13 +1653,73 @@ class HumdrumFile(HumdrumFileContent):
                 assert startTok.track is not None
             self._convertMeasureStaff(startTok.track, measureKey, layerCounts[i])
 
-        # TODO: Harmony, fingering, string numbers
-#         if self._hasHarmonySpine:
-#             self._addHarmFloatsForMeasure(measureKey)
+        if self._hasHarmonySpine:
+            self._addHarmFloatsForMeasure(measureKey)
+        # TODO: fingering, string numbers
 #         if self._hasFingeringSpine:
 #             self._addFingeringsForMeasure(measureKey)
 #         if self._hasStringSpine:
 #             self._addStringNumbersForMeasure(measureKey)
+
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::addHarmFloatsForMeasure --  Insert <harm> type data.
+    //   Exclusive interpretations processed by this function:
+    //     **mxhm      == pitch-class based chord labels
+    '''
+    def _addHarmFloatsForMeasure(self, measureKey: tuple[int | None, int]):
+        startLineIdx, endLineIdx = measureKey
+        if startLineIdx is None:
+            # this method should not be called without a startLineIdx in measureKey
+            raise HumdrumInternalError('Invalid measureKey')
+
+        # Search the measure for mxhm data to process
+        for i in range(startLineIdx, endLineIdx):
+            line: HumdrumLine = self._lines[i]
+            if not line.isData:
+                continue
+
+            active: bool = True
+            track: int = 0
+
+            for j, token in enumerate(line.tokens()):
+                if token.isMens:
+                    active = False
+                    continue
+
+                if token.isKern:
+                    active = True
+                    track = token.track
+                    continue
+
+                if not active:
+                    continue
+                if token.isNull:
+                    continue
+
+                dataType: str = str(token.dataType)
+                isHarm: bool = dataType == '**mxhm'
+                if not isHarm:
+                    continue
+
+                if token.getValueBool('auto', 'hidden'):
+                    # Don't process invisible harmony data
+                    continue
+
+                if 'yy' in token.text:
+                    # 'yy' means hidden, too
+                    continue
+
+                staffIndex: int = self._staffStartsIndexByTrack[track]
+                chordSym = M21Convert.getM21ChordSymFromHarmonyText(token.text, dataType)
+                csOffset: OffsetQL = token.durationFromBarline
+                currentMeasurePerStaff: list[m21.stream.Measure] = (
+                    self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
+                )
+                currentMeasurePerStaff[staffIndex].coreInsert(csOffset, chordSym)
+                currentMeasurePerStaff[staffIndex].coreElementsChanged()
 
     '''
     //////////////////////////////
@@ -11762,12 +11822,13 @@ class HumdrumFile(HumdrumFileContent):
             elif startTok.isDataType('**mens'):
                 staffIndex += 1
                 self._hasMensSpine = True
-            elif startTok.isDataType('**harm'):
-                self._hasHarmonySpine = True
-            elif startTok.isDataType('**rhrm'):  # **recip + **harm
-                self._hasHarmonySpine = True
-            elif startTok.dataType.text.startswith('**cdata'):
-                self._hasHarmonySpine = True
+            # Only mxhm-style harmony for now
+#             elif startTok.isDataType('**harm'):
+#                 self._hasHarmonySpine = True
+#             elif startTok.isDataType('**rhrm'):  # **recip + **harm
+#                 self._hasHarmonySpine = True
+#             elif startTok.dataType.text.startswith('**cdata'):
+#                 self._hasHarmonySpine = True
             elif startTok.isDataType('**color'):
                 self._hasColorSpine = True
             elif startTok.isDataType('**fb') \

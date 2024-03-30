@@ -66,3 +66,18 @@ class GridPart:
     @dynamics.setter
     def dynamics(self, newDynamics: HumdrumToken | None) -> None:
         self.sides.dynamics = newDynamics
+
+    @property
+    def harmonyCount(self) -> int:
+        if self.sides.harmony is None:
+            return 0
+        return 1
+
+    @property
+    def harmony(self) -> HumdrumToken | None:
+        return self.sides.harmony
+
+    @harmony.setter
+    def harmony(self, newHarmony: HumdrumToken | None) -> None:
+        self.sides.harmony = newHarmony
+

@@ -550,11 +550,11 @@ class MeasureData:
         for event in self.events:
             startTime: HumNum = event.startTime
             duration: HumNum = event.duration
-            if duration != 0 or event.isDynamicWedgeStartOrStop:
+            if duration != 0 or event.isDynamicWedgeStartOrStop or event.isChordSymbol:
                 # We treat dynamicWedge start/stop events as having duration even though
-                # the stop events do not.  This is so that they can go in the same
-                # slice with notes/rests, or on their own slice if they have a unique
-                # timestamp.
+                # the stop events do not.  We do the same with ChordSymbol events.
+                # We do this so that they can go in the same slice with notes/rests, or
+                # on their own slice if they have a unique timestamp.
                 mapping[startTime].nonZeroDur.append(event)
             else:
                 mapping[startTime].zeroDur.append(event)
@@ -636,3 +636,6 @@ class MeasureData:
     '''
     def reportDynamicToOwner(self) -> None:
         self.ownerStaff.receiveDynamic()
+
+    def reportHarmonyToOwner(self) -> None:
+        self.ownerStaff.receiveHarmony()

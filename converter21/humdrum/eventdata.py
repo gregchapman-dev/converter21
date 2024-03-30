@@ -82,9 +82,19 @@ class EventData:
         if duration is not None:
             self._duration = opFrac(duration)
         else:
-            self._duration = opFrac(element.duration.quarterLength)
-            if element.duration.tuplets:
-                self._durationTuplets = element.duration.tuplets
+            if isinstance(element, m21.harmony.ChordSymbol):
+                # We pretend all ChordSymbols have duration == 0.
+                # They generally do, but some analysis algorithms like to figure
+                # out a duration for each ChordSym, and we should ignore that.
+                # (Note that despite this, we process ChordSym events as if they
+                # have non-zero duration, so they can go in the same slice with
+                # notes/rests, or in their own slice, if they have a unique
+                # timestamp.)
+                self._duration = 0.
+            else:
+                self._duration = opFrac(element.duration.quarterLength)
+                if element.duration.tuplets:
+                    self._durationTuplets = element.duration.tuplets
 
         ottavas: list[m21.spanner.Ottava] = self.getOttavasStartedHere()
         for ottava in ottavas:
@@ -100,6 +110,10 @@ class EventData:
         # So element.classes[0] is the name of the element's class.
         # e.g. 'Note' for m21.note.Note
         self._name = element.classes[0]
+
+    @property
+    def isChordSymbol(self) -> bool:
+        return isinstance(self.m21Object, m21.harmony.ChordSymbol)
 
     @property
     def isDynamicWedgeStartOrStop(self) -> bool:
@@ -329,6 +343,9 @@ class EventData:
 
     def reportDynamicToOwner(self) -> None:
         self.ownerMeasure.reportDynamicToOwner()
+
+    def reportHarmonyToOwner(self) -> None:
+        self.ownerMeasure.reportHarmonyToOwner()
 
     def reportVerseCountToOwner(self, verseCount: int) -> None:
         self.ownerMeasure.reportVerseCountToOwner(verseCount)

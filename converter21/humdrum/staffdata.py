@@ -105,3 +105,7 @@ class StaffData:
     def receiveDynamic(self) -> None:
         # just pass it on up to the PartData, dynamics are per part
         self.ownerPart.receiveDynamic()
+
+    def receiveHarmony(self) -> None:
+        # just pass it on up to the PartData, harmony is per part(?)
+        self.ownerPart.receiveHarmony()

@@ -38,6 +38,7 @@ class PartData:
         self.spannerBundle: m21.spanner.SpannerBundle = ownerScore.spannerBundle
         self._partIndex: int = partIndex
         self._hasDynamics: bool = False
+        self._hasHarmony: bool = False
 
         # partStaves will be a list of one Part, or a list of multiple PartStaffs,
         # but we don't really care. We make a StaffData out of each one.
@@ -68,6 +69,10 @@ class PartData:
     @property
     def hasDynamics(self) -> bool:
         return self._hasDynamics
+
+    @property
+    def hasHarmony(self) -> bool:
+        return self._hasHarmony
 
     @staticmethod
     def _findPartName(
@@ -120,3 +125,6 @@ class PartData:
 
     def receiveDynamic(self):
         self._hasDynamics = True
+
+    def receiveHarmony(self):
+        self._hasHarmony = True

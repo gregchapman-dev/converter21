@@ -51,7 +51,6 @@ class HumGrid:
         self._verseCount: list[list[int]] = []
         for _ in range(0, 100):
             self._verseCount.append([])
-        self._harmonyCount: list[int] = [0] * 100
         self._xmlIds: list[bool] = [False] * 100
         self._figuredBass: list[bool] = [False] * 100
         self._harmony: list[bool] = [False] * 100
@@ -177,16 +176,6 @@ class HumGrid:
     '''
     //////////////////////////////
     //
-    // HumGrid::getHarmonyCount --
-    '''
-    def harmonyCount(self, partIndex: int) -> int:
-        if 0 <= partIndex < len(self._harmonyCount):
-            return self._harmonyCount[partIndex]
-        return 0
-
-    '''
-    //////////////////////////////
-    //
     // HumGrid::getVerseCount --
     '''
     def verseCount(self, partIndex: int, staffIndex: int) -> int:
@@ -264,6 +253,11 @@ class HumGrid:
             return self._harmony[partIndex]
         return False
 
+    def harmonyCount(self, partIndex: int) -> int:
+        if 0 <= partIndex < len(self._harmony):
+            return int(self._harmony[partIndex])
+        return False
+
     '''
     //////////////////////////////
     //
@@ -300,15 +294,6 @@ class HumGrid:
     def setHarmonyPresent(self, partIndex: int) -> None:
         if 0 <= partIndex < len(self._harmony):
             self._harmony[partIndex] = True
-
-    '''
-    //////////////////////////////
-    //
-    // HumGrid::setHarmonyCount -- part size hardwired to 100 for now.
-    '''
-    def setHarmonyCount(self, partIndex: int, newCount: int) -> None:
-        if 0 <= partIndex < len(self._harmonyCount):
-            self._harmonyCount[partIndex] = newCount
 
     '''
     //////////////////////////////
@@ -2077,7 +2062,7 @@ class HumGrid:
                 line.appendToken(HumdrumToken('*'))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('*'))
-            for _ in range(0, self.harmonyCount(p)):
+            if self.hasHarmony(p):
                 line.appendToken(HumdrumToken('*'))
         else:
             # staff side info
@@ -2148,7 +2133,7 @@ class HumGrid:
                 line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('*'))
-            for _ in range(0, self.harmonyCount(p)):
+            if self.hasHarmony(p):
                 line.appendToken(HumdrumToken('*'))
         else:
             # staff side info (staff markers)
@@ -2203,7 +2188,7 @@ class HumGrid:
                 line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken(text))
-            for _ in range(0, self.harmonyCount(p)):
+            if self.hasHarmony(p):
                 line.appendToken(HumdrumToken(text))
         else:
             # staff side info
@@ -2251,7 +2236,7 @@ class HumGrid:
                 line.appendToken(HumdrumToken('**dynam'))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('**fb'))
-            for _ in range(0, self.harmonyCount(p)):
+            if self.hasHarmony(p):
                 line.appendToken(HumdrumToken('**mxhm'))
         else:
             # staff side info
@@ -2300,7 +2285,7 @@ class HumGrid:
                 line.appendToken(HumdrumToken(text))
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken(text))
-            for _ in range(0, self.harmonyCount(p)):
+            if self.hasHarmony(p):
                 line.appendToken(HumdrumToken(text))
         else:
             # staff side info
