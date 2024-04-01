@@ -135,8 +135,9 @@ class HumdrumWriter:
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
         # we also need a mechanism for specifying which staff it came from.
         self._currentDynamics: list[tuple[int, int, m21.dynamics.Dynamic]] = []
-        # First element of tempo tuple is part index (tempo is at the part level)
+        # First element of tempo/harmony tuple is part index (tempo/harmony are at the part level)
         self._currentTempos: list[tuple[int, m21.tempo.TempoIndication]] = []
+        self._currentHarmonies: list[tuple[int, m21.harmony.ChordSymbol]] = []
 
         # we stash any ottava stops here, to be emitted at the appropriate timestamp
         self.pendingOttavaStopsForPartAndStaff: dict[int, dict[int, list[PendingOttavaStop]]] = {}
@@ -1396,6 +1397,10 @@ class HumdrumWriter:
             self._addUnassociatedTempos(gm, self._currentTempos)
             self._currentTempos = []
 
+        if self._currentHarmonies:
+            self._addUnassociatedHarmonies(gm, self._currentHarmonies)
+            self._currentHarmonies = []
+
         return status
 
     '''
@@ -1526,6 +1531,9 @@ class HumdrumWriter:
                 elif isinstance(m21Obj, m21.dynamics.Dynamic):
                     self._currentDynamics.append((pindex, sindex, m21Obj))
                     zeroDurEvent.reportDynamicToOwner()
+                elif isinstance(m21Obj, m21.harmony.ChordSymbol):
+                    self._currentHarmonies.append((pindex, m21Obj))
+                    zeroDurEvent.reportHarmonyToOwner()
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
                 elif isinstance(m21Obj, m21.note.GeneralNote):
@@ -2151,20 +2159,6 @@ class HumdrumWriter:
         if event is None:
             return
 
-        if event.isChordSymbol:
-            hcount: int = self._addHarmony(
-                outSlice.parts[partIndex], event
-            )
-            if hcount > 0:
-                event.reportHarmonyToOwner()
-
-            # LATER: implement figured bass
-            #         fcount: int = self._addFiguredBass(outSlice.parts[partIndex],
-            #                                               event, nowTime, partIndex)
-            #         if fcount > 0:
-            #             event.reportFiguredBassToOwner()
-            return
-
         if event.isDynamicWedgeStartOrStop:
             # event has a single dynamic wedge start or stop, that is in this part/staff.
             # if t.TYPE_CHECKING:
@@ -2748,6 +2742,51 @@ class HumdrumWriter:
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
 
+    def _addUnassociatedHarmonies(
+        self,
+        outgm: GridMeasure,
+        extraHarmonies: list[tuple[int, m21.harmony.ChordSymbol]]
+    ) -> None:
+        harmonies: list[tuple[int, m21.harmony.ChordSymbol, HumNum, HumdrumToken]] = []
+        # The following dictionaries are keyed by partIndex (no staffIndex here)
+        for partIndex, harmony in extraHarmonies:
+            hstring = M21Convert.m21ChordSymToHarmonyText(harmony)
+            harmonies.append((
+                partIndex,
+                harmony,
+                harmony.getOffsetInHierarchy(self._m21Score),
+                HumdrumToken(hstring)
+            ))
+
+        if not harmonies:
+            # we shouldn't have been called
+            return
+
+        # harmonies element is (partIndex, harmony, offset, token)
+        staffIndex: int = 0
+        for partIndex, harmony, offsetInScore, token in harmonies:
+            outSlice: GridSlice | None
+            outSlice, _voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+                outgm,
+                partIndex,
+                staffIndex,
+                harmony,
+                offsetInScore
+            )
+
+            if outSlice is None:
+                # we have no way of putting a dynamic at the very end of a measure.
+                raise HumdrumExportError('Cannot support dynamic at very end of measure')
+
+            outSlice.parts[partIndex].harmony = token
+
+            # Add any necessary layout params for the harmony we emitted (Humdrum doesn't
+            # actually have !LO:H at the moment; I will propose it to Craig).
+            # hparam: str | None = M21Convert.getHarmonyParameters(harmony, staffIndex)
+            # if hparam:
+            #   fullParam: str = '!LO:H' + hparam
+            #   outgm.addHarmonyLayoutParameters(outSlice, partIndex, fullParam)
+
     '''
     //////////////////////////////
     //
@@ -3024,26 +3063,3 @@ class HumdrumWriter:
         # removed).  join() will rejoin those words with a single space
         # (specified here as ' ') between them.
         return ' '.join(text.split())
-
-
-    '''
-    //////////////////////////////
-    //
-    // Tool_musicxml2hum::addHarmony --
-    '''
-    def _addHarmony(
-        self,
-        part: GridPart,
-        event: EventData,
-    ) -> int:
-        if not event.isChordSymbol:
-            return 0
-
-        if t.TYPE_CHECKING:
-            assert isinstance(event.m21Object, m21.harmony.ChordSymbol)
-
-        tokenStr: str = M21Convert.m21ChordSymToHarmonyText(event.m21Object, dataType='**mxhm')
-        if tokenStr:
-            part.harmony = HumdrumToken(tokenStr)
-        return 1
-

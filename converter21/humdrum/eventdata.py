@@ -86,10 +86,6 @@ class EventData:
                 # We pretend all ChordSymbols have duration == 0.
                 # They generally do, but some analysis algorithms like to figure
                 # out a duration for each ChordSym, and we should ignore that.
-                # (Note that despite this, we process ChordSym events as if they
-                # have non-zero duration, so they can go in the same slice with
-                # notes/rests, or in their own slice, if they have a unique
-                # timestamp.)
                 self._duration = 0.
             else:
                 self._duration = opFrac(element.duration.quarterLength)
