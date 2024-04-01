@@ -268,9 +268,6 @@ class M21Convert:
 
         return M21Convert.m21PitchName(subTokenStr) + octaveStr
 
-    MORE_CHORD_ALIASES: dict[str, str] = {
-        'augmented-ninth': 'augmented-dominant-ninth'
-    }
     @staticmethod
     def getM21ChordSymFromHarmonyText(
         tokenStr: str,
@@ -305,8 +302,6 @@ class M21Convert:
         # convert from MusicXML/Humdrum kind to music21 kind ('dominant' -> 'dominant-seventh')
         if kind in m21.harmony.CHORD_ALIASES:
             kind = m21.harmony.CHORD_ALIASES[kind]
-        if kind in M21Convert.MORE_CHORD_ALIASES:
-            kind = M21Convert.MORE_CHORD_ALIASES[kind]
         if kind not in m21.harmony.CHORD_TYPES:
             kind = ''
 

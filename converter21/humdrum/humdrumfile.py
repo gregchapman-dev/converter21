@@ -477,6 +477,11 @@ class HumdrumFile(HumdrumFileContent):
     def __init__(self, fileName: str | Path | None = None) -> None:
         super().__init__(fileName)  # initialize the HumdrumFileBase fields
 
+        # Some ChordSymbol fixups to allow some extra names in MusicXML (and we will use them
+        # in Humdrum's MusicXML-style '**mxhm' harmony spines as well).
+        if 'augmented-ninth' not in m21.harmony.CHORD_ALIASES:
+            m21.harmony.CHORD_ALIASES['augmented-ninth'] = 'augmented-dominant-ninth'
+
         # The m21Score attribute will not exist until it is set up (in createMusic21Stream)
         # and it will not be None at that point.
         # self.m21Score: m21.stream.Score
