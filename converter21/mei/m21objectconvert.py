@@ -13,7 +13,7 @@
 import sys
 import re
 import typing as t
-from copy import deepcopy
+# from copy import deepcopy
 from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21

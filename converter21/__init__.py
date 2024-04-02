@@ -44,6 +44,10 @@ def register(
     if not converterNames:
         converterNames = (ConverterName.HUMDRUM, ConverterName.MEI)
 
+    # Currently this adjusts MusicXML import/export to handle more names for ChordSymbols
+    # (this also allows converter21 to do so as well).
+    M21Utilities.adjustMusic21Behavior()
+
     if ConverterName.HUMDRUM in converterNames:
         m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterHumdrum)
         m21.converter.registerSubConverter(HumdrumConverter)
