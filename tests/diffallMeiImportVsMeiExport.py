@@ -332,6 +332,8 @@ def runTheDiff(meiPath: Path, results) -> bool:
 '''
     main entry point (parse arguments and do conversion)
 '''
+converter21.M21Utilities.adjustMusic21Behavior()
+
 parser = argparse.ArgumentParser(
             description='Loop over listfile (list of .mei files), importing and then exporting back to .mei, comparing original .mei with exported .mei.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .mei file paths that had no musicdiff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
 parser.add_argument(

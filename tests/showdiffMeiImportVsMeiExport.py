@@ -77,6 +77,8 @@ def runTheFullTest(meiPath: Path):
 '''
     main entry point (parse arguments and do conversion)
 '''
+converter21.M21Utilities.adjustMusic21Behavior()
+
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file')
 print('music21 version:', VERSION_STR, file=sys.stderr)

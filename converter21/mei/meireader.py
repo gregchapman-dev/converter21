@@ -284,6 +284,8 @@ class MeiReader:
     '''
 
     def __init__(self, theDocument: str | None = None) -> None:
+        M21Utilities.adjustMusic21Behavior()
+
         #  The __init__() documentation doesn't isn't processed by Sphinx,
         #  so I put it at class level.
         environLocal.printDebug('*** initializing MeiReader')

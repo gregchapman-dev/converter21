@@ -18,8 +18,6 @@ from converter21.mei import MeiWriter
 import converter21
 
 def runTheFullTest(inputPath: Path):
-    print(f'MusicXML file: {inputPath}')
-
     print(f'Parsing MusicXML file: {inputPath}')
     score1 = m21.converter.parse(inputPath, format='musicxml', forceSource=True)
 
@@ -74,6 +72,8 @@ def runTheFullTest(inputPath: Path):
 '''
     main entry point (parse arguments and do conversion)
 '''
+converter21.M21Utilities.adjustMusic21Behavior()
+
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file')
 print('music21 version:', VERSION_STR, file=sys.stderr)

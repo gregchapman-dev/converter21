@@ -287,6 +287,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
 '''
     main entry point (parse arguments and do conversion)
 '''
+converter21.M21Utilities.adjustMusic21Behavior()
+
 parser = argparse.ArgumentParser(
             description='Loop over listfile (list of .krn files), importing with converter21 and then with music21, comparing the two resulting scores.  Generate three output files (list_file.good.txt, list_file.bad.txt, list_file.results.txt) in the same folder as the list_file, where goodList.txt contains all the .krn file paths that had no music-score-diff differences with their exported version, badList.txt contains the ones that failed, or had differences, and resultsList.txt contains every file with a note about what happened.')
 parser.add_argument(

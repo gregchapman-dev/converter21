@@ -88,16 +88,13 @@ class HumdrumWriter:
     }
 
     def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
+        M21Utilities.adjustMusic21Behavior()
+
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21Score: m21.stream.Score | None = None
         self.spannerBundle: m21.spanner.SpannerBundle | None = None
         self._scoreData: ScoreData | None = None
         self.staffCounts: list[int] = []  # indexed by partIndex
-
-        # Some ChordSymbol fixups to allow some extra names in MusicXML (and we will use them
-        # in Humdrum's MusicXML-style '**mxhm' harmony spines as well).
-        if 'augmented-ninth' not in m21.harmony.CHORD_ALIASES:
-            m21.harmony.CHORD_ALIASES['augmented-ninth'] = 'augmented-dominant-ninth'
 
         # default options (these can be set to non-default values by clients,
         # as long as they do it before they call write())

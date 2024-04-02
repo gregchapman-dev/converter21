@@ -140,7 +140,8 @@ class MeiStaff:
             layer.makePostStavesElements(tb)
 
         # The top-level measure (if not treated as the one layer) might have some
-        # post-staves elements, too (e.g. Dynamic, TextExpression, TempoIndication).
+        # post-staves elements, too (e.g. Dynamic, TextExpression, TempoIndication,
+        # ChordSymbol).
         # This is a small subset of what can be emitted in layer.makePostStavesElements.
         # Also, there may be SpannerAnchors that exist at the Measure level.
         if not self.theOneLayerIsTheMeasureItself:

@@ -11,7 +11,9 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import re
 import typing as t
+from copy import deepcopy
 from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21
@@ -1022,7 +1024,12 @@ class M21ObjectConvert:
             # we're done
             return
 
-        if not isinstance(first, m21.note.GeneralNote):
+        firstIsNote: bool = isinstance(first, m21.note.GeneralNote)
+        if firstIsNote:
+            # ChordSymbol is a GeneralNote, but we treat it like it isn't.
+            firstIsNote = not isinstance(first, m21.harmony.ChordSymbol)
+
+        if not firstIsNote:
             attr['tstamp'] = M21ObjectConvert.makeTstamp(
                 offsetInScore=first.getOffsetInHierarchy(m21Score),
                 offsetInMeasure=first.getOffsetInHierarchy(m21Measure),
@@ -1624,6 +1631,11 @@ class M21ObjectConvert:
             M21ObjectConvert.emitStyledTextElement(obj.content, style, tag, attr, tb)
             return
 
+        if tag == 'harm':
+            if t.TYPE_CHECKING:
+                assert isinstance(obj, m21.harmony.ChordSymbol)
+            M21ObjectConvert.emitHarmony(obj, tag, attr, tb)
+
         if tag == 'tempo':
             assert style is None or isinstance(style, m21.style.TextStyle)
             if isinstance(obj, m21.tempo.MetricModulation):
@@ -1651,6 +1663,77 @@ class M21ObjectConvert:
                         # element in the middle of the text (thus it's mixed text and elements)
                         M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
                         tb.end(tag)
+
+    @staticmethod
+    def emitHarmony(cs: m21.harmony.ChordSymbol, tag: str, attr: dict[str, str], tb: TreeBuilder):
+        if hasattr(cs, 'mei_chord_def_id'):
+            # Let's see if we need to do this.
+            attr['chordref'] = cs.mei_chord_def_id  # ignore: type
+
+        # set @type to music21's favorite standard abbreviation, for ease of parsing later.
+        # music21 puts spaces in the returned figure, but removes them to start parsing,
+        # so we can remove them here with no loss, and it makes @type a legal NMTOKEN.
+        figure: str = re.sub(r'\s', '', cs.figure)
+        attr['type'] = figure
+
+        # Let's bump the root down below all but bass (might be below bass, too, if that's
+        # necessary to get below the other pitches), so we can compute @inth correctly.
+        #   lowRoot: m21.pitch.Pitch = deepcopy(root)
+        #   for pitch in cs.pitches:
+        #       if pitch is root:
+        #           continue
+        #       if bass is not None and pitch is bass:
+        #           continue
+        #       while pitch < lowRoot:
+        #           lowRoot.octave -= 1
+        #
+        #       inths: list[str] = []
+        #       for pitch in cs.pitches:
+        #           # pitches are ordered from lowest to highest
+        #           # Skip root and bass (they are already mentioned in @type)
+        #           if pitch is root:
+        #               continue
+        #           if bass is not None and pitch is bass:
+        #               continue
+        #           intv: m21.interval.Interval = m21.interval.Interval(lowRoot, pitch)
+        #           inth: str = intv.directedName
+        #           # see if it is a valid data.INTERVAL.HARMONIC
+        #           pattern: str = r'[AdMmP][0-9]+'
+        #           m = re.match(pattern, inth)
+        #           if m is None:
+        #               print(f'hey here\'s a bad inth: {inth}')
+        #           inths.append(inth)
+        #           if inths:
+        #               inthsStr: str = ' '.join(inths)
+        #               attr['inth'] = inthsStr
+
+        tb.start(tag, attr)
+        M21ObjectConvert._convertChordSymbolToMixedText(cs, tb)
+        tb.end(tag)
+
+    @staticmethod
+    def _convertChordSymbolToMixedText(cs: m21.harmony.ChordSymbol, tb: TreeBuilder):
+        # Try to use the specified abbreviation that was imported from the original file
+        root: m21.pitch.Pitch = cs.root()
+        rootStr: str = '' if root is None else root.name
+        bass: m21.pitch.Pitch = cs.bass()
+        bassStr: str = '' if bass is None or bass is root else bass.name
+        text: str
+
+        if cs.chordKindStr:
+            text = rootStr + cs.chordKindStr
+            if bassStr:
+                text += '/' + bassStr
+        else:
+            # fall back to music21's favorite standard abbreviation for this
+            # chord symbol, with SMUFL-ized accidentals
+            text = M21Utilities.convertChordSymbolFigureToSmuflSharpsAndFlats(cs.figure)
+
+        # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
+
+        tb.data(text)
+
+        # Here is where we would end the 'rend' tag, if we had started it.
 
     @staticmethod
     def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):
@@ -1989,6 +2072,7 @@ M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG: dict[str, str] = {
     # saved for the post-staves elements.
     'Dynamic': 'dynam',
     'TextExpression': 'dir',
+    'ChordSymbol': 'harm',
     'TempoIndication': 'tempo',
     'TempoText': 'tempo',
     'MetronomeMark': 'tempo',

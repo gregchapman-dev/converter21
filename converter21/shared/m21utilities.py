@@ -24,6 +24,8 @@ import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
 from music21.common.numberTools import opFrac
 
+from converter21.shared import SharedConstants
+
 class CannotMakeScoreFromObjectError(Exception):
     pass
 
@@ -2280,3 +2282,22 @@ class M21Utilities:
             if M21Utilities.mdValueEqual(val, value):
                 return
         md.addCustom(key, value)
+
+    @staticmethod
+    def convertChordSymbolFigureToSmuflSharpsAndFlats(text: str) -> str:
+        output: str = ''
+        for ch in text:
+            if ch in ('-'):
+                output += SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']
+            elif ch == '#':
+                output += SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']
+            else:
+                output += ch
+        return output
+
+    @staticmethod
+    def adjustMusic21Behavior() -> None:
+        if 'augmented-ninth' not in m21.harmony.CHORD_ALIASES:
+            m21.harmony.CHORD_ALIASES['augmented-ninth'] = 'augmented-dominant-ninth'
+        if 'minor-major' not in m21.harmony.CHORD_ALIASES:
+            m21.harmony.CHORD_ALIASES['minor-major'] = 'minor-major-seventh'

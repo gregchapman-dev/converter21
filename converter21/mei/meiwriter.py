@@ -34,6 +34,8 @@ class MeiWriter:
     Debug: bool = False  # can be set to True for more debugging
 
     def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
+        M21Utilities.adjustMusic21Behavior()
+
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21Score: m21.stream.Score | None = None
 
