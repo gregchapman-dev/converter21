@@ -7432,6 +7432,66 @@ class MeiReader:
 
         return tempoObj
 
+    def harmFromElement(
+        self,
+        elem: Element,
+    ) -> tuple[
+        str,
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        m21.harmony.ChordSymbol | None
+    ]:
+        # If no @staff, assume top part (ChordSymbols generally go there).
+        staffNStr = elem.get('staff', '')
+        if not staffNStr:
+            staffNStr = self.topPartN
+        offset: OffsetQL
+        cs: m21.harmony.ChordSymbol | None = None
+        typeAtt: str = elem.get('type', '')
+
+        # @tstamp is required for now, someday we'll be able to derive offsets from @startid
+        tstamp: str | None = elem.get('tstamp')
+        if tstamp is None:
+            environLocal.warn('missing @tstamp in <dir> element')
+            return '', (-1., None, None), None
+
+        offset = self._tstampToOffset(tstamp)
+
+        text: str
+        _styleDict: dict[str, str]
+        text, _styleDict = MeiShared.textFromElem(elem)
+        text = html.unescape(text)
+        text = text.strip()
+
+        # cs.chordKindStr is the printed label for this chord type (i.e. without root or bass)
+        # So if text == 'Cm7sus4' or 'Gm7sus4/A', then chordKindStr should be 'm7sus4'.
+        chordKindStr: str = text[1:]
+        if '/' in chordKindStr:
+            chordKindStr = chordKindStr.split('/')[0]
+
+        if typeAtt:
+            # best case: typeAtt is a pseudo-official ChordSymbol figure
+            # but we have to put some spaces back in first:
+            typeAtt = re.sub('add', ' add ', typeAtt)
+            typeAtt = re.sub('subtract', ' subtract ', typeAtt)
+            typeAtt = re.sub('alter', ' alter ', typeAtt)
+
+            cs = m21.harmony.ChordSymbol(typeAtt)
+            if chordKindStr:
+                cs.chordKindStr = chordKindStr
+
+        if cs is None or len(cs.pitches) == 1 and 'pedal' not in typeAtt:
+            # Last shot is text. Hopefully it's a parseable figure (it often is).
+            cs = m21.harmony.ChordSymbol(text)
+            if chordKindStr:
+                cs.chordKindStr = chordKindStr
+
+        if len(cs.pitches) == 1 and 'pedal' not in typeAtt and 'pedal' not in text:
+            # We failed to make a valid ChordSymbol
+            environLocal.warn('Failed to parse <harm> element: text="{text}"')
+            return '', (-1., None, None), None
+
+        return staffNStr, (offset, None, None), cs
+
     def dirFromElement(
         self,
         elem: Element,
@@ -8673,7 +8733,7 @@ class MeiReader:
             #         f'{MEI_NS}fing': self.fingFromElement,
             #         f'{MEI_NS}gliss': self.glissFromElement,
             f'{MEI_NS}hairpin': self.hairpinFromElement,
-            #         f'{MEI_NS}harm': self.harmFromElement,
+            f'{MEI_NS}harm': self.harmFromElement,
             #         f'{MEI_NS}lv': self.lvFromElement,
             #        f'{MEI_NS}mNum': self.mNumFromElement,
             f'{MEI_NS}mordent': self.mordentFromElement,
