@@ -1666,14 +1666,16 @@ class M21ObjectConvert:
 
     @staticmethod
     def emitHarmony(cs: m21.harmony.ChordSymbol, tag: str, attr: dict[str, str], tb: TreeBuilder):
-        if hasattr(cs, 'mei_chord_def_id'):
-            # Let's see if we need to do this.
-            attr['chordref'] = cs.mei_chord_def_id  # ignore: type
-
         # set @type to music21's favorite standard abbreviation, for ease of parsing later.
         # music21 puts spaces in the returned figure, but removes them to start parsing,
         # so we can remove them here with no loss, and it makes @type a legal NMTOKEN.
         figure: str = re.sub(r'\s', '', cs.figure)
+
+        if figure[1:].startswith('bpedal'):
+            # work around a music21 bug where pedal chords with a root that is flat
+            # end up with figure == 'Ebpedal' instead of the correct 'E-pedal'.
+            figure = figure[0] + '-' + figure[2:]
+
         attr['type'] = figure
 
         # Let's bump the root down below all but bass (might be below bass, too, if that's

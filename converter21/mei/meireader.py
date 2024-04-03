@@ -7470,6 +7470,8 @@ class MeiReader:
         # cs.chordKindStr is the printed label for this chord type (i.e. without root or bass)
         # So if text == 'Cm7sus4' or 'Gm7sus4/A', then chordKindStr should be 'm7sus4'.
         chordKindStr: str = text[1:]
+        if len(text) >= 3 and text[2] in ('#', 'b'):
+            chordKindStr = text[2:]
         if '/' in chordKindStr:
             chordKindStr = chordKindStr.split('/')[0]
 
