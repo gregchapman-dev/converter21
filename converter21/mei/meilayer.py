@@ -548,7 +548,7 @@ class MeiLayer:
                         self.scoreMeterStream,
                         tb
                     )
-            if isinstance(obj, m21.chord.Chord):
+            if isinstance(obj, m21.chord.Chord) and not isinstance(obj, m21.harmony.ChordSymbol):
                 # check every note in the chord
                 for note in obj.notes:
                     for spanner in note.getSpannerSites():  # type: ignore
@@ -567,7 +567,8 @@ class MeiLayer:
             #       now, in the spanner loop above. If that changes, all
             #       'mei_trill_already_handled' processing will need to
             #       change, too.
-            if isinstance(obj, m21.note.GeneralNote):
+            if (isinstance(obj, m21.note.GeneralNote)
+                    and not isinstance(obj, m21.harmony.ChordSymbol)):
                 for expr in obj.expressions:  # type: ignore
                     if isinstance(expr, m21.expressions.Trill):
                         if (hasattr(expr, 'mei_trill_already_handled')):

@@ -1669,7 +1669,12 @@ class M21ObjectConvert:
         # set @type to music21's favorite standard abbreviation, for ease of parsing later.
         # music21 puts spaces in the returned figure, but removes them to start parsing,
         # so we can remove them here with no loss, and it makes @type a legal NMTOKEN.
-        figure: str = re.sub(r'\s', '', cs.figure)
+        figure: str
+        if isinstance(cs, m21.harmony.NoChord):
+            # we'll use chordKindStr the <harm> text, but harm@type="N.C." for NoChord.
+            figure = 'N.C.'
+        else:
+            figure = re.sub(r'\s', '', cs.figure)
 
         if figure[1:].startswith('bpedal'):
             # work around a music21 bug where pedal chords with a root that is flat
@@ -1716,20 +1721,23 @@ class M21ObjectConvert:
     @staticmethod
     def _convertChordSymbolToMixedText(cs: m21.harmony.ChordSymbol, tb: TreeBuilder):
         # Try to use the specified abbreviation that was imported from the original file
-        root: m21.pitch.Pitch = cs.root()
-        rootStr: str = '' if root is None else root.name
-        bass: m21.pitch.Pitch = cs.bass()
-        bassStr: str = '' if bass is None or bass is root else bass.name
         text: str
-
-        if cs.chordKindStr:
-            text = rootStr + cs.chordKindStr
-            if bassStr:
-                text += '/' + bassStr
+        if isinstance(cs, m21.harmony.NoChord):
+            text = cs.chordKindStr
         else:
-            # fall back to music21's favorite standard abbreviation for this
-            # chord symbol, with SMUFL-ized accidentals
-            text = M21Utilities.convertChordSymbolFigureToSmuflSharpsAndFlats(cs.figure)
+            root: m21.pitch.Pitch = cs.root()
+            rootStr: str = '' if root is None else root.name
+            bass: m21.pitch.Pitch = cs.bass()
+            bassStr: str = '' if bass is None or bass is root else bass.name
+
+            if cs.chordKindStr:
+                text = rootStr + cs.chordKindStr
+                if bassStr:
+                    text += '/' + bassStr
+            else:
+                # fall back to music21's favorite standard abbreviation for this
+                # chord symbol, with SMUFL-ized accidentals
+                text = M21Utilities.convertChordSymbolFigureToSmuflSharpsAndFlats(cs.figure)
 
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
 
@@ -2075,6 +2083,7 @@ M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG: dict[str, str] = {
     'Dynamic': 'dynam',
     'TextExpression': 'dir',
     'ChordSymbol': 'harm',
+    'NoChord': 'harm',
     'TempoIndication': 'tempo',
     'TempoText': 'tempo',
     'MetronomeMark': 'tempo',

@@ -7467,6 +7467,21 @@ class MeiReader:
         text = html.unescape(text)
         text = text.strip()
 
+        if typeAtt == 'N.C.' or text in (
+            'N.C.',
+            '(N.C.)',
+            'NC',
+            '(NC)',
+            'No Chord',
+            '(No Chord)',
+            'no chord',
+            '(no chord)',
+            'No chord'
+            '(No chord)'
+        ):
+            cs = m21.harmony.NoChord(text)
+            return staffNStr, (offset, None, None), cs
+
         # cs.chordKindStr is the printed label for this chord type (i.e. without root or bass)
         # So if text == 'Cm7sus4' or 'Gm7sus4/A', then chordKindStr should be 'm7sus4'.
         chordKindStr: str = text[1:]
