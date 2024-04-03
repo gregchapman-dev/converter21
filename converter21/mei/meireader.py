@@ -7482,9 +7482,12 @@ class MeiReader:
             typeAtt = re.sub('subtract', ' subtract ', typeAtt)
             typeAtt = re.sub('alter', ' alter ', typeAtt)
 
-            cs = m21.harmony.ChordSymbol(typeAtt)
-            if chordKindStr:
-                cs.chordKindStr = chordKindStr
+            try:
+                cs = m21.harmony.ChordSymbol(typeAtt)
+                if not cs.pitches:
+                    cs = None
+            except Exception:
+                pass
 
         if cs is None or len(cs.pitches) == 1 and 'pedal' not in typeAtt:
             # Last shot is text. Hopefully it's a parseable figure (it often is).
@@ -7493,7 +7496,9 @@ class MeiReader:
             figureTry: str = M21Utilities.convertChordSymbolFigureFromSmuflSharpsAndFlats(text)
             try:
                 cs = m21.harmony.ChordSymbol(figureTry)
-            except:
+                if not cs.pitches:
+                    cs = None
+            except Exception:
                 pass
 
             if cs is None:
@@ -7503,14 +7508,16 @@ class MeiReader:
 
                 try:
                     cs = m21.harmony.ChordSymbol(figureTry)
-                except:
+                    if not cs.pitches:
+                        cs = None
+                except Exception:
                     pass
 
             if cs is None:
-                print('fix another one')
+                return '', (-1., None, None), None
 
-            if chordKindStr:
-                cs.chordKindStr = chordKindStr
+        if chordKindStr:
+            cs.chordKindStr = chordKindStr
 
         if len(cs.pitches) == 1 and 'pedal' not in typeAtt and 'pedal' not in text:
             # We failed to make a valid ChordSymbol
