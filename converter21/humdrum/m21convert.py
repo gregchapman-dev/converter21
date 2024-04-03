@@ -276,16 +276,16 @@ class M21Convert:
         if dataType != '**mxhm':
             raise HumdrumInternalError('Harmony type "{dataType}" not supported')
 
-        # mxhm data is of the form '<root> <chord-type>', where root is '<A..G><#|-> and
-        # chord type is things like 'major', 'minor-seventh', etc.  The root works just
-        # fine for music21, but we need to look up 'major' -> '', 'minor-seventh' -> 'm7',
-        # etc.
-        strings: list[str] = tokenStr.split()
-        if len(strings) != 2:
-            raise HumdrumInternalError(f'malformed **mxhm harmony: "{tokenStr}"')
+        if tokenStr == 'none':
+            return m21.harmony.NoChord()
 
+        # mxhm data is of the form '<root> <chord-type>', where root is '<A..G><#|-> and
+        # kind is things like 'major', 'minor-seventh', etc.
+        strings: list[str] = tokenStr.split()
         root: str = strings[0]
-        kind: str = strings[1]
+        kind: str = ''
+        if len(strings) > 1:
+            kind = strings[1]
         bass: str = ''
 
         if not root:
