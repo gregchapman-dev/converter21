@@ -13,6 +13,7 @@ from musicdiff import DetailLevel
 # The things we're testing
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
+import converter21
 
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
     obj = score.recurse().getElementById(theID)

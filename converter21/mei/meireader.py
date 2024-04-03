@@ -7440,6 +7440,11 @@ class MeiReader:
         tuple[OffsetQL | None, int | None, OffsetQL | None],
         m21.harmony.ChordSymbol | None
     ]:
+        # bail out (for now) on figured bass harmony
+        fb: Element | None = elem.find(f'{MEI_NS}fb')
+        if fb is not None:
+            return '', (-1., None, None), None
+
         # If no @staff, assume top part (ChordSymbols generally go there).
         staffNStr = elem.get('staff', '')
         if not staffNStr:
@@ -7481,13 +7486,33 @@ class MeiReader:
 
         if cs is None or len(cs.pitches) == 1 and 'pedal' not in typeAtt:
             # Last shot is text. Hopefully it's a parseable figure (it often is).
-            cs = m21.harmony.ChordSymbol(text)
+            # To give it half a chance, translate SMUFL sharps/flats back to the
+            # music21 equivalent ('#', '-').
+            figureTry: str = M21Utilities.convertChordSymbolFigureFromSmuflSharpsAndFlats(text)
+            try:
+                cs = m21.harmony.ChordSymbol(figureTry)
+            except:
+                pass
+
+            if cs is None:
+                # try again with some simple substitutions
+                figureTry = re.sub('maj6', '6', figureTry)
+                figureTry = re.sub('°', 'dim', figureTry)
+
+                try:
+                    cs = m21.harmony.ChordSymbol(figureTry)
+                except:
+                    pass
+
+            if cs is None:
+                print('fix another one')
+
             if chordKindStr:
                 cs.chordKindStr = chordKindStr
 
         if len(cs.pitches) == 1 and 'pedal' not in typeAtt and 'pedal' not in text:
             # We failed to make a valid ChordSymbol
-            environLocal.warn('Failed to parse <harm> element: text="{text}"')
+            environLocal.warn(f'Failed to parse <harm> element: type="{typeAtt}" text="{text}"')
             return '', (-1., None, None), None
 
         return staffNStr, (offset, None, None), cs

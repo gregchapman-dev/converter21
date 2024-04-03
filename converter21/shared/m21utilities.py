@@ -2286,13 +2286,33 @@ class M21Utilities:
     @staticmethod
     def convertChordSymbolFigureToSmuflSharpsAndFlats(text: str) -> str:
         output: str = ''
+        smuflFlat: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']
+        smuflSharp: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']
+
         for ch in text:
-            if ch in ('-'):
-                output += SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']
+            if ch == '-':
+                output += smuflFlat
             elif ch == '#':
-                output += SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']
+                output += smuflSharp
             else:
                 output += ch
+
+        return output
+
+    @staticmethod
+    def convertChordSymbolFigureFromSmuflSharpsAndFlats(text: str) -> str:
+        output: str = ''
+        smuflFlat: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']
+        smuflSharp: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']
+
+        for ch in text:
+            if ch == smuflFlat:
+                output += '-'
+            elif ch == smuflSharp:
+                output += '#'
+            else:
+                output += ch
+
         return output
 
     @staticmethod
