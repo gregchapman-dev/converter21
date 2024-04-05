@@ -13,7 +13,7 @@
 import sys
 import re
 import typing as t
-# from copy import deepcopy
+from copy import copy, deepcopy
 from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21
@@ -1664,55 +1664,317 @@ class M21ObjectConvert:
                         M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
                         tb.end(tag)
 
+    M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES: dict[str, tuple[str, str]] = {
+        # triads
+        'major': ('maj', ''),
+        'minor': ('min', ''),
+        'augmented': ('aug', ''),
+        'diminished': ('dim', ''),
+
+        # sevenths
+        'dominant-seventh': ('7', ''),
+        'major-seventh': ('maj7', ''),
+        'minor-major-seventh': ('minmaj7', ''),
+        'minor-seventh': ('min7', ''),
+        'augmented-major-seventh': ('aug', '7'),
+        'augmented-seventh': ('aug', 'b7'),
+        'half-diminished-seventh': ('hdim7', ''),
+        'diminished-seventh': ('dim7', ''),
+        'seventh-flat-five': ('', '3,b5,b7'),
+
+        # sixths
+        'major-sixth': ('maj6', ''),
+        'minor-sixth': ('min6', ''),
+
+        # ninths
+        'major-ninth': ('maj9', ''),
+        'dominant-ninth': ('9', ''),
+        'minor-major-ninth': ('minmaj7', '9'),
+        'minor-ninth': ('min9', ''),
+        'augmented-major-ninth': ('aug', '7,9'),
+        'augmented-dominant-ninth': ('aug', 'b7,9'),
+        'half-diminished-ninth': ('hdim7', '9'),
+        'half-diminished-minor-ninth': ('hdim7', 'b9'),
+        'diminished-ninth': ('dim7', '9'),
+        'diminished-minor-ninth': ('dim7', 'b9'),
+
+        # elevenths
+        'dominant-11th': ('9', '11'),
+        'major-11th': ('maj9', '11'),
+        'minor-major-11th': ('minmaj7', '9,11'),
+        'minor-11th': ('min9', '11'),
+        'augmented-major-11th': ('aug', '7,9,11'),
+        'augmented-11th': ('aug', 'b7,9,11'),
+        'half-diminished-11th': ('hdim7', '9,11'),
+        'diminished-11th': ('dim7', '9,11'),
+
+        # thirteenths
+        'major-13th': ('maj9', '11,13'),
+        'dominant-13th': ('9', '11,13'),
+        'minor-major-13th': ('minmaj7', '9,11,13'),
+        'minor-13th': ('min9', '11,13'),
+        'augmented-major-13th': ('aug', '7,9,11,13'),
+        'augmented-dominant-13th': ('aug', 'b7,9,11,13'),
+        'half-diminished-13th': ('hdim7', '9,11,13'),
+
+        # other
+        'suspended-second': ('maj', '2,*3'),
+        'suspended-fourth': ('sus4', ''),
+        'suspended-fourth-seventh': ('sus4', 'b7'),
+        'Neapolitan': ('', 'b2,3,b5'),
+        'Italian': ('', '#4,b6'),
+        'French': ('', '2,#4,b6'),
+        'German': ('', 'b3,#4,b6'),
+        'pedal': ('maj', '*3,*5'),
+        'power': ('maj', '*3'),
+        'Tristan': ('', '#4,#6,#9'),
+    }
+
+    M21_CHORD_KIND_TO_HARTE_DEGREES: dict[str, str] = {
+        # triads
+        'major': '3,5',
+        'minor': 'b3,5',
+        'augmented': '3,#5',
+        'diminished': 'b3,b5',
+
+        # sevenths
+        'dominant-seventh': '3,5,b7',
+        'major-seventh': '3,5,7',
+        'minor-major-seventh': 'b3,5,7',
+        'minor-seventh': 'b3,5,b7',
+        'augmented-major-seventh': '3,#5,7',
+        'augmented-seventh': '3,#5,b7',
+        'half-diminished-seventh': 'b3,b5,b7',
+        'diminished-seventh': 'b3,b5,bb7',
+        'seventh-flat-five': '3,b5,b7',
+
+        # sixths
+        'major-sixth': '3,5,6',
+        'minor-sixth': 'b3,5,6',
+
+        # ninths
+        'major-ninth': '3,5,7,9',
+        'dominant-ninth': '3,5,b7,9',
+        'minor-major-ninth': 'b3,5,7,9',
+        'minor-ninth': 'b3,5,b7,9',
+        'augmented-major-ninth': '3,#5,7,9',
+        'augmented-dominant-ninth': '3,#5,b7,9',
+        'half-diminished-ninth': 'b3,b5,b7,9',
+        'half-diminished-minor-ninth': 'b3,b5,b7,b9',
+        'diminished-ninth': 'b3,b5,bb7,9',
+        'diminished-minor-ninth': 'b3,b5,bb7,b9',
+
+        # elevenths
+        'dominant-11th': '3,5,b7,9,11',
+        'major-11th': '3,5,7,9,11',
+        'minor-major-11th': 'b3,5,7,9,11',
+        'minor-11th': 'b3,5,b7,9,11',
+        'augmented-major-11th': '3,#5,7,9,11',
+        'augmented-11th': '3,#5,b7,9,11',
+        'half-diminished-11th': 'b3,b5,b7,9,11',
+        'diminished-11th': 'b3,b5,bb7,9,11',
+
+        # thirteenths
+        'major-13th': '3,5,7,9,11,13',
+        'dominant-13th': '3,5,b7,9,11,13',
+        'minor-major-13th': 'b3,5,7,9,11,13',
+        'minor-13th': 'b3,5,b7,9,11,13',
+        'augmented-major-13th': '3,#5,7,9,11,13',
+        'augmented-dominant-13th': '3,#5,b7,9,11,13',
+        'half-diminished-13th': 'b3,b5,b7,9,11,13',
+
+        # other
+        'suspended-second': '1,2,5',
+        'suspended-fourth': '1,4,5',
+        'suspended-fourth-seventh': '1,4,5,b7',
+        'Neapolitan': 'b2,3,b5',
+        'Italian': '#4,b6',
+        'French': '2,#4,b6',
+        'German': 'b3,#4,b6',
+        'pedal': '',
+        'power': '5',
+        'Tristan': '#4,#6,#9',
+    }
+
+    @staticmethod
+    def makeHarteFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
+        def hartifyRoot(root: m21.pitch.Pitch) -> str:
+            return re.sub('-', 'b', root.name)
+
+        def hartifyBass(bass: m21.pitch.Pitch, root: m21.pitch.Pitch) -> str:
+            # returns the degree of the bass note, relative to the root.
+            # For example, if bass=C-flat and root=D, returns 'bb7'
+            # First, these are in the wrong octaves.  We need the bass to
+            # be less than an octave above the root so we can get an interval
+            # going up.  That way we know m21Name[-1] works to get the degree
+            # number, because we know bass is above root, by less than 8 degrees
+            # so it will be the last character of 'M3' or whatever.
+
+            newBass: m21.pitch.Pitch = deepcopy(bass)
+            newBass.octave = root.octave
+            if newBass < root:
+                # we know newBass.octave and root.octave are not None
+                newBass.octave += 1  # type: ignore
+
+            intv = m21.interval.Interval(root, bass)
+            m21Name: str = intv.name
+            degreeNumStr: str = m21Name[-1]
+            if degreeNumStr in ('1', '4', '5'):  # won't be '8'
+                if m21Name.startswith('P'):
+                    return degreeNumStr
+                if m21Name.startswith('A'):
+                    return ('#' * m21Name.count('A')) + str(degreeNumStr)
+                if m21Name.startswith('d'):
+                    return ('b' * m21Name.count('d')) + str(degreeNumStr)
+
+            # '2', '3', '6', '7' use 'M' instead of 'P', and 'm' for the first decrement.
+            if m21Name.startswith('M'):
+                return degreeNumStr
+            if m21Name.startswith('A'):
+                return ('#' * m21Name.count('A')) + str(degreeNumStr)
+            if m21Name.startswith('m'):
+                return 'b' + degreeNumStr
+            if m21Name.startswith('d'):
+                numFlats: int = m21Name.count('d') + 1
+                return ('b' * numFlats) + degreeNumStr
+
+            # shouldn't get here
+            return degreeNumStr
+
+        def degreeInt(degree: str) -> int:
+            m = re.match(r'[b#]*(\d+)', degree)
+            if not m:
+                raise MeiInternalError('unparseable Harte degree string')
+            return int(m.group(1))
+
+        def modifyDegrees(
+            degrees: str,
+            addList: list[str],
+            omitList: list[str],
+            alterList: list[str]
+        ) -> str:
+            degreeList: list[str] = []
+            newDegreeList: list[str] = []
+            if degrees:
+                degreeList = degrees.split(',')
+                newDegreeList = copy(degreeList)
+            # first do the omitList
+            for omit in omitList:
+                removedIt: bool = False
+                for deg in degreeList:
+                    if omit == deg:
+                        # we only remove it from current degree list if it has
+                        # the same number of #'s or b's
+                        newDegreeList.remove(deg)
+                        removedIt = True
+                if not removedIt:
+                    # put it in the list with a '*' replacing the #'s or b's,
+                    # to omit it from the degree list implied by the shorthand
+                    newDegreeList.append('*' + str(degreeInt(omit)))
+
+            # then the alters (if there are alters, there is no shorthand;
+            # all the notes are represented in degreeList)
+            for alter in alterList:
+                for i, deg in enumerate(degreeList):
+                    if degreeInt(alter) == degreeInt(deg):
+                        # we alter anything with the right degree number
+                        newDegreeList[i] = alter
+
+            # then the adds
+            newDegreeList.extend(addList)
+
+            # sort by degree (lowest degree first)
+            newDegreeList = sorted(newDegreeList, key=degreeInt)
+            return ','.join(newDegreeList)
+
+        # --------- start of makeHarteFromChordSymbol ---------
+        if isinstance(cs, m21.harmony.NoChord):
+            return 'N'
+
+        if not cs.pitches:
+            return 'N'
+
+        if cs.chordKind == 'pedal':
+            # that's just one note, and harte cannot describe it
+            return 'N'
+
+        root: m21.pitch.Pitch | None = cs.root()
+        if root is None:
+            # could do something smart if there are pitches but no root (but would that happen?)
+            return 'N'
+
+        bass: m21.pitch.Pitch | None = cs.bass()
+
+        harteRoot: str = hartifyRoot(root)
+        harteBass: str = ''
+        if bass is not None:
+            harteBass = hartifyBass(bass, root)
+        shorthand: str = ''
+        degrees: str = ''
+
+        if M21Utilities.chordSymbolHasAlters(cs):
+            # we can't use shorthand, just a list of degrees (which we will alter)
+            if cs.chordKind in M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_DEGREES:
+                degrees = (
+                    M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_DEGREES[cs.chordKind]
+                )
+            else:
+                raise Exception
+                # degrees = pitchesToHarteDegrees(cs.pitches, root, bass)
+        else:
+            if cs.chordKind in M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
+                shorthand, degrees = (
+                    M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[cs.chordKind]
+                )
+            else:
+                raise Exception
+                # degrees = pitchesToHarteDegrees(cs.pitches, root, bass)
+
+        # Now figure out ChordSymbol alters/adds/subtracts
+        if cs.chordStepModifications:
+            omitList: list[str] = []
+            addList: list[str] = []
+            alterList: list[str] = []
+
+            for csMod in cs.chordStepModifications:
+                degree: str = str(csMod.degree)
+                if csMod.interval is not None:
+                    numAlter = csMod.interval.semitones
+                    if numAlter > 0:
+                        s = '#'
+                    else:
+                        s = 'b'
+                    prefix: str = s * abs(numAlter)
+                    degree = prefix + degree
+
+                if csMod.modType == 'subtract':
+                    omitList.append(degree)
+                elif csMod.modType == 'add':
+                    addList.append(degree)
+                else:
+                    alterList.append(degree)
+
+            degrees = modifyDegrees(degrees, addList, omitList, alterList)
+
+        harte: str = harteRoot
+        if not shorthand and not degrees:
+            harte += ':'
+        if shorthand:
+            harte += shorthand
+        if degrees:
+            harte += '(' + degrees + ')'
+        if harteBass:
+            harte += '/' + harteBass
+        return harte
+
     @staticmethod
     def emitHarmony(cs: m21.harmony.ChordSymbol, tag: str, attr: dict[str, str], tb: TreeBuilder):
-        # set @type to music21's favorite standard abbreviation, for ease of parsing later.
-        # music21 puts spaces in the returned figure, but removes them to start parsing,
-        # so we can remove them here with no loss, and it makes @type a legal NMTOKEN.
-        figure: str
-        if isinstance(cs, m21.harmony.NoChord):
-            # we'll use chordKindStr the <harm> text, but harm@type="N.C." for NoChord.
-            figure = 'N.C.'
-        else:
-            figure = re.sub(r'\s', '', cs.figure)
-
-        if figure[1:].startswith('bpedal'):
-            # work around a music21 bug where pedal chords with a root that is flat
-            # end up with figure == 'Ebpedal' instead of the correct 'E-pedal'.
-            figure = figure[0] + '-' + figure[2:]
-
-        attr['type'] = figure
-
-        # Let's bump the root down below all but bass (might be below bass, too, if that's
-        # necessary to get below the other pitches), so we can compute @inth correctly.
-        #   lowRoot: m21.pitch.Pitch = deepcopy(root)
-        #   for pitch in cs.pitches:
-        #       if pitch is root:
-        #           continue
-        #       if bass is not None and pitch is bass:
-        #           continue
-        #       while pitch < lowRoot:
-        #           lowRoot.octave -= 1
-        #
-        #       inths: list[str] = []
-        #       for pitch in cs.pitches:
-        #           # pitches are ordered from lowest to highest
-        #           # Skip root and bass (they are already mentioned in @type)
-        #           if pitch is root:
-        #               continue
-        #           if bass is not None and pitch is bass:
-        #               continue
-        #           intv: m21.interval.Interval = m21.interval.Interval(lowRoot, pitch)
-        #           inth: str = intv.directedName
-        #           # see if it is a valid data.INTERVAL.HARMONIC
-        #           pattern: str = r'[AdMmP][0-9]+'
-        #           m = re.match(pattern, inth)
-        #           if m is None:
-        #               print(f'hey here\'s a bad inth: {inth}')
-        #           inths.append(inth)
-        #           if inths:
-        #               inthsStr: str = ' '.join(inths)
-        #               attr['inth'] = inthsStr
+        # set @type to our favorite standard abbreviation, for ease of parsing later.
+        # Harte contains ','s, so we have to convert them all to '.'s to make @type
+        # a legal NMTOKEN. (When we read it up, we will convert them back to commas
+        # before parsing.)
+        harte: str = 'harte-no-commas-' + M21ObjectConvert.makeHarteFromChordSymbol(cs)
+        attr['type'] = re.sub(',', '.', harte)
 
         tb.start(tag, attr)
         M21ObjectConvert._convertChordSymbolToMixedText(cs, tb)

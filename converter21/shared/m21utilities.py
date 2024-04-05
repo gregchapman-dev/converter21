@@ -2316,6 +2316,13 @@ class M21Utilities:
         return output
 
     @staticmethod
+    def chordSymbolHasAlters(cs: m21.harmony.ChordSymbol) -> bool:
+        for csMod in cs.chordStepModifications:
+            if csMod.modType == 'alter':
+                return True
+        return False
+
+    @staticmethod
     def adjustMusic21Behavior() -> None:
         if 'augmented-ninth' not in m21.harmony.CHORD_ALIASES:
             m21.harmony.CHORD_ALIASES['augmented-ninth'] = 'augmented-dominant-ninth'
