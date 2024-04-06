@@ -217,6 +217,7 @@ from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiShared
 from converter21.mei import MeiMetadataReader
 
+from converter21.shared import SharedConstants
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupDescriptionTree
 
@@ -7440,6 +7441,32 @@ class MeiReader:
         tuple[OffsetQL | None, int | None, OffsetQL | None],
         m21.harmony.ChordSymbol | None
     ]:
+        def getLeadingAccidental(text: str) -> str:
+            ACCIDENTAL_CHARS: tuple[str, ...] = (
+                'b',
+                '#',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlat'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharp'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalDoubleSharp'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalDoubleFlat'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalTripleSharp'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalTripleFlat'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSharp'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlatSmall'],
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSmall']
+            )
+
+            output: str = ''
+            for ch in text:
+                if ch in ACCIDENTAL_CHARS:
+                    output += ch
+                else:
+                    break
+
+            return output
+
         # bail out (for now) on figured bass harmony
         fb: Element | None = elem.find(f'{MEI_NS}fb')
         if fb is not None:
@@ -7466,64 +7493,73 @@ class MeiReader:
         text, _styleDict = MeiShared.textFromElem(elem)
         text = html.unescape(text)
         text = text.strip()
-
-        if typeAtt == 'N.C.' or text in (
-            'N.C.',
-            '(N.C.)',
-            'NC',
-            '(NC)',
-            'No Chord',
-            '(No Chord)',
-            'no chord',
-            '(no chord)',
-            'No chord'
-            '(No chord)'
-        ):
-            cs = m21.harmony.NoChord(text)
-            return staffNStr, (offset, None, None), cs
-
         # cs.chordKindStr is the printed label for this chord type (i.e. without root or bass)
-        # So if text == 'Cm7sus4' or 'Gm7sus4/A', then chordKindStr should be 'm7sus4'.
+        # So if text == 'Cm7sus4' or 'G##m7sus4/A', then chordKindStr should be 'm7sus4'.
+
         chordKindStr: str = text[1:]
-        if len(text) >= 3 and text[2] in ('#', 'b'):
-            chordKindStr = text[2:]
+        leadingAccidental: str = getLeadingAccidental(chordKindStr)
+        if leadingAccidental:
+            chordKindStr = chordKindStr[len(leadingAccidental):]
         if '/' in chordKindStr:
             chordKindStr = chordKindStr.split('/')[0]
 
-        if typeAtt:
-            # best case: typeAtt is a pseudo-official ChordSymbol figure
-            # but we have to put some spaces back in first:
-            typeAtt = re.sub('add', ' add ', typeAtt)
-            typeAtt = re.sub('subtract', ' subtract ', typeAtt)
-            typeAtt = re.sub('alter', ' alter ', typeAtt)
+        # get recognized prefix for various regular forms that might be hiding
+        # in @type, waiting for MEI to support @reg.
+        HARTE_PREFIX: str = 'harte-no-commas:'
+        MUSIC21_PREFIX: str = 'music21-no-spaces:'
+        reg: str = ''
+        regType: str = ''
+        if typeAtt.startswith(HARTE_PREFIX):
+            regType = 'harte'
+            reg = re.sub('.', ',', typeAtt[len(HARTE_PREFIX):])
+        elif text.startswith(MUSIC21_PREFIX):
+            regType = 'music21'
+            reg = typeAtt[len(MUSIC21_PREFIX):]
+            reg = re.sub('add', ' add ', reg)
+            reg = re.sub('subtract', ' subtract ', reg)
+            reg = re.sub('alter', ' alter ', reg)
 
+        if regType == 'music21' and reg == 'N.C':
+            cs = m21.harmony.NoChord(text)
+            return staffNStr, (offset, None, None), cs
+
+        if regType == 'harte' and reg == 'N':
+            cs = m21.harmony.NoChord(text)
+            return staffNStr, (offset, None, None), cs
+
+        if text.lower() in ('n.c.', '(n.c.)', 'nc', '(nc)', 'no chord', '(no chord)'):
+            cs = m21.harmony.NoChord(text)
+            return staffNStr, (offset, None, None), cs
+
+        if reg:
             try:
-                cs = m21.harmony.ChordSymbol(typeAtt)
-                if not cs.pitches:
-                    cs = None
+                if regType == 'music21':
+                    cs = M21ObjectConvert.makeChordSymbolFromM21Reg(reg)
+                else:  # 'harte'
+                    cs = M21ObjectConvert.makeChordSymbolFromHarteReg(reg)
             except Exception:
                 pass
 
-        if cs is None or len(cs.pitches) == 1 and 'pedal' not in typeAtt:
-            # Last shot is text. Hopefully it's a parseable figure (it often is).
-            # To give it half a chance, translate SMUFL sharps/flats back to the
+        if cs is None:
+            # Last shot is text. Hopefully it's a parseable music21 figure (it sometimes is).
+            # To give it half a chance, translate any SMUFL/Unicode sharps/flats back to the
             # music21 equivalent ('#', '-').
-            figureTry: str = M21Utilities.convertChordSymbolFigureFromSmuflSharpsAndFlats(text)
+            figureTry: str = M21Utilities.convertPrintableTextToChordSymbolFigure(text)
             try:
                 cs = m21.harmony.ChordSymbol(figureTry)
-                if not cs.pitches:
+                if not cs.pitches or (len(cs.pitches) == 1 and 'pedal' not in text):
                     cs = None
             except Exception:
                 pass
 
             if cs is None:
-                # try again with some simple substitutions
+                # try again with some more simple substitutions
                 figureTry = re.sub('maj6', '6', figureTry)
                 figureTry = re.sub('°', 'dim', figureTry)
 
                 try:
                     cs = m21.harmony.ChordSymbol(figureTry)
-                    if not cs.pitches:
+                    if not cs.pitches or (len(cs.pitches) == 1 and 'pedal' not in text):
                         cs = None
                 except Exception:
                     pass
@@ -7533,11 +7569,6 @@ class MeiReader:
 
         if chordKindStr:
             cs.chordKindStr = chordKindStr
-
-        if len(cs.pitches) == 1 and 'pedal' not in typeAtt and 'pedal' not in text:
-            # We failed to make a valid ChordSymbol
-            environLocal.warn(f'Failed to parse <harm> element: type="{typeAtt}" text="{text}"')
-            return '', (-1., None, None), None
 
         return staffNStr, (offset, None, None), cs
 

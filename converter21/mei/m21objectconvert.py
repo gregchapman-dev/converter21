@@ -1796,8 +1796,34 @@ class M21ObjectConvert:
         'Tristan': '#4,#6,#9',
     }
 
+    HARTE_SHORTHAND_TO_DEGREE_LIST: dict[str, list[str]] = {
+        'maj': ['3', '5'],
+        'min': ['b3', '5'],
+        'dim': ['b3', 'b5'],
+        'aug': ['3', '#5'],
+        'maj7': ['3', '5', '7'],
+        'min7': ['b3', '5', 'b7'],
+        '7': ['3', '5', 'b7'],
+        'dim7': ['b3', 'b5', 'bb7'],
+        'hdim7': ['b3', 'b5', 'b7'],
+        'minmaj7': ['b3', '5', '7'],
+        'maj6': ['3', '5', '6'],
+        'min6': ['b3', '5', '6'],
+        '9': ['3', '5', 'b7', '9'],
+        'maj9': ['3', '5', '7', '9'],
+        'min9': ['b3', '5', 'b7', '9'],
+        'sus4': ['4', '5'],
+    }
+
     @staticmethod
-    def makeHarteFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
+    def degreeInt(degree: str) -> int:
+        m = re.match(r'[b#-]*(\d+)', degree)
+        if not m:
+            raise MeiInternalError('unparseable (Harte, music21) degree string')
+        return int(m.group(1))
+
+    @staticmethod
+    def makeHarteRegFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
         def hartifyRoot(root: m21.pitch.Pitch) -> str:
             return re.sub('-', 'b', root.name)
 
@@ -1841,12 +1867,6 @@ class M21ObjectConvert:
             # shouldn't get here
             return degreeNumStr
 
-        def degreeInt(degree: str) -> int:
-            m = re.match(r'[b#]*(\d+)', degree)
-            if not m:
-                raise MeiInternalError('unparseable Harte degree string')
-            return int(m.group(1))
-
         def modifyDegrees(
             degrees: str,
             addList: list[str],
@@ -1870,13 +1890,13 @@ class M21ObjectConvert:
                 if not removedIt:
                     # put it in the list with a '*' replacing the #'s or b's,
                     # to omit it from the degree list implied by the shorthand
-                    newDegreeList.append('*' + str(degreeInt(omit)))
+                    newDegreeList.append('*' + str(M21ObjectConvert.degreeInt(omit)))
 
             # then the alters (if there are alters, there is no shorthand;
             # all the notes are represented in degreeList)
             for alter in alterList:
                 for i, deg in enumerate(degreeList):
-                    if degreeInt(alter) == degreeInt(deg):
+                    if M21ObjectConvert.degreeInt(alter) == M21ObjectConvert.degreeInt(deg):
                         # we alter anything with the right degree number
                         newDegreeList[i] = alter
 
@@ -1884,18 +1904,14 @@ class M21ObjectConvert:
             newDegreeList.extend(addList)
 
             # sort by degree (lowest degree first)
-            newDegreeList = sorted(newDegreeList, key=degreeInt)
+            newDegreeList = sorted(newDegreeList, key=M21ObjectConvert.degreeInt)
             return ','.join(newDegreeList)
 
-        # --------- start of makeHarteFromChordSymbol ---------
+        # --------- start of makeHarteRegFromChordSymbol ---------
         if isinstance(cs, m21.harmony.NoChord):
             return 'N'
 
         if not cs.pitches:
-            return 'N'
-
-        if cs.chordKind == 'pedal':
-            # that's just one note, and harte cannot describe it
             return 'N'
 
         root: m21.pitch.Pitch | None = cs.root()
@@ -1912,6 +1928,11 @@ class M21ObjectConvert:
         shorthand: str = ''
         degrees: str = ''
 
+        if cs.chordKind == 'pedal':
+            # That's just one note, Harte cannot describe it directly.
+            # How about shorthand='maj', degrees='(*3,*5)'?
+            return harteRoot + ':maj(*3,*5)'
+
         if M21Utilities.chordSymbolHasAlters(cs):
             # we can't use shorthand, just a list of degrees (which we will alter)
             if cs.chordKind in M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_DEGREES:
@@ -1919,7 +1940,7 @@ class M21ObjectConvert:
                     M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_DEGREES[cs.chordKind]
                 )
             else:
-                raise Exception
+                raise MeiInternalError('bad cs.chordKind: "{cs.chordKind}"')
                 # degrees = pitchesToHarteDegrees(cs.pitches, root, bass)
         else:
             if cs.chordKind in M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
@@ -1927,7 +1948,7 @@ class M21ObjectConvert:
                     M21ObjectConvert.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[cs.chordKind]
                 )
             else:
-                raise Exception
+                raise MeiInternalError('bad cs.chordKind: "{cs.chordKind}"')
                 # degrees = pitchesToHarteDegrees(cs.pitches, root, bass)
 
         # Now figure out ChordSymbol alters/adds/subtracts
@@ -1957,15 +1978,165 @@ class M21ObjectConvert:
             degrees = modifyDegrees(degrees, addList, omitList, alterList)
 
         harte: str = harteRoot
-        if not shorthand and not degrees:
+        if shorthand or degrees:
             harte += ':'
-        if shorthand:
-            harte += shorthand
-        if degrees:
-            harte += '(' + degrees + ')'
+            if shorthand:
+                harte += shorthand
+            if degrees:
+                harte += '(' + degrees + ')'
         if harteBass:
             harte += '/' + harteBass
         return harte
+
+    @staticmethod
+    def makeChordSymbolFromHarteReg(harte: str) -> m21.harmony.ChordSymbol | None:
+        def parseHarte(harte: str) -> tuple[str, str, str, str]:
+            # returns root, shorthand, degrees (without parens), bass
+            if harte == 'N':
+                return 'N', '', '', ''
+
+            root: str = ''
+            shorthand: str = ''
+            degrees: str = ''
+            bass: str = ''
+            # This pattern allows some malformed harte, but does a good job of splitting
+            # up the 4 parts (some optional) of the string.
+            m = re.match(
+                r'^([A-G#b]+)(?::([a-z0-9]*)(\([*#b,\d]+\))?)?(?:\/([#b]*\d+))?$',
+                harte
+            )
+            if m:
+                root = m.group(1) or ''
+                shorthand = m.group(2) or ''
+                degrees = m.group(3) or ''
+                bass = m.group(4) or ''
+
+            if degrees:
+                # the regex left the parens on; strip them off
+                degrees = degrees[1:-1]
+
+            return root, shorthand, degrees, bass
+
+        root: str = ''
+        shorthand: str = ''
+        degrees: str = ''
+        bass: str = ''
+        root, shorthand, degrees, bass = parseHarte(harte)
+        if root == 'N':
+            return m21.harmony.NoChord()
+        if not root:
+            return None  # Harte without a root is to be ignored (not even a NoChord)
+
+        # root looks like 'Fb', which needs to turn into 'F-' ('#' can be left as is)
+        rootPitch = m21.pitch.Pitch(re.sub('b', '-', root), octave=3)
+
+        # bass looks like '-3', which means the major third of the chord, less one semitone
+        # (without changing the letter name of the note), so we might end up with who
+        # knows what accidental.  Degree numbers are always the major/perfect degree,
+        # (or, if you like, the degree of the major scale starting at the root).  The
+        # degree accidental(s) adjust that pitch's accidental.)
+        if bass:
+            bassLetter: str = ''
+            accid: str = ''
+            for ch in bass:
+                if ch in '#b':
+                    accid += ch
+                elif ch in 'ABCDEFG':
+                    bassLetter = ch
+                    break
+
+            bassAlter: int = accid.count('#')
+            bassAlter -= accid.count('b')
+
+            newBass: str = bassLetter
+            if bassAlter < 0:
+                newBass += '-' * -bassAlter
+            elif bassAlter > 0:
+                newBass += '#' * bassAlter
+            bassPitch = m21.pitch.Pitch(newBass, octave=rootPitch.octave)
+
+            # make sure bass is (just) below root
+            if bassPitch > rootPitch:
+                bassPitch.octave -= 1  # type: ignore
+
+        degreeList: list[str] = degrees.split(',')
+        if shorthand:
+            # add the implied degrees to degreeList
+            impliedDegList: list[str] = []
+            if shorthand in M21ObjectConvert.HARTE_SHORTHAND_TO_DEGREE_LIST:
+                impliedDegList = M21ObjectConvert.HARTE_SHORTHAND_TO_DEGREE_LIST[shorthand]
+            degreeList = impliedDegList + degreeList
+
+
+        # there's always the implied degree '1'
+        degreeList.insert(0, '1')
+
+        # sort the list (by degree)
+        degreeList = sorted(degreeList, key=M21ObjectConvert.degreeInt)
+        leftoverDegrees: list[str] = []
+
+        m21ChordKind: str = ''
+        while len(degreeList) > 1:
+            # don't run this loop when all that is left in degreeList is ['1'].
+            m21Degrees: str = ','.join(degreeList)
+            m21Degrees = re.sub('b', '-', m21Degrees)
+            # look up ChordSymbol.kind that has m21Degrees
+            for kind in m21.harmony.CHORD_TYPES:
+                if m21Degrees == m21.harmony.getNotationStringGivenChordType(kind):
+                    m21ChordKind = kind
+                    break
+
+            if m21ChordKind:
+                break
+
+            # Truncate the list (putting the removed degree in leftoverDegrees,
+            # keeping it sorted by inserting at the beginning) and try again.
+            leftoverDegrees.insert(0, degreeList[-1])
+            degreeList = degreeList[0:-1]
+
+        if not m21ChordKind:
+            # Here we give up and use 'pedal' (root only).
+            m21ChordKind = 'pedal'
+
+        cs: m21.harmony.ChordSymbol | None = None
+        try:
+            cs = m21.harmony.ChordSymbol(root=rootPitch, bass=bassPitch, kind=m21ChordKind)
+            if cs is not None and not cs.pitches:
+                cs = None
+        except Exception:
+            cs = None
+
+        if cs is not None and leftoverDegrees:
+            # add the extra degrees not implied by m21ChordKind
+            for deg in leftoverDegrees:
+                degInt: int = M21ObjectConvert.degreeInt(deg)
+                if degInt == 1:
+                    # we don't need to add it because it's the root
+                    continue
+
+                alter: int = deg.count('#')
+                alter -= deg.count('b')  # 'b', not '-', because these are Harte degrees
+                csMod = m21.harmony.ChordStepModification('add', degInt, alter)
+                cs.addChordStepModification(csMod, updatePitches=True)
+
+        return cs
+
+    @staticmethod
+    def makeM21RegFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
+        return cs.figure
+
+    @staticmethod
+    def makeChordSymbolFromM21Reg(figure: str) -> m21.harmony.ChordSymbol | None:
+        cs: m21.harmony.ChordSymbol | None = None
+
+        try:
+            cs = m21.harmony.ChordSymbol(figure)
+            if not cs.pitches or (len(cs.pitches) == 1 and 'pedal' not in figure):
+                cs = None
+        except Exception:
+            cs = None
+
+        return cs
 
     @staticmethod
     def emitHarmony(cs: m21.harmony.ChordSymbol, tag: str, attr: dict[str, str], tb: TreeBuilder):
@@ -1973,8 +2144,19 @@ class M21ObjectConvert:
         # Harte contains ','s, so we have to convert them all to '.'s to make @type
         # a legal NMTOKEN. (When we read it up, we will convert them back to commas
         # before parsing.)
-        harte: str = 'harte-no-commas-' + M21ObjectConvert.makeHarteFromChordSymbol(cs)
-        attr['type'] = re.sub(',', '.', harte)
+
+        # @reg = harte or music21? (@type for now...)
+        if hasattr(cs, 'mei_reg_harte'):
+            harteRegPrefix: str = 'harte-no-commas:'
+            harte: str = M21ObjectConvert.makeHarteRegFromChordSymbol(cs)
+            attr['type'] = harteRegPrefix + re.sub(',', '.', harte)
+        else:
+            m21RegPrefix: str = 'music21-no-spaces:'
+            m21Reg: str = M21ObjectConvert.makeM21RegFromChordSymbol(cs)
+            m21Reg = re.sub(' add ', 'add', m21Reg)
+            m21Reg = re.sub(' subtract ', 'subtract', m21Reg)
+            m21Reg = re.sub(' alter ', 'alter', m21Reg)
+            attr['type'] = m21RegPrefix + m21Reg
 
         tb.start(tag, attr)
         M21ObjectConvert._convertChordSymbolToMixedText(cs, tb)
@@ -1997,9 +2179,9 @@ class M21ObjectConvert:
                 if bassStr:
                     text += '/' + bassStr
             else:
-                # fall back to music21's favorite standard abbreviation for this
-                # chord symbol, with SMUFL-ized accidentals
-                text = M21Utilities.convertChordSymbolFigureToSmuflSharpsAndFlats(cs.figure)
+                # fall back to a printable version of music21's favorite
+                # standard abbreviation for this chord symbol
+                text = M21Utilities.convertChordSymbolFigureToPrintableText(cs.figure)
 
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
 

@@ -2283,33 +2283,91 @@ class M21Utilities:
                 return
         md.addCustom(key, value)
 
-    @staticmethod
-    def convertChordSymbolFigureToSmuflSharpsAndFlats(text: str) -> str:
-        output: str = ''
-        smuflFlat: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']
-        smuflSharp: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']
+    ACCIDENTAL_CHAR_TO_ASCII: dict[str, str] = {
+        # Unicode
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']: 'b',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']: '#',
+        # SMUFL
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlat']: 'b',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharp']: '#',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalDoubleSharp']: '##',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalDoubleFlat']: 'bb',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalTripleSharp']: '###',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalTripleFlat']: 'bbb',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalNaturalFlat']: 'b',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalNaturalSharp']: '#',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSharp']: '##',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlatSmall']: 'b',
+        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSmall']: '#',
+    }
 
+    @staticmethod
+    def convertChordSymbolFigureToPrintableText(text: str) -> str:
+        # For use when writing an MEI file.
+
+        # In a cs figure, just after first char (root), any flats are '-'; any trailing '-'s
+        # (after bass)', but everywhere between, 'b' means flat (unless it's in the word
+        # 'subtract').
+        # Turn all '-' to 'b' and all 'subtract' to 'omit' (which works better in a printable
+        # string anyway).
+        text = re.sub('subtract', 'omit', text)
+        text = re.sub('-', 'b', text)
+
+        output: str = ''
+        unicodeFlat: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlat']
+        unicodeSharp: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharp']
         for ch in text:
-            if ch == '-':
-                output += smuflFlat
+            if ch == 'b':
+                output += unicodeFlat
             elif ch == '#':
-                output += smuflSharp
+                output += unicodeSharp
+            elif ch == ' ':
+                pass  # we are removing the spaces around ' add ', ' omit ', ' alter '
             else:
                 output += ch
 
         return output
 
     @staticmethod
-    def convertChordSymbolFigureFromSmuflSharpsAndFlats(text: str) -> str:
+    def convertPrintableTextToChordSymbolFigure(text: str) -> str:
         output: str = ''
-        smuflFlat: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign']
-        smuflSharp: str = SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign']
 
-        for ch in text:
-            if ch == smuflFlat:
-                output += '-'
-            elif ch == smuflSharp:
-                output += '#'
+        # First, put the spaces back in around 'add', 'omit', 'subtract', and 'alter'
+        # (music21 will accept both omit and subtract in a figure as meaning the same
+        # thing, so we go for omit everywhere to avoid the confusion of extra 'b's).
+        text = re.sub('add', ' add ', text)
+        text = re.sub('omit', ' omit ', text)
+        text = re.sub('subtract', ' omit ', text)  # Yes, switch to ' omit '
+        text = re.sub('alter', ' alter ', text)
+
+        # Note how we choose between 'b' and '-' for output ('-' for any root/bass accidentals
+        # 'b' for other notes).
+        useHyphen: bool = False  # for root
+
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            if i == 0:
+                # grab root plus any accidental(s)
+                output += ch
+                i += 1
+                while ch in M21Utilities.ACCIDENTAL_CHAR_TO_ASCII:
+                    output += M21Utilities.ACCIDENTAL_CHAR_TO_ASCII[ch]
+                    i += 1
+
+                # from now until we see a '/' (just before bass note, if present),
+                # we will change any 'b' ASCII accidental to '-'.
+                useHyphen = True
+                continue
+
+            if ch == '/':
+                useHyphen = False  # for bass
+
+            if ch in M21Utilities.ACCIDENTAL_CHAR_TO_ASCII:
+                newStr: str = M21Utilities.ACCIDENTAL_CHAR_TO_ASCII[ch]
+                if useHyphen and newStr in ('b', 'bb', 'bbb'):
+                    newStr = '-' * len(newStr)
+                output += newStr
             else:
                 output += ch
 
