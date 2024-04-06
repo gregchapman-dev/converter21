@@ -2297,8 +2297,6 @@ class M21Utilities:
         SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalNaturalFlat']: 'b',
         SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalNaturalSharp']: '#',
         SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSharp']: '##',
-        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlatSmall']: 'b',
-        SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSmall']: '#',
     }
 
     @staticmethod
@@ -2370,6 +2368,8 @@ class M21Utilities:
                 output += newStr
             else:
                 output += ch
+
+            i += 1
 
         return output
 

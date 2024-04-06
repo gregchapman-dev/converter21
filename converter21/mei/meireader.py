@@ -7454,8 +7454,6 @@ class MeiReader:
                 SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalTripleSharp'],
                 SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalTripleFlat'],
                 SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSharp'],
-                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalFlatSmall'],
-                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSmall']
             )
 
             output: str = ''
@@ -7512,7 +7510,7 @@ class MeiReader:
         if typeAtt.startswith(HARTE_PREFIX):
             regType = 'harte'
             reg = re.sub('.', ',', typeAtt[len(HARTE_PREFIX):])
-        elif text.startswith(MUSIC21_PREFIX):
+        elif typeAtt.startswith(MUSIC21_PREFIX):
             regType = 'music21'
             reg = typeAtt[len(MUSIC21_PREFIX):]
             reg = re.sub('add', ' add ', reg)
