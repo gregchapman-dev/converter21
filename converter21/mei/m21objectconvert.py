@@ -13,7 +13,7 @@
 import sys
 import re
 import typing as t
-from copy import copy, deepcopy
+# from copy import copy, deepcopy
 from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21
@@ -1672,13 +1672,13 @@ class M21ObjectConvert:
         # before parsing.)
 
         # @reg = harte or music21? (@type for now...)
-        if True: # hasattr(cs, 'mei_reg_harte'):
+        if True:  # hasattr(cs, 'mei_reg_harte'):
             harteRegPrefix: str = 'harte-no-commas:'
             harte: str = M21Utilities.makeHarteRegFromChordSymbol(cs)
             attr['type'] = harteRegPrefix + re.sub(',', '.', harte)
         else:
             m21RegPrefix: str = 'music21-no-spaces:'
-            m21Reg: str = M21ObjectConvert.makeM21RegFromChordSymbol(cs)
+            m21Reg: str = M21Utilities.makeM21RegFromChordSymbol(cs)
             m21Reg = re.sub(' add ', 'add', m21Reg)
             m21Reg = re.sub(' subtract ', 'subtract', m21Reg)
             m21Reg = re.sub(' alter ', 'alter', m21Reg)
@@ -1707,11 +1707,12 @@ class M21ObjectConvert:
             else:
                 # fall back to a printable version of music21's favorite
                 # standard abbreviation for this chord symbol
-                text = M21Utilities.convertChordSymbolFigureToPrintableText(cs.figure)
+                pass  # text = M21Utilities.convertChordSymbolFigureToPrintableText(cs.figure)
 
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
 
-        tb.data(text)
+        if text:
+            tb.data(text)
 
         # Here is where we would end the 'rend' tag, if we had started it.
 

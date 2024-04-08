@@ -7509,7 +7509,7 @@ class MeiReader:
         regType: str = ''
         if typeAtt.startswith(HARTE_PREFIX):
             regType = 'harte'
-            reg = re.sub('\.', ',', typeAtt[len(HARTE_PREFIX):])
+            reg = re.sub(r'\.', ',', typeAtt[len(HARTE_PREFIX):])
         elif typeAtt.startswith(MUSIC21_PREFIX):
             regType = 'music21'
             reg = typeAtt[len(MUSIC21_PREFIX):]
@@ -7565,8 +7565,7 @@ class MeiReader:
             if cs is None:
                 return '', (-1., None, None), None
 
-        if chordKindStr:
-            cs.chordKindStr = chordKindStr
+        cs.chordKindStr = chordKindStr
 
         return staffNStr, (offset, None, None), cs
 

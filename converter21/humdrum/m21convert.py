@@ -272,9 +272,15 @@ class M21Convert:
     def getM21ChordSymFromHarmonyText(
         tokenStr: str,
         dataType: str = '**mxhm'
-    ) -> m21.harmony.ChordSymbol:
+    ) -> m21.harmony.ChordSymbol | None:
+        def replace(text: str, old: str, new: str) -> tuple[str, bool]:
+            # returns new text and whether or not any change was made
+            newText: str = re.sub(old, new, text)
+            return newText, newText != text
+
         if dataType != '**mxhm':
-            raise HumdrumInternalError('Harmony type "{dataType}" not supported')
+            print('Harmony type "{dataType}" not supported, skipping.', file=sys.stderr)
+            return None
 
         if tokenStr == 'none':
             return m21.harmony.NoChord()
@@ -289,23 +295,90 @@ class M21Convert:
         bass: str = ''
 
         if not root:
-            raise HumdrumInternalError(f'malformed **mxhm harmony: "{tokenStr}"')
+            print(f'malformed **mxhm harmony: skipping "{tokenStr}"', file=sys.stderr)
+            return None
 
         if '/' in kind:
             # there's a specified bass note (e.g. 'C major/D')
             kindAndBass: list[str] = kind.split('/')
             if len(kindAndBass) != 2:
-                raise HumdrumInternalError(f'malformed **mxhm harmony: "{tokenStr}"')
+                print(f'malformed **mxhm harmony: skipping "{tokenStr}"', file=sys.stderr)
+                return None
             kind = kindAndBass[0]
             bass = kindAndBass[1]
 
         # convert from MusicXML/Humdrum kind to music21 kind ('dominant' -> 'dominant-seventh')
+        kindStr: str = kind  # stash off original kind to make a kindStr (printed) string from
         if kind in m21.harmony.CHORD_ALIASES:
             kind = m21.harmony.CHORD_ALIASES[kind]
         if kind not in m21.harmony.CHORD_TYPES:
-            kind = ''
+            print(f'malformed **mxhm harmony: skipping "{tokenStr}"', file=sys.stderr)
+            return None
 
-        output = m21.harmony.ChordSymbol(bass=bass, root=root, kind=kind)
+        # We need to make up a kindStr (e.g. 'm7'), similar to what verovio's
+        # Humdrum importer does.
+        if kindStr == 'major-minor':
+            kindStr = 'Mm7'
+        elif kindStr == 'minor-major':
+            kindStr = 'mM7'
+
+        changed: bool
+        kindStr, changed = replace(kindStr, 'major-', 'maj')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'minor-', 'm')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'dominant-', 'dom')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'augmented-', '+')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'suspended-', 'sus')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'diminished-', '\u00B0')  # degree sign
+
+        kindStr, changed = replace(kindStr, 'seventh', '7')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'ninth', '9')
+        if not changed:
+            kindStr, changed = replace(kindStr, '11th', '11')
+        if not changed:
+            kindStr, changed = replace(kindStr, '13th', '13')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'second', '2')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'fourth', '4')
+        if not changed:
+            kindStr, changed = replace(kindStr, 'sixth', '6')
+
+        if kindStr in ('major', 'maj', 'ma'):
+            kindStr = ''
+        elif kindStr in ('minor', 'min'):
+            kindStr = 'm'
+        elif kindStr == 'augmented':
+            kindStr = '+'
+        elif kindStr == 'minor-seventh':
+            # I suspect this has already been accomplished above
+            kindStr = 'm7'
+        elif kindStr == 'major-seventh':
+            # I suspect this has already been accomplished above
+            kindStr = 'maj7'
+        elif kindStr == 'dom11':
+            kindStr = '11'
+        elif kindStr == 'dom13':
+            kindStr = '13'
+        elif kindStr == 'dom9':
+            kindStr = '9'
+        elif kindStr == 'half-diminished':
+            kindStr = '\u00F8'  # o-slash
+        elif kindStr == 'diminished':
+            kindStr = '\u00B0'  # degree sign
+        elif kindStr == 'dominant':
+            kindStr = '7'
+        elif kindStr == 'power':
+            kindStr = '5'
+        elif kindStr == 'm7b5':
+            kindStr = 'm7' + '\u266d' + '5'  # unicode flat
+
+        output = m21.harmony.ChordSymbol(bass=bass, root=root, kind=kind, kindStr=kindStr)
         return output
 
     @staticmethod

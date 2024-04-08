@@ -2801,7 +2801,7 @@ class M21Utilities:
                 else:
                     bassIntvName = 'M' + bassNum
 
-            bassPitch =  m21.interval.Interval(bassIntvName).transposePitch(
+            bassPitch = m21.interval.Interval(bassIntvName).transposePitch(
                 rootPitch,
                 inPlace=False
             )

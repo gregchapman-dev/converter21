@@ -1715,8 +1715,13 @@ class HumdrumFile(HumdrumFileContent):
                     # 'yy' means hidden, too
                     continue
 
+                chordSym: m21.harmony.ChordSymbol | None = (
+                    M21Convert.getM21ChordSymFromHarmonyText(token.text, dataType)
+                )
+                if chordSym is None:
+                    continue
+
                 staffIndex: int = self._staffStartsIndexByTrack[track]
-                chordSym = M21Convert.getM21ChordSymFromHarmonyText(token.text, dataType)
                 csOffset: OffsetQL = token.durationFromBarline
                 currentMeasurePerStaff: list[m21.stream.Measure] = (
                     self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
