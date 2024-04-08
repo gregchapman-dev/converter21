@@ -1691,7 +1691,7 @@ class M21ObjectConvert:
     @staticmethod
     def _convertChordSymbolToMixedText(cs: m21.harmony.ChordSymbol, tb: TreeBuilder):
         # Try to use the specified abbreviation that was imported from the original file
-        text: str
+        text: str = ''
         if isinstance(cs, m21.harmony.NoChord):
             text = cs.chordKindStr
         else:
