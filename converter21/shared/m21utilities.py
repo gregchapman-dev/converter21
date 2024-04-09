@@ -2992,18 +2992,21 @@ class M21Utilities:
                                 if prevBeam.type == 'continue':
                                     prevBeam.type = 'stop'
                         else:
-                            # thisNC has beams.  If prevNC has beams, check the matching
-                            # numbered beam.
-                            for thisBeam in thisNC.beams:
-                                if thisBeam.type != 'start':
-                                    continue
-                                # thisBeam is start: prevBeam continue should be stop
-                                num: int = thisBeam.number
-                                if num not in prevNC.beams.getNumbers():
-                                    continue
-                                prevBeam = prevNC.beams.getByNumber(num)
-                                if prevBeam.type == 'continue':
-                                    prevBeam.type = 'stop'
+                            # thisNC has beams.  Check any/all of prevNC's beams.
+                            for prevBeam in prevNC.beams:
+                                num: int = prevBeam.number
+                                if num not in thisNC.beams.getNumbers():
+                                    # no matching beam in thisNC, prevBeam must stop,
+                                    # not continue
+                                    if prevBeam.type == 'continue':
+                                        prevBeam.type = 'stop'
+                                else:
+                                    # matching beam in thisNC; if it starts, prevBeam
+                                    # must stop, not continue.
+                                    thisBeam = thisNC.beams.getByNumber(num)
+                                    if thisBeam.type == 'start':
+                                        if prevBeam.type == 'continue':
+                                            prevBeam.type = 'stop'
 
                     if meas is measures[-1]:
                         # fix last note in score (in this voice)
