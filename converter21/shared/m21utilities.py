@@ -2920,6 +2920,7 @@ class M21Utilities:
                 for k in m21.harmony.CHORD_TYPES:
                     if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
                         cs.chordKind = k
+                        cs._updatePitches()
                         break
 
         return fixme
