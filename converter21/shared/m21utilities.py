@@ -2925,6 +2925,94 @@ class M21Utilities:
 
         return fixme
 
+    @staticmethod
+    def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
+        # must be a score; we will look for parts/measures/etc
+
+        # Currently just looks for continues that should be stops (given what follows within
+        # the current Measure/Voice).  These are often seen in MusicXML, and while Finale
+        # handles them, Musescore and converter21's converters (and musicdiff) do not.
+
+        fixme: m21.stream.Score = score
+        if not inPlace:
+            fixme = deepcopy(score)
+
+        for part in fixme[m21.stream.Part]:
+            # key is previous voice.id (or 'measure' if it's the measure)
+            lastNCInPrevVoice: dict[int | str, m21.note.NotRest] = {}
+            measures: list[m21.stream.Measure] = list(part[m21.stream.Measure])
+            for meas in measures:
+                # we can only fix up beams within a Voice (or within the Measure
+                # itself, if there are no Voices)
+                voices: list[m21.stream.Voice | m21.stream.Measure] = list(
+                    meas[m21.stream.Voice]
+                )
+                if not voices:
+                    voices = [meas]
+
+                for voice in voices:
+                    voiceKey: int | str
+                    if isinstance(voice, m21.stream.Measure):
+                        voiceKey = 'measure'
+                    else:
+                        voiceKey = voice.id
+
+                    notesAndChords: list[m21.note.NotRest] = list(voice[m21.note.NotRest])
+
+                    # remove any ChordSymbols (they are Chords that don't count)
+                    removeList: list[m21.harmony.ChordSymbol] = []
+                    for nc in notesAndChords:
+                        if isinstance(nc, m21.harmony.ChordSymbol):
+                            removeList.append(nc)
+                    for cs in removeList:
+                        notesAndChords.remove(cs)
+
+                    for i in range(0, len(notesAndChords)):
+                        thisNC: m21.note.NotRest = notesAndChords[i]
+                        prevNC: m21.note.NotRest | None
+                        if i == 0:
+                            prevNC = lastNCInPrevVoice.get(voiceKey) or None
+                        else:
+                            prevNC = notesAndChords[i - 1]
+
+                        # prevNC is the one we are fixing (based on beams in thisNC)
+                        if prevNC is None or not prevNC.beams:
+                            # nothing to fix
+                            continue
+
+                        prevBeam: m21.beam.Beam
+                        if not thisNC.beams:
+                            # thisNC has no beams. Any continues in prevNC.beams should be stops.
+                            for prevBeam in prevNC.beams:
+                                if prevBeam.type == 'continue':
+                                    prevBeam.type = 'stop'
+                        else:
+                            # thisNC has beams.  If prevNC has beams, check the matching
+                            # numbered beam.
+                            for thisBeam in thisNC.beams:
+                                if thisBeam.type != 'start':
+                                    continue
+                                # thisBeam is start: prevBeam continue should be stop
+                                num: int = thisBeam.number
+                                if num not in prevNC.beams.getNumbers():
+                                    continue
+                                prevBeam = prevNC.beams.getByNumber(num)
+                                if prevBeam.type == 'continue':
+                                    prevBeam.type = 'stop'
+
+                    if meas is measures[-1]:
+                        # fix last note in score (in this voice)
+                        # (if its a continue it should be a stop)
+                        lastNCInScore: m21.note.NotRest = notesAndChords[-1]
+                        for lastNCInScore in lastNCInScore.beams:
+                            if lastNCInScore.type == 'continue':
+                                lastNCInScore.type = 'stop'
+                    else:
+                        # stash last voice note off to be fixed during processing of
+                        # next measure (for this voice)
+                        lastNCInPrevVoice[voiceKey] = notesAndChords[-1]
+
+        return fixme
 
     @staticmethod
     def adjustMusic21Behavior() -> None:

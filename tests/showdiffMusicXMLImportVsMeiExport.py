@@ -30,6 +30,11 @@ def runTheFullTest(inputPath: Path):
     # the correct 'minor').  Fix that before the diff is performed.
     M21Utilities.fixupBadChordKinds(score1, inPlace=True)
 
+    # Some MusicXML files have beams that go 'start'/'continue' when they should be
+    # 'start'/'stop'. fixupBadBeams notices that the next beam is a 'start', or is
+    # not present at all, and therefore patches that 'continue' to be a 'stop'.
+    M21Utilities.fixupBadBeams(score1, inPlace=True)
+
     meiw: MeiWriter = MeiWriter(score1)
     meiw.makeNotation = False
 
