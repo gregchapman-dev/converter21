@@ -3002,11 +3002,16 @@ class M21Utilities:
                                         prevBeam.type = 'stop'
                                 else:
                                     # matching beam in thisNC; if it starts, prevBeam
-                                    # must stop, not continue.
+                                    # must stop, not continue.  If it stops, prevBeam
+                                    # must continue, not stop (two stops in a row
+                                    # is silly.)
                                     thisBeam = thisNC.beams.getByNumber(num)
                                     if thisBeam.type == 'start':
                                         if prevBeam.type == 'continue':
                                             prevBeam.type = 'stop'
+                                    elif thisBeam.type == 'stop':
+                                        if prevBeam.type == 'stop':
+                                            prevBeam.type = 'continue'
 
                     if meas is measures[-1]:
                         # fix last note in score (in this voice)
