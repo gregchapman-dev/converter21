@@ -2937,7 +2937,8 @@ class M21Utilities:
         if not inPlace:
             fixme = deepcopy(score)
 
-        for part in fixme[m21.stream.Part]:
+        parts: list[m21.stream.Part] = list(fixme[m21.stream.Part])
+        for part in parts:
             # key is previous voice.id (or 'measure' if it's the measure)
             lastNCInPrevVoice: dict[int | str, m21.note.NotRest] = {}
             measures: list[m21.stream.Measure] = list(part[m21.stream.Measure])
@@ -3009,7 +3010,10 @@ class M21Utilities:
                                     if thisBeam.type == 'start':
                                         if prevBeam.type == 'continue':
                                             prevBeam.type = 'stop'
-                                    elif thisBeam.type == 'stop':
+                                    elif thisBeam.type == 'stop' and len(parts) == 1:
+                                        # WE CAN ONLY DO THIS IF THERE IS ONLY ONE PART.
+                                        # In cross-staff beaming, this code gets very
+                                        # confused and makes things worse.
                                         if prevBeam.type == 'stop':
                                             prevBeam.type = 'continue'
 
