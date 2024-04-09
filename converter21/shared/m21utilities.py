@@ -2929,9 +2929,14 @@ class M21Utilities:
     def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
         # must be a score; we will look for parts/measures/etc
 
-        # Currently just looks for continues that should be stops (given the Note
+        # 1. Looks for continues that should be stops (given the Note
         # immediately following).  These are often seen in MusicXML, and while Finale
         # handles them, Musescore and converter21's converters (and musicdiff) do not.
+        # 2. Looks (in 1-part scores only) for multiple stops in a row.  These are
+        # fixed by converting all but the last to a continue.  1-part scores only
+        # because cross-part beams can do this legitimately.  To detect that properly
+        # is possible, but would require looking at all voices in a measure stack
+        # simultaneously.
 
         fixme: m21.stream.Score = score
         if not inPlace:
