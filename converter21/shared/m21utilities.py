@@ -2929,8 +2929,8 @@ class M21Utilities:
     def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
         # must be a score; we will look for parts/measures/etc
 
-        # Currently just looks for continues that should be stops (given what follows within
-        # the current Measure/Voice).  These are often seen in MusicXML, and while Finale
+        # Currently just looks for continues that should be stops (given the Note
+        # immediately following).  These are often seen in MusicXML, and while Finale
         # handles them, Musescore and converter21's converters (and musicdiff) do not.
 
         fixme: m21.stream.Score = score
@@ -2959,11 +2959,16 @@ class M21Utilities:
 
                     notesAndChords: list[m21.note.NotRest] = list(voice[m21.note.NotRest])
 
-                    # remove any ChordSymbols (they are Chords that don't count)
-                    removeList: list[m21.harmony.ChordSymbol] = []
+                    # Remove any ChordSymbols (they are Chords that don't count)
+                    # and any grace notes (they don't participate in the non-grace-note
+                    # beaming).
+                    removeList: list[m21.note.NotRest] = []
                     for nc in notesAndChords:
                         if isinstance(nc, m21.harmony.ChordSymbol):
                             removeList.append(nc)
+                        elif nc.duration.isGrace:
+                            removeList.append(nc)
+
                     for cs in removeList:
                         notesAndChords.remove(cs)
 
