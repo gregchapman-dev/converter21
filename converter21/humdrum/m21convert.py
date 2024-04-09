@@ -400,6 +400,12 @@ class M21Convert:
             if m21.harmony.CHORD_ALIASES[alias] == kind:
                 kind = alias
 
+        if kind not in m21.harmony.CHORD_TYPES:
+            for k in m21.harmony.CHORD_TYPES:
+                if kind in m21.harmony.getAbbreviationListGivenChordType(k):
+                    kind = k
+                    break
+
         bass: str = ''
         csBass: m21.pitch.Pitch | None = cs.bass()
         if csBass is not None and csBass.name != root:

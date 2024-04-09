@@ -1675,14 +1675,16 @@ class M21ObjectConvert:
         if True:  # hasattr(cs, 'mei_reg_harte'):
             harteRegPrefix: str = 'harte-no-commas:'
             harte: str = M21Utilities.makeHarteRegFromChordSymbol(cs)
-            attr['type'] = harteRegPrefix + re.sub(',', '.', harte)
+            if harte:
+                attr['type'] = harteRegPrefix + re.sub(',', '.', harte)
         else:
             m21RegPrefix: str = 'music21-no-spaces:'
             m21Reg: str = M21Utilities.makeM21RegFromChordSymbol(cs)
-            m21Reg = re.sub(' add ', 'add', m21Reg)
-            m21Reg = re.sub(' subtract ', 'subtract', m21Reg)
-            m21Reg = re.sub(' alter ', 'alter', m21Reg)
-            attr['type'] = m21RegPrefix + m21Reg
+            if m21Reg:
+                m21Reg = re.sub(' add ', 'add', m21Reg)
+                m21Reg = re.sub(' subtract ', 'subtract', m21Reg)
+                m21Reg = re.sub(' alter ', 'alter', m21Reg)
+                attr['type'] = m21RegPrefix + m21Reg
 
         tb.start(tag, attr)
         M21ObjectConvert._convertChordSymbolToMixedText(cs, tb)

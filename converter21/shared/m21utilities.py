@@ -2681,23 +2681,36 @@ class M21Utilities:
             # How about shorthand='maj', degrees='(*3,*5)'?
             return harteRoot + ':maj(*3,*5)'
 
+        kind: str
         if M21Utilities.chordSymbolHasAlters(cs):
             # we can't use shorthand, just a list of degrees (which we will alter)
-            if cs.chordKind in M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES:
+            kind = cs.chordKind
+            if kind not in M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES:
+                # see if it is among the abbreviations for a CHORD_KIND
+                for k in m21.harmony.CHORD_TYPES:
+                    if kind in m21.harmony.getAbbreviationListGivenChordType(k):
+                        kind = k
+                        break
+            if kind in M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES:
                 degrees = (
-                    M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES[cs.chordKind]
+                    M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES[kind]
                 )
             else:
                 raise Converter21InternalError(f'bad cs.chordKind: "{cs.chordKind}"')
-                # degrees = pitchesToHarteDegrees(cs.pitches, root, bass)
         else:
-            if cs.chordKind in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
+            kind = cs.chordKind
+            if kind not in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
+                # see if it is among the abbreviations for a CHORD_KIND
+                for k in m21.harmony.CHORD_TYPES:
+                    if kind in m21.harmony.getAbbreviationListGivenChordType(k):
+                        kind = k
+                        break
+            if kind in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
                 shorthand, degrees = (
-                    M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[cs.chordKind]
+                    M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[kind]
                 )
             else:
                 raise Converter21InternalError(f'bad cs.chordKind: "{cs.chordKind}"')
-                # degrees = pitchesToHarteDegrees(cs.pitches, root, bass)
 
         # Now figure out ChordSymbol alters/adds/subtracts
         if cs.chordStepModifications:
