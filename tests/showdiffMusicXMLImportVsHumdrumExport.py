@@ -15,6 +15,8 @@ from musicdiff import DetailLevel
 # The things we're testing
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
+
+from converter21.shared import M21Utilities
 import converter21
 
 def runTheFullTest(inputPath: Path):
@@ -25,6 +27,10 @@ def runTheFullTest(inputPath: Path):
 
     assert score1 is not None
     assert score1.isWellFormedNotation()
+
+    # Some MusicXML files have abbreviations instead of chordKinds (e.g. 'min' instead of
+    # the correct 'minor').  Fix that before the diff is performed.
+    M21Utilities.fixupBadChordKinds(score1, inPlace=True)
 
     humdrumw: HumdrumWriter = HumdrumWriter(score1)
     humdrumw.makeNotation = False

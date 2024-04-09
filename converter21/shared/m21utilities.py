@@ -2681,33 +2681,18 @@ class M21Utilities:
             # How about shorthand='maj', degrees='(*3,*5)'?
             return harteRoot + ':maj(*3,*5)'
 
-        kind: str
         if M21Utilities.chordSymbolHasAlters(cs):
             # we can't use shorthand, just a list of degrees (which we will alter)
-            kind = cs.chordKind
-            if kind not in M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES:
-                # see if it is among the abbreviations for a CHORD_KIND
-                for k in m21.harmony.CHORD_TYPES:
-                    if kind in m21.harmony.getAbbreviationListGivenChordType(k):
-                        kind = k
-                        break
-            if kind in M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES:
+            if cs.chordKind in M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES:
                 degrees = (
-                    M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES[kind]
+                    M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES[cs.chordKind]
                 )
             else:
                 raise Converter21InternalError(f'bad cs.chordKind: "{cs.chordKind}"')
         else:
-            kind = cs.chordKind
-            if kind not in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
-                # see if it is among the abbreviations for a CHORD_KIND
-                for k in m21.harmony.CHORD_TYPES:
-                    if kind in m21.harmony.getAbbreviationListGivenChordType(k):
-                        kind = k
-                        break
-            if kind in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
+            if cs.chordKind in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
                 shorthand, degrees = (
-                    M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[kind]
+                    M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[cs.chordKind]
                 )
             else:
                 raise Converter21InternalError(f'bad cs.chordKind: "{cs.chordKind}"')
@@ -2923,6 +2908,22 @@ class M21Utilities:
                 cs.addChordStepModification(csMod, updatePitches=True)
 
         return cs
+
+    @staticmethod
+    def fixupBadChordKinds(s: m21.stream.Stream, inPlace=False) -> m21.stream.Stream:
+        fixme: m21.stream.Stream = s
+        if not inPlace:
+            fixme = deepcopy(s)
+
+        for cs in fixme[m21.harmony.ChordSymbol]:
+            if cs.chordKind not in m21.harmony.CHORD_TYPES:
+                for k in m21.harmony.CHORD_TYPES:
+                    if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
+                        cs.chordKind = k
+                        break
+
+        return fixme
+
 
     @staticmethod
     def adjustMusic21Behavior() -> None:

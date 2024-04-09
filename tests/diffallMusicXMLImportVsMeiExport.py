@@ -14,6 +14,8 @@ from musicdiff import DetailLevel
 import converter21
 from converter21.mei import MeiWriter
 
+from converter21.shared import M21Utilities
+
 def getM21ObjectById(theID: int, score: m21.stream.Score) -> m21.base.Music21Object:
     obj = score.recurse().getElementById(theID)
     return obj
@@ -237,6 +239,10 @@ def runTheDiff(inputPath: Path, results) -> bool:
         print('score1 not well formed', file=results)
         results.flush()
         return False
+
+    # Some MusicXML files have abbreviations instead of chordKinds (e.g. 'min' instead of
+    # the correct 'minor').  Fix that before the diff is performed.
+    M21Utilities.fixupBadChordKinds(score1, inPlace=True)
 
     # export score back to MEI (without any makeNotation fixups)
 
