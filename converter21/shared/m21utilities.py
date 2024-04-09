@@ -3003,14 +3003,18 @@ class M21Utilities:
                     if meas is measures[-1]:
                         # fix last note in score (in this voice)
                         # (if its a continue it should be a stop)
-                        lastNCInScore: m21.note.NotRest = notesAndChords[-1]
-                        for beam in lastNCInScore.beams:
-                            if beam.type == 'continue':
-                                beam.type = 'stop'
+                        if notesAndChords:
+                            lastNCInScore: m21.note.NotRest = notesAndChords[-1]
+                            for beam in lastNCInScore.beams:
+                                if beam.type == 'continue':
+                                    beam.type = 'stop'
                     else:
                         # stash last voice note off to be fixed during processing of
                         # next measure (for this voice)
-                        lastNCInPrevVoice[voiceKey] = notesAndChords[-1]
+                        if notesAndChords:
+                            lastNCInPrevVoice[voiceKey] = notesAndChords[-1]
+                        else:
+                            lastNCInPrevVoice.pop(voiceKey, None)
 
         return fixme
 
