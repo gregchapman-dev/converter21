@@ -2852,34 +2852,39 @@ class M21Utilities:
                 degreeList.extend(impliedDegList)
 
         # there's always the implied degree '1'
-        degreeList.insert(0, '1')
+        if '1' not in degreeList:
+            degreeList.insert(0, '1')
 
         # sort the list (by degree)
         degreeList = sorted(degreeList, key=M21Utilities._degreeInt)
         leftoverDegrees: list[str] = []
 
         m21ChordKind: str = ''
-        while len(degreeList) > 1:
-            # don't run this loop when all that is left in degreeList is ['1'].
-            m21Degrees: str = ','.join(degreeList)
-            m21Degrees = re.sub('b', '-', m21Degrees)
-            # look up ChordSymbol.kind that has m21Degrees
-            for kind in m21.harmony.CHORD_TYPES:
-                if m21Degrees == m21.harmony.getNotationStringGivenChordType(kind):
-                    m21ChordKind = kind
-                    break
 
-            if m21ChordKind:
-                break
+        # we need to find the CHORD_TYPE that has the most common notes (and no extra notes)
+        mostCommonNotes: int = 0
+        for kind in m21.harmony.CHORD_TYPES:
+            kindDegrees: str = m21.harmony.getNotationStringGivenChordType(kind)
+            kindDegrees = re.sub('-', 'b', kindDegrees)
+            kindDegreeList: list[str] = kindDegrees.split(',')
 
-            # Truncate the list (putting the removed degree in leftoverDegrees,
-            # keeping it sorted by inserting at the beginning) and try again.
-            leftoverDegrees.insert(0, degreeList[-1])
-            degreeList = degreeList[0:-1]
+            degreeSet: set[str] = set(degreeList)
+            kindDegreeSet: set[str] = set(kindDegreeList)
+
+            # kindDegreeList must be <= degreeList (no extra notes)
+            if kindDegreeSet > degreeSet:
+                continue
+
+            # We're looking for biggest intersection
+            inter: set[str] = kindDegreeSet & degreeSet
+            if len(inter) > mostCommonNotes:
+                m21ChordKind = kind
+                mostCommonNotes = len(inter)
+                leftoverDegrees = list(degreeSet - kindDegreeSet)
+
 
         if not m21ChordKind:
-            # Here we give up and use 'pedal' (root only).
-            m21ChordKind = 'pedal'
+            raise Converter21InternalError('Could not find matching kind; not even pedal!')
 
         cs: m21.harmony.ChordSymbol | None = None
         try:
@@ -2890,7 +2895,8 @@ class M21Utilities:
             cs = None
 
         if cs is not None and leftoverDegrees:
-            # add the extra degrees not implied by m21ChordKind
+            # add the extra degrees not implied by m21ChordKind (in order, lowest first)
+            leftoverDegrees = sorted(leftoverDegrees, key=M21Utilities._degreeInt)
             for deg in leftoverDegrees:
                 degInt: int = M21Utilities._degreeInt(deg)
                 if degInt == 1:
