@@ -2857,7 +2857,7 @@ class M21Utilities:
 
         # sort the list (by degree)
         degreeList = sorted(degreeList, key=M21Utilities._degreeInt)
-        leftoverDegrees: list[str] = []
+        leftoverDegrees: set[str] = set()
 
         m21ChordKind: str = ''
 
@@ -2871,8 +2871,8 @@ class M21Utilities:
             degreeSet: set[str] = set(degreeList)
             kindDegreeSet: set[str] = set(kindDegreeList)
 
-            # kindDegreeList must be <= degreeList (no extra notes)
-            if kindDegreeSet > degreeSet:
+            # kindDegreeList must have no extra notes (beyond those in degreeSet)
+            if kindDegreeSet - degreeSet != set():
                 continue
 
             # We're looking for biggest intersection
@@ -2880,8 +2880,14 @@ class M21Utilities:
             if len(inter) > mostCommonNotes:
                 m21ChordKind = kind
                 mostCommonNotes = len(inter)
-                leftoverDegrees = list(degreeSet - kindDegreeSet)
-
+                leftoverDegrees = degreeSet - kindDegreeSet
+            elif len(inter) == mostCommonNotes:
+                # break the tie with len(leftoverDegrees)
+                newLeftovers: set[str] = degreeSet - kindDegreeSet
+                if len(newLeftovers) < len(leftoverDegrees):
+                    m21ChordKind = kind
+                    mostCommonNotes = len(inter)
+                    leftoverDegrees = newLeftovers
 
         if not m21ChordKind:
             raise Converter21InternalError('Could not find matching kind; not even pedal!')
@@ -2896,8 +2902,8 @@ class M21Utilities:
 
         if cs is not None and leftoverDegrees:
             # add the extra degrees not implied by m21ChordKind (in order, lowest first)
-            leftoverDegrees = sorted(leftoverDegrees, key=M21Utilities._degreeInt)
-            for deg in leftoverDegrees:
+            leftoverDegreesList = sorted(list(leftoverDegrees), key=M21Utilities._degreeInt)
+            for deg in leftoverDegreesList:
                 degInt: int = M21Utilities._degreeInt(deg)
                 if degInt == 1:
                     # we don't need to add it because it's the root
