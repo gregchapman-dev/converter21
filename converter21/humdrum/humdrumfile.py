@@ -494,6 +494,7 @@ class HumdrumFile(HumdrumFileContent):
 
         # top-level info
         self._hasHarmonySpine: bool = False
+        self._chosenHarmonyDataType: str = ''
         self._hasFingeringSpine: bool = False
         self._hasKernSpine: bool = False
         self._hasStringSpine: bool = False
@@ -1703,8 +1704,10 @@ class HumdrumFile(HumdrumFileContent):
                     continue
 
                 dataType: str = str(token.dataType)
-                isHarm: bool = dataType == '**mxhm'
-                if not isHarm:
+                if not dataType:
+                    continue
+
+                if self._chosenHarmonyDataType != dataType:
                     continue
 
                 if token.getValueBool('auto', 'hidden'):
@@ -11823,6 +11826,13 @@ class HumdrumFile(HumdrumFileContent):
                 staffIndex += 1
             elif startTok.isDataType('**mxhm'):
                 self._hasHarmonySpine = True
+                # we'll take **mxhm if there isn't anything else
+                if not self._chosenHarmonyDataType:
+                    self._chosenHarmonyDataType = '**mxhm'
+            elif startTok.isDataType('**harte'):
+                self._hasHarmonySpine = True
+                # Harte is our favorite, if there's more than one
+                self._chosenHarmonyDataType = '**harte'
             elif startTok.isDataType('**fing'):
                 self._hasFingeringSpine = True
             elif startTok.isDataType('**string'):
@@ -11839,8 +11849,8 @@ class HumdrumFile(HumdrumFileContent):
 #                 self._hasHarmonySpine = True
             elif startTok.isDataType('**color'):
                 self._hasColorSpine = True
-            elif startTok.isDataType('**fb') \
-                    or startTok.isDataType('**Bnum'):  # older name
+            elif (startTok.isDataType('**fb')
+                    or startTok.isDataType('**Bnum')):  # older name
                 self._hasFiguredBassSpine = True
                 if staffIndex >= 0:
                     self._staffStates[staffIndex].figuredBassState = -1

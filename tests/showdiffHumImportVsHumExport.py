@@ -13,6 +13,7 @@ from musicdiff import DetailLevel
 # The things we're testing
 from converter21.humdrum import HumdrumFile
 from converter21.humdrum import HumdrumWriter
+import converter21
 
 def runTheFullTest(krnPath: Path):
     print(f'krn file: {krnPath}')

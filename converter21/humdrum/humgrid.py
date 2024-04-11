@@ -2237,7 +2237,7 @@ class HumGrid:
             if self.hasFiguredBass(p):
                 line.appendToken(HumdrumToken('**fb'))
             if self.hasHarmony(p):
-                line.appendToken(HumdrumToken('**mxhm'))
+                line.appendToken(HumdrumToken('**harte'))
         else:
             # staff side info
             for _ in range(0, self.xmlIdCount(p)):

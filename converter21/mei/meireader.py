@@ -7534,7 +7534,7 @@ class MeiReader:
                 if regType == 'music21':
                     cs = M21Utilities.makeChordSymbolFromM21Reg(reg)
                 else:  # 'harte'
-                    cs = M21Utilities.makeChordSymbolFromHarteReg(reg)
+                    cs = M21Utilities.makeChordSymbolFromHarte(reg)
             except Exception:
                 pass
 

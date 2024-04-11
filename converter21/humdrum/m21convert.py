@@ -273,14 +273,18 @@ class M21Convert:
         tokenStr: str,
         dataType: str = '**mxhm'
     ) -> m21.harmony.ChordSymbol | None:
-        def replace(text: str, old: str, new: str) -> tuple[str, bool]:
-            # returns new text and whether or not any change was made
-            newText: str = re.sub(old, new, text)
-            return newText, newText != text
-
-        if dataType != '**mxhm':
+        if dataType not in ('**mxhm', '**harte'):
             print('Harmony type "{dataType}" not supported, skipping.', file=sys.stderr)
             return None
+
+        if dataType == '**harte':
+            return M21Utilities.makeChordSymbolFromHarte(tokenStr)
+
+        # ----- **mxhm -----
+        def replace(text: str, oldPatt: str, new: str) -> tuple[str, bool]:
+            # returns new text and whether or not any change was made
+            newText: str = re.sub(oldPatt, new, text)
+            return newText, newText != text
 
         if tokenStr == 'none':
             return m21.harmony.NoChord()
@@ -386,8 +390,11 @@ class M21Convert:
         cs: m21.harmony.ChordSymbol,
         dataType: str = '**mxhm'
     ) -> str:
-        if dataType != '**mxhm':
+        if dataType not in ('**mxhm', '**harte'):
             raise HumdrumInternalError('Harmony type "{dataType}" not supported')
+
+        if dataType == '**harte':
+            return M21Utilities.makeHarteFromChordSymbol(cs)
 
         root: str = ''
         csRoot: m21.pitch.Pitch | None = cs.root()

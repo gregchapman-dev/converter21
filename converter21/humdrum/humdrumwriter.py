@@ -2752,7 +2752,7 @@ class HumdrumWriter:
         harmonies: list[tuple[int, m21.harmony.ChordSymbol, HumNum, HumdrumToken]] = []
         # The following dictionaries are keyed by partIndex (no staffIndex here)
         for partIndex, harmony in extraHarmonies:
-            hstring = M21Convert.m21ChordSymToHarmonyText(harmony)
+            hstring = M21Convert.m21ChordSymToHarmonyText(harmony, dataType='**harte')
             harmonies.append((
                 partIndex,
                 harmony,

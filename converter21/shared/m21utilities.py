@@ -2454,21 +2454,21 @@ class M21Utilities:
         'half-diminished-13th': ('hdim7', '9,11,13'),
 
         # other
-        'suspended-second': ('maj', '2,*3'),
+        'suspended-second': ('', '1,2,5'),
         'suspended-fourth': ('sus4', ''),
         'suspended-fourth-seventh': ('sus4', 'b7'),
-        'Neapolitan': ('', 'b2,3,b5'),
-        'neapolitan': ('', 'b2,3,b5'),
-        'Italian': ('', '#4,b6'),
-        'italian': ('', '#4,b6'),
-        'French': ('', '2,#4,b6'),
-        'french': ('', '2,#4,b6'),
-        'German': ('', 'b3,#4,b6'),
-        'german': ('', 'b3,#4,b6'),
-        'pedal': ('maj', '*3,*5'),
-        'power': ('maj', '*3'),
-        'Tristan': ('', '#4,#6,#9'),
-        'tristan': ('', '#4,#6,#9'),
+        'Neapolitan': ('', '1,b2,3,b5'),
+        'neapolitan': ('', '1,b2,3,b5'),
+        'Italian': ('', '1,#4,b6'),
+        'italian': ('', '1,#4,b6'),
+        'French': ('', '1,2,#4,b6'),
+        'french': ('', '1,2,#4,b6'),
+        'German': ('', '1,b3,#4,b6'),
+        'german': ('', '1,b3,#4,b6'),
+        'pedal': ('', '1'),
+        'power': ('', '1,5'),
+        'Tristan': ('', '1,#4,#6,#9'),
+        'tristan': ('', '1,#4,#6,#9'),
     }
 
     M21_CHORD_KIND_TO_HARTE_DEGREES: dict[str, str] = {
@@ -2528,18 +2528,18 @@ class M21Utilities:
         'suspended-second': '1,2,5',
         'suspended-fourth': '1,4,5',
         'suspended-fourth-seventh': '1,4,5,b7',
-        'Neapolitan': 'b2,3,b5',
-        'neapolitan': 'b2,3,b5',
-        'Italian': '#4,b6',
-        'italian': '#4,b6',
-        'French': '2,#4,b6',
-        'french': '2,#4,b6',
-        'German': 'b3,#4,b6',
-        'german': 'b3,#4,b6',
-        'pedal': '',
-        'power': '5',
-        'Tristan': '#4,#6,#9',
-        'tristan': '#4,#6,#9',
+        'Neapolitan': '1,b2,3,b5',
+        'neapolitan': '1,b2,3,b5',
+        'Italian': '1,#4,b6',
+        'italian': '1,#4,b6',
+        'French': '1,2,#4,b6',
+        'french': '1,2,#4,b6',
+        'German': '1,b3,#4,b6',
+        'german': '1,b3,#4,b6',
+        'pedal': '1',
+        'power': '1,5',
+        'Tristan': '1,#4,#6,#9',
+        'tristan': '1,#4,#6,#9',
     }
 
     HARTE_SHORTHAND_TO_DEGREE_TUPLE: dict[str, tuple[str, ...]] = {
@@ -2569,7 +2569,7 @@ class M21Utilities:
         return int(m.group(1))
 
     @staticmethod
-    def makeHarteRegFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
+    def makeHarteFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
         def hartifyRoot(root: m21.pitch.Pitch) -> str:
             return re.sub('-', 'b', root.name)
 
@@ -2655,7 +2655,7 @@ class M21Utilities:
             newDegreeList = sorted(newDegreeList, key=M21Utilities._degreeInt)
             return ','.join(newDegreeList)
 
-        # --------- start of makeHarteRegFromChordSymbol ---------
+        # --------- start of makeHarteFromChordSymbol ---------
         if isinstance(cs, m21.harmony.NoChord):
             return 'N'
 
@@ -2675,11 +2675,6 @@ class M21Utilities:
             harteBass = hartifyBass(bass, root)
         shorthand: str = ''
         degrees: str = ''
-
-        if cs.chordKind == 'pedal':
-            # That's just one note, Harte cannot describe it directly.
-            # How about shorthand='maj', degrees='(*3,*5)'?
-            return harteRoot + ':maj(*3,*5)'
 
         if M21Utilities.chordSymbolHasAlters(cs):
             # we can't use shorthand, just a list of degrees (which we will alter)
@@ -2735,7 +2730,7 @@ class M21Utilities:
         return harte
 
     @staticmethod
-    def makeChordSymbolFromHarteReg(harte: str) -> m21.harmony.ChordSymbol | None:
+    def makeChordSymbolFromHarte(harte: str) -> m21.harmony.ChordSymbol | None:
         def parseHarte(harte: str) -> tuple[str, str, str, str]:
             # returns root, shorthand, degrees (without parens), bass
             if harte == 'N':
@@ -2811,7 +2806,7 @@ class M21Utilities:
 
             return bassPitch
 
-        # ---------- makeChordSymbolFromHarteReg starts here ----------
+        # ---------- makeChordSymbolFromHarte starts here ----------
 
         root: str = ''
         shorthand: str = ''
