@@ -1724,6 +1724,14 @@ class HumdrumFile(HumdrumFileContent):
                 if chordSym is None:
                     continue
 
+                kindStr: str = ''
+                fullText: str = self._getLayoutParameterWithDefaults(token, 'H', 't', '', '')
+                if fullText:
+                    chordSym.c21_full_text = fullText  # type: ignore
+                else:
+                    kindStr = self._getLayoutParameterWithDefaults(token, 'H', 'kt', '', '')
+                    chordSym.chordKindStr = kindStr
+
                 staffIndex: int = self._staffStartsIndexByTrack[track]
                 csOffset: OffsetQL = token.durationFromBarline
                 currentMeasurePerStaff: list[m21.stream.Measure] = (

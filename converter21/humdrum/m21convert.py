@@ -2137,6 +2137,43 @@ class M21Convert:
         return output
 
     @staticmethod
+    def getHarmonyParameters(cs: m21.harmony.ChordSymbol, staffIndex: int) -> str:
+        output: str = ''
+        #   textStyle: m21.style.TextStyle | None = None
+        #   if dynamic.hasStyleInformation:
+        #       assert isinstance(dynamic.style, m21.style.TextStyle)
+        #       textStyle = dynamic.style
+        #
+        #   staffStr: str = ''
+        #   if staffIndex > 0:
+        #       staffStr = '=' + str(staffIndex + 1)
+        #
+        #   if cs.placement == 'above':
+        #       output += ':a' + staffStr
+        #
+        #   if dynamic.placement == 'below':
+        #       if textStyle is not None and textStyle.alignVertical == 'middle':
+        #           if staffIndex == 0:
+        #               # already in top staff, humdrum default is centered below, so leave it out
+        #               pass
+        #           else:
+        #               output += ':c' + staffStr
+        #           else:
+        #               output += ':b' + staffStr
+        #
+        #       if textStyle is not None:
+        #           if textStyle.justify == 'right':
+        #               output += ':rj'
+        #           elif textStyle.justify == 'center':
+        #               output += ':cj'
+        if hasattr(cs, 'c21_full_text'):
+            output += f':t={cs.c21_full_text}'  # type: ignore
+        if cs.chordKindStr:
+            output += f':kt={cs.chordKindStr}'
+
+        return output
+
+    @staticmethod
     def getDynamicOnNoteParameters(dynamic: m21.dynamics.Dynamic) -> str:
         output: str = ''
         dynString: str = M21Convert.getDynamicString(dynamic)

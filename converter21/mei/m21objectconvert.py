@@ -1695,20 +1695,22 @@ class M21ObjectConvert:
         text: str = ''
         if isinstance(cs, m21.harmony.NoChord):
             text = cs.chordKindStr
+        elif hasattr(cs, 'c21_full_text'):
+            text = cs.c21_full_text  # type: ignore
         else:
             root: m21.pitch.Pitch = cs.root()
             rootStr: str = '' if root is None else root.name
             bass: m21.pitch.Pitch = cs.bass()
             bassStr: str = '' if bass is None or bass is root else bass.name
 
-            if cs.chordKindStr:
-                text = rootStr + cs.chordKindStr
-                if bassStr:
-                    text += '/' + bassStr
-            else:
-                # fall back to a printable version of music21's favorite
-                # standard abbreviation for this chord symbol
-                pass  # text = M21Utilities.convertChordSymbolFigureToPrintableText(cs.figure)
+            if rootStr:
+                rootStr = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(rootStr)
+            if bassStr:
+                bassStr = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(bassStr)
+
+            text = rootStr + cs.chordKindStr
+            if bassStr:
+                text += '/' + bassStr
 
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
 
@@ -1716,6 +1718,23 @@ class M21ObjectConvert:
             tb.data(text)
 
         # Here is where we would end the 'rend' tag, if we had started it.
+
+    @staticmethod
+    def _m21PitchNameToSMUFLAccidentals(text: str) -> str:
+        output: str = text
+        if '#' in output:
+            output = re.sub(
+                '#',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign'],
+                output
+            )
+        if '-' in output:
+            output = re.sub(
+                '-',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign'],
+                output
+            )
+        return output
 
     @staticmethod
     def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):

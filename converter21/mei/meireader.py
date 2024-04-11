@@ -7566,6 +7566,7 @@ class MeiReader:
                 return '', (-1., None, None), None
 
         cs.chordKindStr = chordKindStr
+        cs.c21_full_text = text  # type: ignore
 
         return staffNStr, (offset, None, None), cs
 

@@ -2784,10 +2784,10 @@ class HumdrumWriter:
 
             # Add any necessary layout params for the harmony we emitted (Humdrum doesn't
             # actually have !LO:H at the moment; I will propose it to Craig).
-            # hparam: str | None = M21Convert.getHarmonyParameters(harmony, staffIndex)
-            # if hparam:
-            #   fullParam: str = '!LO:H' + hparam
-            #   outgm.addHarmonyLayoutParameters(outSlice, partIndex, fullParam)
+            hparam: str = M21Convert.getHarmonyParameters(harmony, staffIndex)
+            if hparam:
+                fullParam: str = '!LO:H' + hparam
+                outgm.addHarmonyLayoutParameters(outSlice, partIndex, fullParam)
 
     '''
     //////////////////////////////
