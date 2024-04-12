@@ -2780,6 +2780,11 @@ class HumdrumWriter:
                 # we have no way of putting a dynamic at the very end of a measure.
                 raise HumdrumExportError('Cannot support dynamic at very end of measure')
 
+            if outSlice.parts[partIndex].harmony:
+                # Can't export two simultaneous chords
+                print(f'Dropping simultaneous ChordSymbol: "{token.text}"')
+                continue
+
             outSlice.parts[partIndex].harmony = token
 
             # Add any necessary layout params for the harmony we emitted (Humdrum doesn't
