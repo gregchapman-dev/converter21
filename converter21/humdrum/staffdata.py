@@ -62,7 +62,7 @@ class StaffData:
         if partStaff and partStaff.atSoundingPitch is False:  # might be 'unknown' or True
             for inst in partStaff.getElementsByClass(m21.instrument.Instrument):
                 if M21Utilities.isTransposingInstrument(inst):
-                    partStaff.toSoundingPitch(inPlace=True)
+                    partStaff.toSoundingPitch(inPlace=True, preserveAccidentalDisplay=True)
                     break  # you only need to transpose the part once
 
     @property
