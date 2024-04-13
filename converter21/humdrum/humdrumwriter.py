@@ -2730,7 +2730,6 @@ class HumdrumWriter:
             else:
                 existingDynamicsToken.text += ' ' + token.text
                 moreThanOneDynamic[partIndex] = True
-                currentDynamicIndex[partIndex] = 1  # ':n=' is 1-based
 
             # add any necessary layout params for the dynamics we emitted
             dparam: str | None = M21Convert.getDynamicParameters(dynamic, staffIndex)
@@ -2750,7 +2749,7 @@ class HumdrumWriter:
         extraHarmonies: list[tuple[int, m21.harmony.ChordSymbol]]
     ) -> None:
         harmonies: list[tuple[int, m21.harmony.ChordSymbol, HumNum, HumdrumToken]] = []
-        # The following dictionaries are keyed by partIndex (no staffIndex here)
+
         for partIndex, harmony in extraHarmonies:
             hstring = M21Convert.m21ChordSymToHarmonyText(harmony, dataType='**harte')
             harmonies.append((
@@ -2763,6 +2762,24 @@ class HumdrumWriter:
         if not harmonies:
             # we shouldn't have been called
             return
+
+        # The following dictionaries are keyed by partIndex (no staffIndex here)
+        moreThanOneHarmony: dict[tuple[int, OffsetQL], bool] = {}
+        currentHarmonyIndex: dict[tuple[int, OffsetQL], int] = {}
+
+        # pre-loop over harmonies, to see if any partIndex has more than one harmony
+        numHarmoniesPerPartOffset: dict[tuple[int, OffsetQL], int] = {}
+        for partIndex, harmony, offsetInScore, token in harmonies:
+            if (partIndex, offsetInScore) not in numHarmoniesPerPartOffset:
+                numHarmoniesPerPartOffset[(partIndex, offsetInScore)] = 1
+            else:
+                numHarmoniesPerPartOffset[(partIndex, offsetInScore)] += 1
+
+        for partIndex, offset in numHarmoniesPerPartOffset:
+            moreThanOneHarmony[(partIndex, offset)] = (
+                numHarmoniesPerPartOffset[(partIndex, offset)] > 1
+            )
+            currentHarmonyIndex[(partIndex, offset)] = 1
 
         # harmonies element is (partIndex, harmony, offset, token)
         staffIndex: int = 0
@@ -2777,21 +2794,28 @@ class HumdrumWriter:
             )
 
             if outSlice is None:
-                # we have no way of putting a dynamic at the very end of a measure.
-                raise HumdrumExportError('Cannot support dynamic at very end of measure')
+                # we have no way of putting harmony at the very end of a measure.
+                raise HumdrumExportError('Cannot support harmony at very end of measure')
 
-            if outSlice.parts[partIndex].harmony:
-                # Can't export two simultaneous chords
-                print(f'Dropping simultaneous ChordSymbol: "{token.text}"')
-                continue
+            existingHarmonyToken: HumdrumToken | None = (
+                outSlice.parts[partIndex].harmony
+            )
+            if existingHarmonyToken is None:
+                outSlice.parts[partIndex].harmony = token
+            else:
+                existingHarmonyToken.text += ' ' + token.text
 
-            outSlice.parts[partIndex].harmony = token
-
-            # Add any necessary layout params for the harmony we emitted (Humdrum doesn't
-            # actually have !LO:H at the moment; I will propose it to Craig).
+            # Add any necessary layout params for the harmony we emitted (humlib
+            # and verovio don't actually support !LO:H at the moment; I will
+            # propose it to Craig).
             hparam: str = M21Convert.getHarmonyParameters(harmony, staffIndex)
             if hparam:
-                fullParam: str = '!LO:H' + hparam
+                fullParam: str = '!LO:H'
+                if moreThanOneHarmony[(partIndex, offsetInScore)]:
+                    fullParam += ':n=' + str(currentHarmonyIndex[(partIndex, offsetInScore)])
+                    currentHarmonyIndex[(partIndex, offsetInScore)] += 1
+
+                fullParam += hparam
                 outgm.addHarmonyLayoutParameters(outSlice, partIndex, fullParam)
 
     '''

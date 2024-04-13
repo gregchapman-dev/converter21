@@ -1672,6 +1672,7 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::addHarmFloatsForMeasure --  Insert <harm> type data.
     //   Exclusive interpretations processed by this function:
     //     **mxhm      == pitch-class based chord labels
+    //     **harte     == Harte-style regularized chord labels
     '''
     def _addHarmFloatsForMeasure(self, measureKey: tuple[int | None, int]):
         startLineIdx, endLineIdx = measureKey
@@ -1718,27 +1719,51 @@ class HumdrumFile(HumdrumFileContent):
                     # 'yy' means hidden, too
                     continue
 
-                chordSym: m21.harmony.ChordSymbol | None = (
-                    M21Convert.getM21ChordSymFromHarmonyText(token.text, dataType)
-                )
-                if chordSym is None:
-                    continue
+                harmonyTexts: list[str] = [token.text]
+                if dataType == '**harte':
+                    # we support multiple space-delimited harmonies per token
+                    harmonyTexts = token.text.split(' ')
+                hasMultipleHarmonies: bool = len(harmonyTexts) > 1
 
-                kindStr: str = ''
-                fullText: str = self._getLayoutParameterWithDefaults(token, 'H', 't', '', '')
-                if fullText:
-                    chordSym.c21_full_text = fullText  # type: ignore
-                else:
-                    kindStr = self._getLayoutParameterWithDefaults(token, 'H', 'kt', '', '')
-                    chordSym.chordKindStr = kindStr
+                n: int | None = None
+                if hasMultipleHarmonies:
+                    n = 0  # will be incremented before first harmony (!LO:n= is 1-based)
 
-                staffIndex: int = self._staffStartsIndexByTrack[track]
-                csOffset: OffsetQL = token.durationFromBarline
-                currentMeasurePerStaff: list[m21.stream.Measure] = (
-                    self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
-                )
-                currentMeasurePerStaff[staffIndex].coreInsert(csOffset, chordSym)
-                currentMeasurePerStaff[staffIndex].coreElementsChanged()
+                for htext in harmonyTexts:
+                    chordSym: m21.harmony.ChordSymbol | None = (
+                        M21Convert.getM21ChordSymFromHarmonyText(htext, dataType)
+                    )
+                    if chordSym is None:
+                        continue
+
+                    if hasMultipleHarmonies:
+                        if t.TYPE_CHECKING:
+                            assert n is not None
+                        n += 1
+
+                    nStr: str = ''
+                    if n is not None:
+                        nStr = str(n)
+
+                    kindStr: str = ''
+                    fullText: str = self._getLayoutParameterWithDefaults(
+                        token, 'H', 't', '', '', n=nStr
+                    )
+                    if fullText:
+                        chordSym.c21_full_text = fullText  # type: ignore
+                    else:
+                        kindStr = self._getLayoutParameterWithDefaults(
+                            token, 'H', 'kt', '', '', n=nStr
+                        )
+                        chordSym.chordKindStr = kindStr
+
+                    staffIndex: int = self._staffStartsIndexByTrack[track]
+                    csOffset: OffsetQL = token.durationFromBarline
+                    currentMeasurePerStaff: list[m21.stream.Measure] = (
+                        self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
+                    )
+                    currentMeasurePerStaff[staffIndex].coreInsert(csOffset, chordSym)
+                    currentMeasurePerStaff[staffIndex].coreElementsChanged()
 
     '''
     //////////////////////////////
@@ -9777,7 +9802,8 @@ class HumdrumFile(HumdrumFileContent):
         ns2: str,
         catKey: str,
         existsButEmptyValue: str,
-        doesntExistValue: str = ''
+        doesntExistValue: str = '',
+        n: str = ''
     ) -> str:
         lcount = token.linkedParameterSetCount
         if lcount == 0:
@@ -9792,6 +9818,20 @@ class HumdrumFile(HumdrumFileContent):
             if hps.namespace2 != ns2:
                 continue
 
+            if n:
+                foundN: bool = False
+                for q in range(0, hps.count):
+                    k: str = hps.getParameterName(q)
+                    if k == 'n':
+                        v: str = hps.getParameterValue(q)
+                        if v == n:
+                            foundN = True
+                            break
+
+                if not foundN:
+                    continue
+
+            # we found n, or there's no n
             for q in range(0, hps.count):
                 key: str = hps.getParameterName(q)
                 if key == catKey:
@@ -11848,7 +11888,7 @@ class HumdrumFile(HumdrumFileContent):
             elif startTok.isDataType('**mens'):
                 staffIndex += 1
                 self._hasMensSpine = True
-            # Only mxhm-style harmony for now
+            # Only mxhm/harte-style harmony for now
 #             elif startTok.isDataType('**harm'):
 #                 self._hasHarmonySpine = True
 #             elif startTok.isDataType('**rhrm'):  # **recip + **harm
