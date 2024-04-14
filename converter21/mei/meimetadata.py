@@ -91,25 +91,26 @@ class MeiMetadataItem:
                 self.meiOtherAttribs['version'] = version
 
 class MeiMetadata:
-    def __init__(self, m21Metadata: m21.metadata.Metadata) -> None:
-        self.m21Metadata: m21.metadata.Metadata = m21Metadata
+    def __init__(self, m21Metadata: m21.metadata.Metadata | None) -> None:
+        self.m21Metadata: m21.metadata.Metadata | None = m21Metadata
         # self.contents is structured just like m21Metadata._contents v8 and later,
         # except that the key is the humdrum ref key (if there is one), or the
         # uniqueName (if there is one), or the custom key if that's all there is.
         self.contents: dict[str, list[MeiMetadataItem]] = {}
-        for m21Item in m21Metadata.all(returnPrimitives=True, returnSorted=False):
-            meiItem = MeiMetadataItem(m21Item, m21Metadata)
-            key: str = (
-                meiItem.humdrumRefKey
-                or meiItem.uniqueName
-                or meiItem.meiMetadataKey
-                or meiItem.key
-            )
-            currList: list[MeiMetadataItem] | None = self.contents.get(key, None)
-            if currList is None:
-                self.contents[key] = [meiItem]
-            else:
-                currList.append(meiItem)
+        if self.m21Metadata is not None:
+            for m21Item in m21Metadata.all(returnPrimitives=True, returnSorted=False):
+                meiItem = MeiMetadataItem(m21Item, m21Metadata)
+                key: str = (
+                    meiItem.humdrumRefKey
+                    or meiItem.uniqueName
+                    or meiItem.meiMetadataKey
+                    or meiItem.key
+                )
+                currList: list[MeiMetadataItem] | None = self.contents.get(key, None)
+                if currList is None:
+                    self.contents[key] = [meiItem]
+                else:
+                    currList.append(meiItem)
 
         # The xml:id of the main work (the work that is actually encoded).
         # This will be referenced in mdiv@decls (or maybe music@decls).
