@@ -9,7 +9,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from xml.etree.ElementTree import TreeBuilder  # , Element
+# from xml.etree.ElementTree import TreeBuilder
 import typing as t
 
 import music21 as m21
@@ -19,6 +19,7 @@ import music21 as m21
 from converter21.mei import MeiElement
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
+from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 environLocal = m21.environment.Environment('converter21.mei.meimetadata')
 
@@ -97,7 +98,7 @@ class MeiMetadata:
         # except that the key is the humdrum ref key (if there is one), or the
         # uniqueName (if there is one), or the custom key if that's all there is.
         self.contents: dict[str, list[MeiMetadataItem]] = {}
-        if self.m21Metadata is not None:
+        if m21Metadata is not None:
             for m21Item in m21Metadata.all(returnPrimitives=True, returnSorted=False):
                 meiItem = MeiMetadataItem(m21Item, m21Metadata)
                 key: str = (

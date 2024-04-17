@@ -10,7 +10,7 @@
 # ------------------------------------------------------------------------------
 import sys
 import typing as t
-from xml.etree.ElementTree import Element, TreeBuilder
+from xml.etree.ElementTree import Element  # , TreeBuilder
 
 import music21 as m21
 from music21.common import opFrac
@@ -28,6 +28,7 @@ from converter21.mei import MeiTupletSpanner
 from converter21.mei import MeiTieSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupTree
+from converter21.shared import DebugTreeBuilder as TreeBuilder  # put this back before shipping
 
 environLocal = m21.environment.Environment('converter21.mei.meiscore')
 
@@ -42,16 +43,38 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 
 class MeiScore:
     def __init__(self, m21Score: m21.stream.Score, meiVersion: str) -> None:
+        def getUniqueVoiceIds(part: m21.stream.Part) -> list[int | str]:
+            output: list[int | str] = ['']  # fake id for Measure
+            for meas in part[m21.stream.Measure]:
+                for voice in meas.voices:
+                    if voice.id not in output:
+                        output.append(voice.id)
+            return output
+
         self.m21Score: m21.stream.Score = m21Score
         self.meiVersion: str = meiVersion
 
-        self.previousBeamedNoteOrChord: m21.note.NotRest | None = None
-        self.currentBeamSpanners: list[MeiBeamSpanner] = []
         self.currentTupletSpanners: dict[m21.stream.Part, list[MeiTupletSpanner]] = {}
         self.currentTieSpanners: dict[m21.stream.Part, list[tuple[MeiTieSpanner, int]]] = {}
+
+        # we assume beams do not cross voice ids within the part. (This will still be true
+        # when we eventually support cross-part beaming... the voice id will still match.)
+        self.previousBeamedNoteOrChord: dict[
+            tuple[m21.stream.Part, int | str],
+            m21.note.NotRest | None
+        ] = {}
+        self.currentBeamSpanners: dict[
+            tuple[m21.stream.Part, int | str],
+            MeiBeamSpanner
+        ] = {}
+
         for part in self.m21Score.parts:
             self.currentTupletSpanners[part] = []
             self.currentTieSpanners[part] = []
+            voiceIds: list[int | str] = getUniqueVoiceIds(part)
+            for id in voiceIds:
+                self.currentBeamSpanners[(part, id)] = []
+                self.previousBeamedNoteOrChord[(part, id)] = None
 
         # pre-scan of m21Score to set up some things
         self.annotateScore()
@@ -394,8 +417,14 @@ class MeiScore:
                 if not voices:
                     voices = [measure]
                 for voice in voices:
+                    voiceId: int | str
+                    if isinstance(voice, m21.stream.Measure):
+                        voiceId = ''
+                    else:
+                        voiceId = voice.id
+
                     for obj in voice:
-                        self.annotateBeams(obj)
+                        self.annotateBeams(obj, part, voiceId)
                         self.annotateTuplets(obj, part)
                         self.annotateTies(obj, part)
                         self.annotatePositionedRests(obj, part)
@@ -516,7 +545,12 @@ class MeiScore:
                 if spanner.isFirst(obj) or spanner.isLast(obj):
                     M21ObjectConvert.assureXmlId(obj)
 
-    def annotateBeams(self, noteOrChord: m21.base.Music21Object) -> None:
+    def annotateBeams(
+        self,
+        noteOrChord: m21.base.Music21Object,
+        part: m21.stream.Part,
+        voiceId: int | str
+    ) -> None:
         if not isinstance(noteOrChord, m21.note.NotRest):
             return
 
@@ -568,30 +602,30 @@ class MeiScore:
             return numBeams - numStartStops
 
         if not noteOrChord.beams.beamsList:
-            self.previousBeamedNoteOrChord = None
+            self.previousBeamedNoteOrChord[(part, voiceId)] = None
             return
 
-        if allStart(noteOrChord.beams) or not self.currentBeamSpanners:
+        if allStart(noteOrChord.beams) or not self.currentBeamSpanners[(part, voiceId)]:
             newBeamSpanner = MeiBeamSpanner()
             self.m21Score.append(newBeamSpanner)
-            self.currentBeamSpanners.append(newBeamSpanner)
+            self.currentBeamSpanners[(part, voiceId)].append(newBeamSpanner)
 
-        self.currentBeamSpanners[-1].addSpannedElements(noteOrChord)
+        self.currentBeamSpanners[(part, voiceId)][-1].addSpannedElements(noteOrChord)
 
         if allStop(noteOrChord.beams):
             # done with this <beam> or <beamSpan>.  Put the spanner in the score,
             # and clear out any state variables.
-            self.currentBeamSpanners = self.currentBeamSpanners[:-1]
-            self.previousBeamedNoteOrChord = None
+            self.currentBeamSpanners[(part, voiceId)] = self.currentBeamSpanners[(part, voiceId)][:-1]
+            self.previousBeamedNoteOrChord[(part, voiceId)] = None
             return
 
         # annotate any breaksec ending at this noteOrChord (set it on the previous noteOrChord)
-        if self.previousBeamedNoteOrChord is not None:
-            breakSec: int = computeBreakSec(self.previousBeamedNoteOrChord.beams, noteOrChord.beams)
+        if self.previousBeamedNoteOrChord[(part, voiceId)] is not None:
+            breakSec: int = computeBreakSec(self.previousBeamedNoteOrChord[(part, voiceId)].beams, noteOrChord.beams)
             if breakSec > 0:
-                self.previousBeamedNoteOrChord.mei_breaksec = breakSec  # type: ignore
+                self.previousBeamedNoteOrChord[(part, voiceId)].mei_breaksec = breakSec  # type: ignore
 
-        self.previousBeamedNoteOrChord = noteOrChord
+        self.previousBeamedNoteOrChord[(part, voiceId)] = noteOrChord
 
     def annotateTuplets(self, gnote: m21.base.Music21Object, part: m21.stream.Part) -> None:
         if not isinstance(gnote, m21.note.GeneralNote):

@@ -11,12 +11,13 @@
 # Copyright:     (c) 2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-from xml.etree.ElementTree import TreeBuilder, Element, tostring
+from xml.etree.ElementTree import Element, tostring  # ,TreeBuilder
 import typing as t
 
 import music21 as m21
 
 from converter21.shared import M21Utilities
+from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 class MeiElement:
     def __init__(

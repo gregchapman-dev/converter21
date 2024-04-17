@@ -9,7 +9,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-from xml.etree.ElementTree import TreeBuilder
+# from xml.etree.ElementTree import TreeBuilder
 import typing as t
 
 import music21 as m21
@@ -20,6 +20,7 @@ from converter21.mei import M21ObjectConvert
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
 # from converter21.shared import M21Utilities
+from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.

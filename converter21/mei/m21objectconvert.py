@@ -14,7 +14,7 @@ import sys
 import re
 import typing as t
 # from copy import copy, deepcopy
-from xml.etree.ElementTree import TreeBuilder
+# from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21
 from music21.common import OffsetQLIn, OffsetQL
@@ -24,6 +24,7 @@ from music21.common.numberTools import opFrac
 from converter21.mei import MeiInternalError
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
+from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 environLocal = m21.environment.Environment('converter21.mei.m21objectconvert')
 

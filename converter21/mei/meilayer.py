@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------------------
 import sys
 # import copy
-from xml.etree.ElementTree import TreeBuilder
+# from xml.etree.ElementTree import TreeBuilder
 import typing as t
 
 import music21 as m21
@@ -24,6 +24,7 @@ from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiBeamSpanner
 from converter21.mei import MeiTupletSpanner
+from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 environLocal = m21.environment.Environment('converter21.mei.meilayer')
 
@@ -162,6 +163,9 @@ class MeiLayer:
                     M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
                 lastOffsetEmitted = voiceOffset
 
+        if self.m21Voice.id == 'lead':
+            if self.parentStaff.m21Measure.measureNumber in ('19', 19):
+                print('hey')
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
@@ -391,6 +395,15 @@ class MeiLayer:
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
             return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Measure)
 
+        def beamsBeforeTupletsBeforeTremolos(spanner: m21.spanner.Spanner) -> int:
+            if isinstance(spanner, MeiBeamSpanner):
+                return 1
+            if isinstance(spanner, MeiTupletSpanner):
+                return 2
+            if isinstance(spanner, m21.expressions.TremoloSpanner):
+                return 3
+            return 4
+
         def nestsReasonably(
             tuplet: m21.spanner.Spanner,
             voiceBeams: set[m21.spanner.Spanner]
@@ -477,6 +490,7 @@ class MeiLayer:
 
             output.append(spanner)  # type: ignore
 
+        output.sort(reverse=True, key=beamsBeforeTupletsBeforeTremolos)
         output.sort(reverse=True, key=spannerQL)
         return output
 
@@ -486,7 +500,16 @@ class MeiLayer:
     ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
-            return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Measure)
+            return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Score)
+
+        def beamsBeforeTupletsBeforeTremolos(spanner: m21.spanner.Spanner) -> int:
+            if isinstance(spanner, MeiBeamSpanner):
+                return 1
+            if isinstance(spanner, MeiTupletSpanner):
+                return 2
+            if isinstance(spanner, m21.expressions.TremoloSpanner):
+                return 3
+            return 4
 
         output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
@@ -515,6 +538,7 @@ class MeiLayer:
 
             output.append(spanner)  # type: ignore
 
+        output.sort(key=beamsBeforeTupletsBeforeTremolos)
         output.sort(key=spannerQL)  # type: ignore
         return output
 
