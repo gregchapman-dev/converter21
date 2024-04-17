@@ -163,9 +163,6 @@ class MeiLayer:
                     M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
                 lastOffsetEmitted = voiceOffset
 
-        if self.m21Voice.id == 'lead':
-            if self.parentStaff.m21Measure.measureNumber in ('19', 19):
-                print('hey')
         for obj in self.m21Voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 objOffsetInMeasure: OffsetQL = obj.getOffsetInHierarchy(
