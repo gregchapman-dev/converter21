@@ -2916,6 +2916,12 @@ class M21Utilities:
 
         return cs
 
+    EXTRA_CHORD_KINDS: dict[str, str] = {
+        'maj9': 'major-ninth',
+        'sus47': 'suspended-fourth-seventh',
+        'minMaj7': 'minor-major-seventh'
+    }
+
     @staticmethod
     def fixupBadChordKinds(s: m21.stream.Stream, inPlace=False) -> m21.stream.Stream:
         fixme: m21.stream.Stream = s
@@ -2923,12 +2929,54 @@ class M21Utilities:
             fixme = deepcopy(s)
 
         for cs in fixme[m21.harmony.ChordSymbol]:
-            if cs.chordKind not in m21.harmony.CHORD_TYPES:
-                for k in m21.harmony.CHORD_TYPES:
-                    if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
-                        cs.chordKind = k
-                        cs._updatePitches()
-                        break
+            if cs.chordKind in m21.harmony.CHORD_TYPES:
+                # all good, check the next cs
+                continue
+
+            fixedIt: bool = False
+            for k in m21.harmony.CHORD_TYPES:
+                # maybe cs.chordKind is a known abbreviation?
+                if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
+                    cs.chordKind = k
+                    cs._updatePitches()
+                    fixedIt = True
+                    break
+
+            if fixedIt:
+                # done with this bad cs, move on to the next one
+                continue
+
+            # we can also use our own lookup (on chordKind)
+            if cs.chordKind in M21Utilities.EXTRA_CHORD_KINDS:
+                cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKind]
+                cs._updatePitches()
+                fixedIt = True
+
+            if fixedIt:
+                # done with this bad cs, move on to the next one
+                continue
+
+            for k in m21.harmony.CHORD_TYPES:
+                # maybe cs.chordKindStr is a known abbreviation?
+                if cs.chordKindStr in m21.harmony.getAbbreviationListGivenChordType(k):
+                    cs.chordKind = k
+                    cs._updatePitches()
+                    fixedIt = True
+                    break
+
+            if fixedIt:
+                # done with this bad cs, move on to the next one
+                continue
+
+            # we can also use our own lookup (on chordKindStr)
+            if cs.chordKindStr in M21Utilities.EXTRA_CHORD_KINDS:
+                cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKindStr]
+                cs._updatePitches()
+                fixedIt = True
+
+            if fixedIt:
+                # done with this bad cs, move on to the next one
+                continue
 
         return fixme
 
