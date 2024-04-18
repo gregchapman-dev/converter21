@@ -126,14 +126,21 @@ class M21Convert:
     }
 
     numSharpsToHumdrumStandardKeyStrings: dict[int, str] = {
-        0: '',
-        1: 'f#',
-        2: 'f#c#',
-        3: 'f#c#g#',
-        4: 'f#c#g#d#',
-        5: 'f#c#g#d#a#',
-        6: 'f#c#g#d#a#e#',
-        7: 'f#c#g#d#a#e#b#',
+        0:  '',
+        1:  'f#',
+        2:  'f#c#',
+        3:  'f#c#g#',
+        4:  'f#c#g#d#',
+        5:  'f#c#g#d#a#',
+        6:  'f#c#g#d#a#e#',
+        7:  'f#c#g#d#a#e#b#',
+        8:  'f##c#g#d#a#e#b#',
+        9:  'f##c##g#d#a#e#b#',
+        10: 'f##c##g##d#a#e#b#',
+        11: 'f##c##g##d##a#e#b#',
+        12: 'f##c##g##d##a##e#b#',
+        13: 'f##c##g##d##a##e##b#',
+        14: 'f##c##g##d##a##e##b##',
         -1: 'b-',
         -2: 'b-e-',
         -3: 'b-e-a-',
@@ -141,6 +148,13 @@ class M21Convert:
         -5: 'b-e-a-d-g-',
         -6: 'b-e-a-d-g-c-',
         -7: 'b-e-a-d-g-c-f-',
+        -8: 'b--e-a-d-g-c-f-',
+        -9: 'b--e--a-d-g-c-f-',
+        -10: 'b--e--a--d-g-c-f-',
+        -11: 'b--e--a--d--g-c-f-',
+        -12: 'b--e--a--d--g--c-f-',
+        -13: 'b--e--a--d--g--c--f-',
+        -14: 'b--e--a--d--g--c--f--',
     }
 
     humdrumModeToM21Mode: dict[str, str] = {
