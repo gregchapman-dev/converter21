@@ -2919,7 +2919,8 @@ class M21Utilities:
     EXTRA_CHORD_KINDS: dict[str, str] = {
         'maj9': 'major-ninth',
         'sus47': 'suspended-fourth-seventh',
-        'minMaj7': 'minor-major-seventh'
+        'minMaj7': 'minor-major-seventh',
+        '°': 'diminished'
     }
 
     @staticmethod
