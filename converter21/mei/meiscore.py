@@ -65,16 +65,16 @@ class MeiScore:
         ] = {}
         self.currentBeamSpanners: dict[
             tuple[m21.stream.Part, int | str],
-            MeiBeamSpanner
+            list[MeiBeamSpanner]
         ] = {}
 
         for part in self.m21Score.parts:
             self.currentTupletSpanners[part] = []
             self.currentTieSpanners[part] = []
             voiceIds: list[int | str] = getUniqueVoiceIds(part)
-            for id in voiceIds:
-                self.currentBeamSpanners[(part, id)] = []
-                self.previousBeamedNoteOrChord[(part, id)] = None
+            for voiceId in voiceIds:
+                self.currentBeamSpanners[(part, voiceId)] = []
+                self.previousBeamedNoteOrChord[(part, voiceId)] = None
 
         # pre-scan of m21Score to set up some things
         self.annotateScore()
@@ -615,15 +615,20 @@ class MeiScore:
         if allStop(noteOrChord.beams):
             # done with this <beam> or <beamSpan>.  Put the spanner in the score,
             # and clear out any state variables.
-            self.currentBeamSpanners[(part, voiceId)] = self.currentBeamSpanners[(part, voiceId)][:-1]
+            self.currentBeamSpanners[(part, voiceId)] = (
+                self.currentBeamSpanners[(part, voiceId)][:-1]
+            )
             self.previousBeamedNoteOrChord[(part, voiceId)] = None
             return
 
         # annotate any breaksec ending at this noteOrChord (set it on the previous noteOrChord)
         if self.previousBeamedNoteOrChord[(part, voiceId)] is not None:
-            breakSec: int = computeBreakSec(self.previousBeamedNoteOrChord[(part, voiceId)].beams, noteOrChord.beams)
+            prevNC = self.previousBeamedNoteOrChord[(part, voiceId)]
+            if t.TYPE_CHECKING:
+                assert prevNC is not None
+            breakSec: int = computeBreakSec(prevNC.beams, noteOrChord.beams)
             if breakSec > 0:
-                self.previousBeamedNoteOrChord[(part, voiceId)].mei_breaksec = breakSec  # type: ignore
+                prevNC.mei_breaksec = breakSec  # type: ignore
 
         self.previousBeamedNoteOrChord[(part, voiceId)] = noteOrChord
 
