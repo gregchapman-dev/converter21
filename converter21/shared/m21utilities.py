@@ -2979,6 +2979,20 @@ class M21Utilities:
                 # done with this bad cs, move on to the next one
                 continue
 
+            # Well-known chords that require (in music21) chord modifications
+            # So far, cs.chordKind == 'maj69' is the only one.
+            # It is ['1','3','5','6','9'], which is 'major-sixth' with add 9
+            if cs.chordKind == 'maj69':
+                cs.chordKind = 'major-sixth'
+                cs.addChordStepModification(
+                    m21.harmony.ChordStepModification(modType='add', degree=9)
+                )
+                cs._updatePitches()
+                fixedIt = True
+
+            if fixedIt:
+                continue
+
         return fixme
 
     @staticmethod
