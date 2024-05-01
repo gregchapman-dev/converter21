@@ -2994,10 +2994,15 @@ class M21Utilities:
                 continue
 
             # I have seen chords with chordKind == '/A' and chordKindStr == '/A',
-            # meaning 'root' major chord with bass = 'A'.  It will print as
+            # meaning 'root' major chord with bass = 'A'.  I have also seen
+            # 'min/A', meaning minor chord with bass = 'A'.  It will print as
             # {root}{chordKindStr}, so construct that and set it as cs.figure.
             # If parseable, cs.chordKind and cs.bass() will be set, and the
-            # pitches reconstructed.
+            # pitches reconstructed.  Then we trim the '/A' off the chordKindStr,
+            # since that is added automatically, now that cs.bass() is set
+            # correctly.
+            # See "Stuart and Laughhelm - Mixed Emotions.mxl" for an example in
+            # measure 2: root == 'A-', chordKindStr (and chordKind) == 'min/G'.
             if '/' in cs.chordKindStr:
                 # figure it out
                 if cs.root():
