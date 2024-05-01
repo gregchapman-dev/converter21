@@ -2751,7 +2751,7 @@ class HumdrumWriter:
         harmonies: list[tuple[int, m21.harmony.ChordSymbol, HumNum, HumdrumToken]] = []
 
         for partIndex, harmony in extraHarmonies:
-            hstring = M21Convert.m21ChordSymToHarmonyText(harmony, dataType='**harte')
+            hstring = M21Convert.m21ChordSymToHarmonyText(harmony, dataType='**harte', noResult='.')
             harmonies.append((
                 partIndex,
                 harmony,

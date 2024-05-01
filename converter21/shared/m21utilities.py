@@ -2569,7 +2569,7 @@ class M21Utilities:
         return int(m.group(1))
 
     @staticmethod
-    def makeHarteFromChordSymbol(cs: m21.harmony.ChordSymbol) -> str:
+    def makeHarteFromChordSymbol(cs: m21.harmony.ChordSymbol, noResult: str = '') -> str:
         def hartifyRoot(root: m21.pitch.Pitch) -> str:
             return re.sub('-', 'b', root.name)
 
@@ -2683,14 +2683,14 @@ class M21Utilities:
                     M21Utilities.M21_CHORD_KIND_TO_HARTE_DEGREES[cs.chordKind]
                 )
             else:
-                raise Converter21InternalError(f'bad cs.chordKind: "{cs.chordKind}"')
+                return noResult
         else:
             if cs.chordKind in M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES:
                 shorthand, degrees = (
                     M21Utilities.M21_CHORD_KIND_TO_HARTE_SHORTHAND_AND_DEGREES[cs.chordKind]
                 )
             else:
-                raise Converter21InternalError(f'bad cs.chordKind: "{cs.chordKind}"')
+                return noResult
 
         # Now figure out ChordSymbol alters/adds/subtracts
         if cs.chordStepModifications:
@@ -2989,6 +2989,24 @@ class M21Utilities:
                 )
                 cs._updatePitches()
                 fixedIt = True
+
+            if fixedIt:
+                continue
+
+            # I have seen chords with chordKind == '/A' and chordKindStr == '/A',
+            # meaning 'root' major chord with bass = 'A'.  It will print as
+            # {root}{chordKindStr}, so construct that and set it as cs.figure.
+            # If parseable, cs.chordKind and cs.bass() will be set, and the
+            # pitches reconstructed.
+            if '/' in cs.chordKindStr:
+                # figure it out
+                if cs.root():
+                    newFigure: str = cs.root().name + cs.chordKindStr
+                    cs.figure = newFigure
+                    # remove trailing '/blah' from cs.chordKindStr
+                    slashIdx: int = cs.chordKindStr.index('/')
+                    cs.chordKindStr = cs.chordKindStr[:slashIdx]
+                    fixedIt = True
 
             if fixedIt:
                 continue

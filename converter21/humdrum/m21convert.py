@@ -402,13 +402,14 @@ class M21Convert:
     @staticmethod
     def m21ChordSymToHarmonyText(
         cs: m21.harmony.ChordSymbol,
-        dataType: str = '**mxhm'
+        dataType: str = '**mxhm',
+        noResult: str = ''
     ) -> str:
         if dataType not in ('**mxhm', '**harte'):
             raise HumdrumInternalError('Harmony type "{dataType}" not supported')
 
         if dataType == '**harte':
-            return M21Utilities.makeHarteFromChordSymbol(cs)
+            return M21Utilities.makeHarteFromChordSymbol(cs, noResult=noResult)
 
         root: str = ''
         csRoot: m21.pitch.Pitch | None = cs.root()
@@ -433,6 +434,9 @@ class M21Convert:
 
         if bass:
             output += '/' + bass
+
+        if not output:
+            return noResult
 
         return output
 
