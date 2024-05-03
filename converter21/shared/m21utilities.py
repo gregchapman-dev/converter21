@@ -22,6 +22,7 @@ from copy import copy, deepcopy
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
 from music21.common.numberTools import opFrac
+from music21.figuredBass import realizerScale
 
 from converter21.shared import SharedConstants
 
@@ -2916,11 +2917,121 @@ class M21Utilities:
 
         return cs
 
+    @staticmethod
+    def _updatePitches(cs: m21.harmony.ChordSymbol):
+        # fix bug in cs._updatePitches (it doesn't know about 'augmented' ninths)
+        def adjustOctaves(cs, pitches):
+            from music21 import pitch, chord
+            self = cs  # because this is an edited copy of ChordSymbol._adjustOctaves
+            if not isinstance(pitches, list):
+                pitches = list(pitches)
+
+            # do this for all ninth, thirteenth, and eleventh chords...
+            # this must be done to get octave spacing right
+            # possibly rewrite figured bass function with this integrated?
+            # ninths = ['dominant-ninth', 'major-ninth', 'minor-ninth']
+            # elevenths = ['dominant-11th', 'major-11th', 'minor-11th']
+            # thirteenths = ['dominant-13th', 'major-13th', 'minor-13th']
+
+            if self.chordKind.endswith('-ninth'):
+                pitches[1] = pitch.Pitch(pitches[1].name + str(pitches[1].octave + 1))
+            elif self.chordKind.endswith('-11th'):
+                pitches[1] = pitch.Pitch(pitches[1].name + str(pitches[1].octave + 1))
+                pitches[3] = pitch.Pitch(pitches[3].name + str(pitches[3].octave + 1))
+
+            elif self.chordKind.endswith('-13th'):
+                pitches[1] = pitch.Pitch(pitches[1].name + str(pitches[1].octave + 1))
+                pitches[3] = pitch.Pitch(pitches[3].name + str(pitches[3].octave + 1))
+                pitches[5] = pitch.Pitch(pitches[5].name + str(pitches[5].octave + 1))
+            else:
+                return pitches
+
+            c = chord.Chord(pitches)
+            c = c.sortDiatonicAscending()
+
+            return list(c.pitches)
+
+        self = cs  # because this is a copy of ChordSymbol._updatePitches
+        if 'root' not in self._overrides or 'bass' not in self._overrides or self.chordKind is None:
+            return
+
+        # create figured bass scale with root as scale
+        fbScale = realizerScale.FiguredBassScale(self._overrides['root'], 'major')
+
+        # render in the 3rd octave by default
+        self._overrides['root'].octave = 3
+        self._overrides['bass'].octave = 3
+
+        if self._notationString():
+            pitches = fbScale.getSamplePitches(self._overrides['root'], self._notationString())
+            # remove duplicated bass note due to figured bass method.
+            pitches.pop(0)
+        else:
+            pitches = []
+            pitches.append(self._overrides['root'])
+            if self._overrides['bass'] not in pitches:
+                pitches.append(self._overrides['bass'])
+
+        pitches = adjustOctaves(self, pitches)
+
+        if self._overrides['root'].name != self._overrides['bass'].name:
+            inversionNum: int | None = self.inversion()
+            if not self.inversionIsValid(inversionNum):
+                # there is a bass, yet no normal inversion was found: must be added note
+                inversionNum = None
+
+                # arbitrary octave, must be below root,
+                # which was arbitrarily chosen as 3 above
+                self._overrides['bass'].octave = 2
+                pitches.append(self._overrides['bass'])
+        else:
+            self.inversion(None, transposeOnSet=False)
+            inversionNum = None
+
+        pitches = self._adjustPitchesForChordStepModifications(pitches)
+
+        if inversionNum not in (0, None):
+            if t.TYPE_CHECKING:
+                assert inversionNum is not None
+            for p in pitches[0:inversionNum]:
+                p.octave = p.octave + 1
+                # Repeat if 9th/11th/13th chord in 4th inversion or greater
+                if inversionNum > 3:
+                    p.octave = p.octave + 1
+
+            # if after bumping up the octaves, there are still pitches below bass pitch
+            # bump up their octaves
+            # bassPitch = pitches[inversionNum]
+
+            # self.bass(bassPitch)
+            for p in pitches:
+                if p.diatonicNoteNum < self._overrides['bass'].diatonicNoteNum:
+                    p.octave = p.octave + 1
+
+        while self._hasPitchAboveC4(pitches):
+            for thisPitch in pitches:
+                thisPitch.octave -= 1
+
+        # but if this has created pitches below lowest note (the A 3 octaves below middle C)
+        # on a standard piano, we're going to have to bump all the octaves back up
+        while self._hasPitchBelowA1(pitches):
+            for thisPitch in pitches:
+                thisPitch.octave += 1
+
+        self.pitches = tuple(pitches)
+        self.sortDiatonicAscending(inPlace=True)
+
+        # set overrides to be pitches in the harmony
+        # self._overrides = {}  # JTW: was wiping legit overrides such as root=C from 'C6'
+        self.bass(self.bass(), allow_add=True)
+        self.root(self.root())
+
     EXTRA_CHORD_KINDS: dict[str, str] = {
         'maj9': 'major-ninth',
         'sus47': 'suspended-fourth-seventh',
         'minMaj7': 'minor-major-seventh',
-        '°': 'diminished'
+        '°': 'diminished',
+        'augmented-ninth': 'augmented-dominant-ninth'
     }
 
     @staticmethod
@@ -2939,7 +3050,7 @@ class M21Utilities:
                 # maybe cs.chordKind is a known abbreviation?
                 if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
                     cs.chordKind = k
-                    cs._updatePitches()
+                    M21Utilities._updatePitches(cs)
                     fixedIt = True
                     break
 
@@ -2950,7 +3061,7 @@ class M21Utilities:
             # we can also use our own lookup (on chordKind)
             if cs.chordKind in M21Utilities.EXTRA_CHORD_KINDS:
                 cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKind]
-                cs._updatePitches()
+                M21Utilities._updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -2961,7 +3072,7 @@ class M21Utilities:
                 # maybe cs.chordKindStr is a known abbreviation?
                 if cs.chordKindStr in m21.harmony.getAbbreviationListGivenChordType(k):
                     cs.chordKind = k
-                    cs._updatePitches()
+                    M21Utilities._updatePitches(cs)
                     fixedIt = True
                     break
 
@@ -2972,7 +3083,7 @@ class M21Utilities:
             # we can also use our own lookup (on chordKindStr)
             if cs.chordKindStr in M21Utilities.EXTRA_CHORD_KINDS:
                 cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKindStr]
-                cs._updatePitches()
+                M21Utilities._updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -2987,7 +3098,7 @@ class M21Utilities:
                 cs.addChordStepModification(
                     m21.harmony.ChordStepModification(modType='add', degree=9)
                 )
-                cs._updatePitches()
+                M21Utilities._updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
