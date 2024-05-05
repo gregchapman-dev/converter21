@@ -2796,7 +2796,7 @@ class HumdrumWriter:
             if outSlice is None:
                 # we have no way of putting harmony at the very end of a measure.
                 print(
-                    'Humdrum cannot encode harmony at end of measure: dropping "{harmony.figure}"',
+                    f'Humdrum cannot encode harmony at end of measure: "{harmony.figure}"',
                     file=sys.stderr
                 )
                 return
