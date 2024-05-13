@@ -30,7 +30,6 @@ def oplistSummary(
     # print(f'op_list = {op_list}', file=sys.stderr)
 
     counts['measure'] = 0
-    counts['voice'] = 0
     counts['note'] = 0
     counts['space'] = 0
     counts['gracenote'] = 0
@@ -49,9 +48,6 @@ def oplistSummary(
         # measure
         if op[0] in ('insbar', 'delbar'):
             counts['measure'] += 1
-        # voice
-        elif op[0] in ('voiceins', 'voicedel'):
-            counts['voice'] += 1
         # note
         elif op[0] in ('noteins',
                         'notedel',
