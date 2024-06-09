@@ -1430,7 +1430,7 @@ class M21Convert:
     def _addNoteNumberToLayout(layout: str, noteNum: int) -> str:
         # split at colons
         params: list[str] = layout.split(':')
-        insertAtIndex: int = len(params) - 2
+        insertAtIndex: int = 2
         params.insert(insertAtIndex, f'n={noteNum}')
 
         output: str = ':'.join(params)
