@@ -275,13 +275,13 @@ class HumdrumTie:
     def __init__(
         self,
         startLayerIndex: int,
-        startNote: m21.note.Note,
+        startNote: m21.note.Note | m21.note.Unpitched,
         startToken: HumdrumToken,
         startSubTokenStr: str,
         startSubTokenIdx: int
     ) -> None:
         self.startLayerIndex: int = startLayerIndex
-        self.startNote: m21.note.Note = startNote
+        self.startNote: m21.note.Note | m21.note.Unpitched = startNote
         self.startToken: HumdrumToken = startToken
         self.startSubTokenStr: str = startSubTokenStr
         self.startSubTokenIdx: int = startSubTokenIdx
@@ -296,7 +296,11 @@ class HumdrumTie:
 
         self.wasInserted: bool = False
 
-    def setEndAndInsert(self, endNote: m21.note.Note, endSubTokenStr: str) -> m21.tie.Tie:
+    def setEndAndInsert(
+        self,
+        endNote: m21.note.Note | m21.note.Unpitched,
+        endSubTokenStr: str
+    ) -> m21.tie.Tie:
         startTieType: str = 'start'
         if '_' in self.startSubTokenStr:
             startTieType = 'continue'
@@ -852,7 +856,7 @@ class HumdrumFile(HumdrumFileContent):
         exporters.
     '''
     @staticmethod
-    def _processHangingTieEnd(note: m21.note.Note, tstring: str) -> None:
+    def _processHangingTieEnd(note: m21.note.Note | m21.note.Unpitched, tstring: str) -> None:
         if '_' in tstring:
             return  # 'continue' will be handled in the ss.ties list as a tieStart
 
@@ -5401,6 +5405,23 @@ class HumdrumFile(HumdrumFileContent):
 
         return note
 
+    @staticmethod
+    def _createUnpitched(infoHash: HumHash | None = None) -> m21.note.Unpitched:
+        # infoHash is generally the token for which the note is being created,
+        # but we declare it as a HumHash, since the only thing we read is
+        # 'placeHolder'.
+        # The actual construction of the unpitched contents from the token is done elsewhere.
+        placeHolder: m21.Music21Object | None = None
+        if infoHash is not None:
+            placeHolder = infoHash.getValueM21Object('music21', 'placeHolder')
+
+        unpitched: m21.note.Unpitched = M21Utilities.createUnpitched(placeHolder)
+
+        if placeHolder is not None and infoHash is not None:
+            infoHash.setValue('music21', 'placeHolder', None)
+
+        return unpitched
+
     def _createAndConvertNote(
         self,
         token: HumdrumToken,
@@ -5409,9 +5430,14 @@ class HumdrumFile(HumdrumFileContent):
         staffIndex: int,
         layerIndex: int,
         subTokenIdx: int = -1
-    ) -> m21.note.Note | None:
-        note: m21.note.Note = self._createNote(token)
-        convertedNote: m21.note.Note | None = self._convertNote(
+    ) -> m21.note.Note | m21.note.Unpitched | None:
+        note: m21.note.Note | m21.note.Unpitched
+        if token.isUnpitched:
+            note = self._createUnpitched(token)
+        else:
+            note = self._createNote(token)
+
+        convertedNote: m21.note.Note | m21.note.Unpitched | None = self._convertNote(
             note,
             token,
             staffAdjust,
@@ -5422,6 +5448,7 @@ class HumdrumFile(HumdrumFileContent):
         )
         if token is not None and convertedNote is not None:
             token.setValue('music21', 'generalNote', convertedNote)
+
         return convertedNote
 
     @staticmethod
@@ -5606,7 +5633,7 @@ class HumdrumFile(HumdrumFileContent):
             voice.coreInsert(chord2OffsetInVoice, chord2)
             tremolo2.addSpannedElements(noteOrChord, chord2)
         else:
-            note2: m21.note.Note | None = self._createAndConvertNote(
+            note2: m21.note.Note | m21.note.Unpitched | None = self._createAndConvertNote(
                 second, 0, measureIndex, staffIndex, layerIndex
             )
             if note2 is None:
@@ -5692,7 +5719,7 @@ class HumdrumFile(HumdrumFileContent):
             voice.coreInsert(chord2OffsetInVoice, chord2)
             tremolo2.addSpannedElements(noteOrChord, chord2)
         else:
-            note2: m21.note.Note | None = self._createAndConvertNote(
+            note2: m21.note.Note | m21.note.Unpitched | None = self._createAndConvertNote(
                 second, 0, measureIndex, staffIndex, layerIndex
             )
             if note2 is None:
@@ -5925,7 +5952,7 @@ class HumdrumFile(HumdrumFileContent):
 #                 continue;
 #             }
 
-            note: m21.note.Note | None = self._createAndConvertNote(
+            note: m21.note.Note | m21.note.Unpitched | None = self._createAndConvertNote(
                 layerTok,
                 0,
                 measureIndex,
@@ -6094,7 +6121,7 @@ class HumdrumFile(HumdrumFileContent):
         vOffsetInMeasure: HumNum = opFrac(voiceOffsetInMeasure)
         noteOffsetInMeasure: HumNum = layerTok.durationFromBarline
         noteOffsetInVoice: HumNum = opFrac(noteOffsetInMeasure - vOffsetInMeasure)
-        note: m21.note.Note | None = self._createAndConvertNote(
+        note: m21.note.Note | m21.note.Unpitched | None = self._createAndConvertNote(
             layerTok,
             0,
             measureIndex,
@@ -7105,11 +7132,14 @@ class HumdrumFile(HumdrumFileContent):
         return myGN
 
     @staticmethod
-    def _replaceNoteWithGrace(note: m21.note.Note, tstring: str) -> m21.note.Note:
+    def _replaceNoteWithGrace(
+        note: m21.note.Note | m21.note.Unpitched,
+        tstring: str
+    ) -> m21.note.Note | m21.note.Unpitched:
         gn: m21.note.GeneralNote = HumdrumFile._replaceGeneralNoteWithGrace(note, tstring)
         if t.TYPE_CHECKING:
             # because _replaceGeneralNoteWithGrace always returns the same type you pass in
-            assert isinstance(gn, m21.note.Note)
+            assert isinstance(gn, (m21.note.Note, m21.note.Unpitched))
         return gn
 
     @staticmethod
@@ -7130,14 +7160,14 @@ class HumdrumFile(HumdrumFileContent):
 
     def _convertNote(
         self,
-        note: m21.note.Note,
+        note: m21.note.Note | m21.note.Unpitched,
         token: HumdrumToken,
         staffAdjust: int,
         measureIndex: int,
         staffIndex: int,
         layerIndex: int,
         subTokenIdx: int = -1
-    ) -> m21.note.Note | None:
+    ) -> m21.note.Note | m21.note.Unpitched | None:
         # note is empty.  Fill it in.
         ss: StaffStateVariables = self._staffStates[staffIndex]
         tstring: str = ''
@@ -7184,28 +7214,25 @@ class HumdrumFile(HumdrumFileContent):
         octave: int = Convert.kernToOctaveNumber(tstring)
 
         if isUnpitched:
-            unpitched: m21.note.Unpitched = self._replaceGeneralNoteWithUnpitched(note)
+            if t.TYPE_CHECKING:
+                assert isinstance(note, m21.note.Unpitched)
             if hasattr(m21.common.types, 'StepName'):
                 displayStepV8: m21.common.types.StepName | None = (
                     M21Convert.m21StepNameV8(tstring)
                 )
                 if octave >= 0 and displayStepV8 is not None:
-                    unpitched.displayOctave = octave
-                    unpitched.displayStep = displayStepV8
+                    note.displayOctave = octave
+                    note.displayStep = displayStepV8
             else:
                 # we can remove this code in favor of StepName once we no longer
                 # support music21 v7
                 displayStep: str | None = M21Convert.m21StepName(tstring)
                 if octave >= 0 and displayStep is not None:
-                    unpitched.displayOctave = octave
-                    unpitched.displayStep = displayStep  # type: ignore
-
-            # From here we assign unpitched back to note, and treat it like a note
-            if t.TYPE_CHECKING:
-                # we lie here, but we will live this lie consistently from here on
-                assert isinstance(unpitched, m21.note.Note)
-            note = unpitched
+                    note.displayOctave = octave
+                    note.displayStep = displayStep  # type: ignore
         else:
+            if t.TYPE_CHECKING:
+                assert isinstance(note, m21.note.Note)
             # Q: might need to jump octaves backward to the ottava?  Maybe that's just MEI.
             # Q: music21 has transposing and non-transposing ottavas, so we probably just
             # Q: need to use the right one, so we can leave the note alone.
@@ -7267,6 +7294,8 @@ class HumdrumFile(HumdrumFileContent):
                 editorialStyle = optionalEdStyle
 
         if not mensit and not isUnpitched:
+            if t.TYPE_CHECKING:
+                assert isinstance(note, m21.note.Note)
             if note.pitch.accidental:
                 # by default we do not display accidentals (only cautionary/editorial/visible)
                 note.pitch.accidental.displayStatus = False
@@ -7424,7 +7453,12 @@ class HumdrumFile(HumdrumFileContent):
     //
     // HumdrumInput::colorNote --
     '''
-    def _colorNote(self, note: m21.note.Note, token: HumdrumToken, tstring: str) -> None:
+    def _colorNote(
+        self,
+        note: m21.note.Note | m21.note.Unpitched,
+        token: HumdrumToken,
+        tstring: str
+    ) -> None:
         spineColor: str = self._getSpineColor(token)
         if spineColor:
             note.style.color = spineColor
@@ -7487,7 +7521,7 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _setNoteHead(
         self,
-        note: m21.note.Note,
+        note: m21.note.Note | m21.note.Unpitched,
         token: HumdrumToken,
         subTokenIdx: int,
         staffIndex: int
@@ -7515,7 +7549,11 @@ class HumdrumFile(HumdrumFileContent):
                     pass
 
     @staticmethod
-    def _setStemDirection(note: m21.note.Note, token: HumdrumToken, tstring: str) -> None:
+    def _setStemDirection(
+        note: m21.note.Note | m21.note.Unpitched,
+        token: HumdrumToken,
+        tstring: str
+    ) -> None:
         # stem direction (if any)
         if '/' in tstring:
             note.stemDirection = 'up'
@@ -7823,7 +7861,7 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _processTieStart(
         self,
-        note: m21.note.Note,
+        note: m21.note.Note | m21.note.Unpitched,
         token: HumdrumToken,
         tstring: str,
         subTokenIdx: int,
@@ -7889,7 +7927,7 @@ class HumdrumFile(HumdrumFileContent):
     '''
     def _processTieEnd(
         self,
-        note: m21.note.Note,
+        note: m21.note.Note | m21.note.Unpitched,
         token: HumdrumToken,
         tstring: str,
         subTokenIdx: int,
