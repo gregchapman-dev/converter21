@@ -3823,19 +3823,14 @@ class HumdrumFile(HumdrumFileContent):
                 # no durational object; set it on the token
                 token.setValue('auto', 'stem.dir', str(direction))
             else:
-                if not isinstance(obj, (m21.note.Note, m21.chord.Chord)):
+                if not isinstance(obj, (m21.note.Note, m21.chord.ChordBase, m21.note.Unpitched)):
                     continue  # it's not a note/chord, no stem direction needed
 
                 if upOrDown:
-                    if isinstance(obj, m21.chord.Chord):
-                        obj.stemDirection = upOrDown
-                        # Hmmm... seems like setting stemDirection up or down on each
-                        # note might be a good idea, but iohumdrum.cpp doesn't do that. --gregc
-                        # Clear the stemDirection of all the notes in the chord, at least.
+                    obj.stemDirection = upOrDown
+                    if isinstance(obj, m21.chord.ChordBase):
                         for note in obj.notes:
-                            note.stemDirection = None  # means 'unspecified'
-                    elif isinstance(obj, m21.note.Note):
-                        obj.stemDirection = upOrDown
+                            note.stemDirection = upOrDown
 
             if beamEnd == beamStart:
                 # last note of beam so exit
@@ -5976,21 +5971,30 @@ class HumdrumFile(HumdrumFileContent):
         # LATER: Support *2\right for scores where half-notes' stems are on the right
         # I don't think music21 can do it, so...
 
-        # Overwrite cross-stem direction if there is an explicit stem direction.
-        # BUGFIX: We are doing this processing in _convertNote for notes that are in
-        # BUGFIX: a chord, and for the chord here, so we might end up with notes in a chord
-        # BUGFIX: whose stem direction is the opposite of the stem direction of the chord...
-        if '/' in tstring:
+        # Overwrite cross-stem direction if there is an explicit stem direction.  This
+        # has already been done for each note in the chord (in the createAndConvertNote
+        # calls above).  Here we are believing the first '/' or '\\' we see in the chord
+        # token, which may well be on one of the note subtokens.
+        didSetChordStemDirection: bool = False
+        if '/' in ' '.join(tstrings):
             chord.stemDirection = 'up'
-        elif '\\' in tstring:
+            didSetChordStemDirection = True
+        elif '\\' in ' '.join(tstrings):
             chord.stemDirection = 'down'
+            didSetChordStemDirection = True
 
-        # Stem direction of the chord.  If both up and down, then show up.
+        # Stem direction of the chord beam.  If both up and down, then show up.
         beamStemDir: int = layerTok.getValueInt('auto', 'stem.dir')
         if beamStemDir == 1:
             chord.stemDirection = 'up'
+            didSetChordStemDirection = True
         elif beamStemDir == -1:
             chord.stemDirection = 'down'
+            didSetChordStemDirection = True
+
+        if didSetChordStemDirection:
+            for note in chord.notes:
+                note.stemDirection = chord.stemDirection
 
         # We do not need to adjustChordNoteDurations, since _convertNote carefully did not
         # set note durations at all (in a chord). --gregc
