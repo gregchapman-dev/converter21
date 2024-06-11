@@ -712,6 +712,11 @@ class HumdrumFile(HumdrumFileContent):
                 ss: StaffStateVariables = self._staffStates[spStaffIndex]
                 ss.hasOttavas = True
                 if ss.m21Part is not None:
+                    # depending on voicing, the last element in the ottava may not be the
+                    # element with the highest end time.  That's unfortunate, because that
+                    # is what spanner.fill assumes.  So find that element, remove and
+                    # re-add it, so that it is the last element in the ottava.
+                    M21Utilities.adjustSpannerOrder(sp, ss.m21Part)
                     sp.fill(ss.m21Part)
 
         # Transpose any transposing instrument parts (or parts with ottavas) to "written pitch".
@@ -2200,7 +2205,6 @@ class HumdrumFile(HumdrumFileContent):
                     measureIndex, voice, vOffsetInMeasure, layerTok, staffIndex):
                 insertedIntoVoice = True
 
-        # TODO: ottava marks
         self._handleOttavaMark(measureIndex, layerTok, staffIndex)
         # self._handleLigature(layerTok) # just for **mens
         # self._handleColoration(layerTok) # just for **mens

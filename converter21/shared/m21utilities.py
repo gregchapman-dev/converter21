@@ -570,6 +570,39 @@ class M21Utilities:
         return isinstance(inst, (m21.instrument.KeyboardInstrument, m21.instrument.Organ))
 
     @staticmethod
+    def adjustSpannerOrder(sp: m21.spanner.Spanner, s: m21.stream.Stream):
+        # the adjustment we make is to find the element with highest end time (in s),
+        # and move it to be the last element in the spanner
+        lastEl: m21.Music21Object | None = sp.getLast()
+        highestEl: m21.Music21Object | None = lastEl
+        if highestEl is None:
+            return
+
+        highestEndTime: OffsetQL = highestEl.getOffsetInHierarchy(s) + highestEl.quarterLength
+        for el in sp:
+            if el is lastEl:
+                # shortcut the last iteration, since we inited highestEl with sp.getLast()
+                break
+
+            endTime: OffsetQL = 0.
+            try:
+                endTime = el.getOffsetInHierarchy(s) + el.quarterLength
+            except Exception:
+                # el not in s, we'll have to ignore it; keep going
+                continue
+
+            if endTime > highestEndTime:
+                highestEndTime = endTime
+                highestEl = el
+
+        if highestEl is None or highestEl is lastEl:
+            # nothing to adjust
+            return
+
+        sp.spannerStorage.remove(highestEl)
+        sp.addSpannedElements(highestEl)
+
+    @staticmethod
     def makeDuration(
         base: OffsetQLIn = 0.0,
         dots: int = 0
