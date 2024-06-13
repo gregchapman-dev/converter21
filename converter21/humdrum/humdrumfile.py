@@ -2280,45 +2280,48 @@ class HumdrumFile(HumdrumFileContent):
             # turn on "up one octave" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-            # create it
-            ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
-            ss.currentOttava1Up.humdrum_staff_index = staffIndex  # type: ignore
-
-            # put it in the measure
-            measure.insert(0, ss.currentOttava1Up)
+            # create it (if it isn't already there; might be in a different voice in the staff)
+            if ss.currentOttava1Up is None:
+                ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
+                ss.currentOttava1Up.humdrum_staff_index = staffIndex  # type: ignore
+                # put it in the measure
+                measure.insert(0, ss.currentOttava1Up)
             return
 
         if token.text == '*8ba':
             # turn on "down one octave" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-            # create it
-            ss.currentOttava1Down = m21.spanner.Ottava(type='8vb', transposing=False)
-            ss.currentOttava1Down.humdrum_staff_index = staffIndex  # type: ignore
-            # put it in the measure
-            measure.insert(0, ss.currentOttava1Down)
+            # create it (if it isn't already there; might be in a different voice in the staff)
+            if ss.currentOttava1Down is None:
+                ss.currentOttava1Down = m21.spanner.Ottava(type='8vb', transposing=False)
+                ss.currentOttava1Down.humdrum_staff_index = staffIndex  # type: ignore
+                # put it in the measure
+                measure.insert(0, ss.currentOttava1Down)
             return
 
         if token.text == '*15ma':
             # turn on "up two octaves" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-            # create it
-            ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
-            ss.currentOttava2Up.humdrum_staff_index = staffIndex  # type: ignore
-            # put it in the measure
-            measure.insert(0, ss.currentOttava2Up)
+            # create it (if it isn't already there; might be in a different voice in the staff)
+            if ss.currentOttava2Up is None:
+                ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
+                ss.currentOttava2Up.humdrum_staff_index = staffIndex  # type: ignore
+                # put it in the measure
+                measure.insert(0, ss.currentOttava2Up)
             return
 
         if token.text == '*15ba':
             # turn on "down two octaves" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
-            # create it
-            ss.currentOttava2Down = m21.spanner.Ottava(type='15mb', transposing=False)
-            ss.currentOttava2Down.humdrum_staff_index = staffIndex  # type: ignore
-            # put it in the measure
-            measure.insert(0, ss.currentOttava2Down)
+            # create it (if it isn't already there; might be in a different voice in the staff)
+            if ss.currentOttava2Down is None:
+                ss.currentOttava2Down = m21.spanner.Ottava(type='15mb', transposing=False)
+                ss.currentOttava2Down.humdrum_staff_index = staffIndex  # type: ignore
+                # put it in the measure
+                measure.insert(0, ss.currentOttava2Down)
             return
 
         if token.text == '*X8va':
