@@ -601,10 +601,12 @@ class M21Utilities:
                 # el not in s, we'll have to ignore it; keep going
                 continue
 
-            if endTime > highestEndTime:
+            if endTime >= highestEndTime:
+                # >= so we get the last element that has that highestEndTime
                 highestEndTime = endTime
                 highestEl = el
             if startTime < lowestStartTime:
+                # < (not <=) so we get the first element that has that lowestStartTime
                 lowestStartTime = startTime
                 lowestEl = el
 
