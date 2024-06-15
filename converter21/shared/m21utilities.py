@@ -33,9 +33,13 @@ class CannotMakeScoreFromObjectError(Exception):
 class NoMusic21VersionError(Exception):
     pass
 
+
 class Converter21InternalError(Exception):
     pass
 
+
+MAX_INT: int = 9223372036854775807
+MAX_OFFSETQL: OffsetQL = opFrac(MAX_INT)
 
 # pylint: disable=protected-access
 
@@ -571,22 +575,28 @@ class M21Utilities:
 
     @staticmethod
     def adjustSpannerOrder(sp: m21.spanner.Spanner, s: m21.stream.Stream):
-        # the adjustment we make is to find the element with highest end time (in s),
-        # and move it to be the last element in the spanner
+        # the adjustment is that we move the element with the smallest offsetInHierarchy(s)
+        # to the beginning of the list, and the element with the largest highestTime
+        # (offsetInHierarchy(s) + el.quarterLength) to the end of the list.
+        firstEl: m21.Music21Object | None = sp.getFirst()
         lastEl: m21.Music21Object | None = sp.getLast()
+        lowestEl: m21.Music21Object | None = firstEl
         highestEl: m21.Music21Object | None = lastEl
-        if highestEl is None:
+        if lowestEl is None and highestEl is None:
+            # zero elements, no adjustment necessary
+            return
+        if lowestEl is highestEl:
+            # one element, no adjustment necessary
             return
 
-        highestEndTime: OffsetQL = highestEl.getOffsetInHierarchy(s) + highestEl.quarterLength
+        highestEndTime: OffsetQL = -1.
+        lowestStartTime: OffsetQL = MAX_OFFSETQL
         for el in sp:
-            if el is lastEl:
-                # shortcut the last iteration, since we inited highestEl with sp.getLast()
-                break
-
-            endTime: OffsetQL = 0.
+            endTime: OffsetQL = -1.  # not 0., since grace notes might have endTime == 0.
+            startTime: OffsetQL = MAX_OFFSETQL
             try:
-                endTime = el.getOffsetInHierarchy(s) + el.quarterLength
+                startTime = el.getOffsetInHierarchy(s)
+                endTime = startTime + el.quarterLength
             except Exception:
                 # el not in s, we'll have to ignore it; keep going
                 continue
@@ -594,13 +604,25 @@ class M21Utilities:
             if endTime > highestEndTime:
                 highestEndTime = endTime
                 highestEl = el
+            if startTime < lowestStartTime:
+                lowestStartTime = startTime
+                lowestEl = el
 
-        if highestEl is None or highestEl is lastEl:
-            # nothing to adjust
-            return
+        if lowestEl is not None and lowestEl is not firstEl:
+            # get them all
+            elements: list[m21.Music21Object] = sp.getSpannedElements()
+            # remove them all
+            for el in elements:
+                sp.spannerStorage.remove(el)
 
-        sp.spannerStorage.remove(highestEl)
-        sp.addSpannedElements(highestEl)
+            # add them back, lowestEl first
+            sp.addSpannedElements(lowestEl)
+            sp.addSpannedElements(elements)  # lowestEl will be skipped because already there
+
+        if highestEl is not None:
+            # make sure it is last
+            sp.spannerStorage.remove(highestEl)
+            sp.addSpannedElements(highestEl)
 
     @staticmethod
     def makeDuration(
