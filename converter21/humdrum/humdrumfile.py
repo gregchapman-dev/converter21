@@ -2284,6 +2284,10 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava1Up is None:
                 ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
                 ss.currentOttava1Up.humdrum_staff_index = staffIndex  # type: ignore
+                ss.currentOttava1Up.humdrum_measure_index = measureIndex  # type: ignore
+                ss.currentOttava1Up.humdrum_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava1Up)
             return
@@ -2296,6 +2300,10 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava1Down is None:
                 ss.currentOttava1Down = m21.spanner.Ottava(type='8vb', transposing=False)
                 ss.currentOttava1Down.humdrum_staff_index = staffIndex  # type: ignore
+                ss.currentOttava1Down.humdrum_measure_index = measureIndex  # type: ignore
+                ss.currentOttava1Down.humdrum_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava1Down)
             return
@@ -2308,6 +2316,10 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava2Up is None:
                 ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
                 ss.currentOttava2Up.humdrum_staff_index = staffIndex  # type: ignore
+                ss.currentOttava2Up.humdrum_measure_index = measureIndex  # type: ignore
+                ss.currentOttava2Up.humdrum_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava2Up)
             return
@@ -2320,6 +2332,10 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava2Down is None:
                 ss.currentOttava2Down = m21.spanner.Ottava(type='15mb', transposing=False)
                 ss.currentOttava2Down.humdrum_staff_index = staffIndex  # type: ignore
+                ss.currentOttava2Down.humdrum_measure_index = measureIndex  # type: ignore
+                ss.currentOttava2Down.humdrum_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava2Down)
             return
@@ -2356,6 +2372,10 @@ class HumdrumFile(HumdrumFileContent):
     def _endOttava(self, token: HumdrumToken, ottava: m21.spanner.Ottava | None):
         # Search backward for the first previous data line, then add the
         # notes/chords from all the tokens (in our staff/track) on that line.
+        # gregc: I think this is unnecessary, given that we called processOttava
+        # gregc: on every note that should be in this ottava.
+        return
+
         if ottava is None:
             return
 
@@ -6009,7 +6029,7 @@ class HumdrumFile(HumdrumFileContent):
 
         layerTok.setValue('music21', 'measureIndex', measureIndex)
 
-        self._processOttava(chord, staffIndex)
+        self._processOttava(chord, layerTok, measureIndex, staffIndex)
 
         self._convertVerses(chord, layerTok)
         return chord
@@ -7211,7 +7231,7 @@ class HumdrumFile(HumdrumFileContent):
         self._colorNote(note, token, tstring)
 
         if not isChord:
-            self._processOttava(note, staffIndex)
+            self._processOttava(note, token, measureIndex, staffIndex)
 
         # check for accacciatura ('q') and appoggiatura ('qq')
         if not isChord and 'q' in tstring:
@@ -7430,16 +7450,41 @@ class HumdrumFile(HumdrumFileContent):
 
         return note
 
-    def _processOttava(self, noteOrChord: m21.note.NotRest, staffIndex: int):
+    def _addToOttava(
+            self,
+            noteOrChord: m21.note.NotRest,
+            token: HumdrumToken,
+            ottava: m21.spanner.Ottava,
+            measureIndex: int,
+            staffIndex: int
+    ):
+        if measureIndex == ottava.humdrum_measure_index:  # type: ignore
+            # check to see if noteOrChord/token is before the ottava starts
+            if token.durationFromBarline < ottava.humdrum_duration_from_barline:  # type: ignore
+                # it is before ottava start, don't add it
+                return
+
+        # If measure indices don't match, don't worry about being after the ottava.
+        # This routine will not be called (because ss.currentOttavaXXX will be None).
+
+        ottava.addSpannedElements(noteOrChord)
+
+    def _processOttava(
+        self,
+        noteOrChord: m21.note.NotRest,
+        token: HumdrumToken,
+        measureIndex: int,
+        staffIndex: int
+    ):
         ss: StaffStateVariables = self._staffStates[staffIndex]
         if ss.currentOttava1Up is not None:
-            ss.currentOttava1Up.addSpannedElements(noteOrChord)
+            self._addToOttava(noteOrChord, token, ss.currentOttava1Up, measureIndex, staffIndex)
         if ss.currentOttava1Down is not None:
-            ss.currentOttava1Down.addSpannedElements(noteOrChord)
+            self._addToOttava(noteOrChord, token, ss.currentOttava1Down, measureIndex, staffIndex)
         if ss.currentOttava2Up is not None:
-            ss.currentOttava2Up.addSpannedElements(noteOrChord)
+            self._addToOttava(noteOrChord, token, ss.currentOttava2Up, measureIndex, staffIndex)
         if ss.currentOttava2Down is not None:
-            ss.currentOttava2Down.addSpannedElements(noteOrChord)
+            self._addToOttava(noteOrChord, token, ss.currentOttava2Down, measureIndex, staffIndex)
 
     '''
     //////////////////////////////
