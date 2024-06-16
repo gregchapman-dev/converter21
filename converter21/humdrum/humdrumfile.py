@@ -2341,83 +2341,57 @@ class HumdrumFile(HumdrumFileContent):
             return
 
         if token.text == '*X8va':
-            # turn off "up one octave" ottava
-            ss = self._staffStates[staffIndex]
-            # find and add all the other notes in this staff that come before this ottava end
-            self._endOttava(token, ss.currentOttava1Up)
-            ss.currentOttava1Up = None
+            if self._isLastEndOttavaLikeThisInStaff(token):
+                # turn off "up one octave" ottava
+                ss = self._staffStates[staffIndex]
+                ss.currentOttava1Up = None
             return
 
         if token.text == '*X8ba':
-            # turn off "down one octave" ottava
-            ss = self._staffStates[staffIndex]
-            self._endOttava(token, ss.currentOttava1Down)
-            ss.currentOttava1Down = None
+            if self._isLastEndOttavaLikeThisInStaff(token):
+                # turn off "down one octave" ottava
+                ss = self._staffStates[staffIndex]
+                ss.currentOttava1Down = None
             return
 
         if token.text == '*X15ma':
-            # turn off "up two octaves" ottava
-            ss = self._staffStates[staffIndex]
-            self._endOttava(token, ss.currentOttava2Up)
-            ss.currentOttava2Up = None
+            if self._isLastEndOttavaLikeThisInStaff(token):
+                # turn off "up two octaves" ottava
+                ss = self._staffStates[staffIndex]
+                ss.currentOttava2Up = None
             return
 
         if token.text == '*X15ba':
-            # turn off "down two octaves" ottava
-            ss = self._staffStates[staffIndex]
-            self._endOttava(token, ss.currentOttava2Down)
-            ss.currentOttava2Down = None
+            if self._isLastEndOttavaLikeThisInStaff(token):
+                # turn off "down two octaves" ottava
+                ss = self._staffStates[staffIndex]
+                ss.currentOttava2Down = None
             return
 
-    def _endOttava(self, token: HumdrumToken, ottava: m21.spanner.Ottava | None):
-        # Search backward for the first previous data line, then add the
-        # notes/chords from all the tokens (in our staff/track) on that line.
-        # gregc: I think this is unnecessary, given that we called processOttava
-        # gregc: on every note that should be in this ottava.
-        return
-
-        if ottava is None:
-            return
-
-        tok: HumdrumToken | None = token.previousToken0
-        while tok is not None and not tok.isData:
-            tok = tok.previousToken0
-
+    def _isLastEndOttavaLikeThisInStaff(self, token: HumdrumToken) -> bool:
+        # Search the rest of this track (on this HumdrumLine) for other ottava ends
+        # like this. If there are none, then this is the last of the ottava ends in
+        # this track/staff, so we return True.
+        ourTrack: int | None = token.track
+        tok: HumdrumToken | None = token.nextFieldToken
         if tok is None:
-            # couldn't find a previous data line
-            return
+            # no more tokens on line (and no such end ottava found)
+            return True
 
-        ourTrack: int | None = tok.track
-        ttrack: int | None = ourTrack
-        noteTokens: list[HumdrumToken] = []
-
+        ttrack: int | None = tok.track
         while ttrack == ourTrack:
-            xtok: HumdrumToken = tok
-            if xtok.isNull:
-                xtok = xtok.nullResolution
-            if xtok is None:
-                tok = tok.nextFieldToken
-                if tok is None:
-                    break
-                ttrack = tok.track
-                continue
-
-            # skip rests (notes and chords only)
-            if not xtok.isRest:
-                noteTokens.append(xtok)
+            if tok.text == token.text:
+                # found an end ottava like token in our staff (token is not the last one)
+                return False
 
             tok = tok.nextFieldToken
             if tok is None:
-                break
+                # no more tokens on line (and no such end ottava found)
+                return True
             ttrack = tok.track
 
-        for noteTok in noteTokens:
-            # the actual note or chord may not have been created yet, but
-            # _getGeneralNoteOrPlaceHolder will make it work like it has.
-            # If it gives us a placeholder, the actual note will automatically
-            # take its place in the ottava later.
-            gNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(noteTok)
-            ottava.addSpannedElements(gNote)
+        # no more tokens in other voices in our track/staff (and no such end ottava found)
+        return True
 
     def _handlePedalMark(
         self,
