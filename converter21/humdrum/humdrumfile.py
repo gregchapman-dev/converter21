@@ -2284,8 +2284,8 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava1Up is None:
                 ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
                 ss.currentOttava1Up.humdrum_staff_index = staffIndex  # type: ignore
-                ss.currentOttava1Up.humdrum_measure_index = measureIndex  # type: ignore
-                ss.currentOttava1Up.humdrum_duration_from_barline = (  # type: ignore
+                ss.currentOttava1Up.humdrum_start_measure_index = measureIndex  # type: ignore
+                ss.currentOttava1Up.humdrum_start_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
                 # put it in the measure
@@ -2300,8 +2300,8 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava1Down is None:
                 ss.currentOttava1Down = m21.spanner.Ottava(type='8vb', transposing=False)
                 ss.currentOttava1Down.humdrum_staff_index = staffIndex  # type: ignore
-                ss.currentOttava1Down.humdrum_measure_index = measureIndex  # type: ignore
-                ss.currentOttava1Down.humdrum_duration_from_barline = (  # type: ignore
+                ss.currentOttava1Down.humdrum_start_measure_index = measureIndex  # type: ignore
+                ss.currentOttava1Down.humdrum_start_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
                 # put it in the measure
@@ -2316,8 +2316,8 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava2Up is None:
                 ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
                 ss.currentOttava2Up.humdrum_staff_index = staffIndex  # type: ignore
-                ss.currentOttava2Up.humdrum_measure_index = measureIndex  # type: ignore
-                ss.currentOttava2Up.humdrum_duration_from_barline = (  # type: ignore
+                ss.currentOttava2Up.humdrum_start_measure_index = measureIndex  # type: ignore
+                ss.currentOttava2Up.humdrum_start_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
                 # put it in the measure
@@ -2332,8 +2332,8 @@ class HumdrumFile(HumdrumFileContent):
             if ss.currentOttava2Down is None:
                 ss.currentOttava2Down = m21.spanner.Ottava(type='15mb', transposing=False)
                 ss.currentOttava2Down.humdrum_staff_index = staffIndex  # type: ignore
-                ss.currentOttava2Down.humdrum_measure_index = measureIndex  # type: ignore
-                ss.currentOttava2Down.humdrum_duration_from_barline = (  # type: ignore
+                ss.currentOttava2Down.humdrum_start_measure_index = measureIndex  # type: ignore
+                ss.currentOttava2Down.humdrum_start_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
                 # put it in the measure
@@ -2341,31 +2341,55 @@ class HumdrumFile(HumdrumFileContent):
             return
 
         if token.text == '*X8va':
+            ss = self._staffStates[staffIndex]
             if self._isLastEndOttavaLikeThisInStaff(token):
                 # turn off "up one octave" ottava
-                ss = self._staffStates[staffIndex]
                 ss.currentOttava1Up = None
+            elif (ss.currentOttava1Up is not None
+                    and not hasattr(ss.currentOttava1Up, 'humdrum_end_measure_index')):
+                ss.currentOttava1Up.humdrum_end_measure_index = measureIndex  # type: ignore
+                ss.currentOttava1Up.humdrum_end_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
             return
 
         if token.text == '*X8ba':
+            ss = self._staffStates[staffIndex]
             if self._isLastEndOttavaLikeThisInStaff(token):
                 # turn off "down one octave" ottava
-                ss = self._staffStates[staffIndex]
                 ss.currentOttava1Down = None
+            elif (ss.currentOttava1Down is not None
+                    and not hasattr(ss.currentOttava1Down, 'humdrum_end_measure_index')):
+                ss.currentOttava1Down.humdrum_end_measure_index = measureIndex  # type: ignore
+                ss.currentOttava1Down.humdrum_end_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
             return
 
         if token.text == '*X15ma':
+            ss = self._staffStates[staffIndex]
             if self._isLastEndOttavaLikeThisInStaff(token):
                 # turn off "up two octaves" ottava
-                ss = self._staffStates[staffIndex]
                 ss.currentOttava2Up = None
+            elif (ss.currentOttava2Up is not None
+                    and not hasattr(ss.currentOttava2Up, 'humdrum_end_measure_index')):
+                ss.currentOttava2Up.humdrum_end_measure_index = measureIndex  # type: ignore
+                ss.currentOttava2Up.humdrum_end_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
             return
 
         if token.text == '*X15ba':
+            ss = self._staffStates[staffIndex]
             if self._isLastEndOttavaLikeThisInStaff(token):
                 # turn off "down two octaves" ottava
-                ss = self._staffStates[staffIndex]
                 ss.currentOttava2Down = None
+            elif (ss.currentOttava2Down is not None
+                    and not hasattr(ss.currentOttava2Down, 'humdrum_end_measure_index')):
+                ss.currentOttava2Down.humdrum_end_measure_index = measureIndex  # type: ignore
+                ss.currentOttava2Down.humdrum_end_duration_from_barline = (  # type: ignore
+                    token.durationFromBarline
+                )
             return
 
     def _isLastEndOttavaLikeThisInStaff(self, token: HumdrumToken) -> bool:
@@ -7432,14 +7456,23 @@ class HumdrumFile(HumdrumFileContent):
             measureIndex: int,
             staffIndex: int
     ):
-        if measureIndex == ottava.humdrum_measure_index:  # type: ignore
+        if measureIndex == ottava.humdrum_start_measure_index:  # type: ignore
             # check to see if noteOrChord/token is before the ottava starts
-            if token.durationFromBarline < ottava.humdrum_duration_from_barline:  # type: ignore
+            if (token.durationFromBarline
+                    < ottava.humdrum_start_duration_from_barline):  # type: ignore
                 # it is before ottava start, don't add it
                 return
 
-        # If measure indices don't match, don't worry about being after the ottava.
-        # This routine will not be called (because ss.currentOttavaXXX will be None).
+        if hasattr(ottava, 'humdrum_end_measure_index'):
+            if measureIndex == ottava.humdrum_end_measure_index:  # type: ignore
+                if (token.durationFromBarline
+                        >= ottava.humdrum_end_duration_from_barline):  # type: ignore
+                    # it starts at or after ottava end, don't add it.
+                    # Note that we are not checking token's end time, because
+                    # (1) no note _should_ be overlapping the ottava end time,
+                    # and (2) if such a note existed, it should probably be
+                    # interpreted as being in the ottava.
+                    return
 
         ottava.addSpannedElements(noteOrChord)
 
