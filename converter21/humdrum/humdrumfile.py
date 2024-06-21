@@ -1923,9 +1923,10 @@ class HumdrumFile(HumdrumFileContent):
             return
 
         ss: StaffStateVariables = self._staffStates[staffIndex]
+        measureIndex: int = self.measureIndexFromKey(measureKey)
 
-        # check for ottava start at or before start of first measure
-        self._prepareInitialOttavas(layerData[0], staffIndex)
+        # check for ottava start at or before start of measure
+        self._prepareInitialOttavas(layerData[0], staffIndex, measureIndex)
 
         # cadenzas can have measure entirely made up of grace notes...
         # don't bail on measureDuration == 0!
@@ -1959,7 +1960,6 @@ class HumdrumFile(HumdrumFileContent):
 
         assert len(tgs) == len(layerData)
 
-        measureIndex: int = self.measureIndexFromKey(measureKey)
         currentMeasurePerStaff: list[m21.stream.Measure] = (
             self._allMeasuresPerStaff[measureIndex]
         )
@@ -2231,7 +2231,8 @@ class HumdrumFile(HumdrumFileContent):
     def _prepareInitialOttavas(
         self,
         token: HumdrumToken | FakeRestToken,
-        staffIndex: int
+        staffIndex: int,
+        measureIndex: int
     ) -> None:
         if token is None:
             return
@@ -2256,8 +2257,7 @@ class HumdrumFile(HumdrumFileContent):
                 tok = tok.previousToken0
                 continue
 
-            if tok.text in ('*8va', '*8ba', '*15ma', '*15ba'):
-                self._handleOttavaMark(0, tok, staffIndex)
+            if self._handleOttavaMark(measureIndex, tok, staffIndex):
                 break
 
             tok = tok.previousToken0
@@ -2267,16 +2267,17 @@ class HumdrumFile(HumdrumFileContent):
         measureIndex: int,
         token: HumdrumToken | FakeRestToken,
         staffIndex: int
-    ) -> None:
+    ) -> bool:
         ss: StaffStateVariables
         measure: m21.stream.Measure
 
         if token.isFakeRest:
-            return
+            return False
         if t.TYPE_CHECKING:
             assert isinstance(token, HumdrumToken)
 
-        if token.text == '*8va':
+        ottavaText = self.getUnhandledOttavaMarkInStaff(token)
+        if ottavaText == '*8va':
             # turn on "up one octave" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
@@ -2290,9 +2291,9 @@ class HumdrumFile(HumdrumFileContent):
                 )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava1Up)
-            return
+            return True
 
-        if token.text == '*8ba':
+        if ottavaText == '*8ba':
             # turn on "down one octave" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
@@ -2306,9 +2307,9 @@ class HumdrumFile(HumdrumFileContent):
                 )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava1Down)
-            return
+            return True
 
-        if token.text == '*15ma':
+        if ottavaText == '*15ma':
             # turn on "up two octaves" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
@@ -2322,9 +2323,9 @@ class HumdrumFile(HumdrumFileContent):
                 )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava2Up)
-            return
+            return True
 
-        if token.text == '*15ba':
+        if ottavaText == '*15ba':
             # turn on "down two octaves" ottava
             ss = self._staffStates[staffIndex]
             measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
@@ -2338,11 +2339,11 @@ class HumdrumFile(HumdrumFileContent):
                 )
                 # put it in the measure
                 measure.insert(0, ss.currentOttava2Down)
-            return
+            return True
 
-        if token.text == '*X8va':
+        if ottavaText == '*X8va':
             ss = self._staffStates[staffIndex]
-            if self._isLastEndOttavaLikeThisInStaff(token):
+            if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
                 # turn off "up one octave" ottava
                 ss.currentOttava1Up = None
             elif (ss.currentOttava1Up is not None
@@ -2351,11 +2352,11 @@ class HumdrumFile(HumdrumFileContent):
                 ss.currentOttava1Up.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
-            return
+            return True
 
-        if token.text == '*X8ba':
+        if ottavaText == '*X8ba':
             ss = self._staffStates[staffIndex]
-            if self._isLastEndOttavaLikeThisInStaff(token):
+            if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
                 # turn off "down one octave" ottava
                 ss.currentOttava1Down = None
             elif (ss.currentOttava1Down is not None
@@ -2364,11 +2365,11 @@ class HumdrumFile(HumdrumFileContent):
                 ss.currentOttava1Down.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
-            return
+            return True
 
-        if token.text == '*X15ma':
+        if ottavaText == '*X15ma':
             ss = self._staffStates[staffIndex]
-            if self._isLastEndOttavaLikeThisInStaff(token):
+            if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
                 # turn off "up two octaves" ottava
                 ss.currentOttava2Up = None
             elif (ss.currentOttava2Up is not None
@@ -2377,11 +2378,11 @@ class HumdrumFile(HumdrumFileContent):
                 ss.currentOttava2Up.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
-            return
+            return True
 
-        if token.text == '*X15ba':
+        if ottavaText == '*X15ba':
             ss = self._staffStates[staffIndex]
-            if self._isLastEndOttavaLikeThisInStaff(token):
+            if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
                 # turn off "down two octaves" ottava
                 ss.currentOttava2Down = None
             elif (ss.currentOttava2Down is not None
@@ -2390,9 +2391,38 @@ class HumdrumFile(HumdrumFileContent):
                 ss.currentOttava2Down.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
                 )
-            return
+            return True
 
-    def _isLastEndOttavaLikeThisInStaff(self, token: HumdrumToken) -> bool:
+        return False
+
+    def getUnhandledOttavaMarkInStaff(self, token: HumdrumToken) -> str:
+        if token.text in ('*8va', '*X8va', '*8ba', '*X8ba', '*15ma', '*X15ma', '*15ba', '*X15ba'):
+            return token.text
+
+        # token might be '*', so we need to look at the rest of the voices in the staff
+        # (fields in the track).
+        ourTrack: int | None = token.track
+        tok: HumdrumToken | None = token.nextFieldToken
+        if tok is None:
+            # no more tokens on line (and no such unhandled ottava found)
+            return ''
+
+        ttrack: int | None = tok.track
+        while ttrack == ourTrack:
+            if tok.text in ('*8va', '*X8va', '*8ba', '*X8ba', '*15ma', '*X15ma', '*15ba', '*X15ba'):
+                # found an unhandled ottava mark
+                return tok.text
+
+            tok = tok.nextFieldToken
+            if tok is None:
+                # no more tokens on line (and no unhandled ottava mark found)
+                return ''
+            ttrack = tok.track
+
+        # no more tokens in other voices in our track/staff (and no unhandled ottava mark found)
+        return ''
+
+    def _isLastEndOttavaLikeThisInStaff(self, token: HumdrumToken, endOttavaText: str) -> bool:
         # Search the rest of this track (on this HumdrumLine) for other ottava ends
         # like this. If there are none, then this is the last of the ottava ends in
         # this track/staff, so we return True.
@@ -2404,7 +2434,7 @@ class HumdrumFile(HumdrumFileContent):
 
         ttrack: int | None = tok.track
         while ttrack == ourTrack:
-            if tok.text == token.text:
+            if tok.text == endOttavaText:
                 # found an end ottava like token in our staff (token is not the last one)
                 return False
 
