@@ -2341,13 +2341,20 @@ class HumdrumFile(HumdrumFileContent):
                 measure.insert(0, ss.currentOttava2Down)
             return True
 
+        endNote: m21.note.GeneralNote | None = None
         if ottavaText == '*X8va':
             ss = self._staffStates[staffIndex]
+            if ss.currentOttava1Up is None:
+                # unexpected ottava stop
+                return True
+
             if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
-                # turn off "up one octave" ottava
+                # get "last chance" end token and turn off "up one octave" ottava
+                endNote = self.getEndNoteForOttava(token)
+                if endNote is not None:
+                    ss.currentOttava1Up.addSpannedElements(endNote)
                 ss.currentOttava1Up = None
-            elif (ss.currentOttava1Up is not None
-                    and not hasattr(ss.currentOttava1Up, 'humdrum_end_measure_index')):
+            elif not hasattr(ss.currentOttava1Up, 'humdrum_end_measure_index'):
                 ss.currentOttava1Up.humdrum_end_measure_index = measureIndex  # type: ignore
                 ss.currentOttava1Up.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
@@ -2356,11 +2363,17 @@ class HumdrumFile(HumdrumFileContent):
 
         if ottavaText == '*X8ba':
             ss = self._staffStates[staffIndex]
+            if ss.currentOttava1Down is None:
+                # unexpected ottava stop
+                return True
+
             if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
-                # turn off "down one octave" ottava
+                # get "last chance" end token and turn off "down one octave" ottava
+                endNote = self.getEndNoteForOttava(token)
+                if endNote is not None:
+                    ss.currentOttava1Down.addSpannedElements(endNote)
                 ss.currentOttava1Down = None
-            elif (ss.currentOttava1Down is not None
-                    and not hasattr(ss.currentOttava1Down, 'humdrum_end_measure_index')):
+            elif not hasattr(ss.currentOttava1Down, 'humdrum_end_measure_index'):
                 ss.currentOttava1Down.humdrum_end_measure_index = measureIndex  # type: ignore
                 ss.currentOttava1Down.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
@@ -2369,11 +2382,17 @@ class HumdrumFile(HumdrumFileContent):
 
         if ottavaText == '*X15ma':
             ss = self._staffStates[staffIndex]
+            if ss.currentOttava2Up is None:
+                # unexpected ottava stop
+                return True
+
             if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
-                # turn off "up two octaves" ottava
+                # get "last chance" end token and turn off "up two octaves" ottava
+                endNote = self.getEndNoteForOttava(token)
+                if endNote is not None:
+                    ss.currentOttava2Up.addSpannedElements(endNote)
                 ss.currentOttava2Up = None
-            elif (ss.currentOttava2Up is not None
-                    and not hasattr(ss.currentOttava2Up, 'humdrum_end_measure_index')):
+            elif not hasattr(ss.currentOttava2Up, 'humdrum_end_measure_index'):
                 ss.currentOttava2Up.humdrum_end_measure_index = measureIndex  # type: ignore
                 ss.currentOttava2Up.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
@@ -2382,11 +2401,17 @@ class HumdrumFile(HumdrumFileContent):
 
         if ottavaText == '*X15ba':
             ss = self._staffStates[staffIndex]
+            if ss.currentOttava2Down is None:
+                # unexpected ottava stop
+                return True
+
             if self._isLastEndOttavaLikeThisInStaff(token, ottavaText):
-                # turn off "down two octaves" ottava
+                # get "last chance" end token and turn off "down two octaves" ottava
+                endNote = self.getEndNoteForOttava(token)
+                if endNote is not None:
+                    ss.currentOttava2Down.addSpannedElements(endNote)
                 ss.currentOttava2Down = None
-            elif (ss.currentOttava2Down is not None
-                    and not hasattr(ss.currentOttava2Down, 'humdrum_end_measure_index')):
+            elif not hasattr(ss.currentOttava2Down, 'humdrum_end_measure_index'):
                 ss.currentOttava2Down.humdrum_end_measure_index = measureIndex  # type: ignore
                 ss.currentOttava2Down.humdrum_end_duration_from_barline = (  # type: ignore
                     token.durationFromBarline
@@ -2394,6 +2419,59 @@ class HumdrumFile(HumdrumFileContent):
             return True
 
         return False
+
+    def getEndNoteForOttava(self, token: HumdrumToken) -> m21.note.GeneralNote | None:
+        endTok: HumdrumToken | None = self.getEndNoteTokenForOttava(token)
+        if endTok is None:
+            return None
+
+        endNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(endTok)
+        return endNote
+
+    @staticmethod
+    def getEndNoteTokenForOttava(token: HumdrumToken) -> HumdrumToken | None:
+        tok: HumdrumToken | None = token.previousToken0
+        while tok is not None and not tok.isData:
+            tok = tok.previousToken0
+
+        if tok is None:
+            # couldn't find a previous data line
+            return None
+
+        track: int | None = tok.track
+        ttrack: int | None = track
+        notes: list[HumdrumToken] = []
+        timestamps: list[HumNum] = []
+
+        while ttrack == track:
+            xtok: HumdrumToken = tok
+            if xtok.isNull:
+                xtok = xtok.nullResolution
+            if xtok is None or xtok.isRest:
+                tok = tok.nextFieldToken
+                if tok is None:
+                    break
+                ttrack = tok.track
+                continue
+
+            timestamp: HumNum = xtok.durationFromStart
+            notes.append(xtok)
+            timestamps.append(timestamp)
+
+            tok = tok.nextFieldToken
+            if tok is None:
+                break
+            ttrack = tok.track
+
+        if not notes:
+            return None
+
+        bestIndex: int = 0
+        for i in range(1, len(notes)):
+            if timestamps[i] > timestamps[bestIndex]:
+                bestIndex = i
+
+        return notes[bestIndex]
 
     def getUnhandledOttavaMarkInStaff(self, token: HumdrumToken) -> str:
         if token.text in ('*8va', '*X8va', '*8ba', '*X8ba', '*15ma', '*X15ma', '*15ba', '*X15ba'):
