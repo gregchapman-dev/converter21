@@ -1,0 +1,36 @@
+**kern	**kern	**dynam
+*staff2	*staff1	*staff1/2
+*Ipiano	*Ipiano	*Ipiano
+*k[f#c#g#d#]	*k[f#c#g#d#]	*
+*M3/4	*M3/4	*
+*clefF4	*clefG2	*
+=185	=185	=185
+*8va	*8va	*
+*	*^	*
+16b'\	8r	[2.bb\	.
+32ddn\LLL	.	.	.
+32cc#\JJJ	.	.	.
+32b\LLL	8bbb/	.	.
+32cc#\	.	.	.
+32b\	.	.	.
+32a\JJJ	.	.	.
+32g#/LLL	8r	.	.
+32a/	.	.	.
+32g#/	.	.	.
+32f#/JJJ	.	.	.
+32e#/LLL	8bbb/	.	.
+32f#/	.	.	.
+32e#/	.	.	.
+32dn/JJJ	.	.	.
+32c#\LLL	8r	.	.
+32dn\	.	.	.
+32c#\	.	.	.
+32B\JJJ	.	.	.
+32A\LLL	8cccc#/	.	.
+32B\	.	.	.
+32A\	.	.	.
+32G#\JJJ	.	.	.
+*	*v	*v	*
+*X8va	*X8va	*
+==	==	==
+*-	*-	*-
