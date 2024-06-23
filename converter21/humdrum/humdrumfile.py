@@ -2471,8 +2471,6 @@ class HumdrumFile(HumdrumFileContent):
         while ttrack == track:
             xtok: HumdrumToken = tok
             if xtok.isNull:
-                xtok = xtok.nullResolution
-            if xtok is None:
                 tok = tok.nextFieldToken
                 if tok is None:
                     break
