@@ -2472,7 +2472,7 @@ class HumdrumFile(HumdrumFileContent):
             xtok: HumdrumToken = tok
             if xtok.isNull:
                 xtok = xtok.nullResolution
-            if xtok is None or xtok.isRest:
+            if xtok is None:
                 tok = tok.nextFieldToken
                 if tok is None:
                     break
@@ -2525,7 +2525,7 @@ class HumdrumFile(HumdrumFileContent):
             xtok: HumdrumToken = tok
             if xtok.isNull:
                 xtok = xtok.nullResolution
-            if xtok is None or xtok.isRest:
+            if xtok is None:
                 tok = tok.nextFieldToken
                 if tok is None:
                     break
