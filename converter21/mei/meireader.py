@@ -2119,7 +2119,7 @@ class MeiReader:
     def addOttavas(
         self,
         elem: Element,
-        obj: note.NotRest,
+        obj: note.GeneralNote,
     ) -> list[spanner.Spanner]:
         completedOttavas: list[spanner.Spanner] = []
 
@@ -4829,6 +4829,7 @@ class MeiReader:
         if fermata is not None:
             theRest.expressions.append(fermata)
 
+        self.addOttavas(elem, theRest)
         self.addHairpins(elem, theRest)
         self.addDirsDynamsTempos(elem, theRest)
 

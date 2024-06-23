@@ -2276,11 +2276,11 @@ class HumdrumFile(HumdrumFileContent):
         if t.TYPE_CHECKING:
             assert isinstance(token, HumdrumToken)
 
+        startNote: m21.note.GeneralNote | None = None
         ottavaText = self.getUnhandledOttavaMarkInStaff(token)
         if ottavaText == '*8va':
             # turn on "up one octave" ottava
             ss = self._staffStates[staffIndex]
-            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it (if it isn't already there; might be in a different voice in the staff)
             if ss.currentOttava1Up is None:
                 ss.currentOttava1Up = m21.spanner.Ottava(type='8va', transposing=False)
@@ -2290,13 +2290,19 @@ class HumdrumFile(HumdrumFileContent):
                     token.durationFromBarline
                 )
                 # put it in the measure
+                measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
                 measure.insert(0, ss.currentOttava1Up)
+
+                # work around other voices being "hidden from ottava" due to manipulators
+                startNote = self.getStartNoteForOttava(token)
+                if startNote is not None:
+                    ss.currentOttava1Up.addSpannedElements(startNote)
+
             return True
 
         if ottavaText == '*8ba':
             # turn on "down one octave" ottava
             ss = self._staffStates[staffIndex]
-            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it (if it isn't already there; might be in a different voice in the staff)
             if ss.currentOttava1Down is None:
                 ss.currentOttava1Down = m21.spanner.Ottava(type='8vb', transposing=False)
@@ -2306,13 +2312,19 @@ class HumdrumFile(HumdrumFileContent):
                     token.durationFromBarline
                 )
                 # put it in the measure
+                measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
                 measure.insert(0, ss.currentOttava1Down)
+
+                # work around other voices being "hidden from ottava" due to manipulators
+                startNote = self.getStartNoteForOttava(token)
+                if startNote is not None:
+                    ss.currentOttava1Down.addSpannedElements(startNote)
+
             return True
 
         if ottavaText == '*15ma':
             # turn on "up two octaves" ottava
             ss = self._staffStates[staffIndex]
-            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it (if it isn't already there; might be in a different voice in the staff)
             if ss.currentOttava2Up is None:
                 ss.currentOttava2Up = m21.spanner.Ottava(type='15ma', transposing=False)
@@ -2322,13 +2334,19 @@ class HumdrumFile(HumdrumFileContent):
                     token.durationFromBarline
                 )
                 # put it in the measure
+                measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
                 measure.insert(0, ss.currentOttava2Up)
+
+                # work around other voices being "hidden from ottava" due to manipulators
+                startNote = self.getStartNoteForOttava(token)
+                if startNote is not None:
+                    ss.currentOttava2Up.addSpannedElements(startNote)
+
             return True
 
         if ottavaText == '*15ba':
             # turn on "down two octaves" ottava
             ss = self._staffStates[staffIndex]
-            measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
             # create it (if it isn't already there; might be in a different voice in the staff)
             if ss.currentOttava2Down is None:
                 ss.currentOttava2Down = m21.spanner.Ottava(type='15mb', transposing=False)
@@ -2338,7 +2356,14 @@ class HumdrumFile(HumdrumFileContent):
                     token.durationFromBarline
                 )
                 # put it in the measure
+                measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
                 measure.insert(0, ss.currentOttava2Down)
+
+                # work around other voices being "hidden from ottava" due to manipulators
+                startNote = self.getStartNoteForOttava(token)
+                if startNote is not None:
+                    ss.currentOttava2Down.addSpannedElements(startNote)
+
             return True
 
         endNote: m21.note.GeneralNote | None = None
@@ -2419,6 +2444,59 @@ class HumdrumFile(HumdrumFileContent):
             return True
 
         return False
+
+    def getStartNoteForOttava(self, token: HumdrumToken) -> m21.note.GeneralNote | None:
+        startTok: HumdrumToken | None = self.getStartNoteTokenForOttava(token)
+        if startTok is None:
+            return None
+
+        startNote: m21.note.GeneralNote = self._getGeneralNoteOrPlaceHolder(startTok)
+        return startNote
+
+    @staticmethod
+    def getStartNoteTokenForOttava(token: HumdrumToken) -> HumdrumToken | None:
+        tok: HumdrumToken | None = token.nextToken0
+        while tok is not None and not tok.isData:
+            tok = tok.nextToken0
+
+        if tok is None:
+            # couldn't find a next data line
+            return None
+
+        track: int | None = tok.track
+        ttrack: int | None = track
+        notes: list[HumdrumToken] = []
+        timestamps: list[HumNum] = []
+
+        while ttrack == track:
+            xtok: HumdrumToken = tok
+            if xtok.isNull:
+                xtok = xtok.nullResolution
+            if xtok is None or xtok.isRest:
+                tok = tok.nextFieldToken
+                if tok is None:
+                    break
+                ttrack = tok.track
+                continue
+
+            timestamp: HumNum = xtok.durationFromStart
+            notes.append(xtok)
+            timestamps.append(timestamp)
+
+            tok = tok.nextFieldToken
+            if tok is None:
+                break
+            ttrack = tok.track
+
+        if not notes:
+            return None
+
+        bestIndex: int = 0
+        for i in range(1, len(notes)):
+            if timestamps[i] < timestamps[bestIndex]:
+                bestIndex = i
+
+        return notes[bestIndex]
 
     def getEndNoteForOttava(self, token: HumdrumToken) -> m21.note.GeneralNote | None:
         endTok: HumdrumToken | None = self.getEndNoteTokenForOttava(token)
