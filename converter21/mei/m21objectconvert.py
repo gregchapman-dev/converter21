@@ -1698,6 +1698,12 @@ class M21ObjectConvert:
             text = cs.chordKindStr
         elif hasattr(cs, 'c21_full_text'):
             text = cs.c21_full_text  # type: ignore
+        elif cs.chordKindStr:
+            root: str = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(cs.root().name)
+            bass: str = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(cs.bass().name)
+            text = root + cs.chordKindStr
+            if bass != root:
+                text = text + '/' + bass
         else:
             text = cs.findFigure()
             text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
