@@ -1699,19 +1699,8 @@ class M21ObjectConvert:
         elif hasattr(cs, 'c21_full_text'):
             text = cs.c21_full_text  # type: ignore
         else:
-            root: m21.pitch.Pitch = cs.root()
-            rootStr: str = '' if root is None else root.name
-            bass: m21.pitch.Pitch = cs.bass()
-            bassStr: str = '' if bass is None or bass is root else bass.name
-
-            if rootStr:
-                rootStr = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(rootStr)
-            if bassStr:
-                bassStr = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(bassStr)
-
-            text = rootStr + cs.chordKindStr
-            if bassStr:
-                text += '/' + bassStr
+            text = cs.findFigure()
+            text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
 
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
 
