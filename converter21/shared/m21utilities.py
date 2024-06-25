@@ -2388,7 +2388,7 @@ class M21Utilities:
 
         if removeRootName:
             output = output[1:]
-            while output[0] in (unicodeFlat, unicodeSharp):
+            while output and output[0] in (unicodeFlat, unicodeSharp):
                 output = output[1:]
         return output
 
