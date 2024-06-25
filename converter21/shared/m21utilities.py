@@ -2361,8 +2361,9 @@ class M21Utilities:
     # ============================
 
     @staticmethod
-    def convertChordSymbolFigureToPrintableText(text: str) -> str:
+    def convertChordSymbolFigureToPrintableText(text: str, removeRootName: bool = False) -> str:
         # For use when writing an MEI file.
+        # removeRootName = True?  Good for computing cs.chordKindStr
 
         # In a cs figure, just after first char (root), any flats are '-'; any trailing '-'s
         # (after bass)', but everywhere between, 'b' means flat (unless it's in the word
@@ -2385,6 +2386,10 @@ class M21Utilities:
             else:
                 output += ch
 
+        if removeRootName:
+            output = output[1:]
+            while output[0] in (unicodeFlat, unicodeSharp):
+                output = output[1:]
         return output
 
     @staticmethod
