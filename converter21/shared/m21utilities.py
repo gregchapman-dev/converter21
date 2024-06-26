@@ -2361,7 +2361,7 @@ class M21Utilities:
     # ============================
 
     @staticmethod
-    def convertChordSymbolFigureToPrintableText(text: str, removeRootName: bool = False) -> str:
+    def convertChordSymbolFigureToPrintableText(text: str, removeNoteNames: bool = False) -> str:
         # For use when writing an MEI file.
         # removeRootName = True?  Good for computing cs.chordKindStr
 
@@ -2386,10 +2386,17 @@ class M21Utilities:
             else:
                 output += ch
 
-        if removeRootName:
+        if removeNoteNames:
+            # remove leading chord letter name (and accidentals)
             output = output[1:]
             while output and output[0] in (unicodeFlat, unicodeSharp):
                 output = output[1:]
+
+            if '/' in output:
+                # remove trailing '/blah'
+                slashIdx: int = output.index('/')
+                output = output[:slashIdx]
+
         return output
 
     @staticmethod

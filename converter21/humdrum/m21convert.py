@@ -400,7 +400,7 @@ class M21Convert:
         output = m21.harmony.ChordSymbol(bass=bass, root=root, kind=kind)
         text: str = output.findFigure()
         text = M21Utilities.convertChordSymbolFigureToPrintableText(
-            text, removeRootName=True
+            text, removeNoteNames=True
         )
         if text:
             output.chordKindStr = text
