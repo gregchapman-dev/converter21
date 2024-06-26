@@ -2997,49 +2997,50 @@ class M21Utilities:
             return
 
         csWasModified: bool = False
-        if len(csms) == 1 and cs.chordKind in ('major', 'minor', 'augmented', 'diminished'):
+        if len(csms) == 1 and cs.chordKind in (
+                'major', 'minor', 'augmented', 'diminished',
+                'augmented-seventh', 'augmented-major-seventh'):
             csm: m21.harmony.ChordStepModification = csms[0]
-            if csm.degree == 7:
+            if csm.modType == 'add' and csm.degree == 7:
                 if cs.chordKind == 'major':
                     if csm.interval.semitones == 0:
                         cs.chordKind = 'major-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                     elif csm.interval.semitones == -1:
                         cs.chordKind = 'dominant-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                 elif cs.chordKind == 'minor':
                     if csm.interval.semitones == 0:
                         cs.chordKind = 'minor-major-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                     elif csm.interval.semitones == -1:
                         cs.chordKind = 'minor-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                 elif cs.chordKind == 'augmented':
                     if csm.interval.semitones == 0:
                         cs.chordKind = 'augmented-major-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                     elif csm.interval.semitones == -1:
                         cs.chordKind = 'augmented-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                 elif cs.chordKind == 'diminished':
                     if csm.interval.semitones == -1:
                         cs.chordKind = 'half-diminished-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
                     elif csm.interval.semitones == -2:
                         cs.chordKind = 'diminished-seventh'
-                        cs.chordKindStr = ''
                         csWasModified = True
+            elif csm.modType == 'add' and csm.degree == 9 and csm.interval.semitones == 0:
+                if cs.chordKind == 'augmented-seventh':
+                    cs.chordKind = 'augmented-dominant-ninth'
+                    csWasModified = True
+                elif cs.chordKind == 'augmented-major-seventh':
+                    cs.chordKind = 'augmented-major-ninth'
+                    csWasModified = True
 
-            if csWasModified:
-                cs.chordStepModifications = []
-                cs.figure = None  # next get will update it
+        if csWasModified:
+            cs.chordStepModifications = []
+            cs.figure = None  # next get will update it
 
     @staticmethod
     def _updatePitches(cs: m21.harmony.ChordSymbol):
