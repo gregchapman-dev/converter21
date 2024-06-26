@@ -13,7 +13,7 @@
 import sys
 import re
 import typing as t
-# from copy import copy, deepcopy
+from copy import deepcopy
 # from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21
@@ -1705,7 +1705,9 @@ class M21ObjectConvert:
             if bass != root:
                 text = text + '/' + bass
         else:
-            text = cs.findFigure()
+            simplifiedCS: m21.harmony.ChordSymbol = deepcopy(cs)
+            M21Utilities.simplifyChordSymbol(simplifiedCS)
+            text = simplifiedCS.findFigure()
             text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
 
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)

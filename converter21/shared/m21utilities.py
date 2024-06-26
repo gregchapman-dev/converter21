@@ -2726,6 +2726,9 @@ class M21Utilities:
             return ','.join(newDegreeList)
 
         # --------- start of makeHarteFromChordSymbol ---------
+        cs = deepcopy(cs)  # because we want to try to simplify it
+        M21Utilities.simplifyChordSymbol(cs)
+
         if isinstance(cs, m21.harmony.NoChord):
             return 'N'
 
