@@ -2397,6 +2397,14 @@ class M21Utilities:
                 slashIdx: int = output.index('/')
                 output = output[:slashIdx]
 
+        # some final tweaks of things music21 does, that I don't like
+        output = output.replace('dim', '\u00B0')  # degree symbol instead of 'dim'
+        if 'o' in output:
+            output = output.replace('o7', '\u00B0' + '7')
+            output = output.replace('o9', '\u00B0' + '9')
+            output = output.replace('o' + unicodeFlat + '9', '\u00B0' + unicodeFlat + '9')
+            output = output.replace('o11', '\u00B0' + '11')
+
         return output
 
     @staticmethod
