@@ -2290,12 +2290,9 @@ class HumdrumToken(HumHash):
     //
     // HumdrumToken::noteInLowerSubtrack -- Return true if the note
     //     is attacked or sustained with another note in a lower layer.
-    //     This is for using in hum2mei conversion to avoid a bug in
-    //     verovio related to lyrics in layers where the notes are a
-    //     second apart.
-        iohumdrum.cpp in Verovio is the only client --gregc
+    //     This is so we don't duplicate lyrics in multiple layers when
+    //     one layer will do.
     '''
-    @property
     def noteInLowerSubtrack(self) -> bool:
         if self.subTrack <= 1:
             return False
@@ -2308,7 +2305,7 @@ class HumdrumToken(HumHash):
 
         # loops from field-1 to 0 (end index -1 is exclusive), incrementing by -1
         for i in range(self.fieldIndex - 1, -1, -1):
-            xtoken = self.ownerLine.token[i]
+            xtoken = self.ownerLine[i]
             if xtoken.track != track:
                 return False
             if xtoken.isNull:

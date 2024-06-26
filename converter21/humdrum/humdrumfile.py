@@ -7826,18 +7826,13 @@ class HumdrumFile(HumdrumFileContent):
         if not ss.hasLyrics:
             return
 
-#         int subtrack = token->getSubtrack();
-#         if (subtrack > 1) {
-#             if (token->noteInLowerSubtrack()) {
-#                 // don't print a lyric for secondary layers unless
-#                 // all of the lower layers do not have a note attacking
-#                 // or tied at the same time.  This is because verovio
-#                 // will incorrectly overstrike syllables shared between
-#                 // layers if there is an offset of a second between the layers.
-#                 return;
-#                 // probably also have to deal with chords containing seconds...
-#             }
-#         }
+        subTrack: int = token.subTrack
+        if subTrack > 1 and token.noteInLowerSubtrack():
+            # don't print a lyric for secondary layers unless
+            # all of the lower layers do not have a note attacking
+            # or tied at the same time.  That way we don't duplicate
+            # lyrics in multiple voices when one voice will do.
+            return
 
         line: HumdrumLine = token.ownerLine
         track: int = token.track
