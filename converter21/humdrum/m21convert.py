@@ -398,7 +398,7 @@ class M21Convert:
 
 #         output = m21.harmony.ChordSymbol(bass=bass, root=root, kind=kind, kindStr=kindStr)
         output = m21.harmony.ChordSymbol(bass=bass, root=root, kind=kind)
-        output = M21Utilities.simplifyChordSymbol(output)
+        M21Utilities.simplifyChordSymbol(output)
         text: str = output.findFigure()
         text = M21Utilities.convertChordSymbolFigureToPrintableText(
             text, removeNoteNames=True
