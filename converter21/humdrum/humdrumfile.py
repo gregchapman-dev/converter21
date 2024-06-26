@@ -1764,7 +1764,8 @@ class HumdrumFile(HumdrumFileContent):
                         kindStr = self._getLayoutParameterWithDefaults(
                             token, 'H', 'kt', '', '', n=nStr
                         )
-                        chordSym.chordKindStr = kindStr
+                        if kindStr:
+                            chordSym.chordKindStr = kindStr
 
                     staffIndex: int = self._staffStartsIndexByTrack[track]
                     csOffset: OffsetQL = token.durationFromBarline
