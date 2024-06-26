@@ -2999,7 +2999,8 @@ class M21Utilities:
         csWasModified: bool = False
         if len(csms) == 1 and cs.chordKind in (
                 'major', 'minor', 'augmented', 'diminished',
-                'augmented-seventh', 'augmented-major-seventh'):
+                'augmented-seventh', 'augmented-major-seventh',
+                'minor-seventh'):
             csm: m21.harmony.ChordStepModification = csms[0]
             if csm.modType == 'add' and csm.degree == 7:
                 if cs.chordKind == 'major':
@@ -3036,6 +3037,10 @@ class M21Utilities:
                     csWasModified = True
                 elif cs.chordKind == 'augmented-major-seventh':
                     cs.chordKind = 'augmented-major-ninth'
+                    csWasModified = True
+            elif csm.modType == 'alter' and csm.degree == 5 and csm.interval.semitones == -1:
+                if cs.chordKind == 'minor-seventh':
+                    cs.chordKind = 'half-diminished-seventh'
                     csWasModified = True
 
         if csWasModified:
