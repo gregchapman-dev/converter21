@@ -2195,7 +2195,7 @@ class M21Convert:
         #               output += ':cj'
         if hasattr(cs, 'c21_full_text'):
             output += f':t={cs.c21_full_text}'  # type: ignore
-        if cs.chordKindStr or cs.chordKind == 'major':
+        if cs.chordKindStr:
             output += f':kt={cs.chordKindStr}'
 
         return output
