@@ -2046,6 +2046,7 @@ class M21Utilities:
         'sourceEditor': 'PED',
         'publication editor': 'PED',
         'publicationEditor': 'PED',
+        'poet': 'LYR'
     }
 
     validMeiMetadataKeys: tuple[str, ...] = (

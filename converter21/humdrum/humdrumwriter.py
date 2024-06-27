@@ -768,7 +768,7 @@ class HumdrumWriter:
                     hdKeyWithoutIndex = (
                         M21Utilities.contributorRoleToHumdrumReferenceKey(value.role)
                     )
-                    if hdKeyWithoutIndex is not None:
+                    if hdKeyWithoutIndex:
                         idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                         hdKeyWithoutIndexToCurrentIndex[
                             hdKeyWithoutIndex] = idx + 1  # for next time
@@ -783,7 +783,7 @@ class HumdrumWriter:
                     M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
                 )
 
-                if hdKeyWithoutIndex is not None:
+                if hdKeyWithoutIndex:
                     idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                     hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
                     refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
