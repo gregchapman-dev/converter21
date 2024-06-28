@@ -2410,6 +2410,8 @@ class HumdrumWriter:
                     currentDynamicIndex += 1
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
+            elif moreThanOneDynamic:
+                currentDynamicIndex += 1
 
     def _appendInvisibleRestVoice(
         self,
@@ -2742,6 +2744,8 @@ class HumdrumWriter:
 
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
+            elif moreThanOneDynamic[partIndex]:
+                currentDynamicIndex[partIndex] += 1
 
     def _addUnassociatedHarmonies(
         self,
@@ -2821,6 +2825,8 @@ class HumdrumWriter:
 
                 fullParam += hparam
                 outgm.addHarmonyLayoutParameters(outSlice, partIndex, fullParam)
+            elif moreThanOneHarmony[(partIndex, offsetInScore)]:
+                currentHarmonyIndex[(partIndex, offsetInScore)] += 1
 
     '''
     //////////////////////////////
