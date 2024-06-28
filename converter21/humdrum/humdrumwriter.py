@@ -768,7 +768,7 @@ class HumdrumWriter:
                     hdKeyWithoutIndex = (
                         M21Utilities.contributorRoleToHumdrumReferenceKey(value.role)
                     )
-                    if hdKeyWithoutIndex is not None:
+                    if hdKeyWithoutIndex:
                         idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                         hdKeyWithoutIndexToCurrentIndex[
                             hdKeyWithoutIndex] = idx + 1  # for next time
@@ -783,7 +783,7 @@ class HumdrumWriter:
                     M21Convert.m21MetadataItemToHumdrumKeyWithoutIndex(uniqueName, value)
                 )
 
-                if hdKeyWithoutIndex is not None:
+                if hdKeyWithoutIndex:
                     idx = hdKeyWithoutIndexToCurrentIndex.get(hdKeyWithoutIndex, 0)
                     hdKeyWithoutIndexToCurrentIndex[hdKeyWithoutIndex] = idx + 1  # for next time
                     refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
@@ -2410,6 +2410,8 @@ class HumdrumWriter:
                     currentDynamicIndex += 1
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
+            elif moreThanOneDynamic:
+                currentDynamicIndex += 1
 
     def _appendInvisibleRestVoice(
         self,
@@ -2742,6 +2744,8 @@ class HumdrumWriter:
 
                 fullParam += dparam
                 outgm.addDynamicsLayoutParameters(outSlice, partIndex, fullParam)
+            elif moreThanOneDynamic[partIndex]:
+                currentDynamicIndex[partIndex] += 1
 
     def _addUnassociatedHarmonies(
         self,
@@ -2821,6 +2825,8 @@ class HumdrumWriter:
 
                 fullParam += hparam
                 outgm.addHarmonyLayoutParameters(outSlice, partIndex, fullParam)
+            elif moreThanOneHarmony[(partIndex, offsetInScore)]:
+                currentHarmonyIndex[(partIndex, offsetInScore)] += 1
 
     '''
     //////////////////////////////

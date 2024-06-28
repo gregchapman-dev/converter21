@@ -2046,6 +2046,7 @@ class M21Utilities:
         'sourceEditor': 'PED',
         'publication editor': 'PED',
         'publicationEditor': 'PED',
+        'poet': 'LYR'
     }
 
     validMeiMetadataKeys: tuple[str, ...] = (
@@ -2361,8 +2362,9 @@ class M21Utilities:
     # ============================
 
     @staticmethod
-    def convertChordSymbolFigureToPrintableText(text: str) -> str:
+    def convertChordSymbolFigureToPrintableText(text: str, removeNoteNames: bool = False) -> str:
         # For use when writing an MEI file.
+        # removeRootName = True?  Good for computing cs.chordKindStr
 
         # In a cs figure, just after first char (root), any flats are '-'; any trailing '-'s
         # (after bass)', but everywhere between, 'b' means flat (unless it's in the word
@@ -2384,6 +2386,25 @@ class M21Utilities:
                 pass  # we are removing the spaces around ' add ', ' omit ', ' alter '
             else:
                 output += ch
+
+        if removeNoteNames:
+            # remove leading chord letter name (and accidentals)
+            output = output[1:]
+            while output and output[0] in (unicodeFlat, unicodeSharp):
+                output = output[1:]
+
+            if '/' in output:
+                # remove trailing '/blah'
+                slashIdx: int = output.index('/')
+                output = output[:slashIdx]
+
+        # some final tweaks of things music21 does, that I don't like
+        output = output.replace('dim', '\u00B0')  # degree symbol instead of 'dim'
+        if 'o' in output:
+            output = output.replace('o7', '\u00B0' + '7')
+            output = output.replace('o9', '\u00B0' + '9')
+            output = output.replace('o' + unicodeFlat + '9', '\u00B0' + unicodeFlat + '9')
+            output = output.replace('o11', '\u00B0' + '11')
 
         return output
 
@@ -2714,6 +2735,9 @@ class M21Utilities:
             return ','.join(newDegreeList)
 
         # --------- start of makeHarteFromChordSymbol ---------
+        cs = deepcopy(cs)  # because we want to try to simplify it
+        M21Utilities.simplifyChordSymbol(cs)
+
         if isinstance(cs, m21.harmony.NoChord):
             return 'N'
 
@@ -2972,7 +2996,68 @@ class M21Utilities:
                 csMod = m21.harmony.ChordStepModification('add', degInt, alter)
                 cs.addChordStepModification(csMod, updatePitches=True)
 
+        if cs is not None:
+            # see if we can find a better chordKind with fewer chordStepModifications
+            M21Utilities.simplifyChordSymbol(cs)
+
         return cs
+
+    @staticmethod
+    def simplifyChordSymbol(cs: m21.harmony.ChordSymbol):
+        csms: list[m21.harmony.ChordStepModification] = cs.getChordStepModifications()
+        if not csms:
+            return
+
+        csWasModified: bool = False
+        if len(csms) == 1 and cs.chordKind in (
+                'major', 'minor', 'augmented', 'diminished',
+                'augmented-seventh', 'augmented-major-seventh',
+                'minor-seventh'):
+            csm: m21.harmony.ChordStepModification = csms[0]
+            if csm.modType == 'add' and csm.degree == 7:
+                if cs.chordKind == 'major':
+                    if csm.interval.semitones == 0:
+                        cs.chordKind = 'major-seventh'
+                        csWasModified = True
+                    elif csm.interval.semitones == -1:
+                        cs.chordKind = 'dominant-seventh'
+                        csWasModified = True
+                elif cs.chordKind == 'minor':
+                    if csm.interval.semitones == 0:
+                        cs.chordKind = 'minor-major-seventh'
+                        csWasModified = True
+                    elif csm.interval.semitones == -1:
+                        cs.chordKind = 'minor-seventh'
+                        csWasModified = True
+                elif cs.chordKind == 'augmented':
+                    if csm.interval.semitones == 0:
+                        cs.chordKind = 'augmented-major-seventh'
+                        csWasModified = True
+                    elif csm.interval.semitones == -1:
+                        cs.chordKind = 'augmented-seventh'
+                        csWasModified = True
+                elif cs.chordKind == 'diminished':
+                    if csm.interval.semitones == -1:
+                        cs.chordKind = 'half-diminished-seventh'
+                        csWasModified = True
+                    elif csm.interval.semitones == -2:
+                        cs.chordKind = 'diminished-seventh'
+                        csWasModified = True
+            elif csm.modType == 'add' and csm.degree == 9 and csm.interval.semitones == 0:
+                if cs.chordKind == 'augmented-seventh':
+                    cs.chordKind = 'augmented-dominant-ninth'
+                    csWasModified = True
+                elif cs.chordKind == 'augmented-major-seventh':
+                    cs.chordKind = 'augmented-major-ninth'
+                    csWasModified = True
+            elif csm.modType == 'alter' and csm.degree == 5 and csm.interval.semitones == -1:
+                if cs.chordKind == 'minor-seventh':
+                    cs.chordKind = 'half-diminished-seventh'
+                    csWasModified = True
+
+        if csWasModified:
+            cs.chordStepModifications = []
+            cs.figure = None  # next get will update it
 
     @staticmethod
     def _updatePitches(cs: m21.harmony.ChordSymbol):
