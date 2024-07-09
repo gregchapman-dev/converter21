@@ -66,18 +66,14 @@ def runTheFullTest(krnPath: Path):
 
     # compare the two music21 scores
     # with music-score-diff:
-    print('comparing the two m21 scores (ignoring rest positions, because verovio invents them)')
-    TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
     score_lin1 = AnnScore(
         score1,
-        (DetailLevel.AllObjectsWithStyleAndMetadata
-            | TURN_OFF_REST_POSITION_COMPARISON)
+        DetailLevel.AllObjectsWithStyleAndMetadata
     )
     print('loaded first score')
     score_lin2 = AnnScore(
         score2,
-        (DetailLevel.AllObjectsWithStyleAndMetadata
-            | TURN_OFF_REST_POSITION_COMPARISON)
+        DetailLevel.AllObjectsWithStyleAndMetadata
     )
     print('loaded second score')
     if score_lin1.n_of_parts != score_lin2.n_of_parts:

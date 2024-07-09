@@ -301,16 +301,13 @@ def runTheDiff(krnPath: Path, results) -> bool:
     # and return whether or not they were identical. Disable
     # rest position comparison, since verovio makes them up.
     try:
-        TURN_OFF_REST_POSITION_COMPARISON: int = 0x10000000
         annotatedScore1 = AnnScore(
             score1,
-            (DetailLevel.AllObjectsWithStyleAndMetadata
-                | TURN_OFF_REST_POSITION_COMPARISON)
+            DetailLevel.AllObjectsWithStyleAndMetadata
         )
         annotatedScore2 = AnnScore(
             score2,
-            (DetailLevel.AllObjectsWithStyleAndMetadata
-                | TURN_OFF_REST_POSITION_COMPARISON)
+            DetailLevel.AllObjectsWithStyleAndMetadata
         )
         if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
             print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')
