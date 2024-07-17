@@ -68,9 +68,13 @@ def oplistSummary(
             counts['space'] += 1
         elif op[0] in ('graceedit', 'graceslashedit'):
             counts['gracenote'] += 1
-        elif op[0] in ('inslyric',
-                        'dellyric',
-                        'editlyric'):
+        elif op[0] in ('lyricins',
+                        'lyricdel',
+                        'lyricsub',
+                        'lyricedit',
+                        'lyricverseidedit',
+                        'lyricoffsetedit',
+                        'lyricstyleedit'):
             counts['lyric'] += 1
         elif op[0] in ('editstyle',
                        'editnoteshape',
@@ -328,6 +332,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
             summ: str = '\t' + oplistSummary(op_list, score1, score2)
             print(summ)
             print(summ, file=results)
+            textOut: str = Visualization.get_text_output(score1, score2, op_list)
+            print(textOut)
+            print(textOut, file=results)
             results.flush()
             return False
         return True

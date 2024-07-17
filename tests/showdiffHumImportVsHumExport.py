@@ -98,6 +98,8 @@ def runTheFullTest(krnPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
+        textOut: str = Visualization.get_text_output(score1, score2, op_list)
+        print(textOut)
 #     print('score1 written to: ', score1.write('musicxml', makeNotation=False))
 #     print('score2 written to: ', score2.write('musicxml', makeNotation=False))
     return
