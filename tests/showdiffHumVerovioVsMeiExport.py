@@ -76,7 +76,7 @@ def runTheFullTest(krnPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
-        textOut: str = Visualization.get_text_output(score1, score2, op_list)
+        textOut: str = Visualization.get_text_output(score1, score2, diffList)
         print(textOut)
 #     print('verovio MEI score written to: ', score1.write('musicxml', makeNotation=False))
 #     print('my MEI score written to: ', score2.write('musicxml', makeNotation=False))
