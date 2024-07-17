@@ -74,7 +74,8 @@ def oplistSummary(
                         'lyricdel',
                         'lyricsub',
                         'lyricedit',
-                        'lyricverseidedit',
+                        'lyricnumedit',
+                        'lyricidedit',
                         'lyricoffsetedit',
                         'lyricstyleedit'):
             counts['lyric'] += 1
