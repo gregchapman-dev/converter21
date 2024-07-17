@@ -1657,6 +1657,8 @@ class HumdrumFileContent(HumdrumFileStructure):
     //          auto/ij-end=true: the syllable is the last in an ij region.
     //
     // Returns true if there are any *ij/*Xij markers in the data.
+    //
+    // Also consider *edit/*Xedit and *italic/*Xitalic as *ij/*Xij for printing.
     '''
     def analyzeTextRepetition(self) -> None:
         spineStarts: list[HumdrumToken | None] = self.spineStartList
@@ -1680,10 +1682,10 @@ class HumdrumFileContent(HumdrumFileStructure):
                     continue
 
                 if current.isInterpretation:
-                    if current.text == '*ij':
+                    if current.text in ('*ij', '*edit', '*italic'):
                         startij = True
                         ijstate = True
-                    elif current.text == '*Xij':
+                    elif current.text in ('*Xij', '*Xedit', '*Xitalic'):
                         startij = False
                         ijstate = False
                         if lastIJToken is not None:
