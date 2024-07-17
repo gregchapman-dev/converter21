@@ -8,6 +8,7 @@ from music21.base import VERSION_STR
 
 from musicdiff.annotation import AnnScore, AnnExtra, AnnMetadataItem
 from musicdiff import Comparison
+from musicdiff import Visualization
 from musicdiff import DetailLevel
 
 # The things we're testing
