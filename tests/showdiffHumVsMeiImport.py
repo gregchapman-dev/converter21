@@ -68,12 +68,12 @@ def runTheFullTest(krnPath: Path):
     # with music-score-diff:
     score_lin1 = AnnScore(
         score1,
-        DetailLevel.AllObjectsWithStyleAndMetadata
+        DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
     )
     print('loaded first score')
     score_lin2 = AnnScore(
         score2,
-        DetailLevel.AllObjectsWithStyleAndMetadata
+        DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
     )
     print('loaded second score')
     if score_lin1.n_of_parts != score_lin2.n_of_parts:

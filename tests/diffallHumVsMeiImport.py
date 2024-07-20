@@ -309,11 +309,11 @@ def runTheDiff(krnPath: Path, results) -> bool:
     try:
         annotatedScore1 = AnnScore(
             score1,
-            DetailLevel.AllObjectsWithStyleAndMetadata
+            DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
         )
         annotatedScore2 = AnnScore(
             score2,
-            DetailLevel.AllObjectsWithStyleAndMetadata
+            DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
         )
         if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
             print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')

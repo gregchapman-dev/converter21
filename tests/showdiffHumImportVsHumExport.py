@@ -78,11 +78,17 @@ def runTheFullTest(krnPath: Path):
 #     score2.show('musicxml.pdf')
 
     # compare the two music21 scores
-    # with music-score-diff:
+    # with musicdiff:
     print('comparing the two m21 scores')
-    score_lin1 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
+    score_lin1 = AnnScore(
+        score1,
+        DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+    )
     print('loaded first score')
-    score_lin2 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
+    score_lin2 = AnnScore(
+        score2,
+        DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+    )
     print('loaded second score')
     if score_lin1.n_of_parts != score_lin2.n_of_parts:
         print(f'numParts {score_lin1.n_of_parts} vs {score_lin2.n_of_parts}')

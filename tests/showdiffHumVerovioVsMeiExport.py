@@ -55,12 +55,18 @@ def runTheFullTest(krnPath: Path):
 
     score2 = m21.converter.parse(meiwPath, format='mei', forceSource=True)
 
-    # compare the two music21 (MEI) scores
-    # with music-score-diff:
+    # compare the two music21 scores
+    # with musicdiff:
     print('comparing the two m21/MEI scores')
-    score_lin2 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
+    score_lin2 = AnnScore(
+        score1,
+        DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+    )
     print('loaded verovio MEI score')
-    score_lin3 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
+    score_lin3 = AnnScore(
+        score2,
+        DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+    )
     print('loaded my MEI score')
     if score_lin2.n_of_parts != score_lin3.n_of_parts:
         print(f'numParts {score_lin2.n_of_parts} vs {score_lin3.n_of_parts}')

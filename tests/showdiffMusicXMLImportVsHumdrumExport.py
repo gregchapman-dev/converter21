@@ -58,9 +58,13 @@ def runTheFullTest(inputPath: Path):
     # compare the two music21 (Humdrum) scores
     # with music-score-diff:
     print('comparing the two music21 scores')
-    score_lin2 = AnnScore(score1, DetailLevel.AllObjectsWithStyleAndMetadata)
+    score_lin2 = AnnScore(
+        score1, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+    )
     print('loaded imported MusicXML score')
-    score_lin3 = AnnScore(score2, DetailLevel.AllObjectsWithStyleAndMetadata)
+    score_lin3 = AnnScore(
+        score2, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+    )
     print('loaded exported Humdrum score')
     if score_lin2.n_of_parts != score_lin3.n_of_parts:
         print(f'numParts {score_lin2.n_of_parts} vs {score_lin3.n_of_parts}')
