@@ -238,7 +238,7 @@ class MeiScore:
             if clefs:
                 clef = clefs[0]
         if clef is not None:
-            M21ObjectConvert.m21ClefToMei(clef, tb)
+            M21ObjectConvert.m21ClefToMei(clef, self.spannerBundle, tb)
             clef.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial clef found in part {staffN}')
@@ -254,7 +254,7 @@ class MeiScore:
             if keySigs:
                 keySig = keySigs[0]
         if keySig is not None:
-            M21ObjectConvert.m21KeySigToMei(keySig, tb)
+            M21ObjectConvert.m21KeySigToMei(keySig, self.spannerBundle, tb)
             keySig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial key signature found in part {staffN}')
@@ -270,7 +270,7 @@ class MeiScore:
             if meterSigs:
                 meterSig = meterSigs[0]
         if meterSig is not None:
-            M21ObjectConvert.m21TimeSigToMei(meterSig, tb)
+            M21ObjectConvert.m21TimeSigToMei(meterSig, self.spannerBundle, tb)
             meterSig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial time signature found in part {staffN}')
@@ -477,6 +477,8 @@ class MeiScore:
 
     def fillOttavas(self, obj: m21.base.Music21Object, part: m21.stream.Part) -> None:
         for spanner in obj.getSpannerSites():
+            if spanner not in self.spannerBundle:
+                continue
             if isinstance(spanner, m21.spanner.Ottava) and spanner.isFirst(obj):
                 spanner.fill(part)
 
@@ -500,6 +502,8 @@ class MeiScore:
                 # Handle this as a special case.
                 for note in obj.notes:
                     for spanner in note.getSpannerSites():
+                        if spanner not in self.spannerBundle:
+                            continue
                         if isinstance(spanner, MeiTieSpanner):
                             M21ObjectConvert.assureXmlId(spanner.getFirst())
                             if spanner.getLast() is not spanner.getFirst():
@@ -519,6 +523,8 @@ class MeiScore:
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
             for spanner in obj.getSpannerSites():
+                if spanner not in self.spannerBundle:
+                    continue
                 if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
                     # Beam spanners and tuplet spanners only need xmlIds if they
                     # span multiple measures.  Note that we won't know this until

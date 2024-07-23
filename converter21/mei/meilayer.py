@@ -160,7 +160,7 @@ class MeiLayer:
                 for duration in durations:
                     m21Space = m21.note.Rest(duration)
                     m21Space.style.hideObjectOnPrint = True
-                    M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
+                    M21ObjectConvert.convertM21ObjectToMei(m21Space, self.spannerBundle, tb)
                 lastOffsetEmitted = voiceOffset
 
         for obj in self.m21Voice:
@@ -179,7 +179,7 @@ class MeiLayer:
                     for duration in durations:
                         m21Space = m21.note.Rest(duration)
                         m21Space.style.hideObjectOnPrint = True
-                        M21ObjectConvert.convertM21ObjectToMei(m21Space, tb)
+                        M21ObjectConvert.convertM21ObjectToMei(m21Space, self.spannerBundle, tb)
 
                     lastOffsetEmitted = objOffsetInMeasure
 
@@ -197,7 +197,11 @@ class MeiLayer:
                         # because it isn't between objects, so not relevant.  The
                         # equivalent staff change in other layer(s) will have to do.
                         if not hasattr(staffChangeObject, 'mei_emitted'):
-                            M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                            M21ObjectConvert.convertM21ObjectToMei(
+                                staffChangeObject,
+                                self.spannerBundle,
+                                tb
+                            )
                             staffChangeObject.mei_emitted = True  # type: ignore
                         else:
                             M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
@@ -224,7 +228,7 @@ class MeiLayer:
                 endBTremNeeded: bool = self.processBTremState(obj, tb)
 
                 # Emit the object itself
-                M21ObjectConvert.convertM21ObjectToMei(obj, tb)
+                M21ObjectConvert.convertM21ObjectToMei(obj, self.spannerBundle, tb)
                 lastOffsetEmitted = opFrac(objOffsetInMeasure + obj.duration.quarterLength)
 
                 # Process any nested element ends
@@ -240,7 +244,9 @@ class MeiLayer:
             staffChangeOffset = nextStaffChange[1]
             if staffChangeOffset == lastOffsetEmitted:
                 if not hasattr(staffChangeObject, 'mei_emitted'):
-                    M21ObjectConvert.convertM21ObjectToMei(staffChangeObject, tb)
+                    M21ObjectConvert.convertM21ObjectToMei(
+                        staffChangeObject, self.spannerBundle, tb
+                    )
                     staffChangeObject.mei_emitted = True  # type: ignore
                 else:
                     M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
@@ -253,15 +259,17 @@ class MeiLayer:
 
         tb.end('layer')
 
-    @staticmethod
     def getAllBeamsInVoice(
+        self,
         voice: m21.stream.Voice | m21.stream.Measure
     ) -> set[m21.spanner.Spanner]:
         output: set[m21.spanner.Spanner] = set()
         for obj in voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                beams: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiBeamSpanner])
-                output.update(beams)
+                for beam in obj.getSpannerSites([MeiBeamSpanner]):
+                    if beam not in self.spannerBundle:
+                        continue
+                    output.add(beam)
         return output
 
     _NUM_MARKS_TO_UNIT_DUR: dict[int, str] = {
@@ -448,6 +456,9 @@ class MeiLayer:
             MeiTupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
+            if spanner not in self.spannerBundle:
+                continue
+
             # we're only interested in starts
             if not spanner.isFirst(obj):
                 continue
@@ -514,6 +525,9 @@ class MeiLayer:
             MeiTupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
+            if spanner not in self.spannerBundle:
+                continue
+
             # we're only interested in starts
             if not spanner.isLast(obj):
                 continue
@@ -575,6 +589,8 @@ class MeiLayer:
                 # check every note in the chord
                 for note in obj.notes:
                     for spanner in note.getSpannerSites():  # type: ignore
+                        if spanner not in self.spannerBundle:
+                            continue
                         if spanner.isFirst(note):
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,

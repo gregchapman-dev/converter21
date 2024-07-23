@@ -206,6 +206,8 @@ class MeasureData:
 
         # parse any RepeatBracket this measure is in.
         for rb in self.m21Measure.getSpannerSites([m21.spanner.RepeatBracket]):
+            if rb not in self.spannerBundle:
+                continue
             # measure is in this RepeatBracket
             if t.TYPE_CHECKING:
                 assert isinstance(rb, m21.spanner.RepeatBracket)

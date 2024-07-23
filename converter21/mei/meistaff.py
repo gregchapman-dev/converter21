@@ -49,6 +49,7 @@ class MeiStaff:
         self.staffNStr: str = staffNStr
         self.m21Measure = m21Measure
         self.m21Score = parentScore.m21Score
+        self.spannerBundle = spannerBundle
         self.scoreMeterStream = parentScore.scoreMeterStream
         self.nextFreeVoiceNumber = 1
         self.layers: list[MeiLayer] = []
@@ -120,7 +121,7 @@ class MeiStaff:
                         if not staffDefEmitted:
                             tb.start('staffDef', {'n': self.staffNStr})
                             staffDefEmitted = True
-                        M21ObjectConvert.convertM21ObjectToMei(el, tb)
+                        M21ObjectConvert.convertM21ObjectToMei(el, self.spannerBundle, tb)
                     else:
                         # gather up non-zero offset clefs/timesigs/keysigs to emit in MeiLayer
                         if len(self.layers) > 1:
@@ -158,6 +159,8 @@ class MeiStaff:
                     )
                 if isinstance(obj, m21.spanner.SpannerAnchor):
                     for spanner in obj.getSpannerSites():
+                        if spanner not in self.spannerBundle:
+                            continue
                         if hasattr(spanner, 'mei_trill_already_handled'):
                             continue
                         if spanner.isFirst(obj):

@@ -41,18 +41,29 @@ nextFreeVoiceNumber: int = 0
 
 class M21ObjectConvert:
     @staticmethod
-    def convertM21ObjectToMei(obj: m21.base.Music21Object, tb: TreeBuilder):
-        convert: t.Callable[[m21.base.Music21Object, TreeBuilder], None] | None = (
+    def convertM21ObjectToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ):
+        convert: t.Callable[
+            [m21.base.Music21Object, m21.spanner.SpannerBundle, TreeBuilder],
+            None
+        ] | None = (
             M21ObjectConvert._getM21ObjectConverter(obj)
         )
         if convert is not None:
-            convert(obj, tb)
+            convert(obj, spannerBundle, tb)
 
     @staticmethod
-    def m21NoteToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21NoteToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, (m21.note.Note, m21.note.Unpitched))
-        M21ObjectConvert._noteToMei(obj, tb, withDuration=True)
+        M21ObjectConvert._noteToMei(obj, spannerBundle, tb, withDuration=True)
 
     @staticmethod
     def _addStemMod(obj: m21.note.NotRest, attr: dict[str, str]):
@@ -68,9 +79,15 @@ class M21ObjectConvert:
                 attr['breaksec'] = str(num)
 
     @staticmethod
-    def _addTupletAttribute(obj: m21.note.GeneralNote, attr: dict[str, str]):
+    def _addTupletAttribute(
+        obj: m21.note.GeneralNote,
+        spannerBundle: m21.spanner.SpannerBundle,
+        attr: dict[str, str]
+    ):
         tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiTupletSpanner])
         for tuplet in tupletSpanners:
+            if tuplet not in spannerBundle:
+                continue
             if hasattr(tuplet, 'mei_tuplet'):
                 # tuplet is handled by <tuplet> element, no need for @tuplet attributes
                 continue
@@ -259,7 +276,11 @@ class M21ObjectConvert:
             raise MeiInternalError('unsupported @sameas object type: {obj.classes[0]}')
 
     @staticmethod
-    def m21ChordToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21ChordToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
         attr: dict[str, str] = {}
@@ -271,7 +292,7 @@ class M21ObjectConvert:
         if hasattr(obj, 'mei_in_ftrem'):
             inFTrem = getattr(obj, 'mei_in_ftrem')
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr, inFTrem=inFTrem)
-        M21ObjectConvert._addTupletAttribute(obj, attr)
+        M21ObjectConvert._addTupletAttribute(obj, spannerBundle, attr)
         M21ObjectConvert._addBreakSec(obj, attr)
         M21ObjectConvert._addStylisticAttributes(obj, attr)
         M21ObjectConvert._addStemMod(obj, attr)
@@ -280,11 +301,15 @@ class M21ObjectConvert:
         M21ObjectConvert.m21ArticulationsToMei(obj.articulations, tb)
         M21ObjectConvert.m21LyricsToMei(obj.lyrics, tb)
         for note in obj.notes:
-            M21ObjectConvert._noteToMei(note, tb, withDuration=False)
+            M21ObjectConvert._noteToMei(note, spannerBundle, tb, withDuration=False)
         tb.end('chord')
 
     @staticmethod
-    def m21RestToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21RestToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.note.Rest)
         attr: dict[str, str] = {}
@@ -293,7 +318,7 @@ class M21ObjectConvert:
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
-        M21ObjectConvert._addTupletAttribute(obj, attr)
+        M21ObjectConvert._addTupletAttribute(obj, spannerBundle, attr)
 
         oloc: str = getattr(obj, 'mei_oloc', '')
         ploc: str = getattr(obj, 'mei_ploc', '')
@@ -354,8 +379,13 @@ class M21ObjectConvert:
     }
 
     @staticmethod
-    def _getOttavaShiftAndTransposing(gn: m21.note.GeneralNote) -> tuple[int, bool]:
+    def _getOttavaShiftAndTransposing(
+        gn: m21.note.GeneralNote,
+        spannerBundle: m21.spanner.SpannerBundle
+    ) -> tuple[int, bool]:
         for spanner in gn.getSpannerSites():
+            if spanner not in spannerBundle:
+                continue
             if isinstance(spanner, m21.spanner.Ottava):
                 return (
                     M21ObjectConvert._OTTAVA_TYPE_TO_OCTAVE_SHIFT[spanner.type],
@@ -366,6 +396,7 @@ class M21ObjectConvert:
     @staticmethod
     def _noteToMei(
         note: m21.note.Note | m21.note.Unpitched,
+        spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder,
         withDuration: bool
     ) -> None:
@@ -381,7 +412,7 @@ class M21ObjectConvert:
             if hasattr(note, 'mei_in_ftrem'):
                 inFTrem = getattr(note, 'mei_in_ftrem')
             M21ObjectConvert.m21DurationToMeiDurDotsGrace(note.duration, attr, inFTrem=inFTrem)
-            M21ObjectConvert._addTupletAttribute(note, attr)
+            M21ObjectConvert._addTupletAttribute(note, spannerBundle, attr)
 
         if isinstance(note, m21.note.Unpitched):
             loc: str = M21ObjectConvert.m21DisplayPitchToMeiLoc(note.displayPitch())
@@ -391,7 +422,9 @@ class M21ObjectConvert:
             attr['pname'] = note.pitch.step.lower()
             octaveShift: int
             ottavaTransposes: bool
-            octaveShift, ottavaTransposes = M21ObjectConvert._getOttavaShiftAndTransposing(note)
+            octaveShift, ottavaTransposes = (
+                M21ObjectConvert._getOttavaShiftAndTransposing(note, spannerBundle)
+            )
             if octaveShift == 0:
                 attr['oct'] = str(note.pitch.implicitOctave)
             else:
@@ -543,7 +576,11 @@ class M21ObjectConvert:
     }
 
     @staticmethod
-    def m21ClefToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21ClefToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.clef.Clef)
         if obj.sign is None or obj.sign == 'none':
@@ -612,7 +649,11 @@ class M21ObjectConvert:
     }
 
     @staticmethod
-    def m21KeySigToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21KeySigToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.key.KeySignature)
 
@@ -645,7 +686,11 @@ class M21ObjectConvert:
         tb.end('keySig')
 
     @staticmethod
-    def m21TimeSigToMei(obj: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21TimeSigToMei(
+        obj: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.meter.TimeSignature)
 
@@ -1347,6 +1392,8 @@ class M21ObjectConvert:
 
             # 1. Look for a TrillExtension with gn as first element.
             for spanner in gn.getSpannerSites():
+                if spanner not in m21Score.spannerBundle:
+                    continue
                 if isinstance(spanner, m21.expressions.TrillExtension):
                     # found it!
                     trillExtension = spanner
@@ -1365,6 +1412,8 @@ class M21ObjectConvert:
 
                 for anchor in anchors:
                     for spanner in anchor.getSpannerSites():
+                        if spanner not in m21Score.spannerBundle:
+                            continue
                         if isinstance(spanner, m21.expressions.TrillExtension):
                             # found it!
                             trillExtension = spanner
@@ -1892,7 +1941,11 @@ class M21ObjectConvert:
         return output
 
     @staticmethod
-    def m21BarlineToMei(barline: m21.base.Music21Object, tb: TreeBuilder) -> None:
+    def m21BarlineToMei(
+        barline: m21.base.Music21Object,
+        spannerBundle: m21.spanner.SpannerBundle,
+        tb: TreeBuilder
+    ) -> None:
         if t.TYPE_CHECKING:
             assert isinstance(barline, m21.bar.Barline)
 
@@ -1984,7 +2037,7 @@ class M21ObjectConvert:
     @staticmethod
     def _getM21ObjectConverter(
         obj: m21.base.Music21Object
-    ) -> t.Callable[[m21.base.Music21Object, TreeBuilder], None] | None:
+    ) -> t.Callable[[m21.base.Music21Object, m21.spanner.SpannerBundle, TreeBuilder], None] | None:
         if isinstance(obj, m21.stream.Stream):
             print(f'skipping unexpected stream object: {obj.classes[0]}')
             return None
@@ -2051,7 +2104,7 @@ class MeiTieSpanner(MeiTemporarySpanner):
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[
-    [m21.base.Music21Object, TreeBuilder],
+    [m21.base.Music21Object, m21.spanner.SpannerBundle, TreeBuilder],
     None]
 ] = {
     'Note': M21ObjectConvert.m21NoteToMei,

@@ -58,6 +58,8 @@ class MeiMeasure:
         if prevMeiMeasure is not None:
             prevMeiMeasure.nextMeiMeasure = self
 
+        self.spannerBundle = spannerBundle
+
         self.staves: list[MeiStaff] = []
         self.measureNumStr: str = ''
         for m in m21Measures:
@@ -153,6 +155,8 @@ class MeiMeasure:
             # Any one of them being first in a RepeatBracket is sufficient
             # (they should all be, or none be).
             for spanner in m21m.getSpannerSites():
+                if spanner not in self.spannerBundle:
+                    continue
                 if isinstance(spanner, m21.spanner.RepeatBracket):
                     if spanner.isFirst(m21m):
                         rb = spanner
@@ -187,6 +191,8 @@ class MeiMeasure:
             # Any one of them being last in a RepeatBracket is sufficient
             # (they should all be, or none be).
             for spanner in m21m.getSpannerSites():
+                if spanner not in self.spannerBundle:
+                    continue
                 if isinstance(spanner, m21.spanner.RepeatBracket):
                     if spanner.isLast(m21m):
                         rb = spanner
