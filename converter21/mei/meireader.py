@@ -949,9 +949,15 @@ class MeiReader:
                 thisSlur.idLocal = thisIdLocal
                 self.spannerBundle.append(thisSlur)
 
-
-                self.m21Attr[startId]['m21SlurStart'] = thisIdLocal
-                self.m21Attr[endId]['m21SlurEnd'] = thisIdLocal
+                # We need to handle multiple slur starts (or slur ends) on a single note
+                if 'm21SlurStart' not in self.m21Attr[startId]:
+                    self.m21Attr[startId]['m21SlurStart'] = thisIdLocal
+                else:
+                    self.m21Attr[startId]['m21SlurStart'] += ',' + thisIdLocal
+                if 'm21SlurEnd' not in self.m21Attr[endId]:
+                    self.m21Attr[endId]['m21SlurEnd'] = thisIdLocal
+                else:
+                    self.m21Attr[endId]['m21SlurEnd'] += ',' + thisIdLocal
             else:
                 environLocal.warn(
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid and @endid')
@@ -2049,7 +2055,7 @@ class MeiReader:
         self,
         elem: Element,
         obj: note.NotRest,
-    ) -> bool:
+    ):
         '''
         If relevant, add a slur to an ``obj`` (object) that was created from an ``elem`` (element).
 
@@ -2079,20 +2085,25 @@ class MeiReader:
         .. caution:: If an ``elem`` has an @m21SlurStart or @m21SlurEnd attribute that refer to an
             object not found in the ``spannerBundle``, the slur is silently dropped.
         '''
-        addedSlur: bool = False
-
         def getSlurNumAndType(eachSlur: str) -> tuple[str, str]:
             # eachSlur is of the form "[i|m|t][1-6]"
             slurNum: str = eachSlur[1:]
             slurType: str = eachSlur[:1]
             return slurNum, slurType
 
-        startStr: str | None = elem.get('m21SlurStart')
-        endStr: str | None = elem.get('m21SlurEnd')
-        if startStr is not None:
-            addedSlur = self.safeAddToSpannerByIdLocal(obj, startStr, self.spannerBundle)
-        if endStr is not None:
-            addedSlur = self.safeAddToSpannerByIdLocal(obj, endStr, self.spannerBundle)
+        slurStart: str | None = elem.get('m21SlurStart')
+        slurEnd: str | None = elem.get('m21SlurEnd')
+        startStrs: list[str] = []
+        endStrs: list[str] = []
+        if slurStart:
+            startStrs = slurStart.split(',')
+        if slurEnd:
+            endStrs = slurEnd.split(',')
+
+        for startStr in startStrs:
+            self.safeAddToSpannerByIdLocal(obj, startStr, self.spannerBundle)
+        for endStr in endStrs:
+            self.safeAddToSpannerByIdLocal(obj, endStr, self.spannerBundle)
 
         slurStr: str | None = elem.get('slur')
         if slurStr is not None:
@@ -2109,12 +2120,9 @@ class MeiReader:
                     newSlur.idLocal = slurNum
                     self.spannerBundle.append(newSlur)
                     newSlur.addSpannedElements(obj)
-                    addedSlur = True
                 elif 't' == slurType:
-                    addedSlur = self.safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle)
+                    self.safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle)
                 # 'm' is currently ignored; we may need it for cross-staff slurs
-
-        return addedSlur
 
     def addOttavas(
         self,

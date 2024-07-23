@@ -1694,13 +1694,10 @@ class Test(unittest.TestCase):
         mockNewSlur.addSpannedElements = mock.MagicMock()
         spannerBundle.getByIdLocal = mock.MagicMock(return_value=[mockNewSlur])
         obj = mock.MagicMock('object')
-        expected = True
 
         c = MeiReader()
         c.spannerBundle = spannerBundle
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
+        c.addSlurs(elem, obj)
         spannerBundle.getByIdLocal.assert_called_once_with(theUUID)
         mockNewSlur.addSpannedElements.assert_called_once_with(obj)
 
@@ -1717,13 +1714,10 @@ class Test(unittest.TestCase):
         theSlur.idLocal = theUUID
         spannerBundle.append(theSlur)
         obj = note.Note('E-7', quarterLength=2.0)
-        expected = True
 
         c = MeiReader()
         c.spannerBundle = spannerBundle
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
+        c.addSlurs(elem, obj)
         self.assertSequenceEqual([theSlur], list(spannerBundle))
         self.assertSequenceEqual([obj], list(spannerBundle)[0].getSpannedElements())
 
@@ -1740,13 +1734,10 @@ class Test(unittest.TestCase):
         mockNewSlur.addSpannedElements = mock.MagicMock()
         spannerBundle.getByIdLocal = mock.MagicMock(return_value=[mockNewSlur])
         obj = mock.MagicMock('object')
-        expected = True
 
         c = MeiReader()
         c.spannerBundle = spannerBundle
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
+        c.addSlurs(elem, obj)
         spannerBundle.getByIdLocal.assert_called_once_with(theUUID)
         mockNewSlur.addSpannedElements.assert_called_once_with(obj)
 
@@ -1768,13 +1759,10 @@ class Test(unittest.TestCase):
         mockNewSlur.addSpannedElements = mock.MagicMock()
         spannerBundle.getByIdLocal = mock.MagicMock(return_value=[mockNewSlur])
         obj = mock.MagicMock('object')
-        expected = True
 
         c = MeiReader()
         c.spannerBundle = spannerBundle
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
+        c.addSlurs(elem, obj)
         spannerBundle.append.assert_called_once_with(mockSlur.return_value)
         mockSlur.return_value.addSpannedElements.assert_called_once_with(obj)
         spannerBundle.getByIdLocal.assert_called_once_with('2')
@@ -1792,68 +1780,14 @@ class Test(unittest.TestCase):
         theSlur.idLocal = '2'
         spannerBundle.append(theSlur)
         obj = note.Note('E-7', quarterLength=2.0)
-        expected = True
 
         c = MeiReader()
         c.spannerBundle = spannerBundle
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
+        c.addSlurs(elem, obj)
         self.assertSequenceEqual([theSlur, mock.ANY], list(spannerBundle))
         self.assertIsInstance(list(spannerBundle)[1], spanner.Slur)
         self.assertSequenceEqual([obj], list(spannerBundle)[0].getSpannedElements())
         self.assertSequenceEqual([obj], list(spannerBundle)[1].getSpannedElements())
-
-    def testUnit4AddSlurs(self):
-        '''
-        addSlurs(): nothing was added; all three slur-related attributes missing
-        '''
-        elem = ETree.Element('note', attrib={'m21SlurStart': None,
-                                             'm21SlurEnd': None,
-                                             'slur': None})
-        obj = mock.MagicMock('object')
-        expected = False
-
-        c = MeiReader()
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
-
-    def testUnit5AddSlurs(self):
-        '''
-        addSlurs(): nothing was added; @slur is present, but only "medial" indicators
-        '''
-        elem = ETree.Element('note', attrib={'m21SlurStart': None,
-                                             'm21SlurEnd': None,
-                                             'slur': 'm1 m2'})
-        obj = mock.MagicMock('object')
-        expected = False
-
-        c = MeiReader()
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
-
-    def testUnit6AddSlurs(self):
-        '''
-        addSlurs(): nothing was added; when the Slur with id of @m21SlurStart can't be found
-
-        NB: this tests that the inner function works---catching the IndexError
-        '''
-        elem = ETree.Element('note',
-                             attrib={'m21SlurStart': '07f5513a-436a-4247-8a5d-85c10c661920',
-                                     'm21SlurEnd': None,
-                                     'slur': None})
-        spannerBundle = mock.MagicMock('slur bundle')
-        spannerBundle.getByIdLocal = mock.MagicMock(side_effect=IndexError)
-        obj = mock.MagicMock('object')
-        expected = False
-
-        c = MeiReader()
-        c.spannerBundle = spannerBundle
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
 
     def testIntegration6AddSlurs(self):
         '''
@@ -1866,12 +1800,9 @@ class Test(unittest.TestCase):
                                      'm21SlurEnd': None,
                                      'slur': None})
         obj = note.Note('E-7', quarterLength=2.0)
-        expected = False
 
         c = MeiReader()
-        actual = c.addSlurs(elem, obj)
-
-        self.assertEqual(expected, actual)
+        c.addSlurs(elem, obj)
         self.assertSequenceEqual([], list(c.spannerBundle))
 
 # -----------------------------------------------------------------------------
