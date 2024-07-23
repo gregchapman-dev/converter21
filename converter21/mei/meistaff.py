@@ -171,6 +171,7 @@ class MeiStaff:
                                 self.m21Score,
                                 self.m21Measure,
                                 self.scoreMeterStream,
+                                self.spannerBundle,
                                 tb
                             )
 

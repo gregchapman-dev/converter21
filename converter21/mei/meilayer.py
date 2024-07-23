@@ -583,6 +583,7 @@ class MeiLayer:
                         m21Score,
                         m21Measure,
                         self.scoreMeterStream,
+                        self.spannerBundle,
                         tb
                     )
             if isinstance(obj, m21.chord.Chord) and not isinstance(obj, m21.harmony.ChordSymbol):
@@ -598,6 +599,7 @@ class MeiLayer:
                                 m21Score,
                                 m21Measure,
                                 self.scoreMeterStream,
+                                self.spannerBundle,
                                 tb
                             )
 
@@ -620,6 +622,7 @@ class MeiLayer:
                             m21Score,
                             m21Measure,
                             self.scoreMeterStream,
+                            self.spannerBundle,
                             tb
                         )
                         continue

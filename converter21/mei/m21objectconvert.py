@@ -1132,6 +1132,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder
     ) -> None:
         forceTstamp2: bool = False
@@ -1258,6 +1259,7 @@ class M21ObjectConvert:
                             m21Score,
                             m21Measure,
                             scoreMeterStream,
+                            spannerBundle,
                             tb=None,
                             attr=attr
                         )
@@ -1376,6 +1378,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder | None,
         attr: dict[str, str] | None = None,
     ) -> None:
@@ -1392,7 +1395,7 @@ class M21ObjectConvert:
 
             # 1. Look for a TrillExtension with gn as first element.
             for spanner in gn.getSpannerSites():
-                if spanner not in m21Score.spannerBundle:
+                if spanner not in spannerBundle:
                     continue
                 if isinstance(spanner, m21.expressions.TrillExtension):
                     # found it!
@@ -1412,7 +1415,7 @@ class M21ObjectConvert:
 
                 for anchor in anchors:
                     for spanner in anchor.getSpannerSites():
-                        if spanner not in m21Score.spannerBundle:
+                        if spanner not in spannerBundle:
                             continue
                         if isinstance(spanner, m21.expressions.TrillExtension):
                             # found it!

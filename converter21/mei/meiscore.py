@@ -79,6 +79,13 @@ class MeiScore:
         # pre-scan of m21Score to set up some things
         self.annotateScore()
 
+        # annotateScore put a bunch of stuff in the spannerBundle, so we can't
+        # copy it until now.  Which is just in time, since makeXmlIds needs it.
+        self.spannerBundle = self.m21Score.spannerBundle
+
+        # once annotated, check to see if any of these objects need xml:id.
+        self.makeXmlIds()
+
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             self.m21Score.getTimeSignatures(
                 returnDefault=True,
@@ -133,7 +140,7 @@ class MeiScore:
                 measureStack,
                 prevMeiMeasure,
                 self,
-                self.m21Score.spannerBundle)
+                self.spannerBundle)
             output.append(meiMeas)
 
         return output
@@ -237,7 +244,7 @@ class MeiScore:
             if clefs:
                 clef = clefs[0]
         if clef is not None:
-            M21ObjectConvert.m21ClefToMei(clef, self.m21Score.spannerBundle, tb)
+            M21ObjectConvert.m21ClefToMei(clef, self.spannerBundle, tb)
             clef.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial clef found in part {staffN}')
@@ -253,7 +260,7 @@ class MeiScore:
             if keySigs:
                 keySig = keySigs[0]
         if keySig is not None:
-            M21ObjectConvert.m21KeySigToMei(keySig, self.m21Score.spannerBundle, tb)
+            M21ObjectConvert.m21KeySigToMei(keySig, self.spannerBundle, tb)
             keySig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial key signature found in part {staffN}')
@@ -269,7 +276,7 @@ class MeiScore:
             if meterSigs:
                 meterSig = meterSigs[0]
         if meterSig is not None:
-            M21ObjectConvert.m21TimeSigToMei(meterSig, self.m21Score.spannerBundle, tb)
+            M21ObjectConvert.m21TimeSigToMei(meterSig, self.spannerBundle, tb)
             meterSig.mei_handled_already = True  # type: ignore
         else:
             environLocal.warn(f'No initial time signature found in part {staffN}')
@@ -394,6 +401,10 @@ class MeiScore:
         tb.end('scoreDef')
 
     def annotateScore(self) -> None:
+        # self.spannerBundle has not yet been set, so make a copy of the spannerBundle
+        # that was imported, for use during fillOttavas.
+        spannerBundleForOttavas: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
+
         for part in self.m21Score.parts:
             partTieSpanners: list[tuple[MeiTieSpanner, int]] = self.currentTieSpanners[part]
             for measure in part:
@@ -427,7 +438,7 @@ class MeiScore:
                         self.annotateTuplets(obj, part)
                         self.annotateTies(obj, part)
                         self.annotatePositionedRests(obj, part)
-                        self.fillOttavas(obj, part)
+                        self.fillOttavas(obj, part, spannerBundleForOttavas)
 
                     if self.currentTupletSpanners[part]:
                         # assume tuplets end at end of each voice
@@ -446,10 +457,6 @@ class MeiScore:
                     # at end of measure. This isn't strictly true, but iohumdrum.cpp makes
                     # the same assumption (never producing a <tupletSpan>).
                     self.currentTupletSpanners[part] = []
-
-                # once annotated, check to see if any of these objects
-                # need xml:id.
-                self.makeXmlIds(measure)
 
         # print('done annotating score')
 
@@ -474,9 +481,14 @@ class MeiScore:
         obj.mei_ploc = tempPitch.step.lower()  # type: ignore
         obj.mei_oloc = str(tempPitch.octave)  # type: ignore
 
-    def fillOttavas(self, obj: m21.base.Music21Object, part: m21.stream.Part) -> None:
+    def fillOttavas(
+        self,
+        obj: m21.base.Music21Object,
+        part: m21.stream.Part,
+        spannerBundle: m21.spanner.SpannerBundle
+    ) -> None:
         for spanner in obj.getSpannerSites():
-            if spanner not in self.m21Score.spannerBundle:
+            if spanner not in spannerBundle:
                 continue
             if isinstance(spanner, m21.spanner.Ottava) and spanner.isFirst(obj):
                 spanner.fill(part)
@@ -493,7 +505,18 @@ class MeiScore:
             if hasattr(obj, 'mei_xml_id'):
                 delattr(obj, 'mei_xml_id')
 
-    def makeXmlIds(self, measure: m21.stream.Measure):
+    def makeXmlIds(self) -> None:
+        for part in self.m21Score.parts:
+            for measure in part:
+                if not isinstance(measure, m21.stream.Measure):
+                    continue
+                self.makeMeasureXmlIds(measure, self.spannerBundle)
+
+    def makeMeasureXmlIds(
+        self,
+        measure: m21.stream.Measure,
+        spannerBundle: m21.spanner.SpannerBundle
+    ):
         for obj in measure.recurse().getElementsByClass(m21.note.GeneralNote):
             if isinstance(obj, m21.chord.Chord):
                 # MeiTieSpanner might contain notes that are inside chords (this
@@ -501,7 +524,7 @@ class MeiScore:
                 # Handle this as a special case.
                 for note in obj.notes:
                     for spanner in note.getSpannerSites():
-                        if spanner not in self.m21Score.spannerBundle:
+                        if spanner not in spannerBundle:
                             continue
                         if isinstance(spanner, MeiTieSpanner):
                             M21ObjectConvert.assureXmlId(spanner.getFirst())
@@ -522,7 +545,7 @@ class MeiScore:
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
             for spanner in obj.getSpannerSites():
-                if spanner not in self.m21Score.spannerBundle:
+                if spanner not in spannerBundle:
                     continue
                 if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
                     # Beam spanners and tuplet spanners only need xmlIds if they
