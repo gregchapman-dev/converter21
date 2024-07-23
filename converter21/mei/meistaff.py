@@ -18,7 +18,7 @@ from music21.common import OffsetQL
 
 # from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
-# from converter21.shared import M21Utilities
+from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiLayer
 from converter21.shared import DebugTreeBuilder as TreeBuilder
@@ -159,7 +159,7 @@ class MeiStaff:
                     )
                 if isinstance(obj, m21.spanner.SpannerAnchor):
                     for spanner in obj.getSpannerSites():
-                        if spanner not in self.spannerBundle:
+                        if not M21Utilities.isIn(spanner, self.spannerBundle):
                             continue
                         if hasattr(spanner, 'mei_trill_already_handled'):
                             continue

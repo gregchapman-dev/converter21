@@ -222,7 +222,7 @@ class EventData:
         for sp in self.m21Object.getSpannerSites():
             if not isinstance(sp, m21.spanner.Ottava):
                 continue
-            if sp not in self.spannerBundle:
+            if not M21Utilities.isIn(sp, self.spannerBundle):
                 continue
             if sp.isFirst(self.m21Object):
                 output.append(sp)
@@ -233,7 +233,7 @@ class EventData:
         for sp in self.m21Object.getSpannerSites():
             if not isinstance(sp, m21.spanner.Ottava):
                 continue
-            if sp not in self.spannerBundle:
+            if not M21Utilities.isIn(sp, self.spannerBundle):
                 continue
             if sp.isFirst(self.m21Object):
                 return True
@@ -253,7 +253,7 @@ class EventData:
         for sp in self.m21Object.getSpannerSites():
             if not isinstance(sp, m21.spanner.Ottava):
                 continue
-            if sp not in self.spannerBundle:
+            if not M21Utilities.isIn(sp, self.spannerBundle):
                 continue
             if sp.isFirst(self.m21Object):
                 ottavaStarts.append(sp)

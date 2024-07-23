@@ -1268,7 +1268,8 @@ class M21Convert:
         for slur in spanners:
             if not isinstance(slur, m21.spanner.Slur):
                 continue
-            if slur not in spannerBundle:  # it's from the flat score, or something (ignore it)
+            if not M21Utilities.isIn(slur, spannerBundle):
+                # it's from the flat score, or something (ignore it)
                 continue
             if slur.isFirst(m21GeneralNote):
                 slurStarts.append(slur.placement)

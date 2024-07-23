@@ -267,7 +267,7 @@ class MeiLayer:
         for obj in voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
                 for beam in obj.getSpannerSites([MeiBeamSpanner]):
-                    if beam not in self.spannerBundle:
+                    if not M21Utilities.isIn(beam, self.spannerBundle):
                         continue
                     output.add(beam)
         return output
@@ -456,7 +456,7 @@ class MeiLayer:
             MeiTupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
-            if spanner not in self.spannerBundle:
+            if not M21Utilities.isIn(spanner, self.spannerBundle):
                 continue
 
             # we're only interested in starts
@@ -525,7 +525,7 @@ class MeiLayer:
             MeiTupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
-            if spanner not in self.spannerBundle:
+            if not M21Utilities.isIn(spanner, self.spannerBundle):
                 continue
 
             # we're only interested in starts
@@ -573,7 +573,7 @@ class MeiLayer:
             # 2. Spanners (Slurs, DynamicWedges, TrillExtensions, etc) whose first
             # element is in this voice. Includes <beamSpan>, <tupletSpan>, <tie>
             for spanner in obj.getSpannerSites():
-                if spanner not in self.spannerBundle:
+                if not M21Utilities.isIn(spanner, self.spannerBundle):
                     continue
                 if spanner.isFirst(obj):
                     # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
@@ -590,7 +590,7 @@ class MeiLayer:
                 # check every note in the chord
                 for note in obj.notes:
                     for spanner in note.getSpannerSites():  # type: ignore
-                        if spanner not in self.spannerBundle:
+                        if not M21Utilities.isIn(spanner, self.spannerBundle):
                             continue
                         if spanner.isFirst(note):
                             M21ObjectConvert.postStavesSpannerToMei(

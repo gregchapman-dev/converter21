@@ -86,7 +86,7 @@ class M21ObjectConvert:
     ):
         tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiTupletSpanner])
         for tuplet in tupletSpanners:
-            if tuplet not in spannerBundle:
+            if not M21Utilities.isIn(tuplet, spannerBundle):
                 continue
             if hasattr(tuplet, 'mei_tuplet'):
                 # tuplet is handled by <tuplet> element, no need for @tuplet attributes
@@ -384,7 +384,7 @@ class M21ObjectConvert:
         spannerBundle: m21.spanner.SpannerBundle
     ) -> tuple[int, bool]:
         for spanner in gn.getSpannerSites():
-            if spanner not in spannerBundle:
+            if not M21Utilities.isIn(spanner, spannerBundle):
                 continue
             if isinstance(spanner, m21.spanner.Ottava):
                 return (
@@ -1395,7 +1395,7 @@ class M21ObjectConvert:
 
             # 1. Look for a TrillExtension with gn as first element.
             for spanner in gn.getSpannerSites():
-                if spanner not in spannerBundle:
+                if not M21Utilities.isIn(spanner, spannerBundle):
                     continue
                 if isinstance(spanner, m21.expressions.TrillExtension):
                     # found it!
@@ -1415,7 +1415,7 @@ class M21ObjectConvert:
 
                 for anchor in anchors:
                     for spanner in anchor.getSpannerSites():
-                        if spanner not in spannerBundle:
+                        if not M21Utilities.isIn(spanner, spannerBundle):
                             continue
                         if isinstance(spanner, m21.expressions.TrillExtension):
                             # found it!

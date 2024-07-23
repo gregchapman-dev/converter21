@@ -500,7 +500,7 @@ class M21Utilities:
         # start with the expression spanners (TrillExtension and TremoloSpanner)
         spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites()
         for spanner in spanners:
-            if spanner not in spannerBundle:
+            if not M21Utilities.isIn(spanner, spannerBundle):
                 continue
             if isinstance(spanner, m21.expressions.TrillExtension):
                 expressions.append(spanner)
@@ -516,6 +516,19 @@ class M21Utilities:
         return expressions
 
     @staticmethod
+    def isIn(
+        obj: m21.base.Music21Object,
+        iterable: t.Iterable
+    ) -> bool:
+        # same as doing 'obj in iterable', except it uses "is" instead of "==",
+        # because that's what we want, and it's a lot cheaper than "==" for
+        # Music21Objects.
+        for it in iterable:
+            if it is obj:
+                return True
+        return False
+
+    @staticmethod
     def getDynamicWedgesStartedOrStoppedWithGeneralNote(
             gnote: m21.note.GeneralNote,
             spannerBundle: m21.spanner.SpannerBundle
@@ -523,7 +536,7 @@ class M21Utilities:
         output: list[m21.dynamics.DynamicWedge] = []
         spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
-            if spanner not in spannerBundle:
+            if not M21Utilities.isIn(spanner, spannerBundle):
                 continue
             if not spanner.isFirst(gnote) and not spanner.isLast(gnote):
                 # not started/stopped with general note, forget it
@@ -540,7 +553,7 @@ class M21Utilities:
         output: list[m21.dynamics.DynamicWedge] = []
         spanners: list[m21.spanner.Spanner] = gnote.getSpannerSites('DynamicWedge')
         for spanner in spanners:
-            if spanner not in spannerBundle:
+            if not M21Utilities.isIn(spanner, spannerBundle):
                 continue
             if not spanner.isFirst(gnote):  # not started with general note, forget it
                 continue

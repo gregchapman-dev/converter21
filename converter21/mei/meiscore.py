@@ -488,7 +488,7 @@ class MeiScore:
         spannerBundle: m21.spanner.SpannerBundle
     ) -> None:
         for spanner in obj.getSpannerSites():
-            if spanner not in spannerBundle:
+            if not M21Utilities.isIn(spanner, spannerBundle):
                 continue
             if isinstance(spanner, m21.spanner.Ottava) and spanner.isFirst(obj):
                 spanner.fill(part)
@@ -524,7 +524,7 @@ class MeiScore:
                 # Handle this as a special case.
                 for note in obj.notes:
                     for spanner in note.getSpannerSites():
-                        if spanner not in spannerBundle:
+                        if not M21Utilities.isIn(spanner, spannerBundle):
                             continue
                         if isinstance(spanner, MeiTieSpanner):
                             M21ObjectConvert.assureXmlId(spanner.getFirst())
@@ -545,7 +545,7 @@ class MeiScore:
 
             # check for spanners (all spanners for now, might get too many xmlIds?)
             for spanner in obj.getSpannerSites():
-                if spanner not in spannerBundle:
+                if not M21Utilities.isIn(spanner, spannerBundle):
                     continue
                 if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
                     # Beam spanners and tuplet spanners only need xmlIds if they

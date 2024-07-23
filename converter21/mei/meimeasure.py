@@ -19,7 +19,7 @@ from converter21.mei import MeiStaff
 from converter21.mei import M21ObjectConvert
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
-# from converter21.shared import M21Utilities
+from converter21.shared import M21Utilities
 from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 # For debug or unit test print, a simple way to get a string which is the current function name
@@ -155,7 +155,7 @@ class MeiMeasure:
             # Any one of them being first in a RepeatBracket is sufficient
             # (they should all be, or none be).
             for spanner in m21m.getSpannerSites():
-                if spanner not in self.spannerBundle:
+                if not M21Utilities.isIn(spanner, self.spannerBundle):
                     continue
                 if isinstance(spanner, m21.spanner.RepeatBracket):
                     if spanner.isFirst(m21m):
@@ -191,7 +191,7 @@ class MeiMeasure:
             # Any one of them being last in a RepeatBracket is sufficient
             # (they should all be, or none be).
             for spanner in m21m.getSpannerSites():
-                if spanner not in self.spannerBundle:
+                if not M21Utilities.isIn(spanner, self.spannerBundle):
                     continue
                 if isinstance(spanner, m21.spanner.RepeatBracket):
                     if spanner.isLast(m21m):
