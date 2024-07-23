@@ -53,6 +53,7 @@ class MeiScore:
 
         self.m21Score: m21.stream.Score = m21Score
         self.meiVersion: str = meiVersion
+        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
 
         self.currentTupletSpanners: dict[m21.stream.Part, list[MeiTupletSpanner]] = {}
         self.currentTieSpanners: dict[m21.stream.Part, list[tuple[MeiTieSpanner, int]]] = {}
@@ -79,7 +80,6 @@ class MeiScore:
         # pre-scan of m21Score to set up some things
         self.annotateScore()
 
-        self.spannerBundle: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             self.m21Score.getTimeSignatures(
                 returnDefault=True,
