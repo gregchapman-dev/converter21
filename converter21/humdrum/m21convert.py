@@ -942,17 +942,18 @@ class M21Convert:
         vdurRecip: str = ''
         graceType: str = ''
         recip, vdurRecip, graceType = M21Convert.kernRecipAndGraceTypeFromGeneralNote(m21Rest)
-        postfixAndLayouts: tuple[str, list[str]] = (
-            M21Convert.kernPostfixAndLayoutsFromM21Rest(
+        prefixPostfixAndLayouts: tuple[str, str, list[str]] = (
+            M21Convert.kernPrefixPostfixAndLayoutsFromM21Rest(
                 m21Rest,
                 recip,
                 spannerBundle,
                 owner)
         )
-        postfix: str = postfixAndLayouts[0]
-        layouts: list[str] = postfixAndLayouts[1]
+        prefix: str = prefixPostfixAndLayouts[0]
+        postfix: str = prefixPostfixAndLayouts[1]
+        layouts: list[str] = prefixPostfixAndLayouts[2]
 
-        token: str = recip + graceType + pitch + postfix
+        token: str = prefix + recip + graceType + pitch + postfix
 
         if vdurRecip:
             layouts.append('!LO:N:vis=' + vdurRecip)
@@ -960,12 +961,13 @@ class M21Convert:
         return (token, layouts)
 
     @staticmethod
-    def kernPostfixAndLayoutsFromM21Rest(
+    def kernPrefixPostfixAndLayoutsFromM21Rest(
         m21Rest: m21.note.Rest,
         recip: str,
-        _spannerBundle: m21.spanner.SpannerBundle,
+        spannerBundle: m21.spanner.SpannerBundle,
         owner=None
-    ) -> tuple[str, list[str]]:
+    ) -> tuple[str, str, list[str]]:
+        prefix: str = ''
         postfix: str = ''
         layouts: list[str] = []
 
@@ -1005,7 +1007,16 @@ class M21Convert:
         # rest postfix possibility 2: invisibility
         postfix += M21Convert._getKernInvisibilityFromGeneralNote(m21Rest)
 
-        return (postfix, layouts)
+        # prefix/postfix possibility: slurs
+        slurStarts: str = ''
+        slurStops: str = ''
+        slurStarts, slurStops = (
+            M21Convert._getKernSlurStartsAndStopsFromGeneralNote(m21Rest, spannerBundle)
+        )
+        prefix = slurStarts + prefix  # prepend to prefix for readability
+        postfix += slurStops
+
+        return (prefix, postfix, layouts)
 
     @staticmethod
     def kernTokenStringAndLayoutsFromM21Note(
