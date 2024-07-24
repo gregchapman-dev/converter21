@@ -940,7 +940,7 @@ class MeiReader:
         ):
             startId: str = MeiShared.removeOctothorpe(eachSlur.get('startid', ''))
             endId: str = MeiShared.removeOctothorpe(eachSlur.get('endid', ''))
-            if startId and endId:
+            if startId or endId:
                 thisIdLocal = str(uuid4())
                 thisSlur = spanner.Slur()
                 if t.TYPE_CHECKING:
@@ -950,17 +950,20 @@ class MeiReader:
                 self.spannerBundle.append(thisSlur)
 
                 # We need to handle multiple slur starts (or slur ends) on a single note
-                if 'm21SlurStart' not in self.m21Attr[startId]:
-                    self.m21Attr[startId]['m21SlurStart'] = thisIdLocal
-                else:
-                    self.m21Attr[startId]['m21SlurStart'] += ',' + thisIdLocal
-                if 'm21SlurEnd' not in self.m21Attr[endId]:
-                    self.m21Attr[endId]['m21SlurEnd'] = thisIdLocal
-                else:
-                    self.m21Attr[endId]['m21SlurEnd'] += ',' + thisIdLocal
+                if startId:
+                    if 'm21SlurStart' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21SlurStart'] = thisIdLocal
+                    else:
+                        self.m21Attr[startId]['m21SlurStart'] += ',' + thisIdLocal
+
+                if endId:
+                    if 'm21SlurEnd' not in self.m21Attr[endId]:
+                        self.m21Attr[endId]['m21SlurEnd'] = thisIdLocal
+                    else:
+                        self.m21Attr[endId]['m21SlurEnd'] += ',' + thisIdLocal
             else:
                 environLocal.warn(
-                    _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid and @endid')
+                    _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid or @endid')
                 )
 
     def _ppTies(self) -> None:
