@@ -7255,14 +7255,14 @@ class HumdrumFile(HumdrumFileContent):
             # two slurs.
             if slurEndCount > 1:
                 found: int = -1
-                for j in range(1, slurEndCount):
+                for j in range(1, slurEndCount + 1):
                     if i == j:
                         continue
                     if slurStartList[i][1] == slurStartList[j][1]:
                         found = j
                         break
                 if found > 0:
-                    if found > i:
+                    if found < i:
                         slur.placement = 'above'
                     else:
                         slur.placement = 'below'
