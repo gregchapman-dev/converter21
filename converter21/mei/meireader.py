@@ -962,9 +962,9 @@ class MeiReader:
                     else:
                         self.m21Attr[endId]['m21SlurEnd'] += ',' + thisIdLocal
 
-                place: str = eachSlur.get('place', '')
-                if place:
-                    thisSlur.placement = place
+                curvedir: str = eachSlur.get('curvedir', '')
+                if curvedir in ('above', 'below'):
+                    thisSlur.placement = curvedir
             else:
                 environLocal.warn(
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid or @endid')

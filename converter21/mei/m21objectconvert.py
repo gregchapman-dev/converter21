@@ -129,7 +129,10 @@ class M21ObjectConvert:
         # placement (we pass obj because placement might be in obj or obj.style)
         place: str | None = M21ObjectConvert.m21PlacementToMei(obj)
         if place:
-            attr['place'] = place
+            if isinstance(obj, m21.spanner.Slur):
+                attr['curvedir'] = place
+            else:
+                attr['place'] = place
 
         style: m21.style.Style | None = None
         if obj.hasStyleInformation:
@@ -176,7 +179,9 @@ class M21ObjectConvert:
                 placement = 'below'
 
         if placement == 'below' and alignVertical == 'middle':
-            return 'between'
+            if not isinstance(obj, m21.spanner.Slur):
+                return 'between'
+
         if placement in ('above', 'below'):
             return placement
 
