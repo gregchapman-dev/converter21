@@ -961,6 +961,10 @@ class MeiReader:
                         self.m21Attr[endId]['m21SlurEnd'] = thisIdLocal
                     else:
                         self.m21Attr[endId]['m21SlurEnd'] += ',' + thisIdLocal
+
+                place: str = eachSlur.get('place', '')
+                if place:
+                    thisSlur.placement = place
             else:
                 environLocal.warn(
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid or @endid')
