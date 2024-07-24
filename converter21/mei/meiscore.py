@@ -487,14 +487,14 @@ class MeiScore:
         part: m21.stream.Part,
         spannerBundle: m21.spanner.SpannerBundle
     ) -> None:
-        for spanner in obj.getSpannerSites():
+        for spanner in obj.getSpannerSites([m21.spanner.Ottava]):
             if not M21Utilities.isIn(spanner, spannerBundle):
                 continue
-            if isinstance(spanner, m21.spanner.Ottava) and spanner.isFirst(obj):
+            if spanner.isFirst(obj):
                 spanner.fill(part)
 
     def deannotateScore(self) -> None:
-        for sp in self.m21Score.getElementsByClass(MeiTemporarySpanner):
+        for sp in self.m21Score[MeiTemporarySpanner]:
             if isinstance(sp, MeiBeamSpanner):
                 for el in sp.getSpannedElements():
                     if hasattr(el, 'mei_breaksec'):

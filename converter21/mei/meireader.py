@@ -1590,6 +1590,14 @@ class MeiReader:
                     plist.remove(startId)
                 plist.insert(0, startId)
 
+            # If there's an endid, put it at the end of the list (but don't duplicate it
+            # if it's already there).
+            endId: str | None = eachArpeg.get('endid')
+            if endId:
+                if endId in plist:
+                    plist.remove(endId)
+                plist.append(endId)
+
             # Now if we have a plist, it contains all the ids that should
             # be arpeggiated together.  But we only need an ArpeggioMarkSpanner if there
             # is more than one id in the plist.  An ArpeggioMark is fine for just one.
@@ -2033,22 +2041,38 @@ class MeiReader:
     @staticmethod
     def safeGetSpannerByIdLocal(
         theId: str,
-        spannerBundle: spanner.SpannerBundle
+        spannerBundle: spanner.SpannerBundle,
+        clearId: bool = False
     ) -> spanner.Spanner | None:
+        output: spanner.Spanner | None = None
         try:
-            return spannerBundle.getByIdLocal(theId)[0]  # type: ignore
+            output = spannerBundle.getByIdLocal(theId)[0]  # type: ignore
+            if clearId:
+                output.idLocal = None
+                # clear from the cache, too
+                cacheKey = f'idLocal-{theId}'
+                del spannerBundle._cache[cacheKey]
         except IndexError:
-            return None
+            output = None
+
+        return output
 
     @staticmethod
     def safeAddToSpannerByIdLocal(
         theObj: Music21Object,
         theId: str,
-        spannerBundle: spanner.SpannerBundle
+        spannerBundle: spanner.SpannerBundle,
+        clearId: bool = False
     ) -> bool:
         '''Avoid crashing when getByIdLocal() doesn't find the spanner'''
         try:
-            spannerBundle.getByIdLocal(theId)[0].addSpannedElements(theObj)  # type: ignore
+            sp: spanner.Spanner = spannerBundle.getByIdLocal(theId)[0]  # type: ignore
+            sp.addSpannedElements(theObj)
+            if clearId:
+                sp.idLocal = None
+                # clear from the cache, too
+                cacheKey = f'idLocal-{theId}'
+                del spannerBundle._cache[cacheKey]
             return True
         except IndexError:
             # when getByIdLocal() couldn't find the Slur
@@ -2124,7 +2148,8 @@ class MeiReader:
                     self.spannerBundle.append(newSlur)
                     newSlur.addSpannedElements(obj)
                 elif 't' == slurType:
-                    self.safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle)
+                    # must clear localId because it's 1..6, and gets reused in later slurs
+                    self.safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle, clearId=True)
                 # 'm' is currently ignored; we may need it for cross-staff slurs
 
     def addOttavas(
