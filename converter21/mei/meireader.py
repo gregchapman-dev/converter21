@@ -6806,17 +6806,94 @@ class MeiReader:
         self,
         tstamp: str,
     ) -> OffsetQL:
-        beat: float
+        beat: OffsetQL
         try:
-            beat = float(tstamp)
+            beat = self.tstampStrToOffsetQL(tstamp)
         except (TypeError, ValueError):
             # warn about malformed tstamp, assuming 0.0
             return 0.0
 
         return self._beatToOffset(beat, self.activeMeter)
 
+    _KNOWN_REPEATING_DECIMAL_FRACTIONS: dict[str, OffsetQL] = {
+        '1111': Fraction(1, 9),
+        '11111': Fraction(1, 9),
+        '1428': Fraction(1, 7),
+        '14285': Fraction(1, 7),
+        '14286': Fraction(1, 7),
+        '1429': Fraction(1, 7),
+        '1666': Fraction(1, 6),
+        '16666': Fraction(1, 6),
+        '16667': Fraction(1, 6),
+        '1667': Fraction(1, 6),
+        '2222': Fraction(2, 9),
+        '22222': Fraction(2, 9),
+        '2857': Fraction(2, 7),
+        '28571': Fraction(2, 7),
+        '3333': Fraction(1, 3),
+        '33333': Fraction(1, 3),
+        '4286': Fraction(3, 7),
+        '42857': Fraction(3, 7),
+        '4444': Fraction(4, 9),
+        '44444': Fraction(4, 9),
+        '5555': Fraction(5, 9),
+        '55555': Fraction(5, 9),
+        '55556': Fraction(5, 9),
+        '5556': Fraction(5, 9),
+        '5714': Fraction(4, 7),
+        '57142': Fraction(4, 7),
+        '57143': Fraction(4, 7),
+        '6666': Fraction(2, 3),
+        '66666': Fraction(2, 3),
+        '66667': Fraction(2, 3),
+        '6667': Fraction(2, 3),
+        '7142': Fraction(5, 7),
+        '71428': Fraction(5, 7),
+        '71429': Fraction(5, 7),
+        '7143': Fraction(5, 7),
+        '7777': Fraction(7, 9),
+        '77777': Fraction(7, 9),
+        '77778': Fraction(7, 9),
+        '7778': Fraction(7, 9),
+        '8333': Fraction(5, 6),
+        '83333': Fraction(5, 6),
+        '8571': Fraction(6, 7),
+        '85714': Fraction(6, 7),
+        '8888': Fraction(8, 9),
+        '88888': Fraction(8, 9),
+        '88889': Fraction(8, 9),
+        '8889': Fraction(8, 9),
+        '9999': 1.0,
+        '99999': 1.0
+    }
+
+    def tstampStrToOffsetQL(self, tstampStr: str) -> OffsetQL:
+        '''
+        The problem with just doing opFrac(float('1.66666')) is that you end up with
+        1.66667034 (or whatever) which is by definition binary expressible, so you
+        can never get a fraction (5/3 in this case would be perfect).
+
+        Callers must catch any exceptions, just like they would for calling float(tstampStr).
+        '''
+        if '.' not in tstampStr:
+            return float(tstampStr)
+
+        parts: list[str] = tstampStr.split('.')
+        if len(parts) == 2:
+            # look up parts[1][0:4] (first five digits of fractional part) in a
+            # dictionary of known fractions. If there are fewer than 5 digits available
+            # we just get as many as there are.
+            knownFrac: OffsetQL | None = self._KNOWN_REPEATING_DECIMAL_FRACTIONS.get(
+                parts[1][0:5],
+                None
+            )
+            if knownFrac is not None:
+                return opFrac(int(parts[0]) + knownFrac)
+
+        return float(tstampStr)
+
     @staticmethod
-    def _beatToOffset(beat: float, activeMeter: meter.TimeSignature | None) -> OffsetQL:
+    def _beatToOffset(beat: OffsetQL, activeMeter: meter.TimeSignature | None) -> OffsetQL:
         # beat is expressed in beats, as expressed in the written time signature.
         # We will need to offset it (beats are 1-based, offsets are 0-based) and convert
         # it to quarter notes (OffsetQL)
@@ -6833,7 +6910,6 @@ class MeiReader:
 
         # convert to quarter notes
         beat *= 4.0
-
         return opFrac(beat)
 
     def _tstamp2ToMeasSkipAndOffset(
@@ -6841,7 +6917,7 @@ class MeiReader:
         tstamp2: str,
     ) -> tuple[int, OffsetQL]:
         measSkip: int
-        beat: float
+        beat: OffsetQL
         offset: OffsetQL
 
         tstamp2Patt: str = r'(([0-9]+)m\s*\+\s*)?([0-9]+(\.?[0-9]*)?)'
@@ -6860,7 +6936,7 @@ class MeiReader:
                 # no '.5000', m.group(3) is an integer
                 beat = float(int(m.group(3)))
             else:
-                beat = float(m.group(3))
+                beat = self.tstampStrToOffsetQL(m.group(3))
         except Exception:
             # warn about malformed tstamp2, assuming '0m+0.000'
             return 0, 0.
