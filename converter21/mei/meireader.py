@@ -182,6 +182,7 @@ from collections import defaultdict
 from copy import deepcopy
 from fractions import Fraction  # for typing
 from uuid import uuid4
+from functools import cache
 
 # music21
 import music21 as m21
@@ -223,6 +224,7 @@ from converter21.shared import M21StaffGroupDescriptionTree
 
 environLocal = environment.Environment('converter21.mei.meireader')
 
+DENOM_LIMIT = 96
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
@@ -6815,57 +6817,48 @@ class MeiReader:
 
         return self._beatToOffset(beat, self.activeMeter)
 
-    _KNOWN_REPEATING_DECIMAL_FRACTIONS: dict[str, OffsetQL] = {
-        '1111': Fraction(1, 9),
-        '11111': Fraction(1, 9),
-        '1428': Fraction(1, 7),
-        '14285': Fraction(1, 7),
-        '14286': Fraction(1, 7),
-        '1429': Fraction(1, 7),
-        '1666': Fraction(1, 6),
-        '16666': Fraction(1, 6),
-        '16667': Fraction(1, 6),
-        '1667': Fraction(1, 6),
-        '2222': Fraction(2, 9),
-        '22222': Fraction(2, 9),
-        '2857': Fraction(2, 7),
-        '28571': Fraction(2, 7),
-        '3333': Fraction(1, 3),
-        '33333': Fraction(1, 3),
-        '4286': Fraction(3, 7),
-        '42857': Fraction(3, 7),
-        '4444': Fraction(4, 9),
-        '44444': Fraction(4, 9),
-        '5555': Fraction(5, 9),
-        '55555': Fraction(5, 9),
-        '55556': Fraction(5, 9),
-        '5556': Fraction(5, 9),
-        '5714': Fraction(4, 7),
-        '57142': Fraction(4, 7),
-        '57143': Fraction(4, 7),
-        '6666': Fraction(2, 3),
-        '66666': Fraction(2, 3),
-        '66667': Fraction(2, 3),
-        '6667': Fraction(2, 3),
-        '7142': Fraction(5, 7),
-        '71428': Fraction(5, 7),
-        '71429': Fraction(5, 7),
-        '7143': Fraction(5, 7),
-        '7777': Fraction(7, 9),
-        '77777': Fraction(7, 9),
-        '77778': Fraction(7, 9),
-        '7778': Fraction(7, 9),
-        '8333': Fraction(5, 6),
-        '83333': Fraction(5, 6),
-        '8571': Fraction(6, 7),
-        '85714': Fraction(6, 7),
-        '8888': Fraction(8, 9),
-        '88888': Fraction(8, 9),
-        '88889': Fraction(8, 9),
-        '8889': Fraction(8, 9),
-        '9999': 1.0,
-        '99999': 1.0
-    }
+    @staticmethod
+    @cache
+    def _preFracLimitDenominator(n: int, d: int) -> tuple[int, int]:
+        # nonspection PyShadowingNames
+        '''
+        Copied from music21, where it is used in opFrac (with DENOM_LIMIT = 65535)
+
+        Copied from fractions.limit_denominator.  Their method
+        requires creating three new Fraction instances to get one back.
+        This doesn't create any call before Fraction...
+
+        This is also cached, so repeated calls with the same n & d just
+        get the result from the cache.
+        '''
+        if d <= DENOM_LIMIT:  # faster than hard-coding 96 (or whatever)
+            return (n, d)
+        nOrg = n
+        dOrg = d
+        p0, q0, p1, q1 = 0, 1, 1, 0
+        while True:
+            a = n // d
+            q2 = q0 + a * q1
+            if q2 > DENOM_LIMIT:
+                break
+            p0, q0, p1, q1 = p1, q1, p0 + a * p1, q2
+            n, d = d, n - a * d
+
+        k = (DENOM_LIMIT - q0) // q1
+        bound1n = p0 + k * p1
+        bound1d = q0 + k * q1
+        bound2n = p1
+        bound2d = q1
+        # s = (0.0 + n)/d
+        bound1minusS_n = abs((bound1n * dOrg) - (nOrg * bound1d))
+        bound1minusS_d = dOrg * bound1d
+        bound2minusS_n = abs((bound2n * dOrg) - (nOrg * bound2d))
+        bound2minusS_d = dOrg * bound2d
+        difference = (bound1minusS_n * bound2minusS_d) - (bound2minusS_n * bound1minusS_d)
+        if difference >= 0:
+            # bound1 is farther from zero than bound2; return bound2
+            return (bound2n, bound2d)
+        return (bound1n, bound1d)
 
     def tstampStrToOffsetQL(self, tstampStr: str) -> OffsetQL:
         '''
@@ -6875,22 +6868,14 @@ class MeiReader:
 
         Callers must catch any exceptions, just like they would for calling float(tstampStr).
         '''
-        if '.' not in tstampStr:
-            return float(tstampStr)
-
-        parts: list[str] = tstampStr.split('.')
-        if len(parts) == 2:
-            # look up parts[1][0:4] (first five digits of fractional part) in a
-            # dictionary of known fractions. If there are fewer than 5 digits available
-            # we just get as many as there are.
-            knownFrac: OffsetQL | None = self._KNOWN_REPEATING_DECIMAL_FRACTIONS.get(
-                parts[1][0:5],
-                None
-            )
-            if knownFrac is not None:
-                return opFrac(int(parts[0]) + knownFrac)
-
-        return float(tstampStr)
+        tstamp_float: float = float(tstampStr)
+        tstamp_frac: Fraction = Fraction(tstamp_float)
+        num: int
+        den: int
+        num, den = self._preFracLimitDenominator(tstamp_frac.numerator, tstamp_frac.denominator)
+        tstamp_fracL: Fraction = Fraction(num, den)
+        offset: OffsetQL = opFrac(tstamp_fracL)
+        return offset
 
     @staticmethod
     def _beatToOffset(beat: OffsetQL, activeMeter: meter.TimeSignature | None) -> OffsetQL:
