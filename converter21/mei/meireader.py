@@ -6884,18 +6884,18 @@ class MeiReader:
         # it to quarter notes (OffsetQL)
 
         # make it 0-based
-        beat -= 1.0
+        beat = opFrac(beat + 1.0)
 
         activeMeterDenom: int = 4  # if no activeMeter, pretend it's <something> / 4
         if activeMeter is not None:
             activeMeterDenom = activeMeter.denominator
 
         # convert to whole notes
-        beat /= float(activeMeterDenom)
+        beat = opFrac(beat / float(activeMeterDenom))
 
         # convert to quarter notes
-        beat *= 4.0
-        return opFrac(beat)
+        beat = opFrac(beat * 4.0)
+        return beat
 
     def _tstamp2ToMeasSkipAndOffset(
         self,
