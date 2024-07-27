@@ -224,7 +224,7 @@ from converter21.shared import M21StaffGroupDescriptionTree
 
 environLocal = environment.Environment('converter21.mei.meireader')
 
-DENOM_LIMIT = 96
+DENOM_LIMIT = 768
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
