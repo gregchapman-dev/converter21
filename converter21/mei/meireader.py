@@ -6884,7 +6884,7 @@ class MeiReader:
         # it to quarter notes (OffsetQL)
 
         # make it 0-based
-        beat = opFrac(beat + 1.0)
+        beat = opFrac(beat - 1.0)
 
         activeMeterDenom: int = 4  # if no activeMeter, pretend it's <something> / 4
         if activeMeter is not None:
