@@ -1,0 +1,4 @@
+Changes since 3.1.0:
+    Humdrum/MEI import/export: support ChordSymbols
+    Humdrum/MEI import/export: lots of bugfixes
+
