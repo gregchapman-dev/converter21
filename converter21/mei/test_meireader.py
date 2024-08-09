@@ -36,6 +36,7 @@ from xml.etree import ElementTree as ETree
 
 from collections import defaultdict
 from fractions import Fraction
+from pathlib import Path
 from unittest import mock  # pylint: disable=no-name-in-module
 
 from music21 import articulations
@@ -56,6 +57,7 @@ from music21 import tie
 from converter21.mei import meiexceptions
 from converter21.mei import meireader
 from converter21.mei import MeiReader
+from converter21.mei import MeiShared
 from converter21.shared import M21Utilities
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
@@ -76,7 +78,7 @@ class Test(unittest.TestCase):
     def testInit2(self):
         '''__init__(): a valid MEI file is prepared properly'''
         inputFile = '''<?xml version="1.0" encoding="UTF-8"?>
-                       <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="2013">
+                       <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0">
                        <music><score></score></music></mei>'''
         actual = MeiReader(inputFile)
         # NB: at first I did this:
@@ -101,7 +103,7 @@ class Test(unittest.TestCase):
         inputFile = '''<?xml version="1.0" encoding="UTF-8"?>
                        <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
                                                        "http://www.musicxml.org/dtds/partwise.dtd">
-                       <score-partwise></score-partwise>'''
+                       <score-partwise meiversion="4.0"></score-partwise>'''
         self.assertRaises(meiexceptions.MeiElementError, MeiReader, inputFile)
         try:
             MeiReader(inputFile)
@@ -168,7 +170,7 @@ class Test(unittest.TestCase):
 
     def testKeySigFromAttrs2(self):
         '''_keySigFromAttrs(): using @key.sig, and @key.mode (integration test)'''
-        elem = ETree.Element('{mei}staffDef', attrib={'key.sig': '6s', 'key.mode': 'minor'})
+        elem = ETree.Element('{mei}staffDef', attrib={'keysig': '6s', 'key.mode': 'minor'})
         expectedSharps = 6
         expectedMode = 'minor'
         c = MeiReader()
@@ -236,7 +238,7 @@ class Test(unittest.TestCase):
         xmlid = '#14ccdc11-8090-49f4-b094-5935f534131a'
         expected = '14ccdc11-8090-49f4-b094-5935f534131a'
         c = MeiReader()
-        actual = c.removeOctothorpe(xmlid)
+        actual = MeiShared.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
     def testRemoveOctothorpe2(self):
@@ -244,7 +246,7 @@ class Test(unittest.TestCase):
         xmlid = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
         expected = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
         c = MeiReader()
-        actual = c.removeOctothorpe(xmlid)
+        actual = MeiShared.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
     def testAccidFromElement(self):
@@ -710,31 +712,6 @@ class Test(unittest.TestCase):
     # class TestRestFromElement(unittest.TestCase):
     # '''Tests for restFromElement() and spaceFromElement()'''
 
-    @mock.patch('music21.note.Rest')
-    @mock.patch('converter21.shared.M21Utilities.makeDuration')
-    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
-    def testUnit1TestRestFromElement(self, mockTuplet, mockMakeDur, mockRest):
-        '''
-        restFromElement(): test @dur, @dots, @xml:id, and tuplet-related attributes
-        '''
-        elem = ETree.Element('rest', attrib={'dur': '4', 'dots': '1', _XMLID: 'the id',
-                                             'm21TupletNum': '5', 'm21TupletNumbase': '4',
-                                             'm21TupletType': 'start'})
-        mockMakeDur.return_value = 'the duration'
-        mockNewRest = mock.MagicMock('new rest')
-        mockRest.return_value = mockNewRest
-        mockTuplet.return_value = 'tupletized'
-        expected = mockTuplet.return_value
-
-        c = MeiReader()
-        actual = c.restFromElement(elem)
-
-        self.assertEqual(expected, actual)
-        mockRest.assert_called_once_with(duration=mockMakeDur.return_value)
-        mockMakeDur.assert_called_once_with(1.0, 1)
-        mockTuplet.assert_called_once_with(mockRest.return_value, elem)
-        self.assertEqual('the id', mockNewRest.id)
-
     def testIntegration1(self):
         '''
         restFromElement(): test @dur, @dots, @xml:id, and tuplet-related attributes
@@ -1196,7 +1173,7 @@ class Test(unittest.TestCase):
         # 1.) prepare
         elem = ETree.Element(f'{MEI_NS}staffDef',
                              attrib={'clef.shape': 'G', 'clef.line': '2', 'n': '12',
-                                     'meter.count': '3', 'meter.unit': '8', 'key.sig': '0',
+                                     'meter.count': '3', 'meter.unit': '8', 'keysig': '0',
                                      'key.mode': 'major', 'trans.semi': '-3', 'trans.diat': '-2'})
         theInstrDef = ETree.Element(f'{MEI_NS}instrDef',
                                     attrib={'midi.channel': '1', 'midi.instrnum': '71',
@@ -1225,7 +1202,7 @@ class Test(unittest.TestCase):
         # 1.) prepare
         elem = ETree.Element(f'{MEI_NS}staffDef',
                              attrib={'n': '12', 'meter.count': '3', 'meter.unit': '8',
-                                     'key.sig': '0',
+                                     'keysig': '0',
                                      'key.mode': 'major', 'trans.semi': '-3', 'trans.diat': '-2'})
         theInstrDef = ETree.Element(f'{MEI_NS}instrDef',
                                     attrib={'midi.channel': '1', 'midi.instrnum': '71',
@@ -1312,7 +1289,7 @@ class Test(unittest.TestCase):
         # 1.) prepare
         elem = ETree.Element(f'{MEI_NS}staffDef',
                              attrib={'n': '12', 'clef.line': '2', 'clef.shape': 'G',
-                                     'key.sig': '0',
+                                     'keysig': '0',
                                      'key.mode': 'major', 'trans.semi': '-3', 'trans.diat': '-2',
                                      'meter.count': '3', 'meter.unit': '8', 'label': 'clarinet'})
 
@@ -1397,7 +1374,7 @@ class Test(unittest.TestCase):
         # 1.) prepare
         elem = ETree.Element(f'{MEI_NS}staffDef',
                              attrib={'n': '12', 'clef.line': '2', 'clef.shape': 'G',
-                                     'key.sig': '0',
+                                     'keysig': '0',
                                      'key.mode': 'major', 'trans.semi': '-3', 'trans.diat': '-2',
                                      'meter.count': '3', 'meter.unit': '8'})
 
@@ -1486,7 +1463,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('staffGrp')
         innerElems = [ETree.Element(f'{MEI_NS}staffDef',
                                     attrib={'n': str(n + 1), 'key.mode': 'major',
-                                            'key.sig': f'{n + 1}f'})
+                                            'keysig': f'{n + 1}f'})
                       for n in range(4)]
         for eachElem in innerElems:
             elem.append(eachElem)
@@ -1507,7 +1484,7 @@ class Test(unittest.TestCase):
         elem = ETree.Element('staffGrp')
         innerElems = [ETree.Element(f'{MEI_NS}staffDef',
                                     attrib={'n': str(n + 1), 'key.mode': 'major',
-                                            'key.sig': f'{n + 1}f'})
+                                            'keysig': f'{n + 1}f'})
                       for n in range(4)]
         innerGrp = ETree.Element(f'{MEI_NS}staffGrp')
         for eachElem in innerElems:
@@ -1537,7 +1514,7 @@ class Test(unittest.TestCase):
         @meter.count, @meter.unit, @key.accid, @key.mode, @key.pname, @key.sig
         '''
         # 1.) prepare
-        elem = ETree.Element('staffDef', attrib={'key.sig': '4s', 'key.mode': 'major',
+        elem = ETree.Element('staffDef', attrib={'keysig': '4s', 'key.mode': 'major',
                                                  'meter.count': '3', 'meter.unit': '8'})
         mockTime.return_value = 'mockTime return'
         mockKey.return_value = 'mockKey return'
@@ -1559,7 +1536,7 @@ class Test(unittest.TestCase):
         scoreDefFromElement(): corresponds to testUnit1() without mock objects
         '''
         # 1.) prepare
-        elem = ETree.Element('staffDef', attrib={'key.sig': '4s', 'key.mode': 'major',
+        elem = ETree.Element('staffDef', attrib={'keysig': '4s', 'key.mode': 'major',
                                                  'meter.count': '3', 'meter.unit': '8'})
 
         # 2.) run
@@ -1578,7 +1555,7 @@ class Test(unittest.TestCase):
         scoreDefFromElement(): corresponds to testUnit2() without mock objects
         '''
         # 1.) prepare
-        elem = ETree.Element('staffDef', attrib={'key.sig': '4s', 'key.mode': 'major',
+        elem = ETree.Element('staffDef', attrib={'keysig': '4s', 'key.mode': 'major',
                                                  'meter.count': '3', 'meter.unit': '8'})
         staffGrp = ETree.Element(f'{MEI_NS}staffGrp')
         staffDef = ETree.Element(f'{MEI_NS}staffDef',
@@ -1743,31 +1720,6 @@ class Test(unittest.TestCase):
 
     # NB: skipping testIntegration2() ... if Integration1 and Unit2 work, this probably does too
 
-    @mock.patch('music21.spanner.Slur')
-    def testUnit3AddSlurs(self, mockSlur):
-        '''
-        addSlurs(): element with @slur is handled correctly (both an 'i' and 't' slur)
-        '''
-        elem = ETree.Element('note', attrib={'m21SlurStart': None,
-                                             'm21SlurEnd': None,
-                                             'slur': 'i1 t2'})
-        spannerBundle = mock.MagicMock('slur bundle')
-        spannerBundle.append = mock.MagicMock('spannerBundle.append')
-        mockSlur.return_value = mock.MagicMock('mock slur')
-        mockSlur.return_value.addSpannedElements = mock.MagicMock()
-        mockNewSlur = mock.MagicMock('mock new slur')
-        mockNewSlur.addSpannedElements = mock.MagicMock()
-        spannerBundle.getByIdLocal = mock.MagicMock(return_value=[mockNewSlur])
-        obj = mock.MagicMock('object')
-
-        c = MeiReader()
-        c.spannerBundle = spannerBundle
-        c.addSlurs(elem, obj)
-        spannerBundle.append.assert_called_once_with(mockSlur.return_value)
-        mockSlur.return_value.addSpannedElements.assert_called_once_with(obj)
-        spannerBundle.getByIdLocal.assert_called_once_with('2')
-        mockNewSlur.addSpannedElements.assert_called_once_with(obj)
-
     def testIntegration3AddSlurs(self):
         '''
         addSlurs(): element with @slur is handled correctly (both an 'i' and 't' slur)
@@ -1827,79 +1779,6 @@ class Test(unittest.TestCase):
             self.assertEqual('12', obj.m21TupletNum)
             self.assertEqual('400', obj.m21TupletNumbase)
             self.assertEqual('the forest', obj.m21TupletSearch)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
-    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
-    @mock.patch('converter21.mei.meireader.MeiReader.applyBreaksecs')
-    def testTuplets7(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
-        '''
-        tupletFromElement(): everything set properly in a triplet; no extraneous elements
-        '''
-        elem = ETree.Element('tuplet', attrib={'num': '3', 'numbase': '2'})
-        mockNotes = [mock.MagicMock(spec=note.Note()) for _ in range(3)]
-        for obj in mockNotes:
-            obj.duration.tuplets = [mock.MagicMock(spec=duration.Tuplet())]
-            obj.duration.tuplets[0].type = 'default'
-        mockTuplet.return_value = mockNotes
-
-        c = MeiReader()
-        actual = c.tupletFromElement(elem)
-
-        self.assertSequenceEqual(mockNotes, actual)
-        self.assertEqual('start', mockNotes[0].duration.tuplets[0].type)
-        self.assertEqual('default', mockNotes[1].duration.tuplets[0].type)
-        self.assertEqual('stop', mockNotes[2].duration.tuplets[0].type)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
-    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
-    @mock.patch('converter21.mei.meireader.MeiReader.applyBreaksecs')
-    def testTuplets8(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
-        '''
-        tupletFromElement(): everything set properly in a triplet; extraneous elements interposed
-        '''
-        # NB: elements 0, 3, and 5 are the Notes; elements 1, 2, and 4 are not
-        elem = ETree.Element('tuplet', attrib={'num': '3', 'numbase': '2'})
-        mockNotes = [mock.MagicMock(spec=note.Note()) for _ in range(6)]
-        for obj in mockNotes:
-            obj.duration.tuplets = [mock.MagicMock(spec=duration.Tuplet())]
-            obj.duration.tuplets[0].type = 'default'
-        for i in (1, 2, 4):
-            mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
-        mockTuplet.return_value = mockNotes
-
-        c = MeiReader()
-        actual = c.tupletFromElement(elem)
-
-        self.assertSequenceEqual(mockNotes, actual)
-        self.assertEqual('start', mockNotes[0].duration.tuplets[0].type)
-        self.assertEqual('default', mockNotes[3].duration.tuplets[0].type)
-        self.assertEqual('stop', mockNotes[5].duration.tuplets[0].type)
-
-    @mock.patch('converter21.mei.meireader.MeiReader._processEmbeddedElements')
-    @mock.patch('converter21.mei.meireader.MeiReader.scaleToTuplet')
-    @mock.patch('converter21.mei.meireader.MeiReader.applyBreaksecs')
-    def testTuplets9(self, mockBreaksecs, mockTuplet, mockEmbedded):  # pylint: disable=unused-argument
-        '''
-        tupletFromElement(): everything set properly in a triplet; extraneous elements interposed,
-            prepended, and appended
-        '''
-        # NB: elements 1, 4, and 6 are the Notes; elements 0, 2, 3, 5, and 7 are not
-        elem = ETree.Element('tuplet', attrib={'num': '3', 'numbase': '2'})
-        mockNotes = [mock.MagicMock(spec=note.Note()) for _ in range(8)]
-        for obj in mockNotes:
-            obj.duration.tuplets = [mock.MagicMock(spec=duration.Tuplet())]
-            obj.duration.tuplets[0].type = 'default'
-        for i in (0, 2, 3, 5, 7):
-            mockNotes[i] = mock.MagicMock(spec=clef.TrebleClef())
-        mockTuplet.return_value = mockNotes
-
-        c = MeiReader()
-        actual = c.tupletFromElement(elem)
-
-        self.assertSequenceEqual(mockNotes, actual)
-        self.assertEqual('start', mockNotes[1].duration.tuplets[0].type)
-        self.assertEqual('default', mockNotes[4].duration.tuplets[0].type)
-        self.assertEqual('stop', mockNotes[6].duration.tuplets[0].type)
 
     def testTuplet10(self):
         '''
@@ -2763,7 +2642,7 @@ class Test(unittest.TestCase):
         '''
         # setup the arguments
         elem = '''<score xmlns="http://www.music-encoding.org/ns/mei">
-            <scoreDef key.sig="1f" key.mode="minor">
+            <scoreDef keysig="1f" key.mode="minor">
                 <staffGrp>
                     <staffDef n="1" clef.line="4" clef.shape="F"/>
                 </staffGrp>
@@ -2879,7 +2758,7 @@ class Test(unittest.TestCase):
         There should be one instrument called "Clarinet."
         '''
         meiSource = '''<?xml version="1.0" encoding="UTF-8"?>
-            <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="2013">
+            <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0">
             <music><score>
                 <scoreDef meter.count="8" meter.unit="8">
                     <staffGrp>
@@ -2916,7 +2795,7 @@ class Test(unittest.TestCase):
         import converter21
         converter21.register(converter21.ConverterName.MEI)
 
-        fp = common.getSourceFilePath() / 'mei' / 'test' / 'test_file.mei'
+        fp = Path('converter21') / 'mei' / 'test' / 'test_file.mei'
         s = converter.parse(fp, forceSource=True)
 
         seen_ids = set()
