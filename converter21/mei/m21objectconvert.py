@@ -1896,6 +1896,7 @@ class M21ObjectConvert:
 
     _M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE: dict[str, str] = {
         'regular': '',  # or 'normal'? (but update meiMeasureBarlineAttrCombine if you do that)
+        'heavy-light': '',  # treat heavy-light as normal (MEI has no such thing)
         'heavy': 'heavy',
         'dotted': 'dotted',
         'dashed': 'dashed',
