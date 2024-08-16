@@ -232,7 +232,6 @@ MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 _IGNORE_UNPROCESSED = (
     f'{MEI_NS}annot',        # annotations are skipped; someday maybe goes into editorial?
     f'{MEI_NS}pedal',        # pedal marks are skipped for now
-    f'{MEI_NS}harm',         # harm (chord symbols) are skipped for now
     f'{MEI_NS}expansion',    # expansions are intentionally skipped
     f'{MEI_NS}bracketSpan',  # bracketSpans (phrases, ligatures, ...) are intentionally skipped
     f'{MEI_NS}mensur',       # mensur is intentionally skipped, we use the invis <meterSig> instead
@@ -7583,7 +7582,7 @@ class MeiReader:
         # @tstamp is required for now, someday we'll be able to derive offsets from @startid
         tstamp: str | None = elem.get('tstamp')
         if tstamp is None:
-            environLocal.warn('missing @tstamp in <dir> element')
+            environLocal.warn('missing @tstamp in <harm> element')
             return '', (-1., None, None), None
 
         offset = self._tstampToOffset(tstamp)
