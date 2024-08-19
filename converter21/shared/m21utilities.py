@@ -2370,9 +2370,47 @@ class M21Utilities:
         SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSharp']: '##',
     }
 
+    @staticmethod
+    def m21PitchNameToSMUFLAccidentals(text: str) -> str:
+        output: str = text
+        if '#' in output:
+            output = re.sub(
+                '#',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign'],
+                output
+            )
+        if '-' in output:
+            output = re.sub(
+                '-',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign'],
+                output
+            )
+        return output
+
     # ============================
     # ChordSymbol support routines
     # ============================
+
+    @staticmethod
+    def convertChordSymbolToText(cs: m21.harmony.ChordSymbol) -> str:
+        # Try to use the specified abbreviation that was imported from the original file
+        text: str = ''
+        if isinstance(cs, m21.harmony.NoChord):
+            text = cs.chordKindStr
+        elif hasattr(cs, 'c21_full_text'):
+            text = cs.c21_full_text  # type: ignore
+        elif cs.chordKindStr:
+            root: str = M21Utilities.m21PitchNameToSMUFLAccidentals(cs.root().name)
+            bass: str = M21Utilities.m21PitchNameToSMUFLAccidentals(cs.bass().name)
+            text = root + cs.chordKindStr
+            if bass != root:
+                text = text + '/' + bass
+        else:
+            simplifiedCS: m21.harmony.ChordSymbol = deepcopy(cs)
+            M21Utilities.simplifyChordSymbol(simplifiedCS)
+            text = simplifiedCS.findFigure()
+            text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
+        return text
 
     @staticmethod
     def convertChordSymbolFigureToPrintableText(text: str, removeNoteNames: bool = False) -> str:

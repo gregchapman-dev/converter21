@@ -1749,47 +1749,11 @@ class M21ObjectConvert:
 
     @staticmethod
     def _convertChordSymbolToMixedText(cs: m21.harmony.ChordSymbol, tb: TreeBuilder):
-        # Try to use the specified abbreviation that was imported from the original file
-        text: str = ''
-        if isinstance(cs, m21.harmony.NoChord):
-            text = cs.chordKindStr
-        elif hasattr(cs, 'c21_full_text'):
-            text = cs.c21_full_text  # type: ignore
-        elif cs.chordKindStr:
-            root: str = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(cs.root().name)
-            bass: str = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(cs.bass().name)
-            text = root + cs.chordKindStr
-            if bass != root:
-                text = text + '/' + bass
-        else:
-            simplifiedCS: m21.harmony.ChordSymbol = deepcopy(cs)
-            M21Utilities.simplifyChordSymbol(simplifiedCS)
-            text = simplifiedCS.findFigure()
-            text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
-
+        text: str = M21Utilities.convertChordSymbolToText(cs)
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
-
         if text:
             tb.data(text)
-
         # Here is where we would end the 'rend' tag, if we had started it.
-
-    @staticmethod
-    def _m21PitchNameToSMUFLAccidentals(text: str) -> str:
-        output: str = text
-        if '#' in output:
-            output = re.sub(
-                '#',
-                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign'],
-                output
-            )
-        if '-' in output:
-            output = re.sub(
-                '-',
-                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign'],
-                output
-            )
-        return output
 
     @staticmethod
     def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):
