@@ -22,6 +22,9 @@ from music21.common.numberTools import opFrac
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
+from converter21.shared import M21BeamSpanner
+from converter21.shared import M21TupletSpanner
+from converter21.shared import M21TieSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
 from converter21.shared import DebugTreeBuilder as TreeBuilder
@@ -84,7 +87,7 @@ class M21ObjectConvert:
         spannerBundle: m21.spanner.SpannerBundle,
         attr: dict[str, str]
     ):
-        tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiTupletSpanner])
+        tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([M21TupletSpanner])
         for tuplet in tupletSpanners:
             if not M21Utilities.isIn(tuplet, spannerBundle):
                 continue
@@ -187,79 +190,6 @@ class M21ObjectConvert:
 
         return None
 
-    # Edit this list of characters as desired (but be careful about 'xml:id' value rules)
-    _XMLID_BASE_ALPHABET = tuple("abcdefghijklmnopqrstuvwxyz")
-    # _XMLID_BASE_DICT = dict((c, v) for v, c in enumerate(_XMLID_BASE_ALPHABET))
-    _XMLID_BASE_LEN = len(_XMLID_BASE_ALPHABET)
-#     def alphabet_decode(encodedStr: str) -> int:
-#         num: int = 0
-#         for char in encodedStr:
-#             num = num * M21ObjectConvert._XMLID_BASE_LEN + M21ObjectConvert._XMLID_BASE_DICT[char]
-#         return num
-
-
-    @staticmethod
-    def makeXmlIdFrom(identifier: int | str, prefix: str = '') -> str:
-        output: str = ''
-
-        def alphabet_encode(numToEncode: int) -> str:
-            if numToEncode == 0:
-                return M21ObjectConvert._XMLID_BASE_ALPHABET[0]
-
-            encoded: str = ''
-            while numToEncode:
-                numToEncode, remainder = divmod(numToEncode, M21ObjectConvert._XMLID_BASE_LEN)
-                encoded = M21ObjectConvert._XMLID_BASE_ALPHABET[remainder] + encoded
-            return encoded
-
-        if isinstance(identifier, str):
-            # str, use as is
-            output = identifier
-        elif (isinstance(identifier, int)
-                and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
-            # Nice low integer, use as is (converted to str)
-            output = str(identifier)
-        elif isinstance(identifier, int):
-            # Actually a memory location, so make it a nice short ASCII string,
-            # with lower-case class name prefix.
-            output = alphabet_encode(identifier)
-        else:
-            raise MeiInternalError('identifier not int or str')
-
-        if not prefix:
-            return output
-
-        if not output.lower().startswith(prefix.lower()):
-            # don't put a prefix on that's already there
-            output = prefix + '-' + output
-        return output
-
-    @staticmethod
-    def assureXmlId(obj: m21.base.Music21Object):
-        # if xml id has already been set, leave it as is
-        if hasattr(obj, 'mei_xml_id'):
-            return
-        obj.mei_xml_id = M21ObjectConvert.makeXmlIdFrom(  # type: ignore
-            obj.id, obj.classes[0].lower()
-        )
-
-    @staticmethod
-    def assureXmlIds(objs: list[m21.base.Music21Object] | m21.spanner.Spanner):
-        if isinstance(objs, m21.spanner.Spanner):
-            objs = objs.getSpannedElements()
-
-        for obj in objs:
-            M21ObjectConvert.assureXmlId(obj)
-
-    @staticmethod
-    def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
-        # only returns something if assureXmlId has been called already on this object
-        if hasattr(obj, 'mei_xml_id'):
-            return obj.mei_xml_id  # type: ignore
-        if required:
-            raise MeiInternalError('required xml:id is missing')
-        return ''
-
     @staticmethod
     def convertM21ObjectToMeiSameAs(obj: m21.base.Music21Object, tb: TreeBuilder):
         if not isinstance(obj, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
@@ -267,7 +197,7 @@ class M21ObjectConvert:
 
         # This obj has already been emitted with the appropriate xml:id, and here
         # we just emit a stub object with @sameas set to that same xml:id.
-        attr: dict[str, str] = {'sameas': M21ObjectConvert.getXmlId(obj, required=True)}
+        attr: dict[str, str] = {'sameas': M21Utilities.getXmlId(obj, required=True)}
         if isinstance(obj, m21.clef.Clef):
             tb.start('clef', attr)
             tb.end('clef')
@@ -289,7 +219,7 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -319,7 +249,7 @@ class M21ObjectConvert:
             assert isinstance(obj, m21.note.Rest)
         attr: dict[str, str] = {}
 
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
@@ -406,7 +336,7 @@ class M21ObjectConvert:
         withDuration: bool
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(note)
+        xmlId: str = M21Utilities.getXmlId(note)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -557,7 +487,7 @@ class M21ObjectConvert:
                 )
             )
             attr: dict[str, str] = {}  # above/below, etc
-            xmlId: str = M21ObjectConvert.getXmlId(artic)
+            xmlId: str = M21Utilities.getXmlId(artic)
             if xmlId:
                 attr['xml:id'] = xmlId
             if name:
@@ -596,7 +526,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -666,7 +596,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -703,7 +633,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -1087,7 +1017,7 @@ class M21ObjectConvert:
                 meterStream=scoreMeterStream
             )
         else:
-            attr['startid'] = f'#{M21ObjectConvert.getXmlId(first, required=True)}'
+            attr['startid'] = f'#{M21Utilities.getXmlId(first, required=True)}'
 
         if last is None or last is first:
             # no unique last element, we're done
@@ -1112,7 +1042,7 @@ class M21ObjectConvert:
                 meterStream=scoreMeterStream
             )
         else:
-            attr['endid'] = f'#{M21ObjectConvert.getXmlId(last, required=True)}'
+            attr['endid'] = f'#{M21Utilities.getXmlId(last, required=True)}'
 
     _ARPEGGIO_TYPE_TO_ARROW_AND_ORDER: dict[str, tuple[str, str]] = {
         'normal': ('', ''),
@@ -1145,16 +1075,16 @@ class M21ObjectConvert:
         last: m21.base.Music21Object = spanner.getLast()
         tag: str = ''
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(spanner)
+        xmlId: str = M21Utilities.getXmlId(spanner)
         if xmlId:
             attr['xml:id'] = xmlId
 
-        if isinstance(spanner, MeiBeamSpanner):
+        if isinstance(spanner, M21BeamSpanner):
             if hasattr(spanner, 'mei_beam'):
                 # already emitted as <beam> within <layer>
                 return
 
-        if isinstance(spanner, MeiTupletSpanner):
+        if isinstance(spanner, M21TupletSpanner):
             if hasattr(spanner, 'mei_tuplet'):
                 # already emitted as <tuplet> within <layer>
                 return
@@ -1198,7 +1128,7 @@ class M21ObjectConvert:
             dis, disPlace = M21ObjectConvert._DIS_AND_DIS_PLACE_FROM_M21_OTTAVA_TYPE[spanner.type]
             attr['dis'] = dis
             attr['dis.place'] = disPlace
-        elif isinstance(spanner, MeiBeamSpanner):
+        elif isinstance(spanner, M21BeamSpanner):
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
@@ -1206,9 +1136,9 @@ class M21ObjectConvert:
             for el in spanner.getSpannedElements():
                 if plistStr:
                     plistStr += ' '
-                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+                plistStr += M21Utilities.getXmlId(el, required=True)
             attr['plist'] = plistStr
-        elif isinstance(spanner, MeiTupletSpanner):
+        elif isinstance(spanner, M21TupletSpanner):
             tag = 'tupletSpan'
             M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
             # set up plist for every spanned element (yes, even the ones that are already
@@ -1217,9 +1147,9 @@ class M21ObjectConvert:
             for el in spanner.getSpannedElements():
                 if plistStr:
                     plistStr += ' '
-                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+                plistStr += M21Utilities.getXmlId(el, required=True)
             attr['plist'] = plistStr
-        elif isinstance(spanner, MeiTieSpanner):
+        elif isinstance(spanner, M21TieSpanner):
             if spanner.startTie.style != 'hidden':
                 tag = 'tie'
                 M21ObjectConvert.fillInTieAttributes(spanner.startTie, attr)
@@ -1294,7 +1224,7 @@ class M21ObjectConvert:
             for el in arpeggio.getSpannedElements():
                 if plistStr:
                     plistStr += ' '
-                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+                plistStr += M21Utilities.getXmlId(el, required=True)
             attr['plist'] = plistStr
 
         arrow: str
@@ -1318,10 +1248,10 @@ class M21ObjectConvert:
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(arpeggio)
+        xmlId: str = M21Utilities.getXmlId(arpeggio)
         if xmlId:
             attr['xml:id'] = xmlId
-        attr['startid'] = f'#{M21ObjectConvert.getXmlId(gn, required=True)}'
+        attr['startid'] = f'#{M21Utilities.getXmlId(gn, required=True)}'
         M21ObjectConvert.fillInArpeggioAttributes(arpeggio, attr)
         tb.start('arpeg', attr)
         tb.end('arpeg')
@@ -1434,7 +1364,7 @@ class M21ObjectConvert:
                 last = trillExtension.getLast()
 
             attr = {}
-            xmlId: str = M21ObjectConvert.getXmlId(trill)
+            xmlId: str = M21Utilities.getXmlId(trill)
             if xmlId:
                 attr['xml:id'] = xmlId
             M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1484,7 +1414,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(turn)
+        xmlId: str = M21Utilities.getXmlId(turn)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1528,7 +1458,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(mordent)
+        xmlId: str = M21Utilities.getXmlId(mordent)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1568,7 +1498,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(fermata)
+        xmlId: str = M21Utilities.getXmlId(fermata)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1655,7 +1585,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ):
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1928,7 +1858,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(barline)
+        xmlId: str = M21Utilities.getXmlId(barline)
         if xmlId:
             attr['xml:id'] = xmlId
         form: str
@@ -2049,31 +1979,6 @@ class M21ObjectConvert:
                 return False
 
         return True
-
-
-class MeiTemporarySpanner(m21.spanner.Spanner):
-    pass
-
-
-class MeiBeamSpanner(MeiTemporarySpanner):
-    pass
-
-
-class MeiTupletSpanner(MeiTemporarySpanner):
-    def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
-        super().__init__()
-        self.startTuplet: m21.duration.Tuplet = startTuplet
-
-
-class MeiTieSpanner(MeiTemporarySpanner):
-    def __init__(
-        self,
-        startTie: m21.tie.Tie,
-        startParentChord: m21.chord.Chord | None
-    ) -> None:
-        super().__init__()
-        self.startTie: m21.tie.Tie = startTie
-        self.startParentChord: m21.chord.Chord | None = startParentChord
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[

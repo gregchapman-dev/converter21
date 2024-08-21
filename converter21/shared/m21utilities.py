@@ -153,6 +153,32 @@ class M21StaffGroupDescriptionTree:
         self.children: list[M21StaffGroupDescriptionTree] = []
         self.parent: M21StaffGroupDescriptionTree | None = None
 
+# These are additional temporary spanners that can come in handy
+# in both MEI export and in MusicEngine.
+class M21TemporarySpanner(m21.spanner.Spanner):
+    pass
+
+
+class M21BeamSpanner(M21TemporarySpanner):
+    pass
+
+
+class M21TupletSpanner(M21TemporarySpanner):
+    def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
+        super().__init__()
+        self.startTuplet: m21.duration.Tuplet = startTuplet
+
+
+class M21TieSpanner(M21TemporarySpanner):
+    def __init__(
+        self,
+        startTie: m21.tie.Tie,
+        startParentChord: m21.chord.Chord | None
+    ) -> None:
+        super().__init__()
+        self.startTie: m21.tie.Tie = startTie
+        self.startParentChord: m21.chord.Chord | None = startParentChord
+
 
 class M21Utilities:
 
@@ -3321,6 +3347,103 @@ class M21Utilities:
                 continue
 
         return fixme
+
+    # Edit this list of characters as desired (but be careful about 'xml:id' value rules)
+    _XMLID_BASE_ALPHABET = tuple("abcdefghijklmnopqrstuvwxyz")
+    # _XMLID_BASE_DICT = dict((c, v) for v, c in enumerate(_XMLID_BASE_ALPHABET))
+    _XMLID_BASE_LEN = len(_XMLID_BASE_ALPHABET)
+#     def alphabet_decode(encodedStr: str) -> int:
+#         num: int = 0
+#         for char in encodedStr:
+#             num = num * M21Utilities._XMLID_BASE_LEN + M21Utilities._XMLID_BASE_DICT[char]
+#         return num
+
+
+    @staticmethod
+    def makeXmlIdFrom(identifier: int | str, prefix: str) -> str:
+        output: str = ''
+
+        def alphabet_encode(numToEncode: int) -> str:
+            if numToEncode == 0:
+                return M21Utilities._XMLID_BASE_ALPHABET[0]
+
+            encoded: str = ''
+            while numToEncode:
+                numToEncode, remainder = divmod(numToEncode, M21Utilities._XMLID_BASE_LEN)
+                encoded = M21Utilities._XMLID_BASE_ALPHABET[remainder] + encoded
+            return encoded
+
+        if isinstance(identifier, str):
+            # str, use as is
+            output = identifier
+        elif (isinstance(identifier, int)
+                and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
+            # Nice low integer, use as is (converted to str)
+            output = str(identifier)
+        elif isinstance(identifier, int):
+            # Actually a memory location, so make it a nice short ASCII string,
+            # with lower-case class name prefix.
+            output = alphabet_encode(identifier)
+        else:
+            raise Converter21InternalError('identifier not int or str')
+
+        if not prefix:
+            return output
+
+        if not output.lower().startswith(prefix.lower()):
+            # don't put a prefix on that's already there
+            output = prefix + '-' + output
+        return output
+
+    @staticmethod
+    def getXmlIdPrefixFor(obj: m21.base.Music21Object) -> str:
+        if isinstance(obj, m21.clef.Clef):
+            return 'clef'
+        if isinstance(obj, m21.expressions.TextExpression):
+            return 'dir'
+        if isinstance(obj, m21.harmony.ChordSymbol):
+            return 'harm'
+
+        return obj.classes[0].lower()
+
+    @staticmethod
+    def assureXmlId(obj: m21.base.Music21Object, prefix: str = ''):
+        # if xml id has already been set, leave it as is
+        if hasattr(obj, 'xml_id'):
+            return
+        if not prefix:
+            prefix = M21Utilities.getXmlIdPrefixFor(obj)
+        obj.xml_id = M21Utilities.makeXmlIdFrom(  # type: ignore
+            obj.id, prefix
+        )
+
+    @staticmethod
+    def assureXmlIds(objs: list[m21.base.Music21Object] | m21.spanner.Spanner):
+        if isinstance(objs, m21.spanner.Spanner):
+            objs = objs.getSpannedElements()
+
+        for obj in objs:
+            M21Utilities.assureXmlId(obj)
+
+    @staticmethod
+    def assureAllXmlIds(s: m21.stream.Stream):
+        for obj in s.recurse():
+            M21Utilities.assureXmlId(obj)
+            # if it's a chord (and not a chord symbol), put an xmlid on all the notes
+            # (required for MEI export, because <tie> might reference a note in a chord)
+            if isinstance(obj, m21.chord.ChordBase):
+                if not isinstance(obj, m21.harmony.ChordSymbol):
+                    for n in obj.notes:
+                        M21Utilities.assureXmlId(n)
+
+    @staticmethod
+    def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
+        # only returns something if assureXmlId has been called already on this object
+        if hasattr(obj, 'xml_id'):
+            return obj.xml_id  # type: ignore
+        if required:
+            raise Converter21InternalError('required xml:id is missing')
+        return ''
 
     @staticmethod
     def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:

@@ -14,6 +14,10 @@ __all__ = [
 ]
 
 from .sharedconstants import SharedConstants
+from .m21utilities import M21TemporarySpanner
+from .m21utilities import M21BeamSpanner
+from .m21utilities import M21TupletSpanner
+from .m21utilities import M21TieSpanner
 from .m21utilities import M21Utilities
 from .m21utilities import M21StaffGroupTree
 from .m21utilities import M21StaffGroupDescriptionTree

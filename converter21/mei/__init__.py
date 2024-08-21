@@ -20,10 +20,6 @@ from .meiexceptions import MeiExportError
 from .meiexceptions import MeiInternalError
 
 from .m21objectconvert import M21ObjectConvert
-from .m21objectconvert import MeiTemporarySpanner
-from .m21objectconvert import MeiBeamSpanner
-from .m21objectconvert import MeiTupletSpanner
-from .m21objectconvert import MeiTieSpanner
 
 from .meielement import MeiElement
 from .meishared import MeiShared

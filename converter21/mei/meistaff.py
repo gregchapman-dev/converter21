@@ -126,7 +126,7 @@ class MeiStaff:
                         # gather up non-zero offset clefs/timesigs/keysigs to emit in MeiLayer
                         if len(self.layers) > 1:
                             # we'll need an xmlId for any sameas references from extra layers.
-                            M21ObjectConvert.assureXmlId(el)
+                            M21Utilities.assureXmlId(el)
                         extraStaffChanges.append((el, elOffsetInMeasure))
 
             if staffDefEmitted:

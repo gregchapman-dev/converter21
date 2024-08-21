@@ -22,8 +22,8 @@ from music21.common import OffsetQL, opFrac
 from converter21.mei import MeiInternalError
 from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
-from converter21.mei import MeiBeamSpanner
-from converter21.mei import MeiTupletSpanner
+from converter21.shared import M21BeamSpanner
+from converter21.shared import M21TupletSpanner
 from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 environLocal = m21.environment.Environment('converter21.mei.meilayer')
@@ -216,10 +216,10 @@ class MeiLayer:
                 # with this obj.  Sort them by duration (longest first),
                 # so they will nest properly as elements.
                 beamTupletFTremStarts: list[
-                    MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
+                    M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremStarts(obj, voiceBeams)
                 beamTupletFTremEnds: list[
-                    MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
+                    M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremEnds(obj)
 
                 # Process any nested element starts
@@ -266,7 +266,7 @@ class MeiLayer:
         output: set[m21.spanner.Spanner] = set()
         for obj in voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                for beam in obj.getSpannerSites([MeiBeamSpanner]):
+                for beam in obj.getSpannerSites([M21BeamSpanner]):
                     if not M21Utilities.isIn(beam, self.spannerBundle):
                         continue
                     output.add(beam)
@@ -339,14 +339,14 @@ class MeiLayer:
 
     def processBeamTupletFTremStart(
         self,
-        btfs: MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner,
+        btfs: M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner,
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
-        if isinstance(btfs, MeiBeamSpanner):
+        if isinstance(btfs, M21BeamSpanner):
             # start a <beam>
             tb.start('beam', attr)
-        elif isinstance(btfs, MeiTupletSpanner):
+        elif isinstance(btfs, M21TupletSpanner):
             # start a <tuplet>
             M21ObjectConvert.fillInTupletAttributes(btfs.startTuplet, attr)
             tb.start('tuplet', attr)
@@ -378,15 +378,15 @@ class MeiLayer:
 
     def processBeamTupletFTremEnd(
         self,
-        btfe: MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner,
+        btfe: M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner,
         tb: TreeBuilder
     ):
         if hasattr(btfe, 'mei_skip'):
             return
 
-        if isinstance(btfe, MeiBeamSpanner):
+        if isinstance(btfe, M21BeamSpanner):
             tb.end('beam')
-        elif isinstance(btfe, MeiTupletSpanner):
+        elif isinstance(btfe, M21TupletSpanner):
             tb.end('tuplet')
         elif isinstance(btfe, m21.expressions.TremoloSpanner):
             tb.end('fTrem')
@@ -395,15 +395,15 @@ class MeiLayer:
         self,
         obj: m21.base.Music21Object,
         voiceBeams: set[m21.spanner.Spanner]
-    ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
+    ) -> list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
             return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Measure)
 
         def beamsBeforeTupletsBeforeTremolos(spanner: m21.spanner.Spanner) -> int:
-            if isinstance(spanner, MeiBeamSpanner):
+            if isinstance(spanner, M21BeamSpanner):
                 return 1
-            if isinstance(spanner, MeiTupletSpanner):
+            if isinstance(spanner, M21TupletSpanner):
                 return 2
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 return 3
@@ -450,10 +450,10 @@ class MeiLayer:
 
             return True
 
-        output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
+        output: list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
-            MeiBeamSpanner,
-            MeiTupletSpanner,
+            M21BeamSpanner,
+            M21TupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
             if not M21Utilities.isIn(spanner, self.spannerBundle):
@@ -466,25 +466,25 @@ class MeiLayer:
             # Beam and tuplet are special, they can span across measure boundaries.
             # If they do span across a measure boundary, skip them here, we'll
             # emit a <beamSpan> or <tupletSpan> instead, later.
-            if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
+            if isinstance(spanner, (M21BeamSpanner, M21TupletSpanner)):
                 if not M21Utilities.allSpannedElementsAreInHierarchy(
                     spanner, self.parentStaff.m21Measure
                 ):
-                    M21ObjectConvert.assureXmlIds(spanner)
+                    M21Utilities.assureXmlIds(spanner)
                     continue
 
                 # Tuplet is even more special.  It can interleave with beams in a way
                 # that cannot be nested.  If so, we can't emit <tuplet>, since it can't
                 # be properly nested with the <beam>s in the voice/layer, so we have to
                 # skip the tuplet here, and emit later as <tupletSpan>.
-                if isinstance(spanner, MeiTupletSpanner):
+                if isinstance(spanner, M21TupletSpanner):
                     if not nestsReasonably(spanner, voiceBeams):
-                        M21ObjectConvert.assureXmlIds(spanner)
+                        M21Utilities.assureXmlIds(spanner)
                         continue
 
                 # mark as having been emitted as <beam> or <tuplet> so we don't emit
                 # as <beamSpan> or <tupletSpan> later, in makePostStavesElements.
-                if isinstance(spanner, MeiBeamSpanner):
+                if isinstance(spanner, M21BeamSpanner):
                     spanner.mei_beam = True  # type: ignore
                 else:
                     spanner.mei_tuplet = True  # type: ignore
@@ -505,24 +505,24 @@ class MeiLayer:
     def getOrderedBeamTupletFTremEnds(
         self,
         obj: m21.base.Music21Object,
-    ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
+    ) -> list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
             return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Score)
 
         def beamsBeforeTupletsBeforeTremolos(spanner: m21.spanner.Spanner) -> int:
-            if isinstance(spanner, MeiBeamSpanner):
+            if isinstance(spanner, M21BeamSpanner):
                 return 1
-            if isinstance(spanner, MeiTupletSpanner):
+            if isinstance(spanner, M21TupletSpanner):
                 return 2
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 return 3
             return 4
 
-        output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
+        output: list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
-            MeiBeamSpanner,
-            MeiTupletSpanner,
+            M21BeamSpanner,
+            M21TupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
             if not M21Utilities.isIn(spanner, self.spannerBundle):
@@ -532,11 +532,11 @@ class MeiLayer:
             if not spanner.isLast(obj):
                 continue
 
-            if isinstance(spanner, MeiBeamSpanner) and not hasattr(spanner, 'mei_beam'):
+            if isinstance(spanner, M21BeamSpanner) and not hasattr(spanner, 'mei_beam'):
                 # Skip if we're emitting as <beamSpan>
                 continue
 
-            if isinstance(spanner, MeiTupletSpanner) and not hasattr(spanner, 'mei_tuplet'):
+            if isinstance(spanner, M21TupletSpanner) and not hasattr(spanner, 'mei_tuplet'):
                 # Skip if we're emitting as <tupletSpan>
                 continue
 
