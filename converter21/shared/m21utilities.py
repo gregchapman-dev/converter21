@@ -3397,12 +3397,35 @@ class M21Utilities:
 
     @staticmethod
     def getXmlIdPrefixFor(obj: m21.base.Music21Object) -> str:
+        # This tries to match what Verovio's Humdrum import does (the names are MEI-ish).
         if isinstance(obj, m21.clef.Clef):
             return 'clef'
+        if isinstance(obj, m21.key.KeySignature):
+            return 'keysig'
+        if isinstance(obj, m21.meter.TimeSignature):
+            return 'metersig'
         if isinstance(obj, m21.expressions.TextExpression):
             return 'dir'
         if isinstance(obj, m21.harmony.ChordSymbol):
             return 'harm'
+        if isinstance(obj, m21.tempo.TempoIndication):
+            return 'tempo'
+        if isinstance(obj, (m21.expressions.ArpeggioMark, m21.expressions.ArpeggioMarkSpanner)):
+            return 'arpeg'
+        if isinstance(obj, m21.expressions.GeneralMordent):
+            return 'mordent'
+        if isinstance(obj, m21.expressions.Trill):
+            return 'trill'
+        if isinstance(obj, m21.expressions.Turn):
+            return 'turn'
+        if isinstance(obj, (m21.dynamics.Dynamic, m21.dynamics.DynamicWedge)):
+            return 'dynam'
+        if isinstance(obj, M21TieSpanner):
+            return 'tie'
+        if isinstance(obj, m21.note.Rest):
+            if obj.style.hideObjectOnPrint:
+                # hidden rest is a space
+                return 'space'
 
         return obj.classes[0].lower()
 
@@ -3435,6 +3458,18 @@ class M21Utilities:
                 if not isinstance(obj, m21.harmony.ChordSymbol):
                     for n in obj.notes:
                         M21Utilities.assureXmlId(n)
+
+    @staticmethod
+    def removeAllXmlIds(s: m21.stream.Stream):
+        for obj in s.recurse():
+            if hasattr(obj, 'xml_id'):
+                del obj.xml_id  # type: ignore
+            # if it's a chord (and not a chord symbol), remove xmlid from all the notes
+            if isinstance(obj, m21.chord.ChordBase):
+                if not isinstance(obj, m21.harmony.ChordSymbol):
+                    for n in obj.notes:
+                        if hasattr(n, 'xml_id'):
+                            del n.xml_id  # type: ignore
 
     @staticmethod
     def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
