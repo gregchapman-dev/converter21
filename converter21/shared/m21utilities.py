@@ -3398,6 +3398,8 @@ class M21Utilities:
     @staticmethod
     def getXmlIdPrefixFor(obj: m21.base.Music21Object) -> str:
         # This tries to match what Verovio's Humdrum import does (the names are MEI-ish).
+        if isinstance(obj, m21.stream.Voice):
+            return 'layer'
         if isinstance(obj, m21.clef.Clef):
             return 'clef'
         if isinstance(obj, m21.key.KeySignature):
@@ -3422,6 +3424,10 @@ class M21Utilities:
             return 'dynam'
         if isinstance(obj, M21TieSpanner):
             return 'tie'
+        if isinstance(obj, M21BeamSpanner):
+            return 'beam'
+        if isinstance(obj, M21TupletSpanner):
+            return 'tuplet'
         if isinstance(obj, m21.note.Rest):
             if obj.style.hideObjectOnPrint:
                 # hidden rest is a space

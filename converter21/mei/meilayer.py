@@ -113,8 +113,10 @@ class MeiLayer:
         #       voice.id values, as stated above).
         #
         # 3. Someone has assigned string voice.id values with great care for
-        #       some other reason, and we should simply use them.
+        #       some other reason, and we should use them. (We put them in
+        #       layer@label, though, not layer@n.)
         layerNStr: str = ''
+        layerLabel: str = ''
         if isinstance(self.m21Voice, m21.stream.Voice):
             if (isinstance(self.m21Voice.id, int)
                     and self.m21Voice.id < m21.defaults.minIdNumberToConsiderMemoryLocation):
@@ -130,14 +132,32 @@ class MeiLayer:
                 layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
                 self.parentStaff.nextFreeVoiceNumber += 1
             elif isinstance(self.m21Voice.id, str):
-                layerNStr = self.m21Voice.id
+                # in MEI, n= must have a numeric string, so we have to drop this id
+                # and change it to a low number.  Do the same dance we do above.
+                # And stash off the string id to export as layer@label.
+                layerLabel = self.m21Voice.id
+                layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
+                self.parentStaff.nextFreeVoiceNumber += 1
             else:
-                layerNStr = ''
+                # no voice id; same dance
+                layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
+                self.parentStaff.nextFreeVoiceNumber += 1
+
+        if hasattr(self.m21Voice, 'c21_label'):
+            # voice.c21_label overrides string voice.id in export to MEI layer@label
+            layerLabel = self.m21Voice.c21_label  # type: ignore
 
         layerAttr: dict[str, str] = {}
+        xmlId: str = M21Utilities.getXmlId(self.m21Voice)
+        if xmlId:
+            layerAttr['xml:id'] = xmlId
         if layerNStr:
             layerAttr['n'] = layerNStr
-        tb.start('layer', {'n': layerNStr})
+
+        if layerLabel:
+            layerAttr['label'] = layerLabel
+
+        tb.start('layer', layerAttr)
 
         nextStaffChange: None | tuple[
             m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
@@ -328,6 +348,10 @@ class MeiLayer:
 
                 # start a <bTrem>
                 attr: dict[str, str] = {}
+                xmlId: str = M21Utilities.getXmlId(expr)
+                if xmlId:
+                    attr['xml:id'] = xmlId
+
                 attr['unitdur'] = unitDur
                 tb.start('bTrem', attr)
 
@@ -343,6 +367,10 @@ class MeiLayer:
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
+        xmlId: str = M21Utilities.getXmlId(btfs)
+        if xmlId:
+            attr['xml:id'] = xmlId
+
         if isinstance(btfs, M21BeamSpanner):
             # start a <beam>
             tb.start('beam', attr)
