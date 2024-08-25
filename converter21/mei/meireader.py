@@ -7618,16 +7618,25 @@ class MeiReader:
             reg = re.sub('subtract', ' subtract ', reg)
             reg = re.sub('alter', ' alter ', reg)
 
+        # id in the @xml:id attribute
+        xmlId: str | None = elem.get(_XMLID)
+
         if regType == 'music21' and reg == 'N.C':
             cs = m21.harmony.NoChord(text)
+            if xmlId is not None:
+                cs.id = xmlId
             return staffNStr, (offset, None, None), cs
 
         if regType == 'harte' and reg == 'N':
             cs = m21.harmony.NoChord(text)
+            if xmlId is not None:
+                cs.id = xmlId
             return staffNStr, (offset, None, None), cs
 
         if text.lower() in ('n.c.', '(n.c.)', 'nc', '(nc)', 'no chord', '(no chord)'):
             cs = m21.harmony.NoChord(text)
+            if xmlId is not None:
+                cs.id = xmlId
             return staffNStr, (offset, None, None), cs
 
         if reg:
@@ -7668,7 +7677,8 @@ class MeiReader:
 
         cs.chordKindStr = chordKindStr
         cs.c21_full_text = text  # type: ignore
-
+        if xmlId is not None:
+            cs.id = xmlId
         return staffNStr, (offset, None, None), cs
 
     def dirFromElement(
@@ -7732,6 +7742,10 @@ class MeiReader:
             place
         )
 
+        # id in the @xml:id attribute
+        xmlId: str | None = elem.get(_XMLID)
+        if xmlId is not None:
+            te.id = xmlId
         return staffNStr, (offset, None, None), te
 
     def _textExpressionFromPieces(
