@@ -3137,7 +3137,7 @@ class M21Utilities:
             cs.figure = None  # next get will update it
 
     @staticmethod
-    def _updatePitches(cs: m21.harmony.ChordSymbol):
+    def updatePitches(cs: m21.harmony.ChordSymbol):
         # fix bug in cs._updatePitches (it doesn't know about 'augmented' ninths)
         def adjustOctaves(cs, pitches):
             from music21 import pitch, chord
@@ -3269,7 +3269,7 @@ class M21Utilities:
                 # maybe cs.chordKind is a known abbreviation?
                 if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
                     cs.chordKind = k
-                    M21Utilities._updatePitches(cs)
+                    M21Utilities.updatePitches(cs)
                     fixedIt = True
                     break
 
@@ -3280,7 +3280,7 @@ class M21Utilities:
             # we can also use our own lookup (on chordKind)
             if cs.chordKind in M21Utilities.EXTRA_CHORD_KINDS:
                 cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKind]
-                M21Utilities._updatePitches(cs)
+                M21Utilities.updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -3291,7 +3291,7 @@ class M21Utilities:
                 # maybe cs.chordKindStr is a known abbreviation?
                 if cs.chordKindStr in m21.harmony.getAbbreviationListGivenChordType(k):
                     cs.chordKind = k
-                    M21Utilities._updatePitches(cs)
+                    M21Utilities.updatePitches(cs)
                     fixedIt = True
                     break
 
@@ -3302,7 +3302,7 @@ class M21Utilities:
             # we can also use our own lookup (on chordKindStr)
             if cs.chordKindStr in M21Utilities.EXTRA_CHORD_KINDS:
                 cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKindStr]
-                M21Utilities._updatePitches(cs)
+                M21Utilities.updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -3317,7 +3317,7 @@ class M21Utilities:
                 cs.addChordStepModification(
                     m21.harmony.ChordStepModification(modType='add', degree=9)
                 )
-                M21Utilities._updatePitches(cs)
+                M21Utilities.updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
