@@ -19,6 +19,9 @@ import typing as t
 from fractions import Fraction
 from copy import copy, deepcopy
 
+import pickle
+import zlib
+
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
 from music21.common.numberTools import opFrac
@@ -35,6 +38,10 @@ class NoMusic21VersionError(Exception):
 
 
 class Converter21InternalError(Exception):
+    pass
+
+
+class FreezeThawError(Exception):
     pass
 
 
@@ -178,6 +185,458 @@ class M21TieSpanner(M21TemporarySpanner):
         super().__init__()
         self.startTie: m21.tie.Tie = startTie
         self.startParentChord: m21.chord.Chord | None = startParentChord
+
+
+# This FreezeThaw stuff comes from music21, and then I modified it to do everything
+# without writing to a file.
+class StreamFreezeThawBase:
+    def __init__(self):
+        self.stream = None
+
+
+# -----------------------------------------------------------------------------
+class StreamFreezer(StreamFreezeThawBase):
+    def __init__(self, streamObj=None, fastButUnsafe=False, topLevel=True, streamIds=None):
+        super().__init__()
+        # must make a deepcopy, as we will be altering .sites
+        self.stream = None
+        # clear all sites only if the top level.
+        self.topLevel = topLevel
+        self.streamIds = streamIds
+
+        self.subStreamFreezers = {}  # this will keep track of sub freezers for spanners
+
+        if streamObj is not None and fastButUnsafe is False:
+            # deepcopy necessary because we mangle sites in the objects
+            # before serialization
+            self.stream = deepcopy(streamObj)
+            # self.stream = streamObj
+        elif streamObj is not None:
+            self.stream = streamObj
+
+    def packStream(self, streamObj=None):
+        # do all things necessary to set up the stream
+        if streamObj is None:
+            streamObj = self.stream
+        self.setupSerializationScaffold(streamObj)
+        storage = {'stream': streamObj, 'm21Version': m21.base.VERSION}
+        return storage
+
+    def setupSerializationScaffold(self, streamObj=None):
+        '''
+        Prepare this stream and all of its contents for pickle/pickling, that
+        is, serializing and storing an object representation on file or as a string.
+
+        The `topLevel` and `streamIdsFound` arguments are used to keep track of recursive calls.
+
+        Note that this is a destructive process: elements contained within this Stream
+        will have their sites cleared of all contents not in the hierarchy
+        of the Streams. Thus, when doing a normal .write('pickle')
+        the Stream is deepcopied before this method is called. The
+        attribute `fastButUnsafe = True` setting of StreamFreezer ignores the destructive
+        effects of these processes and skips the deepcopy.
+        '''
+        if streamObj is None:
+            streamObj = self.stream
+            if streamObj is None:
+                raise FreezeThawError('You need to pass in a stream when creating to work')
+        # might not work when recurse yields...
+        allEls = list(streamObj.recurse(restoreActiveSites=False))
+
+        if self.topLevel is True:
+            self.findActiveStreamIdsInHierarchy(streamObj)
+
+        for el in allEls:
+            if isinstance(el, m21.variant.Variant):
+                # works like a whole new hierarchy...  # no need for deepcopy
+                subSF = StreamFreezer(
+                    el._stream,
+                    fastButUnsafe=True,
+                    streamIds=self.streamIds,
+                    topLevel=False,
+                )
+                subSF.setupSerializationScaffold()
+            elif isinstance(el, m21.spanner.Spanner):
+                # works like a whole new hierarchy...  # no need for deepcopy
+                subSF = StreamFreezer(
+                    el.spannerStorage,
+                    fastButUnsafe=True,
+                    streamIds=self.streamIds,
+                    topLevel=False,
+                )
+                subSF.setupSerializationScaffold()
+            elif el.isStream:
+                self.removeStreamStatusClient(el)
+                # removing seems to create problems for jsonPickle with Spanners
+
+        self.removeStreamStatusClient(streamObj)
+        # removing seems to create problems for jsonPickle with Spanners
+        self.setupStoredElementOffsetTuples(streamObj)
+
+        if self.topLevel is True:
+            self.recursiveClearSites(streamObj)
+
+    def removeStreamStatusClient(self, streamObj):
+        '''
+        if s is a stream then
+
+        s.streamStatus._client is s
+
+        this can be hard to pickle, so this method removes the streamStatus._client from the
+        streamObj (not recursive).  Called by setupSerializationScaffold.
+        '''
+        if hasattr(streamObj, 'streamStatus'):
+            streamObj.streamStatus.client = None
+
+    def recursiveClearSites(self, startObj):
+        '''
+        recursively clear all sites, including activeSites, taking into account
+        that spanners and variants behave differently.
+
+        Called by setupSerializationScaffold.
+
+        To be run after setupStoredElementOffsetTuples() has been run
+
+        This predicament is why when the standard freezeThaw call is made, what is frozen is a
+        deepcopy of the Stream so that nothing is left in an unusable position
+        '''
+        if hasattr(startObj, '_storedElementOffsetTuples'):
+            storedElementOffsetTuples = startObj._storedElementOffsetTuples
+            for el, unused_offset in storedElementOffsetTuples:
+                if el.isStream:
+                    self.recursiveClearSites(el)
+                if isinstance(el, m21.spanner.Spanner):
+                    self.recursiveClearSites(el.spannerStorage)
+                if isinstance(el, m21.variant.Variant):
+                    self.recursiveClearSites(el._stream)
+                if hasattr(el, '_derivation'):
+                    el._derivation = m21.derivation.Derivation()  # reset
+
+                if hasattr(el, '_offsetDict'):
+                    el._offsetDict = {}
+                el.sites.clear()
+                el.activeSite = None
+            startObj._derivation = m21.derivation.Derivation()  # reset
+            startObj.sites.clear()
+            startObj.activeSite = None
+
+    def setupStoredElementOffsetTuples(self, streamObj):
+        '''
+        move all elements from ._elements and ._endElements
+        to a new attribute ._storedElementOffsetTuples
+        which contains a list of tuples of the form
+        (el, offset or 'end').
+
+        Called by setupSerializationScaffold.
+        '''
+        if hasattr(streamObj, '_storedElementOffsetTuples'):
+            # in the case of a spanner storing a Stream, like a StaffGroup
+            # spanner, it is possible that the elements have already been
+            # transferred.  Thus, we should NOT do this again!
+            return
+
+        storedElementOffsetTuples = []
+        for e in streamObj._elements:
+            elementTuple = (e, streamObj.elementOffset(e))
+            storedElementOffsetTuples.append(elementTuple)
+            if e.isStream:
+                self.setupStoredElementOffsetTuples(e)
+            e.sites.remove(streamObj)
+            e.activeSite = None
+            # e._preFreezeId = id(e)
+            # elementDict[id(e)] = s.elementOffset(e)
+        for e in streamObj._endElements:
+            elementTuple = (e, 'end')
+            storedElementOffsetTuples.append(elementTuple)
+            if e.isStream:  # pragma: no cover
+                # streams should not be in endElements, but
+                # we leave this here just to be safe.
+                self.setupStoredElementOffsetTuples(e)
+            e.sites.remove(streamObj)
+            e.activeSite = None
+
+        streamObj._storedElementOffsetTuples = storedElementOffsetTuples
+        # streamObj._elementTree = None
+        streamObj._offsetDict = {}
+        streamObj._elements = []
+        streamObj._endElements = []
+        streamObj.coreElementsChanged()
+
+    def findActiveStreamIdsInHierarchy(
+        self,
+        hierarchyObject=None,
+        getSpanners=True,
+        getVariants=True
+    ) -> list[int]:
+        '''
+        Return a list of all Stream ids anywhere in the hierarchy.  By id,
+        we mean `id(s)` not `s.id` -- so they are memory locations and unique.
+
+        Stores them in .streamIds.
+
+        if hierarchyObject is None, uses self.stream.
+
+        Spanners are included unless getSpanners is False
+
+        >>> staffGroup = layout.StaffGroup([p1, p2])
+        >>> sc.insert(0, staffGroup)
+
+        :class:`~music21.layout.StaffGroup` is a spanner, so
+        it should be found
+
+        >>> sf2 = freezeThaw.StreamFreezer(sc, fastButUnsafe=True)
+        >>> foundIds = sf2.findActiveStreamIdsInHierarchy()
+
+        But you won't find the id of the spanner itself in
+        the foundIds:
+
+        >>> id(staffGroup) in foundIds
+        False
+
+        instead it's the id of the storage object:
+
+        >>> id(staffGroup.spannerStorage) in foundIds
+        True
+
+        Variants are treated similarly.
+
+        The method also sets self.streamIds to the returned list.
+        '''
+        if hierarchyObject is None:
+            streamObj = self.stream
+        else:
+            streamObj = hierarchyObject
+        streamsFoundGenerator = streamObj.recurse(streamsOnly=True,
+                                                  restoreActiveSites=False,
+                                                  includeSelf=True)
+        streamIds = [id(s) for s in streamsFoundGenerator]
+
+        if getSpanners is True:
+            spannerBundle = streamObj.spannerBundle
+            streamIds += spannerBundle.getSpannerStorageIds()
+
+        if getVariants is True:
+            for el in streamObj.recurse(includeSelf=True).getElementsByClass(m21.variant.Variant):
+                streamIds += self.findActiveStreamIdsInHierarchy(el._stream)
+
+        # should not happen that there are duplicates, but possible with spanners...
+        # Python's uniq value...
+        streamIds = list(set(streamIds))
+
+        self.streamIds = streamIds
+        return streamIds
+
+    # --------------------------------------------------------------------------
+
+    def parseWriteFmt(self, fmt):
+        '''
+        Parse a passed-in write format
+        '''
+        if fmt is None:  # this is the default
+            return 'pickle'
+        fmt = fmt.strip().lower()
+        if fmt in ['p', 'pickle']:
+            return 'pickle'
+        elif fmt in ['jsonpickle', 'json']:
+            return 'jsonpickle'
+        else:
+            return 'pickle'
+
+    def write(self, fmt='pickle', zipType=None, **keywords) -> bytes | str:
+        '''
+        For a supplied Stream, write a serialized version to
+        string in either 'pickle' or 'jsonpickle' format and
+        return the resulting string.
+
+        jsonpickle is the better format for transporting from
+        one computer to another, but slower and may have some bugs.
+
+        If zipType == 'zlib' then zlib compression is done after serializing.
+        No other compression types are currently supported.
+        '''
+        output: bytes | str
+        if zipType not in (None, 'zlib'):  # pragma: no cover
+            raise FreezeThawError('Cannot zip files except zlib...')
+
+        fmt = self.parseWriteFmt(fmt)
+
+        storage = self.packStream(self.stream)
+
+        if fmt == 'pickle':
+            # previously used highest protocol, but now protocols are changing too
+            # fast, and might not be compatible for sharing.
+            # packStream() returns a storage dictionary
+            output = pickle.dumps(storage)
+            if zipType == 'zlib':
+                output = zlib.compress(output)
+
+        elif fmt == 'jsonpickle':
+            import jsonpickle  # type: ignore
+            output = jsonpickle.encode(storage, **keywords)
+            if t.TYPE_CHECKING:
+                assert isinstance(output, str)
+            if zipType == 'zlib':
+                output = zlib.compress(output.encode())
+
+        else:  # pragma: no cover
+            raise FreezeThawError(f'bad StreamFreezer format: {fmt}')
+
+        return output
+
+
+class StreamThawer(StreamFreezeThawBase):
+    '''
+    This class is used to thaw a data string into a Stream
+    '''
+
+    def __init__(self):
+        super().__init__()
+        self.stream = None
+
+    def teardownSerializationScaffold(self, streamObj=None):
+        '''
+        After rebuilding this Stream from pickled storage, prepare this as a normal `Stream`.
+
+        If streamObj is None, runs it on the embedded stream
+        '''
+        if streamObj is None:  # pragma: no cover
+            streamObj = self.stream
+            if streamObj is None:
+                raise FreezeThawError('You need to pass in a stream when creating to work')
+
+        storedAutoSort = streamObj.autoSort
+        streamObj.autoSort = False
+
+        self.restoreElementsFromTuples(streamObj)
+
+        self.restoreStreamStatusClient(streamObj)
+        # removing seems to create problems for jsonPickle with Spanners
+        allEls = list(streamObj.recurse())
+
+        for e in allEls:
+            eClasses = e.classes
+            if 'Variant' in eClasses:
+                # works like a whole new hierarchy...  # no need for deepcopy
+                subSF = StreamThawer()
+                subSF.teardownSerializationScaffold(e._stream)
+                e._cache = {}
+                # for el in e._stream.flatten():
+                #    print(el, el.offset, el.sites.siteDict)
+            elif 'Spanner' in eClasses:
+                subSF = StreamThawer()
+                subSF.teardownSerializationScaffold(e.spannerStorage)
+                e._cache = {}
+            elif e.isStream:
+                self.restoreStreamStatusClient(e)
+                # removing seems to create problems for jsonPickle with Spanners
+
+            # e.wrapWeakref()
+
+        # restore to whatever it was
+        streamObj.autoSort = storedAutoSort
+
+    def restoreElementsFromTuples(self, streamObj):
+        '''
+        Take a Stream with elements and offsets stored in
+        a list of tuples (element, offset or 'end') at
+        _storedElementOffsetTuples
+        and restore it to the ._elements and ._endElements lists
+        in the proper locations.
+        '''
+        if hasattr(streamObj, '_storedElementOffsetTuples'):
+            # streamObj._elementTree = ElementTree(source=streamObj)
+            for e, offset in streamObj._storedElementOffsetTuples:
+                if offset != 'end':
+                    try:
+                        streamObj.coreInsert(offset, e)
+                    except AttributeError:  # pragma: no cover
+                        print('Problem in decoding... some debug info...')
+                        print(offset, e)
+                        print(streamObj)
+                        print(streamObj.activeSite)
+                        raise
+                else:
+                    streamObj.coreStoreAtEnd(e)
+            del streamObj._storedElementOffsetTuples
+            streamObj.coreElementsChanged()
+
+        for subElement in streamObj:
+            if subElement.isStream is True:
+                # note that the elements may have already been restored
+                # if the spanner stores a part or something in the Stream
+                # for instance in a StaffGroup object
+                self.restoreElementsFromTuples(subElement)
+
+    def restoreStreamStatusClient(self, streamObj):
+        '''
+        Restore the streamStatus client to point to the Stream
+        (do we do this for derivations?  No: there should not be derivations stored.
+        Other objects?  Unclear...)
+        '''
+        if hasattr(streamObj, 'streamStatus'):
+            streamObj.streamStatus.client = streamObj
+
+    def unpackStream(self, storage):
+        '''
+        Convert from storage dictionary to Stream.
+        '''
+        version = storage['m21Version']
+        if version != m21.base.VERSION:  # pragma: no cover
+            print(
+                'this pickled file is out of date and may not function properly.',
+                file=sys.stderr
+            )
+        streamObj = storage['stream']
+
+        self.teardownSerializationScaffold(streamObj)
+        return streamObj
+
+    def parseOpenFmt(self, storage):
+        '''
+        Look at the file and determine the format
+        '''
+        if isinstance(storage, bytes):
+            if storage.startswith(b'{"'):  # pragma: no cover
+                # was m21Version": {"py/tuple" but order of dict may change
+                return 'jsonpickle'
+            else:
+                return 'pickle'
+        else:
+            if storage.startswith('{"'):
+                # was m21Version": {"py/tuple" but order of dict may change
+                return 'jsonpickle'
+            else:  # pragma: no cover
+                return 'pickle'
+
+    def open(self, fileData: bytes, zipType=None, pickleFormat=None):
+        '''
+        Take bytes representing a Frozen(pickled/jsonpickled)
+        Stream and convert it to a normal Stream.
+
+        if format is None then the format is automatically
+        determined from the bytes contents.
+        '''
+        fmt = self.parseOpenFmt(fileData)
+        if fmt == 'pickle':
+            if zipType is None:
+                storage = pickle.loads(fileData)
+            elif zipType == 'zlib':
+                uncompressed = zlib.decompress(fileData)
+                try:
+                    storage = pickle.loads(uncompressed)
+                except AttributeError as e:
+                    raise FreezeThawError(
+                        f'Problem in decoding: {e}'
+                    ) from e
+            else:
+                raise FreezeThawError(f'Unknown zipType {zipType}')
+            self.stream = self.unpackStream(storage)
+        elif fmt == 'jsonpickle':
+            import jsonpickle
+            storage = jsonpickle.decode(fileData)
+            self.stream = self.unpackStream(storage)
+        else:  # pragma: no cover
+            raise FreezeThawError(f'bad StreamFreezer format: {fmt!r}')
 
 
 class M21Utilities:
