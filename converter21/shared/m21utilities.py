@@ -489,9 +489,9 @@ class StreamThawer(StreamFreezeThawBase):
     This class is used to thaw a data string into a Stream
     '''
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.stream: m21.stream.Score = None
+        self.stream: m21.stream.Score | None = None
 
     def teardownSerializationScaffold(self, streamObj=None):
         '''
