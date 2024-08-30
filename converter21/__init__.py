@@ -23,6 +23,8 @@ from enum import IntEnum, auto
 from .HumdrumConverter import HumdrumConverter
 from .MEIConverter import MEIConverter
 from .shared import M21Utilities
+from .shared import StreamFreezer
+from .shared import StreamThawer
 
 class Music21VersionException(Exception):
     # raised if the version of music21 is not recent enough

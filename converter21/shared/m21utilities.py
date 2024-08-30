@@ -491,7 +491,7 @@ class StreamThawer(StreamFreezeThawBase):
 
     def __init__(self):
         super().__init__()
-        self.stream = None
+        self.stream: m21.stream.Score = None
 
     def teardownSerializationScaffold(self, streamObj=None):
         '''
@@ -608,7 +608,7 @@ class StreamThawer(StreamFreezeThawBase):
             else:  # pragma: no cover
                 return 'pickle'
 
-    def open(self, fileData: bytes, zipType=None, pickleFormat=None):
+    def open(self, fileData: bytes, zipType=None):
         '''
         Take bytes representing a Frozen(pickled/jsonpickled)
         Stream and convert it to a normal Stream.

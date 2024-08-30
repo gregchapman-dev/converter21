@@ -21,6 +21,8 @@ from .m21utilities import M21TieSpanner
 from .m21utilities import M21Utilities
 from .m21utilities import M21StaffGroupTree
 from .m21utilities import M21StaffGroupDescriptionTree
+from .m21utilities import StreamFreezer
+from .m21utilities import StreamThawer
 from .m21utilities import CannotMakeScoreFromObjectError
 from .m21utilities import NoMusic21VersionError
 
