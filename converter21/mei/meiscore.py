@@ -585,6 +585,10 @@ class MeiScore:
         if not isinstance(noteOrChord, m21.note.NotRest):
             return
 
+        if isinstance(noteOrChord, m21.harmony.ChordSymbol):
+            # ChordSymbol is a NotRest, but should not have any beams.
+            return
+
         def stopsBeam(beam: m21.beam.Beam) -> bool:
             if beam.type == 'stop':
                 return True
@@ -667,6 +671,11 @@ class MeiScore:
         if not isinstance(gnote, m21.note.GeneralNote):
             return
 
+        if isinstance(gnote, m21.harmony.ChordSymbol):
+            # ChordSymbol is a GeneralNote, but will not have any duration (i.e. no tuplets)
+            # in the MEI file.
+            return
+
         def stopsTuplet(tuplet: m21.duration.Tuplet) -> bool:
             if tuplet.type in ('stop', 'startStop'):
                 return True
@@ -712,6 +721,10 @@ class MeiScore:
         if not isinstance(noteOrChord, (m21.note.Note, m21.chord.Chord)):
             # Note that we reject Unpitched and PercussionChord here, since
             # they have no pitches, so they cannot be tied.
+            return
+
+        if isinstance(noteOrChord, m21.harmony.ChordSymbol):
+            # ChordSymbol is a Chord, but will not have any ties.
             return
 
         def startsTie(noteOrChord: m21.note.Note | m21.chord.Chord) -> bool:
