@@ -92,6 +92,7 @@ class HumdrumWriter:
 
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21Score: m21.stream.Score | None = None
+        self.customM21AttrsToDelete: dict[m21.base.Music21Object, list[str]] = {}
         self.spannerBundle: m21.spanner.SpannerBundle | None = None
         self._scoreData: ScoreData | None = None
         self.staffCounts: list[int] = []  # indexed by partIndex
@@ -379,6 +380,11 @@ class HumdrumWriter:
                 self._firstTempoLayout = '!!LO:TX:omd:t=' + tempoText
                 self._firstMMTokenStr = mmTokenStr
                 startingTempo.humdrum_tempo_already_handled = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customM21AttrsToDelete,
+                    startingTempo,
+                    ['humdrum_tempo_already_handled']
+                )
             else:
                 self._firstTempoLayout = '!!LO:TX:omd:t='
 
@@ -465,7 +471,15 @@ class HumdrumWriter:
 
         self._printResult(fp, outfile)
 
+        self.deannotateScore()
+
         return status
+
+    def deannotateScore(self):
+        for obj, attrs in self.customM21AttrsToDelete.items():
+            for attr in attrs:
+                if hasattr(obj, attr):
+                    delattr(obj, attr)
 
     '''
     //////////////////////////////
