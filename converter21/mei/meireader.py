@@ -1239,7 +1239,7 @@ class MeiReader:
 
             staffNStr: str = eachElem.get('staff', '')
             if staffNStr:
-                dw.mei_staff = staffNStr  # type: ignore
+                dw.meireader_staff = staffNStr  # type: ignore
 
     def _ppFermatas(self) -> None:
         '''
@@ -1535,7 +1535,7 @@ class MeiReader:
             eachOctave.set('m21Ottava', thisIdLocal)
             staffNStr: str = eachOctave.get('staff', '')
             if staffNStr:
-                ottava.mei_staff = staffNStr  # type: ignore
+                ottava.meireader_staff = staffNStr  # type: ignore
 
     _ARPEGGIO_ARROW_AND_ORDER_TO_ARPEGGIOTYPE: dict[tuple[str, str], str] = {
         # default arrow is 'false'
@@ -2226,7 +2226,7 @@ class MeiReader:
             justify: str = elem.get(f'{prefix}Justify', '')
 
             # make the appropriate m21 object (TextExpression, Dynamic, TempoIndication)
-            # and put it in a custom list in obj: obj.mei_dir_dynam_tempo_list
+            # and put it in a custom list in obj: obj.meireader_dir_dynam_tempo_list
             te: m21.expressions.TextExpression = (
                 self._textExpressionFromPieces(
                     text,
@@ -2254,7 +2254,7 @@ class MeiReader:
                 outputList.append(mm)
 
         if outputList:
-            obj.mei_dir_dynam_tempo_list = outputList  # type: ignore
+            obj.meireader_dir_dynam_tempo_list = outputList  # type: ignore
 
     def addArpeggio(
         self,
@@ -2626,19 +2626,19 @@ class MeiReader:
                 continue
 
             breaksecNum: int | None = None
-            if not hasattr(thing, 'mei_breaksec'):
+            if not hasattr(thing, 'meireader_breaksec'):
                 continue
 
             try:
-                breaksecNum = int(thing.mei_breaksec)  # type: ignore
+                breaksecNum = int(thing.meireader_breaksec)  # type: ignore
             except Exception:
                 pass
             if breaksecNum is None:
                 continue
 
-            # delete the custom mei_breaksec attribute so that nested <beam> elements
+            # delete the custom meireader_breaksec attribute so that nested <beam> elements
             # won't process it twice.
-            del thing.mei_breaksec  # type: ignore
+            del thing.meireader_breaksec  # type: ignore
 
             # stop the extra (not included in breaksecNum) beams in this thing
             for beamNum in range(breaksecNum + 1, len(thing.beams) + 1):  # type: ignore
@@ -4719,7 +4719,7 @@ class MeiReader:
         stemModStr: str | None = elem.get('stem.mod')
         if stemModStr is not None:
             # just add it as an attribute, to be read by callers if they like
-            theNote.mei_stem_mod = stemModStr  # type: ignore
+            theNote.meireader_stem_mod = stemModStr  # type: ignore
 
         stemLenStr: str | None = elem.get('stem.len')
         stemLen: float | None = None
@@ -4739,7 +4739,7 @@ class MeiReader:
         # between this note and the next note.  Mark this in theNote with a custom attribute.
         breaksec: str | None = elem.get('breaksec')
         if breaksec is not None:
-            theNote.mei_breaksec = breaksec  # type: ignore
+            theNote.meireader_breaksec = breaksec  # type: ignore
 
         # beams indicated by a <beamSpan> held elsewhere
         if elem.get('m21Beam') is not None:
@@ -4769,9 +4769,9 @@ class MeiReader:
         if elem.get('visible') == 'false':
             theNote.style.hideObjectOnPrint = True
 
-        # stash the staff number in theNote.mei_staff (in case a spanner needs to know)
+        # stash the staff number in theNote.meireader_staff (in case a spanner needs to know)
         if self.staffNumberForNotes:
-            theNote.mei_staff = self.staffNumberForNotes  # type: ignore
+            theNote.meireader_staff = self.staffNumberForNotes  # type: ignore
 
         # Check for m21TupletSearch=='end' and tuplet='tNN'
         # to decrement self.inTupletCount.
@@ -4941,9 +4941,9 @@ class MeiReader:
             if elem.get('visible') == 'false':
                 theRest.style.hideObjectOnPrint = True
 
-        # stash the staff number in theRest.mei_staff (in case a spanner needs to know)
+        # stash the staff number in theRest.meireader_staff (in case a spanner needs to know)
         if self.staffNumberForNotes:
-            theRest.mei_staff = self.staffNumberForNotes  # type: ignore
+            theRest.meireader_staff = self.staffNumberForNotes  # type: ignore
 
         # Check for m21TupletSearch=='end' and tuplet='tNN'
         # to decrement self.inTupletCount.
@@ -5332,13 +5332,13 @@ class MeiReader:
         stemModStr: str | None = elem.get('stem.mod')
         if stemModStr is not None:
             # just add it as an attribute, to be read by callers if they like
-            theChord.mei_stem_mod = stemModStr  # type: ignore
+            theChord.meireader_stem_mod = stemModStr  # type: ignore
 
         # breaksec="n" means that the beams that cross this note drop down to "n" beams
         # between this note and the next note.  Mark this in theNote with a custom attribute.
         breaksec: str | None = elem.get('breaksec')
         if breaksec is not None:
-            theChord.mei_breaksec = breaksec  # type: ignore
+            theChord.meireader_breaksec = breaksec  # type: ignore
 
         # beams indicated by a <beamSpan> held elsewhere
         m21BeamStr: str | None = elem.get('m21Beam')
@@ -5369,9 +5369,9 @@ class MeiReader:
         if elem.get('visible') == 'false':
             theChord.style.hideObjectOnPrint = True
 
-        # stash the staff number in theChord.mei_staff (in case a spanner needs to know)
+        # stash the staff number in theChord.meireader_staff (in case a spanner needs to know)
         if self.staffNumberForNotes:
-            theChord.mei_staff = self.staffNumberForNotes  # type: ignore
+            theChord.meireader_staff = self.staffNumberForNotes  # type: ignore
 
         # Check for m21TupletSearch=='end' and tuplet='tNN'
         # to decrement self.inTupletCount.
@@ -5759,11 +5759,11 @@ class MeiReader:
         numMarks: int = self._DUR_TO_NUMBEAMS.get(unitDurStr, 0)
         if numMarks == 0:
             # check the note or chord itself to see if it has @stem.mod = '3slashes' or the like
-            if hasattr(noteOrChord, 'mei_stem_mod'):
+            if hasattr(noteOrChord, 'meireader_stem_mod'):
                 numMarks = self._STEMMOD_TO_NUMSLASHES.get(
-                    noteOrChord.mei_stem_mod, 0  # type: ignore
+                    noteOrChord.meireader_stem_mod, 0  # type: ignore
                 )
-                delattr(noteOrChord, 'mei_stem_mod')
+                delattr(noteOrChord, 'meireader_stem_mod')
 
         if numMarks == 9:
             numMarks = 8  # music21 doesn't support a 2048th note tremolo, pretend it's 1024th note
@@ -5816,16 +5816,16 @@ class MeiReader:
         if numMarks == 0:
             # check the notes or chords themselves to see if they have @stem.mod = '3slashes'
             # or the like
-            if hasattr(firstNoteOrChord, 'mei_stem_mod'):
+            if hasattr(firstNoteOrChord, 'meireader_stem_mod'):
                 numMarks = self._STEMMOD_TO_NUMSLASHES.get(
-                    firstNoteOrChord.mei_stem_mod, 0  # type: ignore
+                    firstNoteOrChord.meireader_stem_mod, 0  # type: ignore
                 )
-                delattr(firstNoteOrChord, 'mei_stem_mod')
-            if numMarks == 0 and hasattr(secondNoteOrChord, 'mei_stem_mod'):
+                delattr(firstNoteOrChord, 'meireader_stem_mod')
+            if numMarks == 0 and hasattr(secondNoteOrChord, 'meireader_stem_mod'):
                 numMarks = self._STEMMOD_TO_NUMSLASHES.get(
-                    secondNoteOrChord.mei_stem_mod, 0  # type: ignore
+                    secondNoteOrChord.meireader_stem_mod, 0  # type: ignore
                 )
-                delattr(secondNoteOrChord, 'mei_stem_mod')
+                delattr(secondNoteOrChord, 'meireader_stem_mod')
 
         # numMarks should be total number of beams - beams due to note duration
         numNoteBeams: int = self._QL_TO_NUMFLAGS.get(firstNoteOrChord.duration.quarterLength, 0)
@@ -6167,12 +6167,12 @@ class MeiReader:
             # If there, append them first, then the obj, so
             # they all get the same offset (since dir/dynam/tempo
             # have zero duration).
-            if hasattr(obj, 'mei_dir_dynam_tempo_list'):
+            if hasattr(obj, 'meireader_dir_dynam_tempo_list'):
                 dirDynamTempoList: list[
                     m21.expressions.TextExpression
                     | m21.dynamics.Dynamic
                     | m21.tempo.TempoIndication
-                ] = obj.mei_dir_dynam_tempo_list  # type: ignore
+                ] = obj.meireader_dir_dynam_tempo_list  # type: ignore
                 if dirDynamTempoList:
                     for each in dirDynamTempoList:
                         theVoice.coreAppend(each)
@@ -7021,8 +7021,8 @@ class MeiReader:
         if not staffNStr:
             # get it from start note in ottava (should already be there)
             startObj: Music21Object | None = ottava.getFirst()
-            if startObj is not None and hasattr(startObj, 'mei_staff'):
-                staffNStr = startObj.mei_staff  # type: ignore
+            if startObj is not None and hasattr(startObj, 'meireader_staff'):
+                staffNStr = startObj.meireader_staff  # type: ignore
         if not staffNStr:
             staffNStr = self.topPartN
 
@@ -7034,9 +7034,9 @@ class MeiReader:
             environLocal.warn('missing @tstamp/@startid in <octave> element')
             return ('', (-1., None, None), None)
         if not startId:
-            ottava.mei_needs_start_anchor = True  # type: ignore
+            ottava.meireader_needs_start_anchor = True  # type: ignore
         if not endId and tstamp2:
-            ottava.mei_needs_end_anchor = True  # type: ignore
+            ottava.meireader_needs_end_anchor = True  # type: ignore
         if tstamp:
             offset = self._tstampToOffset(tstamp)
         if tstamp2:
@@ -7155,9 +7155,9 @@ class MeiReader:
                 environLocal.warn('missing @tstamp/@startid in <trill> element')
                 return [('', (-1., None, None), None)]
             if not startId:
-                trillExt.mei_needs_start_anchor = True  # type: ignore
+                trillExt.meireader_needs_start_anchor = True  # type: ignore
             if not endId:
-                trillExt.mei_needs_end_anchor = True  # type: ignore
+                trillExt.meireader_needs_end_anchor = True  # type: ignore
 
             measSkip: int | None = None
             offset2: OffsetQL | None = None
@@ -7170,8 +7170,8 @@ class MeiReader:
             if not trillExtStaffNStr:
                 # get it from start note in trillExt (should already be there)
                 startObj: Music21Object | None = trillExt.getFirst()
-                if startObj is not None and hasattr(startObj, 'mei_staff'):
-                    trillExtStaffNStr = startObj.mei_staff  # type: ignore
+                if startObj is not None and hasattr(startObj, 'meireader_staff'):
+                    trillExtStaffNStr = startObj.meireader_staff  # type: ignore
             if not trillExtStaffNStr:
                 trillExtStaffNStr = self.topPartN
 
@@ -7378,8 +7378,8 @@ class MeiReader:
         staffNStr: str = elem.get('staff', '')
         if not staffNStr:
             # get it from hairpin
-            if hasattr(hairpin, 'mei_staff'):
-                staffNStr = hairpin.mei_staff  # type: ignore
+            if hasattr(hairpin, 'meireader_staff'):
+                staffNStr = hairpin.meireader_staff  # type: ignore
         if not staffNStr:
             staffNStr = self.topPartN
 
@@ -7394,9 +7394,9 @@ class MeiReader:
             environLocal.warn('missing @tstamp/@startid in <hairpin> element')
             return ('', (-1., None, None), None)
         if not startId:
-            hairpin.mei_needs_start_anchor = True  # type: ignore
+            hairpin.meireader_needs_start_anchor = True  # type: ignore
         if not endId:
-            hairpin.mei_needs_end_anchor = True  # type: ignore
+            hairpin.meireader_needs_end_anchor = True  # type: ignore
         if tstamp:
             offset = self._tstampToOffset(tstamp)
         if tstamp2:
@@ -8086,16 +8086,16 @@ class MeiReader:
                             # If it needs start or end notes make them now.
                             needsStartAnchor: bool = False
                             needsEndAnchor: bool = False
-                            if hasattr(m21Obj, 'mei_needs_start_anchor'):
+                            if hasattr(m21Obj, 'meireader_needs_start_anchor'):
                                 needsStartAnchor = (
-                                    spannerObj.mei_needs_start_anchor  # type: ignore
+                                    spannerObj.meireader_needs_start_anchor  # type: ignore
                                 )
-                                del spannerObj.mei_needs_start_anchor  # type: ignore
-                            if hasattr(m21Obj, 'mei_needs_end_anchor'):
+                                del spannerObj.meireader_needs_start_anchor  # type: ignore
+                            if hasattr(m21Obj, 'meireader_needs_end_anchor'):
                                 needsEndAnchor = (
-                                    spannerObj.mei_needs_end_anchor  # type: ignore
+                                    spannerObj.meireader_needs_end_anchor  # type: ignore
                                 )
-                                del spannerObj.mei_needs_end_anchor  # type: ignore
+                                del spannerObj.meireader_needs_end_anchor  # type: ignore
 
                             if needsStartAnchor:
                                 startObj = spanner.SpannerAnchor()
@@ -8840,13 +8840,13 @@ class MeiReader:
             if not isinstance(sp, spanner.Ottava):
                 continue
             staffNStr: str = ''
-            if hasattr(sp, 'mei_staff'):
-                staffNStr = sp.mei_staff  # type: ignore
+            if hasattr(sp, 'meireader_staff'):
+                staffNStr = sp.meireader_staff  # type: ignore
             if not staffNStr:
                 # get it from start note in ottava (should already be there)
                 startObj: Music21Object | None = sp.getFirst()
-                if startObj is not None and hasattr(startObj, 'mei_staff'):
-                    staffNStr = startObj.mei_staff  # type: ignore
+                if startObj is not None and hasattr(startObj, 'meireader_staff'):
+                    staffNStr = startObj.meireader_staff  # type: ignore
             if not staffNStr:
                 staffNStr = self.topPartN
 

@@ -54,6 +54,8 @@ class MeiScore:
         self.m21Score: m21.stream.Score = m21Score
         self.meiVersion: str = meiVersion
 
+        self.customM21AttrsToDelete: dict[m21.base.Music21Object, list[str]] = {}
+
         self.currentTupletSpanners: dict[m21.stream.Part, list[M21TupletSpanner]] = {}
         self.currentTieSpanners: dict[m21.stream.Part, list[tuple[M21TieSpanner, int]]] = {}
 
@@ -143,6 +145,7 @@ class MeiScore:
                 measureStack,
                 prevMeiMeasure,
                 self,
+                self.customM21AttrsToDelete,
                 self.spannerBundle)
             output.append(meiMeas)
 
@@ -217,7 +220,12 @@ class MeiScore:
         root: Element = tb.close()
         return root
 
-    def makeStaffDefElement(self, part: m21.stream.Part, staffN: int, tb: TreeBuilder):
+    def makeStaffDefElement(
+        self,
+        part: m21.stream.Part,
+        staffN: int,
+        tb: TreeBuilder
+    ):
         # staffLines (defaults to 5)
         staffLines: int = 5
         initialStaffLayout: m21.layout.StaffLayout | None = None
@@ -249,6 +257,11 @@ class MeiScore:
         if clef is not None:
             M21ObjectConvert.m21ClefToMei(clef, self.spannerBundle, tb)
             clef.mei_handled_already = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                self.customM21AttrsToDelete,
+                clef,
+                ['mei_handled_already']
+            )
         else:
             environLocal.warn(f'No initial clef found in part {staffN}')
 
@@ -265,6 +278,11 @@ class MeiScore:
         if keySig is not None:
             M21ObjectConvert.m21KeySigToMei(keySig, self.spannerBundle, tb)
             keySig.mei_handled_already = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                self.customM21AttrsToDelete,
+                keySig,
+                ['mei_handled_already']
+            )
         else:
             environLocal.warn(f'No initial key signature found in part {staffN}')
 
@@ -281,6 +299,11 @@ class MeiScore:
         if meterSig is not None:
             M21ObjectConvert.m21TimeSigToMei(meterSig, self.spannerBundle, tb)
             meterSig.mei_handled_already = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                self.customM21AttrsToDelete,
+                meterSig,
+                ['mei_handled_already']
+            )
         else:
             environLocal.warn(f'No initial time signature found in part {staffN}')
 
@@ -463,7 +486,11 @@ class MeiScore:
 
         # print('done annotating score')
 
-    def annotatePositionedRests(self, obj: m21.base.Music21Object, part: m21.stream.Part) -> None:
+    def annotatePositionedRests(
+        self,
+        obj: m21.base.Music21Object,
+        part: m21.stream.Part,
+    ) -> None:
         if not isinstance(obj, m21.note.Rest):
             return
         if obj.stepShift == 0:
@@ -483,6 +510,11 @@ class MeiScore:
         tempPitch.diatonicNoteNum = restObjectPseudoDNN
         obj.mei_ploc = tempPitch.step.lower()  # type: ignore
         obj.mei_oloc = str(tempPitch.octave)  # type: ignore
+        M21Utilities.extendCustomM21Attributes(
+            self.customM21AttrsToDelete,
+            obj,
+            ['mei_ploc', 'mei_oloc']
+        )
 
     def fillOttavas(
         self,
@@ -497,16 +529,22 @@ class MeiScore:
                 spanner.fill(part)
 
     def deannotateScore(self) -> None:
-        for sp in self.m21Score[M21TemporarySpanner]:
-            if isinstance(sp, M21BeamSpanner):
-                for el in sp.getSpannedElements():
-                    if hasattr(el, 'mei_breaksec'):
-                        delattr(el, 'mei_breaksec')
+        for sp in list(self.m21Score[M21TemporarySpanner]):
             self.m21Score.remove(sp)
 
-        for obj in self.m21Score[m21.note.GeneralNote]:
-            if hasattr(obj, 'mei_xml_id'):
-                delattr(obj, 'mei_xml_id')
+        for obj in self.m21Score.recurse():
+            # we don't put 'xml_id' in self.customM21AttrsToDelete, because
+            # then every object would be in that dictionary.
+            if hasattr(obj, 'xml_id'):
+                delattr(obj, 'xml_id')
+
+            if obj in self.customM21AttrsToDelete:
+                customAttrs: list[str] = self.customM21AttrsToDelete[obj]
+                for customAttr in customAttrs:
+                    if hasattr(obj, customAttr):
+                        delattr(obj, customAttr)
+        # all done, let go of these references to music21 objects.
+        self.customM21AttrsToDelete = {}
 
 #     def makeXmlIds(self) -> None:
 #         for part in self.m21Score.parts:
@@ -664,7 +702,11 @@ class MeiScore:
             breakSec: int = computeBreakSec(prevNC.beams, noteOrChord.beams)
             if breakSec > 0:
                 prevNC.mei_breaksec = breakSec  # type: ignore
-
+                M21Utilities.extendCustomM21Attributes(
+                    self.customM21AttrsToDelete,
+                    prevNC,
+                    ['mei_breaksec']
+                )
         self.previousBeamedNoteOrChord[(part, voiceId)] = noteOrChord
 
     def annotateTuplets(self, gnote: m21.base.Music21Object, part: m21.stream.Part) -> None:

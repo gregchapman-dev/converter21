@@ -71,6 +71,7 @@ class M21ObjectConvert:
     @staticmethod
     def _addStemMod(obj: m21.note.NotRest, attr: dict[str, str]):
         if hasattr(obj, 'mei_stem_mod'):
+            # 888 nowhere in mei exporter does 'mei_stem_mod' get set.
             stemMod: str = getattr(obj, 'mei_stem_mod')
             attr['stem.mod'] = stemMod
 
@@ -1067,6 +1068,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        customAttributes: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder
     ) -> None:
@@ -1194,6 +1196,7 @@ class M21ObjectConvert:
                             m21Score,
                             m21Measure,
                             scoreMeterStream,
+                            customAttributes,
                             spannerBundle,
                             tb=None,
                             attr=attr
@@ -1201,10 +1204,21 @@ class M21ObjectConvert:
                         # mark the Trill as handled, so when we see it during note.expressions
                         # processing, we won't emit it again.
                         expr.mei_trill_already_handled = True  # type: ignore
+                        M21Utilities.extendCustomM21Attributes(
+                            customAttributes,
+                            expr,
+                            ['mei_trill_already_handled']
+                        )
+
                         # mark the TrillExtension as handled, so when we (might) see it during
                         # Trill processing or measure-level SpannerAnchor scanning, we won't
                         # re-issue it.
                         spanner.mei_trill_already_handled = True  # type: ignore
+                        M21Utilities.extendCustomM21Attributes(
+                            customAttributes,
+                            spanner,
+                            ['mei_trill_already_handled']
+                        )
                         break
                 if tag:
                     break
@@ -1313,6 +1327,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        customAttributes: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder | None,
         attr: dict[str, str] | None = None,
@@ -1400,8 +1415,18 @@ class M21ObjectConvert:
             tb.start('trill', attr)
             tb.end('trill')
             trill.mei_trill_already_handled = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                customAttributes,
+                trill,
+                ['mei_trill_already_handled']
+            )
             if trillExtension is not None:
                 trillExtension.mei_trill_already_handled = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    customAttributes,
+                    trillExtension,
+                    ['mei_trill_already_handled']
+                )
 
     @staticmethod
     def turnToMei(
@@ -1803,7 +1828,8 @@ class M21ObjectConvert:
 
     @staticmethod
     def m21BarlineToMeiMeasureBarlineAttr(
-        barline: m21.bar.Barline | None
+        barline: m21.bar.Barline | None,
+        customAttributes: dict[m21.base.Music21Object, list[str]]
     ) -> str:
         if barline is None:
             return ''
@@ -1815,6 +1841,11 @@ class M21ObjectConvert:
                 ]
             )
             barline.mei_emitted_as_measure_attr = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                customAttributes,
+                barline,
+                ['mei_emitted_as_measure_attr']
+            )
             return output
 
         # not a repeat, use barline.type
@@ -1824,12 +1855,18 @@ class M21ObjectConvert:
             ]
         )
         barline.mei_emitted_as_measure_attr = True  # type: ignore
+        M21Utilities.extendCustomM21Attributes(
+            customAttributes,
+            barline,
+            ['mei_emitted_as_measure_attr']
+        )
         return output
 
     @staticmethod
     def m21BarlinesToMeiMeasureBarlineAttr(
         barline1: m21.bar.Barline | None,
-        barline2: m21.bar.Barline | None
+        barline2: m21.bar.Barline | None,
+        customAttributes: dict[m21.base.Music21Object, list[str]]
     ) -> str:
         # barline1 and barline2 are simultaneous, and need to be combined.
         # For example, barline1 may be the right barline of one measure, and barline2
@@ -1837,8 +1874,8 @@ class M21ObjectConvert:
         if barline1 is None and barline2 is None:
             return ''
 
-        attr1: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline1)
-        attr2: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline2)
+        attr1: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline1, customAttributes)
+        attr2: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline2, customAttributes)
 
         output: str = M21ObjectConvert.meiMeasureBarlineAttrCombine(attr1, attr2)
         return output

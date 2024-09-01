@@ -47,6 +47,8 @@ class MeiLayer:
         m21Voice: m21.stream.Voice | m21.stream.Measure,
         parentStaff,  # MeiStaff
         parentScore,  # MeiScore
+        # custom m21 attrs to delete later (children will extend this)
+        customAttrs: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
     ) -> None:
         from converter21.mei import MeiStaff
@@ -55,6 +57,7 @@ class MeiLayer:
             assert isinstance(parentScore, MeiScore)
         self.m21Voice: m21.stream.Voice | m21.stream.Measure = m21Voice
         self.parentStaff: MeiStaff = parentStaff
+        self.customAttrs: dict[m21.base.Music21Object, list[str]] = customAttrs
         self.spannerBundle: m21.spanner.SpannerBundle = spannerBundle
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             parentScore.scoreMeterStream
@@ -223,6 +226,11 @@ class MeiLayer:
                                 tb
                             )
                             staffChangeObject.mei_emitted = True  # type: ignore
+                            M21Utilities.extendCustomM21Attributes(
+                                self.customAttrs,
+                                staffChangeObject,
+                                ['mei_emitted']
+                            )
                         else:
                             M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
 
@@ -268,6 +276,11 @@ class MeiLayer:
                         staffChangeObject, self.spannerBundle, tb
                     )
                     staffChangeObject.mei_emitted = True  # type: ignore
+                    M21Utilities.extendCustomM21Attributes(
+                        self.customAttrs,
+                        staffChangeObject,
+                        ['mei_emitted']
+                    )
                 else:
                     M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
 
@@ -390,6 +403,11 @@ class MeiLayer:
                     f'invalid totalNumBeams ({totalNumBeams}), skipping fTrem.'
                 )
                 btfs.mei_skip = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    btfs,
+                    ['mei_skip']
+                )
                 return
             beams: str = self._UNIT_DUR_TO_BEAMS.get(unitDur, '')
             if not beams:
@@ -397,6 +415,11 @@ class MeiLayer:
                     f'invalid unitDur ({unitDur}), skipping fTrem.'
                 )
                 btfs.mei_skip = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    btfs,
+                    ['mei_skip']
+                )
                 return
 
             # start an <fTrem>
@@ -512,6 +535,8 @@ class MeiLayer:
 
                 # mark as having been emitted as <beam> or <tuplet> so we don't emit
                 # as <beamSpan> or <tupletSpan> later, in makePostStavesElements.
+                # We don't add these custom attributes to self.customAttrs, since
+                # the entire spanner will be deleted during deannotateScore().
                 if isinstance(spanner, M21BeamSpanner):
                     spanner.mei_beam = True  # type: ignore
                 else:
@@ -523,6 +548,11 @@ class MeiLayer:
                     continue
 
                 obj.mei_in_ftrem = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    obj,
+                    ['mei_in_ftrem']
+                )
 
             output.append(spanner)  # type: ignore
 
@@ -574,6 +604,11 @@ class MeiLayer:
                     continue
 
                 obj.mei_in_ftrem = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    obj,
+                    ['mei_in_ftrem']
+                )
 
             output.append(spanner)  # type: ignore
 
@@ -611,6 +646,7 @@ class MeiLayer:
                         m21Score,
                         m21Measure,
                         self.scoreMeterStream,
+                        self.customAttrs,
                         self.spannerBundle,
                         tb
                     )
@@ -627,6 +663,7 @@ class MeiLayer:
                                 m21Score,
                                 m21Measure,
                                 self.scoreMeterStream,
+                                self.customAttrs,
                                 self.spannerBundle,
                                 tb
                             )
@@ -650,6 +687,7 @@ class MeiLayer:
                             m21Score,
                             m21Measure,
                             self.scoreMeterStream,
+                            self.customAttrs,
                             self.spannerBundle,
                             tb
                         )

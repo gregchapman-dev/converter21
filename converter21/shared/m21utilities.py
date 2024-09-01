@@ -2992,6 +2992,13 @@ class M21Utilities:
         return output
 
     @staticmethod
+    def updateChordSymbolFullText(cs: m21.harmony.ChordSymbol):
+        if not hasattr(cs, 'c21_full_text'):
+            return
+        # For now, don't bother trying to make it like it was, just get rid of c21_full_text
+        del cs.c21_full_text
+
+    @staticmethod
     def chordSymbolHasAlters(cs: m21.harmony.ChordSymbol) -> bool:
         for csMod in cs.chordStepModifications:
             if csMod.modType == 'alter':
@@ -4066,3 +4073,14 @@ class M21Utilities:
             m21.harmony.CHORD_ALIASES['augmented-ninth'] = 'augmented-dominant-ninth'
         if 'minor-major' not in m21.harmony.CHORD_ALIASES:
             m21.harmony.CHORD_ALIASES['minor-major'] = 'minor-major-seventh'
+
+    @staticmethod
+    def extendCustomM21Attributes(
+        customAttrs: dict[m21.base.Music21Object, list[str]],
+        obj: m21.base.Music21Object,
+        newAttrs: list[str]
+    ):
+        if obj not in customAttrs:
+            customAttrs[obj] = []
+        customAttrs[obj].extend(newAttrs)
+

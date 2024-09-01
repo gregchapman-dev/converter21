@@ -39,6 +39,8 @@ class MeiMeasure:
         m21Measures: list[m21.stream.Measure],
         prevMeiMeasure,  # MeiMeasure | None
         parentScore,  # MeiScore
+        # custom m21 attrs to delete later (children will extend this)
+        customAttrs: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
     ) -> None:
         '''
@@ -58,6 +60,7 @@ class MeiMeasure:
         if prevMeiMeasure is not None:
             prevMeiMeasure.nextMeiMeasure = self
 
+        self.customAttrs: dict[m21.base.Music21Object, list[str]] = customAttrs
         self.spannerBundle = spannerBundle
 
         self.staves: list[MeiStaff] = []
@@ -73,7 +76,7 @@ class MeiMeasure:
             if part is None:
                 raise MeiInternalError('Found a Measure that\'s not in a Part.')
             nStr: str = str(parentScore.staffNumbersForM21Parts[part])
-            staff = MeiStaff(nStr, m, parentScore, spannerBundle)
+            staff = MeiStaff(nStr, m, parentScore, customAttrs, spannerBundle)
             self.staves.append(staff)
 
     @staticmethod
@@ -219,7 +222,10 @@ class MeiMeasure:
             # instead of assuming the previous measure combined it into their
             # 'right' attribute.
             myLeftBarline: m21.bar.Barline | None = meiStaff.m21Measure.leftBarline
-            left: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(myLeftBarline)
+            left: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(
+                myLeftBarline,
+                self.customAttrs
+            )
             if left:
                 attr['left'] = left
 
@@ -233,7 +239,8 @@ class MeiMeasure:
 
         right: str = M21ObjectConvert.m21BarlinesToMeiMeasureBarlineAttr(
             myRightBarline,
-            nextLeftBarline
+            nextLeftBarline,
+            self.customAttrs
         )
         if right:
             attr['right'] = right
