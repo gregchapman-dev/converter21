@@ -476,10 +476,13 @@ class HumdrumWriter:
         return status
 
     def deannotateScore(self):
-        for obj, attrs in self.customM21AttrsToDelete.items():
-            for attr in attrs:
-                if hasattr(obj, attr):
-                    delattr(obj, attr)
+        for obj, customAttrs in self.customM21AttrsToDelete.items():
+            for customAttr in customAttrs:
+                if hasattr(obj, customAttr):
+                    delattr(obj, customAttr)
+
+        # all done, let go of these references to music21 objects.
+        self.customM21AttrsToDelete = {}
 
     '''
     //////////////////////////////

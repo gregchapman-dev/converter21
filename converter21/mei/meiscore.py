@@ -538,11 +538,11 @@ class MeiScore:
             if hasattr(obj, 'xml_id'):
                 delattr(obj, 'xml_id')
 
-            if obj in self.customM21AttrsToDelete:
-                customAttrs: list[str] = self.customM21AttrsToDelete[obj]
-                for customAttr in customAttrs:
-                    if hasattr(obj, customAttr):
-                        delattr(obj, customAttr)
+        for obj, customAttrs in self.customM21AttrsToDelete.items():
+            for customAttr in customAttrs:
+                if hasattr(obj, customAttr):
+                    delattr(obj, customAttr)
+
         # all done, let go of these references to music21 objects.
         self.customM21AttrsToDelete = {}
 
