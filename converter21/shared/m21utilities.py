@@ -3953,6 +3953,24 @@ class M21Utilities:
         return ''
 
     @staticmethod
+    def assureAllXmlIdsAndIds(s: m21.stream.Stream):
+        # for 3rd party clients who want their current m21Score to match the
+        # exported/re-imported score they are about to produce.  (Re-import
+        # of the exported score will load the new score's ids with the old
+        # score's xml_ids.)  Don't change voice.id though, those are important.
+        for obj in s.recurse():
+            M21Utilities.assureXmlId(obj)
+            if not isinstance(obj, m21.stream.Voice):
+                obj.id = obj.xml_id  # type: ignore
+            # if it's a chord (and not a chord symbol), put an xmlid on all the notes
+            # (required for MEI export, because <tie> might reference a note in a chord)
+            if isinstance(obj, m21.chord.ChordBase):
+                if not isinstance(obj, m21.harmony.ChordSymbol):
+                    for n in obj.notes:
+                        M21Utilities.assureXmlId(n)
+                        n.id = n.xml_id  # type: ignore
+
+    @staticmethod
     def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
         # must be a score; we will look for parts/measures/etc
 
