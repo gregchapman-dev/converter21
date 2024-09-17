@@ -619,24 +619,34 @@ class StreamThawer(StreamFreezeThawBase):
         fmt = self.parseOpenFmt(fileData)
         if fmt == 'pickle':
             if zipType is None:
-                storage = pickle.loads(fileData)
-            elif zipType == 'zlib':
-                uncompressed = zlib.decompress(fileData)
                 try:
+                    storage = pickle.loads(fileData)
+                except Exception as e:
+                    print(f'Problem in thawing score: {e}', file=sys.stderr)
+                    return
+            elif zipType == 'zlib':
+                try:
+                    uncompressed = zlib.decompress(fileData)
                     storage = pickle.loads(uncompressed)
-                except AttributeError as e:
-                    raise FreezeThawError(
-                        f'Problem in decoding: {e}'
-                    ) from e
+                except Exception as e:
+                    print(f'Problem in thawing zipped score: {e}', file=sys.stderr)
+                    return
             else:
-                raise FreezeThawError(f'Unknown zipType {zipType}')
+                print(f'Unknown zipType {zipType}', file=sys.stderr)
+                return
+
             self.stream = self.unpackStream(storage)
         elif fmt == 'jsonpickle':
             import jsonpickle
-            storage = jsonpickle.decode(fileData)
+            try:
+                storage = jsonpickle.decode(fileData)
+            except Exception as e:
+                print(f'Problem in thawing jsonpickled score: {e}', file=sys.stderr)
+                return
+
             self.stream = self.unpackStream(storage)
         else:  # pragma: no cover
-            raise FreezeThawError(f'bad StreamFreezer format: {fmt!r}')
+            print(f'bad StreamFreezer format: {fmt!r}', file=sys.stderr)
 
 
 class M21Utilities:
