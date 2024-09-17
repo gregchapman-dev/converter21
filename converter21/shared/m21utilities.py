@@ -466,9 +466,13 @@ class StreamFreezer(StreamFreezeThawBase):
             # previously used highest protocol, but now protocols are changing too
             # fast, and might not be compatible for sharing.
             # packStream() returns a storage dictionary
-            output = pickle.dumps(storage)
-            if zipType == 'zlib':
-                output = zlib.compress(output)
+            try:
+                output = pickle.dumps(storage)
+                if zipType == 'zlib':
+                    output = zlib.compress(output)
+            except Exception as e:
+                print(f'StreamFreezer: failed {e}')
+                output = b''
 
         elif fmt == 'jsonpickle':
             import jsonpickle  # type: ignore
@@ -479,7 +483,8 @@ class StreamFreezer(StreamFreezeThawBase):
                 output = zlib.compress(output.encode())
 
         else:  # pragma: no cover
-            raise FreezeThawError(f'bad StreamFreezer format: {fmt}')
+            print(f'bad StreamFreezer format: {fmt}')
+            output = b''
 
         return output
 
