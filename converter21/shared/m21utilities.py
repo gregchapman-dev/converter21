@@ -3855,15 +3855,14 @@ class M21Utilities:
             return encoded
 
         if isinstance(identifier, str):
-            # str, use as is
+            # non-empty str, use as is
             output = identifier
         elif (isinstance(identifier, int)
                 and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
             # Nice low integer, use as is (converted to str)
             output = str(identifier)
         elif isinstance(identifier, int):
-            # Actually a memory location, so make it a nice short ASCII string,
-            # with lower-case class name prefix.
+            # Actually a memory location, replace with nice short ASCII string
             output = alphabet_encode(identifier)
         else:
             raise Converter21InternalError('identifier not int or str')
@@ -3928,6 +3927,21 @@ class M21Utilities:
         )
 
     @staticmethod
+    def assureXmlIdAndId(obj: m21.base.Music21Object, prefix: str = ''):
+        M21Utilities.assureXmlId(obj, prefix)
+        # Don't change voice.id though, those are important.
+        if not isinstance(obj, m21.stream.Voice):
+            obj.id = obj.xml_id  # type: ignore
+
+        # if it's a chord (and not a chord symbol), put an xmlid on all the notes, too
+        # (required for MEI export, because <tie> might reference a note in a chord)
+        if isinstance(obj, m21.chord.ChordBase):
+            if not isinstance(obj, m21.harmony.ChordSymbol):
+                for n in obj.notes:
+                    M21Utilities.assureXmlId(n)
+                    n.id = n.xml_id  # type: ignore
+
+    @staticmethod
     def assureXmlIds(objs: list[m21.base.Music21Object] | m21.spanner.Spanner):
         if isinstance(objs, m21.spanner.Spanner):
             objs = objs.getSpannedElements()
@@ -3974,16 +3988,7 @@ class M21Utilities:
         # of the exported score will load the new score's ids with the old
         # score's xml_ids.)  Don't change voice.id though, those are important.
         for obj in s.recurse():
-            M21Utilities.assureXmlId(obj)
-            if not isinstance(obj, m21.stream.Voice):
-                obj.id = obj.xml_id  # type: ignore
-            # if it's a chord (and not a chord symbol), put an xmlid on all the notes
-            # (required for MEI export, because <tie> might reference a note in a chord)
-            if isinstance(obj, m21.chord.ChordBase):
-                if not isinstance(obj, m21.harmony.ChordSymbol):
-                    for n in obj.notes:
-                        M21Utilities.assureXmlId(n)
-                        n.id = n.xml_id  # type: ignore
+            M21Utilities.assureXmlIdAndId(obj)
 
     @staticmethod
     def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
