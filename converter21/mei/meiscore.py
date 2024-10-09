@@ -788,7 +788,8 @@ class MeiScore:
             parentChord: m21.chord.Chord | None = None
         ) -> tuple[M21TieSpanner, int] | None:
             # look at all the partTieSpanners and see if this note has the
-            # same (exact) pitches as the start note of that spanner.
+            # same (exact) pitches as the start note of that spanner (and also
+            # stops or continues a tie)
             for sp, numMeasuresSearched in partTieSpanners:
                 startNote: m21.note.Note = sp.getFirst()
                 if note is startNote:
@@ -798,6 +799,20 @@ class MeiScore:
                 # bug where a pitch with accidental=None is different from
                 # a pitch with accidental='natural'.  Ugh.
                 if startNote.pitch.nameWithOctave != note.pitch.nameWithOctave:
+                    continue
+
+                # From music21 docs: Notes do not need to know if they are tied from a previous
+                # note. i.e., you can tie n1 to n2 just with a tie start on n1. However, if you
+                # want proper musicXML output you need a tie stop on n2.  one tie with “continue”
+                # implies tied from and tied to.
+
+                # My interpretation: it's OK to assume during export to MEI (just like music21
+                # apparently assumes during export to MusicXML) that tie stops are fully in
+                # place.  I would also note that my Humdrum exporter assumes the same thing.
+                if note.tie is None:
+                    continue
+
+                if note.tie.type not in ('stop', 'continue'):
                     continue
 
                 # to stop a tie, you have to start at or beyond the end of the tie's start note.
