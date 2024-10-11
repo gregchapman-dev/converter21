@@ -274,33 +274,85 @@ class Phrase(m21.spanner.Slur):
 class HumdrumTie:
     def __init__(
         self,
+        startLayerIndex: int | None = None,
+        startNote: m21.note.Note | m21.note.Unpitched | None = None,
+        startToken: HumdrumToken | None = None,
+        startSubTokenStr: str | None = None,
+        startSubTokenIdx: int | None = None
+    ):
+        self.startLayerIndex: int | None = startLayerIndex
+        self.startNote: m21.note.Note | m21.note.Unpitched | None = startNote
+        self.startToken: HumdrumToken | None = startToken
+        self.startSubTokenStr: str | None = startSubTokenStr
+        self.startSubTokenIdx: int | None = startSubTokenIdx
+        self.pitch: int | None = None
+        self.startTime: HumNum | None = None
+        self.endTime: HumNum | None = None
+        self.wasInserted: bool = False
+
+        if startSubTokenStr is not None:
+            self.pitch = Convert.kernToMidiNoteNumber(startSubTokenStr)
+        if startToken is not None:
+            self.startTime = opFrac(startToken.durationFromStart)
+            self.endTime = opFrac(self.startTime + opFrac(startToken.duration))
+
+        # set by self.setEnd()
+        self.endNote: m21.note.Note | m21.note.Unpitched | None = None
+        self.endSubTokenStr: str | None = None
+
+    def setStart(
+        self,
         startLayerIndex: int,
         startNote: m21.note.Note | m21.note.Unpitched,
         startToken: HumdrumToken,
         startSubTokenStr: str,
         startSubTokenIdx: int
-    ) -> None:
-        self.startLayerIndex: int = startLayerIndex
-        self.startNote: m21.note.Note | m21.note.Unpitched = startNote
-        self.startToken: HumdrumToken = startToken
-        self.startSubTokenStr: str = startSubTokenStr
-        self.startSubTokenIdx: int = startSubTokenIdx
+    ):
+
+        self.startLayerIndex = startLayerIndex
+        self.startNote = startNote
+        self.startToken = startToken
+        self.startSubTokenStr = startSubTokenStr
+        self.startSubTokenIdx = startSubTokenIdx
 
         # pitch computation is a little sloppy (on purpose?).
         # This will (e.g.) allow a C-flat to be tied to a B-natural.
         # base40 would be more stringent, but wouldn't work for triple
         # flats and triple sharps.
-        self.pitch: int = Convert.kernToMidiNoteNumber(startSubTokenStr)
-        self.startTime: HumNum = opFrac(startToken.durationFromStart)
-        self.endTime: HumNum = opFrac(self.startTime + opFrac(startToken.duration))
+        self.pitch = Convert.kernToMidiNoteNumber(startSubTokenStr)
+        self.startTime = opFrac(startToken.durationFromStart)
+        self.endTime = opFrac(self.startTime + opFrac(startToken.duration))
 
-        self.wasInserted: bool = False
-
-    def setEndAndInsert(
+    def setEnd(
         self,
         endNote: m21.note.Note | m21.note.Unpitched,
         endSubTokenStr: str
-    ) -> m21.tie.Tie:
+    ):
+        self.endNote = endNote
+        self.endSubTokenStr = endSubTokenStr
+
+    def insertIntoScore(self) -> m21.tie.Tie | None:
+        if self.wasInserted:
+            # don't insert again
+            return None
+
+        if self.startNote is None and self.endNote is None:
+            return None
+
+        if self.startNote is None:
+            # This is a tie with no start.  Don't know what to do with this
+            # for now (but is possible due to repeated music).
+            return None
+
+        if self.endNote is None:
+            # This is a tie with no end.  Don't know what to do with this
+            # for now (but is possible due to repeated music).
+            return None
+
+        if t.TYPE_CHECKING:
+            assert self.startSubTokenStr is not None
+            assert self.endSubTokenStr is not None
+
         startTieType: str = 'start'
         if '_' in self.startSubTokenStr:
             startTieType = 'continue'
@@ -310,11 +362,19 @@ class HumdrumTie:
 
         # also add an end tie to endNote (but not if the end tie is a continue,
         # which will be handled shortly since it's in the list as a start)
-        if ']' in endSubTokenStr:  # not '_'
-            endNote.tie = m21.tie.Tie('stop')  # that's it, no style or placement
+        if ']' in self.endSubTokenStr:  # not '_'
+            self.endNote.tie = m21.tie.Tie('stop')  # that's it, no style or placement
 
         self.wasInserted = True
         return startTie
+
+    def setEndAndInsert(
+        self,
+        endNote: m21.note.Note | m21.note.Unpitched,
+        endSubTokenStr: str
+    ) -> m21.tie.Tie | None:
+        self.setEnd(endNote, endSubTokenStr)
+        return self.insertIntoScore()
 
 class HumdrumBeamAndTuplet:
     # A struct (per note/chord/rest) describing a beam and/or tuplet group.
@@ -438,6 +498,9 @@ class StaffStateVariables:
 
         # ties (list of starts that we search when we see an end)
         self.ties: list[HumdrumTie] = []
+
+        # tieends (list of hanging tie ends that we try to handle later)
+        self.tieends: list[HumdrumTie] = []
 
         # tremolo is active on this staff (*tremolo and *Xtremolo)
         self.tremolo: bool = False
@@ -829,7 +892,7 @@ class HumdrumFile(HumdrumFileContent):
     def _processHangingTieStarts(self) -> None:
         for ss in self._staffStates:
             for tie in ss.ties:
-                self._processHangingTieStart(tie)
+                self._processHangingTieStart(tie, ss.tieends)
 
     '''
     //////////////////////////////
@@ -837,18 +900,41 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::processHangingTieStart --
 
         For music21 output we handle this a little differently than iohumdrum.cpp does
-        for MEI output.  In music21, describing a tie with only a start note is easy,
-        and we can leave the problem of what to do in this case to the individual
-        exporters.
+        for MEI output.  We cannot "addHangingTieToNextItem" in music21, so we can only
+        search for tie ends in earlier layers that can be linked.
     '''
-    def _processHangingTieStart(self, tieInfo: HumdrumTie) -> None:
-        tieType: str = 'start'
-        if '_' in tieInfo.startSubTokenStr:
-            tieType = 'continue'
+    def _processHangingTieStart(
+        self,
+        tieInfo: HumdrumTie,
+        tieends: list[HumdrumTie]
+    ) -> None:
+        # check if there is a tie end from an earlier layer that can be linked.
+        found: HumdrumTie | None = None
+        for tieend in tieends:
+            if tieend.pitch != tieInfo.pitch:
+                continue
 
-        tieInfo.startNote.tie = m21.tie.Tie(tieType)
-        self._addTieStyle(tieInfo.startNote.tie, tieInfo.startToken,
-                          tieInfo.startSubTokenStr, tieInfo.startSubTokenIdx)
+            if tieend.startTime == tieInfo.endTime:
+                found = tieend
+                break
+            # deal with disjunct ties as well
+
+        if found is not None:
+            # found a matching tie end from a previous layer, so link the ends
+            if t.TYPE_CHECKING:
+                assert found.endNote is not None and found.endSubTokenStr is not None
+
+            insertedTie: m21.tie.Tie | None = tieInfo.setEndAndInsert(
+                found.endNote, found.endSubTokenStr
+            )
+            if insertedTie is not None:
+                self._addTieStyle(
+                    insertedTie,
+                    tieInfo.startToken,
+                    tieInfo.startSubTokenStr,
+                    tieInfo.startSubTokenIdx
+                )
+                tieends.remove(found)
 
     '''
     //////////////////////////////
@@ -856,16 +942,24 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::processHangingTieEnd --
 
         For music21 output we handle this a little differently than iohumdrum.cpp does
-        for MEI output.  In music21, describing a tie with only an end note is easy,
-        and we can leave the problem of what to do in this case to the individual
-        exporters.
+        for MEI output.  We cannot "tieToPreviousItem" in music21, so we can only store
+        for later processing to (hopefully) link to a tie in a higher layer number.
     '''
-    @staticmethod
-    def _processHangingTieEnd(note: m21.note.Note | m21.note.Unpitched, tstring: str) -> None:
+    def _processHangingTieEnd(
+        self,
+        note: m21.note.Note | m21.note.Unpitched,
+        tstring: str,
+        tieends: list[HumdrumTie]
+    ) -> None:
+        if 'yy' in tstring:
+            return  # ignore tie when token is suppressed with yy signifier
+
         if '_' in tstring:
             return  # 'continue' will be handled in the ss.ties list as a tieStart
 
-        note.tie = m21.tie.Tie('stop')  # that's it, no style or placement
+        tie: HumdrumTie = HumdrumTie()
+        tie.setEnd(note, tstring)
+        tieends.append(tie)
 
     @property
     def staffCount(self) -> int:
@@ -8207,10 +8301,10 @@ class HumdrumFile(HumdrumFileContent):
                 continue
             if tie.pitch != pitch:
                 continue
-            if disjunct and '[[' in tie.startSubTokenStr:
+            if disjunct and tie.startSubTokenStr is not None and '[[' in tie.startSubTokenStr:
                 found = tie
                 break
-            if disjunct and '__' in tie.startSubTokenStr:
+            if disjunct and tie.startSubTokenStr is not None and '__' in tie.startSubTokenStr:
                 found = tie
                 break
             if tie.endTime == timeStamp:
@@ -8222,10 +8316,11 @@ class HumdrumFile(HumdrumFileContent):
             for tie in ss.ties:
                 if tie.pitch != pitch:
                     continue
-                if disjunct and '[[' in tie.startSubTokenStr:
+                if disjunct and tie.startSubTokenStr is not None and '[[' in tie.startSubTokenStr:
                     found = tie
                     break
-                if disjunct and '__' in tie.startSubTokenStr:  # BUGFIX: This "if" was missing.
+                if disjunct and tie.startSubTokenStr is not None and '__' in tie.startSubTokenStr:
+                    # BUGFIX: This "if" was missing.
                     found = tie
                     break
                 if tie.endTime == timeStamp:
@@ -8233,20 +8328,21 @@ class HumdrumFile(HumdrumFileContent):
                     break
 
         if not found:
-            self._processHangingTieEnd(note, tstring)
+            self._processHangingTieEnd(note, tstring, ss.tieends)
             return
 
         # TODO: hanging tie end in different endings
         # needToBreak = self._inDifferentEndings(found.startToken, token)
         # if needToBreak:
-        #     self._processHangingTieEnd(note, tstring)
+        #     self._processHangingTieEnd(note, tstring, ss.tieends)
         #     return
 
         # invisible ties (handled here in iohumdrum.cpp) are handled via style
         # (since that's how music21 describes them)
 
-        m21TieStart: m21.tie.Tie = found.setEndAndInsert(note, tstring)
-        self._addTieStyle(m21TieStart, token, tstring, subTokenIdx)
+        m21TieStart: m21.tie.Tie | None = found.setEndAndInsert(note, tstring)
+        if m21TieStart:
+            self._addTieStyle(m21TieStart, token, tstring, subTokenIdx)
 
         if found.wasInserted:
             # Only deleting the finished tie if it was successful.  Undeleted
@@ -8274,10 +8370,13 @@ class HumdrumFile(HumdrumFileContent):
     def _addTieStyle(
         self,
         tie: m21.tie.Tie,
-        token: HumdrumToken,
-        tstring: str,
-        subTokenIdx: int
+        token: HumdrumToken | None,
+        tstring: str | None,
+        subTokenIdx: int | None
     ) -> None:
+        if token is None or tstring is None or subTokenIdx is None:
+            return
+
         if '[y' in tstring or '_y' in tstring:
             tie.style = 'hidden'
         elif token.layoutParameter('T', 'dot', subTokenIdx):
