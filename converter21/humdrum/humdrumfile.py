@@ -761,8 +761,6 @@ class HumdrumFile(HumdrumFileContent):
             lineIdx = self._convertSystemMeasure(lineIdx)
 #            self._checkForInformalBreak(lineIdx)
 
-        self._processHangingTieStarts()
-
         # Fill intermediate elements in Ottavas.  This needs to happen before any
         # transposition because Ottavas must be filled to be transposed correctly.
         for sp in self.m21Score.spannerBundle:
@@ -794,6 +792,9 @@ class HumdrumFile(HumdrumFileContent):
                         break
                 if hasTransposingInstrument or ss.hasOttavas:
                     ss.m21Part.toWrittenPitch(inPlace=True, preserveAccidentalDisplay=True)
+
+        self._processHangingTieStarts()
+        self._processHangingTieEnds()
 
         return self.m21Score
 
@@ -897,11 +898,25 @@ class HumdrumFile(HumdrumFileContent):
     '''
     //////////////////////////////
     //
+    // HumdrumInput::processHangingTieEnds --  This function is called after
+    //    processing the score and there are tie ending that were not matched to
+    //    a tie start.
+    '''
+    def _processHangingTieEnds(self) -> None:
+        for ss in self._staffStates:
+            for tie in ss.tieends:
+                # This is a hanging tie end for no apparent reason.  Display it.
+                if tie.endNote is not None:
+                    m21Tie: m21.tie.Tie = m21.tie.Tie('stop')
+                    tie.endNote.tie = m21Tie
+
+    '''
+    //////////////////////////////
+    //
     // HumdrumInput::processHangingTieStart --
 
         For music21 output we handle this a little differently than iohumdrum.cpp does
-        for MEI output.  We cannot "addHangingTieToNextItem" in music21, so we can only
-        search for tie ends in earlier layers that can be linked.
+        for MEI output.
     '''
     def _processHangingTieStart(
         self,
@@ -919,14 +934,13 @@ class HumdrumFile(HumdrumFileContent):
                 break
             # deal with disjunct ties as well
 
+        insertedTie: m21.tie.Tie | None = None
         if found is not None:
             # found a matching tie end from a previous layer, so link the ends
             if t.TYPE_CHECKING:
                 assert found.endNote is not None and found.endSubTokenStr is not None
 
-            insertedTie: m21.tie.Tie | None = tieInfo.setEndAndInsert(
-                found.endNote, found.endSubTokenStr
-            )
+            insertedTie = tieInfo.setEndAndInsert(found.endNote, found.endSubTokenStr)
             if insertedTie is not None:
                 self._addTieStyle(
                     insertedTie,
@@ -935,6 +949,20 @@ class HumdrumFile(HumdrumFileContent):
                     tieInfo.startSubTokenIdx
                 )
                 tieends.remove(found)
+                return
+
+        # This is a hanging tie.  iohumdrum.cpp tries to make it a particular duration,
+        # and also to judge whether or not it is legal.  We do neither, we just produce
+        # a "let-ring" tie, which is the best music21 can do.
+        insertedTie = m21.tie.Tie(type='let-ring')
+        self._addTieStyle(
+            insertedTie,
+            tieInfo.startToken,
+            tieInfo.startSubTokenStr,
+            tieInfo.startSubTokenIdx
+        )
+        if tieInfo.startNote is not None:
+            tieInfo.startNote.tie = insertedTie
 
     '''
     //////////////////////////////
@@ -942,24 +970,36 @@ class HumdrumFile(HumdrumFileContent):
     // HumdrumInput::processHangingTieEnd --
 
         For music21 output we handle this a little differently than iohumdrum.cpp does
-        for MEI output.  We cannot "tieToPreviousItem" in music21, so we can only store
-        for later processing to (hopefully) link to a tie in a higher layer number.
+        for MEI output.
     '''
     def _processHangingTieEnd(
         self,
         note: m21.note.Note | m21.note.Unpitched,
+        token: HumdrumToken,
         tstring: str,
+        subTokenIdx: int,
         tieends: list[HumdrumTie]
     ) -> None:
         if 'yy' in tstring:
             return  # ignore tie when token is suppressed with yy signifier
 
-        if '_' in tstring:
-            return  # 'continue' will be handled in the ss.ties list as a tieStart
+        m21Tie: m21.tie.Tie | None = None
+        position: HumNum = token.durationFromStart
+        if position == 0 or self._atEndingBoundaryStart(token):
+            # Hanging tie at start of music or at start of a secondary ending
+            if '_' in tstring:
+                m21Tie = m21.tie.Tie(type='continue')
+            else:
+                m21Tie = m21.tie.Tie(type='stop')
+            self._addTieStyle(m21Tie, token, tstring, subTokenIdx)
+            note.tie = m21Tie
+            return
 
-        tie: HumdrumTie = HumdrumTie()
-        tie.setEnd(note, tstring)
-        tieends.append(tie)
+        # Store for later processing to link to a tie in a higher
+        # layer number, or to identify as a hanging tie.
+        tieend: HumdrumTie = HumdrumTie()
+        tieend.setEnd(note, tstring)
+        tieends.append(tieend)
 
     @property
     def staffCount(self) -> int:
@@ -8328,14 +8368,16 @@ class HumdrumFile(HumdrumFileContent):
                     break
 
         if not found:
-            self._processHangingTieEnd(note, tstring, ss.tieends)
+            self._processHangingTieEnd(note, token, tstring, subTokenIdx, ss.tieends)
             return
 
-        # TODO: hanging tie end in different endings
-        # needToBreak = self._inDifferentEndings(found.startToken, token)
-        # if needToBreak:
-        #     self._processHangingTieEnd(note, tstring, ss.tieends)
-        #     return
+        if t.TYPE_CHECKING:
+            assert found.startToken is not None
+
+        needToBreak = self._inDifferentEndings(found.startToken, token)
+        if needToBreak:
+            self._processHangingTieEnd(note, token, tstring, subTokenIdx, ss.tieends)
+            return
 
         # invisible ties (handled here in iohumdrum.cpp) are handled via style
         # (since that's how music21 describes them)
@@ -8354,6 +8396,75 @@ class HumdrumFile(HumdrumFileContent):
             # See https://github.com/humdrum-tools/verovio-humdrum-viewer/issues/164
             # for a discussion of disjunct ties, and why they are needed.
             ss.ties.remove(found)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::atEndingBoundaryStart -- Return true if a token is in a
+    //   different ending section that the previous note.  Split spines
+    //   should mostly be accounted for, but maybe not corner cases.
+    '''
+    def _atEndingBoundaryStart(self, token: HumdrumToken) -> bool:
+        current: HumdrumToken | None = token.previousToken0
+        while current is not None:
+            if current.isData and not current.isNull:
+                break
+            current = current.previousToken0
+
+        if current is None:
+            return False
+
+        return self._inDifferentEndings(token, current)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::atEndingBoundaryEnd -- Return true if a token is in a
+    //   different ending section that the next note.
+    '''
+    def _atEndingBoundaryEnd(self, token: HumdrumToken) -> bool:
+        current: HumdrumToken | None = token.nextToken0
+        while current is not None:
+            if current.isData and not current.isNull:
+                break
+            current = current.nextToken0
+
+        if current is None:
+            return False
+
+        return self._inDifferentEndings(token, current)
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::inDifferentEndings --
+    '''
+    def _inDifferentEndings(self, token1: HumdrumToken, token2: HumdrumToken) -> bool:
+        line1: int = token1.lineIndex
+        line2: int = token2.lineIndex
+        label1: HumdrumToken | None = self._sectionLabels[line1]
+        label2: HumdrumToken | None = self._sectionLabels[line2]
+        if label1 == label2:
+            return False
+        if label1 is None:
+            return False
+        if label2 is None:
+            return False
+
+        number1: int = 0
+        number2: int = 0
+        m = re.search(r'(\d+)$', label1.text)
+        if m is None:
+            return False
+        number1 = int(m.group(1))
+        m = re.search(r'(\d+)$', label2.text)
+        if m is None:
+            return False
+        number2 = int(m.group(1))
+        if number1 == number2:
+            return False
+
+        return True
 
     '''
     //////////////////////////////
