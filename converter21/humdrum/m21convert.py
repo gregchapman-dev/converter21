@@ -2832,6 +2832,7 @@ class M21Convert:
     def _getTieStartStopAndLayoutsFromM21GeneralNote(
         m21GeneralNote: m21.note.GeneralNote
     ) -> tuple[str, str, list[str]]:
+        # returns tuple(prefix, postfix, layouts)
         if m21GeneralNote.tie is None:
             return ('', '', [])
 
@@ -2847,9 +2848,12 @@ class M21Convert:
             tieStr += ']'
         elif tieType == 'continue':
             tieStr += '_'
+        elif tieType == 'let-ring':
+            tieStr += '['
+            layouts.append('!LO:T:lv')
 
         # style and placement are ignored/never set on tie stop
-        if tieType in ('start', 'continue'):
+        if tieType in ('start', 'continue', 'let-ring'):
             if tieStyle == 'hidden':
                 # ignore placement if hidden
                 tieStr += 'y'
@@ -2866,7 +2870,7 @@ class M21Convert:
                 elif tieStyle == 'dashed':
                     layouts.append('!LO:T:dash')
 
-        if tieType == 'start':
+        if tieType in ('start', 'let-ring'):
             return (tieStr, '', layouts)
         if tieType in ('stop', 'continue'):
             return ('', tieStr, layouts)
