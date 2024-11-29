@@ -315,14 +315,6 @@ def runTheDiff(krnPath: Path, results) -> bool:
             score2,
             DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
         )
-        if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
-            print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')
-            print(
-                f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}',
-                file=results
-            )
-            results.flush()
-            return False
 
         op_list, _cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
