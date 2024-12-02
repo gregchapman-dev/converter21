@@ -32,12 +32,19 @@ class HumdrumConverter(SubConverter):
 
     # --------------------------------------------------------------------------
 
-    def parseData(self, dataString, number=None) -> stream.Score:
+    def parseData(
+        self,
+        dataString: str,
+        number: int | None = None,
+        accept_syntax_errors: bool = False,
+        **_keywords
+    ) -> stream.Score:
         '''
         Create HumdrumFile object from a string, and create a music21 Stream from it.
         '''
         # print("parsing krn string", file=sys.stderr)
         hf = HumdrumFile()
+        hf.accept_syntax_errors = accept_syntax_errors
         hf.readString(dataString)
         self.stream = hf.createMusic21Stream()
         self.humdrumFile = hf
@@ -48,6 +55,7 @@ class HumdrumConverter(SubConverter):
         self,
         filePath: str | Path,
         number: int | None = None,
+        accept_syntax_errors: bool = False,
         **_keywords
     ) -> stream.Score:
         '''
@@ -56,7 +64,9 @@ class HumdrumConverter(SubConverter):
         may be utf-8 or latin-1, so we need to handle various text encodings ourselves.
         '''
         # print("parsing krn file", file=sys.stderr)
-        hf = HumdrumFile(filePath)
+        hf = HumdrumFile()
+        hf.accept_syntax_errors = accept_syntax_errors
+        hf.read(filePath)
         self.stream = hf.createMusic21Stream()
         self.humdrumFile = hf
         return self.stream

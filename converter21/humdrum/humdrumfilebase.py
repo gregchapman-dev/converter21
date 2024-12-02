@@ -115,6 +115,8 @@ class HumdrumFileBase(HumHash):
     def __init__(self, fileName: str | Path | None = None) -> None:
         super().__init__()  # initialize the HumHash fields
 
+        self.accept_syntax_errors: bool = False
+
         '''
         // m_lines: an array representing lines from the input file.
         // The contents of lines must be deallocated when deconstructing object.
