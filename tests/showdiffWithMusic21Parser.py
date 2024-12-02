@@ -49,10 +49,6 @@ def runTheFullTest(krnPath: Path):
     print('loaded first score')
     score_lin2 = AnnScore(score2)
     print('loaded second score')
-    if score_lin1.n_of_parts != score_lin2.n_of_parts:
-        print(f'numParts {score_lin1.n_of_parts} vs {score_lin2.n_of_parts}')
-        return
-
     diffList, _cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
     print('diffed the two scores:')
     numDiffs = len(diffList)
