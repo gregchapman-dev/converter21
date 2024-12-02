@@ -32,8 +32,12 @@ class HumdrumFileStructure(HumdrumFileBase):
     # So... no __init__
     # Except... pylint is unhappy about some data it thinks is uninitialized (because it's
     # initialized in HumdrumFileBase), so let's initialize it here, too.
-    def __init__(self, fileName: str | Path | None = None) -> None:
-        super().__init__(fileName)
+    def __init__(
+        self,
+        fileName: str | Path | None = None,
+        acceptSyntaxErrors: bool = False
+    ) -> None:
+        super().__init__(fileName, acceptSyntaxErrors)
         self._ticksPerQuarterNote: int = -1
         self._barlines: list[HumdrumLine] = []
         self._strand1d: list[TokenPair] = []

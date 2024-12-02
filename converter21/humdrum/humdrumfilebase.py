@@ -112,10 +112,12 @@ class HumdrumFileBase(HumHash):
                             | OPT_NOTIE
                             | OPT_NONULL)
 
-    def __init__(self, fileName: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        fileName: str | Path | None = None,
+        acceptSyntaxErrors: bool = False
+    ) -> None:
         super().__init__()  # initialize the HumHash fields
-
-        self.accept_syntax_errors: bool = False
 
         '''
         // m_lines: an array representing lines from the input file.
@@ -127,6 +129,8 @@ class HumdrumFileBase(HumHash):
         // m_filename: name of the file which was loaded.
         '''
         # self._fileName: str = None # weirdly, appears not be set or used
+
+        self.acceptSyntaxErrors: bool = acceptSyntaxErrors
 
         '''
         // m_segementlevel: segment level (e.g., work/movement)

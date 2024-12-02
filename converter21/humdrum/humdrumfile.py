@@ -478,10 +478,14 @@ class StaffStateVariables:
 class HumdrumFile(HumdrumFileContent):
     # add XML print routines?
 
-    def __init__(self, fileName: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        fileName: str | Path | None = None,
+        acceptSyntaxErrors: bool = False
+    ) -> None:
         M21Utilities.adjustMusic21Behavior()
 
-        super().__init__(fileName)  # initialize the HumdrumFileBase fields
+        super().__init__(fileName, acceptSyntaxErrors)  # initialize the HumdrumFileBase fields
 
 
         # The m21Score attribute will not exist until it is set up (in createMusic21Stream)
