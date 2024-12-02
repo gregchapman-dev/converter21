@@ -270,7 +270,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
         success: bool = True
         meiwPath = Path(tempfile.gettempdir())
         meiwPath /= (krnPath.stem + '_Written')
-        meiwPath = meiwPath.with_suffix('.mei')
+        meiwPath = meiwPath.with_suffix('.4.mei')
         with open(meiwPath, 'wt') as f:
             success = meiw.write(f)
         if not success:

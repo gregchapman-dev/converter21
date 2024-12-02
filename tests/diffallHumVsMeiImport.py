@@ -266,7 +266,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
     try:
         meiPath = Path(tempfile.gettempdir())
         meiPath /= krnPath.name
-        meiPath = meiPath.with_suffix('.mei')
+        meiPath = meiPath.with_suffix('.2.mei')
         subprocess.run(
             ['verovio', '-a', '-t', 'mei', '-o', f'{meiPath}', str(krnPath)],
             check=True,
