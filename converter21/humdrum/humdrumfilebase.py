@@ -903,14 +903,19 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 continue
 
             if not seenFirstExInterp and not line.isExclusiveInterpretation:
-                return self.setParseError(
-                    f'Error on line: {i+1}:\n'
-                    + 'Data found before exclusive interpretation\n'
-                    + f'LINE: {line.text}'
-                )
+                if not self.acceptSyntaxErrors:
+                    return self.setParseError(
+                        f'Error on line: {i+1}:\n'
+                        + 'Data found before exclusive interpretation\n'
+                        + f'LINE: {line.text}'
+                    )
+                # fix it instead (just ignore the line from now on)
+                self._lines[i] = HumdrumLine('!! ignore data before exinterp: ' + line.text)
+                self._lines[i].createTokensFromLine()
+                continue
 
             if not seenFirstExInterp and line.isExclusiveInterpretation:
-                # first line of data in file
+                # first line of exinterp (**kern, etc) in file
                 seenFirstExInterp = True
                 dataType = []
                 sinfo = []
