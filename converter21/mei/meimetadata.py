@@ -86,8 +86,9 @@ class MeiMetadataItem:
         self.meiOtherAttribs: dict[str, str] = {}
         otherAttribs: set[str] = getattr(self.value, 'c21OtherAttribs', set())
         for attrib in otherAttribs:
+            version: str = ''
             if attrib in ('meiVersion', 'humdrumVersion'):
-                version: str = getattr(self.value, attrib, '')
+                version = getattr(self.value, attrib, '')
             if version:
                 self.meiOtherAttribs['version'] = version
 
