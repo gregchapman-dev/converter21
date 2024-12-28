@@ -626,11 +626,12 @@ class HumdrumFile(HumdrumFileContent):
         # which lives in HumdrumFileContent
 
         # pylint: disable=attribute-defined-outside-init
-        self.m21Score: m21.stream.Score
+        self.m21Score: m21.stream.Score = m21.stream.Score()
+        if self.fixedSyntaxErrors > 0:
+            self.m21Score.c21_syntax_errors_fixed = self.fixedSyntaxErrors  # type: ignore
 
         if not self.isValid:
             # input file did not parse successfully, give up.  Return an empty score.
-            self.m21Score = m21.stream.Score()
             return self.m21Score
 
         # You can comment out sections of a Humdrum file using the following global comments:
@@ -645,7 +646,6 @@ class HumdrumFile(HumdrumFileContent):
 
         if not self._staffStarts:  # if empty list or None
             # No parts in file, give up.  Return an empty score.
-            self.m21Score = m21.stream.Score()
             return self.m21Score
 
         self.analyzeNotation()
@@ -665,10 +665,6 @@ class HumdrumFile(HumdrumFileContent):
         self._prepareSections()        # associate numbered/unnumbered section names with lines
         self._prepareMetadata()        # pull standard biblio keys/values out of reference records
         self._prepareTimeSignatures()  # gather time signature info
-
-        # set up m21Score high-level structure
-        self.m21Score = m21.stream.Score()
-        # pylint: enable=attribute-defined-outside-init
 
         # Creates Parts, PartStaffs, and StaffGroups, as appropriate,
         # using !!system-decoration, if present.
@@ -736,6 +732,10 @@ class HumdrumFile(HumdrumFileContent):
                 if hasTransposingInstrument or ss.hasOttavas:
                     ss.m21Part.toWrittenPitch(inPlace=True, preserveAccidentalDisplay=True)
 
+        # set c21_syntax_errors_fixed again, because actually generating the score might
+        # have caused us to fix more syntax errors.
+        if self.fixedSyntaxErrors > 0:
+            self.m21Score.c21_syntax_errors_fixed = self.fixedSyntaxErrors  # type: ignore
         return self.m21Score
 
     def _prepareForSecondPass(self) -> None:

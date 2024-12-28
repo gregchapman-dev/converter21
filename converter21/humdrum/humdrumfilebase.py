@@ -131,6 +131,7 @@ class HumdrumFileBase(HumHash):
         # self._fileName: str = None # weirdly, appears not be set or used
 
         self.acceptSyntaxErrors: bool = acceptSyntaxErrors
+        self.fixedSyntaxErrors: int = 0
 
         '''
         // m_segementlevel: segment level (e.g., work/movement)
@@ -729,6 +730,7 @@ class HumdrumFileBase(HumHash):
                     # remove trailing tokens in nextLine to make up the difference
                     for i in range(prevLine.tokenCount, nextLine.tokenCount):
                         nextLine._tokens.pop(i)
+                        self.fixedSyntaxErrors += 1
                     nextLine.createLineFromTokens()
                 else:
                     # append appropriate null-ish tokens to nextLine to make up the difference
@@ -744,6 +746,7 @@ class HumdrumFileBase(HumHash):
                         ch = '*'
                     for _ in range(nextLine.tokenCount, prevLine.tokenCount):
                         nextLine._tokens.append(HumdrumToken(ch))
+                        self.fixedSyntaxErrors += 1
                     nextLine.createLineFromTokens()
 
             for i, prevTok in enumerate(prevLine.tokens()):
@@ -936,6 +939,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 self._lines[i] = HumdrumLine(
                     '!! ignore spiny line before first exinterp: ' + line.text
                 )
+                self.fixedSyntaxErrors += 1
                 self._lines[i].createTokensFromLine()
                 continue
 
@@ -969,6 +973,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     # remove trailing tokens to make up the difference
                     for i in range(len(dataType), line.tokenCount):
                         line._tokens.pop(i)
+                        self.fixedSyntaxErrors += 1
                     line.createLineFromTokens()
                 else:
                     # append appropriate null-ish tokens to make up the difference
@@ -983,6 +988,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     elif line.isInterpretation:
                         ch = '*'
                     for _ in range(line.tokenCount, len(dataType)):
+                        self.fixedSyntaxErrors += 1
                         line._tokens.append(HumdrumToken(ch))
                     line.createLineFromTokens()
 
