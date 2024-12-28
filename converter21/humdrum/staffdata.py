@@ -99,8 +99,7 @@ class StaffData:
     def receiveVerseCount(self, verseCount: int) -> None:
         # don't propagate up to PartData, verses are per staff
         # accumulate the maximum verseCount seen
-        if verseCount > self._verseCount:
-            self._verseCount = verseCount
+        self._verseCount = max(self._verseCount, verseCount)
 
     def receiveDynamic(self) -> None:
         # just pass it on up to the PartData, dynamics are per part

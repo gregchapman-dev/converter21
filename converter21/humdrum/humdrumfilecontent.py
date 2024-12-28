@@ -674,9 +674,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         linkStarts: list[HumdrumToken],
         linkEnds: list[HumdrumToken]
     ) -> None:
-        shortest: int = len(linkStarts)
-        if shortest > len(linkEnds):
-            shortest = len(linkEnds)
+        shortest: int = min(len(linkStarts), len(linkEnds))
         if shortest == 0:
             # nothing to do
             return
@@ -916,9 +914,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         linkStarts: list[tuple[HumdrumToken, int]],
         linkEnds: list[tuple[HumdrumToken, int]]
     ) -> None:
-        shortest = len(linkStarts)
-        if shortest > len(linkEnds):
-            shortest = len(linkEnds)
+        shortest: int = min(len(linkStarts), len(linkEnds))
         if shortest == 0:
             # nothing to do
             return

@@ -1476,6 +1476,7 @@ class HumdrumWriter:
         hasKeyDesignation: bool = False
         hasTransposition: bool = False
         hasTimeSig: bool = False
+        hasMeterSig: bool = False
 #        hasOttava: bool = False
         hasStaffLines: bool = False
 
@@ -1661,8 +1662,7 @@ class HumdrumWriter:
         for staffList in notes:  # notes is a list of staffLists, one staffList per part
             for voiceList in staffList:
                 for noteList in voiceList:
-                    if maxGraceNoteCount < len(noteList):
-                        maxGraceNoteCount = len(noteList)
+                    maxGraceNoteCount = max(maxGraceNoteCount, len(noteList))
 
         if maxGraceNoteCount == 0:
             return

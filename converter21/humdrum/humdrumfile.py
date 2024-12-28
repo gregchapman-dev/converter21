@@ -4309,8 +4309,7 @@ class HumdrumFile(HumdrumFileContent):
         # of beam numbers starting from 1 (or 0 if a note/rest has no beam).
         beamCount: int = 0
         for durBeamNum in durBeamNums:
-            if durBeamNum > beamCount:
-                beamCount = durBeamNum
+            beamCount = max(beamCount, durBeamNum)
 
         # beamstarts and beamends are lists of the starting and ending
         # index for beams of duration items in the layer.  The index is
@@ -4806,8 +4805,7 @@ class HumdrumFile(HumdrumFileContent):
     def _assignTupletScalings(self, tgs: list[HumdrumBeamAndTuplet]) -> None:
         maxGroup: int = 0
         for tg in tgs:
-            if maxGroup < tg.group:
-                maxGroup = tg.group
+            maxGroup = max(maxGroup, tg.group)
 
         if maxGroup <= 0:
             # no tuplets
@@ -4914,8 +4912,7 @@ class HumdrumFile(HumdrumFileContent):
         # Try units = totalDur / maxDur
         maxDur: HumNum = opFrac(0)
         for dur in durCounts:
-            if dur > maxDur:
-                maxDur = dur
+            maxDur = max(maxDur, dur)
 
         totalDur: HumNum = opFrac(0)
         for tg in tggroup:
@@ -5765,7 +5762,7 @@ class HumdrumFile(HumdrumFileContent):
             noteOrChord.expressions.append(tremolo)
         except m21.expressions.TremoloException:
             # numberOfMarks out of range (1..8)
-            return
+            pass
 
     def _processUnexpandedTremolo2(
         self,
