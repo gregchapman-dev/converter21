@@ -4118,13 +4118,15 @@ class M21Utilities:
         # 1. Looks for parts that have different numbers of measures.  Appends
         #       empty measures (filled with appropriate duration hidden rests)
         #       to the short parts to equalize them.
-        # 2. Looks for overlapping GeneralNotes in Voice (or in top level of Measure).
+        # NOPE 2. Looks for overlapping GeneralNotes in Voice (or in top level of Measure).
         #       Removes the overlap by sliding the second GeneralNote (and following
         #       GeneralNotes) later (which will extend the Measure).
         # 3. Looks for multi-part measures that have different durations (perhaps due
         #       to step 2).  Appends invisible rests to the short part-measures to
         #       equalize them.
-        # 4. Looks for hidden rests with unprintable durations (e.g. 1.25QL).  Splits
+        # 4. Looks for overlapping measures in a Part (perhaps due to step 1 or 3).
+        #       Re-inserts each measure at the end offset of the previous measure.
+        # 5. Looks for hidden rests with unprintable durations (e.g. 1.25QL).  Splits
         #       them into rests that could be printed if they weren't hidden (e.g.
         #       split 1.25QL hidden rest into 1.0QL and 0.25QL).
 
@@ -4148,7 +4150,7 @@ class M21Utilities:
         # Step 1: check for parts with too few measures
         measureStacks: list[list[m21.stream.Measure]] = []
         for msIdx in range(0, maxMeasuresInPart):
-            measureStacks[msIdx] = []
+            measureStacks.append([])
             for partIdx in range(0, numParts):
                 if msIdx >= numMeasuresInParts[partIdx]:
                     # step 1: append an empty measure (we'll fill it later in step 3)
@@ -4165,33 +4167,39 @@ class M21Utilities:
                 measureStacks[msIdx].append(partMeasures[partIdx][msIdx])
 
         # Step 2: check for overlapping GeneralNotes
-        for msIdx, mStack in enumerate(measureStacks):
-            for partIdx, meas in enumerate(mStack):
-                voices: list[m21.stream.Voice | m21.stream.Measure] = list(
-                    meas[m21.stream.Voice]
-                )
-                # treat the measure as a voice
-                voices.append(meas)
-
-                for voice in voices:
-                    prevGN: m21.note.GeneralNote | None = None
-                    # do not recurse!
-                    gnList: list[m21.note.GeneralNote] = list(
-                        voice.getElementsByClass(m21.note.GeneralNote)
-                    )
-                    for gn in gnList:
-                        if isinstance(gn, m21.harmony.Harmony):
-                            # we don't care about ChordSymbol or other Harmony duration
-                            continue
-
-                        # check for overlapping GeneralNotes. If found, reinsert
-                        # second note at end of first note.
-                        if prevGN is not None:
-                            if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
-                                voice.remove(gn)
-                                voice.insert(opFrac(prevGN.offset + prevGN.quarterLength), gn)
-
-                        prevGN = gn
+#         for msIdx, mStack in enumerate(measureStacks):
+#             for partIdx, meas in enumerate(mStack):
+#                 voices: list[m21.stream.Voice | m21.stream.Measure] = list(
+#                     meas[m21.stream.Voice]
+#                 )
+#                 # treat the measure as a voice
+#                 voices.append(meas)
+#
+#                 for voice in voices:
+#                     prevGN: m21.note.GeneralNote | None = None
+#                     # do not recurse!
+#                     gnList: list[m21.note.GeneralNote] = list(
+#                         voice.getElementsByClass(m21.note.GeneralNote)
+#                     )
+#                     for gn in gnList:
+#                         if isinstance(gn, m21.harmony.Harmony):
+#                             # we don't care about ChordSymbol or other Harmony duration
+#                             continue
+#
+#                         # check for overlapping GeneralNotes. If found, reinsert
+#                         # second note at end of first note.
+#                         if prevGN is not None:
+#                             if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
+#                                 newOffset: OffsetQL = opFrac(prevGN.offset + prevGN.quarterLength)
+#                                 print(
+#                                     f'Moving {gn} from {gn.offset} to {newOffset}'
+#                                     f' in measure {msIdx}, part {partIdx}',
+#                                     file=sys.stderr
+#                                 )
+#                                 voice.remove(gn)
+#                                 voice.insert(newOffset, gn)
+#
+#                         prevGN = gn
 
         # Step 3: check each stack for equal duration measures
         for msIdx, mStack in enumerate(measureStacks):
@@ -4200,7 +4208,7 @@ class M21Utilities:
                 maxDurationInStack = max(maxDurationInStack, meas.quarterLength)
             for partIdx, meas in enumerate(mStack):
                 if meas.quarterLength < maxDurationInStack:
-                    # append a hidden rest (we'll split it if necessary in step 4)
+                    # append a hidden rest (we'll split it if necessary in step 5)
                     addQL: OffsetQL = opFrac(maxDurationInStack - meas.quarterLength)
                     print(
                         f'Appending {addQL}QL space to measure {msIdx}, part {partIdx}',
@@ -4210,16 +4218,52 @@ class M21Utilities:
                     hiddenRest.style.hideObjectOnPrint = True
                     meas.append(hiddenRest)
 
-        # Step 4: check for hidden rests that need splitting
-        for msIdx, mStack in enumerate(measureStacks):
-            for partIdx, meas in enumerate(mStack):
-                voices = list(meas[m21.stream.Voice])
-                # treat the measure as a voice
-                voices.append(meas)
+        # Step 4: check for overlapping measures (perhaps caused by step 1 or 3).
+        # If you find an overlapping measure in a part, stop checking and just re-insert
+        # every measure after that.
+        for partIdx, part in enumerate(parts):
+            reinserting: bool = False
+            prevMeas: m21.stream.Measure | None = None
+            for meas in partMeasures[partIdx]:
+                if prevMeas is None:
+                    prevMeas = meas
+                    continue
 
-                for voice in voices:
-                    # doesn't recurse
-                    M21Utilities.splitComplexRestDurations(voice, onlyHidden=True)
+                prevMeasEnd: OffsetQL = opFrac(prevMeas.offset + prevMeas.quarterLength)
+                if not reinserting:
+                    if prevMeasEnd != meas.offset:
+                        reinserting = True
+
+                if reinserting:
+                    part.remove(meas)
+                    part.insert(prevMeasEnd, meas)
+
+                prevMeas = meas
+
+        # Step 5: check for hidden rests that need splitting (possibly caused by step 3)
+        M21Utilities.fixupComplexHiddenRests(fixme, inPlace=True)
+
+        return fixme
+
+    @staticmethod
+    def fixupComplexHiddenRests(
+        s: m21.stream.Stream,
+        inPlace: bool = False
+    ) -> m21.stream.Stream:
+        # Splits every complex-duration hidden rest into simple-duration hidden rests
+        # in the fixme stream, recursively.
+        fixme: m21.stream.Stream = s
+        if not inPlace:
+            fixme = deepcopy(s)
+
+        # splitComplexRestDurations does not recurse
+        M21Utilities.splitComplexRestDurations(fixme, onlyHidden=True)
+
+        # for each substream that is directly in fixme, recursively call
+        # myself (in place, since the top level call already deepcopied
+        # the whole stream if necessary).
+        for substream in fixme.getElementsByClass(m21.stream.Stream):
+            M21Utilities.fixupComplexHiddenRests(substream, inPlace=True)
 
         return fixme
 

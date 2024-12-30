@@ -338,12 +338,14 @@ class HumdrumWriter:
 
     def write(self, fp) -> bool:
         # First: HumdrumWriter.write likes to modify the input stream (e.g. transposing to
-        # concert pitch, etc), so we need to make a copy of the input stream before we start.
-        # TODO: do the transposition in Humdrum-land, following C++ code 'transpose -c'
-        # (use transpose's code from humlib).  For now, go ahead and modify the input;
-        # copying the whole score takes WAY too long.
-        # if isinstance(self._m21Object, m21.stream.Stream):
-        #     self._m21Object = self._m21Object.coreCopyAsDerivation('HumdrumWriter.write')
+        # concert pitch, fixing durations, etc), so we need to make a copy of the input
+        # stream before we start.
+        if isinstance(self._m21Object, m21.stream.Stream):
+            # before deepcopying, fix up any complex hidden rests (so the input score can be
+            # visualized).  This should have been done by whoever created the input score,
+            # but let's at least fix it up now.
+            M21Utilities.fixupComplexHiddenRests(self._m21Object, inPlace=True)
+            self._m21Object = self._m21Object.coreCopyAsDerivation('HumdrumWriter.write')
 
         # Second: turn the object into a well-formed Score (someone might have passed in a single
         # note, for example).  This code is swiped from music21 v7's musicxml exporter.  The hope
@@ -360,6 +362,12 @@ class HumdrumWriter:
             self._m21Score = self._m21Object
         del self._m21Object  # everything after this uses self._m21Score
 
+        # Third: deal with various duration problems (we see this e.g. after import of a
+        # Photoscore-generated MusicXML file)
+        M21Utilities.fixupBadDurations(self._m21Score, inPlace=True)
+
+        # score.spannerBundle is an expensive operation (recurses through the whole score),
+        # so stash the result somewhere, rather than calling it again and again.
         self.spannerBundle = self._m21Score.spannerBundle
 
         # set up _firstTempoLayout ('!!LO:TX:omd:t=something') for use when emitting
