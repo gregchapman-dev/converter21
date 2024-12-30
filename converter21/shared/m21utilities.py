@@ -4216,7 +4216,14 @@ class M21Utilities:
                     )
                     hiddenRest = m21.note.Rest(quarterLength=addQL)
                     hiddenRest.style.hideObjectOnPrint = True
-                    meas.append(hiddenRest)
+                    hasVoices: bool = False
+                    for voice in meas.voices:
+                        hasVoices = True
+                        myRest: m21.note.Rest = deepcopy(hiddenRest)
+                        voice.append(myRest)
+                    if not hasVoices:
+                        meas.append(hiddenRest)
+                    meas.duration.quarterLength = maxDurationInStack
 
         # Step 4: check for overlapping measures (perhaps caused by step 1 or 3).
         # If you find an overlapping measure in a part, stop checking and just re-insert
