@@ -1421,12 +1421,22 @@ class M21Utilities:
         # loses all beams, so we can only do this on rests!
         rest: m21.note.Rest
         for rest in s.getElementsByClass('Rest'):
-            if rest.duration.type != 'complex':
-                continue
             if onlyHidden:
                 if not rest.hasStyleInformation:
                     continue
                 if not rest.style.hideObjectOnPrint:
+                    continue
+
+            if rest.duration.type != 'complex' and rest.duration.linked:
+                continue
+
+            if rest.duration.type != 'complex' and not rest.duration.linked:
+                # "visual" type may not be complex, but check the "gestural" quarterLength
+                # to be sure.
+                qlconv: m21.duration.QuarterLengthConversion = (
+                    m21.duration.quarterConversion(rest.duration.quarterLength)
+                )
+                if len(qlconv.components) == 1:
                     continue
 
             insertPoint = rest.offset
@@ -1446,9 +1456,21 @@ class M21Utilities:
 
     @staticmethod
     def splitComplexRestDuration(rest: m21.note.Rest) -> tuple[m21.note.Rest, ...]:
-        atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
+        if rest.duration.linked:
+            components: tuple[m21.duration.DurationTuple, ...] = rest.duration.components
+            atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
+        else:
+            qlconv: m21.duration.QuarterLengthConversion = (
+                m21.duration.quarterConversion(rest.duration.quarterLength)
+            )
+            components = qlconv.components
+            if qlconv.tuplet is None:
+                atm = 1.0
+            else:
+                atm = qlconv.tuplet.tupletMultiplier()
+
         quarterLengthList: list[OffsetQLIn] = [
-            float(c.quarterLength * atm) for c in rest.duration.components
+            float(c.quarterLength * atm) for c in components
         ]
         splits: tuple[m21.note.Rest, ...] = (
             rest.splitByQuarterLengths(quarterLengthList, addTies=False)  # type: ignore
@@ -4112,6 +4134,31 @@ class M21Utilities:
         return fixme
 
     @staticmethod
+    def getRestDurationQL(rest: m21.note.Rest, container: m21.stream.Stream) -> OffsetQL:
+        # returns rest.duration.quarterLength, unless the rest is the only GeneralNote
+        # in the container stream, in which case it returns the barDuration of the
+        # current timesignature.
+        restIsAlone: bool = True
+        for obj in container.getElementsByClass(m21.note.GeneralNote):
+            if isinstance(obj, m21.harmony.Harmony):
+                # ChordSymbols et al don't count
+                continue
+            if obj is not rest:
+                restIsAlone = False
+                break
+
+        if restIsAlone:
+            # rest is alone in this container stream, try to figure out barDuration of current
+            # timesignature.  If you can't, just return rest.duration.quarterLength.
+            tsContext = rest.getContextByClass(m21.meter.TimeSignature)
+            if tsContext:
+                return tsContext.barDuration.quarterLength
+
+        # rest is alone, or there is no timesignature context.  Either way,
+        # return the rest's quarterLength.
+        return rest.duration.quarterLength
+
+    @staticmethod
     def fixupBadDurations(score: m21.stream.Score, inPlace: bool = False) -> m21.stream.Score:
         # must be a score; we will look for parts/measures/etc
 
@@ -4147,13 +4194,22 @@ class M21Utilities:
         for nm in numMeasuresInParts:
             maxMeasuresInPart = max(maxMeasuresInPart, nm)
 
+        # Step -1: check for missing time signatures in parts (propagate the first timesig
+        #   you see into the parts with missing timesigs).  Note that you may need to look
+        #   inside the first measure of each part, not just at offset 0 of the part.
+
+        # Step 0: check for whole measure rests that have the wrong duration.
+        #   Fix the enclosing stream durations up to and including the enclosing
+        #   measure.  Try fixing the rest duration as well (default fullMeasure='auto'
+        #   should do the right thing, right?)
+
         # Step 1: check for parts with too few measures
         measureStacks: list[list[m21.stream.Measure]] = []
         for msIdx in range(0, maxMeasuresInPart):
             measureStacks.append([])
             for partIdx in range(0, numParts):
                 if msIdx >= numMeasuresInParts[partIdx]:
-                    # step 1: append an empty measure (we'll fill it later in step 3)
+                    # step 1: append an empty measure (with a full-measure hidden rest)
                     print(
                         f'Appending empty measure {msIdx} to part {partIdx}',
                         file=sys.stderr
@@ -4161,45 +4217,54 @@ class M21Utilities:
                     emptyMeas = m21.stream.Measure()
                     # put it in the score
                     parts[partIdx].append(emptyMeas)
+                    # now that it's in the part, we can put the rest in it,
+                    # and then figure out its duration.
+                    hiddenRest: m21.note.Rest = m21.note.Rest()
+                    hiddenRest.style.hideObjectOnPrint = True
+                    emptyMeas.append(hiddenRest)
+                    tsContext = hiddenRest.getContextByClass(m21.meter.TimeSignature)
+                    if tsContext:
+                        hiddenRest.duration.quarterLength = tsContext.barDuration.quarterLength
+
                     # put it in the partMeasures array
                     partMeasures[partIdx][msIdx] = emptyMeas
 
                 measureStacks[msIdx].append(partMeasures[partIdx][msIdx])
 
         # Step 2: check for overlapping GeneralNotes
-#         for msIdx, mStack in enumerate(measureStacks):
-#             for partIdx, meas in enumerate(mStack):
-#                 voices: list[m21.stream.Voice | m21.stream.Measure] = list(
-#                     meas[m21.stream.Voice]
-#                 )
-#                 # treat the measure as a voice
-#                 voices.append(meas)
-#
-#                 for voice in voices:
-#                     prevGN: m21.note.GeneralNote | None = None
-#                     # do not recurse!
-#                     gnList: list[m21.note.GeneralNote] = list(
-#                         voice.getElementsByClass(m21.note.GeneralNote)
-#                     )
-#                     for gn in gnList:
-#                         if isinstance(gn, m21.harmony.Harmony):
-#                             # we don't care about ChordSymbol or other Harmony duration
-#                             continue
-#
-#                         # check for overlapping GeneralNotes. If found, reinsert
-#                         # second note at end of first note.
-#                         if prevGN is not None:
-#                             if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
-#                                 newOffset: OffsetQL = opFrac(prevGN.offset + prevGN.quarterLength)
-#                                 print(
-#                                     f'Moving {gn} from {gn.offset} to {newOffset}'
-#                                     f' in measure {msIdx}, part {partIdx}',
-#                                     file=sys.stderr
-#                                 )
-#                                 voice.remove(gn)
-#                                 voice.insert(newOffset, gn)
-#
-#                         prevGN = gn
+        for msIdx, mStack in enumerate(measureStacks):
+            for partIdx, meas in enumerate(mStack):
+                voices: list[m21.stream.Voice | m21.stream.Measure] = list(
+                    meas[m21.stream.Voice]
+                )
+                # treat the measure as a voice
+                voices.append(meas)
+
+                for voice in voices:
+                    prevGN: m21.note.GeneralNote | None = None
+                    # do not recurse!
+                    gnList: list[m21.note.GeneralNote] = list(
+                        voice.getElementsByClass(m21.note.GeneralNote)
+                    )
+                    for gn in gnList:
+                        if isinstance(gn, m21.harmony.Harmony):
+                            # we don't care about ChordSymbol or other Harmony duration
+                            continue
+
+                        # check for overlapping GeneralNotes. If found, reinsert
+                        # second note at end of first note.
+                        if prevGN is not None:
+                            if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
+                                newOffset: OffsetQL = opFrac(prevGN.offset + prevGN.quarterLength)
+                                print(
+                                    f'Moving {gn} from {gn.offset} to {newOffset}'
+                                    f' in measure {msIdx}, part {partIdx}',
+                                    file=sys.stderr
+                                )
+                                voice.remove(gn)
+                                voice.insert(newOffset, gn)
+
+                        prevGN = gn
 
         # Step 3: check each stack for equal duration measures
         for msIdx, mStack in enumerate(measureStacks):
@@ -4225,9 +4290,9 @@ class M21Utilities:
                         meas.append(hiddenRest)
                     meas.duration.quarterLength = maxDurationInStack
 
-        # Step 4: check for overlapping measures (perhaps caused by step 1 or 3).
-        # If you find an overlapping measure in a part, stop checking and just re-insert
-        # every measure after that.
+        # Step 4: check for overlapping/underlapping measures (perhaps caused by previous
+        # steps). If you find an overlapping/underlapping measure in a part, stop checking
+        # and just re-insert every measure after that.
         for partIdx, part in enumerate(parts):
             reinserting: bool = False
             prevMeas: m21.stream.Measure | None = None
