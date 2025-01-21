@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
+import json
 import typing as t
 import subprocess
 import music21 as m21
@@ -324,7 +325,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
             score2, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
         )
 
-        op_list, _cost = Comparison.annotated_scores_diff(
+        op_list, cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
         print(f'numDiffs = {numDiffs}')
@@ -334,6 +335,10 @@ def runTheDiff(krnPath: Path, results) -> bool:
             summ: str = '\t' + oplistSummary(op_list, score1, score2)
             print(summ)
             print(summ, file=results)
+            serOut: dict = Visualization.get_ser_output(cost, annotatedScore2)
+            jsonStr: str = json.dumps(serOut)
+            print(jsonStr)
+            print(jsonStr, file=results)
             textOut: str = Visualization.get_text_output(score1, score2, op_list)
             print(textOut)
             print(textOut, file=results)
