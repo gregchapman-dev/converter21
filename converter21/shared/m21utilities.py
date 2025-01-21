@@ -4260,16 +4260,21 @@ class M21Utilities:
             if theTimeSig is None:
                 # None of the simultaneous (stacked) measures have a timesig
                 if msIdx == 0:
-                    # first measure: all measures must have a timesig
+                    # first measure: all stacked measures must have a timesig
                     theTimeSig = m21.meter.TimeSignature('4/4')
                 else:
-                    # all but first measure: if one measure has a timesig, the others
-                    # must have it too.
+                    # all but first measure: if none of the stacked measures
+                    # have a timesig, it's OK.
                     continue
 
             for partIdx, timesig in enumerate(timesigs):
                 if timesig is None:
+                    print(
+                        f'Inserting hidden timesig {myTS}'
+                        f' at start of measure {msIdx}, in part {partIdx}'
+                    )
                     myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
+                    myTS.style.hideObjectOnPrint = True
                     mStack[partIdx].insert(0, myTS)
 
         # Step 3: check for whole measure (non-hidden) rests that have too long duration
@@ -4329,7 +4334,7 @@ class M21Utilities:
 
                 if recomputeMeasureDuration:
                     # recompute measure duration from highestTime
-                    meas._cache['HighestTime'] = None  # force recomputation
+                    meas._cache['HighestTime'] = None  # force recomputation of meas.highestTime
                     meas.duration.quarterLength = meas.highestTime
 
         # Step 4: check for overlapping GeneralNotes
