@@ -4175,7 +4175,7 @@ class M21Utilities:
         # 1. Looks for parts that have different numbers of measures.  Appends
         #       empty measures (filled with appropriate duration hidden rests)
         #       to the short parts to equalize them.
-        # 2. Looks for simultaneous measures where one or more have missing timesigs.
+        # NOPE 2. Looks for simultaneous measures where one or more have missing timesigs.
         #       Copies the timesig from one measure to the other simultaneous measures.
         # 3. Looks for whole measure rests (duration=4.0) where that whole rest is
         #       longer than the measure should be (according to the timesig).
@@ -4201,6 +4201,16 @@ class M21Utilities:
         # Build up a list of measureStacks
         parts: list[m21.stream.Part] = list(fixme[m21.stream.Part])
         numParts: int = len(parts)
+        partMeterStreams: list[m21.stream.Stream] = []
+        for p in range(0, numParts):
+            partMeterStreams.append(
+                parts[p].getTimeSignatures(
+                    searchContext=False,
+                    returnDefault=False,
+                    recurse=True,
+                    sortByCreationTime=False
+                )
+            )
         partMeasures: list[list[m21.stream.Measure]] = [
             list(part[m21.stream.Measure]) for part in parts
         ]
@@ -4241,35 +4251,35 @@ class M21Utilities:
 
         # Step 2: I have seen scores that have a timesig in one part, but not the other.
         # Fix that first.
-        for msIdx, mStack in enumerate(measureStacks):
-            theTimeSig: m21.meter.TimeSignature | None = None
-            timesigs: list[m21.meter.TimeSignature | None] = []
-            for partIdx, meas in enumerate(mStack):
-                timesigAtZero: m21.meter.TimeSignature | None = (
-                    M21Utilities.getTimeSigFromStartOfStream(meas)
-                )
-                if msIdx == 0:
-                    # first measure: if no timesig in measure, we can also
-                    # check offset 0 in the enclosing part
-                    if timesigAtZero is None:
-                        timesigAtZero = M21Utilities.getTimeSigFromStartOfStream(parts[partIdx])
-                timesigs.append(timesigAtZero)
-                if timesigs[-1] is not None and theTimeSig is None:
-                    theTimeSig = timesigs[-1]
-
-            if theTimeSig is None:
-                # if none of the stacked measures have a timesig, it's OK.
-                continue
-
-            for partIdx, timesig in enumerate(timesigs):
-                if timesig is None:
-                    myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
-                    myTS.style.hideObjectOnPrint = True
-                    print(
-                        f'Inserting hidden timesig {myTS}'
-                        f' at start of measure {msIdx}, in part {partIdx}'
-                    )
-                    mStack[partIdx].insert(0, myTS)
+        # for msIdx, mStack in enumerate(measureStacks):
+        #     theTimeSig: m21.meter.TimeSignature | None = None
+        #     timesigs: list[m21.meter.TimeSignature | None] = []
+        #     for partIdx, meas in enumerate(mStack):
+        #         timesigAtZero: m21.meter.TimeSignature | None = (
+        #             M21Utilities.getTimeSigFromStartOfStream(meas)
+        #         )
+        #         if msIdx == 0:
+        #             # first measure: if no timesig in measure, we can also
+        #             # check offset 0 in the enclosing part
+        #             if timesigAtZero is None:
+        #                 timesigAtZero = M21Utilities.getTimeSigFromStartOfStream(parts[partIdx])
+        #         timesigs.append(timesigAtZero)
+        #         if timesigs[-1] is not None and theTimeSig is None:
+        #             theTimeSig = timesigs[-1]
+        #
+        #     if theTimeSig is None:
+        #         # if none of the stacked measures have a timesig, it's OK.
+        #         continue
+        #
+        #     for partIdx, timesig in enumerate(timesigs):
+        #         if timesig is None:
+        #             myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
+        #             myTS.style.hideObjectOnPrint = True
+        #             print(
+        #                 f'Inserting hidden timesig {myTS}'
+        #                 f' at start of measure {msIdx}, in part {partIdx}'
+        #             )
+        #             mStack[partIdx].insert(0, myTS)
 
         # Step 3: check for whole measure (non-hidden) rests that have too long duration
         #   (e.g. 4 quarter notes when the timesig says 3/4). Too short is OK, we'll pad
@@ -4282,8 +4292,8 @@ class M21Utilities:
         for partIdx, part in enumerate(parts):
             for meas in partMeasures[partIdx]:
                 timesig = M21Utilities.getTimeSigFromStartOfStream(meas)
-                if timesig is None:
-                    timesig = meas.getContextByClass(m21.meter.TimeSignature)
+                # if timesig is None:
+                #     timesig = meas.getContextByClass(m21.meter.TimeSignature)
 
                 voices: list[m21.stream.Voice | m21.stream.Measure] = list(
                     meas[m21.stream.Voice]
@@ -4307,16 +4317,14 @@ class M21Utilities:
                         rest: m21.note.Rest = gnList[0]
                         restQL: OffsetQL = rest.duration.quarterLength
                         if restQL == 4.0:
-                            # if timesig is None:
-                            #     # try looking in the meterStream
-                            #     measOffset: OffsetQL = meas.getOffsetInHierarchy(fixme)
-                            #     timesig = M21Utilities.getActiveTimeSigFromMeterStream(
-                            #         measOffset, meterStream)
-                            #     if timesig is None:
-                            #         timesig = TimeSignature('4/4')
-                            if t.TYPE_CHECKING:
-                                # because we pre-fixed this above
-                                assert timesig is not None
+                            if timesig is None:
+                                # try looking in the meterStream
+                                measOffset: OffsetQL = meas.getOffsetInHierarchy(fixme)
+                                timesig = M21Utilities.getActiveTimeSigFromMeterStream(
+                                    measOffset, partMeterStreams[partIdx]
+                                )
+                                if timesig is None:
+                                    timesig = m21.meter.TimeSignature('4/4')
                             barQL: OffsetQL = timesig.barDuration.quarterLength
                             if restQL > barQL:
                                 rest.duration.linked = False
