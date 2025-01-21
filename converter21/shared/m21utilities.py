@@ -4269,12 +4269,12 @@ class M21Utilities:
 
             for partIdx, timesig in enumerate(timesigs):
                 if timesig is None:
+                    myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
+                    myTS.style.hideObjectOnPrint = True
                     print(
                         f'Inserting hidden timesig {myTS}'
                         f' at start of measure {msIdx}, in part {partIdx}'
                     )
-                    myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
-                    myTS.style.hideObjectOnPrint = True
                     mStack[partIdx].insert(0, myTS)
 
         # Step 3: check for whole measure (non-hidden) rests that have too long duration
