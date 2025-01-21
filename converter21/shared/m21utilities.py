@@ -4258,14 +4258,8 @@ class M21Utilities:
                     theTimeSig = timesigs[-1]
 
             if theTimeSig is None:
-                # None of the simultaneous (stacked) measures have a timesig
-                if msIdx == 0:
-                    # first measure: all stacked measures must have a timesig
-                    theTimeSig = m21.meter.TimeSignature('4/4')
-                else:
-                    # all but first measure: if none of the stacked measures
-                    # have a timesig, it's OK.
-                    continue
+                # if none of the stacked measures have a timesig, it's OK.
+                continue
 
             for partIdx, timesig in enumerate(timesigs):
                 if timesig is None:
