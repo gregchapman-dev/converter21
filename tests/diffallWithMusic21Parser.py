@@ -275,14 +275,20 @@ def runTheDiff(krnPath: Path, results) -> bool:
             summ: str = '\t' + oplistSummary(op_list, score1, score2)
             print(summ)
             print(summ, file=results)
-            serOut: dict = Visualization.get_ser_output(cost, annotatedScore2)
-            jsonStr: str = json.dumps(serOut)
-            print(jsonStr)
-            print(jsonStr, file=results)
-            textOut: str = Visualization.get_text_output(score1, score2, op_list)
+
+        # print SER dict even if there are no diffs
+        serOut: dict = Visualization.get_ser_output(cost, annotatedScore2)
+        jsonStr: str = json.dumps(serOut)
+        print(jsonStr)
+        print(jsonStr, file=results)
+
+        textOut: str = Visualization.get_text_output(score1, score2, op_list)
+        if textOut:
             print(textOut)
             print(textOut, file=results)
             results.flush()
+
+        if numDiffs > 0:
             return False
         return True
     except KeyboardInterrupt:
