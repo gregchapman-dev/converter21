@@ -3,6 +3,7 @@ import tempfile
 import argparse
 import sys
 import subprocess
+import json
 
 from music21.base import VERSION_STR
 import music21 as m21
@@ -68,7 +69,7 @@ def runTheFullTest(krnPath: Path):
         DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
     )
     print('loaded my MEI score')
-    diffList, _cost = Comparison.annotated_scores_diff(score_lin2, score_lin3)
+    diffList, cost = Comparison.annotated_scores_diff(score_lin2, score_lin3)
     print('diffed the two scores:')
     numDiffs = len(diffList)
     print(f'\tnumber of differences = {numDiffs}')
@@ -78,8 +79,14 @@ def runTheFullTest(krnPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
-        textOut: str = Visualization.get_text_output(score1, score2, diffList)
+
+    serOut: dict[str, str] = Visualization.get_ser_output(cost, score_lin2)
+    jsonStr: str = json.dumps(serOut)
+    print(jsonStr)
+    textOut: str = Visualization.get_text_output(score1, score2, diffList)
+    if textOut:
         print(textOut)
+
 #     print('verovio MEI score written to: ', score1.write('musicxml', makeNotation=False))
 #     print('my MEI score written to: ', score2.write('musicxml', makeNotation=False))
     return

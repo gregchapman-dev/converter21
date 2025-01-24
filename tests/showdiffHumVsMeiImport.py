@@ -3,6 +3,7 @@ import tempfile
 import argparse
 import sys
 import subprocess
+import json
 
 from music21.base import VERSION_STR
 import music21 as m21
@@ -76,7 +77,7 @@ def runTheFullTest(krnPath: Path):
         DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
     )
     print('loaded second score')
-    diffList, _cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
+    diffList, cost = Comparison.annotated_scores_diff(score_lin1, score_lin2)
     print('diffed the two scores:')
     numDiffs = len(diffList)
     print(f'\tnumber of differences = {numDiffs}')
@@ -86,8 +87,14 @@ def runTheFullTest(krnPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
-        textOut: str = Visualization.get_text_output(score1, score2, diffList)
+
+    serOut: dict[str, str] = Visualization.get_ser_output(cost, score_lin2)
+    jsonStr: str = json.dumps(serOut)
+    print(jsonStr)
+    textOut: str = Visualization.get_text_output(score1, score2, diffList)
+    if textOut:
         print(textOut)
+
 #     print('score1 written to: ', score1.write('musicxml', makeNotation=False))
 #     print('score2 written to: ', score2.write('musicxml', makeNotation=False))
     return
