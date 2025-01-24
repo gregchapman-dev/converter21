@@ -1,0 +1,29 @@
+Changes since 3.2.0:
+    Humdrum export: fix up various duration problems (seen e.g. after import of a Photoscore-
+        generated MusicXML file) that would prevent Humdrum export from succeeding.
+
+    Humdrum/MEI export: There are a lot of custom attributes that we add to various objects
+        in the score to keep track of export status.  Remove them at end of export.
+
+    MEI export: Put xml:id on (almost) everything in the exported MEI file.
+    MEI export: Clean up ChordSymbol support.
+    MEI export: There is no 'heavy-light' barline in MEI.  Rather than fail when we try to
+        export one, just export a normal barline.
+    MEI export: If voice.id is a string, put it in layer@label, not layer@n (which must be a
+        number).
+
+    Shared: SplitComplexRestDurations can now handle rests that have a different visual and
+        gestural duration (in music21 terms, the rest duration is unlinked).
+
+    Shared: M21Utilities has a lot more stuff in it now.  Some is moved from other places in
+        converter21, so it can be shared (with other parts of converter21 or even with clients),
+        and some is new (like the new fixupBadDurations API, used by the Humdrum exporter; see
+        above).
+
+    All: lots of little bugfixes.
+
+    Humdrum import: Add new option to attempt to fix syntax errors on the fly.  The number
+        of syntax errors fixed is written to m21Score.c21_syntax_errors_fixed, so clients can
+        see what happened.  This is in support of musicdiff, when being used as an OMR DL
+        training evaluation function.  This is only minimally implemented for now, and the
+        number of syntax errors fixed will be fleshed out in the next few months.
