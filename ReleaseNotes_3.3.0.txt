@@ -21,9 +21,3 @@ Changes since 3.2.0:
         above).
 
     All: lots of little bugfixes.
-
-    Humdrum import: Add new option to attempt to fix syntax errors on the fly.  The number
-        of syntax errors fixed is written to m21Score.c21_syntax_errors_fixed, so clients can
-        see what happened.  This is in support of musicdiff, when being used as an OMR DL
-        training evaluation function.  This is only minimally implemented for now, and the
-        number of syntax errors fixed will be fleshed out in the next few months.
