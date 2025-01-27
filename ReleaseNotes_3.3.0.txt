@@ -1,6 +1,7 @@
 Changes since 3.2.0:
-    Humdrum export: fix up various duration problems (seen e.g. after import of a Photoscore-
-        generated MusicXML file) that would prevent Humdrum export from succeeding.
+    Humdrum export: At start of export, fix up various duration problems (seen e.g. after
+        import of a Photoscore-generated MusicXML file) that would prevent Humdrum export
+        from succeeding.
 
     Humdrum/MEI export: There are a lot of custom attributes that we add to various objects
         in the score to keep track of export status.  Remove them at end of export.
@@ -13,10 +14,10 @@ Changes since 3.2.0:
         number).
 
     Shared: SplitComplexRestDurations can now handle rests that have a different visual and
-        gestural duration (in music21 terms, the rest duration is unlinked).
+        gestural duration (in music21 terms, these are rests with an unlinked duration).
 
     Shared: M21Utilities has a lot more stuff in it now.  Some is moved from other places in
-        converter21, so it can be shared (with other parts of converter21 or even with clients),
+        converter21, so it can be shared with other parts of converter21 (or even with clients),
         and some is new (like the new fixupBadDurations API, used by the Humdrum exporter; see
         above).
 
