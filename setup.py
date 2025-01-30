@@ -4,14 +4,14 @@
 #
 # Authors:       Greg Chapman
 #
-# Copyright:     (c) 2021-2023 Greg Chapman
+# Copyright:     (c) 2021-2025 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
 import setuptools
 
 # must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION et al
-converter21version = '3.2.0'
+converter21version = '3.3.0'
 
 if __name__ == '__main__':
     setuptools.setup(
