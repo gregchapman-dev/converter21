@@ -32,8 +32,12 @@ class HumdrumFileContent(HumdrumFileStructure):
     # HumdrumFileContent has no private data to initialize, just a bunch more functions
     # So... no __init__.  Well, OK, to keep pylint happy about attribute-defined-outside-init,
     # a quick __init__ that sets a few attributes that are already set in HumdrumFileBase.py
-    def __init__(self, fileName: str | Path | None = None) -> None:
-        super().__init__(fileName)  # initialize the HumdrumFileBase fields
+    def __init__(
+        self,
+        fileName: str | Path | None = None,
+        acceptSyntaxErrors: bool = False
+    ) -> None:
+        super().__init__(fileName, acceptSyntaxErrors)  # initialize the HumdrumFileBase fields
         self._hasInformalBreaks: bool = False
         self._hasFormalBreaks: bool = False
 
@@ -670,9 +674,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         linkStarts: list[HumdrumToken],
         linkEnds: list[HumdrumToken]
     ) -> None:
-        shortest: int = len(linkStarts)
-        if shortest > len(linkEnds):
-            shortest = len(linkEnds)
+        shortest: int = min(len(linkStarts), len(linkEnds))
         if shortest == 0:
             # nothing to do
             return
@@ -912,9 +914,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         linkStarts: list[tuple[HumdrumToken, int]],
         linkEnds: list[tuple[HumdrumToken, int]]
     ) -> None:
-        shortest = len(linkStarts)
-        if shortest > len(linkEnds):
-            shortest = len(linkEnds)
+        shortest: int = min(len(linkStarts), len(linkEnds))
         if shortest == 0:
             # nothing to do
             return

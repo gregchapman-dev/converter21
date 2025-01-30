@@ -478,10 +478,14 @@ class StaffStateVariables:
 class HumdrumFile(HumdrumFileContent):
     # add XML print routines?
 
-    def __init__(self, fileName: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        fileName: str | Path | None = None,
+        acceptSyntaxErrors: bool = False
+    ) -> None:
         M21Utilities.adjustMusic21Behavior()
 
-        super().__init__(fileName)  # initialize the HumdrumFileBase fields
+        super().__init__(fileName, acceptSyntaxErrors)  # initialize the HumdrumFileBase fields
 
 
         # The m21Score attribute will not exist until it is set up (in createMusic21Stream)
@@ -622,11 +626,12 @@ class HumdrumFile(HumdrumFileContent):
         # which lives in HumdrumFileContent
 
         # pylint: disable=attribute-defined-outside-init
-        self.m21Score: m21.stream.Score
+        self.m21Score: m21.stream.Score = m21.stream.Score()
+        if self.fixedSyntaxErrors > 0:
+            self.m21Score.c21_syntax_errors_fixed = self.fixedSyntaxErrors  # type: ignore
 
         if not self.isValid:
             # input file did not parse successfully, give up.  Return an empty score.
-            self.m21Score = m21.stream.Score()
             return self.m21Score
 
         # You can comment out sections of a Humdrum file using the following global comments:
@@ -641,7 +646,6 @@ class HumdrumFile(HumdrumFileContent):
 
         if not self._staffStarts:  # if empty list or None
             # No parts in file, give up.  Return an empty score.
-            self.m21Score = m21.stream.Score()
             return self.m21Score
 
         self.analyzeNotation()
@@ -661,10 +665,6 @@ class HumdrumFile(HumdrumFileContent):
         self._prepareSections()        # associate numbered/unnumbered section names with lines
         self._prepareMetadata()        # pull standard biblio keys/values out of reference records
         self._prepareTimeSignatures()  # gather time signature info
-
-        # set up m21Score high-level structure
-        self.m21Score = m21.stream.Score()
-        # pylint: enable=attribute-defined-outside-init
 
         # Creates Parts, PartStaffs, and StaffGroups, as appropriate,
         # using !!system-decoration, if present.
@@ -732,6 +732,10 @@ class HumdrumFile(HumdrumFileContent):
                 if hasTransposingInstrument or ss.hasOttavas:
                     ss.m21Part.toWrittenPitch(inPlace=True, preserveAccidentalDisplay=True)
 
+        # set c21_syntax_errors_fixed again, because actually generating the score might
+        # have caused us to fix more syntax errors.
+        if self.fixedSyntaxErrors > 0:
+            self.m21Score.c21_syntax_errors_fixed = self.fixedSyntaxErrors  # type: ignore
         return self.m21Score
 
     def _prepareForSecondPass(self) -> None:
@@ -4305,8 +4309,7 @@ class HumdrumFile(HumdrumFileContent):
         # of beam numbers starting from 1 (or 0 if a note/rest has no beam).
         beamCount: int = 0
         for durBeamNum in durBeamNums:
-            if durBeamNum > beamCount:
-                beamCount = durBeamNum
+            beamCount = max(beamCount, durBeamNum)
 
         # beamstarts and beamends are lists of the starting and ending
         # index for beams of duration items in the layer.  The index is
@@ -4802,8 +4805,7 @@ class HumdrumFile(HumdrumFileContent):
     def _assignTupletScalings(self, tgs: list[HumdrumBeamAndTuplet]) -> None:
         maxGroup: int = 0
         for tg in tgs:
-            if maxGroup < tg.group:
-                maxGroup = tg.group
+            maxGroup = max(maxGroup, tg.group)
 
         if maxGroup <= 0:
             # no tuplets
@@ -4910,8 +4912,7 @@ class HumdrumFile(HumdrumFileContent):
         # Try units = totalDur / maxDur
         maxDur: HumNum = opFrac(0)
         for dur in durCounts:
-            if dur > maxDur:
-                maxDur = dur
+            maxDur = max(maxDur, dur)
 
         totalDur: HumNum = opFrac(0)
         for tg in tggroup:
@@ -5761,7 +5762,7 @@ class HumdrumFile(HumdrumFileContent):
             noteOrChord.expressions.append(tremolo)
         except m21.expressions.TremoloException:
             # numberOfMarks out of range (1..8)
-            return
+            pass
 
     def _processUnexpandedTremolo2(
         self,

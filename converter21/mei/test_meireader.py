@@ -42,7 +42,6 @@ from unittest import mock  # pylint: disable=no-name-in-module
 from music21 import articulations
 from music21 import bar
 from music21 import clef
-from music21 import duration
 from music21 import instrument
 from music21 import interval
 from music21 import key
@@ -237,7 +236,6 @@ class Test(unittest.TestCase):
         '''removeOctothorpe(): when there's an octothorpe'''
         xmlid = '#14ccdc11-8090-49f4-b094-5935f534131a'
         expected = '14ccdc11-8090-49f4-b094-5935f534131a'
-        c = MeiReader()
         actual = MeiShared.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
@@ -245,7 +243,6 @@ class Test(unittest.TestCase):
         '''removeOctothorpe(): when there's not an octothorpe'''
         xmlid = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
         expected = 'b05c3007-bc49-4bc2-a970-bb5700cb634d'
-        c = MeiReader()
         actual = MeiShared.removeOctothorpe(xmlid)
         self.assertEqual(expected, actual)
 
@@ -2790,7 +2787,6 @@ class Test(unittest.TestCase):
         self.assertEqual(instr.transposition.directedName, 'm-3')
 
     def testUniqueInstances(self):
-        from music21 import common
         from music21 import converter
         import converter21
         converter21.register(converter21.ConverterName.MEI)

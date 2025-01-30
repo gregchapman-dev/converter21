@@ -22,8 +22,8 @@ from music21.common import OffsetQL, opFrac
 from converter21.mei import MeiInternalError
 from converter21.shared import M21Utilities
 from converter21.mei import M21ObjectConvert
-from converter21.mei import MeiBeamSpanner
-from converter21.mei import MeiTupletSpanner
+from converter21.shared import M21BeamSpanner
+from converter21.shared import M21TupletSpanner
 from converter21.shared import DebugTreeBuilder as TreeBuilder
 
 environLocal = m21.environment.Environment('converter21.mei.meilayer')
@@ -47,6 +47,8 @@ class MeiLayer:
         m21Voice: m21.stream.Voice | m21.stream.Measure,
         parentStaff,  # MeiStaff
         parentScore,  # MeiScore
+        # custom m21 attrs to delete later (children will extend this)
+        customAttrs: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
     ) -> None:
         from converter21.mei import MeiStaff
@@ -55,6 +57,7 @@ class MeiLayer:
             assert isinstance(parentScore, MeiScore)
         self.m21Voice: m21.stream.Voice | m21.stream.Measure = m21Voice
         self.parentStaff: MeiStaff = parentStaff
+        self.customAttrs: dict[m21.base.Music21Object, list[str]] = customAttrs
         self.spannerBundle: m21.spanner.SpannerBundle = spannerBundle
         self.scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature] = (
             parentScore.scoreMeterStream
@@ -113,8 +116,10 @@ class MeiLayer:
         #       voice.id values, as stated above).
         #
         # 3. Someone has assigned string voice.id values with great care for
-        #       some other reason, and we should simply use them.
+        #       some other reason, and we should use them. (We put them in
+        #       layer@label, though, not layer@n.)
         layerNStr: str = ''
+        layerLabel: str = ''
         if isinstance(self.m21Voice, m21.stream.Voice):
             if (isinstance(self.m21Voice.id, int)
                     and self.m21Voice.id < m21.defaults.minIdNumberToConsiderMemoryLocation):
@@ -130,14 +135,32 @@ class MeiLayer:
                 layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
                 self.parentStaff.nextFreeVoiceNumber += 1
             elif isinstance(self.m21Voice.id, str):
-                layerNStr = self.m21Voice.id
+                # in MEI, n= must have a numeric string, so we have to drop this id
+                # and change it to a low number.  Do the same dance we do above.
+                # And stash off the string id to export as layer@label.
+                layerLabel = self.m21Voice.id
+                layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
+                self.parentStaff.nextFreeVoiceNumber += 1
             else:
-                layerNStr = ''
+                # no voice id; same dance
+                layerNStr = str(self.parentStaff.nextFreeVoiceNumber)
+                self.parentStaff.nextFreeVoiceNumber += 1
+
+        if hasattr(self.m21Voice, 'c21_label'):
+            # voice.c21_label overrides string voice.id in export to MEI layer@label
+            layerLabel = self.m21Voice.c21_label  # type: ignore
 
         layerAttr: dict[str, str] = {}
+        xmlId: str = M21Utilities.getXmlId(self.m21Voice)
+        if xmlId:
+            layerAttr['xml:id'] = xmlId
         if layerNStr:
             layerAttr['n'] = layerNStr
-        tb.start('layer', {'n': layerNStr})
+
+        if layerLabel:
+            layerAttr['label'] = layerLabel
+
+        tb.start('layer', layerAttr)
 
         nextStaffChange: None | tuple[
             m21.clef.Clef | m21.meter.TimeSignature | m21.key.KeySignature,
@@ -203,6 +226,11 @@ class MeiLayer:
                                 tb
                             )
                             staffChangeObject.mei_emitted = True  # type: ignore
+                            M21Utilities.extendCustomM21Attributes(
+                                self.customAttrs,
+                                staffChangeObject,
+                                ['mei_emitted']
+                            )
                         else:
                             M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
 
@@ -216,10 +244,10 @@ class MeiLayer:
                 # with this obj.  Sort them by duration (longest first),
                 # so they will nest properly as elements.
                 beamTupletFTremStarts: list[
-                    MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
+                    M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremStarts(obj, voiceBeams)
                 beamTupletFTremEnds: list[
-                    MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner
+                    M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner
                 ] = self.getOrderedBeamTupletFTremEnds(obj)
 
                 # Process any nested element starts
@@ -248,6 +276,11 @@ class MeiLayer:
                         staffChangeObject, self.spannerBundle, tb
                     )
                     staffChangeObject.mei_emitted = True  # type: ignore
+                    M21Utilities.extendCustomM21Attributes(
+                        self.customAttrs,
+                        staffChangeObject,
+                        ['mei_emitted']
+                    )
                 else:
                     M21ObjectConvert.convertM21ObjectToMeiSameAs(staffChangeObject, tb)
 
@@ -266,7 +299,7 @@ class MeiLayer:
         output: set[m21.spanner.Spanner] = set()
         for obj in voice:
             if M21ObjectConvert.streamElementBelongsInLayer(obj):
-                for beam in obj.getSpannerSites([MeiBeamSpanner]):
+                for beam in obj.getSpannerSites([M21BeamSpanner]):
                     if not M21Utilities.isIn(beam, self.spannerBundle):
                         continue
                     output.add(beam)
@@ -328,6 +361,10 @@ class MeiLayer:
 
                 # start a <bTrem>
                 attr: dict[str, str] = {}
+                xmlId: str = M21Utilities.getXmlId(expr)
+                if xmlId:
+                    attr['xml:id'] = xmlId
+
                 attr['unitdur'] = unitDur
                 tb.start('bTrem', attr)
 
@@ -339,14 +376,18 @@ class MeiLayer:
 
     def processBeamTupletFTremStart(
         self,
-        btfs: MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner,
+        btfs: M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner,
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
-        if isinstance(btfs, MeiBeamSpanner):
+        xmlId: str = M21Utilities.getXmlId(btfs)
+        if xmlId:
+            attr['xml:id'] = xmlId
+
+        if isinstance(btfs, M21BeamSpanner):
             # start a <beam>
             tb.start('beam', attr)
-        elif isinstance(btfs, MeiTupletSpanner):
+        elif isinstance(btfs, M21TupletSpanner):
             # start a <tuplet>
             M21ObjectConvert.fillInTupletAttributes(btfs.startTuplet, attr)
             tb.start('tuplet', attr)
@@ -362,6 +403,11 @@ class MeiLayer:
                     f'invalid totalNumBeams ({totalNumBeams}), skipping fTrem.'
                 )
                 btfs.mei_skip = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    btfs,
+                    ['mei_skip']
+                )
                 return
             beams: str = self._UNIT_DUR_TO_BEAMS.get(unitDur, '')
             if not beams:
@@ -369,6 +415,11 @@ class MeiLayer:
                     f'invalid unitDur ({unitDur}), skipping fTrem.'
                 )
                 btfs.mei_skip = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    btfs,
+                    ['mei_skip']
+                )
                 return
 
             # start an <fTrem>
@@ -378,15 +429,15 @@ class MeiLayer:
 
     def processBeamTupletFTremEnd(
         self,
-        btfe: MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner,
+        btfe: M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner,
         tb: TreeBuilder
     ):
         if hasattr(btfe, 'mei_skip'):
             return
 
-        if isinstance(btfe, MeiBeamSpanner):
+        if isinstance(btfe, M21BeamSpanner):
             tb.end('beam')
-        elif isinstance(btfe, MeiTupletSpanner):
+        elif isinstance(btfe, M21TupletSpanner):
             tb.end('tuplet')
         elif isinstance(btfe, m21.expressions.TremoloSpanner):
             tb.end('fTrem')
@@ -395,15 +446,15 @@ class MeiLayer:
         self,
         obj: m21.base.Music21Object,
         voiceBeams: set[m21.spanner.Spanner]
-    ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
+    ) -> list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
             return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Measure)
 
         def beamsBeforeTupletsBeforeTremolos(spanner: m21.spanner.Spanner) -> int:
-            if isinstance(spanner, MeiBeamSpanner):
+            if isinstance(spanner, M21BeamSpanner):
                 return 1
-            if isinstance(spanner, MeiTupletSpanner):
+            if isinstance(spanner, M21TupletSpanner):
                 return 2
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 return 3
@@ -450,10 +501,10 @@ class MeiLayer:
 
             return True
 
-        output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
+        output: list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
-            MeiBeamSpanner,
-            MeiTupletSpanner,
+            M21BeamSpanner,
+            M21TupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
             if not M21Utilities.isIn(spanner, self.spannerBundle):
@@ -466,25 +517,27 @@ class MeiLayer:
             # Beam and tuplet are special, they can span across measure boundaries.
             # If they do span across a measure boundary, skip them here, we'll
             # emit a <beamSpan> or <tupletSpan> instead, later.
-            if isinstance(spanner, (MeiBeamSpanner, MeiTupletSpanner)):
+            if isinstance(spanner, (M21BeamSpanner, M21TupletSpanner)):
                 if not M21Utilities.allSpannedElementsAreInHierarchy(
                     spanner, self.parentStaff.m21Measure
                 ):
-                    M21ObjectConvert.assureXmlIds(spanner)
+                    M21Utilities.assureXmlIds(spanner)
                     continue
 
                 # Tuplet is even more special.  It can interleave with beams in a way
                 # that cannot be nested.  If so, we can't emit <tuplet>, since it can't
                 # be properly nested with the <beam>s in the voice/layer, so we have to
                 # skip the tuplet here, and emit later as <tupletSpan>.
-                if isinstance(spanner, MeiTupletSpanner):
+                if isinstance(spanner, M21TupletSpanner):
                     if not nestsReasonably(spanner, voiceBeams):
-                        M21ObjectConvert.assureXmlIds(spanner)
+                        M21Utilities.assureXmlIds(spanner)
                         continue
 
                 # mark as having been emitted as <beam> or <tuplet> so we don't emit
                 # as <beamSpan> or <tupletSpan> later, in makePostStavesElements.
-                if isinstance(spanner, MeiBeamSpanner):
+                # We don't add these custom attributes to self.customAttrs, since
+                # the entire spanner will be deleted during deannotateScore().
+                if isinstance(spanner, M21BeamSpanner):
                     spanner.mei_beam = True  # type: ignore
                 else:
                     spanner.mei_tuplet = True  # type: ignore
@@ -495,6 +548,11 @@ class MeiLayer:
                     continue
 
                 obj.mei_in_ftrem = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    obj,
+                    ['mei_in_ftrem']
+                )
 
             output.append(spanner)  # type: ignore
 
@@ -505,24 +563,24 @@ class MeiLayer:
     def getOrderedBeamTupletFTremEnds(
         self,
         obj: m21.base.Music21Object,
-    ) -> list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner]:
+    ) -> list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner]:
 
         def spannerQL(spanner: m21.spanner.Spanner) -> OffsetQL:
             return M21Utilities.getSpannerQuarterLength(spanner, self.parentStaff.m21Score)
 
         def beamsBeforeTupletsBeforeTremolos(spanner: m21.spanner.Spanner) -> int:
-            if isinstance(spanner, MeiBeamSpanner):
+            if isinstance(spanner, M21BeamSpanner):
                 return 1
-            if isinstance(spanner, MeiTupletSpanner):
+            if isinstance(spanner, M21TupletSpanner):
                 return 2
             if isinstance(spanner, m21.expressions.TremoloSpanner):
                 return 3
             return 4
 
-        output: list[MeiBeamSpanner | MeiTupletSpanner | m21.expressions.TremoloSpanner] = []
+        output: list[M21BeamSpanner | M21TupletSpanner | m21.expressions.TremoloSpanner] = []
         for spanner in obj.getSpannerSites([
-            MeiBeamSpanner,
-            MeiTupletSpanner,
+            M21BeamSpanner,
+            M21TupletSpanner,
             m21.expressions.TremoloSpanner
         ]):
             if not M21Utilities.isIn(spanner, self.spannerBundle):
@@ -532,11 +590,11 @@ class MeiLayer:
             if not spanner.isLast(obj):
                 continue
 
-            if isinstance(spanner, MeiBeamSpanner) and not hasattr(spanner, 'mei_beam'):
+            if isinstance(spanner, M21BeamSpanner) and not hasattr(spanner, 'mei_beam'):
                 # Skip if we're emitting as <beamSpan>
                 continue
 
-            if isinstance(spanner, MeiTupletSpanner) and not hasattr(spanner, 'mei_tuplet'):
+            if isinstance(spanner, M21TupletSpanner) and not hasattr(spanner, 'mei_tuplet'):
                 # Skip if we're emitting as <tupletSpan>
                 continue
 
@@ -546,6 +604,11 @@ class MeiLayer:
                     continue
 
                 obj.mei_in_ftrem = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customAttrs,
+                    obj,
+                    ['mei_in_ftrem']
+                )
 
             output.append(spanner)  # type: ignore
 
@@ -583,6 +646,7 @@ class MeiLayer:
                         m21Score,
                         m21Measure,
                         self.scoreMeterStream,
+                        self.customAttrs,
                         self.spannerBundle,
                         tb
                     )
@@ -599,6 +663,7 @@ class MeiLayer:
                                 m21Score,
                                 m21Measure,
                                 self.scoreMeterStream,
+                                self.customAttrs,
                                 self.spannerBundle,
                                 tb
                             )
@@ -622,6 +687,7 @@ class MeiLayer:
                             m21Score,
                             m21Measure,
                             self.scoreMeterStream,
+                            self.customAttrs,
                             self.spannerBundle,
                             tb
                         )

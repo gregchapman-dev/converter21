@@ -13,7 +13,7 @@
 import sys
 import re
 import typing as t
-from copy import deepcopy
+# from copy import deepcopy
 # from xml.etree.ElementTree import TreeBuilder
 
 import music21 as m21
@@ -22,6 +22,9 @@ from music21.common.numberTools import opFrac
 
 # from converter21.mei import MeiExportError
 from converter21.mei import MeiInternalError
+from converter21.shared import M21BeamSpanner
+from converter21.shared import M21TupletSpanner
+from converter21.shared import M21TieSpanner
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
 from converter21.shared import DebugTreeBuilder as TreeBuilder
@@ -68,6 +71,7 @@ class M21ObjectConvert:
     @staticmethod
     def _addStemMod(obj: m21.note.NotRest, attr: dict[str, str]):
         if hasattr(obj, 'mei_stem_mod'):
+            # 888 nowhere in mei exporter does 'mei_stem_mod' get set.
             stemMod: str = getattr(obj, 'mei_stem_mod')
             attr['stem.mod'] = stemMod
 
@@ -84,7 +88,7 @@ class M21ObjectConvert:
         spannerBundle: m21.spanner.SpannerBundle,
         attr: dict[str, str]
     ):
-        tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([MeiTupletSpanner])
+        tupletSpanners: list[m21.spanner.Spanner] = obj.getSpannerSites([M21TupletSpanner])
         for tuplet in tupletSpanners:
             if not M21Utilities.isIn(tuplet, spannerBundle):
                 continue
@@ -187,79 +191,6 @@ class M21ObjectConvert:
 
         return None
 
-    # Edit this list of characters as desired (but be careful about 'xml:id' value rules)
-    _XMLID_BASE_ALPHABET = tuple("abcdefghijklmnopqrstuvwxyz")
-    # _XMLID_BASE_DICT = dict((c, v) for v, c in enumerate(_XMLID_BASE_ALPHABET))
-    _XMLID_BASE_LEN = len(_XMLID_BASE_ALPHABET)
-#     def alphabet_decode(encodedStr: str) -> int:
-#         num: int = 0
-#         for char in encodedStr:
-#             num = num * M21ObjectConvert._XMLID_BASE_LEN + M21ObjectConvert._XMLID_BASE_DICT[char]
-#         return num
-
-
-    @staticmethod
-    def makeXmlIdFrom(identifier: int | str, prefix: str = '') -> str:
-        output: str = ''
-
-        def alphabet_encode(numToEncode: int) -> str:
-            if numToEncode == 0:
-                return M21ObjectConvert._XMLID_BASE_ALPHABET[0]
-
-            encoded: str = ''
-            while numToEncode:
-                numToEncode, remainder = divmod(numToEncode, M21ObjectConvert._XMLID_BASE_LEN)
-                encoded = M21ObjectConvert._XMLID_BASE_ALPHABET[remainder] + encoded
-            return encoded
-
-        if isinstance(identifier, str):
-            # str, use as is
-            output = identifier
-        elif (isinstance(identifier, int)
-                and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
-            # Nice low integer, use as is (converted to str)
-            output = str(identifier)
-        elif isinstance(identifier, int):
-            # Actually a memory location, so make it a nice short ASCII string,
-            # with lower-case class name prefix.
-            output = alphabet_encode(identifier)
-        else:
-            raise MeiInternalError('identifier not int or str')
-
-        if not prefix:
-            return output
-
-        if not output.lower().startswith(prefix.lower()):
-            # don't put a prefix on that's already there
-            output = prefix + '-' + output
-        return output
-
-    @staticmethod
-    def assureXmlId(obj: m21.base.Music21Object):
-        # if xml id has already been set, leave it as is
-        if hasattr(obj, 'mei_xml_id'):
-            return
-        obj.mei_xml_id = M21ObjectConvert.makeXmlIdFrom(  # type: ignore
-            obj.id, obj.classes[0].lower()
-        )
-
-    @staticmethod
-    def assureXmlIds(objs: list[m21.base.Music21Object] | m21.spanner.Spanner):
-        if isinstance(objs, m21.spanner.Spanner):
-            objs = objs.getSpannedElements()
-
-        for obj in objs:
-            M21ObjectConvert.assureXmlId(obj)
-
-    @staticmethod
-    def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
-        # only returns something if assureXmlId has been called already on this object
-        if hasattr(obj, 'mei_xml_id'):
-            return obj.mei_xml_id  # type: ignore
-        if required:
-            raise MeiInternalError('required xml:id is missing')
-        return ''
-
     @staticmethod
     def convertM21ObjectToMeiSameAs(obj: m21.base.Music21Object, tb: TreeBuilder):
         if not isinstance(obj, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
@@ -267,7 +198,7 @@ class M21ObjectConvert:
 
         # This obj has already been emitted with the appropriate xml:id, and here
         # we just emit a stub object with @sameas set to that same xml:id.
-        attr: dict[str, str] = {'sameas': M21ObjectConvert.getXmlId(obj, required=True)}
+        attr: dict[str, str] = {'sameas': M21Utilities.getXmlId(obj, required=True)}
         if isinstance(obj, m21.clef.Clef):
             tb.start('clef', attr)
             tb.end('clef')
@@ -289,7 +220,7 @@ class M21ObjectConvert:
         if t.TYPE_CHECKING:
             assert isinstance(obj, m21.chord.Chord)
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -319,7 +250,7 @@ class M21ObjectConvert:
             assert isinstance(obj, m21.note.Rest)
         attr: dict[str, str] = {}
 
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert.m21DurationToMeiDurDotsGrace(obj.duration, attr)
@@ -406,7 +337,7 @@ class M21ObjectConvert:
         withDuration: bool
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(note)
+        xmlId: str = M21Utilities.getXmlId(note)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -557,7 +488,7 @@ class M21ObjectConvert:
                 )
             )
             attr: dict[str, str] = {}  # above/below, etc
-            xmlId: str = M21ObjectConvert.getXmlId(artic)
+            xmlId: str = M21Utilities.getXmlId(artic)
             if xmlId:
                 attr['xml:id'] = xmlId
             if name:
@@ -596,7 +527,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -666,7 +597,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -703,7 +634,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
 
@@ -1087,7 +1018,7 @@ class M21ObjectConvert:
                 meterStream=scoreMeterStream
             )
         else:
-            attr['startid'] = f'#{M21ObjectConvert.getXmlId(first, required=True)}'
+            attr['startid'] = f'#{M21Utilities.getXmlId(first, required=True)}'
 
         if last is None or last is first:
             # no unique last element, we're done
@@ -1112,7 +1043,7 @@ class M21ObjectConvert:
                 meterStream=scoreMeterStream
             )
         else:
-            attr['endid'] = f'#{M21ObjectConvert.getXmlId(last, required=True)}'
+            attr['endid'] = f'#{M21Utilities.getXmlId(last, required=True)}'
 
     _ARPEGGIO_TYPE_TO_ARROW_AND_ORDER: dict[str, tuple[str, str]] = {
         'normal': ('', ''),
@@ -1137,6 +1068,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        customAttributes: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder
     ) -> None:
@@ -1145,16 +1077,16 @@ class M21ObjectConvert:
         last: m21.base.Music21Object = spanner.getLast()
         tag: str = ''
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(spanner)
+        xmlId: str = M21Utilities.getXmlId(spanner)
         if xmlId:
             attr['xml:id'] = xmlId
 
-        if isinstance(spanner, MeiBeamSpanner):
+        if isinstance(spanner, M21BeamSpanner):
             if hasattr(spanner, 'mei_beam'):
                 # already emitted as <beam> within <layer>
                 return
 
-        if isinstance(spanner, MeiTupletSpanner):
+        if isinstance(spanner, M21TupletSpanner):
             if hasattr(spanner, 'mei_tuplet'):
                 # already emitted as <tuplet> within <layer>
                 return
@@ -1198,7 +1130,7 @@ class M21ObjectConvert:
             dis, disPlace = M21ObjectConvert._DIS_AND_DIS_PLACE_FROM_M21_OTTAVA_TYPE[spanner.type]
             attr['dis'] = dis
             attr['dis.place'] = disPlace
-        elif isinstance(spanner, MeiBeamSpanner):
+        elif isinstance(spanner, M21BeamSpanner):
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
             # in attr as 'startid' and 'endid')
@@ -1206,9 +1138,9 @@ class M21ObjectConvert:
             for el in spanner.getSpannedElements():
                 if plistStr:
                     plistStr += ' '
-                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+                plistStr += M21Utilities.getXmlId(el, required=True)
             attr['plist'] = plistStr
-        elif isinstance(spanner, MeiTupletSpanner):
+        elif isinstance(spanner, M21TupletSpanner):
             tag = 'tupletSpan'
             M21ObjectConvert.fillInTupletAttributes(spanner.startTuplet, attr)
             # set up plist for every spanned element (yes, even the ones that are already
@@ -1217,9 +1149,9 @@ class M21ObjectConvert:
             for el in spanner.getSpannedElements():
                 if plistStr:
                     plistStr += ' '
-                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+                plistStr += M21Utilities.getXmlId(el, required=True)
             attr['plist'] = plistStr
-        elif isinstance(spanner, MeiTieSpanner):
+        elif isinstance(spanner, M21TieSpanner):
             if spanner.startTie.style != 'hidden':
                 tag = 'tie'
                 M21ObjectConvert.fillInTieAttributes(spanner.startTie, attr)
@@ -1264,6 +1196,7 @@ class M21ObjectConvert:
                             m21Score,
                             m21Measure,
                             scoreMeterStream,
+                            customAttributes,
                             spannerBundle,
                             tb=None,
                             attr=attr
@@ -1271,10 +1204,21 @@ class M21ObjectConvert:
                         # mark the Trill as handled, so when we see it during note.expressions
                         # processing, we won't emit it again.
                         expr.mei_trill_already_handled = True  # type: ignore
+                        M21Utilities.extendCustomM21Attributes(
+                            customAttributes,
+                            expr,
+                            ['mei_trill_already_handled']
+                        )
+
                         # mark the TrillExtension as handled, so when we (might) see it during
                         # Trill processing or measure-level SpannerAnchor scanning, we won't
                         # re-issue it.
                         spanner.mei_trill_already_handled = True  # type: ignore
+                        M21Utilities.extendCustomM21Attributes(
+                            customAttributes,
+                            spanner,
+                            ['mei_trill_already_handled']
+                        )
                         break
                 if tag:
                     break
@@ -1294,7 +1238,7 @@ class M21ObjectConvert:
             for el in arpeggio.getSpannedElements():
                 if plistStr:
                     plistStr += ' '
-                plistStr += M21ObjectConvert.getXmlId(el, required=True)
+                plistStr += M21Utilities.getXmlId(el, required=True)
             attr['plist'] = plistStr
 
         arrow: str
@@ -1318,10 +1262,10 @@ class M21ObjectConvert:
         tb: TreeBuilder
     ):
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(arpeggio)
+        xmlId: str = M21Utilities.getXmlId(arpeggio)
         if xmlId:
             attr['xml:id'] = xmlId
-        attr['startid'] = f'#{M21ObjectConvert.getXmlId(gn, required=True)}'
+        attr['startid'] = f'#{M21Utilities.getXmlId(gn, required=True)}'
         M21ObjectConvert.fillInArpeggioAttributes(arpeggio, attr)
         tb.start('arpeg', attr)
         tb.end('arpeg')
@@ -1383,6 +1327,7 @@ class M21ObjectConvert:
         m21Score: m21.stream.Score,
         m21Measure: m21.stream.Measure,
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
+        customAttributes: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder | None,
         attr: dict[str, str] | None = None,
@@ -1434,7 +1379,7 @@ class M21ObjectConvert:
                 last = trillExtension.getLast()
 
             attr = {}
-            xmlId: str = M21ObjectConvert.getXmlId(trill)
+            xmlId: str = M21Utilities.getXmlId(trill)
             if xmlId:
                 attr['xml:id'] = xmlId
             M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1470,8 +1415,18 @@ class M21ObjectConvert:
             tb.start('trill', attr)
             tb.end('trill')
             trill.mei_trill_already_handled = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                customAttributes,
+                trill,
+                ['mei_trill_already_handled']
+            )
             if trillExtension is not None:
                 trillExtension.mei_trill_already_handled = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    customAttributes,
+                    trillExtension,
+                    ['mei_trill_already_handled']
+                )
 
     @staticmethod
     def turnToMei(
@@ -1484,7 +1439,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(turn)
+        xmlId: str = M21Utilities.getXmlId(turn)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1528,7 +1483,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(mordent)
+        xmlId: str = M21Utilities.getXmlId(mordent)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1568,7 +1523,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ) -> None:
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(fermata)
+        xmlId: str = M21Utilities.getXmlId(fermata)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1655,7 +1610,7 @@ class M21ObjectConvert:
         tb: TreeBuilder,
     ):
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(obj)
+        xmlId: str = M21Utilities.getXmlId(obj)
         if xmlId:
             attr['xml:id'] = xmlId
         M21ObjectConvert._fillInStandardPostStavesAttributes(
@@ -1749,47 +1704,11 @@ class M21ObjectConvert:
 
     @staticmethod
     def _convertChordSymbolToMixedText(cs: m21.harmony.ChordSymbol, tb: TreeBuilder):
-        # Try to use the specified abbreviation that was imported from the original file
-        text: str = ''
-        if isinstance(cs, m21.harmony.NoChord):
-            text = cs.chordKindStr
-        elif hasattr(cs, 'c21_full_text'):
-            text = cs.c21_full_text  # type: ignore
-        elif cs.chordKindStr:
-            root: str = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(cs.root().name)
-            bass: str = M21ObjectConvert._m21PitchNameToSMUFLAccidentals(cs.bass().name)
-            text = root + cs.chordKindStr
-            if bass != root:
-                text = text + '/' + bass
-        else:
-            simplifiedCS: m21.harmony.ChordSymbol = deepcopy(cs)
-            M21Utilities.simplifyChordSymbol(simplifiedCS)
-            text = simplifiedCS.findFigure()
-            text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
-
+        text: str = M21Utilities.convertChordSymbolToText(cs)
         # Here is where we would start a 'rend' tag and do some style stuff (color, italic, etc)
-
         if text:
             tb.data(text)
-
         # Here is where we would end the 'rend' tag, if we had started it.
-
-    @staticmethod
-    def _m21PitchNameToSMUFLAccidentals(text: str) -> str:
-        output: str = text
-        if '#' in output:
-            output = re.sub(
-                '#',
-                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign'],
-                output
-            )
-        if '-' in output:
-            output = re.sub(
-                '-',
-                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign'],
-                output
-            )
-        return output
 
     @staticmethod
     def _convertMetronomeMarkToMixedText(mm: m21.tempo.MetronomeMark, tb: TreeBuilder):
@@ -1896,6 +1815,7 @@ class M21ObjectConvert:
 
     _M21_BARLINE_TYPE_OR_DIRECTION_TO_MEI_BARLINE_TYPE: dict[str, str] = {
         'regular': '',  # or 'normal'? (but update meiMeasureBarlineAttrCombine if you do that)
+        'heavy-light': '',  # treat heavy-light as normal (MEI has no such thing)
         'heavy': 'heavy',
         'dotted': 'dotted',
         'dashed': 'dashed',
@@ -1908,7 +1828,8 @@ class M21ObjectConvert:
 
     @staticmethod
     def m21BarlineToMeiMeasureBarlineAttr(
-        barline: m21.bar.Barline | None
+        barline: m21.bar.Barline | None,
+        customAttributes: dict[m21.base.Music21Object, list[str]]
     ) -> str:
         if barline is None:
             return ''
@@ -1920,6 +1841,11 @@ class M21ObjectConvert:
                 ]
             )
             barline.mei_emitted_as_measure_attr = True  # type: ignore
+            M21Utilities.extendCustomM21Attributes(
+                customAttributes,
+                barline,
+                ['mei_emitted_as_measure_attr']
+            )
             return output
 
         # not a repeat, use barline.type
@@ -1929,12 +1855,18 @@ class M21ObjectConvert:
             ]
         )
         barline.mei_emitted_as_measure_attr = True  # type: ignore
+        M21Utilities.extendCustomM21Attributes(
+            customAttributes,
+            barline,
+            ['mei_emitted_as_measure_attr']
+        )
         return output
 
     @staticmethod
     def m21BarlinesToMeiMeasureBarlineAttr(
         barline1: m21.bar.Barline | None,
-        barline2: m21.bar.Barline | None
+        barline2: m21.bar.Barline | None,
+        customAttributes: dict[m21.base.Music21Object, list[str]]
     ) -> str:
         # barline1 and barline2 are simultaneous, and need to be combined.
         # For example, barline1 may be the right barline of one measure, and barline2
@@ -1942,8 +1874,8 @@ class M21ObjectConvert:
         if barline1 is None and barline2 is None:
             return ''
 
-        attr1: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline1)
-        attr2: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline2)
+        attr1: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline1, customAttributes)
+        attr2: str = M21ObjectConvert.m21BarlineToMeiMeasureBarlineAttr(barline2, customAttributes)
 
         output: str = M21ObjectConvert.meiMeasureBarlineAttrCombine(attr1, attr2)
         return output
@@ -1963,7 +1895,7 @@ class M21ObjectConvert:
             return
 
         attr: dict[str, str] = {}
-        xmlId: str = M21ObjectConvert.getXmlId(barline)
+        xmlId: str = M21Utilities.getXmlId(barline)
         if xmlId:
             attr['xml:id'] = xmlId
         form: str
@@ -2084,31 +2016,6 @@ class M21ObjectConvert:
                 return False
 
         return True
-
-
-class MeiTemporarySpanner(m21.spanner.Spanner):
-    pass
-
-
-class MeiBeamSpanner(MeiTemporarySpanner):
-    pass
-
-
-class MeiTupletSpanner(MeiTemporarySpanner):
-    def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
-        super().__init__()
-        self.startTuplet: m21.duration.Tuplet = startTuplet
-
-
-class MeiTieSpanner(MeiTemporarySpanner):
-    def __init__(
-        self,
-        startTie: m21.tie.Tie,
-        startParentChord: m21.chord.Chord | None
-    ) -> None:
-        super().__init__()
-        self.startTie: m21.tie.Tie = startTie
-        self.startParentChord: m21.chord.Chord | None = startParentChord
 
 
 _M21_OBJECT_CONVERTER: dict[str, t.Callable[

@@ -112,7 +112,11 @@ class HumdrumFileBase(HumHash):
                             | OPT_NOTIE
                             | OPT_NONULL)
 
-    def __init__(self, fileName: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        fileName: str | Path | None = None,
+        acceptSyntaxErrors: bool = False
+    ) -> None:
         super().__init__()  # initialize the HumHash fields
 
         '''
@@ -125,6 +129,9 @@ class HumdrumFileBase(HumHash):
         // m_filename: name of the file which was loaded.
         '''
         # self._fileName: str = None # weirdly, appears not be set or used
+
+        self.acceptSyntaxErrors: bool = acceptSyntaxErrors
+        self.fixedSyntaxErrors: int = 0
 
         '''
         // m_segementlevel: segment level (e.g., work/movement)
@@ -711,11 +718,36 @@ class HumdrumFileBase(HumHash):
         # first handle simple cases where the spine assignments are one-to-one:
         if not prevLine.isInterpretation and not nextLine.isInterpretation:
             if prevLine.tokenCount != nextLine.tokenCount:
-                return self.setParseError(
-                    f'Error lines {prevLine.lineNumber} and {nextLine.lineNumber} '
-                    + f'not same length.\nLine {prevLine.lineNumber}: {prevLine.text}\n'
-                    + f'Line {nextLine.lineNumber}: {nextLine.text}\n'
-                )
+                if not self.acceptSyntaxErrors:
+                    return self.setParseError(
+                        f'Error lines {prevLine.lineNumber} and {nextLine.lineNumber} '
+                        + f'not same length.\nLine {prevLine.lineNumber}: {prevLine.text}\n'
+                        + f'Line {nextLine.lineNumber}: {nextLine.text}\n'
+                    )
+
+                # fix it instead
+                if nextLine.tokenCount > prevLine.tokenCount:
+                    # remove trailing tokens in nextLine to make up the difference
+                    for i in range(prevLine.tokenCount, nextLine.tokenCount):
+                        nextLine._tokens.pop(i)
+                        self.fixedSyntaxErrors += 1
+                    nextLine.createLineFromTokens()
+                else:
+                    # append appropriate null-ish tokens to nextLine to make up the difference
+                    ch: str = '.'  # for most spines, this is a fine do-nothing
+                    if nextLine.isBarline:
+                        if nextLine[0] is not None:
+                            ch = nextLine[0].text  # copy the first barline on the line
+                        else:
+                            ch = '='
+                    elif nextLine.isLocalComment:
+                        ch = '!'
+                    elif nextLine.isInterpretation:
+                        ch = '*'
+                    for _ in range(nextLine.tokenCount, prevLine.tokenCount):
+                        nextLine._tokens.append(HumdrumToken(ch))
+                        self.fixedSyntaxErrors += 1
+                    nextLine.createLineFromTokens()
 
             for i, prevTok in enumerate(prevLine.tokens()):
                 if nextLine[i] is not None:
@@ -897,14 +929,22 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 continue
 
             if not seenFirstExInterp and not line.isExclusiveInterpretation:
-                return self.setParseError(
-                    f'Error on line: {i+1}:\n'
-                    + 'Data found before exclusive interpretation\n'
-                    + f'LINE: {line.text}'
+                if not self.acceptSyntaxErrors:
+                    return self.setParseError(
+                        f'Error on line: {i+1}:\n'
+                        + 'Data found before exclusive interpretation\n'
+                        + f'LINE: {line.text}'
+                    )
+                # fix it instead (just ignore the line from now on)
+                self._lines[i] = HumdrumLine(
+                    '!! ignore spiny line before first exinterp: ' + line.text
                 )
+                self.fixedSyntaxErrors += 1
+                self._lines[i].createTokensFromLine()
+                continue
 
             if not seenFirstExInterp and line.isExclusiveInterpretation:
-                # first line of data in file
+                # first line of exinterp (**kern, etc) in file
                 seenFirstExInterp = True
                 dataType = []
                 sinfo = []
@@ -918,14 +958,39 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 continue
 
             if len(dataType) != line.tokenCount:
-                err = (
-                    f'Error on line {line.lineNumber}:\n'
-                    + f'Expected {len(dataType)} fields, but found {line.tokenCount}\n'
-                    + f'Line is: {line.text}'
-                )
-                if i > 0:
-                    err += f'\nPrevious line is {self._lines[i-1].text}'
-                return self.setParseError(err)
+                if not self.acceptSyntaxErrors:
+                    err = (
+                        f'Error on line {line.lineNumber}:\n'
+                        + f'Expected {len(dataType)} fields, but found {line.tokenCount}\n'
+                        + f'Line is: {line.text}'
+                    )
+                    if i > 0:
+                        err += f'\nPrevious line is {self._lines[i-1].text}'
+                    return self.setParseError(err)
+
+                # fix it instead
+                if line.tokenCount > len(dataType):
+                    # remove trailing tokens to make up the difference
+                    for i in range(len(dataType), line.tokenCount):
+                        line._tokens.pop(i)
+                        self.fixedSyntaxErrors += 1
+                    line.createLineFromTokens()
+                else:
+                    # append appropriate null-ish tokens to make up the difference
+                    ch: str = '.'  # for most spines, this is a fine do-nothing
+                    if line.isBarline:
+                        if line[0] is not None:
+                            ch = line[0].text  # copy the first barline on the line
+                        else:
+                            ch = '='
+                    elif line.isLocalComment:
+                        ch = '!'
+                    elif line.isInterpretation:
+                        ch = '*'
+                    for _ in range(line.tokenCount, len(dataType)):
+                        self.fixedSyntaxErrors += 1
+                        line._tokens.append(HumdrumToken(ch))
+                    line.createLineFromTokens()
 
             for j, token in enumerate(line.tokens()):
                 token.spineInfo = sinfo[j]

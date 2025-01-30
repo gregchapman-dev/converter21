@@ -256,6 +256,7 @@ class MeasureData:
             emptyStartDuration: HumNumIn = 0,
             emptyEndDuration: HumNumIn = 0
     ) -> None:
+        ownerWriter = self.ownerStaff.ownerPart.ownerScore.ownerWriter
         event: EventData
         durations: list[HumNum]
         startTime: HumNum
@@ -294,6 +295,12 @@ class MeasureData:
                 )
                 if noteOrChord:
                     noteOrChord.humdrum_sf_or_sfz = element  # type: ignore
+                    M21Utilities.extendCustomM21Attributes(
+                        ownerWriter.customM21AttrsToDelete,
+                        noteOrChord,
+                        ['humdrum_sf_or_sfz']
+                    )
+
                     continue
 
             # handle any gaps between elements by emitting hidden rest(s)

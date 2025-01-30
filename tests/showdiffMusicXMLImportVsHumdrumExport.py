@@ -3,6 +3,7 @@ import tempfile
 import argparse
 import sys
 import subprocess
+import json
 
 from music21.base import VERSION_STR
 import music21 as m21
@@ -66,11 +67,7 @@ def runTheFullTest(inputPath: Path):
         score2, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
     )
     print('loaded exported Humdrum score')
-    if score_lin2.n_of_parts != score_lin3.n_of_parts:
-        print(f'numParts {score_lin2.n_of_parts} vs {score_lin3.n_of_parts}')
-        return
-
-    diffList, _cost = Comparison.annotated_scores_diff(score_lin2, score_lin3)
+    diffList, cost = Comparison.annotated_scores_diff(score_lin2, score_lin3)
     print('diffed the two scores:')
     numDiffs = len(diffList)
     print(f'\tnumber of differences = {numDiffs}')
@@ -80,8 +77,14 @@ def runTheFullTest(inputPath: Path):
         print('marked the scores to show differences')
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
-        textOut: str = Visualization.get_text_output(score1, score2, diffList)
+
+    serOut: dict[str, str] = Visualization.get_ser_output(cost, score_lin2)
+    jsonStr: str = json.dumps(serOut)
+    print(jsonStr)
+    textOut: str = Visualization.get_text_output(score1, score2, diffList)
+    if textOut:
         print(textOut)
+
 #     print('imported MusicXML score written to: ', score1.write('musicxml', makeNotation=False))
 #     print('exported Humdrum score written to: ', score2.write('musicxml', makeNotation=False))
     return

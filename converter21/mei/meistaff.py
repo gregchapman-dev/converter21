@@ -40,6 +40,8 @@ class MeiStaff:
         staffNStr: str,
         m21Measure: m21.stream.Measure,
         parentScore,  # MeiScore
+        # custom m21 attrs to delete later (children will extend this)
+        customAttrs: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
     ) -> None:
         if t.TYPE_CHECKING:
@@ -49,6 +51,7 @@ class MeiStaff:
         self.staffNStr: str = staffNStr
         self.m21Measure = m21Measure
         self.m21Score = parentScore.m21Score
+        self.customAttrs: dict[m21.base.Music21Object, list[str]] = customAttrs
         self.spannerBundle = spannerBundle
         self.scoreMeterStream = parentScore.scoreMeterStream
         self.nextFreeVoiceNumber = 1
@@ -63,7 +66,7 @@ class MeiStaff:
             self.theOneLayerIsTheMeasureItself = True
 
         for voice in voices:
-            self.layers.append(MeiLayer(voice, self, parentScore, spannerBundle))
+            self.layers.append(MeiLayer(voice, self, parentScore, customAttrs, spannerBundle))
 
     def makeRootElement(self, tb: TreeBuilder):
         self.nextFreeVoiceNumber = 1
@@ -126,7 +129,7 @@ class MeiStaff:
                         # gather up non-zero offset clefs/timesigs/keysigs to emit in MeiLayer
                         if len(self.layers) > 1:
                             # we'll need an xmlId for any sameas references from extra layers.
-                            M21ObjectConvert.assureXmlId(el)
+                            M21Utilities.assureXmlId(el)
                         extraStaffChanges.append((el, elOffsetInMeasure))
 
             if staffDefEmitted:
@@ -171,6 +174,7 @@ class MeiStaff:
                                 self.m21Score,
                                 self.m21Measure,
                                 self.scoreMeterStream,
+                                self.customAttrs,
                                 self.spannerBundle,
                                 tb
                             )

@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 import argparse
 import sys
+import json
 import typing as t
 import music21 as m21
 from music21.base import VERSION_STR
@@ -270,7 +271,7 @@ def runTheDiff(krnPath: Path, results) -> bool:
         success: bool = True
         meiwPath = Path(tempfile.gettempdir())
         meiwPath /= (krnPath.stem + '_Written')
-        meiwPath = meiwPath.with_suffix('.mei')
+        meiwPath = meiwPath.with_suffix('.4.mei')
         with open(meiwPath, 'wt') as f:
             success = meiw.write(f)
         if not success:
@@ -323,16 +324,8 @@ def runTheDiff(krnPath: Path, results) -> bool:
         annotatedScore2 = AnnScore(
             score2, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
         )
-        if annotatedScore1.n_of_parts != annotatedScore2.n_of_parts:
-            print(f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}')
-            print(
-                f'numParts {annotatedScore1.n_of_parts} vs {annotatedScore2.n_of_parts}',
-                file=results
-            )
-            results.flush()
-            return False
 
-        op_list, _cost = Comparison.annotated_scores_diff(
+        op_list, cost = Comparison.annotated_scores_diff(
                                         annotatedScore1, annotatedScore2)
         numDiffs = len(op_list)
         print(f'numDiffs = {numDiffs}')
@@ -342,10 +335,20 @@ def runTheDiff(krnPath: Path, results) -> bool:
             summ: str = '\t' + oplistSummary(op_list, score1, score2)
             print(summ)
             print(summ, file=results)
-            textOut: str = Visualization.get_text_output(score1, score2, op_list)
+
+        # print SER dict even if there are no diffs
+        serOut: dict = Visualization.get_ser_output(cost, annotatedScore2)
+        jsonStr: str = json.dumps(serOut)
+        print(jsonStr)
+        print(jsonStr, file=results)
+
+        textOut: str = Visualization.get_text_output(score1, score2, op_list)
+        if textOut:
             print(textOut)
             print(textOut, file=results)
             results.flush()
+
+        if numDiffs > 0:
             return False
         return True
     except KeyboardInterrupt:

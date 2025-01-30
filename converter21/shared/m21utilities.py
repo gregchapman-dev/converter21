@@ -19,6 +19,9 @@ import typing as t
 from fractions import Fraction
 from copy import copy, deepcopy
 
+import pickle
+import zlib
+
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
 from music21.common.numberTools import opFrac
@@ -35,6 +38,10 @@ class NoMusic21VersionError(Exception):
 
 
 class Converter21InternalError(Exception):
+    pass
+
+
+class FreezeThawError(Exception):
     pass
 
 
@@ -152,6 +159,499 @@ class M21StaffGroupDescriptionTree:
         # children == subgroups, parent = enclosing group (None for top)
         self.children: list[M21StaffGroupDescriptionTree] = []
         self.parent: M21StaffGroupDescriptionTree | None = None
+
+# These are additional temporary spanners that can come in handy
+# in both MEI export and in MusicEngine.
+class M21TemporarySpanner(m21.spanner.Spanner):
+    pass
+
+
+class M21BeamSpanner(M21TemporarySpanner):
+    pass
+
+
+class M21TupletSpanner(M21TemporarySpanner):
+    def __init__(self, startTuplet: m21.duration.Tuplet) -> None:
+        super().__init__()
+        self.startTuplet: m21.duration.Tuplet = startTuplet
+
+
+class M21TieSpanner(M21TemporarySpanner):
+    def __init__(
+        self,
+        startTie: m21.tie.Tie,
+        startParentChord: m21.chord.Chord | None
+    ) -> None:
+        super().__init__()
+        self.startTie: m21.tie.Tie = startTie
+        self.startParentChord: m21.chord.Chord | None = startParentChord
+
+
+# This FreezeThaw stuff comes from music21, and then I modified it to do everything
+# without writing to a file.
+class StreamFreezeThawBase:
+    def __init__(self):
+        self.stream = None
+
+
+# -----------------------------------------------------------------------------
+class StreamFreezer(StreamFreezeThawBase):
+    def __init__(self, streamObj=None, fastButUnsafe=False, topLevel=True, streamIds=None):
+        super().__init__()
+        # must make a deepcopy, as we will be altering .sites
+        self.stream = None
+        # clear all sites only if the top level.
+        self.topLevel = topLevel
+        self.streamIds = streamIds
+
+        self.subStreamFreezers = {}  # this will keep track of sub freezers for spanners
+
+        if streamObj is not None and fastButUnsafe is False:
+            # deepcopy necessary because we mangle sites in the objects
+            # before serialization
+            self.stream = deepcopy(streamObj)
+            # self.stream = streamObj
+        elif streamObj is not None:
+            self.stream = streamObj
+
+    def packStream(self, streamObj=None):
+        # do all things necessary to set up the stream
+        if streamObj is None:
+            streamObj = self.stream
+        self.setupSerializationScaffold(streamObj)
+        storage = {'stream': streamObj, 'm21Version': m21.base.VERSION}
+        return storage
+
+    def setupSerializationScaffold(self, streamObj=None):
+        '''
+        Prepare this stream and all of its contents for pickle/pickling, that
+        is, serializing and storing an object representation on file or as a string.
+
+        The `topLevel` and `streamIdsFound` arguments are used to keep track of recursive calls.
+
+        Note that this is a destructive process: elements contained within this Stream
+        will have their sites cleared of all contents not in the hierarchy
+        of the Streams. Thus, when doing a normal .write('pickle')
+        the Stream is deepcopied before this method is called. The
+        attribute `fastButUnsafe = True` setting of StreamFreezer ignores the destructive
+        effects of these processes and skips the deepcopy.
+        '''
+        if streamObj is None:
+            streamObj = self.stream
+            if streamObj is None:
+                raise FreezeThawError('You need to pass in a stream when creating to work')
+        # might not work when recurse yields...
+        allEls = list(streamObj.recurse(restoreActiveSites=False))
+
+        if self.topLevel is True:
+            self.findActiveStreamIdsInHierarchy(streamObj)
+
+        for el in allEls:
+            if isinstance(el, m21.variant.Variant):
+                # works like a whole new hierarchy...  # no need for deepcopy
+                subSF = StreamFreezer(
+                    el._stream,
+                    fastButUnsafe=True,
+                    streamIds=self.streamIds,
+                    topLevel=False,
+                )
+                subSF.setupSerializationScaffold()
+            elif isinstance(el, m21.spanner.Spanner):
+                # works like a whole new hierarchy...  # no need for deepcopy
+                subSF = StreamFreezer(
+                    el.spannerStorage,
+                    fastButUnsafe=True,
+                    streamIds=self.streamIds,
+                    topLevel=False,
+                )
+                subSF.setupSerializationScaffold()
+            elif el.isStream:
+                self.removeStreamStatusClient(el)
+                # removing seems to create problems for jsonPickle with Spanners
+
+        self.removeStreamStatusClient(streamObj)
+        # removing seems to create problems for jsonPickle with Spanners
+        self.setupStoredElementOffsetTuples(streamObj)
+
+        if self.topLevel is True:
+            self.recursiveClearSites(streamObj)
+
+    def removeStreamStatusClient(self, streamObj):
+        '''
+        if s is a stream then
+
+        s.streamStatus._client is s
+
+        this can be hard to pickle, so this method removes the streamStatus._client from the
+        streamObj (not recursive).  Called by setupSerializationScaffold.
+        '''
+        if hasattr(streamObj, 'streamStatus'):
+            streamObj.streamStatus.client = None
+
+    def recursiveClearSites(self, startObj):
+        '''
+        recursively clear all sites, including activeSites, taking into account
+        that spanners and variants behave differently.
+
+        Called by setupSerializationScaffold.
+
+        To be run after setupStoredElementOffsetTuples() has been run
+
+        This predicament is why when the standard freezeThaw call is made, what is frozen is a
+        deepcopy of the Stream so that nothing is left in an unusable position
+        '''
+        if hasattr(startObj, '_storedElementOffsetTuples'):
+            storedElementOffsetTuples = startObj._storedElementOffsetTuples
+            for el, unused_offset in storedElementOffsetTuples:
+                if el.isStream:
+                    self.recursiveClearSites(el)
+                if isinstance(el, m21.spanner.Spanner):
+                    self.recursiveClearSites(el.spannerStorage)
+                if isinstance(el, m21.variant.Variant):
+                    self.recursiveClearSites(el._stream)
+                if hasattr(el, '_derivation'):
+                    el._derivation = m21.derivation.Derivation()  # reset
+
+                if hasattr(el, '_offsetDict'):
+                    el._offsetDict = {}
+                el.sites.clear()
+                el.activeSite = None
+            startObj._derivation = m21.derivation.Derivation()  # reset
+            startObj.sites.clear()
+            startObj.activeSite = None
+
+    def setupStoredElementOffsetTuples(self, streamObj):
+        '''
+        move all elements from ._elements and ._endElements
+        to a new attribute ._storedElementOffsetTuples
+        which contains a list of tuples of the form
+        (el, offset or 'end').
+
+        Called by setupSerializationScaffold.
+        '''
+        if hasattr(streamObj, '_storedElementOffsetTuples'):
+            # in the case of a spanner storing a Stream, like a StaffGroup
+            # spanner, it is possible that the elements have already been
+            # transferred.  Thus, we should NOT do this again!
+            return
+
+        storedElementOffsetTuples = []
+        for e in streamObj._elements:
+            elementTuple = (e, streamObj.elementOffset(e))
+            storedElementOffsetTuples.append(elementTuple)
+            if e.isStream:
+                self.setupStoredElementOffsetTuples(e)
+            e.sites.remove(streamObj)
+            e.activeSite = None
+            # e._preFreezeId = id(e)
+            # elementDict[id(e)] = s.elementOffset(e)
+        for e in streamObj._endElements:
+            elementTuple = (e, 'end')
+            storedElementOffsetTuples.append(elementTuple)
+            if e.isStream:  # pragma: no cover
+                # streams should not be in endElements, but
+                # we leave this here just to be safe.
+                self.setupStoredElementOffsetTuples(e)
+            e.sites.remove(streamObj)
+            e.activeSite = None
+
+        streamObj._storedElementOffsetTuples = storedElementOffsetTuples
+        # streamObj._elementTree = None
+        streamObj._offsetDict = {}
+        streamObj._elements = []
+        streamObj._endElements = []
+        streamObj.coreElementsChanged()
+
+    def findActiveStreamIdsInHierarchy(
+        self,
+        hierarchyObject=None,
+        getSpanners=True,
+        getVariants=True
+    ) -> list[int]:
+        '''
+        Return a list of all Stream ids anywhere in the hierarchy.  By id,
+        we mean `id(s)` not `s.id` -- so they are memory locations and unique.
+
+        Stores them in .streamIds.
+
+        if hierarchyObject is None, uses self.stream.
+
+        Spanners are included unless getSpanners is False
+
+        >>> staffGroup = layout.StaffGroup([p1, p2])
+        >>> sc.insert(0, staffGroup)
+
+        :class:`~music21.layout.StaffGroup` is a spanner, so
+        it should be found
+
+        >>> sf2 = freezeThaw.StreamFreezer(sc, fastButUnsafe=True)
+        >>> foundIds = sf2.findActiveStreamIdsInHierarchy()
+
+        But you won't find the id of the spanner itself in
+        the foundIds:
+
+        >>> id(staffGroup) in foundIds
+        False
+
+        instead it's the id of the storage object:
+
+        >>> id(staffGroup.spannerStorage) in foundIds
+        True
+
+        Variants are treated similarly.
+
+        The method also sets self.streamIds to the returned list.
+        '''
+        if hierarchyObject is None:
+            streamObj = self.stream
+        else:
+            streamObj = hierarchyObject
+        streamsFoundGenerator = streamObj.recurse(streamsOnly=True,
+                                                  restoreActiveSites=False,
+                                                  includeSelf=True)
+        streamIds = [id(s) for s in streamsFoundGenerator]
+
+        if getSpanners is True:
+            spannerBundle = streamObj.spannerBundle
+            streamIds += spannerBundle.getSpannerStorageIds()
+
+        if getVariants is True:
+            for el in streamObj.recurse(includeSelf=True).getElementsByClass(m21.variant.Variant):
+                streamIds += self.findActiveStreamIdsInHierarchy(el._stream)
+
+        # should not happen that there are duplicates, but possible with spanners...
+        # Python's uniq value...
+        streamIds = list(set(streamIds))
+
+        self.streamIds = streamIds
+        return streamIds
+
+    # --------------------------------------------------------------------------
+
+    def parseWriteFmt(self, fmt):
+        '''
+        Parse a passed-in write format
+        '''
+        if fmt is None:  # this is the default
+            return 'pickle'
+        fmt = fmt.strip().lower()
+        if fmt in ['p', 'pickle']:
+            return 'pickle'
+        elif fmt in ['jsonpickle', 'json']:
+            return 'jsonpickle'
+        else:
+            return 'pickle'
+
+    def write(self, fmt='pickle', zipType=None, **keywords) -> bytes | str:
+        '''
+        For a supplied Stream, write a serialized version to
+        string in either 'pickle' or 'jsonpickle' format and
+        return the resulting string.
+
+        jsonpickle is the better format for transporting from
+        one computer to another, but slower and may have some bugs.
+
+        If zipType == 'zlib' then zlib compression is done after serializing.
+        No other compression types are currently supported.
+        '''
+        output: bytes | str
+        if zipType not in (None, 'zlib'):  # pragma: no cover
+            raise FreezeThawError('Cannot zip files except zlib...')
+
+        fmt = self.parseWriteFmt(fmt)
+
+        storage = self.packStream(self.stream)
+
+        if fmt == 'pickle':
+            # previously used highest protocol, but now protocols are changing too
+            # fast, and might not be compatible for sharing.
+            # packStream() returns a storage dictionary
+            try:
+                output = pickle.dumps(storage)
+                if zipType == 'zlib':
+                    output = zlib.compress(output)
+            except Exception as e:
+                print(f'StreamFreezer: failed {e}')
+                output = b''
+
+        elif fmt == 'jsonpickle':
+            import jsonpickle  # type: ignore
+            output = jsonpickle.encode(storage, **keywords)
+            if t.TYPE_CHECKING:
+                assert isinstance(output, str)
+            if zipType == 'zlib':
+                output = zlib.compress(output.encode())
+
+        else:  # pragma: no cover
+            print(f'bad StreamFreezer format: {fmt}')
+            output = b''
+
+        return output
+
+
+class StreamThawer(StreamFreezeThawBase):
+    '''
+    This class is used to thaw a data string into a Stream
+    '''
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stream: m21.stream.Score | None = None
+
+    def teardownSerializationScaffold(self, streamObj=None):
+        '''
+        After rebuilding this Stream from pickled storage, prepare this as a normal `Stream`.
+
+        If streamObj is None, runs it on the embedded stream
+        '''
+        if streamObj is None:  # pragma: no cover
+            streamObj = self.stream
+            if streamObj is None:
+                raise FreezeThawError('You need to pass in a stream when creating to work')
+
+        storedAutoSort = streamObj.autoSort
+        streamObj.autoSort = False
+
+        self.restoreElementsFromTuples(streamObj)
+
+        self.restoreStreamStatusClient(streamObj)
+        # removing seems to create problems for jsonPickle with Spanners
+        allEls = list(streamObj.recurse())
+
+        for e in allEls:
+            eClasses = e.classes
+            if 'Variant' in eClasses:
+                # works like a whole new hierarchy...  # no need for deepcopy
+                subSF = StreamThawer()
+                subSF.teardownSerializationScaffold(e._stream)
+                e._cache = {}
+                # for el in e._stream.flatten():
+                #    print(el, el.offset, el.sites.siteDict)
+            elif 'Spanner' in eClasses:
+                subSF = StreamThawer()
+                subSF.teardownSerializationScaffold(e.spannerStorage)
+                e._cache = {}
+            elif e.isStream:
+                self.restoreStreamStatusClient(e)
+                # removing seems to create problems for jsonPickle with Spanners
+
+            # e.wrapWeakref()
+
+        # restore to whatever it was
+        streamObj.autoSort = storedAutoSort
+
+    def restoreElementsFromTuples(self, streamObj):
+        '''
+        Take a Stream with elements and offsets stored in
+        a list of tuples (element, offset or 'end') at
+        _storedElementOffsetTuples
+        and restore it to the ._elements and ._endElements lists
+        in the proper locations.
+        '''
+        if hasattr(streamObj, '_storedElementOffsetTuples'):
+            # streamObj._elementTree = ElementTree(source=streamObj)
+            for e, offset in streamObj._storedElementOffsetTuples:
+                if offset != 'end':
+                    try:
+                        streamObj.coreInsert(offset, e)
+                    except AttributeError:  # pragma: no cover
+                        print('Problem in decoding... some debug info...')
+                        print(offset, e)
+                        print(streamObj)
+                        print(streamObj.activeSite)
+                        raise
+                else:
+                    streamObj.coreStoreAtEnd(e)
+            del streamObj._storedElementOffsetTuples
+            streamObj.coreElementsChanged()
+
+        for subElement in streamObj:
+            if subElement.isStream is True:
+                # note that the elements may have already been restored
+                # if the spanner stores a part or something in the Stream
+                # for instance in a StaffGroup object
+                self.restoreElementsFromTuples(subElement)
+
+    def restoreStreamStatusClient(self, streamObj):
+        '''
+        Restore the streamStatus client to point to the Stream
+        (do we do this for derivations?  No: there should not be derivations stored.
+        Other objects?  Unclear...)
+        '''
+        if hasattr(streamObj, 'streamStatus'):
+            streamObj.streamStatus.client = streamObj
+
+    def unpackStream(self, storage):
+        '''
+        Convert from storage dictionary to Stream.
+        '''
+        version = storage['m21Version']
+        if version != m21.base.VERSION:  # pragma: no cover
+            print(
+                'this pickled file is out of date and may not function properly.',
+                file=sys.stderr
+            )
+        streamObj = storage['stream']
+
+        self.teardownSerializationScaffold(streamObj)
+        return streamObj
+
+    def parseOpenFmt(self, storage):
+        '''
+        Look at the file and determine the format
+        '''
+        if isinstance(storage, bytes):
+            if storage.startswith(b'{"'):  # pragma: no cover
+                # was m21Version": {"py/tuple" but order of dict may change
+                return 'jsonpickle'
+            else:
+                return 'pickle'
+        else:
+            if storage.startswith('{"'):
+                # was m21Version": {"py/tuple" but order of dict may change
+                return 'jsonpickle'
+            else:  # pragma: no cover
+                return 'pickle'
+
+    def open(self, fileData: bytes, zipType=None):
+        '''
+        Take bytes representing a Frozen(pickled/jsonpickled)
+        Stream and convert it to a normal Stream.
+
+        if format is None then the format is automatically
+        determined from the bytes contents.
+        '''
+        fmt = self.parseOpenFmt(fileData)
+        if fmt == 'pickle':
+            if zipType is None:
+                try:
+                    storage = pickle.loads(fileData)
+                except Exception as e:
+                    print(f'Problem in thawing score: {e}', file=sys.stderr)
+                    return
+            elif zipType == 'zlib':
+                try:
+                    uncompressed = zlib.decompress(fileData)
+                    storage = pickle.loads(uncompressed)
+                except Exception as e:
+                    print(f'Problem in thawing zipped score: {e}', file=sys.stderr)
+                    return
+            else:
+                print(f'Unknown zipType {zipType}', file=sys.stderr)
+                return
+
+            self.stream = self.unpackStream(storage)
+        elif fmt == 'jsonpickle':
+            import jsonpickle
+            try:
+                storage = jsonpickle.decode(fileData)
+            except Exception as e:
+                print(f'Problem in thawing jsonpickled score: {e}', file=sys.stderr)
+                return
+
+            self.stream = self.unpackStream(storage)
+        else:  # pragma: no cover
+            print(f'bad StreamFreezer format: {fmt!r}', file=sys.stderr)
 
 
 class M21Utilities:
@@ -915,14 +1415,30 @@ class M21Utilities:
         )
 
     @staticmethod
-    def splitComplexRestDurations(s: m21.stream.Stream) -> None:
+    def splitComplexRestDurations(s: m21.stream.Stream, onlyHidden: bool = False) -> None:
         # only handles rests that are in s directly (does not recurse)
         # always in-place, never adds ties (because they're rests)
         # loses all beams, so we can only do this on rests!
         rest: m21.note.Rest
         for rest in s.getElementsByClass('Rest'):
-            if rest.duration.type != 'complex':
+            if onlyHidden:
+                if not rest.hasStyleInformation:
+                    continue
+                if not rest.style.hideObjectOnPrint:
+                    continue
+
+            if rest.duration.type != 'complex' and rest.duration.linked:
                 continue
+
+            if rest.duration.type != 'complex' and not rest.duration.linked:
+                # "visual" type may not be complex, but check the "gestural" quarterLength
+                # to be sure.
+                qlconv: m21.duration.QuarterLengthConversion = (
+                    m21.duration.quarterConversion(rest.duration.quarterLength)
+                )
+                if len(qlconv.components) == 1:
+                    continue
+
             insertPoint = rest.offset
             restList: tuple[m21.note.Rest, ...] = M21Utilities.splitComplexRestDuration(rest)
             s.replace(rest, restList[0])
@@ -940,9 +1456,21 @@ class M21Utilities:
 
     @staticmethod
     def splitComplexRestDuration(rest: m21.note.Rest) -> tuple[m21.note.Rest, ...]:
-        atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
+        if rest.duration.linked:
+            components: tuple[m21.duration.DurationTuple, ...] = rest.duration.components
+            atm: OffsetQL = rest.duration.aggregateTupletMultiplier()
+        else:
+            qlconv: m21.duration.QuarterLengthConversion = (
+                m21.duration.quarterConversion(rest.duration.quarterLength)
+            )
+            components = qlconv.components
+            if qlconv.tuplet is None:
+                atm = 1.0
+            else:
+                atm = qlconv.tuplet.tupletMultiplier()
+
         quarterLengthList: list[OffsetQLIn] = [
-            float(c.quarterLength * atm) for c in rest.duration.components
+            float(c.quarterLength * atm) for c in components
         ]
         splits: tuple[m21.note.Rest, ...] = (
             rest.splitByQuarterLengths(quarterLengthList, addTies=False)  # type: ignore
@@ -1110,6 +1638,16 @@ class M21Utilities:
         if t.TYPE_CHECKING:
             assert timeSig is None or isinstance(timeSig, (m21.meter.TimeSignature))
         return timeSig
+
+    @staticmethod
+    def getTimeSigFromStartOfStream(
+        s: m21.stream.Stream[m21.meter.TimeSignature]
+    ) -> m21.meter.TimeSignature | None:
+        meterStream: m21.stream.Stream = (
+            s.getElementsByClass(m21.meter.TimeSignature).stream()
+        )
+
+        return M21Utilities.getActiveTimeSigFromMeterStream(0., meterStream)
 
     @staticmethod
     def m21VersionIsAtLeast(neededVersion: tuple[int, int, int, str]) -> bool:
@@ -2370,9 +2908,47 @@ class M21Utilities:
         SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['accidentalSharpSharp']: '##',
     }
 
+    @staticmethod
+    def m21PitchNameToSMUFLAccidentals(text: str) -> str:
+        output: str = text
+        if '#' in output:
+            output = re.sub(
+                '#',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicSharpSign'],
+                output
+            )
+        if '-' in output:
+            output = re.sub(
+                '-',
+                SharedConstants.SMUFL_NAME_TO_UNICODE_CHAR['musicFlatSign'],
+                output
+            )
+        return output
+
     # ============================
     # ChordSymbol support routines
     # ============================
+
+    @staticmethod
+    def convertChordSymbolToText(cs: m21.harmony.ChordSymbol) -> str:
+        # Try to use the specified abbreviation that was imported from the original file
+        text: str = ''
+        if isinstance(cs, m21.harmony.NoChord):
+            text = cs.chordKindStr
+        elif hasattr(cs, 'c21_full_text'):
+            text = cs.c21_full_text  # type: ignore
+        elif cs.chordKindStr:
+            root: str = M21Utilities.m21PitchNameToSMUFLAccidentals(cs.root().name)
+            bass: str = M21Utilities.m21PitchNameToSMUFLAccidentals(cs.bass().name)
+            text = root + cs.chordKindStr
+            if bass != root:
+                text = text + '/' + bass
+        else:
+            simplifiedCS: m21.harmony.ChordSymbol = deepcopy(cs)
+            M21Utilities.simplifyChordSymbol(simplifiedCS)
+            text = simplifiedCS.findFigure()
+            text = M21Utilities.convertChordSymbolFigureToPrintableText(text)
+        return text
 
     @staticmethod
     def convertChordSymbolFigureToPrintableText(text: str, removeNoteNames: bool = False) -> str:
@@ -2467,6 +3043,13 @@ class M21Utilities:
             i += 1
 
         return output
+
+    @staticmethod
+    def updateChordSymbolFullText(cs: m21.harmony.ChordSymbol):
+        if not hasattr(cs, 'c21_full_text'):
+            return
+        # For now, don't bother trying to make it like it was, just get rid of c21_full_text
+        del cs.c21_full_text
 
     @staticmethod
     def chordSymbolHasAlters(cs: m21.harmony.ChordSymbol) -> bool:
@@ -3073,7 +3656,7 @@ class M21Utilities:
             cs.figure = None  # next get will update it
 
     @staticmethod
-    def _updatePitches(cs: m21.harmony.ChordSymbol):
+    def updatePitches(cs: m21.harmony.ChordSymbol):
         # fix bug in cs._updatePitches (it doesn't know about 'augmented' ninths)
         def adjustOctaves(cs, pitches):
             from music21 import pitch, chord
@@ -3205,7 +3788,7 @@ class M21Utilities:
                 # maybe cs.chordKind is a known abbreviation?
                 if cs.chordKind in m21.harmony.getAbbreviationListGivenChordType(k):
                     cs.chordKind = k
-                    M21Utilities._updatePitches(cs)
+                    M21Utilities.updatePitches(cs)
                     fixedIt = True
                     break
 
@@ -3216,7 +3799,7 @@ class M21Utilities:
             # we can also use our own lookup (on chordKind)
             if cs.chordKind in M21Utilities.EXTRA_CHORD_KINDS:
                 cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKind]
-                M21Utilities._updatePitches(cs)
+                M21Utilities.updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -3227,7 +3810,7 @@ class M21Utilities:
                 # maybe cs.chordKindStr is a known abbreviation?
                 if cs.chordKindStr in m21.harmony.getAbbreviationListGivenChordType(k):
                     cs.chordKind = k
-                    M21Utilities._updatePitches(cs)
+                    M21Utilities.updatePitches(cs)
                     fixedIt = True
                     break
 
@@ -3238,7 +3821,7 @@ class M21Utilities:
             # we can also use our own lookup (on chordKindStr)
             if cs.chordKindStr in M21Utilities.EXTRA_CHORD_KINDS:
                 cs.chordKind = M21Utilities.EXTRA_CHORD_KINDS[cs.chordKindStr]
-                M21Utilities._updatePitches(cs)
+                M21Utilities.updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -3253,7 +3836,7 @@ class M21Utilities:
                 cs.addChordStepModification(
                     m21.harmony.ChordStepModification(modType='add', degree=9)
                 )
-                M21Utilities._updatePitches(cs)
+                M21Utilities.updatePitches(cs)
                 fixedIt = True
 
             if fixedIt:
@@ -3283,6 +3866,167 @@ class M21Utilities:
                 continue
 
         return fixme
+
+    # Edit this list of characters as desired (but be careful about 'xml:id' value rules)
+    _XMLID_BASE_ALPHABET = tuple("abcdefghijklmnopqrstuvwxyz")
+    # _XMLID_BASE_DICT = dict((c, v) for v, c in enumerate(_XMLID_BASE_ALPHABET))
+    _XMLID_BASE_LEN = len(_XMLID_BASE_ALPHABET)
+#     def alphabet_decode(encodedStr: str) -> int:
+#         num: int = 0
+#         for char in encodedStr:
+#             num = num * M21Utilities._XMLID_BASE_LEN + M21Utilities._XMLID_BASE_DICT[char]
+#         return num
+
+
+    @staticmethod
+    def makeXmlIdFrom(identifier: int | str, prefix: str) -> str:
+        output: str = ''
+
+        def alphabet_encode(numToEncode: int) -> str:
+            if numToEncode == 0:
+                return M21Utilities._XMLID_BASE_ALPHABET[0]
+
+            encoded: str = ''
+            while numToEncode:
+                numToEncode, remainder = divmod(numToEncode, M21Utilities._XMLID_BASE_LEN)
+                encoded = M21Utilities._XMLID_BASE_ALPHABET[remainder] + encoded
+            return encoded
+
+        if isinstance(identifier, str):
+            # non-empty str, use as is
+            output = identifier
+        elif (isinstance(identifier, int)
+                and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
+            # Nice low integer, use as is (converted to str)
+            output = str(identifier)
+        elif isinstance(identifier, int):
+            # Actually a memory location, replace with nice short ASCII string
+            output = alphabet_encode(identifier)
+        else:
+            raise Converter21InternalError('identifier not int or str')
+
+        if not prefix:
+            return output
+
+        if not output.lower().startswith(prefix.lower()):
+            # don't put a prefix on that's already there
+            output = prefix + '-' + output
+        return output
+
+    @staticmethod
+    def getXmlIdPrefixFor(obj: m21.base.Music21Object) -> str:
+        # This tries to match what Verovio's Humdrum import does (the names are MEI-ish).
+        if isinstance(obj, m21.stream.Voice):
+            return 'layer'
+        if isinstance(obj, m21.clef.Clef):
+            return 'clef'
+        if isinstance(obj, m21.key.KeySignature):
+            return 'keysig'
+        if isinstance(obj, m21.meter.TimeSignature):
+            return 'metersig'
+        if isinstance(obj, m21.expressions.TextExpression):
+            return 'dir'
+        if isinstance(obj, m21.harmony.ChordSymbol):
+            return 'harm'
+        if isinstance(obj, m21.tempo.TempoIndication):
+            return 'tempo'
+        if isinstance(obj, (m21.expressions.ArpeggioMark, m21.expressions.ArpeggioMarkSpanner)):
+            return 'arpeg'
+        if isinstance(obj, m21.expressions.GeneralMordent):
+            return 'mordent'
+        if isinstance(obj, m21.expressions.Trill):
+            return 'trill'
+        if isinstance(obj, m21.expressions.Turn):
+            return 'turn'
+        if isinstance(obj, (m21.dynamics.Dynamic, m21.dynamics.DynamicWedge)):
+            return 'dynam'
+        if isinstance(obj, M21TieSpanner):
+            return 'tie'
+        if isinstance(obj, M21BeamSpanner):
+            return 'beam'
+        if isinstance(obj, M21TupletSpanner):
+            return 'tuplet'
+        if isinstance(obj, m21.note.Rest):
+            if obj.style.hideObjectOnPrint:
+                # hidden rest is a space
+                return 'space'
+
+        return obj.classes[0].lower()
+
+    @staticmethod
+    def assureXmlId(obj: m21.base.Music21Object, prefix: str = ''):
+        # if xml id has already been set, leave it as is
+        if hasattr(obj, 'xml_id'):
+            return
+        if not prefix:
+            prefix = M21Utilities.getXmlIdPrefixFor(obj)
+        obj.xml_id = M21Utilities.makeXmlIdFrom(  # type: ignore
+            obj.id, prefix
+        )
+
+    @staticmethod
+    def assureXmlIdAndId(obj: m21.base.Music21Object, prefix: str = ''):
+        M21Utilities.assureXmlId(obj, prefix)
+        # Don't change voice.id though, those are important.
+        if not isinstance(obj, m21.stream.Voice):
+            obj.id = obj.xml_id  # type: ignore
+
+        # if it's a chord (and not a chord symbol), put an xmlid on all the notes, too
+        # (required for MEI export, because <tie> might reference a note in a chord)
+        if isinstance(obj, m21.chord.ChordBase):
+            if not isinstance(obj, m21.harmony.ChordSymbol):
+                for n in obj.notes:
+                    M21Utilities.assureXmlId(n)
+                    n.id = n.xml_id  # type: ignore
+
+    @staticmethod
+    def assureXmlIds(objs: list[m21.base.Music21Object] | m21.spanner.Spanner):
+        if isinstance(objs, m21.spanner.Spanner):
+            objs = objs.getSpannedElements()
+
+        for obj in objs:
+            M21Utilities.assureXmlId(obj)
+
+    @staticmethod
+    def assureAllXmlIds(s: m21.stream.Stream):
+        for obj in s.recurse():
+            M21Utilities.assureXmlId(obj)
+            # if it's a chord (and not a chord symbol), put an xmlid on all the notes
+            # (required for MEI export, because <tie> might reference a note in a chord)
+            if isinstance(obj, m21.chord.ChordBase):
+                if not isinstance(obj, m21.harmony.ChordSymbol):
+                    for n in obj.notes:
+                        M21Utilities.assureXmlId(n)
+
+    @staticmethod
+    def removeAllXmlIds(s: m21.stream.Stream):
+        for obj in s.recurse():
+            if hasattr(obj, 'xml_id'):
+                del obj.xml_id  # type: ignore
+            # if it's a chord (and not a chord symbol), remove xmlid from all the notes
+            if isinstance(obj, m21.chord.ChordBase):
+                if not isinstance(obj, m21.harmony.ChordSymbol):
+                    for n in obj.notes:
+                        if hasattr(n, 'xml_id'):
+                            del n.xml_id  # type: ignore
+
+    @staticmethod
+    def getXmlId(obj: m21.base.Music21Object, required: bool = False) -> str:
+        # only returns something if assureXmlId has been called already on this object
+        if hasattr(obj, 'xml_id'):
+            return obj.xml_id  # type: ignore
+        if required:
+            raise Converter21InternalError('required xml:id is missing')
+        return ''
+
+    @staticmethod
+    def assureAllXmlIdsAndIds(s: m21.stream.Stream):
+        # for 3rd party clients who want their current m21Score to match the
+        # exported/re-imported score they are about to produce.  (Re-import
+        # of the exported score will load the new score's ids with the old
+        # score's xml_ids.)  Don't change voice.id though, those are important.
+        for obj in s.recurse():
+            M21Utilities.assureXmlIdAndId(obj)
 
     @staticmethod
     def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
@@ -3400,8 +4144,320 @@ class M21Utilities:
         return fixme
 
     @staticmethod
+    def getRestDurationQL(rest: m21.note.Rest, container: m21.stream.Stream) -> OffsetQL:
+        # returns rest.duration.quarterLength, unless the rest is the only GeneralNote
+        # in the container stream, in which case it returns the barDuration of the
+        # current timesignature.
+        restIsAlone: bool = True
+        for obj in container.getElementsByClass(m21.note.GeneralNote):
+            if isinstance(obj, m21.harmony.Harmony):
+                # ChordSymbols et al don't count
+                continue
+            if obj is not rest:
+                restIsAlone = False
+                break
+
+        if restIsAlone:
+            # rest is alone in this container stream, try to figure out barDuration of current
+            # timesignature.  If you can't, just return rest.duration.quarterLength.
+            tsContext = rest.getContextByClass(m21.meter.TimeSignature)
+            if tsContext:
+                return tsContext.barDuration.quarterLength
+
+        # rest is alone, or there is no timesignature context.  Either way,
+        # return the rest's quarterLength.
+        return rest.duration.quarterLength
+
+    @staticmethod
+    def fixupBadDurations(score: m21.stream.Score, inPlace: bool = False) -> m21.stream.Score:
+        # must be a score; we will look for parts/measures/etc
+
+        # 1. Looks for parts that have different numbers of measures.  Appends
+        #       empty measures (filled with appropriate duration hidden rests)
+        #       to the short parts to equalize them.
+        # NOPE 2. Looks for simultaneous measures where one or more have missing timesigs.
+        #       Copies the timesig from one measure to the other simultaneous measures.
+        # 3. Looks for whole measure rests (duration=4.0) where that whole rest is
+        #       longer than the measure should be (according to the timesig).
+        #       Shrinks that whole rest to the appropriate duration, but leaves it
+        #       _looking_ like a whole rest.
+        # 4. Looks for overlapping GeneralNotes in Voice (or in top level of Measure).
+        #       Removes the overlap by sliding the second GeneralNote (and following
+        #       GeneralNotes) later (which will extend the Measure).
+        # 5. Looks for multi-part measures that have different durations (perhaps due
+        #       to step 4).  Appends invisible rests to the short part-measures to
+        #       equalize them.
+        # 6. Looks for overlapping/underlapping measures in a Part (perhaps due to
+        #       previous steps). Re-inserts each measure at the end offset of the
+        #       previous measure.
+        # 7. Looks for hidden rests with complex (unprintable) durations (e.g. 1.25QL).
+        #       Splits them into rests that could be printed if they weren't hidden
+        #       (e.g. split 1.25QL hidden rest into 1.0QL and 0.25QL).
+
+        fixme: m21.stream.Score = score
+        if not inPlace:
+            fixme = deepcopy(score)
+
+        # Build up a list of measureStacks
+        parts: list[m21.stream.Part] = list(fixme[m21.stream.Part])
+        numParts: int = len(parts)
+        partMeterStreams: list[m21.stream.Stream] = []
+        for p in range(0, numParts):
+            partMeterStreams.append(
+                parts[p].getTimeSignatures(
+                    searchContext=False,
+                    returnDefault=False,
+                    recurse=True,
+                    sortByCreationTime=False
+                )
+            )
+        partMeasures: list[list[m21.stream.Measure]] = [
+            list(part[m21.stream.Measure]) for part in parts
+        ]
+        numMeasuresInParts: list[int] = [
+            len(partMeasures[partIdx]) for partIdx in range(0, numParts)
+        ]
+        maxMeasuresInPart: int = 0
+        for nm in numMeasuresInParts:
+            maxMeasuresInPart = max(maxMeasuresInPart, nm)
+
+        # Step 1: check for parts with too few measures
+        measureStacks: list[list[m21.stream.Measure]] = []
+        for msIdx in range(0, maxMeasuresInPart):
+            measureStacks.append([])
+            for partIdx in range(0, numParts):
+                if msIdx >= numMeasuresInParts[partIdx]:
+                    # step 1: append an empty measure (with a full-measure hidden rest)
+                    print(
+                        f'Appending empty measure {msIdx} to part {partIdx}',
+                        file=sys.stderr
+                    )
+                    emptyMeas = m21.stream.Measure()
+                    # put it in the score
+                    parts[partIdx].append(emptyMeas)
+                    # now that it's in the part, we can put the rest in it,
+                    # and then figure out its duration.
+                    hiddenRest: m21.note.Rest = m21.note.Rest()
+                    hiddenRest.style.hideObjectOnPrint = True
+                    emptyMeas.append(hiddenRest)
+                    tsContext = hiddenRest.getContextByClass(m21.meter.TimeSignature)
+                    if tsContext:
+                        hiddenRest.duration.quarterLength = tsContext.barDuration.quarterLength
+
+                    # put it in the partMeasures array
+                    partMeasures[partIdx][msIdx] = emptyMeas
+
+                measureStacks[msIdx].append(partMeasures[partIdx][msIdx])
+
+        # Step 2: I have seen scores that have a timesig in one part, but not the other.
+        # Fix that first.
+        # for msIdx, mStack in enumerate(measureStacks):
+        #     theTimeSig: m21.meter.TimeSignature | None = None
+        #     timesigs: list[m21.meter.TimeSignature | None] = []
+        #     for partIdx, meas in enumerate(mStack):
+        #         timesigAtZero: m21.meter.TimeSignature | None = (
+        #             M21Utilities.getTimeSigFromStartOfStream(meas)
+        #         )
+        #         if msIdx == 0:
+        #             # first measure: if no timesig in measure, we can also
+        #             # check offset 0 in the enclosing part
+        #             if timesigAtZero is None:
+        #                 timesigAtZero = M21Utilities.getTimeSigFromStartOfStream(parts[partIdx])
+        #         timesigs.append(timesigAtZero)
+        #         if timesigs[-1] is not None and theTimeSig is None:
+        #             theTimeSig = timesigs[-1]
+        #
+        #     if theTimeSig is None:
+        #         # if none of the stacked measures have a timesig, it's OK.
+        #         continue
+        #
+        #     for partIdx, timesig in enumerate(timesigs):
+        #         if timesig is None:
+        #             myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
+        #             myTS.style.hideObjectOnPrint = True
+        #             print(
+        #                 f'Inserting hidden timesig {myTS}'
+        #                 f' at start of measure {msIdx}, in part {partIdx}'
+        #             )
+        #             mStack[partIdx].insert(0, myTS)
+
+        # Step 3: check for whole measure (non-hidden) rests that have too long duration
+        #   (e.g. 4 quarter notes when the timesig says 3/4). Too short is OK, we'll pad
+        #   the measure out later with hidden rests if necessary.  Fix the rest duration,
+        #   and then the enclosing stream durations (voice if present and measure).  These
+        #   are not hidden rests, so set the rest.duration correctly as visual duration 4.0,
+        #   gestural duration from timesig (so they still look like whole rests).  Or maybe
+        #   just set rest.fullMeasure = True (and quarterLength is from timesig and is linked).
+
+        for partIdx, part in enumerate(parts):
+            for meas in partMeasures[partIdx]:
+                timesig = M21Utilities.getTimeSigFromStartOfStream(meas)
+                # if timesig is None:
+                #     timesig = meas.getContextByClass(m21.meter.TimeSignature)
+
+                voices: list[m21.stream.Voice | m21.stream.Measure] = list(
+                    meas[m21.stream.Voice]
+                )
+                # treat the measure as a voice
+                voices.append(meas)
+
+                recomputeMeasureDuration: bool = False
+                for voice in voices:
+                    # get all general notes except ChordSymbols and such
+                    gnList: list[m21.note.GeneralNote] = list(
+                        voice.getElementsByClass(m21.note.GeneralNote)
+                        .getElementsNotOfClass(m21.harmony.Harmony)
+                    )
+
+                    if len(gnList) != 1:
+                        # more than one note/rest, skip to next voice
+                        continue
+
+                    if isinstance(gnList[0], m21.note.Rest):
+                        rest: m21.note.Rest = gnList[0]
+                        restQL: OffsetQL = rest.duration.quarterLength
+                        if restQL == 4.0:
+                            if timesig is None:
+                                # try looking in the meterStream
+                                measOffset: OffsetQL = meas.getOffsetInHierarchy(fixme)
+                                timesig = M21Utilities.getActiveTimeSigFromMeterStream(
+                                    measOffset, partMeterStreams[partIdx]
+                                )
+                                if timesig is None:
+                                    timesig = m21.meter.TimeSignature('4/4')
+                            barQL: OffsetQL = timesig.barDuration.quarterLength
+                            if restQL > barQL:
+                                rest.duration.linked = False
+                                rest.duration.quarterLength = barQL
+                                # shorten the voice as well (if not the measure)
+                                if voice is not meas:
+                                    voice.duration.quarterLength = barQL
+                                recomputeMeasureDuration = True
+
+                if recomputeMeasureDuration:
+                    # recompute measure duration from highestTime
+                    meas._cache['HighestTime'] = None  # force recomputation of meas.highestTime
+                    meas.duration.quarterLength = meas.highestTime
+
+        # Step 4: check for overlapping GeneralNotes
+        for msIdx, mStack in enumerate(measureStacks):
+            for partIdx, meas in enumerate(mStack):
+                voices = list(
+                    meas[m21.stream.Voice]
+                )
+                # treat the measure as a voice
+                voices.append(meas)
+
+                for voice in voices:
+                    prevGN: m21.note.GeneralNote | None = None
+                    # do not recurse!
+                    gnList = list(
+                        voice.getElementsByClass(m21.note.GeneralNote)
+                        .getElementsNotOfClass(m21.harmony.Harmony)
+                    )
+                    for gn in gnList:
+                        # check for overlapping GeneralNotes. If found, reinsert
+                        # second note at end of first note.
+                        if prevGN is not None:
+                            if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
+                                newOffset: OffsetQL = opFrac(prevGN.offset + prevGN.quarterLength)
+                                print(
+                                    f'Moving {gn} from {gn.offset} to {newOffset}'
+                                    f' in measure {msIdx}, part {partIdx}',
+                                    file=sys.stderr
+                                )
+                                voice.remove(gn)
+                                voice.insert(newOffset, gn)
+
+                        prevGN = gn
+
+        # Step 5: check each stack for equal duration measures
+        for msIdx, mStack in enumerate(measureStacks):
+            maxDurationInStack: OffsetQL = 0
+            for meas in mStack:
+                maxDurationInStack = max(maxDurationInStack, meas.quarterLength)
+            for partIdx, meas in enumerate(mStack):
+                if meas.quarterLength < maxDurationInStack:
+                    # append a hidden rest (we'll split it if necessary in step 7)
+                    addQL: OffsetQL = opFrac(maxDurationInStack - meas.quarterLength)
+                    print(
+                        f'Appending {addQL}QL space to measure {msIdx}, part {partIdx}',
+                        file=sys.stderr
+                    )
+                    hiddenRest = m21.note.Rest(quarterLength=addQL)
+                    hiddenRest.style.hideObjectOnPrint = True
+                    hasVoices: bool = False
+                    for voice in meas.voices:
+                        hasVoices = True
+                        myRest: m21.note.Rest = deepcopy(hiddenRest)
+                        voice.append(myRest)
+                    if not hasVoices:
+                        meas.append(hiddenRest)
+                    meas.duration.quarterLength = maxDurationInStack
+
+        # Step 6: check for overlapping/underlapping measures (perhaps caused by previous
+        # steps). If you find an overlapping/underlapping measure in a part, stop checking
+        # and just re-insert every measure after that.
+        for partIdx, part in enumerate(parts):
+            reinserting: bool = False
+            prevMeas: m21.stream.Measure | None = None
+            for meas in partMeasures[partIdx]:
+                if prevMeas is None:
+                    prevMeas = meas
+                    continue
+
+                prevMeasEnd: OffsetQL = opFrac(prevMeas.offset + prevMeas.quarterLength)
+                if not reinserting:
+                    if prevMeasEnd != meas.offset:
+                        reinserting = True
+
+                if reinserting:
+                    part.remove(meas)
+                    part.insert(prevMeasEnd, meas)
+
+                prevMeas = meas
+
+        # Step 7: check for hidden rests that need splitting (possibly caused by previous steps)
+        M21Utilities.fixupComplexHiddenRests(fixme, inPlace=True)
+
+        return fixme
+
+    @staticmethod
+    def fixupComplexHiddenRests(
+        s: m21.stream.Stream,
+        inPlace: bool = False
+    ) -> m21.stream.Stream:
+        # Splits every complex-duration hidden rest into simple-duration hidden rests
+        # in the fixme stream, recursively.
+        fixme: m21.stream.Stream = s
+        if not inPlace:
+            fixme = deepcopy(s)
+
+        # splitComplexRestDurations does not recurse
+        M21Utilities.splitComplexRestDurations(fixme, onlyHidden=True)
+
+        # for each substream that is directly in fixme, recursively call
+        # myself (in place, since the top level call already deepcopied
+        # the whole stream if necessary).
+        for substream in fixme.getElementsByClass(m21.stream.Stream):
+            M21Utilities.fixupComplexHiddenRests(substream, inPlace=True)
+
+        return fixme
+
+    @staticmethod
     def adjustMusic21Behavior() -> None:
         if 'augmented-ninth' not in m21.harmony.CHORD_ALIASES:
             m21.harmony.CHORD_ALIASES['augmented-ninth'] = 'augmented-dominant-ninth'
         if 'minor-major' not in m21.harmony.CHORD_ALIASES:
             m21.harmony.CHORD_ALIASES['minor-major'] = 'minor-major-seventh'
+
+    @staticmethod
+    def extendCustomM21Attributes(
+        customAttrs: dict[m21.base.Music21Object, list[str]],
+        obj: m21.base.Music21Object,
+        newAttrs: list[str]
+    ):
+        if obj not in customAttrs:
+            customAttrs[obj] = []
+        customAttrs[obj].extend(newAttrs)
+

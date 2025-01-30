@@ -92,6 +92,7 @@ class HumdrumWriter:
 
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21Score: m21.stream.Score | None = None
+        self.customM21AttrsToDelete: dict[m21.base.Music21Object, list[str]] = {}
         self.spannerBundle: m21.spanner.SpannerBundle | None = None
         self._scoreData: ScoreData | None = None
         self.staffCounts: list[int] = []  # indexed by partIndex
@@ -337,12 +338,14 @@ class HumdrumWriter:
 
     def write(self, fp) -> bool:
         # First: HumdrumWriter.write likes to modify the input stream (e.g. transposing to
-        # concert pitch, etc), so we need to make a copy of the input stream before we start.
-        # TODO: do the transposition in Humdrum-land, following C++ code 'transpose -c'
-        # (use transpose's code from humlib).  For now, go ahead and modify the input;
-        # copying the whole score takes WAY too long.
-        # if isinstance(self._m21Object, m21.stream.Stream):
-        #     self._m21Object = self._m21Object.coreCopyAsDerivation('HumdrumWriter.write')
+        # concert pitch, fixing durations, etc), so we need to make a copy of the input
+        # stream before we start.
+        if isinstance(self._m21Object, m21.stream.Stream):
+            # before deepcopying, fix up any complex hidden rests (so the input score can be
+            # visualized).  This should have been done by whoever created the input score,
+            # but let's at least fix it up now.
+            M21Utilities.fixupComplexHiddenRests(self._m21Object, inPlace=True)
+            self._m21Object = self._m21Object.coreCopyAsDerivation('HumdrumWriter.write')
 
         # Second: turn the object into a well-formed Score (someone might have passed in a single
         # note, for example).  This code is swiped from music21 v7's musicxml exporter.  The hope
@@ -359,6 +362,12 @@ class HumdrumWriter:
             self._m21Score = self._m21Object
         del self._m21Object  # everything after this uses self._m21Score
 
+        # Third: deal with various duration problems (we see this e.g. after import of a
+        # Photoscore-generated MusicXML file)
+        M21Utilities.fixupBadDurations(self._m21Score, inPlace=True)
+
+        # score.spannerBundle is an expensive operation (recurses through the whole score),
+        # so stash the result somewhere, rather than calling it again and again.
         self.spannerBundle = self._m21Score.spannerBundle
 
         # set up _firstTempoLayout ('!!LO:TX:omd:t=something') for use when emitting
@@ -379,6 +388,11 @@ class HumdrumWriter:
                 self._firstTempoLayout = '!!LO:TX:omd:t=' + tempoText
                 self._firstMMTokenStr = mmTokenStr
                 startingTempo.humdrum_tempo_already_handled = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customM21AttrsToDelete,
+                    startingTempo,
+                    ['humdrum_tempo_already_handled']
+                )
             else:
                 self._firstTempoLayout = '!!LO:TX:omd:t='
 
@@ -465,7 +479,18 @@ class HumdrumWriter:
 
         self._printResult(fp, outfile)
 
+        self.deannotateScore()
+
         return status
+
+    def deannotateScore(self):
+        for obj, customAttrs in self.customM21AttrsToDelete.items():
+            for customAttr in customAttrs:
+                if hasattr(obj, customAttr):
+                    delattr(obj, customAttr)
+
+        # all done, let go of these references to music21 objects.
+        self.customM21AttrsToDelete = {}
 
     '''
     //////////////////////////////
@@ -1459,6 +1484,7 @@ class HumdrumWriter:
         hasKeyDesignation: bool = False
         hasTransposition: bool = False
         hasTimeSig: bool = False
+        hasMeterSig: bool = False
 #        hasOttava: bool = False
         hasStaffLines: bool = False
 
@@ -1644,8 +1670,7 @@ class HumdrumWriter:
         for staffList in notes:  # notes is a list of staffLists, one staffList per part
             for voiceList in staffList:
                 for noteList in voiceList:
-                    if maxGraceNoteCount < len(noteList):
-                        maxGraceNoteCount = len(noteList)
+                    maxGraceNoteCount = max(maxGraceNoteCount, len(noteList))
 
         if maxGraceNoteCount == 0:
             return
