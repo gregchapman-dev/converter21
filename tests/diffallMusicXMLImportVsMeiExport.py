@@ -179,6 +179,8 @@ def oplistSummary(
             counts[key] += 1
         elif op[0] in ('extrasub',
                        'extracontentedit',
+                       'extrasymboledit',
+                       'extrainfoedit',
                        'extraoffsetedit',
                        'extradurationedit'):
             # op[1] and op[2]
