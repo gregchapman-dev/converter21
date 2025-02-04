@@ -128,25 +128,27 @@ def oplistSummary(
         elif op[0] == 'extradel':
             # op[1] only
             assert isinstance(op[1], AnnExtra)
-            key = op[1].content
+            key = op[1].kind
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
         elif op[0] == 'extrains':
             # op[2] only
             assert isinstance(op[2], AnnExtra)
-            key = op[2].content
+            key = op[2].kind
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
         elif op[0] in ('extrasub',
                        'extracontentedit',
+                       'extrasymboledit',
+                       'extrainfoedit',
                        'extraoffsetedit',
                        'extradurationedit'):
             # op[1] and op[2]
             assert isinstance(op[1], AnnExtra)
             assert isinstance(op[2], AnnExtra)
-            key = op[1].content # a little weird for "extracontentedit", but that's pretty rare
+            key = op[1].kind
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
@@ -154,7 +156,7 @@ def oplistSummary(
             # op[1] and op[2]
             assert isinstance(op[1], AnnExtra)
             assert isinstance(op[2], AnnExtra)
-            key = op[1].content + ':style'
+            key = op[1].kind + ':style'
             if counts.get(key, None) is None:
                 counts[key] = 0
             counts[key] += 1
