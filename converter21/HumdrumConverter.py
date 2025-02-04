@@ -43,10 +43,19 @@ class HumdrumConverter(SubConverter):
         Create HumdrumFile object from a string, and create a music21 Stream from it.
         '''
         # print("parsing krn string", file=sys.stderr)
-        hf = HumdrumFile(acceptSyntaxErrors=acceptSyntaxErrors)
-        hf.readString(dataString)
-        self.stream = hf.createMusic21Stream()
-        self.humdrumFile = hf
+        try:
+            hf = HumdrumFile(acceptSyntaxErrors=acceptSyntaxErrors)
+            hf.readString(dataString)
+            self.stream = hf.createMusic21Stream()
+            self.humdrumFile = hf
+        except Exception as e:
+            if acceptSyntaxErrors:
+                # acceptSyntaxErrors means "do not raise exceptions on syntax errors".
+                # if HumdrumFile raised an exception, it could not work around all the
+                # syntax errors, so we must return an empty score.
+                return stream.Score()
+            raise e
+
         return self.stream
 
     # pylint: disable=arguments-differ
@@ -63,9 +72,18 @@ class HumdrumConverter(SubConverter):
         may be utf-8 or latin-1, so we need to handle various text encodings ourselves.
         '''
         # print("parsing krn file", file=sys.stderr)
-        hf = HumdrumFile(fileName=filePath, acceptSyntaxErrors=acceptSyntaxErrors)
-        self.stream = hf.createMusic21Stream()
-        self.humdrumFile = hf
+        try:
+            hf = HumdrumFile(fileName=filePath, acceptSyntaxErrors=acceptSyntaxErrors)
+            self.stream = hf.createMusic21Stream()
+            self.humdrumFile = hf
+        except Exception as e:
+            if acceptSyntaxErrors:
+                # acceptSyntaxErrors means "do not raise exceptions on syntax errors".
+                # if HumdrumFile raised an exception, it could not work around all the
+                # syntax errors, so we must return an empty score.
+                return stream.Score()
+            raise e
+
         return self.stream
 
     # pylint: disable=arguments-differ
