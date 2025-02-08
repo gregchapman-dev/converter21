@@ -19,13 +19,13 @@ def parseTheFile(theFile: Path):
             return
         numParts: int = len(list(score.parts))
         if not score.elements:
-            print('empty score')
+            print('empty score (exception raised)')
             return
         if numParts == 0:
             print('no parts in score')
             return
-        # if isGT and len(list(score.parts)) not in (2, 4):
-        #     print(f'{len(list(score.parts))} parts, should be 2 or 4')
+        # if isGT and numParts not in (2, 4):
+        #     print(f'{numParts} parts, should be 2 or 4')
         #     return
         if not score.isWellFormedNotation():
             print('ill-formed score')

@@ -131,7 +131,7 @@ class HumdrumFileBase(HumHash):
         # self._fileName: str = None # weirdly, appears not be set or used
 
         self.acceptSyntaxErrors: bool = acceptSyntaxErrors
-        self.fixedSyntaxErrors: int = 0
+        self.numSyntaxErrorsFixed: int = 0
 
         '''
         // m_segementlevel: segment level (e.g., work/movement)
@@ -342,6 +342,10 @@ class HumdrumFileBase(HumHash):
             line = HumdrumLine(contentLine)
             line.ownerFile = self
             self._lines.append(line)
+
+            # we don't yet support multiple scores in one Humdrum file
+            if line.isTerminateInterpretation:
+                break
 
         self.analyzeBaseFromLines()
         # print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
@@ -567,6 +571,8 @@ class HumdrumFileBase(HumHash):
             return self.isValid
         if not self.analyzeLines():
             return self.isValid
+        if self.acceptSyntaxErrors:
+            self.fixLinesWithMismatchedTokens()
         if not self.analyzeSpines():
             return self.isValid
         if not self.analyzeLinks():
@@ -586,6 +592,8 @@ class HumdrumFileBase(HumHash):
 
         if not self.analyzeLines():
             return self.isValid
+        if self.acceptSyntaxErrors:
+            self.fixLinesWithMismatchedTokens()
         if not self.analyzeSpines():
             return self.isValid
         if not self.analyzeLinks():
@@ -649,6 +657,40 @@ class HumdrumFileBase(HumHash):
         for i, line in enumerate(self._lines):
             line.lineIndex = i
         return self.isValid
+
+    def fixLinesWithMismatchedTokens(self) -> None:
+        # only called if self.acceptSyntaxErrors is True
+        for line in self._lines:
+            lineChanged: bool = False
+            if line.isData:
+                for token in line.tokens():
+                    if not token.isData:
+                        token.text = '.'
+                        lineChanged = True
+            elif line.isInterpretation:
+                for token in line.tokens():
+                    if not token.isInterpretation:
+                        token.text = '*'
+                        lineChanged = True
+            elif line.isComment:
+                for token in line.tokens():
+                    if not token.isComment:
+                        token.text = '!'
+                        lineChanged = True
+            elif line.isBarline:
+                firstBarlineSeen: str = ''
+                for token in line.tokens():
+                    if token.isBarline:
+                        if not firstBarlineSeen:
+                            firstBarlineSeen = token.text
+                        continue
+                    if firstBarlineSeen:
+                        token.text = firstBarlineSeen
+                    else:
+                        token.text = '='
+                    lineChanged = True
+            if lineChanged:
+                line.createLineFromTokens()
 
     '''
     //////////////////////////////
@@ -730,7 +772,7 @@ class HumdrumFileBase(HumHash):
                     # remove trailing tokens in nextLine to make up the difference
                     for i in range(prevLine.tokenCount, nextLine.tokenCount):
                         nextLine._tokens.pop(i)
-                        self.fixedSyntaxErrors += 1
+                        self.numSyntaxErrorsFixed += 1
                     nextLine.createLineFromTokens()
                 else:
                     # append appropriate null-ish tokens to nextLine to make up the difference
@@ -746,7 +788,7 @@ class HumdrumFileBase(HumHash):
                         ch = '*'
                     for _ in range(nextLine.tokenCount, prevLine.tokenCount):
                         nextLine._tokens.append(HumdrumToken(ch))
-                        self.fixedSyntaxErrors += 1
+                        self.numSyntaxErrorsFixed += 1
                     nextLine.createLineFromTokens()
 
             for i, prevTok in enumerate(prevLine.tokens()):
@@ -899,12 +941,36 @@ class HumdrumFileBase(HumHash):
                 return self.setParseError('Error: should not get here')
 
         if nextTokenIdx != nextLine.tokenCount:
-            return self.setParseError(
-                f'''Error: cannot stitch lines together due to alignment problem.
+            if not self.acceptSyntaxErrors:
+                return self.setParseError(
+                    f'''Error: cannot stitch lines together due to alignment problem.
 Line {prevLine.lineNumber}: {prevLine.text}
 Line {nextLine.lineNumber}: {nextLine.text}
 nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
-            )
+                )
+            # fix it instead
+            if nextLine.tokenCount > nextTokenIdx:
+                # remove trailing tokens in nextLine to make up the difference
+                for i in range(nextTokenIdx, nextLine.tokenCount):
+                    nextLine._tokens.pop(i)
+                    self.numSyntaxErrorsFixed += 1
+                nextLine.createLineFromTokens()
+            else:
+                # append appropriate null-ish tokens to nextLine to make up the difference
+                ch = '.'  # for most spines, this is a fine do-nothing
+                if nextLine.isBarline:
+                    if nextLine[0] is not None:
+                        ch = nextLine[0].text  # copy the first barline on the line
+                    else:
+                        ch = '='
+                elif nextLine.isLocalComment:
+                    ch = '!'
+                elif nextLine.isInterpretation:
+                    ch = '*'
+                for _ in range(nextLine.tokenCount, nextTokenIdx):
+                    nextLine._tokens.append(HumdrumToken(ch))
+                    self.numSyntaxErrorsFixed += 1
+                nextLine.createLineFromTokens()
 
         return self.isValid
 
@@ -939,7 +1005,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 self._lines[i] = HumdrumLine(
                     '!! ignore spiny line before first exinterp: ' + line.text
                 )
-                self.fixedSyntaxErrors += 1
+                self.numSyntaxErrorsFixed += 1
                 self._lines[i].createTokensFromLine()
                 continue
 
@@ -973,7 +1039,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     # remove trailing tokens to make up the difference
                     for i in range(len(dataType), line.tokenCount):
                         line._tokens.pop(i)
-                        self.fixedSyntaxErrors += 1
+                        self.numSyntaxErrorsFixed += 1
                     line.createLineFromTokens()
                 else:
                     # append appropriate null-ish tokens to make up the difference
@@ -988,7 +1054,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     elif line.isInterpretation:
                         ch = '*'
                     for _ in range(line.tokenCount, len(dataType)):
-                        self.fixedSyntaxErrors += 1
+                        self.numSyntaxErrorsFixed += 1
                         line._tokens.append(HumdrumToken(ch))
                     line.createLineFromTokens()
 

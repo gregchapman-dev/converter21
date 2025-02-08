@@ -627,8 +627,8 @@ class HumdrumFile(HumdrumFileContent):
 
         # pylint: disable=attribute-defined-outside-init
         self.m21Score: m21.stream.Score = m21.stream.Score()
-        if self.fixedSyntaxErrors > 0:
-            self.m21Score.c21_syntax_errors_fixed = self.fixedSyntaxErrors  # type: ignore
+        if self.numSyntaxErrorsFixed > 0:
+            self.m21Score.c21_syntax_errors_fixed = self.numSyntaxErrorsFixed  # type: ignore
 
         if not self.isValid:
             # input file did not parse successfully, give up.  Return an empty score.
@@ -734,8 +734,8 @@ class HumdrumFile(HumdrumFileContent):
 
         # set c21_syntax_errors_fixed again, because actually generating the score might
         # have caused us to fix more syntax errors.
-        if self.fixedSyntaxErrors > 0:
-            self.m21Score.c21_syntax_errors_fixed = self.fixedSyntaxErrors  # type: ignore
+        if self.numSyntaxErrorsFixed > 0:
+            self.m21Score.c21_syntax_errors_fixed = self.numSyntaxErrorsFixed  # type: ignore
         return self.m21Score
 
     def _prepareForSecondPass(self) -> None:
@@ -3705,7 +3705,9 @@ class HumdrumFile(HumdrumFileContent):
                 recomputeDuration = True
 
             if recomputeDuration:
-                duration = M21Convert.m21DurationWithTuplet(startTok, tuplet)
+                duration = M21Convert.m21DurationWithTuplet(
+                    startTok, tuplet, self.acceptSyntaxErrors
+                )
                 tuplet = duration.tuplets[0]
 
         # Now figure out the rest of the tuplet fields (type, placement, bracket, etc)
@@ -3757,8 +3759,8 @@ class HumdrumFile(HumdrumFileContent):
 #         if newQuarterLength != originalQuarterLength:
 #             raise HumdrumInternalError('_startTuplet modified duration.quarterLength')
 
-    @staticmethod
     def _continueTuplet(
+        self,
         layerData: list[HumdrumToken | FakeRestToken],
         tokenIdx: int,
         tupletTemplate: m21.duration.Tuplet,
@@ -3846,7 +3848,9 @@ class HumdrumFile(HumdrumFileContent):
                 recomputeDuration = True
 
             if recomputeDuration:
-                duration = M21Convert.m21DurationWithTuplet(token, tuplet)
+                duration = M21Convert.m21DurationWithTuplet(
+                    token, tuplet, self.acceptSyntaxErrors
+                )
                 tuplet = duration.tuplets[0]
 
         # set the tuplet on the note duration.
@@ -3861,8 +3865,8 @@ class HumdrumFile(HumdrumFileContent):
 #         if newQuarterLength != originalQuarterLength:
 #             raise HumdrumInternalError('_continueTuplet modified duration.quarterLength')
 
-    @staticmethod
     def _endTuplet(
+        self,
         layerData: list[HumdrumToken | FakeRestToken],
         tokenIdx: int,
         tupletTemplate: m21.duration.Tuplet,
@@ -3954,7 +3958,9 @@ class HumdrumFile(HumdrumFileContent):
                 recomputeDuration = True
 
             if recomputeDuration:
-                duration = M21Convert.m21DurationWithTuplet(endToken, tuplet)
+                duration = M21Convert.m21DurationWithTuplet(
+                    endToken, tuplet, self.acceptSyntaxErrors
+                )
                 tuplet = duration.tuplets[0]
 
         if tuplet:

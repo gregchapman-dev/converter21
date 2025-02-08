@@ -596,7 +596,8 @@ class M21Convert:
     @staticmethod
     def m21DurationWithTuplet(
         token: HumdrumToken,
-        tuplet: m21.duration.Tuplet
+        tuplet: m21.duration.Tuplet,
+        acceptSyntaxErrors: bool
     ) -> m21.duration.Duration:
         vdurStr: str = token.getVisualDuration()
         vdur: HumNum | None = None
@@ -626,7 +627,7 @@ class M21Convert:
         durNoDots: HumNum
         numDots: int | None
         durNoDots, numDots = M21Utilities.computeDurationNoDotsAndNumDots(dur)
-        if numDots is None:
+        if numDots is None and not acceptSyntaxErrors:
             print(f'Cannot figure out durNoDots + numDots from {token.text} (on '
                     + f'line number {token.lineNumber}), tuplet={tuplet}, about to '
                     + 'crash in convertQuarterLengthToType()...', file=sys.stderr)
@@ -635,7 +636,12 @@ class M21Convert:
         if vdurType:
             component = m21.duration.durationTupleFromTypeDots(vdurType, vdurNumDots)
         else:
-            durType: str = m21.duration.convertQuarterLengthToType(durNoDots)
+            durType: str = ''
+            if (durNoDots == 0 or numDots is None) and acceptSyntaxErrors:
+                durType = 'zero'
+                numDots = 0
+            else:
+                durType = m21.duration.convertQuarterLengthToType(durNoDots)
             component = m21.duration.durationTupleFromTypeDots(durType, numDots)
 
         output = m21.duration.Duration(components=(component,))

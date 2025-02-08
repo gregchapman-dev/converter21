@@ -236,7 +236,6 @@ class HumdrumFileStructure(HumdrumFileBase):
         if self.maxTrack == 0:
             return True
 
-
         trackStartTok: HumdrumToken | None = self.trackStart(1)
         if trackStartTok is None:
             return False
@@ -512,14 +511,24 @@ class HumdrumFileStructure(HumdrumFileBase):
         line: HumdrumLine = token.ownerLine
         if line.durationFromStart == -1:
             line.durationFromStart = dSum
-        elif line.durationFromStart != dSum:
-            if not token.isTerminateInterpretation:
-                return self.setParseError(
-                    f'''Error: Inconsistent rhythm analysis occurring near line {token.lineNumber}
-Expected durationFromStart to be: {dSum} but found it to be {line.durationFromStart}
-Line: {line.text}'''
-                )
-            line.durationFromStart = max(line.durationFromStart, dSum)
+            return self.isValid
+
+        if line.durationFromStart != dSum:
+            if token.isTerminateInterpretation or self.acceptSyntaxErrors:
+                # It's either a '*-', or we're fixing syntax errors.
+                # Either way, we update the line's duration from start to be the max of the two.
+                # If it's not a '*-', this introduces (by side effect) a gap between notes in
+                # the resulting score.
+                line.durationFromStart = max(line.durationFromStart, dSum)
+                if not token.isTerminateInterpretation:
+                    self.numSyntaxErrorsFixed += 1  # a space was inserted
+                return self.isValid
+
+            return self.setParseError(
+                f'''Error: Inconsistent rhythm analysis occurring near line {token.lineNumber}
+    Expected durationFromStart to be: {dSum} but found it to be {line.durationFromStart}
+    Line: {line.text}'''
+            )
 
         return self.isValid
 
