@@ -23,8 +23,8 @@ class HumdrumConverter(SubConverter):
     Simple class wrapper for parsing Humdrum data provided in a file or in a string.
     '''
     registerFormats = ('humdrum',)
-    registerInputExtensions = ('krn',)
-    registerOutputExtensions = ('krn',)
+    registerInputExtensions = ('krn', 'kern')
+    registerOutputExtensions = ('krn', 'kern')
 
     def __init__(self, **keywords) -> None:
         super().__init__(**keywords)
