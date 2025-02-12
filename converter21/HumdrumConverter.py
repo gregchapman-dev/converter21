@@ -47,14 +47,16 @@ class HumdrumConverter(SubConverter):
             hf = HumdrumFile(acceptSyntaxErrors=acceptSyntaxErrors)
             hf.readString(dataString)
             self.stream = hf.createMusic21Stream()
+            self.stream.c21_parse_err = hf.parseError  # type: ignore
             self.humdrumFile = hf
         except Exception as e:
-            if acceptSyntaxErrors:
-                # acceptSyntaxErrors means "do not raise exceptions on syntax errors".
-                # if HumdrumFile raised an exception, it could not work around all the
-                # syntax errors, so we must return an empty score.
-                return stream.Score()
-            raise e
+            if not acceptSyntaxErrors:
+                raise e
+            # acceptSyntaxErrors means "do not raise exceptions on syntax errors".
+            # if HumdrumFile raised an exception, it could not work around all the
+            # syntax errors, so we must return an empty score.
+            self.stream = stream.Score()
+            self.stream.c21_parse_err = f'{e}'  # type: ignore
 
         return self.stream
 
@@ -75,13 +77,16 @@ class HumdrumConverter(SubConverter):
         try:
             hf = HumdrumFile(fileName=filePath, acceptSyntaxErrors=acceptSyntaxErrors)
             self.stream = hf.createMusic21Stream()
+            self.stream.c21_parse_err = hf.parseError  # type: ignore
             self.humdrumFile = hf
         except Exception as e:
-            if acceptSyntaxErrors:
-                # acceptSyntaxErrors means "do not raise exceptions on syntax errors".
-                # if HumdrumFile raised an exception, it could not work around all the
-                # syntax errors, so we must return an empty score.
-                return stream.Score()
+            if not acceptSyntaxErrors:
+                raise e
+            # acceptSyntaxErrors means "do not raise exceptions on syntax errors".
+            # if HumdrumFile raised an exception, it could not work around all the
+            # syntax errors, so we must return an empty score.
+            self.stream = stream.Score()
+            self.stream.c21_parse_err = f'{e}'  # type: ignore
             raise e
 
         return self.stream

@@ -17,19 +17,26 @@ def parseTheFile(theFile: Path):
         if score is None:
             print('None')
             return
+
         numParts: int = len(list(score.parts))
+        err: str = ''
+        if hasattr(score, 'c21_parse_err'):
+            err = score.c21_parse_err
+
         if not score.elements:
-            print('empty score (exception raised)')
+            if err:
+                print(f'empty score: {err}')
+            else:
+                print('empty score')
             return
+
         if numParts == 0:
-            print('no parts in score')
+            if err:
+                print(f'no parts in score: {err}')
+            else:
+                print('no parts in score')
             return
-        # if isGT and numParts not in (2, 4):
-        #     print(f'{numParts} parts, should be 2 or 4')
-        #     return
-        if not score.isWellFormedNotation():
-            print('ill-formed score')
-            return
+
         print('GOOD')
     except Exception as e:
         print(f'raised {e}')

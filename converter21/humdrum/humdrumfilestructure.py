@@ -719,6 +719,10 @@ class HumdrumFileStructure(HumdrumFileBase):
 
             if token.isNonNullData:
                 token.duration = opFrac(current.durationFromStart - token.durationFromStart)
+                if self.acceptSyntaxErrors:
+                    if token.duration < 0:
+                        token.duration = -token.duration
+                        self.numSyntaxErrorsFixed += 1
                 current = token
 
             token = token.previousToken0
@@ -882,7 +886,8 @@ class HumdrumFileStructure(HumdrumFileBase):
 
             tok = tok.nextToken0
 
-        print('Should not get here in analyzeSpineStrands()', file=sys.stderr)
+        if not self.acceptSyntaxErrors:
+            print('Should not get here in analyzeSpineStrands()', file=sys.stderr)
 
     '''
     //////////////////////////////

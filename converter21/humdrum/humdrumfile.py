@@ -2671,6 +2671,14 @@ class HumdrumFile(HumdrumFileContent):
 
         if forceClefChange or token.durationFromStart != 0:
             if token.isClef:
+                if self.acceptSyntaxErrors:
+                    # truncate at first ' ' seen
+                    subtokens: list[str] = token.text.split(' ')
+                    if len(subtokens) > 1:
+                        token.text = subtokens[0]
+                        token.ownerLine.createLineFromTokens()
+                        self.numSyntaxErrorsFixed += len(subtokens) - 1
+
                 # we do clef changes up in the measure, not in the voices
                 clefOffsetInMeasure: HumNum = token.durationFromBarline
                 m21Clef: m21.clef.Clef = M21Convert.m21Clef(token)
@@ -4754,7 +4762,7 @@ class HumdrumFile(HumdrumFileContent):
         self._assignTupletScalings(tgs)
 
         # in iohumdrum.cpp this is called after return from prepareBeamAndTupletGroups()
-        self._fixLargeTuplets(tgs)
+        # self._fixLargeTuplets(tgs)
 
         return tgs
 
@@ -5394,6 +5402,8 @@ class HumdrumFile(HumdrumFileContent):
     '''
     @staticmethod
     def _nextHigherPowerOfTwo(num: HumNumIn) -> HumNum:
+        if num == 0:
+            return opFrac(Fraction(1, 1024))
         value: float = math.log(float(num)) / math.log(2.0)
         denom: int = int(-value)
         return opFrac(Fraction(1, int(pow(2.0, denom))))

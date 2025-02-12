@@ -939,10 +939,17 @@ class HumdrumLine(HumHash):
     '''
     def createLineFromTokens(self) -> None:
         # 1. make sure that _numTabsAfterToken is full by appending hard-coded values (mostly 1s)
-        numEntriesNeeded = len(self._tokens) - len(self._numTabsAfterToken)
-        if numEntriesNeeded > 0:
-            self._numTabsAfterToken += [1] * (numEntriesNeeded - 1)
+        numNewEntriesNeeded = len(self._tokens) - len(self._numTabsAfterToken)
+        if numNewEntriesNeeded > 0:
+            self._numTabsAfterToken += [1] * (numNewEntriesNeeded - 1)
             self._numTabsAfterToken += [0]  # zero tabs after the last token, please
+        elif numNewEntriesNeeded < 0:
+            # numNewEntriesNeeded is negative, trim the list and set the new last entry to 0
+            self._numTabsAfterToken = self._numTabsAfterToken[:numNewEntriesNeeded]
+            self._numTabsAfterToken[-1] = 0
+        else:
+            # numNewEntriesNeeded is zero, leave the list as is
+            pass
 
         # 2. repair any zeroes in _numTabsAfterToken to be ones (except the last one)
         for i in range(0, len(self._numTabsAfterToken) - 1):

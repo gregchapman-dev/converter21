@@ -771,7 +771,9 @@ class HumdrumFileBase(HumHash):
                 if nextLine.tokenCount > prevLine.tokenCount:
                     # remove trailing tokens in nextLine to make up the difference
                     for i in range(prevLine.tokenCount, nextLine.tokenCount):
-                        nextLine._tokens.pop(i)
+                        # pylint: disable=protected-access
+                        nextLine._tokens = nextLine._tokens[:-1]
+                        # pylint: enable=protected-access
                         self.numSyntaxErrorsFixed += 1
                     nextLine.createLineFromTokens()
                 else:
@@ -881,8 +883,11 @@ class HumdrumFileBase(HumHash):
                 if nextLine[nextTokenIdx] is not None:
                     prevTok.makeForwardLink(nextLine[nextTokenIdx])
                 else:
-                    print('Strange error 5', file=sys.stderr)
-                    raise HumdrumInternalError
+                    if self.acceptSyntaxErrors:
+                        # print('ignoring: Strange error 5')
+                        self.numSyntaxErrorsFixed += 1
+                    else:
+                        raise HumdrumInternalError('Strange error 5')
                 mergeCount = 1
 
             elif prevTok.isExchangeInterpretation:
@@ -952,7 +957,9 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
             if nextLine.tokenCount > nextTokenIdx:
                 # remove trailing tokens in nextLine to make up the difference
                 for i in range(nextTokenIdx, nextLine.tokenCount):
-                    nextLine._tokens.pop(i)
+                    # pylint: disable=protected-access
+                    nextLine._tokens = nextLine._tokens[:-1]
+                    # pylint: enable=protected-access
                     self.numSyntaxErrorsFixed += 1
                 nextLine.createLineFromTokens()
             else:
@@ -1038,7 +1045,9 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 if line.tokenCount > len(dataType):
                     # remove trailing tokens to make up the difference
                     for i in range(len(dataType), line.tokenCount):
-                        line._tokens.pop(i)
+                        # pylint: disable=protected-access
+                        line._tokens = line._tokens[:-1]
+                        # pylint: enable=protected-access
                         self.numSyntaxErrorsFixed += 1
                     line.createLineFromTokens()
                 else:
@@ -1066,6 +1075,10 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 success, dataType, sinfo = self.adjustSpines(line, dataType, sinfo)
                 if not success:
                     return self.isValid
+
+        if not seenFirstExInterp:
+            err = 'Error: no exclusive interpretation line seen (e.g. "**kern")'
+            return self.setParseError(err)
 
         return self.isValid
 
