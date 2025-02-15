@@ -277,9 +277,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
         print(summ)
         print(summ, file=results)
 
-    # print SER dict even if there are no diffs
-    serOut: dict = Visualization.get_ser_output(cost, annotatedScore2)
-    jsonStr: str = json.dumps(serOut)
+    # print SECR dict even if there are no diffs
+    secrOut: dict = Visualization.get_secr_output(cost, annotatedScore1, annotatedScore2)
+    jsonStr: str = json.dumps(secrOut)
     print(jsonStr)
     print(jsonStr, file=results)
 

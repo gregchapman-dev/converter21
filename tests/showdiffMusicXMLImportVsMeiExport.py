@@ -76,8 +76,8 @@ def runTheFullTest(inputPath: Path):
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
 
-    serOut: dict[str, str] = Visualization.get_ser_output(cost, score_lin2)
-    jsonStr: str = json.dumps(serOut)
+    secrOut: dict[str, str] = Visualization.get_secr_output(cost, score_lin1, score_lin2)
+    jsonStr: str = json.dumps(secrOut)
     print(jsonStr)
     textOut: str = Visualization.get_text_output(score1, score2, diffList)
     if textOut:
