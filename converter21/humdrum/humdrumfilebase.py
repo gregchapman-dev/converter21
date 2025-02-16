@@ -339,13 +339,13 @@ class HumdrumFileBase(HumHash):
         contentLines = contents.split('\n')
         # print(funcName(), 'len(contentLines) =', len(contentLines), file=sys.stderr)
         for contentLine in contentLines:
+            if contentLine == '<eos>':
+                # temp fix for SMB dataset (ignore trailing <eos> line)
+                break
             line = HumdrumLine(contentLine)
             line.ownerFile = self
             self._lines.append(line)
 
-            # we don't yet support multiple scores in one Humdrum file
-            if line.isTerminateInterpretation:
-                break
 
         self.analyzeBaseFromLines()
         # print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
