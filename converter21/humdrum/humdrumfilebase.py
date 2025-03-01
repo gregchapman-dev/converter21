@@ -1044,12 +1044,15 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 # fix it instead
                 if line.tokenCount > len(dataType):
                     # remove trailing tokens to make up the difference
+                    tokenRemoved: bool = False
                     for i in range(len(dataType), line.tokenCount):
                         # pylint: disable=protected-access
                         line._tokens = line._tokens[:-1]
                         # pylint: enable=protected-access
                         self.numSyntaxErrorsFixed += 1
-                    line.createLineFromTokens()
+                        tokenRemoved = True
+                    if tokenRemoved:
+                        line.createLineFromTokens()
                 else:
                     # append appropriate null-ish tokens to make up the difference
                     ch: str = '.'  # for most spines, this is a fine do-nothing

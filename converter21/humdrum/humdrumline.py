@@ -946,7 +946,10 @@ class HumdrumLine(HumHash):
         elif numNewEntriesNeeded < 0:
             # numNewEntriesNeeded is negative, trim the list and set the new last entry to 0
             self._numTabsAfterToken = self._numTabsAfterToken[:numNewEntriesNeeded]
-            self._numTabsAfterToken[-1] = 0
+            if self._numTabsAfterToken:
+                self._numTabsAfterToken[-1] = 0
+            else:
+                pass
         else:
             # numNewEntriesNeeded is zero, leave the list as is
             pass
