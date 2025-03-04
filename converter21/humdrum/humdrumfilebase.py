@@ -996,9 +996,18 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
         self._trackEnds = [[]]
 
         seenFirstExInterp = False
-        for i, line in enumerate(self._lines):
+
+        # We do a hand-rolled for loop because we modify self._lines
+        # during the loop.
+        i: int = 0
+        while True:
+            if i >= len(self._lines):
+                break
+            line: HumdrumLine = self._lines[i]
+
             if not line.hasSpines and line[0] is not None:
                 line[0].fieldIndex = 0  # the only token on the line has fieldIndex 0
+                i += 1
                 continue
 
             if not seenFirstExInterp and not line.isExclusiveInterpretation:
@@ -1014,6 +1023,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 )
                 self.numSyntaxErrorsFixed += 1
                 self._lines[i].createTokensFromLine()
+                i += 1
                 continue
 
             if not seenFirstExInterp and line.isExclusiveInterpretation:
@@ -1028,6 +1038,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                     token.spineInfo = str(j + 1)
                     token.fieldIndex = j
                     lastSpine.append(token)
+                i += 1
                 continue
 
             if len(dataType) != line.tokenCount:
@@ -1043,7 +1054,41 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
 
                 # fix it instead
                 if line.tokenCount > len(dataType):
-                    # remove trailing tokens to make up the difference
+                    # Insert spine split manipulator(s) before
+                    # this line to match this line's reality.  If that fails,
+                    # remove any trailing tokens to make up the difference.
+                    # We insert splits in the position of any **kern spine
+                    # in the previous line (spine types are in dataType);
+                    # it's impossible to know where the split really should
+                    # have been.  This makes the file parseable, but it might
+                    # now have notes in wrong voices/staves.
+                    numExtraSpines: int = line.tokenCount - len(dataType)
+
+                    splitLine: HumdrumLine = HumdrumLine()
+                    for dt in dataType:
+                        if numExtraSpines == 0:
+                            splitLine.appendToken('*')
+                            continue
+
+                        if dt == '**kern':
+                            # split!
+                            splitLine.appendToken('*^')
+                            numExtraSpines -= 1
+                            continue
+
+                        splitLine.appendToken('*')
+
+                    if numExtraSpines == 0:
+                        # we were successful, insert that splitLine
+                        splitLine.createLineFromTokens()
+                        self.numSyntaxErrorsFixed += (line.tokenCount - len(dataType)) * 2
+                        self.insertLine(i, splitLine)
+                        # We do not increment i here because we need
+                        # to continue starting at i (which is now
+                        # the inserted manipulator line).
+                        continue
+
+                    # not successful, fall back to just deleting the last token(s)
                     tokenRemoved: bool = False
                     for i in range(len(dataType), line.tokenCount):
                         # pylint: disable=protected-access
@@ -1078,6 +1123,8 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                 success, dataType, sinfo = self.adjustSpines(line, dataType, sinfo)
                 if not success:
                     return self.isValid
+
+            i += 1
 
         if not seenFirstExInterp:
             err = 'Error: no exclusive interpretation line seen (e.g. "**kern")'
@@ -1270,7 +1317,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
     ////////////////////////////
     //
     // HumdrumFileBase::insertLine -- Add a line to the file's contents.  The file's
-    //    spine and rhythmic structure should be recalculated after an append.
+    //    spine and rhythmic structure should be recalculated after an insert.
     '''
     def insertLine(
         self,

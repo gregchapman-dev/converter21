@@ -87,7 +87,6 @@ class HumdrumConverter(SubConverter):
             # syntax errors, so we must return an empty score.
             self.stream = stream.Score()
             self.stream.c21_parse_err = f'{e}'  # type: ignore
-            raise e
 
         return self.stream
 
