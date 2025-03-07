@@ -214,6 +214,7 @@ class MeiShared:
                 fontWeight: str = el.get('fontweight', '')
                 fontFamily: str = el.get('fontfam', '')
                 justify: str = el.get('halign', '')
+                rend: str = el.get('rend', '')
                 if fontStyle:
                     styleDict['fontStyle'] = fontStyle
                 if fontWeight:
@@ -222,6 +223,8 @@ class MeiShared:
                     styleDict['fontFamily'] = fontFamily
                 if justify:
                     styleDict['justify'] = justify
+                if rend in ('box', 'circle', 'dbox', 'tbox'):
+                    styleDict['enclosure'] = rend
 
             elif el.name in MeiShared._CHOOSING_EDITORIALS_NO_NAMESPACE:
                 subEl: MeiElement | None = MeiShared.chooseSubMeiElement(el)

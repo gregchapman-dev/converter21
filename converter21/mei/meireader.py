@@ -1706,6 +1706,7 @@ class MeiReader:
             fontWeight = styleDict.get('fontWeight', None)
             fontFamily = styleDict.get('fontFamily', None)
             justify = styleDict.get('justify', None)
+            enclosure = styleDict.get('enclosure', None)
 
             self.m21Attr[startId][f'm21{name}'] = text
             if place:
@@ -1722,6 +1723,8 @@ class MeiReader:
                 self.m21Attr[startId][f'm21{name}FontFamily'] = fontFamily
             if justify:
                 self.m21Attr[startId][f'm21{name}Justify'] = justify
+            if enclosure:
+                self.m21Attr[startId][f'm21{name}Enclosure'] = enclosure
 
             eachElem.set(f'ignore_in_{lowerName}FromElement', 'true')
 
@@ -2224,6 +2227,7 @@ class MeiReader:
             fontWeight: str = elem.get(f'{prefix}FontWeight', '')
             fontFamily: str = elem.get(f'{prefix}FontFamily', '')
             justify: str = elem.get(f'{prefix}Justify', '')
+            enclosure: str = elem.get(f'{prefix}Enclosure', '')
 
             # make the appropriate m21 object (TextExpression, Dynamic, TempoIndication)
             # and put it in a custom list in obj: obj.meireader_dir_dynam_tempo_list
@@ -2234,6 +2238,7 @@ class MeiReader:
                     fontWeight,
                     fontFamily,
                     justify,
+                    enclosure,
                     place)
             )
 
@@ -7404,6 +7409,74 @@ class MeiReader:
 
         return staffNStr, (offset, measSkip, offset2), hairpin
 
+    def rehFromElement(
+        self,
+        elem: Element,
+    ) -> tuple[
+        str,
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        m21.expressions.RehearsalMark | None
+    ]:
+        staffNStr: str
+        offsets: tuple[OffsetQL | None, int | None, OffsetQL | None]
+        rehObj: m21.expressions.RehearsalMark
+
+        # first parse as a <dir> giving a TextExpression with style,
+        # then try to derive dynamic info from that.
+        teWithStyle: expressions.TextExpression | None
+        staffNStr, offsets, teWithStyle = (
+            self.dirFromElement(elem)
+        )
+        if teWithStyle is None:
+            return '', (-1., None, None), None
+
+        rehObj = self._rehFromTextExpression(teWithStyle)
+        return staffNStr, offsets, rehObj
+
+    @staticmethod
+    def _rehFromTextExpression(
+        te: m21.expressions.TextExpression
+    ) -> m21.expressions.RehearsalMark:
+        rehObj = m21.expressions.RehearsalMark(te.content)
+        if te.hasStyleInformation:
+            # RehearsalMark style is TextStylePlacement (placement is in rehObj.style.placement)
+            # TextExpression style is TextStyle (placement is in te.placement)
+            # So we have to copy each field from one class to the other.
+            if t.TYPE_CHECKING:
+                assert isinstance(te.style, m21.style.TextStyle)
+            rehObj.style = m21.style.TextStylePlacement()
+            rehObj.style.size = te.style.size
+            rehObj.style.relativeX = te.style.relativeX
+            rehObj.style.relativeY = te.style.relativeY
+            rehObj.style.absoluteX = te.style.absoluteX
+            rehObj.style._absoluteY = te.style._absoluteY
+            rehObj.style._enclosure = te.style._enclosure
+            rehObj.style.fontRepresentation = te.style.fontRepresentation
+            rehObj.style.color = te.style.color
+            rehObj.style.units = te.style.units
+            rehObj.style.hideObjectOnPrint = te.style.hideObjectOnPrint
+            rehObj.style.dashLength = te.style.dashLength
+            rehObj.style.spaceLength = te.style.spaceLength
+
+            rehObj.style._fontFamily = te.style._fontFamily
+            rehObj.style._fontSize = te.style._fontSize
+            rehObj.style._fontStyle = te.style._fontStyle
+            rehObj.style._fontWeight = te.style._fontWeight
+            rehObj.style._letterSpacing = te.style._letterSpacing
+            rehObj.style.lineHeight = te.style.lineHeight
+            rehObj.style.textDirection = te.style.textDirection
+            rehObj.style.textRotation = te.style.textRotation
+            rehObj.style.language = te.style.language
+            rehObj.style.textDecoration = te.style.textDecoration
+            rehObj.style._justify = te.style._justify
+            rehObj.style._alignHorizontal = te.style._alignHorizontal
+            rehObj.style._alignVertical = te.style._alignVertical
+
+            # placement comes from te, not te.style
+            rehObj.style.placement = te.placement
+
+        return rehObj
+
     def dynamFromElement(
         self,
         elem: Element,
@@ -7732,6 +7805,7 @@ class MeiReader:
         fontWeight: str | None = styleDict.get('fontWeight', None)
         fontFamily: str | None = styleDict.get('fontFamily', None)
         justify: str | None = styleDict.get('justify', None)
+        enclosure: str | None = styleDict.get('enclosure', None)
 
         te = self._textExpressionFromPieces(
             text,
@@ -7739,6 +7813,7 @@ class MeiReader:
             fontWeight,
             fontFamily,
             justify,
+            enclosure,
             place
         )
 
@@ -7755,6 +7830,7 @@ class MeiReader:
         fontWeight: str | None,
         fontFamily: str | None,
         justify: str | None,
+        enclosure: str | None,
         place: str | None
     ) -> m21.expressions.TextExpression:
         te = m21.expressions.TextExpression(text)
@@ -7770,6 +7846,16 @@ class MeiReader:
             te.style.fontFamily = fontFamily
         if justify:
             te.style.justify = justify
+
+        if enclosure:
+            if enclosure == 'box':
+                te.style.enclosure = m21.style.Enclosure.SQUARE
+            elif enclosure == 'circle':
+                te.style.enclosure = m21.style.Enclosure.CIRCLE
+            elif enclosure == 'dbox':
+                te.style.enclosure = m21.style.Enclosure.DIAMOND
+            elif enclosure == 'tbox':
+                te.style.enclosure = m21.style.Enclosure.TRIANGLE
 
         if place:
             if place == 'above':
@@ -8934,7 +9020,7 @@ class MeiReader:
             #         f'{MEI_NS}pedal': self.pedalFromElement,
             #         f'{MEI_NS}phrase': self.phraseFromElement,
             #         f'{MEI_NS}pitchInflection': self.pitchInflectionFromElement,
-            #         f'{MEI_NS}reh': self.rehFromElement,
+            f'{MEI_NS}reh': self.rehFromElement,
             f'{MEI_NS}tempo': self.tempoFromElement,
             f'{MEI_NS}trill': self.trillFromElement,
             f'{MEI_NS}turn': self.turnFromElement,
