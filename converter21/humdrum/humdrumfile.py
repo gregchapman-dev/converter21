@@ -1031,7 +1031,7 @@ class HumdrumFile(HumdrumFileContent):
 
         self._currentMeasureLayerTokens = self._scoreLayerTokens[measureKey]
         self._convertMeasureStaves(measureKey)
-        # self._checkForRehearsal(startIdx)
+        self._checkForRehearsal(measureKey)
 
         # self._addFTremSlurs() This appears to do nothing in iohumdrum.cpp
 
@@ -1201,7 +1201,7 @@ class HumdrumFile(HumdrumFileContent):
 #             if self._oclefs or self._omets or self._okeys:
 #                 self._storeOriginalClefMensurationKeyApp()
 
-        # TODO: sections (A, B) and repeat endings (1, 2)
+        # TODO: sections (A, B)
 
         return endLineIdx
 
@@ -10362,6 +10362,103 @@ class HumdrumFile(HumdrumFileContent):
         if group and not group.startswith('original'):
             self._m21BreakAtStartOfNextMeasure = m21.layout.PageLayout(isNew=True)
             return
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::checkForRehearsal -- Only attached to barlines for now.
+    //     Also required to be global layout for now, add note attachment
+    //     later.
+        Actually, I care more for staff attachment than note attachment.
+        Currently, it's always top staff because we don't detect it in local
+        layouts.
+    '''
+    def _checkForRehearsal(self, measureKey: tuple[int | None, int]):
+        checkLine: int | None = measureKey[0]
+        if checkLine is None:
+            return
+
+        line: HumdrumLine = self._lines[checkLine]
+        if not line.isBarline:
+            checkLine = self._getNextBarlineIndex(checkLine)
+            line = self._lines[checkLine]
+        if not line.isBarline:
+            return
+
+        token: HumdrumToken | None = line[0]
+        if token is None:
+            return
+
+        lcount: int = token.linkedParameterSetCount
+        for i in range(0, lcount):
+            isGlobal: bool = token.linkedParameterIsGlobal(i)
+            if not isGlobal:
+                continue
+            hps: HumParamSet | None = token.getLinkedParameterSet(i)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            ns2: str = hps.namespace2
+            if ns2 != 'REH':
+                continue
+
+            tvalue: str = ''
+            for j in range(0, hps.count):
+                paramKey: str = hps.getParameterName(j)
+                paramVal: str = hps.getParameterValue(j)
+                if paramKey == 't':
+                    tvalue = paramVal
+                    break
+
+            # We allow rehearsal marks with no text (so does music21's
+            # MusicXML importer).
+
+            # We found one, make a RehearsalMark and insert it at the
+            # beginning of the current measure in the top staff.
+            reh = m21.expressions.RehearsalMark(tvalue)
+
+            # No enclosure type supported yet.
+            # Someday might be !!LO:REH:a:t=3:enc=box or something like that.
+            reh.style.enclosure = m21.style.Enclosure.SQUARE
+
+            staffIndex: int = 0  # for now (local !LO:REH:t= not supported yet)
+            currentMeasurePerStaff: list[m21.stream.Measure] = (
+                self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
+            )
+            currentMeasurePerStaff[staffIndex].coreInsert(0, reh)
+            currentMeasurePerStaff[staffIndex].coreElementsChanged()
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getNextBarlineIndex -- Return the next barline row on or after
+    //     the current index into the file.  If there is none before the first
+    //     encountered data line, then return the input value.
+    '''
+    def _getNextBarlineIndex(self, startLine: int) -> int:
+        line: HumdrumLine = self._lines[startLine]
+        token: HumdrumToken | None = line[0]
+        if token is not None:
+            if token.isBarline:
+                return startLine
+            if token.text == '*-':
+                return startLine
+
+        # check the rest of the lines
+        for lineIdx in range(startLine + 1, len(self._lines)):
+            line = self._lines[lineIdx]
+            token = line[0]
+            if token is None:
+                continue
+            if token.isBarline:
+                return lineIdx
+            if token.isData:
+                return startLine
+            if token.text == '*-':
+                return lineIdx
+
+        return startLine
 
     '''
     //////////////////////////////
