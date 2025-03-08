@@ -1563,6 +1563,7 @@ class M21ObjectConvert:
             meiFontWeight: str | None = None
             meiFontFamily: str | None = None
             meiJustify: str | None = None
+            meiRend: str | None = None
 
             meiFontStyle, meiFontWeight = M21ObjectConvert.m21FontStyleAndWeightToMei(
                 style.fontStyle,
@@ -1576,11 +1577,15 @@ class M21ObjectConvert:
             if style.justify:
                 meiJustify = style.justify
 
+            if style.enclosure is not None:
+                meiRend = M21ObjectConvert.m21EnclosureToMeiRend(style.enclosure)
+
             needsRend = (
                 bool(meiFontStyle)
                 or bool(meiFontWeight)
                 or bool(meiFontFamily)
                 or bool(meiJustify)
+                or bool(meiRend)
             )
             if needsRend:
                 rendAttr: dict[str, str] = {}
@@ -1592,6 +1597,8 @@ class M21ObjectConvert:
                     rendAttr['fontfam'] = meiFontFamily
                 if meiJustify:
                     rendAttr['halign'] = meiJustify
+                if meiRend:
+                    rendAttr['rend'] = meiRend
                 tb.start('rend', rendAttr)
 
         tb.data(text)
@@ -1599,6 +1606,18 @@ class M21ObjectConvert:
         if needsRend:
             tb.end('rend')
         tb.end(tag)
+
+    @staticmethod
+    def m21EnclosureToMeiRend(encl: m21.style.Enclosure) -> str | None:
+        if encl == m21.style.Enclosure.SQUARE:
+            return 'box'
+        if encl in (m21.style.Enclosure.CIRCLE, m21.style.Enclosure.OVAL):
+            return 'circle'
+        if encl == m21.style.Enclosure.DIAMOND:
+            return 'dbox'
+        if encl == m21.style.Enclosure.TRIANGLE:
+            return 'tbox'
+        return None  # default value
 
     @staticmethod
     def convertPostStaveStreamElement(
@@ -1643,6 +1662,12 @@ class M21ObjectConvert:
                 assert style is None or isinstance(style, m21.style.TextStyle)
             M21ObjectConvert.emitStyledTextElement(obj.content, style, tag, attr, tb)
             return
+
+        if tag == 'reh':
+            if t.TYPE_CHECKING:
+                assert isinstance(obj, m21.expressions.RehearsalMark)
+                assert style is None or isinstance(style, m21.style.TextStylePlacement)
+            M21ObjectConvert.emitStyledTextElement(obj.content, style, tag, attr, tb)
 
         if tag == 'harm':
             if t.TYPE_CHECKING:
@@ -2040,6 +2065,7 @@ M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG: dict[str, str] = {
     # saved for the post-staves elements.
     'Dynamic': 'dynam',
     'TextExpression': 'dir',
+    'RehearsalMark': 'reh',
     'ChordSymbol': 'harm',
     'NoChord': 'harm',
     'TempoIndication': 'tempo',

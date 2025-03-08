@@ -7480,8 +7480,8 @@ class MeiReader:
             rehObj.style.alignHorizontal = 'center'
             rehObj.style.alignVertical = 'middle'
 
-            # placement comes from te, not te.style
-            rehObj.style.placement = te.placement
+        # placement comes from te, not te.style
+        rehObj.style.placement = te.placement
 
         return rehObj
 
