@@ -7430,6 +7430,12 @@ class MeiReader:
         if teWithStyle is None:
             return '', (-1., None, None), None
 
+        if offsets[0] is None or offsets[0] < opFrac(0):
+            # <reh> timestamp (unlike other <dir>-like elements) is optional,
+            # and if not present (or bogus) you can just put it at the beginning
+            # of the measure.
+            offsets = (opFrac(0), offsets[1], offsets[2])
+
         rehObj = self._rehFromTextExpression(teWithStyle)
         return staffNStr, offsets, rehObj
 
@@ -7469,8 +7475,10 @@ class MeiReader:
             rehObj.style.language = te.style.language
             rehObj.style.textDecoration = te.style.textDecoration
             rehObj.style._justify = te.style._justify
-            rehObj.style._alignHorizontal = te.style._alignHorizontal
-            rehObj.style._alignVertical = te.style._alignVertical
+            # Make these two match music21's RehearsalMark default (they
+            # are different from music21's TextExpression default)
+            rehObj.style.alignHorizontal = 'center'
+            rehObj.style.alignVertical = 'middle'
 
             # placement comes from te, not te.style
             rehObj.style.placement = te.placement
