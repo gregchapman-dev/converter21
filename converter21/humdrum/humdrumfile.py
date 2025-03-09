@@ -9378,9 +9378,9 @@ class HumdrumFile(HumdrumFileContent):
         if not text:
             return insertedIntoVoice
 
-        # maybe add center justification as an option later
         # justification == 0 means no explicit justification (mostly left justified)
         # justification == 1 means right justified
+        # justification == 2 means center justified
         justification: int = 0
         if token.isDefined('LO', 'TX', 'rj'):
             justification = 1
@@ -10418,7 +10418,6 @@ class HumdrumFile(HumdrumFileContent):
 
                     aparam: bool = False
                     bparam: bool = False
-                    cparam: bool = False
                     encl: str = ''
                     tvalue: str = ''
                     for j in range(0, hps.count):
@@ -10436,9 +10435,6 @@ class HumdrumFile(HumdrumFileContent):
                         if paramKey == 'b':
                             bparam = True
                             continue
-                        if paramKey == 'c':
-                            cparam = True
-                            continue
 
                     # We allow rehearsal marks with no text (so does music21's
                     # MusicXML importer).
@@ -10449,15 +10445,10 @@ class HumdrumFile(HumdrumFileContent):
                     if t.TYPE_CHECKING:
                         assert isinstance(reh.style, m21.style.TextStylePlacement)
 
-                    reh.style.alignVertical = None
-
                     if aparam:  # above staff
                         reh.style.placement = 'above'
                     elif bparam:  # below staff
                         reh.style.placement = 'below'
-                    elif cparam:  # between this staff and next
-                        reh.style.placement = 'below'
-                        reh.style.alignVertical = 'middle'
 
                     if encl == 'box':
                         reh.style.enclosure = m21.style.Enclosure.SQUARE
@@ -10467,9 +10458,6 @@ class HumdrumFile(HumdrumFileContent):
                         reh.style.enclosure = m21.style.Enclosure.DIAMOND
                     elif encl == 'tbox':
                         reh.style.enclosure = m21.style.Enclosure.TRIANGLE
-                    else:
-                        # if not set, or not recognized, default is SQUARE
-                        reh.style.enclosure = m21.style.Enclosure.SQUARE
 
                     currentMeasurePerStaff: list[m21.stream.Measure] = (
                         self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
