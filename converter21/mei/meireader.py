@@ -7481,6 +7481,8 @@ class MeiReader:
             rehObj.style.alignVertical = 'middle'
 
         # placement comes from te, not te.style
+        if t.TYPE_CHECKING:
+            assert isinstance(rehObj.style, m21.style.TextStylePlacement)
         rehObj.style.placement = te.placement
 
         return rehObj
