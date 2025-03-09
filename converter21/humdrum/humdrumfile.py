@@ -10374,60 +10374,108 @@ class HumdrumFile(HumdrumFileContent):
         layouts.
     '''
     def _checkForRehearsal(self, measureKey: tuple[int | None, int]):
-        checkLine: int | None = measureKey[0]
-        if checkLine is None:
+        startLineIdx: int | None
+        endLineIdx: int
+        startLineIdx, endLineIdx = measureKey
+        if startLineIdx is None:
+            # skip this measure
             return
 
-        line: HumdrumLine = self._lines[checkLine]
-        if not line.isBarline:
-            checkLine = self._getNextBarlineIndex(checkLine)
-            line = self._lines[checkLine]
-        if not line.isBarline:
-            return
-
-        token: HumdrumToken | None = line[0]
-        if token is None:
-            return
-
-        lcount: int = token.linkedParameterSetCount
-        for i in range(0, lcount):
-            isGlobal: bool = token.linkedParameterIsGlobal(i)
-            if not isGlobal:
-                continue
-            hps: HumParamSet | None = token.getLinkedParameterSet(i)
-            if not hps:
-                continue
-            if hps.namespace1 != 'LO':
-                continue
-            ns2: str = hps.namespace2
-            if ns2 != 'REH':
-                continue
-
-            tvalue: str = ''
-            for j in range(0, hps.count):
-                paramKey: str = hps.getParameterName(j)
-                paramVal: str = hps.getParameterValue(j)
-                if paramKey == 't':
-                    tvalue = paramVal
+        for lineIdx in range(startLineIdx, endLineIdx):
+            line: HumdrumLine = self._lines[lineIdx]
+            handledGlobalRehearsalMarkOnThisLine: bool = False
+            for token in line.tokens():
+                if handledGlobalRehearsalMarkOnThisLine:
+                    # skip to next line, handle global rehearsal mark there if seen
+                    handledGlobalRehearsalMarkOnThisLine = False
                     break
 
-            # We allow rehearsal marks with no text (so does music21's
-            # MusicXML importer).
+                lcount: int = token.linkedParameterSetCount
+                for i in range(0, lcount):
+                    hps: HumParamSet | None = token.getLinkedParameterSet(i)
+                    if not hps:
+                        continue
+                    if hps.namespace1 != 'LO':
+                        continue
+                    ns2: str = hps.namespace2
+                    if ns2 != 'REH':
+                        continue
 
-            # We found one, make a RehearsalMark and insert it at the
-            # beginning of the current measure in the top staff.
-            reh = m21.expressions.RehearsalMark(tvalue)
+                    staffIndex: int = 0
+                    if token.track is not None:
+                        staffIndex = self._staffStartsIndexByTrack[token.track]
+                    if staffIndex < 0:
+                        # not a notational spine for a staff
+                        continue
 
-            # No enclosure type supported yet.
-            # Someday might be !!LO:REH:a:t=3:enc=box or something like that.
-            reh.style.enclosure = m21.style.Enclosure.SQUARE
+                    isGlobal: bool = token.linkedParameterIsGlobal(i)
+                    if isGlobal:
+                        if handledGlobalRehearsalMarkOnThisLine:
+                            # skip to next token (which will skip to next line)
+                            break
+                        staffIndex = 0
+                        handledGlobalRehearsalMarkOnThisLine = True
 
-            staffIndex: int = 0  # for now (local !LO:REH:t= not supported yet)
-            currentMeasurePerStaff: list[m21.stream.Measure] = (
-                self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
-            )
-            currentMeasurePerStaff[staffIndex].coreInsert(0, reh)
-            currentMeasurePerStaff[staffIndex].coreElementsChanged()
+                    aparam: bool = False
+                    bparam: bool = False
+                    cparam: bool = False
+                    encl: str = ''
+                    tvalue: str = ''
+                    for j in range(0, hps.count):
+                        paramKey: str = hps.getParameterName(j)
+                        paramVal: str = hps.getParameterValue(j)
+                        if paramKey == 't':
+                            tvalue = paramVal
+                            continue
+                        if paramKey == 'en':
+                            encl = paramVal
+                            continue
+                        if paramKey == 'a':
+                            aparam = True
+                            continue
+                        if paramKey == 'b':
+                            bparam = True
+                            continue
+                        if paramKey == 'c':
+                            cparam = True
+                            continue
+
+                    # We allow rehearsal marks with no text (so does music21's
+                    # MusicXML importer).
+
+                    # We found one, make a RehearsalMark and insert it at the
+                    # beginning of the current measure in the top staff.
+                    reh = m21.expressions.RehearsalMark(tvalue)
+                    if t.TYPE_CHECKING:
+                        assert isinstance(reh.style, m21.style.TextStylePlacement)
+
+                    reh.style.alignVertical = None
+
+                    if aparam:  # above staff
+                        reh.style.placement = 'above'
+                    elif bparam:  # below staff
+                        reh.style.placement = 'below'
+                    elif cparam:  # between this staff and next
+                        reh.style.placement = 'below'
+                        reh.style.alignVertical = 'middle'
+
+                    if encl == 'box':
+                        reh.style.enclosure = m21.style.Enclosure.SQUARE
+                    elif encl == 'circle':
+                        reh.style.enclosure = m21.style.Enclosure.CIRCLE
+                    elif encl == 'dbox':
+                        reh.style.enclosure = m21.style.Enclosure.DIAMOND
+                    elif encl == 'tbox':
+                        reh.style.enclosure = m21.style.Enclosure.TRIANGLE
+                    else:
+                        # if not set, or not recognized, default is SQUARE
+                        reh.style.enclosure = m21.style.Enclosure.SQUARE
+
+                    currentMeasurePerStaff: list[m21.stream.Measure] = (
+                        self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
+                    )
+                    currentMeasurePerStaff[staffIndex].coreInsert(0, reh)
+                    currentMeasurePerStaff[staffIndex].coreElementsChanged()
 
     '''
     //////////////////////////////
