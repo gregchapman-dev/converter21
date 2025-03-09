@@ -1776,6 +1776,105 @@ class M21Convert:
             )
         return M21Convert.textLayoutParameterFromM21Pieces(contentString, placement, None)
 
+    @staticmethod
+    def rehearsalMarkLayoutParameterFromM21Pieces(
+        content: str,
+        style: m21.style.TextStylePlacement | None
+    ) -> str:
+        placementString: str = ''
+        styleString: str = ''
+        justString: str = ''
+        colorString: str = ''
+        enclString: str = ''
+        contentString: str = M21Convert.translateSMUFLNotesToNoteNames(content)
+        contentString = M21Convert._cleanSpacesAndColons(contentString)
+
+        # We are perfectly happy to deal with empty contentString.  The result will be:
+        # '!LO:TX:i:t=' or something like that.
+        # The bottom line is that we can't return an invalid token string (e.g. '') or
+        # that will go into the exported file, and a '' will show up on parse as a missing
+        # spine. --gregc
+        if style:
+            if style.placement is not None:
+                if style.placement == 'above':
+                    placementString = ':a'
+                elif style.placement == 'below':
+                    if style and style.alignVertical == 'middle':
+                        placementString = ':c'
+                    else:
+                        placementString = ':b'
+
+            # absoluteY overrides placement
+            if style.absoluteY is not None:
+                if style.absoluteY > 0.0:
+                    placementString = ':a'
+                else:
+                    placementString = ':b'
+
+            italic: bool = False
+            bold: bool = False
+
+            if style.fontStyle is not None:
+                if style.fontStyle == 'italic':
+                    italic = True
+                elif style.fontStyle == 'bold':
+                    bold = True
+                elif style.fontStyle == 'bolditalic':
+                    bold = True
+                    italic = True
+
+            if style.fontWeight is not None and style.fontWeight == 'bold':
+                bold = True
+
+            if italic and bold:
+                styleString = ':Bi'
+            elif italic:
+                styleString = ':i'
+            elif bold:
+                styleString = ':B'
+
+            if style.justify == 'right':
+                justString = ':rj'
+            elif style.justify == 'center':
+                justString = ':cj'
+
+            if style.color:
+                colorString = f':color={style.color}'
+
+            if style.enclosure:
+                if style.enclosure == m21.style.Enclosure.SQUARE:
+                    enclString = ':en=box'
+                elif style.enclosure == m21.style.Enclosure.CIRCLE:
+                    enclString = ':en=circle'
+                elif style.enclosure == m21.style.Enclosure.TRIANGLE:
+                    enclString = ':en=tbox'
+                elif style.enclosure == m21.style.Enclosure.DIAMOND:
+                    enclString = ':en=dbox'
+
+        output: str = (
+            '!LO:REH' + placementString + styleString
+            + justString + colorString + enclString
+            + ':t=' + contentString
+        )
+        return output
+
+    @staticmethod
+    def rehearsalMarkLayoutParameterFromM21RehearsalMark(
+        rehearsalMark: m21.expressions.RehearsalMark
+    ) -> str:
+        if rehearsalMark is None:
+            return ''
+
+        contentString: str = rehearsalMark.content
+        if rehearsalMark.hasStyleInformation:
+            if t.TYPE_CHECKING:
+                assert isinstance(rehearsalMark.style, m21.style.TextStylePlacement)
+            return M21Convert.rehearsalMarkLayoutParameterFromM21Pieces(
+                contentString,
+                rehearsalMark.style
+            )
+        return M21Convert.rehearsalMarkLayoutParameterFromM21Pieces(contentString, None)
+
     '''
     //////////////////////////////
     //
