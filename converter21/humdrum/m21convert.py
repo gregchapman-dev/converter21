@@ -1761,9 +1761,6 @@ class M21Convert:
     def textLayoutParameterFromM21TextExpression(
         textExpression: m21.expressions.TextExpression
     ) -> str:
-        if textExpression is None:
-            return ''
-
         contentString: str = textExpression.content
         placement: str | None = textExpression.placement
         if textExpression.hasStyleInformation:
@@ -1790,7 +1787,7 @@ class M21Convert:
         contentString = M21Convert._cleanSpacesAndColons(contentString)
 
         # We are perfectly happy to deal with empty contentString.  The result will be:
-        # '!LO:TX:i:t=' or something like that.
+        # '!LO:REH:i:t=' or something like that.
         # The bottom line is that we can't return an invalid token string (e.g. '') or
         # that will go into the exported file, and a '' will show up on parse as a missing
         # spine. --gregc
@@ -1799,10 +1796,7 @@ class M21Convert:
                 if style.placement == 'above':
                     placementString = ':a'
                 elif style.placement == 'below':
-                    if style and style.alignVertical == 'middle':
-                        placementString = ':c'
-                    else:
-                        placementString = ':b'
+                    placementString = ':b'
 
             # absoluteY overrides placement
             if style.absoluteY is not None:
@@ -1862,9 +1856,6 @@ class M21Convert:
     def rehearsalMarkLayoutParameterFromM21RehearsalMark(
         rehearsalMark: m21.expressions.RehearsalMark
     ) -> str:
-        if rehearsalMark is None:
-            return ''
-
         contentString: str = rehearsalMark.content
         if rehearsalMark.hasStyleInformation:
             if t.TYPE_CHECKING:

@@ -10418,6 +10418,10 @@ class HumdrumFile(HumdrumFileContent):
 
                     aparam: bool = False
                     bparam: bool = False
+                    bold: bool = False
+                    italic: bool = False
+                    justification: int = 0
+                    color: str = ''
                     encl: str = ''
                     tvalue: str = ''
                     for j in range(0, hps.count):
@@ -10435,6 +10439,25 @@ class HumdrumFile(HumdrumFileContent):
                         if paramKey == 'b':
                             bparam = True
                             continue
+                        if paramKey == 'rj':
+                            justification = 1
+                            continue
+                        if paramKey == 'cj':
+                            justification = 2
+                            continue
+                        if paramKey == 'i':
+                            italic = True
+                            continue
+                        if paramKey == 'B':
+                            bold = True
+                            continue
+                        if paramKey in ('ib', 'iB', 'bi', 'Bi'):
+                            bold = True
+                            italic = True
+                            continue
+                        if paramKey == 'color':
+                            color = paramVal
+                            continue
 
                     # We allow rehearsal marks with no text (so does music21's
                     # MusicXML importer).
@@ -10449,6 +10472,21 @@ class HumdrumFile(HumdrumFileContent):
                         reh.style.placement = 'above'
                     elif bparam:  # below staff
                         reh.style.placement = 'below'
+
+                    if bold and italic:
+                        reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
+                    elif italic:
+                        reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
+                    elif bold:
+                        reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
+
+                    if justification == 1:
+                        reh.style.justify = 'right'
+                    elif justification == 2:
+                        reh.style.justify = 'center'
+
+                    if color:
+                        reh.style.color = color
 
                     if encl == 'box':
                         reh.style.enclosure = m21.style.Enclosure.SQUARE
