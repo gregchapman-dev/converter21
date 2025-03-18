@@ -996,9 +996,9 @@ class HumGrid:
                 if theSlice.isGlobalLayout:
                     voice: GridVoice | None = theSlice.parts[0].staves[0].voices[0]
                     if voice is not None:
-                        token: HumdrumToken | None = voice.token
-                        if token is not None:
-                            if token.text.startswith('!!LO:REH'):
+                        voiceTok: HumdrumToken | None = voice.token
+                        if voiceTok is not None:
+                            if voiceTok.text.startswith('!!LO:REH'):
                                 continue
 
                 barlineInsertionIdx = idx
