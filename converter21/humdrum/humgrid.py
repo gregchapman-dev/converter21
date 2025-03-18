@@ -990,13 +990,19 @@ class HumGrid:
 
             mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
 
-            # Insert barline after any global layouts (so, for example, !!LO:REH comes
-            # _before_ the barline.
+            # Insert barline after any leading !!LO:REH
             barlineInsertionIdx: int = 0
             for idx, theSlice in enumerate(measure.slices):
-                if not theSlice.isGlobalLayout:
-                    barlineInsertionIdx = idx
-                    break
+                if theSlice.isGlobalLayout:
+                    voice: GridVoice | None = theSlice.parts[0].staves[0].voices[0]
+                    if voice is not None:
+                        token: HumdrumToken | None = voice.token
+                        if token is not None:
+                            if token.text.startswith('!!LO:REH'):
+                                continue
+
+                barlineInsertionIdx = idx
+                break
 
             measure.slices.insert(barlineInsertionIdx, mslice)  # barline is first slice in measure
 

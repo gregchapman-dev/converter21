@@ -805,10 +805,12 @@ class GridMeasure:
                 sliceDur: HumNum = opFrac((mts + mdur) - sts)
                 lastSlice.duration = sliceDur
 
-        # in the first bar, we delay the initial barline until after all the clef, keysig, etc
+        # in the first bar, we delay the initial barline (and any associated rehearsal mark)
+        # until after all the clef, keysig, etc
         doFirstBarlineNow: bool = False
         didFirstBarline: bool = False
         firstBarlineSlice: GridSlice | None = None
+        firstBarRehearsalMarkSlices: list[GridSlice] = []
 
         if self.duration == 0:
             # don't reposition the first barline if the first bar has no notes
@@ -833,6 +835,8 @@ class GridMeasure:
 
                 if doFirstBarlineNow and not didFirstBarline:
                     if firstBarlineSlice is not None:
+                        for rehSlice in firstBarRehearsalMarkSlices:
+                            rehSlice.transferTokens(outFile, recip)
                         firstBarlineSlice.transferTokens(outFile, recip)
                     didFirstBarline = True
                     # and the slice that made us do the first barline now...
@@ -841,6 +845,17 @@ class GridMeasure:
 
                 if not didFirstBarline and gridSlice.isMeasureSlice and firstBarlineSlice is None:
                     firstBarlineSlice = gridSlice
+                elif (not didFirstBarline and gridSlice.isGlobalLayout):
+                    savedItForLater: bool = False
+                    voice: GridVoice | None = gridSlice.parts[0].staves[0].voices[0]
+                    if voice is not None:
+                        token: HumdrumToken | None = voice.token
+                        if token is not None:
+                            if token.text.startswith('!!LO:REH'):
+                                firstBarRehearsalMarkSlices.append(gridSlice)
+                                savedItForLater = True
+                    if not savedItForLater:
+                        gridSlice.transferTokens(outFile, recip)
                 else:
                     gridSlice.transferTokens(outFile, recip)
             else:
