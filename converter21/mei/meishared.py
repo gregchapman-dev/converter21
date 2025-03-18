@@ -212,17 +212,23 @@ class MeiShared:
                 # off to use.
                 fontStyle: str = el.get('fontstyle', '')
                 fontWeight: str = el.get('fontweight', '')
+                fontSize: str = el.get('fontsize', '')
                 fontFamily: str = el.get('fontfam', '')
                 justify: str = el.get('halign', '')
+                color: str = el.get('color', '')
                 rend: str = el.get('rend', '')
                 if fontStyle:
                     styleDict['fontStyle'] = fontStyle
                 if fontWeight:
                     styleDict['fontWeight'] = fontWeight
+                if fontSize:
+                    styleDict['fontSize'] = fontSize
                 if fontFamily:
                     styleDict['fontFamily'] = fontFamily
                 if justify:
                     styleDict['justify'] = justify
+                if color:
+                    styleDict['color'] = color
                 if rend in ('box', 'circle', 'dbox', 'tbox'):
                     styleDict['enclosure'] = rend
 

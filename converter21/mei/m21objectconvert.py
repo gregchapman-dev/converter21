@@ -1561,14 +1561,19 @@ class M21ObjectConvert:
         if style is not None:
             meiFontStyle: str | None = None
             meiFontWeight: str | None = None
+            meiFontSize: int | float | str | None = None
             meiFontFamily: str | None = None
             meiJustify: str | None = None
+            meiColor: str | None = None
             meiRend: str | None = None
 
             meiFontStyle, meiFontWeight = M21ObjectConvert.m21FontStyleAndWeightToMei(
                 style.fontStyle,
                 style.fontWeight
             )
+
+            if style.fontSize:
+                meiFontSize = style.fontSize
 
             # style.fontFamily is always a list; just take the first one, I guess...
             if style.fontFamily:
@@ -1577,14 +1582,19 @@ class M21ObjectConvert:
             if style.justify:
                 meiJustify = style.justify
 
+            if style.color:
+                meiColor = style.color
+
             if style.enclosure is not None:
                 meiRend = M21ObjectConvert.m21EnclosureToMeiRend(style.enclosure)
 
             needsRend = (
                 bool(meiFontStyle)
                 or bool(meiFontWeight)
+                or bool(meiFontSize)
                 or bool(meiFontFamily)
                 or bool(meiJustify)
+                or bool(meiColor)
                 or bool(meiRend)
             )
             if needsRend:
@@ -1593,10 +1603,14 @@ class M21ObjectConvert:
                     rendAttr['fontstyle'] = meiFontStyle
                 if meiFontWeight:
                     rendAttr['fontweight'] = meiFontWeight
+                if meiFontSize:
+                    rendAttr['fontsize'] = str(meiFontSize)
                 if meiFontFamily:
                     rendAttr['fontfam'] = meiFontFamily
                 if meiJustify:
                     rendAttr['halign'] = meiJustify
+                if meiColor:
+                    rendAttr['color'] = meiColor
                 if meiRend:
                     rendAttr['rend'] = meiRend
                 tb.start('rend', rendAttr)

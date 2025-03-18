@@ -2225,7 +2225,9 @@ class MeiReader:
                 staff = self.staffNumberForNotes
             fontStyle: str = elem.get(f'{prefix}FontStyle', '')
             fontWeight: str = elem.get(f'{prefix}FontWeight', '')
+            fontSize: str = elem.get(f'{prefix}FontSize', '')
             fontFamily: str = elem.get(f'{prefix}FontFamily', '')
+            color: str = elem.get(f'{prefix}Color', '')
             justify: str = elem.get(f'{prefix}Justify', '')
             enclosure: str = elem.get(f'{prefix}Enclosure', '')
 
@@ -2236,7 +2238,9 @@ class MeiReader:
                     text,
                     fontStyle,
                     fontWeight,
+                    fontSize,
                     fontFamily,
+                    color,
                     justify,
                     enclosure,
                     place)
@@ -7813,15 +7817,19 @@ class MeiReader:
 
         fontStyle: str | None = styleDict.get('fontStyle', None)
         fontWeight: str | None = styleDict.get('fontWeight', None)
+        fontSize: str | None = styleDict.get('fontSize', None)
         fontFamily: str | None = styleDict.get('fontFamily', None)
         justify: str | None = styleDict.get('justify', None)
+        color: str | None = styleDict.get('color', None)
         enclosure: str | None = styleDict.get('enclosure', None)
 
         te = self._textExpressionFromPieces(
             text,
             fontStyle,
             fontWeight,
+            fontSize,
             fontFamily,
+            color,
             justify,
             enclosure,
             place
@@ -7838,7 +7846,9 @@ class MeiReader:
         text: str,
         fontStyle: str | None,
         fontWeight: str | None,
+        fontSize: str | None,
         fontFamily: str | None,
+        color: str | None,
         justify: str | None,
         enclosure: str | None,
         place: str | None
@@ -7852,8 +7862,12 @@ class MeiReader:
             te.style.fontStyle = (
                 M21ObjectConvert.meiFontStyleAndWeightToM21FontStyle(fontStyle, fontWeight)
             )
+        if fontSize:
+            te.style.fontSize = fontSize
         if fontFamily:
             te.style.fontFamily = fontFamily
+        if color:
+            te.style.color = color
         if justify:
             te.style.justify = justify
 

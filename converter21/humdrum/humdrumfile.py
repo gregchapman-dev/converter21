@@ -544,6 +544,9 @@ class HumdrumFile(HumdrumFileContent):
         # because keys aren't necessarily unique.
         self._biblio: list[tuple[str, str]] = []
 
+        # parsed from things like !!!LO-style:REH:enc=dbox:color=limegreen:fs=200%
+        self._layoutDefaultStyles: dict[str, dict[str, str]] = {}
+
         # conversion processing state
 
         # _currentMeasureLayerTokens: current system measure represented as a 3d list of tokens.
@@ -648,6 +651,7 @@ class HumdrumFile(HumdrumFileContent):
             # No parts in file, give up.  Return an empty score.
             return self.m21Score
 
+        self.analyzeDefaultLayoutStyles()
         self.analyzeNotation()
 
         # init some lists of staff info
@@ -12675,6 +12679,58 @@ class HumdrumFile(HumdrumFileContent):
                 return True
 
         return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::analyzeDefaultLayoutStyles -- search for lines starting with:
+    //   !!LO-style: and set the default parameters for the given LO category.
+    // Example:
+    //   !!!LO-style:REH:enc=dbox:encc=crimson:color=limegreen:absys:fs=200%
+    //
+    //   These values will be inserted into the m_layoutDefaultStyles variable.
+    //   In this case:
+    //       m_layoutDefaultStyle["REH"]["enc"]   = "dbox";
+    //       m_layoutDefaultStyle["REH"]["encc"]  = "crimson";
+    //       m_layoutDefaultStyle["REH"]["color"] = "limegreen";
+    //       m_layoutDefaultStyle["REH"]["absys"] = "1";
+    //       m_layoutDefaultStyle["REH"]["fs"]    = "200%";
+    //  These defaults will be loaded before processing a !!LO:REH layout parameter set.
+    //  The defaults can be placed anywhere in the file, and later defaults for the
+    //  same category will replace ones earllier in the file.
+    '''
+    def analyzeDefaultLayoutStyles(self) -> None:
+        self._layoutDefaultStyles = {}
+        prefix: str = '!!!LO-style:'
+        for line in self._lines:
+            if line.hasSpines:
+                continue
+            if not line.text.startswith(prefix):
+                continue
+
+            rest: str = line.text[len(prefix):]
+            pieces: list[str] = rest.split(':')
+            if not pieces:
+                continue
+
+            category: str = pieces[0]
+            self._layoutDefaultStyles[category] = {}
+
+            for piece in pieces[1:]:
+                if piece == '':
+                    continue
+                if piece and piece[0] == '=':
+                    continue
+                m = re.search(r'^([^=]+)=(.*)$', piece)
+                if m:
+                    key: str = m.group(1)
+                    value: str = m.group(2)
+                    value = html.unescape(value)
+                    self._layoutDefaultStyles[category][key] = value
+                else:
+                    key = piece
+                    value = '1'
+                    self._layoutDefaultStyles[category][key] = value
 
     '''
     //////////////////////////////
