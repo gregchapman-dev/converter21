@@ -989,7 +989,16 @@ class HumGrid:
                 continue
 
             mslice: GridSlice = GridSlice(measure, timestamp, SliceType.Measures)
-            measure.slices.insert(0, mslice)  # barline is first slice in measure
+
+            # Insert barline after any global layouts (so, for example, !!LO:REH comes
+            # _before_ the barline.
+            barlineInsertionIdx: int = 0
+            for idx, theSlice in enumerate(measure.slices):
+                if not theSlice.isGlobalLayout:
+                    barlineInsertionIdx = idx
+                    break
+
+            measure.slices.insert(barlineInsertionIdx, mslice)  # barline is first slice in measure
 
             partCount: int = len(firstSpined.parts)
             staffIndex: int = 0

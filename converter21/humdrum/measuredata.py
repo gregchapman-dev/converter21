@@ -104,6 +104,10 @@ class MeasureData:
         return self.staffIndex + 1
 
     @property
+    def humdrumStaffNum(self) -> int:
+        return self.ownerStaff.humdrumStaffNum
+
+    @property
     def partIndex(self) -> int:
         return self.ownerStaff.partIndex
 

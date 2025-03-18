@@ -1,0 +1,42 @@
+!!!verovio: spacingLinear 0.2
+!!!verovio: spacingNonLinear 0.7
+!!!verovio: pageWidth 2300
+**kern	**kern	**kern	**kern
+*I"Bass	*I"Tenor	*I"Alto	*I"Soprano
+*clefF4	*clefGv2	*clefG2	*clefG2
+*k[f#]	*k[f#]	*k[f#]	*k[f#]
+*M3/4	*M3/4	*M3/4	*M3/4
+!!LO:REH:t=A
+=1	=1	=1	=1
+!!LO:TX:a:t=default
+4G	4B	4d	2g
+4E	8cL	4e	.
+.	8BJ	.	.
+4F#	4A	4d	4dd
+!!LO:REH:t=B:color=limegreen
+=2	=2	=2	=2
+!!LO:TX:a:t=limegreen:color=limegreen:fs=75%
+4G	4G	2d	4.b
+4D	4F#	.	.
+.	.	.	8a
+4E	4G	4B	4g
+!!LO:REH:t=C:absys:color=#32CD32
+=3	=3	=3	=3
+!!LO:TX:a:t=#32CD32:color=#32CD32:fs=75%
+4C	8cL	8eL	4.g
+.	8BJ	8d	.
+8BBL	4c	8e	.
+8AAJ	.	8f#J	8a
+4GG	4d	4g	4b
+!!LO:REH:t=D:color=rgb(50,205,50)
+=4	=4	=4	=4
+!!LO:TX:a:t=rgb(50,205,50):color=rgb(50,205,50):fs=75%
+2D;	2d;	2f#;	2a;
+4GG	4d	4g	4b
+!!LO:REH:t=E:color=hsl(120,61%,50%)
+=5	=5	=5	=5
+!!LO:TX:a:t=hsl(120,61%,50%):color=hsl(120,61%,50%):fs=75%
+4FF#	4A	4d	2dd
+4GG	4B	4e	.
+4AA	4c	4f#	4cc
+*-	*-	*-	*-

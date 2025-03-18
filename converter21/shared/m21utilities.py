@@ -1586,6 +1586,17 @@ class M21Utilities:
         return alters
 
     @staticmethod
+    def getQLFromString(qlStr: str) -> OffsetQL:
+        try:
+            if '/' in qlStr:
+                return opFrac(Fraction(qlStr))
+            return opFrac(float(qlStr))
+        except Exception:
+            pass
+
+        return 0.
+
+    @staticmethod
     def safeGetOffsetInHierarchy(
         obj: m21.base.Music21Object,
         stream: m21.stream.Stream

@@ -1776,6 +1776,8 @@ class M21Convert:
     @staticmethod
     def rehearsalMarkLayoutParameterFromM21Pieces(
         content: str,
+        humdrumStaffNum: int,
+        qlOffset: HumNum,
         style: m21.style.TextStylePlacement | None
     ) -> str:
         placementString: str = ''
@@ -1783,6 +1785,8 @@ class M21Convert:
         justString: str = ''
         colorString: str = ''
         enclString: str = ''
+        staffString: str = f':place=s{humdrumStaffNum}'
+        fontSizeString: str = ''
         contentString: str = M21Convert.translateSMUFLNotesToNoteNames(content)
         contentString = M21Convert._cleanSpacesAndColons(contentString)
 
@@ -1820,6 +1824,9 @@ class M21Convert:
             if style.fontWeight is not None and style.fontWeight == 'bold':
                 bold = True
 
+            if style.fontSize is not None:
+                fontSizeString = f':fs={style.fontSize}'
+
             if italic and bold:
                 styleString = ':Bi'
             elif italic:
@@ -1846,15 +1853,20 @@ class M21Convert:
                     enclString = ':en=dbox'
 
         output: str = (
-            '!LO:REH' + placementString + styleString
-            + justString + colorString + enclString
+            '!!LO:REH' + staffString + placementString + styleString
+            + justString + colorString + enclString + fontSizeString
             + ':t=' + contentString
         )
+        if qlOffset != 0:
+            output += ':qo={float(qlOffset)}'
+
         return output
 
     @staticmethod
     def rehearsalMarkLayoutParameterFromM21RehearsalMark(
-        rehearsalMark: m21.expressions.RehearsalMark
+        rehearsalMark: m21.expressions.RehearsalMark,
+        humdrumStaffNum: int,
+        qlOffset: HumNum
     ) -> str:
         contentString: str = rehearsalMark.content
         if rehearsalMark.hasStyleInformation:
@@ -1862,9 +1874,16 @@ class M21Convert:
                 assert isinstance(rehearsalMark.style, m21.style.TextStylePlacement)
             return M21Convert.rehearsalMarkLayoutParameterFromM21Pieces(
                 contentString,
+                humdrumStaffNum,
+                qlOffset,
                 rehearsalMark.style
             )
-        return M21Convert.rehearsalMarkLayoutParameterFromM21Pieces(contentString, None)
+        return M21Convert.rehearsalMarkLayoutParameterFromM21Pieces(
+            contentString,
+            humdrumStaffNum,
+            qlOffset,
+            None
+        )
 
     '''
     //////////////////////////////

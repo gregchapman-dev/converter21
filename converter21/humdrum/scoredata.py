@@ -43,6 +43,10 @@ class ScoreData:
         self.m21Score: m21.stream.Score = score
         self.spannerBundle: m21.spanner.SpannerBundle = ownerWriter.spannerBundle
 
+        self.humdrumStartingStaffNumsByPartPtr: dict[int, int] = {}
+        for idx, m21Part in enumerate(list(score.parts)):
+            self.humdrumStartingStaffNumsByPartPtr[id(m21Part)] = idx + 1  # staffNums are 1-based
+
         self.parts: list[PartData] = []
 
         # key is id(m21Object): a large integer that is actually the mem address of m21Object
@@ -96,18 +100,31 @@ class ScoreData:
                 # we already processed this due to a staff group
                 continue
 
+            humdrumStartingStaffNum: int = self.humdrumStartingStaffNumsByPartPtr[id(part)]
             if 'PartStaff' in part.classes and part in groupedParts:
                 # make a new partData entry for these PartStaffs and fill it
                 for partStaffList in partsWithMoreThanOneStaff:
                     if part in partStaffList:
-                        partOfStavesData: PartData = PartData(partStaffList, self, len(self.parts))
+                        partOfStavesData: PartData = PartData(
+                            partStaffList,
+                            self,
+                            len(self.parts),
+                            humdrumStartingStaffNum
+                        )
+                        humdrumStartingStaffNum += len(partStaffList)
                         self.parts.append(partOfStavesData)
                         for ps in partStaffList:
                             scorePartsStillToProcess.remove(ps)  # so we don't double process
                         break
             else:
                 # make a new partData entry for the Part (one staff which is the part)
-                partData: PartData = PartData([part], self, len(self.parts))
+                partData: PartData = PartData(
+                    [part],
+                    self,
+                    len(self.parts),
+                    humdrumStartingStaffNum
+                )
+                humdrumStartingStaffNum += 1
                 self.parts.append(partData)
                 scorePartsStillToProcess.remove(part)
 

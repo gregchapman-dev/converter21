@@ -172,6 +172,10 @@ class EventData:
         return self.partIndex + 1
 
     @property
+    def humdrumStaffNum(self) -> int:
+        return self.ownerMeasure.humdrumStaffNum
+
+    @property
     def startTime(self) -> HumNum:
         return self._startTime
 

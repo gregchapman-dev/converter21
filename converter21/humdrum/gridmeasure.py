@@ -773,6 +773,12 @@ class GridMeasure:
 
         return None
 
+    def addGlobalLayoutAtMeasureStart(self, tok: str) -> GridSlice:
+        ts: HumNum = opFrac(self.timestamp)
+        gs: GridSlice = GridSlice(self, ts, SliceType.GlobalLayouts, [1])
+        gs.addToken(tok, 0, 0, 0)
+        self.slices.insert(0, gs)
+        return gs
 
     '''
     //////////////////////////////

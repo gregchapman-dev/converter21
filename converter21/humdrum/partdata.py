@@ -31,7 +31,8 @@ class PartData:
             self,
             partStaves: list[m21.stream.Part],    # or PartStaff (derived from Part)
             ownerScore,                             # ScoreData
-            partIndex: int
+            partIndex: int,
+            humdrumStartingStaffNum
     ) -> None:
         from converter21.humdrum import ScoreData
         self.ownerScore: ScoreData = ownerScore
@@ -44,7 +45,7 @@ class PartData:
         # but we don't really care. We make a StaffData out of each one.
         self.staves: list[StaffData] = []
         for s, partStaff in enumerate(partStaves):
-            staffData: StaffData = StaffData(partStaff, self, s)
+            staffData: StaffData = StaffData(partStaff, self, s, humdrumStartingStaffNum + s)
             self.staves.append(staffData)
 
         self._partName: str = self._findPartName(partStaves)

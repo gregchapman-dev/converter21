@@ -33,7 +33,8 @@ class StaffData:
             self,
             partStaff: m21.stream.Part,  # could be PartStaff (derived from Part)
             ownerPart,                   # PartData
-            staffIndex: int
+            staffIndex: int,
+            humdrumStaffNum: int
     ) -> None:
         from converter21.humdrum import PartData
         self.ownerPart: PartData = ownerPart
@@ -45,6 +46,7 @@ class StaffData:
         self._transposeWrittenToSounding(partStaff)
 
         self._staffIndex: int = staffIndex
+        self.humdrumStaffNum: int = humdrumStaffNum
         self._verseCount: int = 0
         self.measures: list[MeasureData] = []
 

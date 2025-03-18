@@ -1031,7 +1031,7 @@ class HumdrumFile(HumdrumFileContent):
 
         self._currentMeasureLayerTokens = self._scoreLayerTokens[measureKey]
         self._convertMeasureStaves(measureKey)
-        self._checkForRehearsal(measureKey)
+        self._checkForGlobalRehearsal(measureKey)
 
         # self._addFTremSlurs() This appears to do nothing in iohumdrum.cpp
 
@@ -10364,16 +10364,9 @@ class HumdrumFile(HumdrumFileContent):
             return
 
     '''
-    //////////////////////////////
-    //
-    // HumdrumInput::checkForRehearsal -- Only attached to barlines for now.
-    //     Also required to be global layout for now, add note attachment
-    //     later.
-        Actually, I care more for staff attachment than note attachment.
-        Currently, it's always top staff because we don't detect it in local
-        layouts.
+    // HumdrumInput::checkForGlobalRehearsal -- Only attached to barlines for now.
     '''
-    def _checkForRehearsal(self, measureKey: tuple[int | None, int]):
+    def _checkForGlobalRehearsal(self, measureKey: tuple[int | None, int]):
         startLineIdx: int | None
         endLineIdx: int
         startLineIdx, endLineIdx = measureKey
@@ -10381,127 +10374,189 @@ class HumdrumFile(HumdrumFileContent):
             # skip this measure
             return
 
-        for lineIdx in range(startLineIdx, endLineIdx):
-            line: HumdrumLine = self._lines[lineIdx]
-            handledGlobalRehearsalMarkOnThisLine: bool = False
-            for token in line.tokens():
-                if handledGlobalRehearsalMarkOnThisLine:
-                    # skip to next line, handle global rehearsal mark there if seen
-                    handledGlobalRehearsalMarkOnThisLine = False
-                    break
+        checkLine: int = self._getNextBarlineIndex(startLineIdx, endLineIdx)
+        line: HumdrumLine = self._lines[checkLine]
+        if not line.isBarline:
+            return
 
-                lcount: int = token.linkedParameterSetCount
-                for i in range(0, lcount):
-                    hps: HumParamSet | None = token.getLinkedParameterSet(i)
-                    if not hps:
-                        continue
-                    if hps.namespace1 != 'LO':
-                        continue
-                    ns2: str = hps.namespace2
-                    if ns2 != 'REH':
-                        continue
+        token: HumdrumToken | None = line[0]
+        if token is None:
+            return
 
-                    staffIndex: int = 0
-                    if token.track is not None:
-                        staffIndex = self._staffStartsIndexByTrack[token.track]
-                    if staffIndex < 0:
-                        # not a notational spine for a staff
-                        continue
+        absysDefault: str = self._getDefaultLayoutParameter('REH', 'absys')
+        fontSizeDefault: str = self._getDefaultLayoutParameter('REH', 'fs')
+        tvalueDefault: str = self._getDefaultLayoutParameter('REH', 't')
+        qlOffsetDefault: str = self._getDefaultLayoutParameter('REH', 'qo')
+        enclosureDefault: str = self._getDefaultLayoutParameter('REH', 'enc')
+        colorDefault: str = self._getDefaultLayoutParameter('REH', 'color')
+        enclosureColorDefault: str = self._getDefaultLayoutParameter('REH', 'encc')
 
-                    isGlobal: bool = token.linkedParameterIsGlobal(i)
-                    if isGlobal:
-                        if handledGlobalRehearsalMarkOnThisLine:
-                            # skip to next token (which will skip to next line)
+        lcount: int = token.linkedParameterSetCount
+        for i in range(0, lcount):
+            hps: HumParamSet | None = token.getLinkedParameterSet(i)
+            if not hps:
+                continue
+            if hps.namespace1 != 'LO':
+                continue
+            ns2: str = hps.namespace2
+            if ns2 != 'REH':
+                continue
+
+            isGlobal: bool = token.linkedParameterIsGlobal(i)
+            if not isGlobal:
+                continue
+
+            staffIndices: list[int] = [0]  # by default just put in staff 0 (top staff)
+
+            absys: bool = absysDefault not in ('', '0', 'false')  # above and below system
+            qlOffset: OffsetQL = M21Utilities.getQLFromString(qlOffsetDefault)
+            aparam: bool = False
+            bparam: bool = False
+            bold: bool = False
+            italic: bool = False
+            justification: int = 0
+            fontSize: str = fontSizeDefault
+            encl: str = enclosureDefault
+            enclColor: str = enclosureColorDefault
+            color: str = colorDefault
+            staffNumStrs: list[str] = []
+            tvalue: str = tvalueDefault
+            for j in range(0, hps.count):
+                paramKey: str = hps.getParameterName(j)
+                paramVal: str = hps.getParameterValue(j)
+                if paramKey == 't':
+                    tvalue = paramVal
+                    continue
+                if paramKey == 'enc':
+                    encl = paramVal
+                    continue
+                if paramKey == 'a':
+                    aparam = True
+                    continue
+                if paramKey == 'b':
+                    bparam = True
+                    continue
+                if paramKey == 'absys':
+                    absys = paramVal not in ('0', 'false')
+                    continue
+                if paramKey == 'qo':
+                    qlOffset = M21Utilities.getQLFromString(paramVal)
+                    continue
+                if paramKey == 'fs':
+                    fontSize = paramVal
+                    continue
+                if paramKey == 'rj':
+                    justification = 1
+                    continue
+                if paramKey == 'cj':
+                    justification = 2
+                    continue
+                if paramKey == 'i':
+                    italic = True
+                    continue
+                if paramKey == 'B':
+                    bold = True
+                    continue
+                if paramKey in ('ib', 'iB', 'bi', 'Bi'):
+                    bold = True
+                    italic = True
+                    continue
+                if paramKey == 'color':
+                    color = paramVal
+                    continue
+                if paramKey == 'encc':
+                    enclColor = paramVal
+                    continue
+                if paramKey == 'place':
+                    # we currently only parse strings like 's1,s4', not 'p1,p2' or 'g1,g3'
+                    placeStrs = paramVal.split(',')
+                    for placeStr in placeStrs:
+                        if not placeStr.startswith('s'):
+                            # bad format, give up on :place=
+                            staffNumStrs = []
                             break
-                        staffIndex = 0
-                        handledGlobalRehearsalMarkOnThisLine = True
+                        if not placeStr[1:].isdigit():
+                            # bad format, give up on :place=
+                            staffNumStrs = []
+                            break
+                        staffNumStrs.append(placeStr[1:])
+                    continue
 
-                    aparam: bool = False
-                    bparam: bool = False
-                    bold: bool = False
-                    italic: bool = False
-                    justification: int = 0
-                    color: str = ''
-                    encl: str = ''
-                    tvalue: str = ''
-                    for j in range(0, hps.count):
-                        paramKey: str = hps.getParameterName(j)
-                        paramVal: str = hps.getParameterValue(j)
-                        if paramKey == 't':
-                            tvalue = paramVal
-                            continue
-                        if paramKey == 'en':
-                            encl = paramVal
-                            continue
-                        if paramKey == 'a':
-                            aparam = True
-                            continue
-                        if paramKey == 'b':
-                            bparam = True
-                            continue
-                        if paramKey == 'rj':
-                            justification = 1
-                            continue
-                        if paramKey == 'cj':
-                            justification = 2
-                            continue
-                        if paramKey == 'i':
-                            italic = True
-                            continue
-                        if paramKey == 'B':
-                            bold = True
-                            continue
-                        if paramKey in ('ib', 'iB', 'bi', 'Bi'):
-                            bold = True
-                            italic = True
-                            continue
-                        if paramKey == 'color':
-                            color = paramVal
-                            continue
+            # We allow rehearsal marks with no text (so does music21's
+            # MusicXML importer).
 
-                    # We allow rehearsal marks with no text (so does music21's
-                    # MusicXML importer).
+            if absys and self.staffCount < 2:
+                # Above and below system only applies if 2 or more staves in system
+                absys = False
 
-                    # We found one, make a RehearsalMark and insert it at the
-                    # beginning of the current measure in the top staff.
-                    reh = m21.expressions.RehearsalMark(tvalue)
-                    if t.TYPE_CHECKING:
-                        assert isinstance(reh.style, m21.style.TextStylePlacement)
+            if staffNumStrs:
+                staffIndices = []  # remove default 0
+                for staffNumStr in staffNumStrs:
+                    staffIndices.append(int(staffNumStr) - 1)
 
-                    if aparam:  # above staff
-                        reh.style.placement = 'above'
-                    elif bparam:  # below staff
-                        reh.style.placement = 'below'
+            if absys:
+                if 0 not in staffIndices:
+                    staffIndices.insert(0, 0)
+                if self.staffCount - 1 not in staffIndices:
+                    staffIndices.append(self.staffCount - 1)
 
-                    if bold and italic:
-                        reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
-                    elif italic:
-                        reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
-                    elif bold:
-                        reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
+            numRehearsalMarks: int = len(staffIndices)
+            rehearsalMarks: list[m21.expressions.RehearsalMark] = []
+            for i in range(0, numRehearsalMarks):
+                reh = m21.expressions.RehearsalMark(tvalue)
+                if t.TYPE_CHECKING:
+                    assert isinstance(reh.style, m21.style.TextStylePlacement)
+                rehearsalMarks.append(reh)
 
-                    if justification == 1:
-                        reh.style.justify = 'right'
-                    elif justification == 2:
-                        reh.style.justify = 'center'
+                if absys and staffIndices[i] == 0:
+                    reh.style.placement = 'above'
+                elif absys and staffIndices[i] == self.staffCount - 1:
+                    reh.style.placement = 'below'
+                elif aparam:  # above staff
+                    reh.style.placement = 'above'
+                elif bparam:  # below staff
+                    reh.style.placement = 'below'
 
-                    if color:
-                        reh.style.color = color
+                if fontSize:
+                    reh.style.fontSize = fontSize
+                if bold and italic:
+                    reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
+                elif italic:
+                    reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('italic')
+                elif bold:
+                    reh.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold')
 
-                    if encl == 'box':
-                        reh.style.enclosure = m21.style.Enclosure.SQUARE
-                    elif encl == 'circle':
-                        reh.style.enclosure = m21.style.Enclosure.CIRCLE
-                    elif encl == 'dbox':
-                        reh.style.enclosure = m21.style.Enclosure.DIAMOND
-                    elif encl == 'tbox':
-                        reh.style.enclosure = m21.style.Enclosure.TRIANGLE
+                if justification == 1:
+                    reh.style.justify = 'right'
+                elif justification == 2:
+                    reh.style.justify = 'center'
 
-                    currentMeasurePerStaff: list[m21.stream.Measure] = (
-                        self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
-                    )
-                    currentMeasurePerStaff[staffIndex].coreInsert(0, reh)
-                    currentMeasurePerStaff[staffIndex].coreElementsChanged()
+                # music21 has no way to have separate color for reh text and enclosure,
+                # so while we have the same style if/elif here as Verovio, we just grab
+                # whatever color we can find.
+                if color and not enclColor:
+                    reh.style.color = color
+                elif not color and enclColor:
+                    reh.style.color = enclColor
+                elif color and enclColor:
+                    reh.style.color = color
+
+                if encl == 'box':
+                    reh.style.enclosure = m21.style.Enclosure.SQUARE
+                elif encl == 'circle':
+                    reh.style.enclosure = m21.style.Enclosure.CIRCLE
+                elif encl == 'dbox':
+                    reh.style.enclosure = m21.style.Enclosure.DIAMOND
+                elif encl == 'tbox':
+                    reh.style.enclosure = m21.style.Enclosure.TRIANGLE
+
+            currentMeasurePerStaff: list[m21.stream.Measure] = (
+                self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]
+            )
+            for reh, staffIndex in zip(rehearsalMarks, staffIndices):
+                currentMeasurePerStaff[staffIndex].coreInsert(qlOffset, reh)
+            for staffIndex in set(staffIndices):
+                currentMeasurePerStaff[staffIndex].coreElementsChanged()
 
     '''
     //////////////////////////////
@@ -10510,7 +10565,7 @@ class HumdrumFile(HumdrumFileContent):
     //     the current index into the file.  If there is none before the first
     //     encountered data line, then return the input value.
     '''
-    def _getNextBarlineIndex(self, startLine: int) -> int:
+    def _getNextBarlineIndex(self, startLine: int, endLine: int) -> int:
         line: HumdrumLine = self._lines[startLine]
         token: HumdrumToken | None = line[0]
         if token is not None:
@@ -10519,8 +10574,8 @@ class HumdrumFile(HumdrumFileContent):
             if token.text == '*-':
                 return startLine
 
-        # check the rest of the lines
-        for lineIdx in range(startLine + 1, len(self._lines)):
+        # check the rest of the lines (including endLine)
+        for lineIdx in range(startLine + 1, endLine + 1):
             line = self._lines[lineIdx]
             token = line[0]
             if token is None:
@@ -12620,3 +12675,18 @@ class HumdrumFile(HumdrumFileContent):
                 return True
 
         return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::getDefaultLayoutParameter -- Return the default layout
+    //   parameter for a given cateogry and category parameter.  If there is
+    //   no given parameter, returns "".
+    '''
+    def _getDefaultLayoutParameter(self, category: str, parameter: str) -> str:
+        if not self._layoutDefaultStyles:
+            return ''
+
+        catDict: dict[str, str] = self._layoutDefaultStyles.get(category, {})
+        paramVal: str = catDict.get(parameter, '')
+        return paramVal

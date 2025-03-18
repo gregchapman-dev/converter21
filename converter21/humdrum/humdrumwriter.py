@@ -134,8 +134,8 @@ class HumdrumWriter:
 
         # First elements of text tuple are part index, staff index, voice index
         self._currentTexts: list[tuple[int, int, int, m21.expressions.TextExpression]] = []
-        # First elements of rehearsal mark tuple is part index, staff index
-        self._currentRehearsalMarks: list[tuple[int, int, m21.expressions.RehearsalMark]] = []
+        # First element of rehearsal mark tuple is humdrum staff number (1..numStaffsInScore+1)
+        self._currentRehearsalMarks: list[tuple[int, m21.expressions.RehearsalMark]] = []
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
         # we also need a mechanism for specifying which staff it came from.
@@ -1526,6 +1526,7 @@ class HumdrumWriter:
                 pindex: int = zeroDurEvent.partIndex
                 sindex: int = zeroDurEvent.staffIndex
                 vindex: int = zeroDurEvent.voiceIndex
+                humdrumStaffNum: int = zeroDurEvent.humdrumStaffNum
 
                 if isinstance(m21Obj, m21.clef.Clef):
                     clefs[pindex].append((sindex, m21Obj))
@@ -1557,7 +1558,7 @@ class HumdrumWriter:
                     # appendNonZeroEvents() -> addEvent()
                     self._currentTexts.append((pindex, sindex, vindex, m21Obj))
                 elif isinstance(m21Obj, m21.expressions.RehearsalMark):
-                    self._currentRehearsalMarks.append((pindex, sindex, m21Obj))
+                    self._currentRehearsalMarks.append((humdrumStaffNum, m21Obj))
                 elif isinstance(m21Obj, m21.tempo.TempoIndication):
                     # If we have already decided to write this tempo as
                     # !!LO:TX:omd:t='something' just before the first time
@@ -2719,53 +2720,28 @@ class HumdrumWriter:
     def _addUnassociatedRehearsalMarks(
         self,
         outgm: GridMeasure,
-        extraRehearsalMarks: list[tuple[int, int, m21.expressions.RehearsalMark]]
+        extraRehearsalMarks: list[tuple[int, m21.expressions.RehearsalMark]]
     ) -> None:
-        rehMarks: list[tuple[int, int, m21.expressions.RehearsalMark, HumNum]] = []
+        if not extraRehearsalMarks:
+            # we shouldn't have been called
+            return
 
-        for partIndex, staffIndex, rehMark in extraRehearsalMarks:
+        rehMarks: list[tuple[int, m21.expressions.RehearsalMark, HumNum]] = []
+
+        for humdrumStaffNum, rehMark in extraRehearsalMarks:
             rehMarks.append((
-                partIndex,
-                staffIndex,
+                humdrumStaffNum,
                 rehMark,
                 rehMark.getOffsetInHierarchy(self._m21Score)
             ))
 
-        if not rehMarks:
-            # we shouldn't have been called
-            return
-
-        # texts element is (partIndex, staffIndex, textExp, offset)
-        for partIndex, staffIndex, rehMark, offset in rehMarks:
-            outSlice: GridSlice | None
-            outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+        for humdrumStaffNum, rehMark, offset in rehMarks:
+            self._addRehearsalMark(
                 outgm,
-                partIndex,
-                staffIndex,
-                rehMark,
-                offset
+                humdrumStaffNum,
+                offset,
+                rehMark
             )
-
-            if outSlice is None:
-                # special case: this textExp goes at the very end of the measure
-                # (after all the slices).
-                self._addRehearsalMark(
-                    None,  # no slice means at end of outgm
-                    outgm,
-                    partIndex,
-                    staffIndex,
-                    0,
-                    rehMark
-                )
-            else:
-                self._addRehearsalMark(
-                    outSlice,
-                    outgm,
-                    partIndex,
-                    staffIndex,
-                    voiceIndex,
-                    rehMark
-                )
 
     def _addUnassociatedDynamics(
         self,
@@ -2958,23 +2934,21 @@ class HumdrumWriter:
 
     @staticmethod
     def _addRehearsalMark(
-        outSlice: GridSlice | None,
         outgm: GridMeasure,
-        partIndex: int,
-        staffIndex: int,
-        voiceIndex: int,
+        humdrumStaffNum: int,
+        offsetInScore: OffsetQL,
         rehearsalMark: m21.expressions.RehearsalMark
     ) -> None:
+        offsetInMeasure: OffsetQL = opFrac(outgm.timestamp - offsetInScore)
         rehString: str = (
-            M21Convert.rehearsalMarkLayoutParameterFromM21RehearsalMark(rehearsalMark)
+            M21Convert.rehearsalMarkLayoutParameterFromM21RehearsalMark(
+                rehearsalMark,
+                humdrumStaffNum,
+                offsetInMeasure
+            )
         )
-        outgm.addLayoutParameter(
-            outSlice,
-            partIndex,
-            staffIndex,
-            voiceIndex,
-            rehString,
-            beforeAnyNonTextLayouts=True
+        outgm.addGlobalLayoutAtMeasureStart(
+            rehString
         )
 
     '''
