@@ -1851,8 +1851,6 @@ class M21Convert:
                     enclString = ':enc=tbox'
                 elif style.enclosure == m21.style.Enclosure.DIAMOND:
                     enclString = ':enc=dbox'
-            else:
-                enclString = ':enc=none'
 
         output: str = (
             '!!LO:REH' + staffString + placementString + styleString
