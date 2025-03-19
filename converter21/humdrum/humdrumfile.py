@@ -10554,7 +10554,8 @@ class HumdrumFile(HumdrumFileContent):
                 elif encl == 'tbox':
                     reh.style.enclosure = m21.style.Enclosure.TRIANGLE
                 elif encl == 'none':
-                    reh.style.enclosure = m21.style.Enclosure.NONE
+                    if hasattr(m21.style.Enclosure, 'NO_ENCLOSURE'):
+                        reh.style.enclosure = m21.style.Enclosure.NO_ENCLOSURE  # type: ignore
 
             currentMeasurePerStaff: list[m21.stream.Measure] = (
                 self._allMeasuresPerStaff[self.measureIndexFromKey(measureKey)]

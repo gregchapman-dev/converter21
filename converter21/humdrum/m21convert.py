@@ -1845,12 +1845,14 @@ class M21Convert:
             if style.enclosure:
                 if style.enclosure == m21.style.Enclosure.SQUARE:
                     enclString = ':enc=box'
-                elif style.enclosure == m21.style.Enclosure.CIRCLE:
+                elif style.enclosure in (m21.style.Enclosure.CIRCLE, m21.style.Enclosure.OVAL):
                     enclString = ':enc=circle'
                 elif style.enclosure == m21.style.Enclosure.TRIANGLE:
                     enclString = ':enc=tbox'
                 elif style.enclosure == m21.style.Enclosure.DIAMOND:
                     enclString = ':enc=dbox'
+                elif style.enclosure == 'none':  # m21.style.Enclosure.NO_ENCLOSURE:
+                    enclString = ':enc=none'
 
         output: str = (
             '!!LO:REH' + staffString + placementString + styleString

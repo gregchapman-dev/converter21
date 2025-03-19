@@ -1631,7 +1631,9 @@ class M21ObjectConvert:
             return 'dbox'
         if encl == m21.style.Enclosure.TRIANGLE:
             return 'tbox'
-        return None  # default value
+        if encl == 'none':  # m21.style.Enclosure.NO_ENCLOSURE:
+            return 'none'
+        return None  # "unspecified" value
 
     @staticmethod
     def convertPostStaveStreamElement(

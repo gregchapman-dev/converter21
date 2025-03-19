@@ -7880,6 +7880,9 @@ class MeiReader:
                 te.style.enclosure = m21.style.Enclosure.DIAMOND
             elif enclosure == 'tbox':
                 te.style.enclosure = m21.style.Enclosure.TRIANGLE
+            elif enclosure == 'none':
+                if hasattr(m21.style.Enclosure, 'NO_ENCLOSURE'):
+                    te.style.enclosure = m21.style.Enclosure.NO_ENCLOSURE  # type: ignore
 
         if place:
             if place == 'above':
