@@ -1851,6 +1851,8 @@ class M21Convert:
                     enclString = ':enc=tbox'
                 elif style.enclosure == m21.style.Enclosure.DIAMOND:
                     enclString = ':enc=dbox'
+            else:
+                enclString = ':enc=none'
 
         output: str = (
             '!!LO:REH' + staffString + placementString + styleString
@@ -1858,7 +1860,10 @@ class M21Convert:
             + ':t=' + contentString
         )
         if qlOffset != 0:
-            output += ':qo={float(qlOffset)}'
+            if float(qlOffset) == int(qlOffset):
+                output += f':qo={int(qlOffset)}'
+            else:
+                output += f':qo={float(qlOffset)}'
 
         return output
 

@@ -2939,7 +2939,7 @@ class HumdrumWriter:
         offsetInScore: OffsetQL,
         rehearsalMark: m21.expressions.RehearsalMark
     ) -> None:
-        offsetInMeasure: OffsetQL = opFrac(outgm.timestamp - offsetInScore)
+        offsetInMeasure: OffsetQL = opFrac(offsetInScore - outgm.timestamp)
         rehString: str = (
             M21Convert.rehearsalMarkLayoutParameterFromM21RehearsalMark(
                 rehearsalMark,
