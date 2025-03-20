@@ -1631,9 +1631,10 @@ class M21ObjectConvert:
             return 'dbox'
         if encl == m21.style.Enclosure.TRIANGLE:
             return 'tbox'
-        if encl == 'none':  # m21.style.Enclosure.NO_ENCLOSURE:
-            return 'none'
-        return None  # "unspecified" value
+        # Unfortunately, MEI has no way to differentiate between unspecified
+        # enclosure and no enclosure.  So we have to treat Enclosure.NO_ENCLOSURE
+        # and None the same here, when writing MEI.
+        return None
 
     @staticmethod
     def convertPostStaveStreamElement(

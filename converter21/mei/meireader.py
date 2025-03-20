@@ -7880,9 +7880,12 @@ class MeiReader:
                 te.style.enclosure = m21.style.Enclosure.DIAMOND
             elif enclosure == 'tbox':
                 te.style.enclosure = m21.style.Enclosure.TRIANGLE
-            elif enclosure == 'none':
-                if hasattr(m21.style.Enclosure, 'NO_ENCLOSURE'):
-                    te.style.enclosure = m21.style.Enclosure.NO_ENCLOSURE  # type: ignore
+        else:
+            # MEI has no way to differentiate between unspecified
+            # enclosure and no enclosure.  We choose to interpret
+            # this as unspecified enclosure, since that is most
+            # often the case.
+            te.style.enclosure = None
 
         if place:
             if place == 'above':
