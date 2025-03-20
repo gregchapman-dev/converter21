@@ -465,10 +465,13 @@ class StaffStateVariables:
         self.hasOttavas: bool = False
 
         '''
-            Next we have temporary (processing) state about this staff (current measure, etc)
+            Next we have temporary (processing) state about this staff (current keysig, etc)
         '''
         self.mostRecentlySeenClefTok: HumdrumToken | None = None
         self.currentM21KeySig: m21.key.KeySignature | m21.key.Key | None = None
+        # pylint: disable=no-member
+        self.currentPedalMark: m21.expressions.PedalMark | None = None  # type: ignore
+        # pylint: enable=no-member
 
     def printState(self, prefix: str) -> None:
         print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
@@ -2124,6 +2127,10 @@ class HumdrumFile(HumdrumFileContent):
         if insertedIntoVoice:
             voice.coreElementsChanged()
 
+        # Some of those things that were insertedIntoVoice might
+        # have actually been insertedIntoMeasure.
+        currentMeasurePerStaff[staffIndex].coreElementsChanged()
+
     @staticmethod
     def _isInvisibleRestVoice(voice: m21.stream.Voice) -> bool:
         for element in voice:
@@ -2610,6 +2617,15 @@ class HumdrumFile(HumdrumFileContent):
         # no more tokens in other voices in our track/staff (and no such end ottava found)
         return True
 
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::handlePedalMark --  *ped turns on and *Xped turns off.
+        If you see *Xped followed by *ped (i.e. at same timestamp), that's
+        a bounce.  *ped without a *Xped just before it can also be a bounce
+        if the pedal is already down, but in that case it's an 'altsymbol'
+        bounce ('Ped.' bounce, not '*Ped.' bounce)
+    '''
     def _handlePedalMark(
         self,
         measureIndex: int,
@@ -2617,7 +2633,111 @@ class HumdrumFile(HumdrumFileContent):
         voiceOffsetInMeasure: HumNumIn,
         token: HumdrumToken
     ) -> bool:
-        # TODO: pedal marks
+        insertedIntoVoice: bool = False
+
+        if not M21Utilities.m21PedalMarksSupported():
+            return insertedIntoVoice
+
+        track: int | None = token.track
+        if track is None:
+            # not a kern/mens spine
+            return insertedIntoVoice
+
+        staffIndex: int = self._staffStartsIndexByTrack[track]
+        if staffIndex < 0:
+            # not a kern/mens spine
+            return insertedIntoVoice
+
+        if token.text not in ('*ped', '*Xped'):
+            return insertedIntoVoice
+
+        # we insert pedal stuff in the measure, not down here in the voice
+        pedalOffsetInMeasure: HumNum = token.durationFromBarline
+        measure: m21.stream.Measure = self._allMeasuresPerStaff[measureIndex][staffIndex]
+        ss: StaffStateVariables = self._staffStates[staffIndex]
+        if token.text == '*ped':
+            bounceBefore: bool = self._hasBounceBefore(token)
+
+            # pedal down
+            if ss.currentPedalMark is not None:
+                # pedal is already down, just insert a bounce here
+                # pylint: disable=no-member
+                pedalBounce = m21.expressions.PedalBounce()  # type: ignore
+                # pylint: enable=no-member
+                pedalBounce.placement = 'below'  # Humdrum has no pedal placement mechanism
+                if not bounceBefore:
+                    # bounce is just 'Ped.', not '*Ped.'
+                    ss.currentPedalMark.pedalForm = 'altsymbol'
+                measure.coreInsert(pedalOffsetInMeasure, pedalBounce)
+                ss.currentPedalMark.addSpannedElements(pedalBounce)
+            else:
+                # pedal is not down, start a new PedalMark spanner with a SpannerAnchor
+                anchor = m21.spanner.SpannerAnchor()
+                measure.coreInsert(pedalOffsetInMeasure, anchor)
+                # pylint: disable=no-member
+                ss.currentPedalMark = m21.expressions.PedalMark()  # type: ignore
+                # pylint: enable=no-member
+                ss.currentPedalMark.placement = 'below'  # Humdrum has no pedal placement mechanism
+                ss.currentPedalMark.addSpannedElements(anchor)
+                measure.coreInsert(pedalOffsetInMeasure, ss.currentPedalMark)
+            insertedIntoVoice = True
+        elif token.text == '*Xped':
+            bounceAfter: bool = self._hasBounceAfter(token)
+            if bounceAfter:
+                # this will be handled later, when we reach that pedal down
+                return insertedIntoVoice
+
+            # pedal up (not a bounce).
+            if ss.currentPedalMark is None:
+                # weird, the pedal is not down.  Just ignore this pedal up, I guess...
+                return insertedIntoVoice
+
+            # End the current PedalMark spanner with an anchor
+            anchor = m21.spanner.SpannerAnchor()
+            measure.coreInsert(pedalOffsetInMeasure, anchor)
+            ss.currentPedalMark.addSpannedElements(anchor)
+            ss.currentPedalMark = None
+            insertedIntoVoice = True
+
+        return insertedIntoVoice
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::hasBounceAfter -- If an *Xped has a *ped after it
+    //    at the same timestamp, then the *Xped should be ignored
+    //    as the following *ped will be turned into a bounce.
+    '''
+    def _hasBounceAfter(self, token: HumdrumToken) -> bool:
+        if token.text != '*Xped':
+            return False
+
+        timestamp: HumNum = token.durationFromStart
+        current: HumdrumToken | None = token.nextToken0
+        while current is not None and current.durationFromStart == timestamp:
+            if current.text == '*ped':
+                return True
+            current = current.nextToken0
+
+        return False
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::hasBounceBefore -- If a *ped has an *Xped before it
+    //    at the same timestamp, then it should be converted to a bounce.
+    '''
+    def _hasBounceBefore(self, token: HumdrumToken) -> bool:
+        if token.text != '*ped':
+            return False
+
+        timestamp: HumNum = token.durationFromStart
+        current: HumdrumToken | None = token.previousToken0
+        while current is not None and current.durationFromStart == timestamp:
+            if current.text == '*Xped':
+                return True
+            current = current.previousToken0
+
         return False
 
     def _handleCustos(

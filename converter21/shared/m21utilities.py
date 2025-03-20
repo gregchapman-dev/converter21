@@ -4472,3 +4472,11 @@ class M21Utilities:
             customAttrs[obj] = []
         customAttrs[obj].extend(newAttrs)
 
+    _m21PedalMarksSupportedCached: bool | None = None
+    @staticmethod
+    def m21PedalMarksSupported() -> bool:
+        if M21Utilities._m21PedalMarksSupportedCached is None:
+            M21Utilities._m21PedalMarksSupportedCached = (
+                hasattr(m21.expressions, 'PedalMark')
+            )
+        return M21Utilities._m21PedalMarksSupportedCached
