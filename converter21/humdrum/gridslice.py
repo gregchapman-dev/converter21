@@ -298,6 +298,10 @@ class GridSlice:
         return self.sliceType == SliceType.Ottavas
 
     @property
+    def isPedalSlice(self) -> bool:
+        return self.sliceType == SliceType.Pedals
+
+    @property
     def isSectionNameSlice(self) -> bool:
         return self.sliceType == SliceType.SectionNames
 

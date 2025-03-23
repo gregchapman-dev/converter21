@@ -59,7 +59,7 @@ class RepeatBracketState(IntEnum):
     InBracket = auto()
     FinishedBracket = auto()
 
-class PendingOttavaStop:
+class PendingOttavaOrPedalStop:
     def __init__(self, tokenString: str, timestamp: HumNumIn) -> None:
         self.tokenString: str = tokenString
         self.timestamp: HumNum = opFrac(timestamp)
@@ -136,6 +136,10 @@ class HumdrumWriter:
         self._currentTexts: list[tuple[int, int, int, m21.expressions.TextExpression]] = []
         # First element of rehearsal mark tuple is humdrum staff number (1..numStaffsInScore+1)
         self._currentRehearsalMarks: list[tuple[int, m21.expressions.RehearsalMark]] = []
+        # First elements of ottava/pedalmark tuple is part index, staff index
+        self._currentOttavasOrPedalMarks: list[
+            tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark]
+        ] = []
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
         # we also need a mechanism for specifying which staff it came from.
@@ -144,8 +148,10 @@ class HumdrumWriter:
         self._currentTempos: list[tuple[int, m21.tempo.TempoIndication]] = []
         self._currentHarmonies: list[tuple[int, m21.harmony.ChordSymbol]] = []
 
-        # we stash any ottava stops here, to be emitted at the appropriate timestamp
-        self.pendingOttavaStopsForPartAndStaff: dict[int, dict[int, list[PendingOttavaStop]]] = {}
+        # we stash any ottava or pedal stops here, to be emitted at the appropriate timestamp
+        self.pendingOttavaOrPedalStopsForPartAndStaff: dict[
+            int, dict[int, list[PendingOttavaOrPedalStop]]
+        ] = {}
 
         # We write a movementName independent from the initial tempo (because that's what
         # music21 contains, independent movementName and initial tempo).  But Humdrum (when
@@ -1426,6 +1432,10 @@ class HumdrumWriter:
             self._addUnassociatedRehearsalMarks(gm, self._currentRehearsalMarks)
             self._currentRehearsalMarks = []
 
+        if self._currentOttavasOrPedalMarks:
+            self._addUnassociatedOttavasOrPedalMarks(gm, self._currentOttavasOrPedalMarks)
+            self._currentOttavasOrPedalMarks = []
+
         if self._currentTempos:
             self._addUnassociatedTempos(gm, self._currentTempos)
             self._currentTempos = []
@@ -1491,7 +1501,6 @@ class HumdrumWriter:
         hasTransposition: bool = False
         hasTimeSig: bool = False
         hasMeterSig: bool = False
-#        hasOttava: bool = False
         hasStaffLines: bool = False
 
         # These are all indexed by part, and include a staff index with each element
@@ -1501,8 +1510,6 @@ class HumdrumWriter:
         timeSigs: list[list[tuple[int, m21.meter.TimeSignature]]] = []
         staffLines: list[list[tuple[int, int]]] = []  # number of staff lines (if specified)
         transposingInstruments: list[list[tuple[int, m21.instrument.Instrument]]] = []
-#        hairPins: list[list[m21.dynamics.DynamicWedge]] = []
-#        ottavas: list[list[list[m21.spanner.Ottava]]] = []
 
         graceBefore: list[list[list[list[EventData]]]] = []
         graceAfter: list[list[list[list[EventData]]]] = []
@@ -1515,8 +1522,6 @@ class HumdrumWriter:
             timeSigs.append([])
             staffLines.append([])
             transposingInstruments.append([])
-#            hairPins.append([])
-#            ottavas.append([])
             graceBefore.append([])
             graceAfter.append([])
 
@@ -1586,10 +1591,30 @@ class HumdrumWriter:
                         pass
                 elif isinstance(m21Obj, (m21.layout.PageLayout, m21.layout.SystemLayout)):
                     self._processPrintElement(outgm, m21Obj, nowTime)
-                # elif isinstance(m21Obj, m21.spanner.SpannerAnchor):
-                #     # Just ignore it; it's only here to be in a Spanner (like DynamicWedge),
-                #     # and we've already handled that.
-                #    pass
+                elif isinstance(m21Obj, m21.spanner.SpannerAnchor):
+                    # check for ottava/pedal start/stop and emit them:
+                    # *ped, or *Xped, or *8va, or *X8va, aut cetera
+                    if zeroDurEvent.isOttavaOrPedalMarkStartOrStop():
+                        starts: list[m21.spanner.Ottava | m21.expressions.PedalMark]
+                        stops: list[str]
+                        starts, stops = zeroDurEvent.getOttavaOrPedalMarkStartsStops(
+                            startsAsSpanners=True
+                        )
+                        for start in starts:
+                            self._currentOttavasOrPedalMarks.append(
+                                (pindex, sindex, start)
+                            )
+                        if stops:
+                            # any stopTokens go after the full duration of this event,
+                            # which might be many slices from now (maybe even in
+                            # a different measure) so we have to stash them off
+                            # and insert them later.
+                            self.storePendingOttavaOrPedalStops(
+                                stops,
+                                zeroDurEvent.startTime,
+                                pindex,
+                                sindex
+                            )
 
         self._addGraceLines(outgm, graceBefore, nowTime)
 
@@ -1618,9 +1643,6 @@ class HumdrumWriter:
             if self._firstMMTokenStr and nowTime == 0.:
                 self._addTempoTokenLine(outgm, self._firstMMTokenStr, nowTime)
                 self._firstMMTokenStr = ''
-
-#         if hasOttava:
-#             self._addOttavaLine(outgm, ottavas, nowTime)
 
         self._addGraceLines(outgm, graceAfter, nowTime)
 
@@ -2110,41 +2132,42 @@ class HumdrumWriter:
             for event in events:
                 self._addEvent(outSlice, outgm, event, nowTime)
 
-    def storePendingOttavaStops(
+    def storePendingOttavaOrPedalStops(
         self,
         stops: list[str],
         timestamp: HumNum,
         partIndex: int,
         staffIndex: int,
-        voiceIndex: int
     ):
-        if self.pendingOttavaStopsForPartAndStaff.get(partIndex, None) is None:
-            self.pendingOttavaStopsForPartAndStaff[partIndex] = {}
-        if self.pendingOttavaStopsForPartAndStaff[partIndex].get(staffIndex, None) is None:
-            self.pendingOttavaStopsForPartAndStaff[partIndex][staffIndex] = []
+        if self.pendingOttavaOrPedalStopsForPartAndStaff.get(partIndex, None) is None:
+            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex] = {}
+        if self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex].get(staffIndex, None) is None:
+            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex][staffIndex] = []
 
         for stop in stops:
-            pendingOttavaStop = PendingOttavaStop(stop, timestamp)
-            self.pendingOttavaStopsForPartAndStaff[partIndex][staffIndex].append(pendingOttavaStop)
+            pendingOttavaOrPedalStop = PendingOttavaOrPedalStop(stop, timestamp)
+            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex][staffIndex].append(
+                pendingOttavaOrPedalStop
+            )
 
-    def popPendingOttavaStopsAtTime(
+    def popPendingOttavaOrPedalStopsAtTime(
         self,
         partIndex: int,
         staffIndex: int,
         timestamp: HumNum
     ) -> list[str]:
         output: list[str] = []
-        stopsForPart: dict[int, list[PendingOttavaStop]] | None = (
-            self.pendingOttavaStopsForPartAndStaff.get(partIndex, None)
+        stopsForPart: dict[int, list[PendingOttavaOrPedalStop]] | None = (
+            self.pendingOttavaOrPedalStopsForPartAndStaff.get(partIndex, None)
         )
         if not stopsForPart:
             return output
 
-        stopsForStaff: list[PendingOttavaStop] | None = stopsForPart.get(staffIndex, None)
+        stopsForStaff: list[PendingOttavaOrPedalStop] | None = stopsForPart.get(staffIndex, None)
         if not stopsForStaff:
             return output
 
-        removeList: list[PendingOttavaStop] = []
+        removeList: list[PendingOttavaOrPedalStop] = []
         for stop in stopsForStaff:
             if stop.timestamp == timestamp:
                 output.append(stop.tokenString)
@@ -2175,20 +2198,6 @@ class HumdrumWriter:
             partIndex = event.partIndex
             staffIndex = event.staffIndex
             voiceIndex = event.voiceIndex
-
-        if outSlice is not None:
-            # Insert any pending Ottava stops
-            ottavaStopTokenStrings: list[str] = (
-                self.popPendingOttavaStopsAtTime(partIndex, staffIndex, nowTime)
-            )
-
-            outgm.addOttavaTokensBefore(
-                ottavaStopTokenStrings,
-                outSlice,
-                partIndex,
-                staffIndex,
-                voiceIndex
-            )
 
         tokenString: str = ''
         layouts: list[str] = []
@@ -2222,14 +2231,30 @@ class HumdrumWriter:
             voiceIndex, token, event.duration
         )
 
-        # check for ottava starts/stops and emit *8va or *X8va aut cetera
-        if event.isOttavaStartOrStop:
+        # Insert any pending Ottava or PedalMark stops
+        ottavaOrPedalStopTokenStrings: list[str] = (
+            self.popPendingOttavaOrPedalStopsAtTime(partIndex, staffIndex, nowTime)
+        )
+
+        if ottavaOrPedalStopTokenStrings:
+            outgm.addOttavaOrPedalTokensBefore(
+                ottavaOrPedalStopTokenStrings,
+                outSlice,
+                partIndex,
+                staffIndex,
+                voiceIndex
+            )
+
+        # check for ottava/pedal starts/stops and emit *ped, *8va, aut cetera
+        if event.isOttavaOrPedalMarkStartOrStop():
             starts: list[str]
             stops: list[str]
-            starts, stops = event.getOttavaTokenStrings()
+            starts, stops = event.getOttavaOrPedalMarkStartsStops(
+                startsAsSpanners=False
+            )
             if starts:
                 # any starts go before this slice
-                outgm.addOttavaTokensBefore(
+                outgm.addOttavaOrPedalTokensBefore(
                     starts,
                     outSlice,
                     partIndex,
@@ -2241,12 +2266,11 @@ class HumdrumWriter:
                 # which might be many slices from now (maybe even in
                 # a different measure) so we have to stash them off
                 # and insert them later.
-                self.storePendingOttavaStops(
+                self.storePendingOttavaOrPedalStops(
                     stops,
                     opFrac(event.startTime + event.duration),
                     partIndex,
-                    staffIndex,
-                    voiceIndex
+                    staffIndex
                 )
 
         # implement tuplet number/bracket visibility
@@ -2742,6 +2766,56 @@ class HumdrumWriter:
                 offset,
                 rehMark
             )
+
+    def _addUnassociatedOttavasOrPedalMarks(
+        self,
+        outgm: GridMeasure,
+        extraOttavaOrPedalMarks: list[
+            tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark]
+        ]
+    ) -> None:
+        if not extraOttavaOrPedalMarks:
+            # we shouldn't have been called
+            return
+
+        marks: list[
+            tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark, str, HumNum]
+        ] = []
+
+        for partIndex, staffIndex, mark in extraOttavaOrPedalMarks:
+            marks.append((
+                partIndex,
+                staffIndex,
+                mark,
+                M21Convert.getKernTokenStringFromM21OttavaOrPedalStart(
+                    mark
+                ),
+                mark.getOffsetInHierarchy(self._m21Score)
+            ))
+
+        if not marks:
+            # we shouldn't have been called
+            return
+
+        # marks element is (partIndex, staffIndex, mark, kerntok, offset)
+        for partIndex, staffIndex, mark, kerntok, offset in marks:
+            outSlice: GridSlice | None
+            outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+                outgm,
+                partIndex,
+                staffIndex,
+                mark,
+                offset
+            )
+
+            if outSlice:
+                outgm.addOttavaOrPedalTokensBefore(
+                    [kerntok],
+                    outSlice,
+                    partIndex,
+                    staffIndex,
+                    voiceIndex,
+                )
 
     def _addUnassociatedDynamics(
         self,

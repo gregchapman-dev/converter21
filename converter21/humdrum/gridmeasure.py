@@ -541,7 +541,7 @@ class GridMeasure:
         newSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
         self.slices.insert(associatedSliceIdx, newSlice)
 
-    def addOttavaTokensBefore(
+    def addOttavaOrPedalTokensBefore(
         self,
         toks: list[str],
         associatedSlice: GridSlice,
@@ -549,7 +549,17 @@ class GridMeasure:
         staffIndex: int,
         voiceIndex: int
     ) -> None:
+        def isPedal(tok: str) -> bool:
+            return tok in ('*ped', '*Xped')
+
+        def isOttava(tok: str) -> bool:
+            return tok not in ('*ped', '*Xped')
+
         newSlice: GridSlice
+
+        if not toks:
+            # nothing to add
+            return
 
         # add these tokens just before the associatedSlice
         if associatedSlice is None:
@@ -572,12 +582,16 @@ class GridMeasure:
             # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
             return
 
+        prevIdx: int = associatedSliceIdx - 1
+        prevSlice: GridSlice | None = None
+        if prevIdx >= 0:
+            prevSlice = self.slices[prevIdx]
+
         for i, tok in enumerate(toks):
-            if i == 0:
-                # see if the previous slice is a Ottava slice we can use
-                prevIdx: int = associatedSliceIdx - 1
-                prevSlice: GridSlice = self.slices[prevIdx]
-                if prevSlice.isOttavaSlice:
+            if i == 0 and prevSlice is not None:
+                # see if the previous slice is a slice we can use
+                if ((isOttava(tok) and prevSlice.isOttavaSlice)
+                        or (isPedal(tok) and prevSlice.isPedalSlice)):
                     prevVoices: list[GridVoice | None] = (
                         prevSlice.parts[partIndex].staves[staffIndex].voices
                     )
@@ -594,9 +608,25 @@ class GridMeasure:
 
             # if we get here, we couldn't use the previous slice, so we need to insert
             # a new Ottava slice to use, just before the associated slice.
-            newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Ottavas)
-            newSlice.initializeBySlice(associatedSlice)
+            if isPedal(tok):
+                newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Pedals)
+            else:
+                newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Ottavas)
+            if prevSlice is not None:
+                newSlice.initializeBySlice(prevSlice)
+            else:
+                newSlice.initializeBySlice(associatedSlice)
             newSlice.addToken(tok, partIndex, staffIndex, voiceIndex)
+            if prevSlice is not None:
+                print('')
+                print(f'prevSlice = {str(prevSlice)}')
+                print(f'newSlice(from prev) = {str(newSlice)}')
+                print(f'nextSlice = {str(associatedSlice)}')
+            else:
+                print('')
+                print('prevSlice = None')
+                print(f'newSlice(from next) = {str(newSlice)}')
+                print(f'nextSlice = {str(associatedSlice)}')
             self.slices.insert(associatedSliceIdx, newSlice)
 
     '''

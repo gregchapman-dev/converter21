@@ -1245,9 +1245,20 @@ class M21Convert:
     }
 
     @staticmethod
-    def _getKernTokenStringFromM21Ottava(ottava: m21.spanner.Ottava, start: bool) -> str:
+    def _getKernTokenStringFromM21OttavaOrPedal(
+        sp: m21.spanner.Spanner,
+        start: bool
+    ) -> str:
+        if M21Utilities.m21PedalMarksSupported():
+            if isinstance(sp, m21.expressions.PedalMark):
+                if start:
+                    return '*ped'
+                return '*Xped'
+
+        if t.TYPE_CHECKING:
+            assert isinstance(sp, m21.spanner.Ottava)
         output: str = ''
-        humdrumOttavaType: str = M21Convert._M21_OTTAVA_TYPES_TO_HUMDRUM.get(ottava.type, '')
+        humdrumOttavaType: str = M21Convert._M21_OTTAVA_TYPES_TO_HUMDRUM.get(sp.type, '')
         if not humdrumOttavaType:
             print(
                 'Ottava type not supported in Humdrum: {ottava.type}; assuming 8va',
@@ -1262,12 +1273,20 @@ class M21Convert:
         return output
 
     @staticmethod
-    def getKernTokenStringFromM21OttavaStart(ottava: m21.spanner.Ottava) -> str:
-        return M21Convert._getKernTokenStringFromM21Ottava(ottava, start=True)
+    def getKernTokenStringFromM21OttavaOrPedalStart(
+        sp: m21.spanner.Spanner
+    ) -> str:
+        return M21Convert._getKernTokenStringFromM21OttavaOrPedal(
+            sp, start=True
+        )
 
     @staticmethod
-    def getKernTokenStringFromM21OttavaStop(ottava: m21.spanner.Ottava) -> str:
-        return M21Convert._getKernTokenStringFromM21Ottava(ottava, start=False)
+    def getKernTokenStringFromM21OttavaOrPedalStop(
+        sp: m21.spanner.Spanner
+    ) -> str:
+        return M21Convert._getKernTokenStringFromM21OttavaOrPedal(
+            sp, start=False
+        )
 
     @staticmethod
     def _getKernSlurStartsAndStopsFromGeneralNote(

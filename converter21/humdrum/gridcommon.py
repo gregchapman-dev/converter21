@@ -36,6 +36,7 @@ from enum import IntEnum, Enum, unique, auto
 #                 Labels,
 #                 LabelAbbrs,
 #                 Ottavas,
+#                 Pedals,
 #             _RegularInterpretation,
 #                 Exclusives,
 #                 Terminators,
@@ -70,6 +71,7 @@ class SliceType(IntEnum):
     Labels = auto()            # Interpretation, RegularInterpretation, Spined
     LabelAbbrs = auto()        # Interpretation, RegularInterpretation, Spined
     Ottavas = auto()           # Interpretation, RegularInterpretation, Spined
+    Pedals = auto()            # Interpretation, RegularInterpretation, Spined
     VerseLabels = auto()       # Interpretation, RegularInterpretation, Spined
     SectionNames = auto()      # Interpretation, RegularInterpretation, Spined
     TupletDisplay = auto()     # Interpretation, RegularInterpretation, Spined

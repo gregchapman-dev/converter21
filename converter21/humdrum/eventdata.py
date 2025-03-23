@@ -11,6 +11,8 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
+import typing as t
+from typing import overload
 
 import music21 as m21
 from music21.common import opFrac
@@ -232,7 +234,6 @@ class EventData:
                 output.append(sp)
         return output
 
-    @property
     def isOttavaStartOrStop(self) -> bool:
         for sp in self.m21Object.getSpannerSites():
             if not isinstance(sp, m21.spanner.Ottava):
@@ -243,42 +244,99 @@ class EventData:
                 return True
             if sp.isLast(self.m21Object):
                 return True
+
         return False
 
-    def getOttavaTokenStrings(self) -> tuple[list[str], list[str]]:
-        # returns an ottava starts list and an ottava ends list (both sorted to nest properly)
-
-        def spannerQL(spanner: m21.spanner.Spanner) -> HumNum:
-            return M21Utilities.getSpannerQuarterLength(spanner, self.ownerScore.m21Score)
-
-        ottavaStarts: list[m21.spanner.Ottava] = []
-        ottavaStops: list[m21.spanner.Ottava] = []
+    def isPedalMarkStartOrStop(self) -> bool:
+        if not M21Utilities.m21PedalMarksSupported():
+            return False
 
         for sp in self.m21Object.getSpannerSites():
-            if not isinstance(sp, m21.spanner.Ottava):
+            if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):
                 continue
             if not M21Utilities.isIn(sp, self.spannerBundle):
                 continue
             if sp.isFirst(self.m21Object):
-                ottavaStarts.append(sp)
+                return True
             if sp.isLast(self.m21Object):
-                ottavaStops.append(sp)
+                return True
 
-        # Sort the starts by longest ottava first, and the stops by shortest ottava first
-        # so they nest properly.  (I wonder if ottavas ever actually overlap; they certainly
-        # can, in music21. If they do overlap, this will be important.)
-        ottavaStarts.sort(key=spannerQL, reverse=True)
-        ottavaStops.sort(key=spannerQL)
+        return False
+
+    def isOttavaOrPedalMarkStartOrStop(self) -> bool:
+        return self.isOttavaStartOrStop() or self.isPedalMarkStartOrStop()
+
+    def getOttavaOrPedalMarkStartSpanners(
+        self
+    ) -> list[m21.spanner.Ottava | m21.expressions.PedalMark]:
+        output: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []
+        for sp in self.m21Object.getSpannerSites():
+            if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):
+                continue
+            if not M21Utilities.isIn(sp, self.spannerBundle):
+                continue
+            output.append(sp)
+        return output
+
+    @overload
+    def getOttavaOrPedalMarkStartsStops(
+        self,
+        startsAsSpanners: t.Literal[True] = True,
+    ) -> tuple[list[m21.spanner.Ottava | m21.expressions.PedalMark], list[str]]:
+        pass
+
+    @overload
+    def getOttavaOrPedalMarkStartsStops(
+        self,
+        startsAsSpanners: t.Literal[False] = False,
+    ) -> tuple[list[str], list[str]]:
+        pass
+
+    def getOttavaOrPedalMarkStartsStops(
+        self,
+        startsAsSpanners: bool = False
+    ) -> tuple[list, list[str]]:
+        # returns an ottava/pedals starts list and an ottava/pedals ends list
+        # (both sorted to nest properly).
+        pedalMarksSupported: bool = M21Utilities.m21PedalMarksSupported()
+
+        def spannerQL(spanner: m21.spanner.Spanner) -> HumNum:
+            return M21Utilities.getSpannerQuarterLength(spanner, self.ownerScore.m21Score)
+
+        starts: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []
+        stops: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []
+
+        for sp in self.m21Object.getSpannerSites():
+            if pedalMarksSupported:
+                if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):
+                    continue
+            else:
+                if not isinstance(sp, m21.spanner.Ottava):
+                    continue
+            if not M21Utilities.isIn(sp, self.spannerBundle):
+                continue
+            if sp.isFirst(self.m21Object):
+                starts.append(sp)
+            if sp.isLast(self.m21Object):
+                stops.append(sp)
+
+        # Sort the starts by longest spanner first, and the stops by shortest spanner first
+        # so they nest properly.
+        starts.sort(key=spannerQL, reverse=True)
+        stops.sort(key=spannerQL)
 
         outputStarts: list[str] = []
         outputStops: list[str] = []
 
-        for sp in ottavaStarts:
-            outputStarts.append(M21Convert.getKernTokenStringFromM21OttavaStart(sp))
+        for sp in starts:
+            if not startsAsSpanners:
+                outputStarts.append(M21Convert.getKernTokenStringFromM21OttavaOrPedalStart(sp))
 
-        for sp in ottavaStops:
-            outputStops.append(M21Convert.getKernTokenStringFromM21OttavaStop(sp))
+        for sp in stops:
+            outputStops.append(M21Convert.getKernTokenStringFromM21OttavaOrPedalStop(sp))
 
+        if startsAsSpanners:
+            return starts, outputStops
         return outputStarts, outputStops
 
     '''
