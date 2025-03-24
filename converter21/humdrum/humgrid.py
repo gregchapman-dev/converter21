@@ -440,6 +440,7 @@ class HumGrid:
         self.addNullTokensForGraceNotes()
         self.addNullTokensForClefChanges()
         self.addNullTokensForLayoutComments()
+        self.addNullTokensForOttavasAndPedalMarks()
 
         # for debugging only, raises exception if expected voice or token is None
 #        self.checkForMissingNullTokens()
@@ -595,6 +596,11 @@ class HumGrid:
     def addNullTokensForLayoutComments(self) -> None:
         # add null tokens for layout comments in other voices
         self._addNullTokensForSliceType(SliceType.Layouts)
+
+    def addNullTokensForOttavasAndPedalMarks(self) -> None:
+        # add null tokens for layout comments in other voices
+        self._addNullTokensForSliceType(SliceType.Ottavas)
+        self._addNullTokensForSliceType(SliceType.Pedals)
 
     '''
     //////////////////////////////

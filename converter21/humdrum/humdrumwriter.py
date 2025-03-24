@@ -2808,14 +2808,13 @@ class HumdrumWriter:
                 offset
             )
 
-            if outSlice:
-                outgm.addOttavaOrPedalTokensBefore(
-                    [kerntok],
-                    outSlice,
-                    partIndex,
-                    staffIndex,
-                    voiceIndex,
-                )
+            outgm.addOttavaOrPedalTokensBefore(
+                [kerntok],
+                outSlice,
+                partIndex,
+                staffIndex,
+                voiceIndex,
+            )
 
     def _addUnassociatedDynamics(
         self,
