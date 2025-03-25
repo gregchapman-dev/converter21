@@ -437,10 +437,7 @@ class HumGrid:
         # make sure every note has enough '.'s to cover duration
         self.addNullTokensForNoteDurations()
 
-        self.addNullTokensForGraceNotes()
-        self.addNullTokensForClefChanges()
-        self.addNullTokensForLayoutComments()
-        self.addNullTokensForOttavasAndPedalMarks()
+        self.addNullTokensForEveryoneElse()
 
         # for debugging only, raises exception if expected voice or token is None
 #        self.checkForMissingNullTokens()
@@ -578,47 +575,13 @@ class HumGrid:
         # a token (likely a grace note which should not be erased)
 
     '''
-    //////////////////////////////
-    //
-    // HumGrid::addNullTokensForGraceNotes -- Avoid grace notes at
-    //     starts of measures from contracting the subspine count.
+        addNullTokensForEveryoneElse -- Avoid non-notes in multi-subspine
+        regions from contracting to a single spine.
     '''
-    def addNullTokensForGraceNotes(self) -> None:
-        # add null tokens for grace notes in other voices
-        self._addNullTokensForSliceType(SliceType.GraceNotes)
-
-    '''
-    //////////////////////////////
-    //
-    // HumGrid::addNullTokensForLayoutComments -- Avoid layout in multi-subspine
-    //     regions from contracting to a single spine.
-    '''
-    def addNullTokensForLayoutComments(self) -> None:
-        # add null tokens for layout comments in other voices
-        self._addNullTokensForSliceType(SliceType.Layouts)
-
-    def addNullTokensForOttavasAndPedalMarks(self) -> None:
-        # add null tokens for layout comments in other voices
-        self._addNullTokensForSliceType(SliceType.Ottavas)
-        self._addNullTokensForSliceType(SliceType.Pedals)
-
-    '''
-    //////////////////////////////
-    //
-    // HumGrid::addNullTokensForClefChanges -- Avoid clef in multi-subspine
-    //     regions from contracting to a single spine.
-    '''
-    def addNullTokensForClefChanges(self) -> None:
-        # add null tokens for clef changes in other voices
-        self._addNullTokensForSliceType(SliceType.Clefs)
-
-    '''
-        _addNullTokensForSliceType
-    '''
-    def _addNullTokensForSliceType(self, sliceType: SliceType) -> None:
-        # add null tokens in other voices in slices of this type
+    def addNullTokensForEveryoneElse(self) -> None:
+        # add null tokens in other voices in slices of all types except Notes
         for i, theSlice in enumerate(self._allSlices):
-            if theSlice.sliceType != sliceType:
+            if theSlice.isNoteSlice:
                 continue
 
             # theSlice is of the sliceType we are looking for.
