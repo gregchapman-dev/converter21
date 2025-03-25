@@ -1289,6 +1289,32 @@ class M21Convert:
         )
 
     @staticmethod
+    def getKernTokenStringsFromM21PedalObject(
+        pedalObj: m21.expressions.PedalObject
+    ) -> list[str]:
+        if not M21Utilities.m21PedalMarksSupported():
+            return []
+        if isinstance(pedalObj, m21.expressions.PedalBounce):
+            spanners: list[m21.spanner.Spanner] = pedalObj.getSpannerSites(
+                [m21.expressions.PedalMark]
+            )
+            if not spanners:
+                return []
+            pm = spanners[0]
+            if t.TYPE_CHECKING:
+                assert isinstance(pm, m21.expressions.PedalMark)
+            if pm.pedalForm == m21.expressions.PedalForm.SymbolAlt:
+                return ['*ped']
+            return ['*ped', '*Xped']  # backwards (because the insertion happens backwards)
+        if isinstance(pedalObj, m21.expressions.PedalGapStart):
+            # unsupported in Humdrum (as yet)
+            return []
+        if isinstance(pedalObj, m21.expressions.PedalGapEnd):
+            # unsupported in Humdrum (as yet)
+            return []
+        return []
+
+    @staticmethod
     def _getKernSlurStartsAndStopsFromGeneralNote(
         m21GeneralNote: m21.note.GeneralNote,
         spannerBundle: m21.spanner.SpannerBundle

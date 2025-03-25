@@ -136,10 +136,14 @@ class HumdrumWriter:
         self._currentTexts: list[tuple[int, int, int, m21.expressions.TextExpression]] = []
         # First element of rehearsal mark tuple is humdrum staff number (1..numStaffsInScore+1)
         self._currentRehearsalMarks: list[tuple[int, m21.expressions.RehearsalMark]] = []
-        # First elements of ottava/pedalmark tuple is part index, staff index
+
+        # First elements of ottava/pedalmark tuple are part index, staff index
         self._currentOttavasOrPedalMarks: list[
             tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark]
         ] = []
+        # First elements of pedalbounce/pedalgap tuple are part index, staff index
+        self._currentPedalObjects: list[tuple[int, int, m21.expressions.PedalObject]] = []
+
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
         # we also need a mechanism for specifying which staff it came from.
@@ -1436,6 +1440,10 @@ class HumdrumWriter:
             self._addUnassociatedOttavasOrPedalMarks(gm, self._currentOttavasOrPedalMarks)
             self._currentOttavasOrPedalMarks = []
 
+        if self._currentPedalObjects:
+            self._addUnassociatedPedalObjects(gm, self._currentPedalObjects)
+            self._currentPedalObjects = []
+
         if self._currentTempos:
             self._addUnassociatedTempos(gm, self._currentTempos)
             self._currentTempos = []
@@ -1576,6 +1584,9 @@ class HumdrumWriter:
                 elif isinstance(m21Obj, m21.harmony.ChordSymbol):
                     self._currentHarmonies.append((pindex, m21Obj))
                     zeroDurEvent.reportHarmonyToOwner()
+                elif (M21Utilities.m21PedalMarksSupported()
+                        and isinstance(m21Obj, m21.expressions.PedalObject)):
+                    self._currentPedalObjects.append((pindex, sindex, m21Obj))
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
                 elif isinstance(m21Obj, m21.note.GeneralNote):
@@ -2767,6 +2778,45 @@ class HumdrumWriter:
                 rehMark
             )
 
+    def _addUnassociatedPedalObjects(
+        self,
+        outgm: GridMeasure,
+        extraPedalObjects: list[
+            tuple[int, int, m21.expressions.PedalObject]
+        ]
+    ) -> None:
+        if not extraPedalObjects:
+            # we shouldn't have been called
+            return
+
+        pedalObjects: list[tuple[int, int, m21.expressions.PedalObject, list[str], HumNum]] = []
+
+        for partIndex, staffIndex, pedalObject in extraPedalObjects:
+            pedalObjects.append((
+                partIndex,
+                staffIndex,
+                pedalObject,
+                M21Convert.getKernTokenStringsFromM21PedalObject(pedalObject),
+                pedalObject.getOffsetInHierarchy(self._m21Score)
+            ))
+
+        for partIndex, staffIndex, pedalObject, kerntoks, offset in pedalObjects:
+            outSlice: GridSlice | None
+            outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+                outgm,
+                partIndex,
+                staffIndex,
+                pedalObject,
+                offset
+            )
+            outgm.addOttavaOrPedalTokensBefore(
+                kerntoks,
+                outSlice,
+                partIndex,
+                staffIndex,
+                voiceIndex
+            )
+
     def _addUnassociatedOttavasOrPedalMarks(
         self,
         outgm: GridMeasure,
@@ -2787,9 +2837,7 @@ class HumdrumWriter:
                 partIndex,
                 staffIndex,
                 mark,
-                M21Convert.getKernTokenStringFromM21OttavaOrPedalStart(
-                    mark
-                ),
+                M21Convert.getKernTokenStringFromM21OttavaOrPedalStart(mark),
                 mark.getOffsetInHierarchy(self._m21Score)
             ))
 
