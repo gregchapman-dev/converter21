@@ -984,6 +984,7 @@ class HumdrumWriter:
         for m in range(0, mCount0):
             status = status and self._insertMeasure(outgrid, m)
 
+        self._finishLastPendingOttavaOrPedalStops(outgrid)
         self._moveBreaksToEndOfPreviousMeasure(outgrid)
         self._insertRepeatBracketSlices(outgrid)
         self._insertPartNames(outgrid)
@@ -2181,6 +2182,26 @@ class HumdrumWriter:
             stopsForStaff.remove(removeThis)
 
         return output
+
+    def _finishLastPendingOttavaOrPedalStops(self, outgrid: HumGrid):
+        if not outgrid.measures:
+            return
+
+        outgm: GridMeasure = outgrid.measures[-1]
+
+        # iterate over all the pending stops
+        for pindex in self.pendingOttavaOrPedalStopsForPartAndStaff:
+            for sindex in self.pendingOttavaOrPedalStopsForPartAndStaff[pindex]:
+                for pended in self.pendingOttavaOrPedalStopsForPartAndStaff[pindex][sindex]:
+                    # timestamp doesn't matter, it's last call
+                    outgm.addOttavaOrPedalTokensBefore(
+                        [pended.tokenString],
+                        None,
+                        pindex,
+                        sindex,
+                        0
+                    )
+
 
     '''
     //////////////////////////////
