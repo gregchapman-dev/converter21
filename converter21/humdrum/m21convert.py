@@ -1245,13 +1245,13 @@ class M21Convert:
     }
 
     @staticmethod
-    def _getKernTokenStringFromM21OttavaOrPedal(
+    def getKernTokenStringFromM21OttavaOrPedal(
         sp: m21.spanner.Spanner,
-        start: bool
+        isStart: bool
     ) -> str:
         if M21Utilities.m21PedalMarksSupported():
             if isinstance(sp, m21.expressions.PedalMark):
-                if start:
+                if isStart:
                     return '*ped'
                 return '*Xped'
 
@@ -1267,26 +1267,10 @@ class M21Convert:
             humdrumOttavaType = '8va'
 
         output = '*'
-        if not start:
+        if not isStart:
             output += 'X'
         output += humdrumOttavaType
         return output
-
-    @staticmethod
-    def getKernTokenStringFromM21OttavaOrPedalStart(
-        sp: m21.spanner.Spanner
-    ) -> str:
-        return M21Convert._getKernTokenStringFromM21OttavaOrPedal(
-            sp, start=True
-        )
-
-    @staticmethod
-    def getKernTokenStringFromM21OttavaOrPedalStop(
-        sp: m21.spanner.Spanner
-    ) -> str:
-        return M21Convert._getKernTokenStringFromM21OttavaOrPedal(
-            sp, start=False
-        )
 
     @staticmethod
     def getKernTokenStringsFromM21PedalObject(

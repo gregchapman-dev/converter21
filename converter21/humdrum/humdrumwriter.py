@@ -137,9 +137,9 @@ class HumdrumWriter:
         # First element of rehearsal mark tuple is humdrum staff number (1..numStaffsInScore+1)
         self._currentRehearsalMarks: list[tuple[int, m21.expressions.RehearsalMark]] = []
 
-        # First elements of ottava/pedalmark tuple are part index, staff index
+        # First elements of ottava/pedalmark tuple are part index, staff index, isStart
         self._currentOttavasOrPedalMarks: list[
-            tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark]
+            tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
         ] = []
         # First elements of pedalbounce/pedalgap tuple are part index, staff index
         self._currentPedalObjects: list[tuple[int, int, m21.expressions.PedalObject]] = []
@@ -1607,24 +1607,17 @@ class HumdrumWriter:
                     # *ped, or *Xped, or *8va, or *X8va, aut cetera
                     if zeroDurEvent.isOttavaOrPedalMarkStartOrStop():
                         starts: list[m21.spanner.Ottava | m21.expressions.PedalMark]
-                        stops: list[str]
+                        stops: list[m21.spanner.Ottava | m21.expressions.PedalMark]
                         starts, stops = zeroDurEvent.getOttavaOrPedalMarkStartsStops(
-                            startsAsSpanners=True
+                            asSpanners=True
                         )
                         for start in starts:
                             self._currentOttavasOrPedalMarks.append(
-                                (pindex, sindex, start)
+                                (pindex, sindex, True, start)
                             )
-                        if stops:
-                            # any stopTokens go after the full duration of this event,
-                            # which might be many slices from now (maybe even in
-                            # a different measure) so we have to stash them off
-                            # and insert them later.
-                            self.storePendingOttavaOrPedalStops(
-                                stops,
-                                zeroDurEvent.startTime,
-                                pindex,
-                                sindex
+                        for stop in stops:
+                            self._currentOttavasOrPedalMarks.append(
+                                (pindex, sindex, False, stop)
                             )
 
         self._addGraceLines(outgm, graceBefore, nowTime)
@@ -2261,7 +2254,7 @@ class HumdrumWriter:
             starts: list[str]
             stops: list[str]
             starts, stops = event.getOttavaOrPedalMarkStartsStops(
-                startsAsSpanners=False
+                asSpanners=False
             )
             if starts:
                 # any starts go before this slice
@@ -2821,7 +2814,7 @@ class HumdrumWriter:
         self,
         outgm: GridMeasure,
         extraOttavaOrPedalMarks: list[
-            tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark]
+            tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
         ]
     ) -> None:
         if not extraOttavaOrPedalMarks:
@@ -2829,16 +2822,23 @@ class HumdrumWriter:
             return
 
         marks: list[
-            tuple[int, int, m21.spanner.Ottava | m21.expressions.PedalMark, str, HumNum]
+            tuple[int, int, m21.spanner.SpannerAnchor, str, HumNum]
         ] = []
 
-        for partIndex, staffIndex, mark in extraOttavaOrPedalMarks:
+        for partIndex, staffIndex, isStart, mark in extraOttavaOrPedalMarks:
+            if isStart:
+                anchor = mark.getFirst()
+            else:
+                anchor = mark.getLast()
+            if t.TYPE_CHECKING:
+                assert isinstance(anchor, m21.spanner.SpannerAnchor)
+
             marks.append((
                 partIndex,
                 staffIndex,
-                mark,
-                M21Convert.getKernTokenStringFromM21OttavaOrPedalStart(mark),
-                mark.getOffsetInHierarchy(self._m21Score)
+                anchor,
+                M21Convert.getKernTokenStringFromM21OttavaOrPedal(mark, isStart=isStart),
+                anchor.getOffsetInHierarchy(self._m21Score)
             ))
 
         if not marks:
@@ -2846,13 +2846,13 @@ class HumdrumWriter:
             return
 
         # marks element is (partIndex, staffIndex, mark, kerntok, offset)
-        for partIndex, staffIndex, mark, kerntok, offset in marks:
+        for partIndex, staffIndex, anchor, kerntok, offset in marks:
             outSlice: GridSlice | None
             outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
                 outgm,
                 partIndex,
                 staffIndex,
-                mark,
+                anchor,
                 offset
             )
 

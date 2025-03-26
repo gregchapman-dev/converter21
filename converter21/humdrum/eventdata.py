@@ -281,21 +281,24 @@ class EventData:
     @overload
     def getOttavaOrPedalMarkStartsStops(
         self,
-        startsAsSpanners: t.Literal[True] = True,
-    ) -> tuple[list[m21.spanner.Ottava | m21.expressions.PedalMark], list[str]]:
+        asSpanners: t.Literal[True] = True,
+    ) -> tuple[
+        list[m21.spanner.Ottava | m21.expressions.PedalMark],
+        list[m21.spanner.Ottava | m21.expressions.PedalMark]
+    ]:
         pass
 
     @overload
     def getOttavaOrPedalMarkStartsStops(
         self,
-        startsAsSpanners: t.Literal[False] = False,
+        asSpanners: t.Literal[False] = False,
     ) -> tuple[list[str], list[str]]:
         pass
 
     def getOttavaOrPedalMarkStartsStops(
         self,
-        startsAsSpanners: bool = False
-    ) -> tuple[list, list[str]]:
+        asSpanners: bool = False
+    ) -> tuple[list, list]:
         # returns an ottava/pedals starts list and an ottava/pedals ends list
         # (both sorted to nest properly).
         pedalMarksSupported: bool = M21Utilities.m21PedalMarksSupported()
@@ -325,18 +328,22 @@ class EventData:
         starts.sort(key=spannerQL, reverse=True)
         stops.sort(key=spannerQL)
 
+        if asSpanners:
+            return starts, stops
+
         outputStarts: list[str] = []
         outputStops: list[str] = []
 
         for sp in starts:
-            if not startsAsSpanners:
-                outputStarts.append(M21Convert.getKernTokenStringFromM21OttavaOrPedalStart(sp))
+            outputStarts.append(M21Convert.getKernTokenStringFromM21OttavaOrPedal(
+                sp, isStart=True
+            ))
 
         for sp in stops:
-            outputStops.append(M21Convert.getKernTokenStringFromM21OttavaOrPedalStop(sp))
+            outputStops.append(M21Convert.getKernTokenStringFromM21OttavaOrPedal(
+                sp, isStart=False
+            ))
 
-        if startsAsSpanners:
-            return starts, outputStops
         return outputStarts, outputStops
 
     '''
