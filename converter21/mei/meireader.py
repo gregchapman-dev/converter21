@@ -231,7 +231,6 @@ MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 # when these tags aren't processed, we won't worry about them (at least for now)
 _IGNORE_UNPROCESSED = (
     f'{MEI_NS}annot',        # annotations are skipped; someday maybe goes into editorial?
-    f'{MEI_NS}pedal',        # pedal marks are skipped for now
     f'{MEI_NS}expansion',    # expansions are intentionally skipped
     f'{MEI_NS}bracketSpan',  # bracketSpans (phrases, ligatures, ...) are intentionally skipped
     f'{MEI_NS}mensur',       # mensur is intentionally skipped, we use the invis <meterSig> instead
@@ -465,6 +464,7 @@ class MeiReader:
         self._ppMordents()
         self._ppTurns()
 
+        self._ppPedals()
         self._ppDirsDynamsTempos()
 
         self._ppConclude()
@@ -1637,6 +1637,101 @@ class MeiReader:
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
                 eachArpeg.set('ignore_in_arpegFromElement', 'true')
 
+    def _ppPedals(self) -> None:
+        environLocal.printDebug('*** pre-processing pedals')
+
+        pedals: list[Element] = self.documentRoot.findall(
+            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}pedal'
+        )
+
+        # currentPedalSpanners is keyed by staffAttr, and there is only one
+        # open PedalMark per staffAttr
+        currentOpenPedalSpanners: dict[str, m21.expressions.PedalMark | None] = {}
+
+        for eachPedal in pedals:
+            # Because we are mapping individual <pedal> elements to the start or end
+            # (or middle) of a PedalMark spanner, we have to look at all them here,
+            # not just the ones with @startid. But the ones with @startid have to
+            # have a bunch more information set on the note/chord/rest/space that is
+            # referenced by that @startid, so that note/chord/rest/space processing
+            # can figure everything out without access to the original <pedal> element.
+            startId: str = MeiShared.removeOctothorpe(eachPedal.get('startid', ''))
+
+            # All the info gets stashed on the note/chord element referenced by startId
+            dirAttr: str = eachPedal.get('dir', '')
+            funcAttr: str = eachPedal.get('func', '')
+            formAttr: str = eachPedal.get('form', '')
+            placeAttr: str = eachPedal.get('place', '')
+            staffAttr: str = eachPedal.get('staff', '')
+            lStartSym: str = eachPedal.get('lstartsym', '')
+            lEndSym: str = eachPedal.get('lendsym', '')
+
+            pm: m21.expressions.PedalMark | None = None
+
+            if dirAttr in ('down', 'half'):
+                # make a PedalMark spanner (put it in self.spannerBundle, and stash the
+                # idLocal as an open spanner in currentOpenPedalSpanners)
+                pm = currentOpenPedalSpanners.get(staffAttr, None)
+                if pm is not None:
+                    # 'down' doesn't do anything, ignore it
+                    # 'half' could mean "come up to half", but music21 doesn't support
+                    # half-down pedals, so we treat 'half' exactly like 'down'.
+                    eachPedal.set('ignore_in_pedalFromElement', 'true')
+                    continue
+
+                pm = m21.expressions.PedalMark()
+                if t.TYPE_CHECKING:
+                    # work around Spanner.idLocal being incorrectly type-hinted as None
+                    assert isinstance(pm.idLocal, str)
+                thisIdLocal = str(uuid4())
+                pm.idLocal = thisIdLocal
+                self.spannerBundle.append(pm)
+                currentOpenPedalSpanners[staffAttr] = pm
+            elif dirAttr in ('up', 'bounce'):
+                # find the currently open spanner for this staffAttr
+                pm = currentOpenPedalSpanners.get(staffAttr, None)
+                if pm is None:
+                    # pedal is not down, so 'up' or 'bounce' makes no sense.  Ignore
+                    eachPedal.set('ignore_in_pedalFromElement', 'true')
+                    continue
+
+                if t.TYPE_CHECKING:
+                    assert isinstance(pm.idLocal, str)
+                thisIdLocal = pm.idLocal
+                if dirAttr == 'up':
+                    # end this spanner
+                    currentOpenPedalSpanners[staffAttr] = None
+            else:
+                # illegal pedal@dir
+                eachPedal.set('ignore_in_pedalFromElement', 'true')
+                continue
+
+            if startId:
+                # <pedal> will be handled in note/chord/rest/space processing
+                # (in addPedals), not in pedalFromElement, so copy a bunch of
+                # data from <pedal> to that note/chord/rest/space.
+                eachPedal.set('ignore_in_pedalFromElement', 'true')
+
+                self.m21Attr[startId]['m21Pedal'] = thisIdLocal
+                if dirAttr:
+                    self.m21Attr[startId]['m21PedalDir'] = dirAttr
+                if funcAttr:
+                    self.m21Attr[startId]['m21PedalFunc'] = funcAttr
+                if formAttr:
+                    self.m21Attr[startId]['m21PedalForm'] = formAttr
+                if placeAttr:
+                    self.m21Attr[startId]['m21PedalPlace'] = placeAttr
+                if staffAttr:
+                    self.m21Attr[startId]['m21PedalStaff'] = staffAttr
+                if lStartSym:
+                    self.m21Attr[startId]['m21PedalLStartSym'] = lStartSym
+                if lEndSym:
+                    self.m21Attr[startId]['m21PedalLEndSym'] = lEndSym
+            else:
+                # <pedal> will be handled in pedalFromElement.  Make a note
+                # of the spanner idLocal, so we can do the right thing there.
+                eachPedal.set('m21Pedal', thisIdLocal)
+
     def _ppDirsDynamsTempos(self) -> None:
         environLocal.printDebug('*** pre-processing dirs/dynams/tempos')
 
@@ -2159,6 +2254,41 @@ class MeiReader:
                     # must clear localId because it's 1..6, and gets reused in later slurs
                     self.safeAddToSpannerByIdLocal(obj, slurNum, self.spannerBundle, clearId=True)
                 # 'm' is currently ignored; we may need it for cross-staff slurs
+
+    def addPedals(
+        self,
+        elem: Element,
+        obj: note.GeneralNote,
+    ):
+        localId: str = elem.get('m21Pedal', '')
+        if not localId:
+            return
+
+        sp: spanner.Spanner | None = self.safeGetSpannerByIdLocal(
+            localId, self.spannerBundle
+        )
+        if sp is None:
+            environLocal.warn('no PedalMark found from pedal preprocessing')
+            return
+
+        if t.TYPE_CHECKING:
+            assert isinstance(sp, m21.expressions.PedalMark)
+        pm: m21.expressions.PedalMark = sp
+        output: tuple[
+            str,
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
+            expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+        ] = self.getPedalObject(
+            pm,
+            obj,
+            '',  # no tstamp needed
+            elem.get('m21PedalStaff', ''),
+            elem.get('m21PedalDir', ''),
+            elem.get('m21PedalFunc', ''),
+            elem.get('m21PedalForm', ''),
+            elem.get('m21PedalPlace', '')
+        )
+        assert output == ('', (-1., None, None), None)
 
     def addOttavas(
         self,
@@ -4679,6 +4809,7 @@ class MeiReader:
         self.addTurn(elem, theNote)
         self.addOttavas(elem, theNote)
         self.addHairpins(elem, theNote)
+        self.addPedals(elem, theNote)
         self.addDirsDynamsTempos(elem, theNote)
 
         # ties in the @tie attribute
@@ -4881,6 +5012,7 @@ class MeiReader:
 
         self.addOttavas(elem, theRest)
         self.addHairpins(elem, theRest)
+        self.addPedals(elem, theRest)
         self.addDirsDynamsTempos(elem, theRest)
 
         if elem.get('cue') == 'true':
@@ -5038,6 +5170,7 @@ class MeiReader:
 
         # yes, sometimes hairpins/dirs/dynams/tempos are attached to spaces
         self.addHairpins(elem, theSpace)
+        self.addPedals(elem, theSpace)
         self.addDirsDynamsTempos(elem, theSpace)
 
         # tuplets
@@ -5284,6 +5417,7 @@ class MeiReader:
         self.addTurn(elem, theChord)
         self.addOttavas(elem, theChord)
         self.addHairpins(elem, theChord)
+        self.addPedals(elem, theChord)
         self.addDirsDynamsTempos(elem, theChord)
 
         # See if any of the notes within the chord have a trill/mordent/turn,
@@ -6093,8 +6227,8 @@ class MeiReader:
         **Contained Elements not Implemented:**
 
         - MEI.cmn: arpeg beamSpan beatRpt bend breath fermata gliss hairpin halfmRpt
-                   harpPedal mRpt mRpt2 meterSigGrp multiRest multiRpt octave pedal
-                   reh slur tie tuplet tupletSpan
+                   harpPedal mRpt mRpt2 meterSigGrp multiRest multiRpt octave
+                   slur tie tuplet tupletSpan
         - MEI.cmnOrnaments: mordent trill turn
         - MEI.critapp: app
         - MEI.edittrans: (all)
@@ -6185,6 +6319,11 @@ class MeiReader:
                 if dirDynamTempoList:
                     for each in dirDynamTempoList:
                         theVoice.coreAppend(each)
+
+            if hasattr(obj, 'meireader_pedalbounce'):
+                pb: m21.expressions.PedalBounce = obj.meireader_pedalbounce  # type: ignore
+                theVoice.coreAppend(pb)
+
             theVoice.coreAppend(obj)
         theVoice.coreElementsChanged()
 
@@ -7413,6 +7552,148 @@ class MeiReader:
 
         return staffNStr, (offset, measSkip, offset2), hairpin
 
+    def pedalFromElement(
+        self,
+        elem: Element,
+    ) -> tuple[
+        str,
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+    ]:
+        # returns (staffNStr, (offset, None, None), te)
+        if elem.get('ignore_in_pedalFromElement') == 'true':
+            return ('', (-1., None, None), None)
+
+        # if we didn't note what spanner this <pedal> is part of (in ppPedals),
+        # we have a bug.
+        pedalLocalId = elem.get('m21Pedal', '')
+        if not pedalLocalId:
+            environLocal.warn('no PedalMark created in pedal preprocessing')
+            return ('', (-1., None, None), None)
+        pm: m21.spanner.Spanner | None = (
+            self.safeGetSpannerByIdLocal(pedalLocalId, self.spannerBundle)
+        )
+        if pm is None:
+            environLocal.warn('no PedalMark found from pedal preprocessing')
+            return ('', (-1., None, None), None)
+
+        if t.TYPE_CHECKING:
+            assert isinstance(pm, m21.expressions.PedalMark)
+
+        output: tuple[
+            str,
+            tuple[OffsetQL | None, int | None, OffsetQL | None],
+            expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+        ] = self.getPedalObject(
+            pm,
+            None,
+            elem.get('tstamp', ''),
+            elem.get('staff', ''),
+            elem.get('dir', ''),
+            elem.get('func', ''),
+            elem.get('form', ''),
+            elem.get('place', '')
+        )
+
+        return output
+
+    PEDAL_FORM_MAP: dict[str, m21.expressions.PedalForm] = {
+        'line': m21.expressions.PedalForm.Line,
+        'pedline': m21.expressions.PedalForm.SymbolLine,
+        'pedstar': m21.expressions.PedalForm.Symbol,
+        'altpedstar': m21.expressions.PedalForm.SymbolAlt
+    }
+
+    PEDAL_TYPE_MAP: dict[str, m21.expressions.PedalType] = {
+        'sustain': m21.expressions.PedalType.Sustain,
+        'sostenuto': m21.expressions.PedalType.Sostenuto,
+        'soft': m21.expressions.PedalType.Soft,
+        'silent': m21.expressions.PedalType.Silent
+    }
+
+    def getPedalObject(
+        self,
+        pm: m21.expressions.PedalMark,
+        obj: m21.base.Music21Object | None,  # from @startid
+        tstampAttr: str,                     # '' if there was a @startid
+        staffAttr: str,
+        dirAttr: str,
+        funcAttr: str,
+        formAttr: str,
+        placeAttr: str,
+    ) -> tuple[
+        str,
+        tuple[OffsetQL | None, int | None, OffsetQL | None],
+        expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+    ]:
+        # obj (from @startid) or @tstamp is required.
+        if obj is None and not tstampAttr:
+            environLocal.warn('missing @tstamp/@startid in <pedal> element')
+            return '', (-1., None, None), None
+
+        if not dirAttr:
+            environLocal.warn('missing @dir in <pedal> element')
+            return '', (-1., None, None), None
+
+        # @staff is required.
+        if not staffAttr:
+            environLocal.warn('missing @staff in <pedal> element')
+            return '', (-1., None, None), None
+
+        offset: OffsetQL = opFrac(-1)
+        if obj is None:
+            offset = self._tstampToOffset(tstampAttr)
+
+        # figure out what the <pedal> element meant
+        if dirAttr in ('down', 'half'):
+            # We are starting the pm spanner.  Set up the pm with all the appropriate
+            # stuff from the attributes.
+            if funcAttr and funcAttr in self.PEDAL_TYPE_MAP:
+                pm.pedalType = self.PEDAL_TYPE_MAP[funcAttr]
+
+            if formAttr and formAttr in self.PEDAL_FORM_MAP:
+                pm.pedalForm = self.PEDAL_FORM_MAP[formAttr]
+
+            if placeAttr in ('above', 'below'):
+                pm.placement = placeAttr
+
+            # Now, we need to put the first object in the spanner, either obj,
+            # which we do not need to return, or a SpannerAnchor, which we do.
+            if obj is not None:
+                pm.addSpannedElements(obj)
+                return '', (-1., None, None), None
+
+            # no obj, make a SpannerAnchor using @tstamp (which we already checked is there)
+            sa = m21.spanner.SpannerAnchor()
+            pm.addSpannedElements(sa)
+            return staffAttr, (offset, None, None), sa
+
+        if dirAttr == 'bounce':
+            pb = m21.expressions.PedalBounce()
+            if placeAttr in ('above', 'below'):
+                pb.placement = placeAttr
+            if obj is None:
+                # return the pedalbounce object
+                return staffAttr, (offset, None, None), pb
+            # make a note of it in the current object, so we can go back and
+            # emit it later (when we're emitting everything in the layer)
+            obj.meireader_pedalbounce = pb  # type: ignore
+            return '', (-1., None, None), None
+
+        if dirAttr == 'up':
+            # Finish off the spanner, by adding obj or a SpannerAnchor.
+            if obj is not None:
+                pm.addSpannedElements(obj)
+                return '', (-1., None, None), None
+
+            # no obj, make a SpannerAnchor using @tstamp (which we already checked is there)
+            sa = m21.spanner.SpannerAnchor()
+            pm.addSpannedElements(sa)
+            return staffAttr, (offset, None, None), sa
+
+        environLocal.warn('unrecognized @dir in <pedal> element: "{dirAttr}"')
+        return '', (-1., None, None), None
+
     def rehFromElement(
         self,
         elem: Element,
@@ -7791,7 +8072,7 @@ class MeiReader:
         if typeAtt is not None and typeAtt == 'fingering':
             return '', (-1., None, None), None
 
-        # @tstamp is required for now, someday we'll be able to derive offsets from @startid
+        # @tstamp is required here, since @startid is handled elsewhere
         tstamp: str | None = elem.get('tstamp')
         if tstamp is None:
             environLocal.warn('missing @tstamp in <dir> element')
@@ -8016,7 +8297,7 @@ class MeiReader:
 
         **Contained Elements not Implemented:**
 
-        - MEI.cmn: beamSpan bend breath gliss harpPedal ossia pedal reh tupletSpan
+        - MEI.cmn: beamSpan bend breath gliss harpPedal ossia tupletSpan
         - MEI.edittrans: gap handShift
         - MEI.harmony: harm
         - MEI.midi: midi
@@ -9047,7 +9328,7 @@ class MeiReader:
             #        f'{MEI_NS}mNum': self.mNumFromElement,
             f'{MEI_NS}mordent': self.mordentFromElement,
             f'{MEI_NS}octave': self.octaveFromElement,
-            #         f'{MEI_NS}pedal': self.pedalFromElement,
+            f'{MEI_NS}pedal': self.pedalFromElement,
             #         f'{MEI_NS}phrase': self.phraseFromElement,
             #         f'{MEI_NS}pitchInflection': self.pitchInflectionFromElement,
             f'{MEI_NS}reh': self.rehFromElement,
