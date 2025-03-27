@@ -2665,10 +2665,7 @@ class HumdrumFile(HumdrumFileContent):
                 pedalBounce = m21.expressions.PedalBounce()  # type: ignore
                 # pylint: enable=no-member
                 pedalBounce.placement = 'below'  # Humdrum has no pedal placement mechanism
-                if bounceBefore:
-                    # bounce is '*Ped.'
-                    ss.currentPedalMark.pedalForm = m21.expressions.PedalForm.Symbol
-                else:
+                if not bounceBefore:
                     # bounce is just 'Ped.', not '*Ped.'
                     ss.currentPedalMark.pedalForm = m21.expressions.PedalForm.SymbolAlt
                 measure.coreInsert(pedalOffsetInMeasure, pedalBounce)
@@ -2680,8 +2677,6 @@ class HumdrumFile(HumdrumFileContent):
                 # pylint: disable=no-member
                 ss.currentPedalMark = m21.expressions.PedalMark()  # type: ignore
                 # pylint: enable=no-member
-                ss.currentPedalMark.pedalForm = m21.expressions.PedalForm.Symbol
-                ss.currentPedalMark.pedalType = m21.expressions.PedalType.Sustain
                 ss.currentPedalMark.placement = 'below'  # Humdrum has no pedal placement mechanism
                 ss.currentPedalMark.addSpannedElements(anchor)
                 measure.coreInsert(pedalOffsetInMeasure, ss.currentPedalMark)
