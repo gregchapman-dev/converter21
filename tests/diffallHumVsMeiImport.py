@@ -330,9 +330,9 @@ def runTheDiff(krnPath: Path, results) -> bool:
             print(summ)
             print(summ, file=results)
 
-        # print SECR dict even if there are no diffs
-        secrOut: dict = Visualization.get_secr_output(cost, annotatedScore1, annotatedScore2)
-        jsonStr: str = json.dumps(secrOut)
+        # print OMR-NED dict even if there are no diffs
+        omrnedOut: dict = Visualization.get_omr_ned_output(cost, annotatedScore1, annotatedScore2)
+        jsonStr: str = json.dumps(omrnedOut)
         print(jsonStr)
         print(jsonStr, file=results)
 

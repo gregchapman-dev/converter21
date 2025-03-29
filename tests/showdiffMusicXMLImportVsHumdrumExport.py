@@ -78,8 +78,8 @@ def runTheFullTest(inputPath: Path):
         Visualization.show_diffs(score1, score2)
         print('displayed both annotated scores')
 
-    secrOut: dict[str, str] = Visualization.get_secr_output(cost, score_lin2, score_lin3)
-    jsonStr: str = json.dumps(secrOut)
+    omrnedOut: dict[str, str] = Visualization.get_omr_ned_output(cost, score_lin2, score_lin3)
+    jsonStr: str = json.dumps(omrnedOut)
     print(jsonStr)
     textOut: str = Visualization.get_text_output(score1, score2, diffList)
     if textOut:
