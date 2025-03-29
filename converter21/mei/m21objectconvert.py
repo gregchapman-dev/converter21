@@ -1070,7 +1070,8 @@ class M21ObjectConvert:
         scoreMeterStream: m21.stream.Stream[m21.meter.TimeSignature],
         customAttributes: dict[m21.base.Music21Object, list[str]],
         spannerBundle: m21.spanner.SpannerBundle,
-        tb: TreeBuilder
+        tb: TreeBuilder,
+        endOfSpanner: bool = False
     ) -> None:
         forceTstamp2: bool = False
         first: m21.base.Music21Object = spanner.getFirst()
@@ -1099,10 +1100,14 @@ class M21ObjectConvert:
             # correct offset.
             forceTstamp2 = True
 
+        # if endOfSpanner is True, we are emitting an element for the end
+        # of this spanner (currently only PedalMark spanners do this).  So
+        # we swizzle the arguments to _fillInStandardPostStavesAttributes
+        # in that case, so it will do the right thing.
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
-            first,
-            last,
+            first if not endOfSpanner else last,
+            last if not endOfSpanner else None,
             staffNStr,
             m21Score,
             m21Measure,
@@ -1130,6 +1135,16 @@ class M21ObjectConvert:
             dis, disPlace = M21ObjectConvert._DIS_AND_DIS_PLACE_FROM_M21_OTTAVA_TYPE[spanner.type]
             attr['dis'] = dis
             attr['dis.place'] = disPlace
+        elif isinstance(spanner, m21.expressions.PedalMark):
+            tag = 'pedal'
+            if endOfSpanner:
+                attr['dir'] = 'up'
+            else:
+                attr['dir'] = 'down'
+            if spanner.pedalType is not None:
+                attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[spanner.pedalType]
+            if spanner.pedalForm is not None:
+                attr['form'] = M21ObjectConvert.M21PEDALFORM_TO_MEI_PEDAL_FORM[spanner.pedalForm]
         elif isinstance(spanner, M21BeamSpanner):
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
@@ -1685,11 +1700,21 @@ class M21ObjectConvert:
                 assert isinstance(obj, m21.expressions.RehearsalMark)
                 assert style is None or isinstance(style, m21.style.TextStylePlacement)
             M21ObjectConvert.emitStyledTextElement(obj.content, style, tag, attr, tb)
+            return
+
+        if tag == 'pedal':
+            if t.TYPE_CHECKING:
+                # PedalBounce, PedalGapStart, and PedalGapEnd
+                # are all PedalObjects
+                assert isinstance(obj, m21.expressions.PedalObject)
+            M21ObjectConvert.emitPedalObject(obj, tag, attr, tb)
+            return
 
         if tag == 'harm':
             if t.TYPE_CHECKING:
                 assert isinstance(obj, m21.harmony.ChordSymbol)
             M21ObjectConvert.emitHarmony(obj, tag, attr, tb)
+            return
 
         if tag == 'tempo':
             assert style is None or isinstance(style, m21.style.TextStyle)
@@ -1703,21 +1728,89 @@ class M21ObjectConvert:
             if isinstance(obj, m21.tempo.MetronomeMark):
                 if obj.numberImplicit:
                     M21ObjectConvert.emitStyledTextElement(obj.text, style, tag, attr, tb)
-                else:
-                    number: int | float | None = obj.number
-                    if number is None:
-                        number = obj.numberSounding
-                    if number is not None:
-                        # figure out @midi.bpm from number, converting from referent
-                        # to quarter note (e.g. referent might be half note)
-                        attr['midi.bpm'] = str(number * obj.referent.quarterLength)
+                    return
 
-                        tb.start(tag, attr)
-                        # also construct "blah=128" or whatever, using SMUFL for noteheads, and
-                        # append it to the text before calling tb.data().  It will need a <rend>
-                        # element in the middle of the text (thus it's mixed text and elements)
-                        M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
-                        tb.end(tag)
+                number: int | float | None = obj.number
+                if number is None:
+                    number = obj.numberSounding
+                if number is None:
+                    return
+
+                # figure out @midi.bpm from number, converting from referent
+                # to quarter note (e.g. referent might be half note)
+                attr['midi.bpm'] = str(number * obj.referent.quarterLength)
+
+                tb.start(tag, attr)
+                # also construct "blah=128" or whatever, using SMUFL for noteheads, and
+                # append it to the text before calling tb.data().  It will need a <rend>
+                # element in the middle of the text (thus it's mixed text and elements)
+                M21ObjectConvert._convertMetronomeMarkToMixedText(obj, tb)
+                tb.end(tag)
+                return
+
+    M21PEDALTYPE_TO_MEI_PEDAL_FUNC: dict[m21.expressions.PedalType, str] = {
+        m21.expressions.PedalType.Sustain: 'sustain',
+        m21.expressions.PedalType.Sostenuto: 'sostenuto',
+        m21.expressions.PedalType.Soft: 'soft',
+        m21.expressions.PedalType.Silent: 'silent',
+    }
+
+    M21PEDALFORM_TO_MEI_PEDAL_FORM: dict[m21.expressions.PedalForm, str] = {
+        m21.expressions.PedalForm.Line: 'line',
+        m21.expressions.PedalForm.Symbol: 'pedstar',
+        m21.expressions.PedalForm.SymbolAlt: 'altpedstar',
+        m21.expressions.PedalForm.SymbolLine: 'pedline',
+    }
+
+    @staticmethod
+    def emitPedalObject(
+        po: m21.expressions.PedalObject,
+        tag: str,
+        attr: dict[str, str],
+        tb: TreeBuilder
+    ):
+        sps: list[m21.spanner.Spanner] = po.getSpannerSites((m21.expressions.PedalMark,))
+        if not sps:
+            # we ignore PedalObjects that are not in a PedalMark spanner
+            return
+
+        pm = sps[0]
+        if t.TYPE_CHECKING:
+            assert isinstance(pm, m21.expressions.PedalMark)
+
+        if isinstance(po, m21.expressions.PedalBounce):
+            attr['dir'] = 'bounce'
+        elif isinstance(po, m21.expressions.PedalGapStart):
+            if pm.pedalForm in (
+                    m21.expressions.PedalForm.Line, m21.expressions.PedalForm.SymbolLine):
+                attr['dir'] = 'up'
+                attr['lendsym'] = 'none'  # no up-tick on the line end
+            else:
+                # there are no gaps unless there are pedal lines
+                return
+        elif isinstance(po, m21.expressions.PedalGapEnd):
+            if pm.pedalForm in (
+                    m21.expressions.PedalForm.Line, m21.expressions.PedalForm.SymbolLine):
+                attr['dir'] = 'down'
+                attr['lstartsym'] = 'none'  # no down-tick on the line start
+            else:
+                # there are no gaps unless there are pedal lines
+                return
+
+        # now the rest of the stuff from pm
+        if pm.pedalType is not None:
+            attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[pm.pedalType]
+        if pm.pedalForm is not None:
+            attr['form'] = M21ObjectConvert.M21PEDALFORM_TO_MEI_PEDAL_FORM[pm.pedalForm]
+
+        M21ObjectConvert._addStylisticAttributes(po, attr)
+        if 'place' not in attr:
+            # if po.placement not set, check pm.placement
+            if pm.placement in ('above', 'below'):
+                attr['place'] = pm.placement
+
+        tb.start(tag, attr)
+        tb.end(tag)
 
     @staticmethod
     def emitHarmony(cs: m21.harmony.ChordSymbol, tag: str, attr: dict[str, str], tb: TreeBuilder):
@@ -2083,6 +2176,9 @@ M21_OBJECT_CLASS_NAMES_FOR_POST_STAVES_TO_MEI_TAG: dict[str, str] = {
     'Dynamic': 'dynam',
     'TextExpression': 'dir',
     'RehearsalMark': 'reh',
+    'PedalBounce': 'pedal',
+    'PedalGapStart': 'pedal',
+    'PedalGapEnd': 'pedal',
     'ChordSymbol': 'harm',
     'NoChord': 'harm',
     'TempoIndication': 'tempo',

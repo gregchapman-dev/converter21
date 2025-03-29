@@ -650,6 +650,23 @@ class MeiLayer:
                         self.spannerBundle,
                         tb
                     )
+                if (isinstance(spanner, m21.expressions.PedalMark)
+                        and spanner.isLast(obj)):
+                    # PedalMarks emit a <pedal dir="down"> element at the
+                    # end of the PedalMark.
+                    M21ObjectConvert.postStavesSpannerToMei(
+                        spanner,
+                        staffNStr,
+                        m21Score,
+                        m21Measure,
+                        self.scoreMeterStream,
+                        self.customAttrs,
+                        self.spannerBundle,
+                        tb,
+                        endOfSpanner=True
+                    )
+
+            # 2a. Spanners on the notes in this chord
             if isinstance(obj, m21.chord.Chord) and not isinstance(obj, m21.harmony.ChordSymbol):
                 # check every note in the chord
                 for note in obj.notes:
@@ -666,6 +683,21 @@ class MeiLayer:
                                 self.customAttrs,
                                 self.spannerBundle,
                                 tb
+                            )
+                        if (isinstance(spanner, m21.expressions.PedalMark)
+                                and spanner.isLast(note)):
+                            # PedalMarks emit a <pedal dir="down"> element at the
+                            # end of the PedalMark.
+                            M21ObjectConvert.postStavesSpannerToMei(
+                                spanner,
+                                staffNStr,
+                                m21Score,
+                                m21Measure,
+                                self.scoreMeterStream,
+                                self.customAttrs,
+                                self.spannerBundle,
+                                tb,
+                                endOfSpanner=True
                             )
 
             # 3. Turns/Trills/Mordents/Fermatas/ArpeggioMarks on notes/chords in this voice.

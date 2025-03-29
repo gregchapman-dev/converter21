@@ -178,6 +178,21 @@ class MeiStaff:
                                 self.spannerBundle,
                                 tb
                             )
+                        if (isinstance(spanner, m21.expressions.PedalMark)
+                                and spanner.isLast(obj)):
+                            # PedalMarks emit a <pedal dir="down"> element at the
+                            # end of the PedalMark.
+                            M21ObjectConvert.postStavesSpannerToMei(
+                                spanner,
+                                self.staffNStr,
+                                self.m21Score,
+                                self.m21Measure,
+                                self.scoreMeterStream,
+                                self.customAttrs,
+                                self.spannerBundle,
+                                tb,
+                                endOfSpanner=True
+                            )
 
         # lastly, any fermata on the right barline is a post-staves element.
         if self.m21Measure.rightBarline is not None:
