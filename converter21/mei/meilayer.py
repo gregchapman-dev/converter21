@@ -55,6 +55,7 @@ class MeiLayer:
         if t.TYPE_CHECKING:
             from converter21.mei import MeiScore
             assert isinstance(parentScore, MeiScore)
+        self.parentScore = parentScore
         self.m21Voice: m21.stream.Voice | m21.stream.Measure = m21Voice
         self.parentStaff: MeiStaff = parentStaff
         self.customAttrs: dict[m21.base.Music21Object, list[str]] = customAttrs
@@ -638,11 +639,18 @@ class MeiLayer:
             for spanner in obj.getSpannerSites():
                 if not M21Utilities.isIn(spanner, self.spannerBundle):
                     continue
+
+                spStaffNStr: str = staffNStr
+                spPartIdx: int = getattr(spanner, 'mei_part_idx', -1)
+                if spPartIdx != -1:
+                    # in our exported MEI file, staff numbers are part indexes plus 1
+                    spStaffNStr = str(spPartIdx + 1)
+
                 if spanner.isFirst(obj):
                     # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
                     M21ObjectConvert.postStavesSpannerToMei(
                         spanner,
-                        staffNStr,
+                        spStaffNStr,
                         m21Score,
                         m21Measure,
                         self.scoreMeterStream,
@@ -656,7 +664,7 @@ class MeiLayer:
                     # end of the PedalMark.
                     M21ObjectConvert.postStavesSpannerToMei(
                         spanner,
-                        staffNStr,
+                        spStaffNStr,
                         m21Score,
                         m21Measure,
                         self.scoreMeterStream,
@@ -673,10 +681,17 @@ class MeiLayer:
                     for spanner in note.getSpannerSites():  # type: ignore
                         if not M21Utilities.isIn(spanner, self.spannerBundle):
                             continue
+
+                        spStaffNStr = staffNStr
+                        spPartIdx = getattr(spanner, 'mei_part_idx', -1)
+                        if spPartIdx != -1:
+                            # in our exported MEI file, staff numbers are part indexes plus 1
+                            spStaffNStr = str(spPartIdx + 1)
+
                         if spanner.isFirst(note):
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,
-                                staffNStr,
+                                spStaffNStr,
                                 m21Score,
                                 m21Measure,
                                 self.scoreMeterStream,
@@ -684,13 +699,14 @@ class MeiLayer:
                                 self.spannerBundle,
                                 tb
                             )
+
                         if (isinstance(spanner, m21.expressions.PedalMark)
                                 and spanner.isLast(note)):
                             # PedalMarks emit a <pedal dir="down"> element at the
                             # end of the PedalMark.
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,
-                                staffNStr,
+                                spStaffNStr,
                                 m21Score,
                                 m21Measure,
                                 self.scoreMeterStream,

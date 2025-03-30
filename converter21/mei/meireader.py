@@ -941,9 +941,11 @@ class MeiReader:
         ):
             startId: str = MeiShared.removeOctothorpe(eachSlur.get('startid', ''))
             endId: str = MeiShared.removeOctothorpe(eachSlur.get('endid', ''))
+            staffAttr: str = eachSlur.get('staff', '')
             if startId or endId:
                 thisIdLocal = str(uuid4())
                 thisSlur = spanner.Slur()
+                thisSlur.meireader_staff = staffAttr  # type: ignore
                 if t.TYPE_CHECKING:
                     # work around Spanner.idLocal being incorrectly type-hinted as None
                     assert isinstance(thisSlur.idLocal, str)
@@ -1319,6 +1321,7 @@ class MeiReader:
             tstamp2: str = eachTrill.get('tstamp2', '')
             hasExtension: bool = bool(endId) or bool(tstamp2)
             place: str = eachTrill.get('place', 'place_unspecified')
+            staffAttr: str = eachTrill.get('staff', '')
 
             if startId:
                 # The trill info gets stashed on the note/chord referenced by startId
@@ -1330,6 +1333,8 @@ class MeiReader:
                     self.m21Attr[startId]['m21TrillAccidUpper'] = accidUpper
                 if accidLower:
                     self.m21Attr[startId]['m21TrillAccidLower'] = accidLower
+                if staffAttr:
+                    self.m21Attr[startId]['m21TrillStaff'] = staffAttr
 
                 eachTrill.set('ignore_trill_in_trillFromElement', 'true')
 
@@ -1356,8 +1361,12 @@ class MeiReader:
 
             if startId:
                 self.m21Attr[startId]['m21TrillExtensionStart'] = thisIdLocal
+                if staffAttr:
+                    self.m21Attr[startId]['m21TrillExtensionStaff'] = staffAttr
             if endId:
                 self.m21Attr[endId]['m21TrillExtensionEnd'] = thisIdLocal
+                if staffAttr:
+                    self.m21Attr[endId]['m21TrillExtensionStaff'] = staffAttr
 
             if startId and endId:
                 # we're finished (well, once we've processed both of those note/chord elements)
@@ -1680,6 +1689,9 @@ class MeiReader:
                     continue
 
                 pm = m21.expressions.PedalMark()
+                # make sure the pedal mark spanner ends up in the right m21Part.
+                pm.meireader_staff = staffAttr  # type: ignore
+
                 if t.TYPE_CHECKING:
                     # work around Spanner.idLocal being incorrectly type-hinted as None
                     assert isinstance(pm.idLocal, str)
@@ -1719,6 +1731,8 @@ class MeiReader:
                     self.m21Attr[startId]['m21PedalFunc'] = funcAttr
                 if formAttr:
                     self.m21Attr[startId]['m21PedalForm'] = formAttr
+                if staffAttr:
+                    self.m21Attr[startId]['m21PedalStaff'] = formAttr
                 if placeAttr:
                     self.m21Attr[startId]['m21PedalPlace'] = placeAttr
                 if staffAttr:
@@ -8424,7 +8438,10 @@ class MeiReader:
                 # need to return object offsets with each object, so we can insert them
                 # appropriately.
                 for measureObj in measureList:
-                    meas.insert(0, measureObj)
+                    if isinstance(measureObj, m21.spanner.Spanner):
+                        meas.append(measureObj)
+                    else:
+                        meas.insert(0, measureObj)
 
                 staves[nStr] = meas
 
@@ -9232,11 +9249,13 @@ class MeiReader:
         for staffGroup in staffGroups:
             theScore.insert(0, staffGroup)
 
+        partIdx: int
+        staffNStr: str
         # fill in any Ottava spanners
         for sp in self.spannerBundle:
             if not isinstance(sp, spanner.Ottava):
                 continue
-            staffNStr: str = ''
+            staffNStr = ''
             if hasattr(sp, 'meireader_staff'):
                 staffNStr = sp.meireader_staff  # type: ignore
             if not staffNStr:
@@ -9254,12 +9273,31 @@ class MeiReader:
                         'Single Ottava in multiple staves: only filling from the first staff'
                     )
                     break
-                partIdx: int = allPartNs.index(staffN)
+                partIdx = allPartNs.index(staffN)
                 sp.fill(thePartList[partIdx])
 
         # put spanners in the Score
         for sp in self.spannerBundle:
-            theScore.insert(0, sp)
+            partIdx = -1
+            if hasattr(sp, 'meireader_staff'):
+                staffNStr = getattr(sp, 'meireader_staff')
+                if staffNStr:
+                    for staffN in staffNStr.split(' '):
+                        # For pedals in multiple staves we're looking for the largest partIdx,
+                        # because allPartNs is in document order/m21Score order, and pedals
+                        # belong in the bottom staff.  For all other spanners in multiple staves,
+                        # look for the smallest partIdx, because if we have to pick a staff, the
+                        # top staff is best.
+                        try:
+                            partIdx = max(partIdx, allPartNs.index(staffN))
+                        except Exception:
+                            # Bad staff number (e.g. @staff="3 xyz 2").
+                            # Just skip it.
+                            pass
+            if partIdx == -1:
+                theScore.append(sp)
+            else:
+                thePartList[partIdx].append(sp)
 
         return theScore
 

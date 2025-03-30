@@ -49,6 +49,7 @@ class MeiStaff:
             assert isinstance(parentScore, MeiScore)
 
         self.staffNStr: str = staffNStr
+        self.parentScore = parentScore
         self.m21Measure = m21Measure
         self.m21Score = parentScore.m21Score
         self.customAttrs: dict[m21.base.Music21Object, list[str]] = customAttrs
@@ -166,11 +167,18 @@ class MeiStaff:
                             continue
                         if hasattr(spanner, 'mei_trill_already_handled'):
                             continue
+
+                        spStaffNStr: str = self.staffNStr
+                        spPartIdx: int = getattr(spanner, 'mei_part_idx', -1)
+                        if spPartIdx != -1:
+                            # in our exported MEI file, staff numbers are part indexes plus 1
+                            spStaffNStr = str(spPartIdx + 1)
+
                         if spanner.isFirst(obj):
                             # print(f'spanner seen: {spanner.classes[0]}', file=sys.stderr)
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,
-                                self.staffNStr,
+                                spStaffNStr,
                                 self.m21Score,
                                 self.m21Measure,
                                 self.scoreMeterStream,
@@ -178,13 +186,14 @@ class MeiStaff:
                                 self.spannerBundle,
                                 tb
                             )
+
                         if (isinstance(spanner, m21.expressions.PedalMark)
                                 and spanner.isLast(obj)):
                             # PedalMarks emit a <pedal dir="down"> element at the
                             # end of the PedalMark.
                             M21ObjectConvert.postStavesSpannerToMei(
                                 spanner,
-                                self.staffNStr,
+                                spStaffNStr,
                                 self.m21Score,
                                 self.m21Measure,
                                 self.scoreMeterStream,

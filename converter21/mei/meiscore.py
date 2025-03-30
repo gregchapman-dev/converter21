@@ -431,7 +431,18 @@ class MeiScore:
         # that was imported, for use during fillOttavas.
         spannerBundleForOttavas: m21.spanner.SpannerBundle = self.m21Score.spannerBundle
 
-        for part in self.m21Score.parts:
+        for partIdx, part in enumerate(self.m21Score.parts):
+            # We need to annotate PedalMark spanners that are in a particular
+            # part (i.e. not just up in the score) with which partIdx they are
+            # in, so we can later compute the correct pedal@staff value.
+            for pm in part[m21.expressions.PedalMark]:
+                pm.mei_part_idx = partIdx  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customM21AttrsToDelete,
+                    pm,
+                    ['mei_part_idx']
+                )
+
             partTieSpanners: list[tuple[M21TieSpanner, int]] = self.currentTieSpanners[part]
             for measure in part:
                 if not isinstance(measure, m21.stream.Measure):
