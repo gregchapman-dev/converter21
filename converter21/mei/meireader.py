@@ -441,6 +441,11 @@ class MeiReader:
         # how many tuplets we are nested within.
         self.inTupletCount: int = 0
 
+        self.pendingPedalBounces: list[
+            # pb, obj (from which we get offset within a measure), staffAttr
+            tuple[m21.expressions.PedalBounce, m21.base.Music21Object, str]
+        ] = []
+
     def run(self) -> stream.Score | stream.Part | stream.Opus:
         '''
         Run conversion of the internal MEI document to produce a music21 object.
@@ -6334,13 +6339,9 @@ class MeiReader:
                     for each in dirDynamTempoList:
                         theVoice.coreAppend(each)
 
-            if hasattr(obj, 'meireader_pedalbounce'):
-                pb: m21.expressions.PedalBounce = obj.meireader_pedalbounce  # type: ignore
-                theVoice.coreAppend(pb)
-
             theVoice.coreAppend(obj)
-        theVoice.coreElementsChanged()
 
+        theVoice.coreElementsChanged()
         self.currVoiceId = ''
 
         return theVoice
@@ -7692,7 +7693,7 @@ class MeiReader:
                 return staffAttr, (offset, None, None), pb
             # make a note of it in the current object, so we can go back and
             # emit it later (when we're emitting everything in the layer)
-            obj.meireader_pedalbounce = pb  # type: ignore
+            self.pendingPedalBounces.append((pb, obj, staffAttr))
             return '', (-1., None, None), None
 
         if dirAttr == 'up':
@@ -8872,6 +8873,25 @@ class MeiReader:
                     nextMeasureLeft = nl
                 else:
                     nextMeasureLeft = None
+
+                # now insert the pendingPedalBounces
+                for pb, obj, staffAttr in self.pendingPedalBounces:
+                    # find the measure containing obj
+                    for m21Meas in measureResult.values():
+                        if isinstance(m21Meas, m21.bar.Repeat):
+                            continue
+                        if obj in m21Meas or any(obj in v for v in m21Meas.voices):
+                            objOffset: OffsetQL = obj.getOffsetInHierarchy(m21Meas)
+                            # insert the PedalBounce into the staffAttr measure,
+                            # at the same offset as obj is in one of the other
+                            # measures.
+                            bounceMeas = measureResult[staffAttr]
+                            if t.TYPE_CHECKING:
+                                assert isinstance(bounceMeas, m21.stream.Measure)
+                            bounceMeas.insert(objOffset, pb)
+                            break
+
+                self.pendingPedalBounces = []
 
             elif scoreDefTag == eachElem.tag:
                 # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups)
