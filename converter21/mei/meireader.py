@@ -7684,6 +7684,7 @@ class MeiReader:
 
         if dirAttr == 'bounce':
             pb = m21.expressions.PedalBounce()
+            pm.addSpannedElements(pb)
             if placeAttr in ('above', 'below'):
                 pb.placement = placeAttr
             if obj is None:
