@@ -2638,6 +2638,9 @@ class HumdrumFile(HumdrumFileContent):
         if not M21Utilities.m21PedalMarksSupported():
             return insertedIntoVoice
 
+        if token.text not in ('*ped', '*Xped'):
+            return insertedIntoVoice
+
         track: int | None = token.track
         if track is None:
             # not a kern/mens spine
@@ -2646,9 +2649,6 @@ class HumdrumFile(HumdrumFileContent):
         staffIndex: int = self._staffStartsIndexByTrack[track]
         if staffIndex < 0:
             # not a kern/mens spine
-            return insertedIntoVoice
-
-        if token.text not in ('*ped', '*Xped'):
             return insertedIntoVoice
 
         # we insert pedal stuff in the measure, not down here in the voice

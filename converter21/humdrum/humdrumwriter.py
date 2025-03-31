@@ -2198,8 +2198,7 @@ class HumdrumWriter:
                         [pended.tokenString],
                         None,
                         pindex,
-                        sindex,
-                        0
+                        sindex
                     )
 
 
@@ -2266,8 +2265,7 @@ class HumdrumWriter:
                 ottavaOrPedalStopTokenStrings,
                 outSlice,
                 partIndex,
-                staffIndex,
-                voiceIndex
+                staffIndex
             )
 
         # check for ottava/pedal starts/stops and emit *ped, *8va, aut cetera
@@ -2283,8 +2281,7 @@ class HumdrumWriter:
                     starts,
                     outSlice,
                     partIndex,
-                    staffIndex,
-                    voiceIndex
+                    staffIndex
                 )
             if stops:
                 # any stops go after the full duration of this event,
@@ -2816,10 +2813,10 @@ class HumdrumWriter:
 
         for partIndex, staffIndex, pedalObject, kerntoks, offset in pedalObjects:
             outSlice: GridSlice | None
-            outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+            outSlice, _ = self._produceOutputSliceForUnassociatedM21Object(
                 outgm,
                 partIndex,
-                staffIndex,
+                None,
                 pedalObject,
                 offset
             )
@@ -2827,8 +2824,7 @@ class HumdrumWriter:
                 kerntoks,
                 outSlice,
                 partIndex,
-                staffIndex,
-                voiceIndex
+                staffIndex
             )
 
     def _addUnassociatedOttavasOrPedalMarks(
@@ -2869,10 +2865,10 @@ class HumdrumWriter:
         # marks element is (partIndex, staffIndex, mark, kerntok, offset)
         for partIndex, staffIndex, anchor, kerntok, offset in marks:
             outSlice: GridSlice | None
-            outSlice, voiceIndex = self._produceOutputSliceForUnassociatedM21Object(
+            outSlice, _ = self._produceOutputSliceForUnassociatedM21Object(
                 outgm,
                 partIndex,
-                staffIndex,
+                None,
                 anchor,
                 offset
             )
@@ -2881,8 +2877,7 @@ class HumdrumWriter:
                 [kerntok],
                 outSlice,
                 partIndex,
-                staffIndex,
-                voiceIndex,
+                staffIndex
             )
 
     def _addUnassociatedDynamics(

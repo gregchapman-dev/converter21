@@ -546,8 +546,7 @@ class GridMeasure:
         toks: list[str],
         associatedSlice: GridSlice | None,
         partIndex: int,
-        staffIndex: int,
-        voiceIndex: int
+        staffIndex: int
     ) -> None:
         def isPedal(tok: str) -> bool:
             return tok in ('*ped', '*Xped')
@@ -592,8 +591,9 @@ class GridMeasure:
                 self.slices.append(newSlice)
 
             newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
-            newVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(newStaff.voices,
-                                                                             voiceIndex)
+            # ottavas and pedals always go in voice 0 (so paired starts/stops can be found,
+            # even when processing one voice at a time).
+            newVoice: GridVoice = self._getIndexedVoice_AppendingIfNecessary(newStaff.voices, 0)
             newVoice.token = HumdrumToken(tok)
 
     '''
