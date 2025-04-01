@@ -4001,6 +4001,12 @@ class M21Utilities:
     @staticmethod
     def assureAllXmlIds(s: m21.stream.Stream):
         for obj in s.recurse():
+            if isinstance(obj, m21.expressions.PedalMark):
+                # each pedalmark turns into two <pedal> elements,
+                # so we can't easily generate xml:id for them both.
+                # Skip it for now.
+                continue
+
             M21Utilities.assureXmlId(obj)
             # if it's a chord (and not a chord symbol), put an xmlid on all the notes
             # (required for MEI export, because <tie> might reference a note in a chord)
