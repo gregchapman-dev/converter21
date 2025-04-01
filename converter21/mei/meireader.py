@@ -441,9 +441,9 @@ class MeiReader:
         # how many tuplets we are nested within.
         self.inTupletCount: int = 0
 
-        self.pendingPedalBounces: list[
-            # pb, obj (from which we get offset within a measure), staffAttr
-            tuple[m21.expressions.PedalBounce, m21.base.Music21Object, str]
+        self.pendingObjectsForOtherStaves: list[
+            # pended, obj (from which we get offset within a measure), staffAttr
+            tuple[m21.base.Music21Object, m21.base.Music21Object, str]
         ] = []
 
     def run(self) -> stream.Score | stream.Part | stream.Opus:
@@ -7706,14 +7706,26 @@ class MeiReader:
 
             # Now, we need to put the first object in the spanner, either obj,
             # which we do not need to return, or a SpannerAnchor, which we do.
-            if obj is not None:
+            # If there is an obj, but it's in the wrong staff, use a SpannerAnchor.
+            if obj is not None and staffAttr == self.staffNumberForNotes:
                 pm.addSpannedElements(obj)
                 return '', (-1., None, None), None
 
-            # no obj, make a SpannerAnchor using @tstamp (which we already checked is there)
+            # no obj, make a SpannerAnchor using @tstamp (which we already
+            # checked is there)
+            if obj is None:
+                sa = m21.spanner.SpannerAnchor()
+                pm.addSpannedElements(sa)
+                return staffAttr, (offset, None, None), sa
+
+            # There is an obj, but it's in the wrong staff.
+            # Make a SpannerAnchor, but we can't return it
+            # because there is no @tstamp.  Instead, put it
+            # in self.pendingObjectsForOtherStaves.
             sa = m21.spanner.SpannerAnchor()
             pm.addSpannedElements(sa)
-            return staffAttr, (offset, None, None), sa
+            self.pendingObjectsForOtherStaves.append((sa, obj, staffAttr))
+            return '', (-1., None, None), None
 
         if dirAttr == 'bounce':
             pb = m21.expressions.PedalBounce()
@@ -7723,9 +7735,9 @@ class MeiReader:
             if obj is None:
                 # return the pedalbounce object
                 return staffAttr, (offset, None, None), pb
-            # make a note of it in the current object, so we can go back and
-            # emit it later (when we're emitting everything in the layer)
-            self.pendingPedalBounces.append((pb, obj, staffAttr))
+            # make a note of it in pendingObjectsForOtherStaves, so we can
+            # go back and emit it later.
+            self.pendingObjectsForOtherStaves.append((pb, obj, staffAttr))
             return '', (-1., None, None), None
 
         if dirAttr == 'up':
@@ -8906,24 +8918,25 @@ class MeiReader:
                 else:
                     nextMeasureLeft = None
 
-                # now insert the pendingPedalBounces
-                for pb, obj, staffAttr in self.pendingPedalBounces:
+                # now insert the pendingObjectsForOtherStaves (using
+                # the offset of obj in a different staff's measure)
+                for pended, obj, staffAttr in self.pendingObjectsForOtherStaves:
                     # find the measure containing obj
                     for m21Meas in measureResult.values():
                         if isinstance(m21Meas, m21.bar.Repeat):
                             continue
                         if obj in m21Meas or any(obj in v for v in m21Meas.voices):
-                            objOffset: OffsetQL = obj.getOffsetInHierarchy(m21Meas)
-                            # insert the PedalBounce into the staffAttr measure,
+                            # insert the pended object into the staffAttr measure,
                             # at the same offset as obj is in one of the other
                             # measures.
-                            bounceMeas = measureResult[staffAttr]
+                            objOffset: OffsetQL = obj.getOffsetInHierarchy(m21Meas)
+                            pendMeas = measureResult[staffAttr]
                             if t.TYPE_CHECKING:
-                                assert isinstance(bounceMeas, m21.stream.Measure)
-                            bounceMeas.insert(objOffset, pb)
+                                assert isinstance(pendMeas, m21.stream.Measure)
+                            pendMeas.insert(objOffset, pended)
                             break
 
-                self.pendingPedalBounces = []
+                self.pendingObjectsForOtherStaves = []
 
             elif scoreDefTag == eachElem.tag:
                 # we only fully parse staffGrps (creating Parts/PartStaffs and StaffGroups)
