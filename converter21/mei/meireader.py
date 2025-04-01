@@ -1729,23 +1729,35 @@ class MeiReader:
                 # data from <pedal> to that note/chord/rest/space.
                 eachPedal.set('ignore_in_pedalFromElement', 'true')
 
-                self.m21Attr[startId]['m21Pedal'] = thisIdLocal
-                if dirAttr:
-                    self.m21Attr[startId]['m21PedalDir'] = dirAttr
+                if dirAttr in ('down', 'half'):
+                    # no 'm21PedalDir', Start implies 'down'
+                    self.m21Attr[startId]['m21PedalStart'] = thisIdLocal
+                elif dirAttr == 'up':
+                    # no 'm21PedalDir', End implies 'up'
+                    self.m21Attr[startId]['m21PedalEnd'] = thisIdLocal
+                else:
+                    self.m21Attr[startId]['m21Pedal'] = thisIdLocal
+                    if dirAttr:
+                        self.m21Attr[startId]['m21PedalDir'] = dirAttr
                 if funcAttr:
-                    self.m21Attr[startId]['m21PedalFunc'] = funcAttr
+                    # we will see the pedal start first, so trust that
+                    if 'm21PedalFunc' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21PedalFunc'] = funcAttr
                 if formAttr:
-                    self.m21Attr[startId]['m21PedalForm'] = formAttr
-                if staffAttr:
-                    self.m21Attr[startId]['m21PedalStaff'] = formAttr
+                    if 'm21PedalForm' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21PedalForm'] = formAttr
                 if placeAttr:
-                    self.m21Attr[startId]['m21PedalPlace'] = placeAttr
+                    if 'm21PedalPlace' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21PedalPlace'] = placeAttr
                 if staffAttr:
-                    self.m21Attr[startId]['m21PedalStaff'] = staffAttr
+                    if 'm21PedalStaff' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21PedalStaff'] = staffAttr
                 if lStartSym:
-                    self.m21Attr[startId]['m21PedalLStartSym'] = lStartSym
+                    if 'm21PedalLStartSym' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21PedalLStartSym'] = lStartSym
                 if lEndSym:
-                    self.m21Attr[startId]['m21PedalLEndSym'] = lEndSym
+                    if 'm21PedalLEndSym' not in self.m21Attr[startId]:
+                        self.m21Attr[startId]['m21PedalLEndSym'] = lEndSym
             else:
                 # <pedal> will be handled in pedalFromElement.  Make a note
                 # of the spanner idLocal, so we can do the right thing there.
@@ -2279,35 +2291,55 @@ class MeiReader:
         elem: Element,
         obj: note.GeneralNote,
     ):
-        localId: str = elem.get('m21Pedal', '')
-        if not localId:
+        # on on generalnote, we allow three pedals: a pedal start, a single pedal bounce or gap
+        # start or end, and a pedal end.  If we need more than that, I'll eat my hat.  Or modify
+        # this code (and the code in _ppPedals).
+        localIdsAndDirs: list[tuple[str, str]] = []
+        localStartId: str = elem.get('m21PedalStart', '')
+        if localStartId:
+            localIdsAndDirs.append((localStartId, 'down'))
+
+        localEndId = elem.get('m21PedalEnd', '')
+        if localEndId:
+            localIdsAndDirs.append((localEndId, 'up'))
+
+        localId = elem.get('m21Pedal', '')
+        if localId:
+            dirAttr: str = elem.get('m21PedalDir', '')
+            if dirAttr:
+                localIdsAndDirs.append((localId, dirAttr))
+
+        if not localIdsAndDirs:
+            # nothing to do
             return
 
-        sp: spanner.Spanner | None = self.safeGetSpannerByIdLocal(
-            localId, self.spannerBundle
-        )
-        if sp is None:
-            environLocal.warn('no PedalMark found from pedal preprocessing')
-            return
+        for localId, dirAttr in localIdsAndDirs:
+            sp: spanner.Spanner | None = self.safeGetSpannerByIdLocal(
+                localId, self.spannerBundle
+            )
+            if sp is None:
+                environLocal.warn('no PedalMark found from pedal preprocessing')
+                return
 
-        if t.TYPE_CHECKING:
-            assert isinstance(sp, m21.expressions.PedalMark)
-        pm: m21.expressions.PedalMark = sp
-        output: tuple[
-            str,
-            tuple[OffsetQL | None, int | None, OffsetQL | None],
-            expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
-        ] = self.getPedalObject(
-            pm,
-            obj,
-            '',  # no tstamp needed
-            elem.get('m21PedalStaff', ''),
-            elem.get('m21PedalDir', ''),
-            elem.get('m21PedalFunc', ''),
-            elem.get('m21PedalForm', ''),
-            elem.get('m21PedalPlace', '')
-        )
-        assert output == ('', (-1., None, None), None)
+            if t.TYPE_CHECKING:
+                assert isinstance(sp, m21.expressions.PedalMark)
+            pm: m21.expressions.PedalMark = sp
+
+            output: tuple[
+                str,
+                tuple[OffsetQL | None, int | None, OffsetQL | None],
+                expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+            ] = self.getPedalObject(
+                pm,
+                obj,
+                '',  # no tstamp needed
+                elem.get('m21PedalStaff', ''),
+                dirAttr,
+                elem.get('m21PedalFunc', ''),
+                elem.get('m21PedalForm', ''),
+                elem.get('m21PedalPlace', '')
+            )
+            assert output == ('', (-1., None, None), None)
 
     def addOttavas(
         self,
@@ -7581,7 +7613,7 @@ class MeiReader:
 
         # if we didn't note what spanner this <pedal> is part of (in ppPedals),
         # we have a bug.
-        pedalLocalId = elem.get('m21Pedal', '')
+        pedalLocalId = elem.get('m21Pedal', '')  # no m21PedalStart/End for @tstamp
         if not pedalLocalId:
             environLocal.warn('no PedalMark created in pedal preprocessing')
             return ('', (-1., None, None), None)
