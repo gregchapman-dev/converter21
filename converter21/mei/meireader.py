@@ -1735,14 +1735,11 @@ class MeiReader:
                     if t.TYPE_CHECKING:
                         assert isinstance(pm.idLocal, str)
                     thisIdLocal = pm.idLocal
-                    # end this spanner
-                    currentOpenPedalSpanners[staffAttr] = None
                 else:
                     # pedal@dir="bounce", but no current pedal mark spanner
                     # I wouldn't expect that to happen, so ignore for now.
                     eachPedal.set('ignore_in_pedalFromElement', 'true')
                     environLocal.warn('<pedal dir="bounce"> ignored because no current pedal mark')
-
                     continue
             else:
                 # ignore this <pedal> with illegal pedal@dir attribute value
