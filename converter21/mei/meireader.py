@@ -1681,46 +1681,73 @@ class MeiReader:
             lEndSym: str = eachPedal.get('lendsym', '')
 
             pm: m21.expressions.PedalMark | None = None
+            thisIdLocal: str = ''
 
             if dirAttr in ('down', 'half'):
-                # make a PedalMark spanner (put it in self.spannerBundle, and stash the
-                # idLocal as an open spanner in currentOpenPedalSpanners)
                 pm = currentOpenPedalSpanners.get(staffAttr, None)
                 if pm is not None:
-                    # 'down' doesn't do anything, ignore it
-                    # 'half' could mean "come up to half", but music21 doesn't support
-                    # half-down pedals, so we treat 'half' exactly like 'down'.
-                    eachPedal.set('ignore_in_pedalFromElement', 'true')
-                    continue
-
-                pm = m21.expressions.PedalMark()
-                # make sure the pedal mark spanner ends up in the right m21Part.
-                pm.meireader_staff = staffAttr  # type: ignore
-
-                if t.TYPE_CHECKING:
-                    # work around Spanner.idLocal being incorrectly type-hinted as None
-                    assert isinstance(pm.idLocal, str)
-                thisIdLocal = str(uuid4())
-                pm.idLocal = thisIdLocal
-                self.spannerBundle.append(pm)
-                currentOpenPedalSpanners[staffAttr] = pm
-            elif dirAttr in ('up', 'bounce'):
-                # find the currently open spanner for this staffAttr
-                pm = currentOpenPedalSpanners.get(staffAttr, None)
-                if pm is None:
-                    # pedal is not down, so 'up' or 'bounce' makes no sense.  Ignore
-                    eachPedal.set('ignore_in_pedalFromElement', 'true')
-                    continue
-
-                if t.TYPE_CHECKING:
-                    assert isinstance(pm.idLocal, str)
-                thisIdLocal = pm.idLocal
-                if dirAttr == 'up':
+                    # 'down' can happen after 'up' in document order (especially
+                    # for pedals that start and stop quickly)
+                    if t.TYPE_CHECKING:
+                        assert isinstance(pm.idLocal, str)
+                    thisIdLocal = pm.idLocal
                     # end this spanner
                     currentOpenPedalSpanners[staffAttr] = None
+                else:
+                    pm = m21.expressions.PedalMark()
+                    # make sure the pedal mark spanner ends up in the right m21Part.
+                    pm.meireader_staff = staffAttr  # type: ignore
+
+                    if t.TYPE_CHECKING:
+                        # work around Spanner.idLocal being incorrectly type-hinted as None
+                        assert isinstance(pm.idLocal, str)
+                    thisIdLocal = str(uuid4())
+                    pm.idLocal = thisIdLocal
+                    self.spannerBundle.append(pm)
+                    currentOpenPedalSpanners[staffAttr] = pm
+            elif dirAttr == 'up':
+                # find the currently open spanner for this staffAttr
+                pm = currentOpenPedalSpanners.get(staffAttr, None)
+                if pm is not None:
+                    if t.TYPE_CHECKING:
+                        assert isinstance(pm.idLocal, str)
+                    thisIdLocal = pm.idLocal
+                    # end this spanner
+                    currentOpenPedalSpanners[staffAttr] = None
+                else:
+                    # up happened before down in the document; that's ok.
+                    pm = m21.expressions.PedalMark()
+                    # make sure the pedal mark spanner ends up in the right m21Part.
+                    pm.meireader_staff = staffAttr  # type: ignore
+
+                    if t.TYPE_CHECKING:
+                        # work around Spanner.idLocal being incorrectly type-hinted as None
+                        assert isinstance(pm.idLocal, str)
+                    thisIdLocal = str(uuid4())
+                    pm.idLocal = thisIdLocal
+                    self.spannerBundle.append(pm)
+                    currentOpenPedalSpanners[staffAttr] = pm
+
+            elif dirAttr == 'bounce':
+                # find the currently open spanner for this staffAttr
+                pm = currentOpenPedalSpanners.get(staffAttr, None)
+                if pm is not None:
+                    if t.TYPE_CHECKING:
+                        assert isinstance(pm.idLocal, str)
+                    thisIdLocal = pm.idLocal
+                    # end this spanner
+                    currentOpenPedalSpanners[staffAttr] = None
+                else:
+                    # pedal@dir="bounce", but no current pedal mark spanner
+                    # I wouldn't expect that to happen, so ignore for now.
+                    eachPedal.set('ignore_in_pedalFromElement', 'true')
+                    environLocal.warn('<pedal dir="bounce"> ignored because no current pedal mark')
+
+                    continue
             else:
-                # illegal pedal@dir
+                # ignore this <pedal> with illegal pedal@dir attribute value
                 eachPedal.set('ignore_in_pedalFromElement', 'true')
+                environLocal.warn(f'illegal <pedal dir="{dirAttr}"> ignored')
                 continue
 
             if startId:
@@ -9317,30 +9344,38 @@ class MeiReader:
 
         partIdx: int
         staffNStr: str
-        # fill in any Ottava spanners
+        # fill in any Ottava spanners, and reorder any PedalMark spanner contents
         for sp in self.spannerBundle:
-            if not isinstance(sp, spanner.Ottava):
-                continue
-            staffNStr = ''
-            if hasattr(sp, 'meireader_staff'):
-                staffNStr = sp.meireader_staff  # type: ignore
-            if not staffNStr:
-                # get it from start note in ottava (should already be there)
-                startObj: Music21Object | None = sp.getFirst()
-                if startObj is not None and hasattr(startObj, 'meireader_staff'):
-                    staffNStr = startObj.meireader_staff  # type: ignore
-            if not staffNStr:
-                staffNStr = self.topPartN
+            if isinstance(sp, m21.spanner.Ottava):
+                staffNStr = ''
+                if hasattr(sp, 'meireader_staff'):
+                    staffNStr = sp.meireader_staff  # type: ignore
+                if not staffNStr:
+                    # get it from start note in ottava (should already be there)
+                    startObj: Music21Object | None = sp.getFirst()
+                    if startObj is not None and hasattr(startObj, 'meireader_staff'):
+                        staffNStr = startObj.meireader_staff  # type: ignore
+                if not staffNStr:
+                    staffNStr = self.topPartN
 
-            staffNs: list[str] = staffNStr.split(' ')
-            for i, staffN in enumerate(staffNs):
-                if i > 0:
-                    environLocal.warn(
-                        'Single Ottava in multiple staves: only filling from the first staff'
-                    )
-                    break
-                partIdx = allPartNs.index(staffN)
-                sp.fill(thePartList[partIdx])
+                staffNs: list[str] = staffNStr.split(' ')
+                for i, staffN in enumerate(staffNs):
+                    if i > 0:
+                        environLocal.warn(
+                            'Single Ottava in multiple staves: only filling from the first staff'
+                        )
+                        break
+                    partIdx = allPartNs.index(staffN)
+                    sp.fill(thePartList[partIdx])
+                continue
+
+            if isinstance(sp, m21.expressions.PedalMark):
+                elList: list[m21.base.Music21Object] = sp.getSpannedElements()
+                for el in elList:
+                    sp.spannerStorage.remove(el)
+                elList.sort(key=lambda el: el.getOffsetInHierarchy(theScore))
+                sp.addSpannedElements(elList)
+                continue
 
         # put spanners in the Score
         for sp in self.spannerBundle:

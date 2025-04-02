@@ -1075,7 +1075,8 @@ class M21ObjectConvert:
     ) -> None:
         forceTstamp2: bool = False
         first: m21.base.Music21Object = spanner.getFirst()
-        last: m21.base.Music21Object = spanner.getLast()
+        # getLast never returns None, but we might override with None below
+        last: m21.base.Music21Object | None = spanner.getLast()
         tag: str = ''
         attr: dict[str, str] = {}
         xmlId: str = M21Utilities.getXmlId(spanner)
@@ -1103,11 +1104,22 @@ class M21ObjectConvert:
         # if endOfSpanner is True, we are emitting an element for the end
         # of this spanner (currently only PedalMark spanners do this).  So
         # we swizzle the arguments to _fillInStandardPostStavesAttributes
-        # in that case, so it will do the right thing.
+        # in that case, so it will do the right thing.  If this is not
+        # the end of this spanner, but it _is_ a PedalMark, then we
+        # set last to None, because <pedal> elements never have an
+        # @endid or @tstamp2.
+        if endOfSpanner:
+            if t.TYPE_CHECKING:
+                assert last is not None
+            first = last
+            last = None
+        elif isinstance(spanner, m21.expressions.PedalMark):
+            last = None
+
         M21ObjectConvert._fillInStandardPostStavesAttributes(
             attr,
-            first if not endOfSpanner else last,
-            last if not endOfSpanner else None,
+            first,
+            last,
             staffNStr,
             m21Score,
             m21Measure,
