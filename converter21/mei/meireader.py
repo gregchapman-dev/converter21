@@ -1680,6 +1680,8 @@ class MeiReader:
             lStartSym: str = eachPedal.get('lstartsym', '')
             lEndSym: str = eachPedal.get('lendsym', '')
 
+            overrideDirAttr: str = ''
+
             pm: m21.expressions.PedalMark | None = None
             thisIdLocal: str = ''
 
@@ -1737,10 +1739,25 @@ class MeiReader:
                     thisIdLocal = pm.idLocal
                 else:
                     # pedal@dir="bounce", but no current pedal mark spanner
-                    # I wouldn't expect that to happen, so ignore for now.
-                    eachPedal.set('ignore_in_pedalFromElement', 'true')
-                    environLocal.warn('<pedal dir="bounce"> ignored because no current pedal mark')
-                    continue
+                    # I have seen this in scores.  It's not valid, but I need
+                    # to deal with it somehow so everything after doesn't go
+                    # wrong.  Ignore the "up" side of the bounce, since the
+                    # pedal is not down.  But do pay attention to the "down"
+                    # side of the bounce, so the state of the pedal after
+                    # the bounce will be down, as it should be.
+                    environLocal.warn('bad pedal bounce (with pedal up); treated as pedal down')
+                    overrideDirAttr = 'down'
+                    pm = m21.expressions.PedalMark()
+                    # make sure the pedal mark spanner ends up in the right m21Part.
+                    pm.meireader_staff = staffAttr  # type: ignore
+
+                    if t.TYPE_CHECKING:
+                        # work around Spanner.idLocal being incorrectly type-hinted as None
+                        assert isinstance(pm.idLocal, str)
+                    thisIdLocal = str(uuid4())
+                    pm.idLocal = thisIdLocal
+                    self.spannerBundle.append(pm)
+                    currentOpenPedalSpanners[staffAttr] = pm
             else:
                 # ignore this <pedal> with illegal pedal@dir attribute value
                 eachPedal.set('ignore_in_pedalFromElement', 'true')
@@ -1761,7 +1778,9 @@ class MeiReader:
                     self.m21Attr[startId]['m21PedalEnd'] = thisIdLocal
                 else:
                     self.m21Attr[startId]['m21Pedal'] = thisIdLocal
-                    if dirAttr:
+                    if overrideDirAttr:
+                        self.m21Attr[startId]['m21PedalDir'] = overrideDirAttr
+                    elif dirAttr:
                         self.m21Attr[startId]['m21PedalDir'] = dirAttr
                 if funcAttr:
                     # we will see the pedal start first, so trust that
@@ -1786,6 +1805,8 @@ class MeiReader:
                 # <pedal> will be handled in pedalFromElement.  Make a note
                 # of the spanner idLocal, so we can do the right thing there.
                 eachPedal.set('m21Pedal', thisIdLocal)
+                if overrideDirAttr:
+                    eachPedal.set('m21PedalOverrideDir', overrideDirAttr)
 
     def _ppDirsDynamsTempos(self) -> None:
         environLocal.printDebug('*** pre-processing dirs/dynams/tempos')
@@ -7651,6 +7672,11 @@ class MeiReader:
         if t.TYPE_CHECKING:
             assert isinstance(pm, m21.expressions.PedalMark)
 
+        dirAttr: str = elem.get('dir', '')
+        override: str = elem.get('m21PedalOverrideDir', '')
+        if override:
+            dirAttr = override
+
         output: tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
@@ -7660,7 +7686,7 @@ class MeiReader:
             None,
             elem.get('tstamp', ''),
             elem.get('staff', ''),
-            elem.get('dir', ''),
+            dirAttr,
             elem.get('func', ''),
             elem.get('form', ''),
             elem.get('place', '')
