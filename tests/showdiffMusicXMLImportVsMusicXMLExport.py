@@ -37,7 +37,7 @@ def runTheFullTest(inputPath: Path):
     xmlPath = Path(tempfile.gettempdir())
     xmlPath /= (inputPath.stem + '_Written')
     xmlPath = xmlPath.with_suffix('.musicxml')
-    print(f'Writing MEI file: {xmlPath}')
+    print(f'Writing MusicXML file: {xmlPath}')
     success = score1.write(fp=xmlPath, fmt='musicxml', makeNotation=False)
 
     assert success
@@ -47,7 +47,7 @@ def runTheFullTest(inputPath: Path):
     assert score2 is not None
     assert score2.isWellFormedNotation()
 
-    # compare the two music21 (MEI) scores
+    # compare the two music21 (MusicXML) scores
     # with music-score-diff:
     print('comparing the two m21/MusicXML scores')
     score_lin2 = AnnScore(
