@@ -1155,8 +1155,10 @@ class M21ObjectConvert:
                 attr['dir'] = 'down'
             if spanner.pedalType is not None:
                 attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[spanner.pedalType]
-            if spanner.pedalForm is not None:
-                attr['form'] = M21ObjectConvert.M21PEDALFORM_TO_MEI_PEDAL_FORM[spanner.pedalForm]
+            form: str = M21ObjectConvert.m21PedalObjectToMeiPedalForm(spanner)
+            if form:
+                attr['form'] = form
+
         elif isinstance(spanner, M21BeamSpanner):
             tag = 'beamSpan'
             # set up plist for every spanned element (yes, even the ones that are already
@@ -1717,9 +1719,9 @@ class M21ObjectConvert:
         if tag == 'pedal':
             if t.TYPE_CHECKING:
                 # PedalBounce, PedalGapStart, and PedalGapEnd
-                # are all PedalObjects
-                assert isinstance(obj, m21.expressions.PedalObject)
-            M21ObjectConvert.emitPedalObject(obj, tag, attr, tb)
+                # are all PedalTransitions
+                assert isinstance(obj, m21.expressions.PedalTransition)
+            M21ObjectConvert.emitPedalTransition(obj, tag, attr, tb)
             return
 
         if tag == 'harm':
@@ -1767,62 +1769,87 @@ class M21ObjectConvert:
         m21.expressions.PedalType.Silent: 'silent',
     }
 
-    M21PEDALFORM_TO_MEI_PEDAL_FORM: dict[m21.expressions.PedalForm, str] = {
-        m21.expressions.PedalForm.Line: 'line',
-        m21.expressions.PedalForm.Symbol: 'pedstar',
-        m21.expressions.PedalForm.SymbolAlt: 'altpedstar',
-        m21.expressions.PedalForm.SymbolLine: 'pedline',
-    }
-
     @staticmethod
-    def emitPedalObject(
-        po: m21.expressions.PedalObject,
+    def emitPedalTransition(
+        pt: m21.expressions.PedalTransition,
         tag: str,
         attr: dict[str, str],
         tb: TreeBuilder
     ):
-        sps: list[m21.spanner.Spanner] = po.getSpannerSites((m21.expressions.PedalMark,))
+        sps: list[m21.spanner.Spanner] = pt.getSpannerSites((m21.expressions.PedalMark,))
         if not sps:
-            # we ignore PedalObjects that are not in a PedalMark spanner
+            # we ignore PedalTransitions that are not in a PedalMark spanner
             return
 
         pm = sps[0]
         if t.TYPE_CHECKING:
             assert isinstance(pm, m21.expressions.PedalMark)
 
-        if isinstance(po, m21.expressions.PedalBounce):
+        if isinstance(pt, m21.expressions.PedalBounce):
             attr['dir'] = 'bounce'
-        elif isinstance(po, m21.expressions.PedalGapStart):
-            if pm.pedalForm in (
-                    m21.expressions.PedalForm.Line, m21.expressions.PedalForm.SymbolLine):
-                attr['dir'] = 'up'
-                attr['lendsym'] = 'none'  # no up-tick on the line end
-            else:
+        elif isinstance(pt, m21.expressions.PedalGapStart):
+            if pm.continueLine == m21.expressions.PedalLine.NoLine:
                 # there are no gaps unless there are pedal lines
                 return
-        elif isinstance(po, m21.expressions.PedalGapEnd):
-            if pm.pedalForm in (
-                    m21.expressions.PedalForm.Line, m21.expressions.PedalForm.SymbolLine):
-                attr['dir'] = 'down'
-                attr['lstartsym'] = 'none'  # no down-tick on the line start
-            else:
+            attr['dir'] = 'up'
+            attr['lendsym'] = 'none'  # no up-tick on the line end
+        elif isinstance(pt, m21.expressions.PedalGapEnd):
+            if pm.continueLine == m21.expressions.PedalLine.NoLine:
                 # there are no gaps unless there are pedal lines
                 return
+            attr['dir'] = 'down'
+            attr['lstartsym'] = 'none'  # no down-tick on the line start
 
-        # now the rest of the stuff from pm
-        if pm.pedalType is not None:
+        if pm.pedalType != m21.expressions.PedalType.Unspecified:
             attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[pm.pedalType]
-        if pm.pedalForm is not None:
-            attr['form'] = M21ObjectConvert.M21PEDALFORM_TO_MEI_PEDAL_FORM[pm.pedalForm]
+        form: str = M21ObjectConvert.m21PedalObjectToMeiPedalForm(pm, pt)
+        if form:
+            attr['form'] = form
 
-        M21ObjectConvert._addStylisticAttributes(po, attr)
+        M21ObjectConvert._addStylisticAttributes(pt, attr)
         if 'place' not in attr:
-            # if po.placement not set, check pm.placement
+            # if pt.placement not already set, check pm.placement
             if pm.placement in ('above', 'below'):
                 attr['place'] = pm.placement
 
         tb.start(tag, attr)
         tb.end(tag)
+
+    @staticmethod
+    def m21PedalObjectToMeiPedalForm(
+        pm: m21.expressions.PedalMark,
+        pt: m21.expressions.PedalTransition | None = None
+    ) -> str:
+        if pt is not None and pt not in pm:
+            raise MeiInternalError('m21PedalTransitionToMeiPedalForm called with unmatched args')
+
+        if isinstance(pt, m21.expressions.PedalBounce):
+            # We try looking at the PedalBounce (pt) itself. Some of those properties
+            # might inherit from the enclosing PedalMark (pm).
+            if pt.bounceDown in (
+                    m21.expressions.PedalForm.PedalName, m21.expressions.PedalForm.Ped):
+                if pt.bounceUp == m21.expressions.PedalForm.NoMark:
+                    return 'altpedstar'
+                return 'pedstar'
+            if pt.bounceDown == m21.expressions.PedalForm.SlantedLine:
+                return 'line'  # we never return 'pedline' for a bounce
+
+        # OK, we handled the weird bounce cases, now handle the usual stuff by looking
+        # at the PedalMark itself (pm).
+        if pm.startForm in (m21.expressions.PedalForm.PedalName, m21.expressions.PedalForm.Ped):
+            if pm.continueLine in (
+                    m21.expressions.PedalLine.Line, m21.expressions.PedalLine.Dashed):
+                return 'pedline'
+            if pm.bounceUp == m21.expressions.PedalForm.NoMark:
+                return 'altpedstar'
+            return 'pedstar'
+
+        if (pm.startForm == m21.expressions.PedalForm.VerticalLine
+                and pm.continueLine != m21.expressions.PedalLine.NoLine):
+            return 'line'
+
+        # Too many things unspecified or specified incorrectly, so don't set pedal@form at all.
+        return ''
 
     @staticmethod
     def emitHarmony(cs: m21.harmony.ChordSymbol, tag: str, attr: dict[str, str], tb: TreeBuilder):

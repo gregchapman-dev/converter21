@@ -2666,7 +2666,7 @@ class HumdrumFile(HumdrumFileContent):
                 # pylint: enable=no-member
                 if not bounceBefore:
                     # bounce is just 'Ped.', not '*Ped.'
-                    ss.currentPedalMark.pedalForm = m21.expressions.PedalForm.SymbolAlt
+                    pedalBounce.overrideBounceUp = m21.expressions.PedalForm.NoMark
                 measure.coreInsert(pedalOffsetInMeasure, pedalBounce)
                 ss.currentPedalMark.addSpannedElements(pedalBounce)
             else:

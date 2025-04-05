@@ -2373,7 +2373,7 @@ class MeiReader:
             output: tuple[
                 str,
                 tuple[OffsetQL | None, int | None, OffsetQL | None],
-                expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+                expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
             ] = self.getPedalObject(
                 pm,
                 obj,
@@ -7650,7 +7650,7 @@ class MeiReader:
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
-        expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+        expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
     ]:
         # returns (staffNStr, (offset, None, None), te)
         if elem.get('ignore_in_pedalFromElement') == 'true':
@@ -7680,7 +7680,7 @@ class MeiReader:
         output: tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
-            expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+            expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
         ] = self.getPedalObject(
             pm,
             None,
@@ -7694,11 +7694,35 @@ class MeiReader:
 
         return output
 
-    PEDAL_FORM_MAP: dict[str, m21.expressions.PedalForm] = {
-        'line': m21.expressions.PedalForm.Line,
-        'pedline': m21.expressions.PedalForm.SymbolLine,
-        'pedstar': m21.expressions.PedalForm.Symbol,
-        'altpedstar': m21.expressions.PedalForm.SymbolAlt
+    PEDAL_FORM_MAP: dict[str, dict[str, m21.expressions.PedalForm]] = {
+        'line': {
+            'startForm': m21.expressions.PedalForm.VerticalLine,
+            'continueLine': m21.expressions.PedalLine.Line,  # type: ignore
+            'bounceUp': m21.expressions.PedalForm.SlantedLine,
+            'bounceDown': m21.expressions.PedalForm.SlantedLine,
+            'endForm': m21.expressions.PedalForm.VerticalLine,
+        },
+        'pedline': {
+            'startForm': m21.expressions.PedalForm.PedalName,
+            'continueLine': m21.expressions.PedalLine.Line,  # type: ignore
+            'bounceUp': m21.expressions.PedalForm.SlantedLine,
+            'bounceDown': m21.expressions.PedalForm.SlantedLine,
+            'endForm': m21.expressions.PedalForm.VerticalLine,
+        },
+        'pedstar': {
+            'startForm': m21.expressions.PedalForm.PedalName,
+            'continueLine': m21.expressions.PedalLine.NoLine,  # type: ignore
+            'bounceUp': m21.expressions.PedalForm.Star,
+            'bounceDown': m21.expressions.PedalForm.PedalName,
+            'endForm': m21.expressions.PedalForm.Star,
+        },
+        'altpedstar': {
+            'startForm': m21.expressions.PedalForm.PedalName,
+            'continueLine': m21.expressions.PedalLine.NoLine,  # type: ignore
+            'bounceUp': m21.expressions.PedalForm.NoMark,
+            'bounceDown': m21.expressions.PedalForm.PedalName,
+            'endForm': m21.expressions.PedalForm.Star,
+        }
     }
 
     PEDAL_TYPE_MAP: dict[str, m21.expressions.PedalType] = {
@@ -7721,7 +7745,7 @@ class MeiReader:
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
-        expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
+        expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
     ]:
         # obj (from @startid) or @tstamp is required.
         if obj is None and not tstampAttr:
@@ -7749,7 +7773,11 @@ class MeiReader:
                 pm.pedalType = self.PEDAL_TYPE_MAP[funcAttr]
 
             if formAttr and formAttr in self.PEDAL_FORM_MAP:
-                pm.pedalForm = self.PEDAL_FORM_MAP[formAttr]
+                pm.startForm = self.PEDAL_FORM_MAP[formAttr]['startForm']
+                pm.continueLine = self.PEDAL_FORM_MAP[formAttr]['continueLine']  # type: ignore
+                pm.bounceUp = self.PEDAL_FORM_MAP[formAttr]['bounceUp']
+                pm.bounceDown = self.PEDAL_FORM_MAP[formAttr]['bounceDown']
+                pm.endForm = self.PEDAL_FORM_MAP[formAttr]['endForm']
 
             if placeAttr in ('above', 'below'):
                 pm.placement = placeAttr

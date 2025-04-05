@@ -142,7 +142,7 @@ class HumdrumWriter:
             tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
         ] = []
         # First elements of pedalbounce/pedalgap tuple are part index, staff index
-        self._currentPedalObjects: list[tuple[int, int, m21.expressions.PedalObject]] = []
+        self._currentPedalTransitions: list[tuple[int, int, m21.expressions.PedalTransition]] = []
 
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
@@ -1441,9 +1441,9 @@ class HumdrumWriter:
             self._addUnassociatedOttavasOrPedalMarks(gm, self._currentOttavasOrPedalMarks)
             self._currentOttavasOrPedalMarks = []
 
-        if self._currentPedalObjects:
-            self._addUnassociatedPedalObjects(gm, self._currentPedalObjects)
-            self._currentPedalObjects = []
+        if self._currentPedalTransitions:
+            self._addUnassociatedPedalTransitions(gm, self._currentPedalTransitions)
+            self._currentPedalTransitions = []
 
         if self._currentTempos:
             self._addUnassociatedTempos(gm, self._currentTempos)
@@ -1586,8 +1586,8 @@ class HumdrumWriter:
                     self._currentHarmonies.append((pindex, m21Obj))
                     zeroDurEvent.reportHarmonyToOwner()
                 elif (M21Utilities.m21PedalMarksSupported()
-                        and isinstance(m21Obj, m21.expressions.PedalObject)):
-                    self._currentPedalObjects.append((pindex, sindex, m21Obj))
+                        and isinstance(m21Obj, m21.expressions.PedalTransition)):
+                    self._currentPedalTransitions.append((pindex, sindex, m21Obj))
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
                 elif isinstance(m21Obj, m21.note.GeneralNote):
@@ -2789,35 +2789,37 @@ class HumdrumWriter:
                 rehMark
             )
 
-    def _addUnassociatedPedalObjects(
+    def _addUnassociatedPedalTransitions(
         self,
         outgm: GridMeasure,
-        extraPedalObjects: list[
-            tuple[int, int, m21.expressions.PedalObject]
+        extraPedalTransitions: list[
+            tuple[int, int, m21.expressions.PedalTransition]
         ]
     ) -> None:
-        if not extraPedalObjects:
+        if not extraPedalTransitions:
             # we shouldn't have been called
             return
 
-        pedalObjects: list[tuple[int, int, m21.expressions.PedalObject, list[str], HumNum]] = []
+        pedalTransitions: list[
+            tuple[int, int, m21.expressions.PedalTransition, list[str], HumNum]
+        ] = []
 
-        for partIndex, staffIndex, pedalObject in extraPedalObjects:
-            pedalObjects.append((
+        for partIndex, staffIndex, pedalTransition in extraPedalTransitions:
+            pedalTransitions.append((
                 partIndex,
                 staffIndex,
-                pedalObject,
-                M21Convert.getKernTokenStringsFromM21PedalObject(pedalObject),
-                pedalObject.getOffsetInHierarchy(self._m21Score)
+                pedalTransition,
+                M21Convert.getKernTokenStringsFromM21PedalTransition(pedalTransition),
+                pedalTransition.getOffsetInHierarchy(self._m21Score)
             ))
 
-        for partIndex, staffIndex, pedalObject, kerntoks, offset in pedalObjects:
+        for partIndex, staffIndex, pedalTransition, kerntoks, offset in pedalTransitions:
             outSlice: GridSlice | None
             outSlice, _ = self._produceOutputSliceForUnassociatedM21Object(
                 outgm,
                 partIndex,
                 None,
-                pedalObject,
+                pedalTransition,
                 offset
             )
             outgm.addOttavaOrPedalTokensBefore(

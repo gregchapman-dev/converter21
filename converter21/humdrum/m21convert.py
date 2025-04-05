@@ -1273,13 +1273,13 @@ class M21Convert:
         return output
 
     @staticmethod
-    def getKernTokenStringsFromM21PedalObject(
-        pedalObj: m21.expressions.PedalObject
+    def getKernTokenStringsFromM21PedalTransition(
+        pt: m21.expressions.PedalTransition
     ) -> list[str]:
         if not M21Utilities.m21PedalMarksSupported():
             return []
-        if isinstance(pedalObj, m21.expressions.PedalBounce):
-            spanners: list[m21.spanner.Spanner] = pedalObj.getSpannerSites(
+        if isinstance(pt, m21.expressions.PedalBounce):
+            spanners: list[m21.spanner.Spanner] = pt.getSpannerSites(
                 [m21.expressions.PedalMark]
             )
             if not spanners:
@@ -1287,13 +1287,16 @@ class M21Convert:
             pm = spanners[0]
             if t.TYPE_CHECKING:
                 assert isinstance(pm, m21.expressions.PedalMark)
-            if pm.pedalForm == m21.expressions.PedalForm.SymbolAlt:
+            bounceUp: m21.expressions.PedalForm = pt.bounceUp
+            if bounceUp == m21.expressions.PedalForm.NoMark:
+                # down only
                 return ['*ped']
-            return ['*ped', '*Xped']  # backwards (because the insertion happens backwards)
-        if isinstance(pedalObj, m21.expressions.PedalGapStart):
+            # up then down (but the insertion will happen backwards, so we reverse that)
+            return ['*ped', '*Xped']
+        if isinstance(pt, m21.expressions.PedalGapStart):
             # unsupported in Humdrum (as yet)
             return []
-        if isinstance(pedalObj, m21.expressions.PedalGapEnd):
+        if isinstance(pt, m21.expressions.PedalGapEnd):
             # unsupported in Humdrum (as yet)
             return []
         return []
