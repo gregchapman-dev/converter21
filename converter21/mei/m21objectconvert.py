@@ -1153,7 +1153,7 @@ class M21ObjectConvert:
                 attr['dir'] = 'up'
             else:
                 attr['dir'] = 'down'
-            if spanner.pedalType is not None:
+            if spanner.pedalType != m21.expressions.PedalType.Unspecified:
                 attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[spanner.pedalType]
             form: str = M21ObjectConvert.m21PedalObjectToMeiPedalForm(spanner)
             if form:
