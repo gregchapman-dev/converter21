@@ -2664,8 +2664,6 @@ class HumdrumFile(HumdrumFileContent):
                 # pylint: disable=no-member
                 pedalBounce = m21.expressions.PedalBounce()  # type: ignore
                 # pylint: enable=no-member
-                pedalBounce.overrideBounceUp = m21.expressions.PedalForm.Star
-                pedalBounce.overrideBounceDown = m21.expressions.PedalForm.Ped
                 if not bounceBefore:
                     # bounce is just 'Ped.', not '*Ped.'
                     pedalBounce.overrideBounceUp = m21.expressions.PedalForm.NoMark
@@ -2678,8 +2676,6 @@ class HumdrumFile(HumdrumFileContent):
                 # pylint: disable=no-member
                 ss.currentPedalMark = m21.expressions.PedalMark()  # type: ignore
                 # pylint: enable=no-member
-                ss.currentPedalMark.startForm = m21.expressions.PedalForm.Ped
-                ss.currentPedalMark.endForm = m21.expressions.PedalForm.Star
                 ss.currentPedalMark.addSpannedElements(anchor)
                 measure.coreInsert(pedalOffsetInMeasure, ss.currentPedalMark)
             insertedIntoVoice = True
