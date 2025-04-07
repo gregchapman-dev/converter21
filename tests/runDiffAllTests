@@ -21,6 +21,12 @@ osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do scr
 # Compare MusicXML import vs MusicXML export/reimport (fileList7)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMusicXMLImportVsMusicXMLExport.py ~/Documents/test/fileList7.txt"'
 
+# Compare Humdrum import vs MusicXML export/reimport (fileList8)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMusicHumImportVsMusicXMLExport.py ~/Documents/test/fileList8.txt"'
+
+# Compare MEI import vs MusicXML export/reimport (fileList8)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMusicMeiImportVsMusicXMLExport.py ~/Documents/test/fileList9.txt"'
+
 # Compare MEI v4 import vs MEI export/reimport (fileListMei)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMeiExport.py ~/Documents/test/fileListMei.txt"'
 
