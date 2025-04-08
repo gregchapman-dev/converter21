@@ -6141,8 +6141,14 @@ class HumdrumFile(HumdrumFileContent):
             # Note, Chord, Unpitched
             if direction > 0:
                 obj.stemDirection = 'up'
+                if isinstance(obj, m21.chord.ChordBase):
+                    for n in obj.notes:
+                        n.stemDirection = 'up'
             elif direction < 0:
                 obj.stemDirection = 'down'
+                if isinstance(obj, m21.chord.ChordBase):
+                    for n in obj.notes:
+                        n.stemDirection = 'down'
 
     '''
         _processTremolos: does any processing necessary to generate Tremolo or TremoloSpanner

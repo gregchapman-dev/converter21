@@ -5567,6 +5567,8 @@ class MeiReader:
             # is supposed to be in another staff (which we don't yet
             # support).
             theChord.stemDirection = self._stemDirectionFromAttr(stemDirStr)
+            for n in theChord.notes:
+                n.stemDirection = theChord.stemDirection
 
         stemModStr: str | None = elem.get('stem.mod')
         if stemModStr is not None:
