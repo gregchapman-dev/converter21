@@ -42,6 +42,9 @@ def runTheFullTest(inputPath: Path):
 
     assert success
 
+    # compare with bbdiff:
+    subprocess.run(['bbdiff', str(inputPath), str(xmlPath)], check=False)
+
     print(f'Parsing written MusicXML file: {xmlPath}')
     score2 = m21.converter.parse(xmlPath, format='musicxml', forceSource=True)
     assert score2 is not None
