@@ -1126,6 +1126,12 @@ class M21Utilities:
         if lowestEl is not None and lowestEl is not firstEl:
             # get them all
             elements: list[m21.Music21Object] = sp.getSpannedElements()
+            elOffsets: list[OffsetQL] = []
+            elActiveSites: list[m21.stream.Stream] = []
+            for el in elements:
+                elOffsets.append(el.offset)
+                elActiveSites.append(el.activeSite)
+
             # remove them all
             for el in elements:
                 sp.spannerStorage.remove(el)
@@ -1134,10 +1140,18 @@ class M21Utilities:
             sp.addSpannedElements(lowestEl)
             sp.addSpannedElements(elements)  # lowestEl will be skipped because already there
 
+            for el, elOffset, elActiveSite in zip(elements, elOffsets, elActiveSites):
+                el.activeSite = elActiveSite
+                el.offset = elOffset
+
         if highestEl is not None:
             # make sure it is last
+            savedEndActiveSite = highestEl.activeSite
+            savedEndOffset = highestEl.offset
             sp.spannerStorage.remove(highestEl)
             sp.addSpannedElements(highestEl)
+            highestEl.activeSite = savedEndActiveSite
+            highestEl.offset = savedEndOffset
 
     @staticmethod
     def makeDuration(
