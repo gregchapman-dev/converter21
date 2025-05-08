@@ -516,11 +516,11 @@ class MeiMetadataReader:
         # Note that we only deal with top-level <work> elements in <workList>.
         # Nested <work>s are out-of-scope.
         works: list[MeiElement] = workListElement.findAll('work', recurse=False)
-        mainWorks: set[MeiElement] = set()
-        parentWorks: set[MeiElement] = set()
-        groupWorks: set[MeiElement] = set()
-        collectionWorks: set[MeiElement] = set()
-        associatedWorks: set[MeiElement] = set()
+        mainWorks: list[MeiElement] = []
+        parentWorks: list[MeiElement] = []
+        groupWorks: list[MeiElement] = []
+        collectionWorks: list[MeiElement] = []
+        associatedWorks: list[MeiElement] = []
 
         if not works:
             return md
@@ -636,32 +636,43 @@ class MeiMetadataReader:
         for work in works:
             workType: str = work.attrib.get('type', '')
             if workType == 'associated':
-                associatedWorks.add(work)
+                if work not in associatedWorks:
+                    associatedWorks.append(work)
                 continue
             if workType == 'parent':
-                parentWorks.add(work)
+                if work not in parentWorks:
+                    parentWorks.append(work)
                 continue
             if workType == 'collection':
-                collectionWorks.add(work)
+                if work not in collectionWorks:
+                    collectionWorks.append(work)
                 continue
             if workType == 'group':
-                groupWorks.add(work)
+                if work not in groupWorks:
+                    groupWorks.append(work)
                 continue
             if getattr(work, 'meiChildren', []) or getattr(work, 'meiMembers', []):
                 continue
 
-            mainWorks.add(work)
+            if work not in mainWorks:
+                mainWorks.append(work)
 
         if not mainWorks:
-            mainWorks.add(works[0])
+            mainWorks.append(works[0])
 
         # Figure out if we have any parent/group/collection works (of the mainWorks).
         # This is redundant for MEI files we wrote, but non-redundant for MEI files
         # we didn't write.
         for mainWork in mainWorks:
-            parentWorks.update(getattr(mainWork, 'meiParents', []))
-            groupWorks.update(getattr(mainWork, 'meiGroups', []))
-            collectionWorks.update(getattr(mainWork, 'meiCollections', []))
+            for parentWork in getattr(mainWork, 'meiParents', []):
+                if parentWork not in parentWorks:
+                    parentWorks.append(parentWork)
+            for groupWork in getattr(mainWork, 'meiGroups', []):
+                if groupWork not in groupWorks:
+                    groupWorks.append(groupWork)
+            for collectionWork in getattr(mainWork, 'meiCollections', []):
+                if collectionWork not in collectionWorks:
+                    collectionWorks.append(collectionWork)
 
         # Pull only titles out of the parent/group/collection/associated works.  There's
         # no other metadata here that can map to music21 or Humdrum metadata.
