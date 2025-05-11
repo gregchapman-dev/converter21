@@ -618,6 +618,7 @@ class MeiLayer:
         return output
 
     def makePostStavesElements(self, tb: TreeBuilder):
+        pedalMarksSupported: bool = M21Utilities.m21PedalMarksSupported()
         m21Score: m21.stream.Score = self.parentStaff.m21Score
         m21Measure: m21.stream.Measure = self.parentStaff.m21Measure
         staffNStr: str = self.parentStaff.staffNStr
@@ -658,7 +659,9 @@ class MeiLayer:
                         self.spannerBundle,
                         tb
                     )
-                if (isinstance(spanner, m21.expressions.PedalMark)
+                # pylint: disable=no-member
+                if (pedalMarksSupported
+                        and isinstance(spanner, m21.expressions.PedalMark)  # type: ignore
                         and spanner.isLast(obj)):
                     # PedalMarks emit a <pedal dir="down"> element at the
                     # end of the PedalMark.
@@ -673,6 +676,7 @@ class MeiLayer:
                         tb,
                         endOfSpanner=True
                     )
+                # pylint: enable=no-member
 
             # 2a. Spanners on the notes in this chord
             if isinstance(obj, m21.chord.Chord) and not isinstance(obj, m21.harmony.ChordSymbol):
@@ -700,7 +704,9 @@ class MeiLayer:
                                 tb
                             )
 
-                        if (isinstance(spanner, m21.expressions.PedalMark)
+                        # pylint: disable=no-member
+                        if (pedalMarksSupported
+                                and isinstance(spanner, m21.expressions.PedalMark)  # type: ignore
                                 and spanner.isLast(note)):
                             # PedalMarks emit a <pedal dir="down"> element at the
                             # end of the PedalMark.
@@ -715,6 +721,7 @@ class MeiLayer:
                                 tb,
                                 endOfSpanner=True
                             )
+                        # pylint: enable=no-member
 
             # 3. Turns/Trills/Mordents/Fermatas/ArpeggioMarks on notes/chords in this voice.
             #       We count on any TrillExtension being handled before

@@ -139,10 +139,12 @@ class HumdrumWriter:
 
         # First elements of ottava/pedalmark tuple are part index, staff index, isStart
         self._currentOttavasOrPedalMarks: list[
-            tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
+            # tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
+            tuple[int, int, bool, m21.spanner.Spanner]
         ] = []
         # First elements of pedalbounce/pedalgap tuple are part index, staff index
-        self._currentPedalTransitions: list[tuple[int, int, m21.expressions.PedalTransition]] = []
+        # self._currentPedalTransitions: list[tuple[int, int, m21.expressions.PedalTransition]]
+        self._currentPedalTransitions: list[tuple[int, int, m21.base.Music21Object]] = []
 
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
@@ -1494,6 +1496,7 @@ class HumdrumWriter:
     //
     // Tool_musicxml2hum::appendZeroEvents --
     '''
+    # pylint: disable=no-member
     def _appendZeroDurationEvents(
         self,
         outgm: GridMeasure,
@@ -1586,7 +1589,7 @@ class HumdrumWriter:
                     self._currentHarmonies.append((pindex, m21Obj))
                     zeroDurEvent.reportHarmonyToOwner()
                 elif (M21Utilities.m21PedalMarksSupported()
-                        and isinstance(m21Obj, m21.expressions.PedalTransition)):
+                        and isinstance(m21Obj, m21.expressions.PedalTransition)):  # type: ignore
                     self._currentPedalTransitions.append((pindex, sindex, m21Obj))
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
@@ -1607,8 +1610,10 @@ class HumdrumWriter:
                     # check for ottava/pedal start/stop and emit them:
                     # *ped, or *Xped, or *8va, or *X8va, aut cetera
                     if zeroDurEvent.isOttavaOrPedalMarkStartOrStop():
-                        starts: list[m21.spanner.Ottava | m21.expressions.PedalMark]
-                        stops: list[m21.spanner.Ottava | m21.expressions.PedalMark]
+                        starts: list[m21.spanner.Ottava  # type: ignore
+                            | m21.expressions.PedalMark]
+                        stops: list[m21.spanner.Ottava  # type: ignore
+                            | m21.expressions.PedalMark]
                         starts, stops = zeroDurEvent.getOttavaOrPedalMarkStartsStops(
                             asSpanners=True
                         )
@@ -1650,6 +1655,7 @@ class HumdrumWriter:
                 self._firstMMTokenStr = ''
 
         self._addGraceLines(outgm, graceAfter, nowTime)
+    # pylint: enable=no-member
 
     '''
     ///////////////////////////////
@@ -2793,7 +2799,7 @@ class HumdrumWriter:
         self,
         outgm: GridMeasure,
         extraPedalTransitions: list[
-            tuple[int, int, m21.expressions.PedalTransition]
+            tuple[int, int, m21.base.Music21Object]  # m21.expressions.PedalTransition]
         ]
     ) -> None:
         if not extraPedalTransitions:
@@ -2801,7 +2807,8 @@ class HumdrumWriter:
             return
 
         pedalTransitions: list[
-            tuple[int, int, m21.expressions.PedalTransition, list[str], HumNum]
+            # tuple[int, int, m21.expressions.PedalTransition, list[str], HumNum]
+            tuple[int, int, m21.base.Music21Object, list[str], HumNum]
         ] = []
 
         for partIndex, staffIndex, pedalTransition in extraPedalTransitions:
@@ -2833,7 +2840,8 @@ class HumdrumWriter:
         self,
         outgm: GridMeasure,
         extraOttavaOrPedalMarks: list[
-            tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
+            # tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
+            tuple[int, int, bool, m21.spanner.Spanner]
         ]
     ) -> None:
         if not extraOttavaOrPedalMarks:

@@ -2626,6 +2626,7 @@ class HumdrumFile(HumdrumFileContent):
         if the pedal is already down, but in that case it's an 'altsymbol'
         bounce ('Ped.' bounce, not '*Ped.' bounce)
     '''
+    # pylint: disable=no-member
     def _handlePedalMark(
         self,
         measureIndex: int,
@@ -2661,21 +2662,17 @@ class HumdrumFile(HumdrumFileContent):
             # pedal down
             if ss.currentPedalMark is not None:
                 # pedal is already down, just insert a bounce here
-                # pylint: disable=no-member
                 pedalBounce = m21.expressions.PedalBounce()  # type: ignore
-                # pylint: enable=no-member
                 if not bounceBefore:
                     # bounce is just 'Ped.', not '*Ped.'
-                    pedalBounce.overrideBounceUp = m21.expressions.PedalForm.NoMark
+                    pedalBounce.overrideBounceUp = m21.expressions.PedalForm.NoMark  # type: ignore
                 measure.coreInsert(pedalOffsetInMeasure, pedalBounce)
                 ss.currentPedalMark.addSpannedElements(pedalBounce)
             else:
                 # pedal is not down, start a new PedalMark spanner with a SpannerAnchor
                 anchor = m21.spanner.SpannerAnchor()
                 measure.coreInsert(pedalOffsetInMeasure, anchor)
-                # pylint: disable=no-member
                 ss.currentPedalMark = m21.expressions.PedalMark()  # type: ignore
-                # pylint: enable=no-member
                 ss.currentPedalMark.addSpannedElements(anchor)
                 measure.coreInsert(pedalOffsetInMeasure, ss.currentPedalMark)
             insertedIntoVoice = True
@@ -2698,6 +2695,7 @@ class HumdrumFile(HumdrumFileContent):
             insertedIntoVoice = True
 
         return insertedIntoVoice
+    # pylint: enable=no-member
 
     '''
     //////////////////////////////

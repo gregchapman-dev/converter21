@@ -247,12 +247,13 @@ class EventData:
 
         return False
 
+    # pylint: disable=no-member
     def isPedalMarkStartOrStop(self) -> bool:
         if not M21Utilities.m21PedalMarksSupported():
             return False
 
         for sp in self.m21Object.getSpannerSites():
-            if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):
+            if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):  # type: ignore
                 continue
             if not M21Utilities.isIn(sp, self.spannerBundle):
                 continue
@@ -268,10 +269,13 @@ class EventData:
 
     def getOttavaOrPedalMarkStartSpanners(
         self
-    ) -> list[m21.spanner.Ottava | m21.expressions.PedalMark]:
-        output: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []
+    ) -> list[m21.spanner.Spanner]:  # list[m21.spanner.Ottava | m21.expressions.PedalMark]:
+        if not M21Utilities.m21PedalMarksSupported():
+            return []
+
+        output: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []  # type: ignore
         for sp in self.m21Object.getSpannerSites():
-            if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):
+            if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):  # type: ignore
                 continue
             if not M21Utilities.isIn(sp, self.spannerBundle):
                 continue
@@ -283,8 +287,11 @@ class EventData:
         self,
         asSpanners: t.Literal[True] = True,
     ) -> tuple[
-        list[m21.spanner.Ottava | m21.expressions.PedalMark],
-        list[m21.spanner.Ottava | m21.expressions.PedalMark]
+        # list[m21.spanner.Ottava | m21.expressions.PedalMark],
+        # list[m21.spanner.Ottava | m21.expressions.PedalMark]
+        list[m21.spanner.Spanner],
+        list[m21.spanner.Spanner]
+
     ]:
         pass
 
@@ -306,12 +313,13 @@ class EventData:
         def spannerQL(spanner: m21.spanner.Spanner) -> HumNum:
             return M21Utilities.getSpannerQuarterLength(spanner, self.ownerScore.m21Score)
 
-        starts: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []
-        stops: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []
+        starts: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []  # type: ignore
+        stops: list[m21.spanner.Ottava | m21.expressions.PedalMark] = []  # type: ignore
 
         for sp in self.m21Object.getSpannerSites():
             if pedalMarksSupported:
-                if not isinstance(sp, (m21.spanner.Ottava, m21.expressions.PedalMark)):
+                if not isinstance(sp,
+                        (m21.spanner.Ottava, m21.expressions.PedalMark)):  # type: ignore
                     continue
             else:
                 if not isinstance(sp, m21.spanner.Ottava):
@@ -345,6 +353,7 @@ class EventData:
             ))
 
         return outputStarts, outputStops
+    # pylint: disable=no-member
 
     '''
         getNoteKernTokenString -- get a **kern token string and a list of layout strings

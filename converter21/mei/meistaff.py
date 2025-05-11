@@ -186,8 +186,9 @@ class MeiStaff:
                                 self.spannerBundle,
                                 tb
                             )
-
-                        if (isinstance(spanner, m21.expressions.PedalMark)
+                        # pylint: disable=no-member
+                        if (M21Utilities.m21PedalMarksSupported()
+                                and isinstance(spanner, m21.expressions.PedalMark)  # type: ignore
                                 and spanner.isLast(obj)):
                             # PedalMarks emit a <pedal dir="down"> element at the
                             # end of the PedalMark.
@@ -202,6 +203,7 @@ class MeiStaff:
                                 tb,
                                 endOfSpanner=True
                             )
+                        # pylint: enable=no-member
 
         # lastly, any fermata on the right barline is a post-staves element.
         if self.m21Measure.rightBarline is not None:

@@ -435,13 +435,14 @@ class MeiScore:
             # We need to annotate PedalMark spanners that are in a particular
             # part (i.e. not just up in the score) with which partIdx they are
             # in, so we can later compute the correct pedal@staff value.
-            for pm in part[m21.expressions.PedalMark]:
-                pm.mei_part_idx = partIdx  # type: ignore
-                M21Utilities.extendCustomM21Attributes(
-                    self.customM21AttrsToDelete,
-                    pm,
-                    ['mei_part_idx']
-                )
+            if M21Utilities.m21PedalMarksSupported():
+                for pm in part[m21.expressions.PedalMark]:  # type: ignore
+                    pm.mei_part_idx = partIdx  # type: ignore
+                    M21Utilities.extendCustomM21Attributes(
+                        self.customM21AttrsToDelete,
+                        pm,
+                        ['mei_part_idx']
+                    )
 
             partTieSpanners: list[tuple[M21TieSpanner, int]] = self.currentTieSpanners[part]
             for measure in part:

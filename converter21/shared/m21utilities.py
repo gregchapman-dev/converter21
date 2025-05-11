@@ -4014,12 +4014,14 @@ class M21Utilities:
 
     @staticmethod
     def assureAllXmlIds(s: m21.stream.Stream):
+        pedalMarksSupported: bool = M21Utilities.m21PedalMarksSupported()
         for obj in s.recurse():
-            if isinstance(obj, m21.expressions.PedalMark):
-                # each pedalmark turns into two <pedal> elements,
-                # so we can't easily generate xml:id for them both.
-                # Skip it for now.
-                continue
+            if pedalMarksSupported:
+                if isinstance(obj, m21.expressions.PedalMark):  # type: ignore
+                    # each pedalmark turns into two <pedal> elements,
+                    # so we can't easily generate xml:id for them both.
+                    # Skip it for now.
+                    continue
 
             M21Utilities.assureXmlId(obj)
             # if it's a chord (and not a chord symbol), put an xmlid on all the notes
@@ -4495,8 +4497,12 @@ class M21Utilities:
     _m21PedalMarksSupportedCached: bool | None = None
     @staticmethod
     def m21PedalMarksSupported() -> bool:
+        # Note that we can't just look for expressions.PedalMark
+        # because my initial implementation (which we do not
+        # support) also had expressions.PedalMark.
+        # expressions.PedalTransition is unique to the new implementation.
         if M21Utilities._m21PedalMarksSupportedCached is None:
             M21Utilities._m21PedalMarksSupportedCached = (
-                hasattr(m21.expressions, 'PedalMark')
+                hasattr(m21.expressions, 'PedalTransition')
             )
         return M21Utilities._m21PedalMarksSupportedCached

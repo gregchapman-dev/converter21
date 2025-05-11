@@ -1244,13 +1244,14 @@ class M21Convert:
         '15mb': '15ba'
     }
 
+    # pylint: disable=no-member
     @staticmethod
     def getKernTokenStringFromM21OttavaOrPedal(
         sp: m21.spanner.Spanner,
         isStart: bool
     ) -> str:
         if M21Utilities.m21PedalMarksSupported():
-            if isinstance(sp, m21.expressions.PedalMark):
+            if isinstance(sp, m21.expressions.PedalMark):  # type: ignore
                 if isStart:
                     return '*ped'
                 return '*Xped'
@@ -1274,32 +1275,33 @@ class M21Convert:
 
     @staticmethod
     def getKernTokenStringsFromM21PedalTransition(
-        pt: m21.expressions.PedalTransition
+        pt  # : m21.expressions.PedalTransition
     ) -> list[str]:
         if not M21Utilities.m21PedalMarksSupported():
             return []
-        if isinstance(pt, m21.expressions.PedalBounce):
+        if isinstance(pt, m21.expressions.PedalBounce):  # type: ignore
             spanners: list[m21.spanner.Spanner] = pt.getSpannerSites(
-                [m21.expressions.PedalMark]
+                [m21.expressions.PedalMark]  # type: ignore
             )
             if not spanners:
                 return []
             pm = spanners[0]
             if t.TYPE_CHECKING:
-                assert isinstance(pm, m21.expressions.PedalMark)
-            bounceUp: m21.expressions.PedalForm = pt.bounceUp
-            if bounceUp == m21.expressions.PedalForm.NoMark:
+                assert isinstance(pm, m21.expressions.PedalMark)  # type: ignore
+            bounceUp: m21.expressions.PedalForm = pt.bounceUp  # type: ignore
+            if bounceUp == m21.expressions.PedalForm.NoMark:  # type: ignore
                 # down only
                 return ['*ped']
             # up then down (but the insertion will happen backwards, so we reverse that)
             return ['*ped', '*Xped']
-        if isinstance(pt, m21.expressions.PedalGapStart):
+        if isinstance(pt, m21.expressions.PedalGapStart):  # type: ignore
             # unsupported in Humdrum (as yet)
             return []
-        if isinstance(pt, m21.expressions.PedalGapEnd):
+        if isinstance(pt, m21.expressions.PedalGapEnd):  # type: ignore
             # unsupported in Humdrum (as yet)
             return []
         return []
+    # pylint: enable=no-member
 
     @staticmethod
     def _getKernSlurStartsAndStopsFromGeneralNote(
