@@ -3893,14 +3893,16 @@ class M21Utilities:
             return encoded
 
         if isinstance(identifier, str):
-            # non-empty str, use as is
+            # non-empty str, use as is with no prefix
             output = identifier
+            prefix = ''
         elif (isinstance(identifier, int)
                 and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
-            # Nice low integer, use as is (converted to str)
+            # Nice low integer, use as is (converted to str), with prefix
             output = str(identifier)
         elif isinstance(identifier, int):
-            # Actually a memory location, replace with nice short ASCII string
+            # Actually a memory location, replace with nice short ASCII
+            # string, with prefix
             output = alphabet_encode(identifier)
         else:
             raise Converter21InternalError('identifier not int or str')
