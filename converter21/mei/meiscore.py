@@ -674,18 +674,49 @@ class MeiScore:
 
             return numBeams - numStartStops
 
-        if not noteOrChord.beams.beamsList:
+        def getNonIgnoredBeams(noteOrChord: m21.note.NotRest) -> m21.beam.Beams:
+            # ignore ridiculous beams (higher beam numbers than are possible,
+            # given the note duration)
+            def maxBeamNumExpected(dur: m21.duration.Duration) -> int:
+                # code stolen (a bit) from m21.beam.Beams.naiveBeams()
+                if dur.type not in m21.beam.beamableDurationTypes:
+                    return 0
+                # we have a beamable duration
+                b = m21.beam.Beams()
+                b.fill(dur.type)
+                return len(b)
+
+            output = m21.beam.Beams()
+            if not noteOrChord.beams.beamsList:
+                return output
+
+            maxBeamNum: int = maxBeamNumExpected(noteOrChord.duration)
+            for beam in noteOrChord.beams:
+                if beam.number <= maxBeamNum:
+                    output.append(beam)
+            return output
+
+        nonIgnoredBeams: m21.beam.Beams = getNonIgnoredBeams(noteOrChord)
+        noteOrChord.mei_nonignored_beams = nonIgnoredBeams  # type: ignore
+        M21Utilities.extendCustomM21Attributes(
+            self.customM21AttrsToDelete,
+            noteOrChord,
+            ['mei_nonignored_beams']
+        )
+
+        # now check for sure
+        if not nonIgnoredBeams.beamsList:
             self.previousBeamedNoteOrChord[(part, voiceId)] = None
             return
 
-        if allStart(noteOrChord.beams) or not self.currentBeamSpanners[(part, voiceId)]:
+        if allStart(nonIgnoredBeams) or not self.currentBeamSpanners[(part, voiceId)]:
             newBeamSpanner = M21BeamSpanner()
             self.m21Score.append(newBeamSpanner)
             self.currentBeamSpanners[(part, voiceId)].append(newBeamSpanner)
 
         self.currentBeamSpanners[(part, voiceId)][-1].addSpannedElements(noteOrChord)
 
-        if allStop(noteOrChord.beams):
+        if allStop(nonIgnoredBeams):
             # done with this <beam> or <beamSpan>.  Put the spanner in the score,
             # and clear out any state variables.
             self.currentBeamSpanners[(part, voiceId)] = (
@@ -695,11 +726,12 @@ class MeiScore:
             return
 
         # annotate any breaksec ending at this noteOrChord (set it on the previous noteOrChord)
-        if self.previousBeamedNoteOrChord[(part, voiceId)] is not None:
-            prevNC = self.previousBeamedNoteOrChord[(part, voiceId)]
-            if t.TYPE_CHECKING:
-                assert prevNC is not None
-            breakSec: int = computeBreakSec(prevNC.beams, noteOrChord.beams)
+        prevNC = self.previousBeamedNoteOrChord[(part, voiceId)]
+        if prevNC is not None:
+            breakSec: int = computeBreakSec(
+                prevNC.mei_nonignored_beams,  # type: ignore
+                nonIgnoredBeams
+            )
             if breakSec > 0:
                 prevNC.mei_breaksec = breakSec  # type: ignore
                 M21Utilities.extendCustomM21Attributes(
