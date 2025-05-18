@@ -129,17 +129,17 @@ class MeiScore:
     def _getMeiMeasures(self) -> list[MeiMeasure]:
         output: list[MeiMeasure] = []
 
-        # OffsetIterator is not recursive, so we have to recursively pull all the measures
-        # into one single stream, before we can use OffsetIterator to generate the "stacks"
-        # of Measures that all occur at the same offset (moment) in the score.
-        measuresStream: m21.stream.Stream[m21.stream.Measure] = (
-            self.m21Score.recurse().getElementsByClass(m21.stream.Measure).stream()
-        )
-        offsetIterator: m21.stream.iterator.OffsetIterator[m21.stream.Measure] = (
-            m21.stream.iterator.OffsetIterator(measuresStream)
-        )
+        measureStacks: list[list[m21.stream.Measure]] = []
+        parts: list[m21.stream.Part] = list(self.m21Score.parts)
+        partMeasures: list[list[m21.stream.Measure]] = []
+        for part in parts:
+            partMeasures.append(list(part.getElementsByClass(m21.stream.Measure)))
+
+        # invert partMeasures into measureStacks
+        measureStacks = [list(measureStack) for measureStack in zip(*partMeasures)]
+
         meiMeas: MeiMeasure | None = None
-        for measureStack in offsetIterator:
+        for measureStack in measureStacks:
             prevMeiMeasure: MeiMeasure | None = meiMeas
             meiMeas = MeiMeasure(
                 measureStack,

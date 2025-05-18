@@ -62,6 +62,16 @@ class MeiWriter:
             self._m21Score = self._m21Object
         del self._m21Object  # everything after this uses self._m21Score
 
+        # Check that all parts have the same number of measures, and that
+        # each measure with the same index has the same offset across parts.
+        err: str = M21Utilities.reportUnwritableScore(
+            self._m21Score,
+            checkMeasureCounts=True,
+            checkMeasureOffsets=False
+        )
+        if err:
+            raise MeiExportError(err)
+
         # Here we convert a music21 Score to an MeiScore. It's still all m21 objects, but
         # the object structure is MEI-like. For example:
         #   music21 scores are {Staff1(Measure1 .. MeasureN), Staff2(Measure1 .. MeasureN)}
