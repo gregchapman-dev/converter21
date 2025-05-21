@@ -4447,6 +4447,29 @@ class M21Utilities:
         return fixme
 
     @staticmethod
+    def getNonIgnoredBeams(noteOrChord: m21.note.NotRest) -> m21.beam.Beams:
+        # ignore ridiculous beams (higher beam numbers than are possible,
+        # given the note duration)
+        def maxBeamNumExpected(dur: m21.duration.Duration) -> int:
+            # code stolen (a bit) from m21.beam.Beams.naiveBeams()
+            if dur.type not in m21.beam.beamableDurationTypes:
+                return 0
+            # we have a beamable duration
+            b = m21.beam.Beams()
+            b.fill(dur.type)
+            return len(b)
+
+        output = m21.beam.Beams()
+        if not noteOrChord.beams.beamsList:
+            return output
+
+        maxBeamNum: int = maxBeamNumExpected(noteOrChord.duration)
+        for beam in noteOrChord.beams:
+            if beam.number <= maxBeamNum:
+                output.append(beam)
+        return output
+
+    @staticmethod
     def reportUnwritableScore(
         score: m21.stream.Score,
         checkMeasureCounts: bool,

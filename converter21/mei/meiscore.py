@@ -674,29 +674,7 @@ class MeiScore:
 
             return numBeams - numStartStops
 
-        def getNonIgnoredBeams(noteOrChord: m21.note.NotRest) -> m21.beam.Beams:
-            # ignore ridiculous beams (higher beam numbers than are possible,
-            # given the note duration)
-            def maxBeamNumExpected(dur: m21.duration.Duration) -> int:
-                # code stolen (a bit) from m21.beam.Beams.naiveBeams()
-                if dur.type not in m21.beam.beamableDurationTypes:
-                    return 0
-                # we have a beamable duration
-                b = m21.beam.Beams()
-                b.fill(dur.type)
-                return len(b)
-
-            output = m21.beam.Beams()
-            if not noteOrChord.beams.beamsList:
-                return output
-
-            maxBeamNum: int = maxBeamNumExpected(noteOrChord.duration)
-            for beam in noteOrChord.beams:
-                if beam.number <= maxBeamNum:
-                    output.append(beam)
-            return output
-
-        nonIgnoredBeams: m21.beam.Beams = getNonIgnoredBeams(noteOrChord)
+        nonIgnoredBeams: m21.beam.Beams = M21Utilities.getNonIgnoredBeams(noteOrChord)
         noteOrChord.mei_nonignored_beams = nonIgnoredBeams  # type: ignore
         M21Utilities.extendCustomM21Attributes(
             self.customM21AttrsToDelete,
