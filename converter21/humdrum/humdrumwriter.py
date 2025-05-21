@@ -934,42 +934,31 @@ class HumdrumWriter:
     '''
     def _stitchParts(self, outgrid: HumGrid, score: m21.stream.Score) -> bool:
         # First, count parts (and each part's measures)
-        partCount: int = 0
-        measureCount: list[int] = []
-        measureOffsets: list[list[OffsetQL]] = []  # list (len partCount) of list of measure offsets
-        for part in score.parts:  # includes PartStaffs, too
-            partCount += 1
-            measureCount.append(0)
-            measureOffsets.append([])
-            for meas in part.getElementsByClass('Measure'):
-                measureCount[-1] += 1
-                measureOffsets[-1].append(meas.getOffsetInHierarchy(score))
-
+        partCount: int = len(score.parts)
         if partCount == 0:
             return False
 
-        mCount0 = measureCount[0]
-        for mCount in measureCount:
-            if mCount != mCount0:
-                raise HumdrumExportError(
-                    'ERROR: cannot handle parts with different measure counts'
-                )
-
-        for measIdx in range(0, mCount0):
-            measureOffsetPart0 = measureOffsets[0][measIdx]
-            for partIdx in range(1, partCount):
-                if measureOffsets[partIdx][measIdx] != measureOffsetPart0:
-                    raise HumdrumExportError(
-                        'ERROR: cannot handle parts whose measure offsets don\'t match'
-                    )
+        err: str = M21Utilities.reportUnwritableScore(
+            score,
+            checkMeasureCounts=True,
+            checkMeasureOffsets=True
+        )
+        if err:
+            raise HumdrumExportError(err)
 
         self._scoreData = ScoreData(score, self)
 
         self.staffCounts = self._scoreData.getStaffCounts()
+        # The measure counts are equal across all Parts
+        # (reportUnwritableScore checked that fact)
+        firstPart: m21.stream.Part | None = score.parts.first()
+        if t.TYPE_CHECKING:
+            assert firstPart is not None
+        measureCount = len(firstPart.getElementsByClass(m21.stream.Measure))
 
         # Now insert each measure into the HumGrid across those parts/staves
         status: bool = True
-        for m in range(0, mCount0):
+        for m in range(0, measureCount):
             status = status and self._insertMeasure(outgrid, m)
 
         self._moveBreaksToEndOfPreviousMeasure(outgrid)

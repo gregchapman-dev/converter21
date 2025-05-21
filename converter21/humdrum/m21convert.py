@@ -2757,8 +2757,10 @@ class M21Convert:
         if not isinstance(m21GeneralNote, m21.note.NotRest):
             # Rests don't have beams, NotRest is where they live
             return ''
-
-        return M21Convert._getHumdrumBeamStringFromM21Beams(m21GeneralNote.beams)
+        nonIgnoredBeams: m21.beam.Beams = (
+            M21Utilities.getNonIgnoredBeams(m21GeneralNote)
+        )
+        return M21Convert._getHumdrumBeamStringFromM21Beams(nonIgnoredBeams)
 
     @staticmethod
     def _getHumdrumStemDirStringFromM21GeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str:
