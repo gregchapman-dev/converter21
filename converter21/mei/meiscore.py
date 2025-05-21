@@ -129,17 +129,17 @@ class MeiScore:
     def _getMeiMeasures(self) -> list[MeiMeasure]:
         output: list[MeiMeasure] = []
 
-        # OffsetIterator is not recursive, so we have to recursively pull all the measures
-        # into one single stream, before we can use OffsetIterator to generate the "stacks"
-        # of Measures that all occur at the same offset (moment) in the score.
-        measuresStream: m21.stream.Stream[m21.stream.Measure] = (
-            self.m21Score.recurse().getElementsByClass(m21.stream.Measure).stream()
-        )
-        offsetIterator: m21.stream.iterator.OffsetIterator[m21.stream.Measure] = (
-            m21.stream.iterator.OffsetIterator(measuresStream)
-        )
+        measureStacks: list[list[m21.stream.Measure]] = []
+        parts: list[m21.stream.Part] = list(self.m21Score.parts)
+        partMeasures: list[list[m21.stream.Measure]] = []
+        for part in parts:
+            partMeasures.append(list(part.getElementsByClass(m21.stream.Measure)))
+
+        # invert partMeasures into measureStacks
+        measureStacks = [list(measureStack) for measureStack in zip(*partMeasures)]
+
         meiMeas: MeiMeasure | None = None
-        for measureStack in offsetIterator:
+        for measureStack in measureStacks:
             prevMeiMeasure: MeiMeasure | None = meiMeas
             meiMeas = MeiMeasure(
                 measureStack,
@@ -686,18 +686,27 @@ class MeiScore:
 
             return numBeams - numStartStops
 
-        if not noteOrChord.beams.beamsList:
+        nonIgnoredBeams: m21.beam.Beams = M21Utilities.getNonIgnoredBeams(noteOrChord)
+        noteOrChord.mei_nonignored_beams = nonIgnoredBeams  # type: ignore
+        M21Utilities.extendCustomM21Attributes(
+            self.customM21AttrsToDelete,
+            noteOrChord,
+            ['mei_nonignored_beams']
+        )
+
+        # now check for sure
+        if not nonIgnoredBeams.beamsList:
             self.previousBeamedNoteOrChord[(part, voiceId)] = None
             return
 
-        if allStart(noteOrChord.beams) or not self.currentBeamSpanners[(part, voiceId)]:
+        if allStart(nonIgnoredBeams) or not self.currentBeamSpanners[(part, voiceId)]:
             newBeamSpanner = M21BeamSpanner()
             self.m21Score.append(newBeamSpanner)
             self.currentBeamSpanners[(part, voiceId)].append(newBeamSpanner)
 
         self.currentBeamSpanners[(part, voiceId)][-1].addSpannedElements(noteOrChord)
 
-        if allStop(noteOrChord.beams):
+        if allStop(nonIgnoredBeams):
             # done with this <beam> or <beamSpan>.  Put the spanner in the score,
             # and clear out any state variables.
             self.currentBeamSpanners[(part, voiceId)] = (
@@ -707,11 +716,12 @@ class MeiScore:
             return
 
         # annotate any breaksec ending at this noteOrChord (set it on the previous noteOrChord)
-        if self.previousBeamedNoteOrChord[(part, voiceId)] is not None:
-            prevNC = self.previousBeamedNoteOrChord[(part, voiceId)]
-            if t.TYPE_CHECKING:
-                assert prevNC is not None
-            breakSec: int = computeBreakSec(prevNC.beams, noteOrChord.beams)
+        prevNC = self.previousBeamedNoteOrChord[(part, voiceId)]
+        if prevNC is not None:
+            breakSec: int = computeBreakSec(
+                prevNC.mei_nonignored_beams,  # type: ignore
+                nonIgnoredBeams
+            )
             if breakSec > 0:
                 prevNC.mei_breaksec = breakSec  # type: ignore
                 M21Utilities.extendCustomM21Attributes(

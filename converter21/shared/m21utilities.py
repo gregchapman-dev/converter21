@@ -3918,14 +3918,16 @@ class M21Utilities:
             return encoded
 
         if isinstance(identifier, str):
-            # non-empty str, use as is
+            # non-empty str, use as is with no prefix
             output = identifier
+            prefix = ''
         elif (isinstance(identifier, int)
                 and identifier < m21.defaults.minIdNumberToConsiderMemoryLocation):
-            # Nice low integer, use as is (converted to str)
+            # Nice low integer, use as is (converted to str), with prefix
             output = str(identifier)
         elif isinstance(identifier, int):
-            # Actually a memory location, replace with nice short ASCII string
+            # Actually a memory location, replace with nice short ASCII
+            # string, with prefix
             output = alphabet_encode(identifier)
         else:
             raise Converter21InternalError('identifier not int or str')
@@ -4476,6 +4478,64 @@ class M21Utilities:
             M21Utilities.fixupComplexHiddenRests(substream, inPlace=True)
 
         return fixme
+
+    @staticmethod
+    def getNonIgnoredBeams(noteOrChord: m21.note.NotRest) -> m21.beam.Beams:
+        # ignore ridiculous beams (higher beam numbers than are possible,
+        # given the note duration)
+        def maxBeamNumExpected(dur: m21.duration.Duration) -> int:
+            # code stolen (a bit) from m21.beam.Beams.naiveBeams()
+            if dur.type not in m21.beam.beamableDurationTypes:
+                return 0
+            # we have a beamable duration
+            b = m21.beam.Beams()
+            b.fill(dur.type)
+            return len(b)
+
+        output = m21.beam.Beams()
+        if not noteOrChord.beams.beamsList:
+            return output
+
+        maxBeamNum: int = maxBeamNumExpected(noteOrChord.duration)
+        for beam in noteOrChord.beams:
+            if beam.number <= maxBeamNum:
+                output.append(beam)
+        return output
+
+    @staticmethod
+    def reportUnwritableScore(
+        score: m21.stream.Score,
+        checkMeasureCounts: bool,
+        checkMeasureOffsets: bool
+    ) -> str:
+        if not checkMeasureCounts and not checkMeasureOffsets:
+            return ''
+
+        measureCount: list[int] = []
+        measureOffsets: list[list[OffsetQL]] = []  # list (len partCount) of list of measure offsets
+        for part in score.parts:  # includes PartStaffs, too
+            if checkMeasureCounts:
+                measureCount.append(len(part.getElementsByClass('Measure')))
+            if checkMeasureOffsets:
+                measureOffsets.append([])
+                for meas in part.getElementsByClass('Measure'):
+                    measureOffsets[-1].append(meas.getOffsetInHierarchy(score))
+
+        if checkMeasureCounts:
+            mCount0 = measureCount[0]
+            for mCount in measureCount:
+                if mCount != mCount0:
+                    return 'ERROR: cannot handle parts with different measure counts'
+
+        if checkMeasureOffsets:
+            partCount: int = len(score.parts)
+            for measIdx in range(0, mCount0):
+                measureOffsetPart0 = measureOffsets[0][measIdx]
+                for partIdx in range(1, partCount):
+                    if measureOffsets[partIdx][measIdx] != measureOffsetPart0:
+                        return 'ERROR: cannot handle parts whose measure offsets don\'t match'
+
+        return ''
 
     @staticmethod
     def adjustMusic21Behavior() -> None:
