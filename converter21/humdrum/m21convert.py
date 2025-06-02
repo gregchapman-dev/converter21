@@ -610,7 +610,9 @@ class M21Convert:
             # their own tupletiness (which then has to match the tupletiness of the gestural
             # duration).  So we only use tupletMultipler on them if they are not already
             # a power of two with dots.
-            vdur = Convert.recipToDuration(vdurStr)
+            vdur = Convert.recipToDuration(
+                vdurStr, acceptSyntaxErrors=acceptSyntaxErrors
+            )
             if t.TYPE_CHECKING:
                 assert vdur is not None
             if not M21Utilities.isPowerOfTwoWithDots(vdur):
@@ -638,7 +640,7 @@ class M21Convert:
         else:
             durType: str = ''
             if (durNoDots == 0 or numDots is None) and acceptSyntaxErrors:
-                durType = 'zero'
+                durType = 'quarter'  # we're just making this up; 'zero' causes issues
                 numDots = 0
             else:
                 durType = m21.duration.convertQuarterLengthToType(durNoDots)

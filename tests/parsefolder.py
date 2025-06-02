@@ -9,7 +9,7 @@ import converter21
 
 def parseTheFile(theFile: Path):
     try:
-        isGT: bool = str(theFile).endswith('gt.kern')
+        isGT: bool = 'gt' in str(theFile)
         if isGT:
             score = m21.converter.parse(theFile, forceSource=True)
         else:

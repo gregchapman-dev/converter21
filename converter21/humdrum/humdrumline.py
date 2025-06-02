@@ -799,7 +799,9 @@ class HumdrumLine(HumHash):
     '''
     def beat(self, beatDuration: str | HumNumIn = Fraction(1, 4)) -> HumNum:
         if isinstance(beatDuration, str):  # recip format string, e.g. '4' means 1/4
-            beatDuration = Convert.recipToDuration(beatDuration)
+            beatDuration = Convert.recipToDuration(
+                beatDuration, acceptSyntaxErrors=self.ownerFile.acceptSyntaxErrors
+            )
         else:
             beatDuration = opFrac(beatDuration)
 

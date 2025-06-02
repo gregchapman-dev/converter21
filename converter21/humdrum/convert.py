@@ -50,7 +50,11 @@ class Convert:
     _knownRecipDurationCache: dict[str, HumNum] = {}
 
     @staticmethod
-    def recipToDuration(recip: str, scale: HumNumIn = opFrac(4)) -> HumNum:
+    def recipToDuration(
+        recip: str,
+        scale: HumNumIn = opFrac(4),
+        acceptSyntaxErrors: bool = False
+    ) -> HumNum:
         if recip in Convert._knownRecipDurationCache:
             return Convert._knownRecipDurationCache[recip]
 
@@ -73,6 +77,10 @@ class Convert:
                 # no rhythm found
                 # don't fill cache with bad strings
                 # Convert._knownRecipDurationCache[recip] = output
+                if acceptSyntaxErrors:
+                    # we gotta do better than 0, or score.show() will crash
+                    # Pretend we saw a '4' (quarter note)
+                    return opFrac(Fraction(1, 4))
                 return output  # 0
 
             if m.group(1).startswith('0'):
@@ -108,9 +116,13 @@ class Convert:
     //   any augmentation dots.
     '''
     @staticmethod
-    def recipToDurationNoDots(recip: str, scale: HumNumIn = opFrac(4)) -> HumNum:
+    def recipToDurationNoDots(
+        recip: str,
+        scale: HumNumIn = opFrac(4),
+        acceptSyntaxErrors: bool = False
+    ) -> HumNum:
         recipNoDots: str = re.sub(r'\.', 'Z', recip)
-        return Convert.recipToDuration(recipNoDots, scale)
+        return Convert.recipToDuration(recipNoDots, scale, acceptSyntaxErrors)
 
     '''
     //////////////////////////////

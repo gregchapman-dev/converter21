@@ -3517,8 +3517,8 @@ class HumdrumFile(HumdrumFileContent):
     '''
         _getNumBeamsForNoteOrChord --
     '''
-    @staticmethod
     def _getNumBeamsForNoteOrChord(
+        self,
         token: HumdrumToken | FakeRestToken,
         noteOrChord: m21.note.NotRest
     ) -> int:
@@ -3544,7 +3544,9 @@ class HumdrumFile(HumdrumFileContent):
             # override with visual duration if present
             durVis: str = token.getVisualDuration()
             if durVis:
-                noteDurationNoDots = Convert.recipToDurationNoDots(durVis)
+                noteDurationNoDots = Convert.recipToDurationNoDots(
+                    durVis, acceptSyntaxErrors=self.acceptSyntaxErrors
+                )
 
             if len(noteOrChord.duration.tuplets) > 1:
                 # LATER: support nested tuplets (music21 needs to support this first)
@@ -3782,7 +3784,9 @@ class HumdrumFile(HumdrumFileContent):
             if startTok.getValueBool('auto', 'startTremolo'):
                 recipStr = startTok.getValueString('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
             elif startTok.getValueBool('auto', 'startTremolo2') or \
                     startTok.getValueBool('auto', 'tremoloAux'):
                 # In two note tremolos, the two notes each look like they have the full duration
@@ -3790,7 +3794,9 @@ class HumdrumFile(HumdrumFileContent):
                 # internally, for the measure duration to make sense.
                 recipStr = startTok.getValueString('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
                     tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
 
             if tremoloNoteVisualDuration is not None:
@@ -3926,7 +3932,9 @@ class HumdrumFile(HumdrumFileContent):
             if token.getValueBool('auto', 'startTremolo'):
                 recipStr = token.getValueString('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
             elif token.getValueBool('auto', 'startTremolo2') or \
                     token.getValueBool('auto', 'tremoloAux'):
                 # In two note tremolos, the two notes each look like they have the full duration
@@ -3934,7 +3942,9 @@ class HumdrumFile(HumdrumFileContent):
                 # internally, for the measure duration to make sense.
                 recipStr = token.getValueString('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
                     tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
 
             if tremoloNoteVisualDuration is not None:
@@ -4035,7 +4045,9 @@ class HumdrumFile(HumdrumFileContent):
             if endToken.getValueBool('auto', 'startTremolo'):
                 recipStr = endToken.getValue('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
             elif endToken.getValueBool('auto', 'startTremolo2') or \
                     endToken.getValueBool('auto', 'tremoloAux'):
                 # In two note tremolos, the two notes each look like they have the full duration
@@ -4043,7 +4055,9 @@ class HumdrumFile(HumdrumFileContent):
                 # internally, for the measure duration to make sense.
                 recipStr = endToken.getValue('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
                     tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
 
             if tremoloNoteVisualDuration is not None:
@@ -4405,7 +4419,9 @@ class HumdrumFile(HumdrumFileContent):
                 continue
 
             # don't consider notes without durations
-            dur: HumNum = Convert.recipToDuration(layerTok.text)
+            dur: HumNum = Convert.recipToDuration(
+                layerTok.text, acceptSyntaxErrors=self.acceptSyntaxErrors
+            )
             if dur == 0:
                 indexMapping2.append(-1)
                 continue
@@ -4563,7 +4579,9 @@ class HumdrumFile(HumdrumFileContent):
             forcedTupletDuration: HumNum | None = None
             rparam: str = durItems[starting].layoutParameter('TUP', 'r')
             if rparam:
-                forcedTupletDuration = Convert.recipToDuration(rparam)
+                forcedTupletDuration = Convert.recipToDuration(
+                    rparam, acceptSyntaxErrors=self.acceptSyntaxErrors
+                )
 
             if forcedTupletDuration is None:
                 # Recommendation: if you use LO:TUP:num, also specify LO:TUP:r, to be explicit.
@@ -5863,15 +5881,22 @@ class HumdrumFile(HumdrumFileContent):
         rest.style.hideObjectOnPrint = True
         return rest
 
-    @staticmethod
-    def _processUnexpandedTremolo(noteOrChord: m21.note.NotRest, layerTok: HumdrumToken) -> None:
+    def _processUnexpandedTremolo(
+        self,
+        noteOrChord: m21.note.NotRest,
+        layerTok: HumdrumToken
+    ) -> None:
         m = re.search(r'@(\d+)@', layerTok.text)
         if not m:
             # it wasn't an unexpanded tremolo after all
             return
 
-        tremoloTotalDuration: HumNum = Convert.recipToDuration(layerTok.text)
-        tremoloSingleNoteDuration: HumNum = Convert.recipToDuration(m.group(1))
+        tremoloTotalDuration: HumNum = Convert.recipToDuration(
+            layerTok.text, acceptSyntaxErrors=self.acceptSyntaxErrors
+        )
+        tremoloSingleNoteDuration: HumNum = Convert.recipToDuration(
+            m.group(1), acceptSyntaxErrors=self.acceptSyntaxErrors
+        )
         slashes: int = int(math.log(float(tremoloSingleNoteDuration)) / math.log(2.0))
         noteBeams: int = int(math.log(float(tremoloTotalDuration)) / math.log(2.0))
         if noteBeams < 0:
@@ -5931,7 +5956,9 @@ class HumdrumFile(HumdrumFileContent):
             skippedEndOfTremolo2 = True
             return skippedEndOfTremolo2
 
-        singleTremoloNoteDuration: HumNum = Convert.recipToDuration(m.group(1))
+        singleTremoloNoteDuration: HumNum = Convert.recipToDuration(
+            m.group(1), acceptSyntaxErrors=self.acceptSyntaxErrors
+        )
         beams: int = -int(math.log(float(singleTremoloNoteDuration)) / math.log(2.0))
         second: HumdrumToken | None = None
 
@@ -8470,7 +8497,9 @@ class HumdrumFile(HumdrumFileContent):
             if token.getValueBool('auto', 'startTremolo'):
                 recipStr = token.getValueString('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
             elif (token.getValueBool('auto', 'startTremolo2')
                     or token.getValueBool('auto', 'tremoloAux')):
                 # In two note tremolos, the two notes each look like they have the full duration
@@ -8478,7 +8507,9 @@ class HumdrumFile(HumdrumFileContent):
                 # internally, for the measure duration to make sense.
                 recipStr = token.getValueString('auto', 'recip')
                 if recipStr:
-                    tremoloNoteVisualDuration = Convert.recipToDuration(recipStr)
+                    tremoloNoteVisualDuration = Convert.recipToDuration(
+                        recipStr, acceptSyntaxErrors=self.acceptSyntaxErrors
+                    )
                     tremoloNoteGesturalDuration = opFrac(tremoloNoteVisualDuration / opFrac(2))
 
             if tremoloNoteVisualDuration is not None:
@@ -8501,9 +8532,13 @@ class HumdrumFile(HumdrumFileContent):
         vstring: str = token.getVisualDuration(subTokenIdx)
         vdur: HumNum | None = None
         if vstring:
-            vdur = Convert.recipToDuration(vstring)
+            vdur = Convert.recipToDuration(
+                vstring, acceptSyntaxErrors=self.acceptSyntaxErrors
+            )
 
-        dur: HumNum = Convert.recipToDuration(tstring)
+        dur: HumNum = Convert.recipToDuration(
+            tstring, acceptSyntaxErrors=self.acceptSyntaxErrors
+        )
 
         if vdur is not None and vdur != dur:
             # set obj duration to vdur, and then unlink the duration, so the subsequent
@@ -9249,7 +9284,9 @@ class HumdrumFile(HumdrumFileContent):
                 current = current.previousFieldToken
                 continue
 
-            output = Convert.recipToDuration(current.text)
+            output = Convert.recipToDuration(
+                current.text, acceptSyntaxErrors=self.acceptSyntaxErrors
+            )
             break
 
         return output
