@@ -73,9 +73,7 @@ class Convert:
                 # no rhythm found
                 # don't fill cache with bad strings
                 # Convert._knownRecipDurationCache[recip] = output
-                # we gotta do better than 0, or score.show() will crash
-                # Pretend we saw a '4' recip (i.e. a quarter note)
-                return opFrac(Fraction(1, 4))
+                return output
 
             if m.group(1).startswith('0'):
                 # 0-symbol (e.g. '0' is 2/1, '00' is 4/1, '000' is 8/1, etc)

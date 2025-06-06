@@ -638,7 +638,7 @@ class M21Convert:
         else:
             durType: str = ''
             if (durNoDots == 0 or numDots is None) and acceptSyntaxErrors:
-                durType = 'quarter'  # we're just making this up; 'zero' causes issues
+                durType = 'eighth'  # we're just making this up; 'zero' causes issues
                 numDots = 0
             else:
                 durType = m21.duration.convertQuarterLengthToType(durNoDots)
