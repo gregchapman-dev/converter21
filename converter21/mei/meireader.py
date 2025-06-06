@@ -7800,17 +7800,17 @@ class MeiReader:
             # We are starting the pm spanner.  Set up the pm with all the appropriate
             # stuff from the attributes.
             if funcAttr and funcAttr in self.PEDAL_TYPE_MAP:
-                pm.pedalType = self.PEDAL_TYPE_MAP[funcAttr]
+                pm.pedalType = self.PEDAL_TYPE_MAP[funcAttr]  # type: ignore
 
             if formAttr and formAttr in self.PEDAL_FORM_MAP:
-                pm.startForm = self.PEDAL_FORM_MAP[formAttr]['startForm']
+                pm.startForm = self.PEDAL_FORM_MAP[formAttr]['startForm']  # type: ignore
                 pm.continueLine = self.PEDAL_FORM_MAP[formAttr]['continueLine']  # type: ignore
-                pm.bounceUp = self.PEDAL_FORM_MAP[formAttr]['bounceUp']
-                pm.bounceDown = self.PEDAL_FORM_MAP[formAttr]['bounceDown']
-                pm.endForm = self.PEDAL_FORM_MAP[formAttr]['endForm']
+                pm.bounceUp = self.PEDAL_FORM_MAP[formAttr]['bounceUp']  # type: ignore
+                pm.bounceDown = self.PEDAL_FORM_MAP[formAttr]['bounceDown']  # type: ignore
+                pm.endForm = self.PEDAL_FORM_MAP[formAttr]['endForm']  # type: ignore
 
             if placeAttr in ('above', 'below'):
-                pm.placement = placeAttr
+                pm.placement = placeAttr  # type: ignore
 
             # Now, we need to put the first object in the spanner, either obj,
             # which we do not need to return, or a SpannerAnchor, which we do.

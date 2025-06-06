@@ -269,7 +269,7 @@ class EventData:
 
     def getOttavaOrPedalMarkStartSpanners(
         self
-    ) -> list[m21.spanner.Spanner]:  # list[m21.spanner.Ottava | m21.expressions.PedalMark]:
+    ) -> list[m21.spanner.Ottava | m21.expressions.PedalMark]:  # type: ignore
         if not M21Utilities.m21PedalMarksSupported():
             return []
 
@@ -286,12 +286,9 @@ class EventData:
     def getOttavaOrPedalMarkStartsStops(
         self,
         asSpanners: t.Literal[True] = True,
-    ) -> tuple[
-        # list[m21.spanner.Ottava | m21.expressions.PedalMark],
-        # list[m21.spanner.Ottava | m21.expressions.PedalMark]
-        list[m21.spanner.Spanner],
-        list[m21.spanner.Spanner]
-
+    ) -> tuple[  # type: ignore
+        list[m21.spanner.Ottava | m21.expressions.PedalMark],  # type: ignore
+        list[m21.spanner.Ottava | m21.expressions.PedalMark]  # type: ignore
     ]:
         pass
 

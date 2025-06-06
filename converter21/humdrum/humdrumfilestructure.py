@@ -194,9 +194,7 @@ class HumdrumFileStructure(HumdrumFileBase):
                 currTok = currTok.nextToken0
                 continue
 
-            currTok.ownerLine.duration = Convert.recipToDuration(
-                currTok.text, acceptSyntaxErrors=self.acceptSyntaxErrors
-            )
+            currTok.ownerLine.duration = Convert.recipToDuration(currTok.text)
             currTok = currTok.nextToken0
 
         # now go back and set the absolute position from the start of the file.

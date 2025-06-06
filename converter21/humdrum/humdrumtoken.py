@@ -746,21 +746,12 @@ class HumdrumToken(HumHash):
         if self.hasRhythm:
             if self.isNonNullData:
                 if self.isKern:
-                    self._duration = Convert.recipToDuration(
-                        self.text,
-                        acceptSyntaxErrors=self.ownerLine.ownerFile.acceptSyntaxErrors
-                    )
+                    self._duration = Convert.recipToDuration(self.text)
                     if self.isGrace:
                         recipWithoutQsOrDots: str = self.text.replace('q', '').replace('.', '')
-                        self._graceVisualDuration = Convert.recipToDuration(
-                            recipWithoutQsOrDots,
-                            acceptSyntaxErrors=self.ownerLine.ownerFile.acceptSyntaxErrors
-                        )
+                        self._graceVisualDuration = Convert.recipToDuration(recipWithoutQsOrDots)
                 elif self.isRecip:
-                    self._duration = Convert.recipToDuration(
-                        self.text,
-                        acceptSyntaxErrors=self.ownerLine.ownerFile.acceptSyntaxErrors
-                    )
+                    self._duration = Convert.recipToDuration(self.text)
                 elif self.isMens:
                     self._duration = Convert.mensToDuration(self.text)
                 else:

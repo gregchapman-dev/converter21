@@ -1159,7 +1159,11 @@ class M21ObjectConvert:
             else:
                 attr['dir'] = 'down'
             if spanner.pedalType != m21.expressions.PedalType.Unspecified:  # type: ignore
-                attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[spanner.pedalType]
+                attr['func'] = (
+                    M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[
+                        spanner.pedalType  # type: ignore
+                    ]
+                )
             form: str = M21ObjectConvert.m21PedalObjectToMeiPedalForm(spanner)
             if form:
                 attr['form'] = form
@@ -1820,7 +1824,9 @@ class M21ObjectConvert:
             attr['lstartsym'] = 'none'  # no down-tick on the line start
 
         if pm.pedalType != m21.expressions.PedalType.Unspecified:  # type: ignore
-            attr['func'] = M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[pm.pedalType]
+            attr['func'] = (
+                M21ObjectConvert.M21PEDALTYPE_TO_MEI_PEDAL_FUNC[pm.pedalType]  # type: ignore
+            )
         form: str = M21ObjectConvert.m21PedalObjectToMeiPedalForm(pm, pt)
         if form:
             attr['form'] = form
@@ -1847,8 +1853,8 @@ class M21ObjectConvert:
         if isinstance(pt, m21.expressions.PedalBounce):  # type: ignore
             # We try looking at the PedalBounce (pt) itself. Some of those properties
             # might inherit from the enclosing PedalMark (pm).
-            if pt.bounceDown in (
-                    m21.expressions.PedalForm.PedalName,   # type: ignore
+            if pt.bounceDown in (  # type: ignore
+                    m21.expressions.PedalForm.PedalName,  # type: ignore
                     m21.expressions.PedalForm.Ped):  # type: ignore
                 if pt.bounceUp == m21.expressions.PedalForm.NoMark:  # type: ignore
                     return 'altpedstar'
@@ -1858,10 +1864,10 @@ class M21ObjectConvert:
 
         # OK, we handled the weird bounce cases, now handle the usual stuff by looking
         # at the PedalMark itself (pm).
-        if pm.startForm in (
+        if pm.startForm in (  # type: ignore
                 m21.expressions.PedalForm.PedalName,  # type: ignore
                 m21.expressions.PedalForm.Ped):  # type: ignore
-            if pm.continueLine in (
+            if pm.continueLine in (  # type: ignore
                     m21.expressions.PedalLine.Line,  # type: ignore
                     m21.expressions.PedalLine.Dashed):  # type: ignore
                 return 'pedline'
