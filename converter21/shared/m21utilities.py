@@ -4559,10 +4559,15 @@ class M21Utilities:
     def m21PedalMarksSupported() -> bool:
         # Note that we can't just look for expressions.PedalMark
         # because my initial implementation (which we do not
-        # support) also had expressions.PedalMark.
+        # support) also had expressions.PedalMark (music21 v9.7).
         # expressions.PedalTransition is unique to the new implementation.
+        # And for now, always return False, because music21 still has
+        # two of my PRs pending, and I don't know for sure that the
+        # PedalTransition check will be correct when they are finally
+        # taken.
         if M21Utilities._m21PedalMarksSupportedCached is None:
             M21Utilities._m21PedalMarksSupportedCached = (
-                hasattr(m21.expressions, 'PedalTransition')
+                # hasattr(m21.expressions, 'PedalTransition')
+                False
             )
         return M21Utilities._m21PedalMarksSupportedCached
