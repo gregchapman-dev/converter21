@@ -1,0 +1,11 @@
+Changes since 3.4.0:
+    All: Add support for import/export of RehearsalMarks.
+    All: More thorough text style support.
+    All export: ignore impossibly-numbered beams.
+    Humdrum import: Support .kern files, not just .krn.
+    Humdrum import: Support default layout style, e.g.
+        !!!LO-style:REH:enc=dbox:color=limegreen:fs=200%
+    Humdrum import: even more syntax fixing (if requested).
+    MEI export: Fix a bad bug triggered by empty (zero-duration) measures in the
+        score being exported from.
+

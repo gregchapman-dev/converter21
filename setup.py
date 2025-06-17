@@ -11,7 +11,7 @@
 import setuptools
 
 # must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION et al
-converter21version = '3.4.0'
+converter21version = '4.0.0'
 
 if __name__ == '__main__':
     setuptools.setup(
@@ -53,6 +53,7 @@ if __name__ == '__main__':
             'music21',
             'OMR',
             'Optical Music Recognition',
+            'OMR-NED'
         ],
 
         packages=setuptools.find_packages(),
@@ -60,7 +61,7 @@ if __name__ == '__main__':
         python_requires='>=3.10',
 
         install_requires=[
-            'music21>=9.1',
+            'music21>=9.7',
         ],
 
         project_urls={
