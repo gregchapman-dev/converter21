@@ -11,7 +11,7 @@
 import setuptools
 
 # must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION et al
-converter21version = '4.0.0'
+converter21version = '3.5.0'
 
 if __name__ == '__main__':
     setuptools.setup(
