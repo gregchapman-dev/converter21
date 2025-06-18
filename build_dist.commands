@@ -2,8 +2,8 @@
 # git merge develop
 # Fix any conflicts, add, commit, push to origin
 
-# Edit setup.py to change version number and maybe dependencies.
-# FIRST edit setup.py to change version number and maybe dependencies.
+# FIRST edit setup.py and converter21/shared/sharedconstants.py
+# to change version number and maybe dependencies.
 # MAYBE README, too, if dependencies changed.
 # git add setup.py README etc
 # git commit
