@@ -48,15 +48,18 @@ class M21ObjectConvert:
         obj: m21.base.Music21Object,
         spannerBundle: m21.spanner.SpannerBundle,
         tb: TreeBuilder
-    ):
+    ) -> bool:
         convert: t.Callable[
             [m21.base.Music21Object, m21.spanner.SpannerBundle, TreeBuilder],
             None
         ] | None = (
             M21ObjectConvert._getM21ObjectConverter(obj)
         )
-        if convert is not None:
-            convert(obj, spannerBundle, tb)
+        if convert is None:
+            return False
+
+        convert(obj, spannerBundle, tb)
+        return True
 
     @staticmethod
     def m21NoteToMei(

@@ -257,8 +257,9 @@ class MeiLayer:
                 endBTremNeeded: bool = self.processBTremState(obj, tb)
 
                 # Emit the object itself
-                M21ObjectConvert.convertM21ObjectToMei(obj, self.spannerBundle, tb)
-                lastOffsetEmitted = opFrac(objOffsetInMeasure + obj.duration.quarterLength)
+                didIt: bool = M21ObjectConvert.convertM21ObjectToMei(obj, self.spannerBundle, tb)
+                if didIt:
+                    lastOffsetEmitted = opFrac(objOffsetInMeasure + obj.duration.quarterLength)
 
                 # Process any nested element ends
                 if endBTremNeeded:
