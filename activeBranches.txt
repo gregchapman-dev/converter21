@@ -1,0 +1,239 @@
+gregc/moreMusicSiteFixes:
+    Initial tie work is here.  The rest of this has been merged into develop.
+
+develop:
+    Merged gregc/spannerAnchorFixes:
+        Fix MEI export of SpannerAnchors, so it doesn't cause gaps to be exported.
+        Release this as soon as gregc/moreAccurateSpannerStartStop PR is accepted
+            in music21.
+
+main (v3.5.0):
+    Merged gregc/moreNotation:
+        Support RehearsalMarks in Humdrum/MEI import/export.
+        Support PedalMarks (disabled until they are in music21)
+
+    Merged gregc/betterXmlIds (fixes for Philippe):
+        Better xml:ids (don't prefix existing strings)
+        Don't get confused by empty measures during MEI export (don't use offsetIterator)
+        Ignore crazy beams during export (number > makes sense for duration)
+
+    Merged gregc/OMREvaluationPaper (see *** MERGED TO develop HERE *** above)
+        Humdrum import/export supports .kern, not just .krn.
+        Any parseError is stashed in score.c21_parse_err.  If accepting syntax
+            errors, and an exception is raised, eat the exception, return an
+            empty score, and stash the exception reason in score.c21_parse_err.
+        Fix a bunch of Humdrum syntax errors (if requested).
+        Allow (ignore) a final line containing '<eos>'.
+        New tests:
+            parseFolder: parses a folder full of gt and pred files, fixing syntax
+                errors in the pred files.  Prints out any parse errors,
+                raised exceptions, empty scores, or scores with no staves.
+            fixSMB: parses all the ground truth data (from metadata.jsonl) and
+                reports which ones have what problems, and a numeric summary
+                at the end.
+
+    Merged gregc/OptionToFixBadHumdrumInput:
+        An option (for OMR folk using musicdiff) to request that instead of crashing, we do our best
+            to fix up the Humdrum file we are importing, so we end up with a score.  I expect that this
+            will be triggered by a musicdiff command line option on one of the input files (not
+            the ground-truth file, the one that came out of the model)
+        Also, musicdiff now handles comparing scores with different numbers of parts.  Stop avoiding that
+            case in diffall* and showdiff* tests.
+
+    Merged gregc/moreMusicSiteFixes, but without any of the initial tie work.
+    (That is still on  gregc/moreMusicSiteFixes.)
+    Here's the merge:
+        Factor out some MEI stuff into M21Utilities so MusicEngine can use it.
+        MEI export: no ties in chord symbols! (etc)
+        MEI export: Treat barline type 'heavy-light' as 'regular' (hopefully it will be combined with
+            something else, like a repeat start).  MEI has no heavy-light barline (SMUFL does, and
+            Humdrum does, and MusicXML does).
+        MEI export: Lots more xml:ids.  Export any string voice.id (overridden by
+            voice.c21_label) in layer@label, and make layer@n always be a low integer.
+        MEI export/Humdrum export: Make note of all custom m21 attributes we create, and remove
+            them when we're done, so we can export multiple times from the same (perhaps modified)
+            score without getting confused by things like clef.mei_handled.
+
+
+main(tag=v3.2.0):
+    from gregc/textOutput:
+        Tests: changes to match new musicdiff functionality (new details, text output, and all new
+            measure-wide-lyrics comparison).
+        MEI import/export: fixed a couple slur bugs, one of which (export) was about slurs that
+            weren't in the score spannerBundle.
+        MEI export, Humdrum export: fixed the rest of the places where we were using spanners that
+            weren't in the score spannerBundle.
+        MEI export, Humdrum export: Use new M21Utilities.isIn(obj, spannerBundle) for speed and
+            accuracy (it does "is" instead of "==")
+        ... SlurFixes tests ran here
+        MEI import: handle open-ended slurs (no endid, or no startid)
+        MEI import: fix import of slur of type: @slur="i1"/"t1"
+        Humdrum export: do export slurs that start or end on a rest
+        ... MoreSlurFixes tests ran here
+        MEI import: support slur placement ('above' and 'below')
+        Humdrum import: fix double-slur-on-chord code that puts one 'above' and one 'below'
+        MEI import/export: it's slur@curvedir, not slur@place.
+        ... EvenMoreSlurFixes tests ran here
+        MEI import: convert tstamp and tstamp2 beats from n.nnnnn -> Fraction (using
+            DENOM_LIMIT == 768)
+        MEI import: fixed some missing opFracs in conversion from offset to beat, that were screwing
+            up our newly accurate tstamp/tstamp2 code.
+
+    Humdrum import of lyrics: support *edit/*Xedit and *italic/*Xitalic as synonyms of *ij/*Xij.
+
+    Tests: go back to comparing rest positions with Verovio (notice a few longstanding errors where
+        positioned rests are under ottavas).
+
+    from gregc/moreFixesForMusicSite:
+        MEI export: better <harmony> text, including use of cs.chordKindStr if present.
+        All export: make up chordKindStr if necessary.
+        Humdrum import: stop duplicating lyrics across voices (grab code from Verovio)
+        All import: simplify chord symbols (try to find better chordKind that has fewer
+            chordStepModifications)
+        Utilities: chord simplification can now do '7+ add 9' -> '9#5', 'maj7+ add 9' -> 'maj9#5',
+            and 'm7 alter b5' -> 'ø7'.
+        MEI export: simplify chord symbols to make better harte and better <harm> text.
+        MEI export and made-up chordKindStr: use '°' instead of 'dim', in 'o7', etc.
+        Humdrum export: make up chordKindStr even if kind=='major' (if chordKindStr == '')
+        All export: export poet as lyricist.
+        Humdrum export: perform "n=" incrementation even if one of the LO:DY, LO:HP, or LO:H
+            instances doesn't have a param that needs "n=".
+
+    from gregc/foundByNewDiff:
+        - Fix Humdrum export of numbered layout for note in chord (!LO:N:n=2, not !LO:n=2:N)
+        - Fix Humdrum import of Unpitched (lots of cleanup)
+        - Humdrum import: be more consistent about stemDirection
+        - Humdrum import: better support for ottavas affecting more than one voice
+            - Reorder multi-voice ottavas so last element ends at maximum ottava offset and
+                first element starts at minimum ottava offset.
+            - Don't start an ottava twice (it will nuke the first one).
+            - When processing a subsequent voice in the first measure under an ottava,
+                pay attention to the ottava's start offset in that measure (don't just
+                put all the voice's notes in the ottava).
+            - Don't stop ottava too early (wait for the last voice to notice the ottava end)
+            - Deal with manipulators that hide voices from ottava start (split just after)
+                and stop (merge just before).
+
+    from gregc/chordSymbol:
+        - Humdrum import/export of ChordSymbols (read **mxhm and **harte, write **harte).
+        - MEI import/export of ChordSymbols (put harte in harm@type for now; hopefully
+            MEIv6 or v7 will have something better).
+
+main(tag=v3.1.0):
+    ... and so much more...
+    Issues discovered during new MusicXML -> MEI conversion tests.
+    - MEI export: no implicit text emitted in <tempo>.
+    - MEI export: no more duplicated clef/keysig/metersig; if you emit in staffdef, don't emit
+        again later.
+    - Humdrum import/export: OMD vs Tempo fixes (picked up some import fixes from Verovio, then
+        started depending on them in Humdrum export)
+    - MEI import/Humdrum import: fix 'title' vs. 'movementName'
+    - Humdrum import/export: support non-note-associated dynamics/directions/tempos by adding a voice
+        full of invisible rests, one of which lands at the desired offset.
+    - MEI import: fix timestamp computation (meter changes inside layers)
+    - Modify all diffall and showdiff tests to check number of parts before diffing
+        to avoid musicdiff crash.
+    - Fix MEI export crash (@midi.bpm must be exported as a string)
+    - MEI export/Humdrum export: handle "play only" metronome marks.
+    - Humdrum import: fix to handling of transposing instruments
+    - MEI export: if @tstamp2 is going to be in a previous measure, don't crash.
+    - MEI export/Humdrum export: handle Grace vs Appoggiatura more carefully
+    - MEI export/Humdrum export: handle gaps by exporting invisible rests
+    - diffall tests: visualize note offset differences (new musicdiff feature)
+    - MEI export/Humdrum export: obey chordSymbol.writeAsChord during export (we
+        do not export the ChordSymbol at all (yet) if .writeAsChord is False)
+    - MEI export/Humdrum export: better handling of staves not in any staffGroup
+    - Humdrum export: Regularize treatment of absoluteY
+    - MEI import/export: Support lyric placement
+    - MEI export: improve absoluteY <-> placement relationship
+    - Humdrum import: better handling of preferred vs forced placement (of dynamics/hairpins)
+
+    Random Bugfixes:
+    - MEI import/export: DatePrimitive range edge that is also a range needs to be
+        "[date1..date2]", not "date1/date2".  We can import both, but export
+        always produces "[date1..date2]".
+    - MEI export: Add missing @isodate for "datePublished".
+    - All: Regularize invisible vs regular vs missing m21 Barlines.
+    - MEI import/export: handle tuplet.bracket and visibility better.
+    - MEI export: actually emit clef/key/timesig changes that aren't at start of measure.
+    - MEI export: handle spanners that start and end in different Parts (we were crashing).
+    - MEI export: emit ornament accidentals only if visible (there is no @accid.ges on
+        ornamentals, unfortunately, or we would use that for invisible accidentals).
+    - MEI import: allow <space> to be used as a @startid or @endid in a staff item (e.g. <hairpin>).
+    - MEI export: MEI hairpins end at start of @endid.  Unfortunately, music21 DynamicWedges
+        end at _end_ of dw.getLast().  So we can't use dw.getLast() as @endid.  Instead
+        we force a @tstamp2 at the ending offset of dw.getLast().
+
+main (tag=v3.0.1):
+
+    Fix MEI metadata export: <appInfo> goes before <editorialDesc> in <encodingDesc>.
+
+    Picked up a few small fixes from latest version of humlib.
+
+main (tag=v3.0.0)
+
+  Export to MEI: handle tuplets that can't nest properly with the voice's beams by emitting
+    <tupletSpan> instead of <tuplet>.
+
+  Export to MEI: export visual+gestural duration @dots.ges non-ambiguously
+    (i.e. always add @dots.ges, even if it's zero or equal to @dots).
+
+  Rework Humdrum export of tuplets, including carefully choosing non-power-of-two recip.
+
+  MEI import: Improved support for gestural duration, including support for @dur.ppq (which is always gestural).
+
+  Import and export MEI metadata
+
+  Import MEI v4 and v5 (decided via root element @meiversion)
+  Export MEI v4 and v5 (default to v5, do v4 if MeiWriter.meiversion.startswith('4'))
+
+  Humdrum export: Ottavas
+  Humdrum export: Articulation placement
+
+  MEI exporter work (and associated improvements to other importers/exporters)
+  Rename of diffall*.py and showdiff*.py (with addition of MEI export variants)
+
+  Humdrum import/export: Support center justification (MEI import already worked)
+
+  MEI import: Support <dir>, <dynam>, <tempo>, <hairpin> with @startid instead of @tstamp
+    and/or @endid instead of @tstamp2.
+
+  meiConverterClass:
+    1. Move all the global functions into the converter
+    2. Move otherInfo into the converter instance storage
+    3. Get rid of self.otherInfo in favor of converter instance member data
+
+  meiStaffGroups:
+    MEI import: support <staffGrp> properly -> multiple PartStaffs and a StaffGroup
+        - lots of stuff including braces/brackets, labels/labelAbbrs, etc
+        - make sure voice numbers are unique across staff groups
+        - BOTH importers should do the automatic detection of piano(2)/organ(3) scores. Humdrum already
+            does, but it's a bit too aggressive.  It should check for non-keyboard instruments before
+            doing it.  MEI should add this code (and do the same instrument/part label check).
+    Humdrum import: several StaffGroup fixes.
+    tests/diffall*.py: visualize the new staff group differences
+
+  Add a runtime check in converter21.register() that raises if music21 v9.0.0a11+ is not present.
+
+  python3.10 -
+    Require python3.10 and music21 v9.
+    Clean up typing stuff by using Blah | Bleah | None instead of t.Optional and t.Union, etc.
+    Replace t.List, t.Tuple, t.Set, t.Dict with list, tuple, set, dict.
+    Remove all checks for music21 features, since they are all there.
+    Update copyright dates to 2023
+    Update converter21 version to 3.0.0
+
+  All: Support ornamentAccidentals
+
+  MEI import: use @dur.ges if @dur is missing.  If both are missing assume dur=None as before.
+
+  tupletBug - pick up fix for https://github.com/humdrum-tools/verovio-humdrum-viewer/issues/697, a.k.a. fix 7tupletsOf16thNotes to actually have 16th notes instead of 32nd notes.  Fixes a TON of beam differences in diffallmei.py.
+
+  ottavaTransposeFix
+
+  delayedTurns
+
+  tupletDetails
+
+
+
