@@ -53,12 +53,13 @@ class AbcWriter:
             raise AbcExportError(
                 'Export to temporary MusicXML file failed.'
             )
-        xmlStr: str = xmlFp.read()
+        with open(xmlFp, 'r', encoding='utf8') as xmlFpOut:
+            xmlStr: str = xmlFpOut.read()
 
         # Now run that MusicXML through xml2abc.vertaal (MusicXML str -> ABC str)
-        abcStr: str = convertMusicXMLToABC(xmlStr)
+        abcStr: str
+        abcStr, _ = convertMusicXMLToABC(xmlStr)
 
-        with open(fp, 'w', encoding='utf8') as fpOut:
-            fpOut.write(abcStr)
+        fp.write(abcStr)
 
         return True

@@ -22,6 +22,7 @@ from enum import IntEnum, auto
 
 from .HumdrumConverter import HumdrumConverter
 from .MEIConverter import MEIConverter
+from .ABCConverter import ABCConverter
 from .shared import M21Utilities
 from .shared import StreamFreezer
 from .shared import StreamThawer
@@ -33,6 +34,7 @@ class Music21VersionException(Exception):
 class ConverterName(IntEnum):
     HUMDRUM = auto()
     MEI = auto()
+    ABC = auto()
 
 def register(
     *converterNames: ConverterName
@@ -44,7 +46,7 @@ def register(
 
     # default (if no converterNames passed in) is to register everything we have
     if not converterNames:
-        converterNames = (ConverterName.HUMDRUM, ConverterName.MEI)
+        converterNames = (ConverterName.HUMDRUM, ConverterName.MEI, ConverterName.ABC)
 
     # Currently this adjusts MusicXML import/export to handle more names for ChordSymbols
     # (this also allows converter21 to do so as well).
@@ -56,3 +58,6 @@ def register(
     if ConverterName.MEI in converterNames:
         m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterMEI)
         m21.converter.registerSubConverter(MEIConverter)
+    if ConverterName.ABC in converterNames:
+        m21.converter.unregisterSubConverter(m21.converter.subConverters.ConverterABC)
+        m21.converter.registerSubConverter(ABCConverter)
