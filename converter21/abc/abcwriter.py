@@ -11,6 +11,7 @@
 import sys
 import music21 as m21
 from converter21.shared import M21Utilities
+from converter21.abc import xml2abc
 
 class AbcExportError(Exception):
     pass
@@ -46,5 +47,18 @@ class AbcWriter:
             self._m21Score = self._m21Object
         del self._m21Object  # everything after this uses self._m21Score
 
-        # Now convert to MusicXML, then run that MusicXML through xml2abc.
+        # Now convert to MusicXML
+        xmlFp = self._m21Score.write(fmt='musicxml', fp=None, makeNotation=self.makeNotation)
+        if xmlFp is None:
+            raise AbcExportError(
+                'Export to temporary MusicXML file failed.'
+            )
+        xmlStr: str = xmlFp.read()
+
+        # Now run that MusicXML through xml2abc.
+        abcStr: str = xml2abc.vertaal(xmlStr)
+
+        with open(fp, 'w') as fpOut:
+            fpOut.write(abcStr)
+
         return True
