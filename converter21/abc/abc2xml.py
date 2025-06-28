@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=latin-1
 '''
 Copyright (C) 2012-2025: Willem G. Vree
 Contributions: Nils Liberg, Nicolas Froment, Norman Schmidt, Reinier Maliepaard, Martin Tarenskeen,

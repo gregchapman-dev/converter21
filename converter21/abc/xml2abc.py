@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=latin-1
 '''
 Copyright (C) 2012-2025: W.G. Vree
 Contributions: M. Tarenskeen, N. Liberg, Paul Villiger, Janus Meuris, Larry Myerscough,
