@@ -22,6 +22,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 # mypy: ignore-errors
+# flake8: noqa
 
 __doc__ = \
 """
