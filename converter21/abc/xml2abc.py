@@ -13,6 +13,7 @@ See the Lesser GNU General Public License for more details. <http://www.gnu.org/
 '''
 # mypy: ignore-errors
 # flake8: noqa
+# pylint: skip-file
 
 try:    import xml.etree.cElementTree as E
 except: import xml.etree.ElementTree as E

@@ -13,6 +13,7 @@ See the Lesser GNU General Public License for more details. <http://www.gnu.org/
 '''
 # mypy: ignore-errors
 # flake8: noqa
+# pylint: skip-file
 
 from functools import reduce
 from pyparsing import Word, OneOrMore, Optional, Literal, NotAny, MatchFirst

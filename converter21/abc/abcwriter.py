@@ -11,7 +11,7 @@
 import sys
 import music21 as m21
 from converter21.shared import M21Utilities
-from converter21.abc import xml2abc
+from converter21.abc.xml2abc import vertaal as convertMusicXMLToABC
 
 class AbcExportError(Exception):
     pass
@@ -29,9 +29,9 @@ class AbcWriter:
         # client can set to False if obj is a Score
         self.makeNotation: bool = True
 
-        # in future, client will be able to set to '2.1' or '2.2'.
-        # Always 2.1 for now.
-        self.abcVersion: str = '2.1'
+        # In future, client may be able to set self.abcVersion to '2.1' or '2.2'.
+        # Always assume 2.1 for now.
+        # self.abcVersion: str = '2.1'
 
     def write(self, fp) -> bool:
         if self.makeNotation:
@@ -55,10 +55,10 @@ class AbcWriter:
             )
         xmlStr: str = xmlFp.read()
 
-        # Now run that MusicXML through xml2abc.
-        abcStr: str = xml2abc.vertaal(xmlStr)
+        # Now run that MusicXML through xml2abc.vertaal (MusicXML str -> ABC str)
+        abcStr: str = convertMusicXMLToABC(xmlStr)
 
-        with open(fp, 'w') as fpOut:
+        with open(fp, 'w', encoding='utf8') as fpOut:
             fpOut.write(abcStr)
 
         return True

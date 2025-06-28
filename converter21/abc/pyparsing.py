@@ -23,6 +23,7 @@
 #
 # mypy: ignore-errors
 # flake8: noqa
+# pylint: skip-file
 
 __doc__ = \
 """
