@@ -37,11 +37,13 @@ def padWithEmptyScores(list1: list[m21.stream.Score], list2: list[m21.stream.Sco
     for _ in range(0, numPad):
         shortList.append(m21.stream.Score())
 
-def runTheFullTest(inputPath: Path):
+def runTheFullTest(inputPath: Path, scoreNum: int | None = None):
     print(f'Parsing ABC file: {inputPath}')
-    score1 = m21.converter.parse(inputPath, format='abc', forceSource=True)
+    score1 = m21.converter.parse(
+        inputPath, format='abc', number=scoreNum, forceSource=True
+    )
 
-    assert score1 is not None
+    assert isinstance(score1, m21.stream.Score | m21.stream.Opus)
     assert score1.isWellFormedNotation()
 
     success: bool = True
@@ -60,7 +62,7 @@ def runTheFullTest(inputPath: Path):
 
     print(f'Parsing written ABC file: {abcPath}')
     score2 = m21.converter.parse(abcPath, format='abc', forceSource=True)
-    assert score2 is not None
+    assert isinstance(score2, m21.stream.Score | m21.stream.Opus)
     assert score2.isWellFormedNotation()
 
     # ABC importer/exporter can produce Score or Opus (full of scores).
@@ -86,11 +88,13 @@ def runTheFullTest(inputPath: Path):
         numDiffs = len(diffList)
         print(f'\tnumber of differences = {numDiffs}')
         if numDiffs > 0:
-            print('now we will mark and display the two scores')
-            Visualization.mark_diffs(sc1, sc2, diffList)
-            print('marked the scores to show differences')
-            # Visualization.show_diffs(sc1, sc2)
-            print('displayed both annotated scores')
+            # don't render diffs to PDF if there are lots of scores to show
+            if len(score1List) == 1:
+                print('now we will mark and display the two scores')
+                Visualization.mark_diffs(sc1, sc2, diffList)
+                print('marked the scores to show differences')
+                Visualization.show_diffs(sc1, sc2)
+                print('displayed both annotated scores')
 
         omrnedOut: dict[str, str] = Visualization.get_omr_ned_output(cost, score_lin1, score_lin2)
         jsonStr: str = json.dumps(omrnedOut)
@@ -109,12 +113,12 @@ def runTheFullTest(inputPath: Path):
 '''
     main entry point (parse arguments and do conversion)
 '''
+print('music21 version:', VERSION_STR, file=sys.stderr)
 converter21.register()
-converter21.M21Utilities.adjustMusic21Behavior()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file')
-print('music21 version:', VERSION_STR, file=sys.stderr)
+parser.add_argument('-n', '--num', default=None)
 args = parser.parse_args()
 
-runTheFullTest(Path(args.input_file))
+runTheFullTest(Path(args.input_file), int(args.num))

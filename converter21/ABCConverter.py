@@ -41,21 +41,21 @@ class ABCConverter(SubConverter):
 
         * dataString: The string with ABC to convert.
 
-        * number: Unused in this class. Default is ``None``.
+        * number: X:n reference number of ABC tune to parse. Default is ``None`` (parse them all).
 
-        Returns the music21 objects corresponding to the ABC file.
+        Returns the music21 objects corresponding to the ABC file (or numbered ABC tune).
         '''
         # if dataString.startswith('mei:'):
         #     dataString = dataString[4:]
 
-        self.stream = AbcReader(dataString).run()
+        self.stream = AbcReader(dataString).run(number)
 
         output: stream.Stream = self.stream
 
         if t.TYPE_CHECKING:
             # self.stream is a property defined in SubConverter, and it's not
             # type-hinted properly.  But we know what this is.
-            assert isinstance(output, (stream.Score, stream.Part, stream.Opus))
+            assert isinstance(output, (stream.Score, stream.Opus))
 
         return output
 
@@ -71,7 +71,7 @@ class ABCConverter(SubConverter):
 
         * filePath: Full pathname to the file containing ABC data as a string or Path.
 
-        * number: Unused in this class. Default is ``None``.
+        * number: X:n reference number of ABC tune to parse. Default is ``None`` (parse them all).
 
         Returns the music21 objects corresponding to the ABC file.
         '''
@@ -82,10 +82,10 @@ class ABCConverter(SubConverter):
                 dataStream = f.read()
         except UnicodeDecodeError:
             try:
-                with open(filePath, 'rt', encoding='utf-16') as f:
+                with open(filePath, 'rt', encoding='latin-1') as f:
                     dataStream = f.read()
             except UnicodeError:
-                with open(filePath, 'rt', encoding='latin-1') as f:
+                with open(filePath, 'rt', encoding='utf-16') as f:
                     dataStream = f.read()
 
         self.parseData(dataStream, number)
@@ -93,7 +93,7 @@ class ABCConverter(SubConverter):
         if t.TYPE_CHECKING:
             # self.stream is a property defined in SubConverter, and it's not
             # type-hinted properly.  But we know what this is.
-            assert isinstance(self.stream, (stream.Score, stream.Part, stream.Opus))
+            assert isinstance(self.stream, (stream.Score, stream.Opus))
 
         return self.stream
 
