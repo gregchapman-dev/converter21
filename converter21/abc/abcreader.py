@@ -41,10 +41,9 @@ class AbcReader:
             if not tunes and preamble:
                 tunes, preamble = ['1\n' + preamble], ''  # tune without X:
 
-            self.abcTuneByNumber: dict[str, str] = {}
             for tune in tunes:
                 numberAndTuneRemainder: list[str] = tune.split('\n', 1)
-                numStr: str = numberAndTuneRemainder[0].strip()
+                numStr = numberAndTuneRemainder[0].strip()
                 self.abcTuneByNumber[numStr] = preamble + 'X:' + tune
 
         if number is None:
@@ -65,15 +64,15 @@ class AbcReader:
         if len(xmlStrs) == 1:
             # return a Score
             score = m21.converter.parseData(xmlStrs[0], fmt='musicxml')
-            score.metadata.fileNumber = abcNumbers[0]
+            score.metadata.number = abcNumbers[0]
             return score
 
-        # return an Opus of Scores, with score.metadata.number set to the
+        # return an Opus of Scores, with each score.metadata.number set to the
         # abc tune reference number.
         opus = m21.stream.Opus()
         for xmlStr, numStr in zip(xmlStrs, abcNumbers):
             score = m21.converter.parseData(xmlStr)
-            score.metadata.fileNumber = number
+            score.metadata.number = numStr
             opus.coreAppend(score)
         opus.coreElementsChanged()
         return opus
