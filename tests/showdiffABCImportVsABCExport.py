@@ -121,4 +121,4 @@ parser.add_argument('input_file')
 parser.add_argument('-n', '--num', default=None)
 args = parser.parse_args()
 
-runTheFullTest(Path(args.input_file), int(args.num))
+runTheFullTest(Path(args.input_file), int(args.num) if args.num is not None else None)

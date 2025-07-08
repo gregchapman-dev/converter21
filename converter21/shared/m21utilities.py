@@ -729,12 +729,22 @@ class M21Utilities:
         return rest
 
     @staticmethod
-    def makeScoreFromObject(obj: m21.prebase.ProtoM21Object) -> m21.stream.Score:
+    def makeWellFormedOpus(op: m21.stream.Opus) -> m21.stream.Opus:
+        newOp: m21.stream.Opus = m21.stream.Opus()
+        for sc in op.scores:
+            newSc: m21.stream.Score = M21Utilities._fromScore(sc)
+            newOp.append(newSc)
+        return newOp
+
+    @staticmethod
+    def makeScoreFromObject(
+        obj: m21.prebase.ProtoM21Object
+    ) -> m21.stream.Score:
         '''
         makeScoreFromObject (et al) are here to turn any ProtoM21Object into a well-formed
-        Score/Part/Measure/whatever stream.  stream.makeNotation will also be called.  Clients
-        can avoid this if they init with a Score, and set self.makeNotation to False before
-        calling write().
+        Score (or Opus, if necessary).  stream.makeNotation will also be called.  Clients
+        can avoid this if they init with a Score/Opus, and set self.makeNotation to False
+        before calling write().
         '''
         _classMapping: dict[str, str] = {
             'Score': '_fromScore',

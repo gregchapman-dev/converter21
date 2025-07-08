@@ -22,7 +22,7 @@ class AbcWriter:
         M21Utilities.adjustMusic21Behavior()
 
         self._m21Object: m21.prebase.ProtoM21Object = obj
-        self._m21Score: m21.stream.Score | m21.stream.Opus | None = None
+        self._m21ScoreOrOpus: m21.stream.Score | m21.stream.Opus | None = None
 
         # default options (these can be set to non-default values by clients,
         # as long as they do it before they call write())
@@ -36,7 +36,10 @@ class AbcWriter:
 
     def write(self, fp) -> bool:
         if self.makeNotation:
-            self._m21Score = M21Utilities.makeScoreFromObject(self._m21Object)
+            if isinstance(self._m21Object, m21.stream.Opus):
+                self._m21ScoreOrOpus = M21Utilities.makeWellFormedOpus(self._m21Object)
+            else:
+                self._m21ScoreOrOpus = M21Utilities.makeScoreFromObject(self._m21Object)
         else:
             if not isinstance(self._m21Object, (m21.stream.Score, m21.stream.Opus)):
                 raise AbcExportError(
@@ -46,15 +49,17 @@ class AbcWriter:
             if not self._m21Object.isWellFormedNotation():
                 print('Source obj is not well-formed; see isWellFormedNotation()', file=sys.stderr)
 
-            self._m21Score = self._m21Object
-        del self._m21Object  # everything after this uses self._m21Score
+            self._m21ScoreOrOpus = self._m21Object
+        del self._m21Object  # everything after this uses self._m21ScoreOrOpus
 
         abcStr: str = ''
         xmlStr: str = ''
 
         # Now convert to MusicXML
-        if isinstance(self._m21Score, m21.stream.Score):
-            xmlFp = self._m21Score.write(fmt='musicxml', fp=None, makeNotation=self.makeNotation)
+        if isinstance(self._m21ScoreOrOpus, m21.stream.Score):
+            xmlFp = self._m21ScoreOrOpus.write(
+                fmt='musicxml', fp=None, makeNotation=self.makeNotation
+            )
             if xmlFp is None:
                 raise AbcExportError(
                     'Export to temporary MusicXML file failed.'
@@ -66,11 +71,28 @@ class AbcWriter:
             abcStr, _ = convertMusicXMLToABC(xmlStr)
         else:  # it's an Opus
             if t.TYPE_CHECKING:
-                assert isinstance(self._m21Score, m21.stream.Opus)
-            nextNumber: int = 0
-            for score in self._m21Score.scores:
-                nextNumber += 1
+                assert isinstance(self._m21ScoreOrOpus, m21.stream.Opus)
+            # if the scores in the Opus have unique numbers in their metadata,
+            # then write out those numbers as X:n, else make up the X:n numbers.
+            useExistingNums: bool = True
+            existingNums: list[str | None] = self._m21ScoreOrOpus.getNumbers()
+            for num in existingNums:
+                if num is None:
+                    useExistingNums = False
+                    break
+            if useExistingNums:
+                uniqueNums: list[str | None] = list(set(existingNums))
+                if len(uniqueNums) != len(existingNums):
+                    useExistingNums = False
 
+            nextNumber: int = 0
+            for score in self._m21ScoreOrOpus.scores:
+                if useExistingNums:
+                    nextNumber = score.metadata.number
+                else:
+                    nextNumber += 1
+
+                # TODO: performance improvement - write to string
                 xmlFp = score.write(fmt='musicxml', fp=None, makeNotation=self.makeNotation)
                 if xmlFp is None:
                     raise AbcExportError(
