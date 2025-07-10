@@ -4514,36 +4514,43 @@ class M21Utilities:
 
     @staticmethod
     def reportUnwritableScore(
-        score: m21.stream.Score,
+        scoreOrOpus: m21.stream.Score | m21.stream.Opus,
         checkMeasureCounts: bool,
         checkMeasureOffsets: bool
     ) -> str:
         if not checkMeasureCounts and not checkMeasureOffsets:
             return ''
 
-        measureCount: list[int] = []
-        measureOffsets: list[list[OffsetQL]] = []  # list (len partCount) of list of measure offsets
-        for part in score.parts:  # includes PartStaffs, too
+        scores: list[m21.stream.Score]
+        if isinstance(scoreOrOpus, m21.stream.Score):
+            scores = [scoreOrOpus]
+        else:
+            scores = list(scoreOrOpus.scores)
+
+        for score in scores:
+            measureCount: list[int] = []
+            measureOffsets: list[list[OffsetQL]] = []  # list (partCount) of list of measure offsets
+            for part in score.parts:  # includes PartStaffs, too
+                if checkMeasureCounts:
+                    measureCount.append(len(part.getElementsByClass('Measure')))
+                if checkMeasureOffsets:
+                    measureOffsets.append([])
+                    for meas in part.getElementsByClass('Measure'):
+                        measureOffsets[-1].append(meas.getOffsetInHierarchy(score))
+
             if checkMeasureCounts:
-                measureCount.append(len(part.getElementsByClass('Measure')))
+                mCount0 = measureCount[0]
+                for mCount in measureCount:
+                    if mCount != mCount0:
+                        return 'ERROR: cannot handle parts with different measure counts'
+
             if checkMeasureOffsets:
-                measureOffsets.append([])
-                for meas in part.getElementsByClass('Measure'):
-                    measureOffsets[-1].append(meas.getOffsetInHierarchy(score))
-
-        if checkMeasureCounts:
-            mCount0 = measureCount[0]
-            for mCount in measureCount:
-                if mCount != mCount0:
-                    return 'ERROR: cannot handle parts with different measure counts'
-
-        if checkMeasureOffsets:
-            partCount: int = len(score.parts)
-            for measIdx in range(0, mCount0):
-                measureOffsetPart0 = measureOffsets[0][measIdx]
-                for partIdx in range(1, partCount):
-                    if measureOffsets[partIdx][measIdx] != measureOffsetPart0:
-                        return 'ERROR: cannot handle parts whose measure offsets don\'t match'
+                partCount: int = len(score.parts)
+                for measIdx in range(0, mCount0):
+                    measureOffsetPart0 = measureOffsets[0][measIdx]
+                    for partIdx in range(1, partCount):
+                        if measureOffsets[partIdx][measIdx] != measureOffsetPart0:
+                            return 'ERROR: cannot handle parts whose measure offsets don\'t match'
 
         return ''
 

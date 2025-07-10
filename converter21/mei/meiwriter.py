@@ -37,7 +37,7 @@ class MeiWriter:
         M21Utilities.adjustMusic21Behavior()
 
         self._m21Object: m21.prebase.ProtoM21Object = obj
-        self._m21Score: m21.stream.Score | None = None
+        self._m21ScoreOrOpus: m21.stream.Score | m21.stream.Opus | None = None
 
         # default options (these can be set to non-default values by clients,
         # as long as they do it before they call write())
@@ -50,39 +50,40 @@ class MeiWriter:
 
     def write(self, fp) -> bool:
         if self.makeNotation:
-            self._m21Score = M21Utilities.makeScoreFromObject(self._m21Object)
+            if isinstance(self._m21Object, m21.stream.Opus):
+                self._m21ScoreOrOpus = M21Utilities.makeWellFormedOpus(self._m21Object)
+            else:
+                self._m21ScoreOrOpus = M21Utilities.makeScoreFromObject(self._m21Object)
         else:
-            if not isinstance(self._m21Object, m21.stream.Score):
+            if not isinstance(self._m21Object, (m21.stream.Score, m21.stream.Opus)):
                 raise MeiExportError(
-                    'Since makeNotation=False, source obj must be a music21 Score, and it is not.'
+                    'Since makeNotation=False, source obj must be a music21'
+                    ' Score/Opus, and it is not.'
                 )
             if not self._m21Object.isWellFormedNotation():
                 print('Source obj is not well-formed; see isWellFormedNotation()', file=sys.stderr)
 
-            self._m21Score = self._m21Object
-        del self._m21Object  # everything after this uses self._m21Score
+            self._m21ScoreOrOpus = self._m21Object
+        del self._m21Object  # everything after this uses self._m21ScoreOrOpus
 
-        # Check that all parts have the same number of measures, and that
-        # each measure with the same index has the same offset across parts.
+        # Check that all parts (in all scores) have the same number of measures, and
+        # that each measure with the same index has the same offset across parts.
         err: str = M21Utilities.reportUnwritableScore(
-            self._m21Score,
+            self._m21ScoreOrOpus,
             checkMeasureCounts=True,
             checkMeasureOffsets=False
         )
         if err:
             raise MeiExportError(err)
 
-        # Here we convert a music21 Score to an MeiScore. It's still all m21 objects, but
-        # the object structure is MEI-like. For example:
-        #   music21 scores are {Staff1(Measure1 .. MeasureN), Staff2(Measure1 .. MeasureN)}
-        #   but MEI scores are {Measure1{Staff1, Staff2} .. MeasureN{Staff1, Staff2}}.
-        meiScore: MeiScore = MeiScore(self._m21Score, self.meiVersion)
+        scores: list[m21.stream.Score]
+        if isinstance(self._m21ScoreOrOpus, m21.stream.Score):
+            scores = [self._m21ScoreOrOpus]
+        else:
+            scores = list(self._m21ScoreOrOpus.scores)
 
-        # Here we convert the MeiScore to an in-memory tree of Elements
-        meiElement: Element = meiScore.makeRootElement()
-        indent(meiElement, space='   ', level=0)
+        writeMeiCorpus: bool = len(scores) > 1
 
-        # Write to the output MEI XML file
         # pylint: disable=line-too-long
         prefix: str
         if self.meiVersion.startswith('4'):
@@ -104,12 +105,47 @@ class MeiWriter:
                 f'invalid meiVersion: {self.meiVersion}. Must start with \'4\' or \'5\'.'
             )
         # pylint: enable=line-too-long
-
         fp.write(prefix)
-        ElementTree(meiElement).write(fp, encoding='unicode')
-        fp.write('\n')
 
-        # clean up all the notes-to-self MeiScore wrote in the score.
-        meiScore.deannotateScore()
+        # where should we write xmlns/meiversion?
+        meiVersion: str = self.meiVersion
+        if writeMeiCorpus:
+            if meiVersion.startswith('5'):
+                fp.write(
+                    '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1+CMN">'
+                )
+            else:
+                fp.write(
+                    '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0.1">'
+                )
+
+            # Here is where we might put any opus.metadata items in <meiCorpus><meiHead>.
+            # Nothing for now, though.
+
+            meiVersion = ''  # disable the xmlns/meiversion attributes in <mei> elements
+
+        for score in scores:
+            # Here we convert a music21 Score to an MeiScore. It's still all m21 objects, but
+            # the object structure is MEI-like. For example:
+            #   music21 scores are {Staff1(Measure1 .. MeasureN), Staff2(Measure1 .. MeasureN)}
+            #   but MEI scores are {Measure1{Staff1, Staff2} .. MeasureN{Staff1, Staff2}}.
+            meiScore: MeiScore = MeiScore(score, meiVersion)
+
+            # Here we convert the MeiScore to an in-memory tree of Elements
+            meiElement: Element = meiScore.makeRootElement()
+            level: int = 0
+            if writeMeiCorpus:
+                level = 1
+            indent(meiElement, space='   ', level=level)
+
+            # Write to the output MEI XML file
+            ElementTree(meiElement).write(fp, encoding='unicode')
+
+            # clean up all the notes-to-self MeiScore wrote in the score.
+            meiScore.deannotateScore()
+
+        if writeMeiCorpus:
+            fp.write('</meiCorpus>')
+        fp.write('\n')
 
         return True

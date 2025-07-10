@@ -12,14 +12,20 @@
 # ------------------------------------------------------------------------------
 import typing as t
 import pathlib
+from xml.etree.ElementTree import fromstring, Element, ElementTree, ParseError
 
 from music21 import stream
 from music21 import common
+from music21 import environment
 
 from music21.converter.subConverters import SubConverter
 
-from converter21.mei import MeiReader
+from converter21.mei import MeiReader, MEI_NS, INVALID_XML_DOC, WRONG_ROOT_ELEMENT
+from converter21.mei import MeiValidityError
+from converter21.mei import MeiElementError
 from converter21.mei import MeiWriter
+
+environLocal = environment.Environment('converter21.mei.meireader')
 
 class MEIConverter(SubConverter):
     '''
@@ -41,21 +47,54 @@ class MEIConverter(SubConverter):
 
         * dataString: The string with XML to convert.
 
-        * number: Unused in this class. Default is ``None``.
+        * number: One-based score number within `<meiCorpus>`. Default is `None`.
 
         Returns the music21 objects corresponding to the MEI file.
+        :raises: :exc:`MeiValidityError` when the MEI file is not valid XML.
         '''
         if dataString.startswith('mei:'):
             dataString = dataString[4:]
 
-        self.stream = MeiReader(dataString).run()
+        try:
+            documentRoot = fromstring(dataString)
+            if isinstance(documentRoot, ElementTree):
+                documentRoot = documentRoot.getroot()
+        except ParseError as parseErr:
+            environLocal.warn(
+                '\n\nERROR: Parsing the MEI document with ElementTree failed.')
+            environLocal.warn(f'We got the following error:\n{parseErr}')
+            raise MeiValidityError(INVALID_XML_DOC)
+
+        # Check for <meiCorpus>, and if present, make an Opus, read
+        # <meiCorpus><meiHead> into opus.metadata, and make an MeiReader
+        # for each enclosed <mei> element, putting the resulting score(s)
+        # into the Opus.
+        if documentRoot.tag == f'{MEI_NS}meiCorpus':
+            if number is None:
+                self.stream = stream.Opus()
+            meiRoots: list[Element] = documentRoot.findall(f'*/{MEI_NS}mei')
+            for scoreIdx, meiRoot in enumerate(meiRoots):
+                if number is None:
+                    score = MeiReader(meiRoot).run()
+                    self.stream.append(score)
+                else:
+                    # we only want a particular score
+                    scoreNum: int = scoreIdx + 1
+                    if number == scoreNum:
+                        self.stream = MeiReader(meiRoot).run()
+                        break
+        elif documentRoot.tag == f'{MEI_NS}mei':
+            self.stream = MeiReader(documentRoot).run()
+        else:
+            # bad root tag
+            raise MeiElementError(WRONG_ROOT_ELEMENT.format(documentRoot.tag))
 
         output: stream.Stream = self.stream
 
         if t.TYPE_CHECKING:
             # self.stream is a property defined in SubConverter, and it's not
             # type-hinted properly.  But we know what this is.
-            assert isinstance(output, (stream.Score, stream.Part, stream.Opus))
+            assert isinstance(output, (stream.Score, stream.Opus))
 
         return output
 
@@ -71,9 +110,10 @@ class MEIConverter(SubConverter):
 
         * filePath: Full pathname to the file containing MEI data as a string or Path.
 
-        * number: Unused in this class. Default is ``None``.
+        * number: One-based score number within `<meiCorpus>`. Default is `None`.
 
         Returns the music21 objects corresponding to the MEI file.
+        :raises: :exc:`MeiValidityError` when the MEI file is not valid XML.
         '''
         # In Python 3 we try the three most likely encodings to work. (UTF-16 is outputted from
         # "sibmei", the Sibelius-to-MEI exporter).  And sometimes latin-1 characters can work
@@ -95,7 +135,7 @@ class MEIConverter(SubConverter):
         if t.TYPE_CHECKING:
             # self.stream is a property defined in SubConverter, and it's not
             # type-hinted properly.  But we know what this is.
-            assert isinstance(self.stream, (stream.Score, stream.Part, stream.Opus))
+            assert isinstance(self.stream, (stream.Score, stream.Opus))
 
         return self.stream
 

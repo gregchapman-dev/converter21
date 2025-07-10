@@ -174,7 +174,7 @@ tool.
 
 '''
 import typing as t
-from xml.etree.ElementTree import Element, ParseError, fromstring, ElementTree
+from xml.etree.ElementTree import Element
 import re
 import html
 
@@ -248,11 +248,10 @@ _IGNORE_UNPROCESSED = (
 
 # Text Strings for Error Conditions
 # -----------------------------------------------------------------------------
-# NOTE: these are all collected handily at the top for two reasons: help you find the easier, and
+# NOTE: these are all collected handily here for two reasons: help you find the easier, and
 #       help you translate them easier
-_TEST_FAILS = 'MEI module had {} failures and {} errors; run music21/mei/base.py to find out more.'
-_INVALID_XML_DOC = 'MEI document is not valid XML.'
-_WRONG_ROOT_ELEMENT = 'Root element should be <mei> in the MEI namespace, not <{}>.'
+INVALID_XML_DOC = 'MEI document is not valid XML.'
+WRONG_ROOT_ELEMENT = 'Root element should be <mei> in the MEI namespace, not <{}>.'
 _UNKNOWN_TAG = 'Found unexpected tag while parsing MEI: <{}>.'
 _UNEXPECTED_ATTR_VALUE = 'Unexpected value for "{}" attribute: {}, ignoring.'
 _SEEMINGLY_NO_PARTS = 'There appear to be no <staffDef> tags in this score.'
@@ -275,16 +274,13 @@ class MeiReader:
     A :class:`MeiReader` instance manages the conversion of a MEI document into music21
     objects.
 
-    If ``theDocument`` does not have <mei> as the root element, the class raises an
-    :class:`MeiElementError`. If ``theDocument`` is not a valid XML file, the class raises an
-    :class:`MeiValidityError`.
-
-    :param str theDocument: A string containing a MEI document.
+    If ``theDocumentRoot`` does not have <mei> or <meiCorpus> as the root element, the
+    class raises an :class:`MeiElementError`.
+    :param str theDocumentRoot: An Element containing the entire MEI file (parsed as XML).
     :raises: :exc:`MeiElementError` when the root element is not <mei>
-    :raises: :exc:`MeiValidityError` when the MEI file is not valid XML.
     '''
 
-    def __init__(self, theDocument: str | None = None) -> None:
+    def __init__(self, theDocumentRoot: Element | None = None) -> None:
         M21Utilities.adjustMusic21Behavior()
 
         #  The __init__() documentation doesn't isn't processed by Sphinx,
@@ -296,22 +292,12 @@ class MeiReader:
         self.documentRoot: Element
         self.meiVersion: str
 
-        if theDocument is None:
+        if theDocumentRoot is None:
             # Without this, the class can't be pickled.
             self.documentRoot = Element(f'{MEI_NS}mei')
             self.meiVersion = '5.0+CMN'
         else:
-            try:
-                self.documentRoot = fromstring(theDocument)
-            except ParseError as parseErr:
-                environLocal.warn(
-                    '\n\nERROR: Parsing the MEI document with ElementTree failed.')
-                environLocal.warn(f'We got the following error:\n{parseErr}')
-                raise MeiValidityError(_INVALID_XML_DOC)
-
-            if isinstance(self.documentRoot, ElementTree):
-                self.documentRoot = self.documentRoot.getroot()
-
+            self.documentRoot = theDocumentRoot
             self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
             if not self.meiVersion:
                 raise MeiAttributeError('No @meiversion on root element.')
@@ -327,8 +313,9 @@ class MeiReader:
                 if self.meiVersion.endswith('Neumes'):
                     raise MeiAttributeError('@meiversion "Neumes" not supported')
 
-            if f'{MEI_NS}mei' != self.documentRoot.tag:
-                raise MeiElementError(_WRONG_ROOT_ELEMENT.format(self.documentRoot.tag))
+            if self.documentRoot.tag not in (f'{MEI_NS}mei', f'{MEI_NS}meiCorpus'):
+                # should never happen (see MEIConverter), but just in case.
+                raise MeiElementError(WRONG_ROOT_ELEMENT.format(self.documentRoot.tag))
 
         # This defaultdict stores extra, music21-specific attributes that we add to elements to
         # help importing. The key is an element's @xml:id, and the value is a regular dict with
@@ -446,7 +433,7 @@ class MeiReader:
             tuple[m21.base.Music21Object, m21.base.Music21Object, str]
         ] = []
 
-    def run(self) -> stream.Score | stream.Part | stream.Opus:
+    def run(self) -> stream.Score:
         '''
         Run conversion of the internal MEI document to produce a music21 object.
 

@@ -161,8 +161,11 @@ class MeiScore:
         elif self.meiVersion.startswith('5'):
             tb.start('mei', {
                 'xmlns': 'http://www.music-encoding.org/ns/mei',
-                'meiversion': '5.0+CMN'
+                'meiversion': '5.1+CMN'
             })
+        elif not self.meiVersion:
+            # empty version means we already put in in <meiCorpus>
+            tb.start('mei', {})
 
         # meiHead
         self.metadata.makeRootElement(tb)
