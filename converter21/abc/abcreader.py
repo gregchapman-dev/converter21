@@ -99,7 +99,7 @@ class AbcReader:
                     mf.attrib['name'] = 'dcterms:description'
                     continue
                 if name in ('origin', 'area'):
-                    if ';' in mf.text or ',' in mf.text:
+                    if mf.text and (';' in mf.text or ',' in mf.text):
                         # locale (city, town, or village) of composition
                         mf.attrib['name'] = 'humdrum:OPC'
                     else:
