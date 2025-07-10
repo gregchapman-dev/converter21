@@ -9,7 +9,10 @@
 # ------------------------------------------------------------------------------
 # import typing as t
 import re
+from xml.etree.ElementTree import Element
+
 import music21 as m21
+
 from converter21.abc.abc2xml import getXmlDocs
 from converter21.abc.abc2xml import fixDoctype
 from converter21.abc.abc2xml import expand_abc_include
@@ -32,8 +35,8 @@ class AbcReader:
         abcNumbers: list[str] = []
         numStr: str
         if not self.abcTuneByNumber:
-            # a bit of code stolen from getXmlDocs that finds the X:n number
-            # for each tune (if there's more than one tune)
+            # a bit of code stolen from getXmlDocs that finds the X:n number for
+            # each tune (if there's more than one tune), and the associated tune.
             abctext: str = expand_abc_include(self.abcString)
             fragments: list[str] = re.split(r'^\s*X:', abctext, flags=re.M)
             preamble: str = fragments[0]
@@ -48,9 +51,11 @@ class AbcReader:
 
         if number is None:
             # all the tunes in the ABC data
-            xmlStrs = [
-                fixDoctype(xmlDoc) for xmlDoc in getXmlDocs(self.abcString, num=1000 * 1000)
-            ]
+            xmlDocs: list[Element] = getXmlDocs(self.abcString, num=1000 * 1000)
+            for xmlDoc in xmlDocs:
+                self.tweakXmlDoc(xmlDoc)
+                xmlStr: str = fixDoctype(xmlDoc)
+                xmlStrs.append(xmlStr)
             abcNumbers = [str(key) for key in self.abcTuneByNumber]
         else:
             numStr = str(number)
@@ -58,7 +63,9 @@ class AbcReader:
                 raise ABCImportException(
                     f'cannot find requested reference number in source file: {number}'
                 )
-            xmlStrs = [fixDoctype(getXmlDocs(self.abcTuneByNumber[numStr])[0])]
+            xmlDoc = getXmlDocs(self.abcTuneByNumber[numStr])[0]
+            self.tweakXmlDoc(xmlDoc)
+            xmlStrs = [fixDoctype(xmlDoc)]
             abcNumbers = [numStr]
 
         if len(xmlStrs) == 1:
@@ -76,3 +83,30 @@ class AbcReader:
             opus.coreAppend(score)
         opus.coreElementsChanged()
         return opus
+
+    @staticmethod
+    def tweakXmlDoc(xmlDoc: Element):
+        # munge any miscellaneous metadata names (e.g. 'notes') into music21-style
+        # namespaced names (e.g. 'dcterms:description')
+        miscfields = xmlDoc.findall('*/*/miscellaneous-field')
+        for mf in miscfields:
+            if 'name' in mf.attrib:
+                name: str = mf.attrib['name']
+                if name == 'notes':
+                    mf.attrib['name'] = 'dcterms:description'
+                    continue
+                if name == 'history':
+                    mf.attrib['name'] = 'dcterms:description'
+                    continue
+                if name in ('origin', 'area'):
+                    if ';' in mf.text or ',' in mf.text:
+                        # locale (city, town, or village) of composition
+                        mf.attrib['name'] = 'humdrum:OPC'
+                    else:
+                        # country of composition
+                        mf.attrib['name'] = 'humdrum:OCY'
+                    continue
+                if name == 'book':
+                    # parentTitle
+                    mf.attrib['name'] = 'humdrum:OPR'
+
