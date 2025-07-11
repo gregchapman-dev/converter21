@@ -70,12 +70,16 @@ class MEIConverter(SubConverter):
         # for each enclosed <mei> element, putting the resulting score(s)
         # into the Opus.
         if documentRoot.tag == f'{MEI_NS}meiCorpus':
+            meiVersion: str = documentRoot.attrib.get('meiversion', '')
+            if not meiVersion:
+                raise MeiAttributeError('No @meiversion on root element.')
+
             if number is None:
                 self.stream = stream.Opus()
-            meiRoots: list[Element] = documentRoot.findall(f'*/{MEI_NS}mei')
+            meiRoots: list[Element] = documentRoot.findall(f'./{MEI_NS}mei')
             for scoreIdx, meiRoot in enumerate(meiRoots):
                 if number is None:
-                    score = MeiReader(meiRoot).run()
+                    score = MeiReader(meiRoot, meiVersion).run()
                     self.stream.append(score)
                 else:
                     # we only want a particular score

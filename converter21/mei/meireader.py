@@ -280,7 +280,11 @@ class MeiReader:
     :raises: :exc:`MeiElementError` when the root element is not <mei>
     '''
 
-    def __init__(self, theDocumentRoot: Element | None = None) -> None:
+    def __init__(
+        self,
+        theDocumentRoot: Element | None = None,
+        meiVersion: str | None = None  # None means look in theDocumentRoot
+    ) -> None:
         M21Utilities.adjustMusic21Behavior()
 
         #  The __init__() documentation doesn't isn't processed by Sphinx,
@@ -298,7 +302,9 @@ class MeiReader:
             self.meiVersion = '5.0+CMN'
         else:
             self.documentRoot = theDocumentRoot
-            self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
+            self.meiVersion = meiVersion
+            if not self.meiVersion:
+                self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
             if not self.meiVersion:
                 raise MeiAttributeError('No @meiversion on root element.')
             if not (self.meiVersion[0] in ('5', '4')):

@@ -96,8 +96,8 @@ class MeiWriter:
         elif self.meiVersion.startswith('5'):
             prefix = (
                 '''<?xml version="1.0" encoding="UTF-8"?>
-<?xml-model href="https://music-encoding.org/schema/5.0/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
-<?xml-model href="https://music-encoding.org/schema/5.0/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<?xml-model href="https://music-encoding.org/schema/5.1/mei-CMN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/5.1/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
 '''
             )
         else:
@@ -118,6 +118,7 @@ class MeiWriter:
                 fp.write(
                     '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0.1">'
                 )
+            fp.write('\n')
 
             # Here is where we might put any opus.metadata items in <meiCorpus><meiHead>.
             # Nothing for now, though.
@@ -137,15 +138,15 @@ class MeiWriter:
             if writeMeiCorpus:
                 level = 1
             indent(meiElement, space='   ', level=level)
-
             # Write to the output MEI XML file
+            fp.write('   ')
             ElementTree(meiElement).write(fp, encoding='unicode')
+            fp.write('\n')
 
             # clean up all the notes-to-self MeiScore wrote in the score.
             meiScore.deannotateScore()
 
         if writeMeiCorpus:
-            fp.write('</meiCorpus>')
-        fp.write('\n')
+            fp.write('</meiCorpus>\n')
 
         return True
