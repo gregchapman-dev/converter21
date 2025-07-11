@@ -172,12 +172,7 @@ class MeiMetadata:
         # unpublished, so we use <unpub> to say that.  This pubStmt will
         # always be non-empty, so create/append in one step
         pubStmt: MeiElement = fileDesc.appendSubElement('pubStmt')
-        unpub: MeiElement = pubStmt.appendSubElement('unpub')
-        unpub.text = (
-            '''This MEI file was created by converter21's MEI writer. When
-                   published, this unpub element should be removed, and the
-                   enclosing pubStmt element should be properly filled out.'''
-        )
+        pubStmt.appendSubElement('unpub')
 
         # sourceDesc: There are potentially multiple sources here, depending on what
         # metadata items we find.  One for the digital source, one for the printed

@@ -302,8 +302,9 @@ class MeiReader:
             self.meiVersion = '5.0+CMN'
         else:
             self.documentRoot = theDocumentRoot
-            self.meiVersion = meiVersion
-            if not self.meiVersion:
+            if meiVersion:
+                self.meiVersion = meiVersion
+            else:
                 self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
             if not self.meiVersion:
                 raise MeiAttributeError('No @meiversion on root element.')

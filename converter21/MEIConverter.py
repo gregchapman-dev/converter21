@@ -23,6 +23,7 @@ from music21.converter.subConverters import SubConverter
 from converter21.mei import MeiReader, MEI_NS, INVALID_XML_DOC, WRONG_ROOT_ELEMENT
 from converter21.mei import MeiValidityError
 from converter21.mei import MeiElementError
+from converter21.mei import MeiAttributeError
 from converter21.mei import MeiWriter
 
 environLocal = environment.Environment('converter21.mei.meireader')
