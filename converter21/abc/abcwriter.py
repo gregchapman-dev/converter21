@@ -105,7 +105,7 @@ class AbcWriter:
                 scoreAbcStr, _ = convertMusicXMLToABC(xmlStr)
 
                 if abcStr:
-                    abcStr += '\n\n'
+                    abcStr += '\n'
 
                 # remove the bad 'X:1' and replace with f'X:{number}'
                 if scoreAbcStr[:4] == 'X:1\n':
