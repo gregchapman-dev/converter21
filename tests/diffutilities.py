@@ -24,36 +24,89 @@ class DiffUtilities:
         inFmt: str,
         outFmt: str,
         outExt: str,
+        writeUsingVerovio: bool = False,
+        convertInputToMeiUsingVerovioBeforeReading: bool = False,
         scoreNum: int | None = None
     ):
         print('music21 version:', VERSION_STR, file=sys.stderr)
         converter21.register()
-        print(f'Parsing {inFmt} file: {inputPath}')
-        scoreOrOpus1 = m21.converter.parse(
-            inputPath,
-            format=inFmt,
-            number=scoreNum,
-            forceSource=True
-        )
+
+        if convertInputToMeiUsingVerovioBeforeReading:
+            if inFmt != 'humdrum':
+                raise Exception(
+                    'convertInputToMeiUsingVerovioBeforeReading requires Humdrum input'
+                )
+            meiPath = Path(tempfile.gettempdir())
+            meiPath /= inputPath.name
+            meiPath = meiPath.with_suffix('.mei')
+            print(f'Converting humdrum file: {inputPath} to mei using Verovio')
+            subprocess.run(
+                ['verovio', '-a', '-t', 'mei', '-o', str(meiPath), str(inputPath)],
+                check=True,
+                capture_output=True
+            )
+
+            print(f'Parsing Verovio-produced mei file: {meiPath}')
+            # pretend we were passed this mei input file
+            inputPath = meiPath
+            inFmt = 'mei'
+        else:
+            print(f'Parsing {inFmt} file: {inputPath}')
+
+        if inFmt == 'pickled':
+            scoreOrOpus1 = m21.converter.thaw(inputPath)
+        else:
+            scoreOrOpus1 = m21.converter.parse(
+                inputPath,
+                format=inFmt,
+                number=scoreNum,
+                forceSource=True
+            )
 
         assert isinstance(scoreOrOpus1, (m21.stream.Score, m21.stream.Opus))
         assert scoreOrOpus1.isWellFormedNotation()
 
-        success: bool = True
-        writePath = Path(tempfile.gettempdir())
-        writePath /= (inputPath.stem + '_Written')
-        writePath = writePath.with_suffix(f'.{outExt}')
-        print(f'Writing {outFmt} file: {writePath}')
+        if inFmt in ('musicxml', 'mxl'):
+            # Some MusicXML files have abbreviations instead of chordKinds (e.g. 'min' instead of
+            # the correct 'minor').  Fix that before the diff is performed.
+            M21Utilities.fixupBadChordKinds(scoreOrOpus1, inPlace=True)
 
-        # Use Stream.write instead of Opus.write (which will incorrectly
-        # split into multiple files, one per score)
-        # success = score1.write(fp=writePath, fmt=outFmt, makeNotation=False)
-        success = m21.stream.Stream.write(
-            scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
-        )
-        assert success
+            # Some MusicXML files have beams that go 'start'/'continue' when they should be
+            # 'start'/'stop'. fixupBadBeams notices that the next beam is a 'start', or is
+            # not present at all, and therefore patches that 'continue' to be a 'stop'.
+            M21Utilities.fixupBadBeams(scoreOrOpus1, inPlace=True)
 
-        if inFmt == outFmt:
+        if writeUsingVerovio:
+            if inFmt != 'humdrum' or outFmt != 'mei':
+                raise Exception(
+                    'bad args: writeUsingVerovio requires Humdrum input and MEI output'
+                )
+            # convert Humdrum input file to MEI using Verovio
+            writePath = Path(tempfile.gettempdir())
+            writePath /= inputPath.name
+            writePath = writePath.with_suffix('.mei')
+            print(f'Writing mei file with Verovio: {writePath}')
+            subprocess.run(
+                ['verovio', '-a', '-t', 'mei', '-o', str(writePath), str(inputPath)],
+                check=True,
+                capture_output=True
+            )
+        else:
+            success: bool = True
+            writePath = Path(tempfile.gettempdir())
+            writePath /= (inputPath.stem + '_Written')
+            writePath = writePath.with_suffix(f'.{outExt}')
+            print(f'Writing {outFmt} file: {writePath}')
+
+            # Use Stream.write instead of Opus.write (which will incorrectly
+            # split into multiple files, one per score)
+            # success = score1.write(fp=writePath, fmt=outFmt, makeNotation=False)
+            success = m21.stream.Stream.write(
+                scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
+            )
+            assert success
+
+        if inFmt == outFmt and inFmt != 'mxl':
             # compare with bbdiff:
             subprocess.run(['bbdiff', str(inputPath), str(writePath)], check=False)
 

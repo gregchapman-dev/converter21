@@ -16,7 +16,7 @@ args = parser.parse_args()
 
 DiffUtilities.runShowDiff(
     inputPath=Path(args.input_file),
-    inFmt='musicxml',
+    inFmt='abc',
     outFmt='mei',
     outExt='mei',
     scoreNum=int(args.num) if args.num is not None else None
