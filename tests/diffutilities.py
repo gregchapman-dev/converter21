@@ -1,3 +1,4 @@
+import typing as t
 from pathlib import Path
 import tempfile
 import sys
@@ -13,9 +14,11 @@ from musicdiff import Comparison
 from musicdiff import DetailLevel
 
 import converter21
+from converter21 import M21Utilities
 
 
 # pylint: disable=useless-return
+# pylint: disable=broad-exception-raised
 
 class DiffUtilities:
     @staticmethod
@@ -67,6 +70,10 @@ class DiffUtilities:
         assert scoreOrOpus1.isWellFormedNotation()
 
         if inFmt in ('musicxml', 'mxl'):
+            # We know that MusicXML files can only contain one score.
+            if t.TYPE_CHECKING:
+                assert isinstance(scoreOrOpus1, m21.stream.Score)
+
             # Some MusicXML files have abbreviations instead of chordKinds (e.g. 'min' instead of
             # the correct 'minor').  Fix that before the diff is performed.
             M21Utilities.fixupBadChordKinds(scoreOrOpus1, inPlace=True)
