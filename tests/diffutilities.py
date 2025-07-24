@@ -372,12 +372,7 @@ class DiffUtilities:
                 # split into multiple files, one per score)
                 # success = scoreOrOpus1.write(fp=writePath, fmt=outFmt, makeNotation=False)
                 success = m21.stream.Stream.write(
-                    scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False,
-                    addRecipSpine = (
-                        inputPath.name == 'test-rhythms.krn'
-                        and inFmt == 'humdrum'
-                        and outFmt == 'humdrum'
-                    )
+                    scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
                 )
                 if not success:
                     print('export failed')
