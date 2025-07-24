@@ -4,6 +4,8 @@ import tempfile
 import sys
 import subprocess
 import json
+import random
+
 from io import TextIOWrapper
 
 from music21.base import VERSION_STR
@@ -209,6 +211,11 @@ class DiffUtilities:
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
     ):
+        # Generate a random integer between 1 and 1,000,000,000 (inclusive)
+        # We put this in written file names, so different tests don't
+        # overwrite each other's output files.
+        uniqueInt: int = random.randint(1, 1000*1000*1000)
+
         goodPath: Path = Path(str(listPath.parent) + '/../results/' + str(listPath.stem)
                                 + '.goodList.txt')
         badPath: Path = Path(str(listPath.parent) + '/../results/' + str(listPath.stem)
@@ -238,6 +245,7 @@ class DiffUtilities:
                                 inFmt,
                                 outFmt,
                                 outExt,
+                                uniqueInt,
                                 writeUsingVerovio,
                                 convertInputToMeiUsingVerovioBeforeReading):
                             resultsf.flush()
@@ -258,6 +266,7 @@ class DiffUtilities:
         inFmt: str,
         outFmt: str,
         outExt: str,
+        uniqueInt: int,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
     ) -> bool:
@@ -265,6 +274,27 @@ class DiffUtilities:
         print(f'{inputPath}: ', end='')
         print(f'{inputPath}: ', end='', file=results)
         results.flush()
+
+        if convertInputToMeiUsingVerovioBeforeReading:
+            try:
+                meiPath = Path(tempfile.gettempdir())
+                meiPath /= inputPath.name
+                meiPath = meiPath.with_suffix(f'.{uniqueInt}.mei')
+                subprocess.run(
+                    ['verovio', '-a', '-t', 'mei', '-o', str(meiPath), str(inputPath)],
+                    check=True,
+                    capture_output=True
+                )
+            except KeyboardInterrupt:
+                sys.exit(0)
+            except:
+                print('conversion to mei with verovio failed')
+                print('conversion to mei with verovio failed', file=results)
+                results.flush()
+                return False
+
+            inputPath = meiPath
+            inFmt = 'mei'
 
         # import into music21
         try:
@@ -316,36 +346,51 @@ class DiffUtilities:
             # not present at all, and therefore patches that 'continue' to be a 'stop'.
             M21Utilities.fixupBadBeams(scoreOrOpus1, inPlace=True)
 
-        # export score to outFmt (without any makeNotation fixups)
-
-        try:
-            success: bool = True
-            writePath = Path(tempfile.gettempdir())
-            writePath /= (inputPath.stem + '_Written')
-            writePath = writePath.with_suffix('.' + outExt)
-            # Use Stream.write instead of Opus.write (which will incorrectly
-            # split into multiple files, one per score)
-            # success = scoreOrOpus1.write(fp=writePath, fmt=outFmt, makeNotation=False)
-            success = m21.stream.Stream.write(
-                scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False,
-                addRecipSpine = (
-                    inputPath.name == 'test-rhythms.krn'
-                    and inFmt == 'humdrum'
-                    and outFmt == 'humdrum'
+        if writeUsingVerovio:
+            if inFmt != 'humdrum' or outFmt != 'mei':
+                raise Exception(
+                    'bad args: writeUsingVerovio requires Humdrum input and MEI output'
                 )
+            # convert Humdrum input file to MEI using Verovio
+            writePath = Path(tempfile.gettempdir())
+            writePath /= inputPath.name
+            writePath = writePath.with_suffix(f'.{uniqueInt}.mei')
+            print(f'Writing mei file with Verovio: {writePath}')
+            subprocess.run(
+                ['verovio', '-a', '-t', 'mei', '-o', str(writePath), str(inputPath)],
+                check=True,
+                capture_output=True
             )
-            if not success:
-                print('export failed')
-                print('export failed', file=results)
+        else:
+            # export score to outFmt (without any makeNotation fixups)
+            try:
+                success: bool = True
+                writePath = Path(tempfile.gettempdir())
+                writePath /= (inputPath.stem + '_Written')
+                writePath = writePath.with_suffix(f'.{uniqueInt}.' + outExt)
+                # Use Stream.write instead of Opus.write (which will incorrectly
+                # split into multiple files, one per score)
+                # success = scoreOrOpus1.write(fp=writePath, fmt=outFmt, makeNotation=False)
+                success = m21.stream.Stream.write(
+                    scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False,
+                    addRecipSpine = (
+                        inputPath.name == 'test-rhythms.krn'
+                        and inFmt == 'humdrum'
+                        and outFmt == 'humdrum'
+                    )
+                )
+                if not success:
+                    print('export failed')
+                    print('export failed', file=results)
+                    results.flush()
+                    return False
+            except KeyboardInterrupt:
+                sys.exit(0)
+            except Exception as e:
+                print(f'export crash: {e}')
+                print(f'export crash: {e}', file=results)
                 results.flush()
                 return False
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except Exception as e:
-            print(f'export crash: {e}')
-            print(f'export crash: {e}', file=results)
-            results.flush()
-            return False
 
         # and then try to parse the exported file
 
