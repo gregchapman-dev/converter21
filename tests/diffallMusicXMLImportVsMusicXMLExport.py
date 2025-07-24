@@ -15,7 +15,7 @@ converter21.register()
 parser = argparse.ArgumentParser()
 parser.add_argument(
         'list_file',
-        help='file containing a lis of the .musicxml/.mxl files to compare (full paths)')
+        help='file containing a list of the files to read/write/compare (full paths)')
 args = parser.parse_args()
 
 listPath: Path = Path(args.list_file)

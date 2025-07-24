@@ -268,7 +268,7 @@ class DiffUtilities:
 
         # import into music21
         try:
-            scoreOrOpus1 = m21.converter.parse(inputPath, format='musicxml', forceSource=True)
+            scoreOrOpus1 = m21.converter.parse(inputPath, format=inFmt, forceSource=True)
             if scoreOrOpus1 is None:
                 print('scoreOrOpus1 creation failure')
                 print('scoreOrOpus1 creation failure', file=results)
@@ -327,7 +327,12 @@ class DiffUtilities:
             # split into multiple files, one per score)
             # success = scoreOrOpus1.write(fp=writePath, fmt=outFmt, makeNotation=False)
             success = m21.stream.Stream.write(
-                scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
+                scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False,
+                addRecipSpine = (
+                    inputPath.name == 'test-rhythms.krn'
+                    and inFmt == 'humdrum'
+                    and outFmt == 'humdrum'
+                )
             )
             if not success:
                 print('export failed')
