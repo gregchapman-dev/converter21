@@ -52,7 +52,7 @@ osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do scr
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsABCExport.py ~/Documents/test/teststuff/fileList17.txt"'
 
 # Compare Humdrum import vs ABC export/reimport (fileList18)
-osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumdrumImportVsABCExport.py ~/Documents/test/teststuff/fileList18.txt"'
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumImportVsABCExport.py ~/Documents/test/teststuff/fileList18.txt"'
 
 # Compare MEI v4 import vs MEI export/reimport (fileListMei)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMeiExport.py ~/Documents/test/teststuff/fileListMei.txt"'
