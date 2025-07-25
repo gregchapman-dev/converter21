@@ -27,6 +27,33 @@ osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do scr
 # Compare MEI import vs MusicXML export/reimport (fileList9)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMusicXMLExport.py ~/Documents/test/teststuff/fileList9.txt"'
 
+# Compare ABC import vs MusicXML export/reimport (fileList10)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallABCImportVsMusicXMLExport.py ~/Documents/test/teststuff/fileList10.txt"'
+
+# Compare ABC import vs Humdrum export/reimport (fileList11)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallABCImportVsHumdrumExport.py ~/Documents/test/teststuff/fileList11.txt"'
+
+# Compare ABC import vs MEI export/reimport (fileList12)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallABCImportVsMeiExport.py ~/Documents/test/teststuff/fileList12.txt"'
+
+# Compare ABC import vs ABC export/reimport (fileList13)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallABCImportVsABCExport.py ~/Documents/test/teststuff/fileList13.txt"'
+
+# Verovio convert ABC to MEI, then compare MEI import vs MEI export/reimport (fileList14)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallABCVerovioVsMeiExport.py ~/Documents/test/teststuff/fileList14.txt"'
+
+# Compare ABC import vs verovio convert ABC to MEI then MEI import (fileList15)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallABCVsMeiImport.py ~/Documents/test/teststuff/fileList15.txt"'
+
+# Compare MusicXML import vs ABC export/reimport (fileList16)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMusicXMLImportVsABCExport.py ~/Documents/test/teststuff/fileList16.txt"'
+
+# Compare MEI import vs ABC export/reimport (fileList17)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsABCExport.py ~/Documents/test/teststuff/fileList17.txt"'
+
+# Compare Humdrum import vs ABC export/reimport (fileList18)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumdrumImportVsABCExport.py ~/Documents/test/teststuff/fileList18.txt"'
+
 # Compare MEI v4 import vs MEI export/reimport (fileListMei)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMeiExport.py ~/Documents/test/teststuff/fileListMei.txt"'
 
