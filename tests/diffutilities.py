@@ -47,7 +47,7 @@ class DiffUtilities:
             meiPath = meiPath.with_suffix('.mei')
             print(f'Converting humdrum file: {inputPath} to mei using Verovio')
             subprocess.run(
-                ['verovio', '-a', '-t', 'mei', '-o', str(meiPath), str(inputPath)],
+                ['verovio', '-a', '-f', inFmt, '-t', 'mei', '-o', str(meiPath), str(inputPath)],
                 check=True,
                 capture_output=True
             )
@@ -351,16 +351,26 @@ class DiffUtilities:
                 raise Exception(
                     'bad args: writeUsingVerovio requires Humdrum or ABC input and MEI output'
                 )
-            # convert Humdrum input file to MEI using Verovio
-            writePath = Path(tempfile.gettempdir())
-            writePath /= inputPath.name
-            writePath = writePath.with_suffix(f'.{uniqueInt}.mei')
-            print(f'Writing mei file with Verovio: {writePath}')
-            subprocess.run(
-                ['verovio', '-a', '-t', 'mei', '-o', str(writePath), str(inputPath)],
-                check=True,
-                capture_output=True
-            )
+            try:
+                # convert Humdrum input file to MEI using Verovio
+                writePath = Path(tempfile.gettempdir())
+                writePath /= inputPath.name
+                writePath = writePath.with_suffix(f'.{uniqueInt}.mei')
+                print(f'Writing mei file with Verovio: {writePath}')
+                subprocess.run(
+                    ['verovio', '-a', '-f', inFmt, '-t', 'mei', '-o',
+                        str(writePath), str(inputPath)],
+                    check=True,
+                    capture_output=True
+                )
+            except KeyboardInterrupt:
+                sys.exit(0)
+            except Exception as e:
+                print(f'verovio crash: {e}')
+                print(f'verovio crash: {e}', file=results)
+                results.flush()
+                return False
+
         else:
             # export score to outFmt (without any makeNotation fixups)
             try:
