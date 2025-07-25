@@ -347,9 +347,9 @@ class DiffUtilities:
             M21Utilities.fixupBadBeams(scoreOrOpus1, inPlace=True)
 
         if writeUsingVerovio:
-            if inFmt != 'humdrum' or outFmt != 'mei':
+            if inFmt not in ('humdrum', 'abc') or outFmt != 'mei':
                 raise Exception(
-                    'bad args: writeUsingVerovio requires Humdrum input and MEI output'
+                    'bad args: writeUsingVerovio requires Humdrum or ABC input and MEI output'
                 )
             # convert Humdrum input file to MEI using Verovio
             writePath = Path(tempfile.gettempdir())
