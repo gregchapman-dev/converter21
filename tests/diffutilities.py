@@ -23,7 +23,10 @@ from converter21 import M21Utilities
 # pylint: disable=useless-return
 # pylint: disable=broad-exception-raised
 
+DEFAULT_DETAIL_LEVEL: int = DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+
 class DiffUtilities:
+
     @staticmethod
     def runShowDiff(
         inputPath: Path,
@@ -32,6 +35,7 @@ class DiffUtilities:
         outExt: str,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
+        detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL,
         scoreNum: int | None = None
     ):
         print('music21 version:', VERSION_STR, file=sys.stderr)
@@ -210,11 +214,12 @@ class DiffUtilities:
         outExt: str,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
+        detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL
     ):
         # Generate a random integer between 1 and 1,000,000,000 (inclusive)
         # We put this in written file names, so different tests don't
         # overwrite each other's output files.
-        uniqueInt: int = random.randint(1, 1000*1000*1000)
+        uniqueInt: int = random.randint(1, 1000 * 1000 * 1000)
 
         goodPath: Path = Path(str(listPath.parent) + '/../results/' + str(listPath.stem)
                                 + '.goodList.txt')
@@ -247,7 +252,8 @@ class DiffUtilities:
                                 outExt,
                                 uniqueInt,
                                 writeUsingVerovio,
-                                convertInputToMeiUsingVerovioBeforeReading):
+                                convertInputToMeiUsingVerovioBeforeReading,
+                                detail):
                             resultsf.flush()
                             print(file, file=goodf)
                             goodf.flush()
@@ -269,6 +275,7 @@ class DiffUtilities:
         uniqueInt: int,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
+        detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL
     ) -> bool:
         # returns True if the test passed (no musicdiff differences found)
         print(f'{inputPath}: ', end='')
@@ -287,7 +294,7 @@ class DiffUtilities:
                 )
             except KeyboardInterrupt:
                 sys.exit(0)
-            except:
+            except Exception:
                 print('conversion to mei with verovio failed')
                 print('conversion to mei with verovio failed', file=results)
                 results.flush()
@@ -443,14 +450,8 @@ class DiffUtilities:
             # use musicdiff to compare the two music21 scores,
             # and return whether or not they were identical
             try:
-                annotatedScore1 = AnnScore(
-                    sc1,
-                    DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
-                )
-                annotatedScore2 = AnnScore(
-                    sc2,
-                    DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
-                )
+                annotatedScore1 = AnnScore(sc1, detail)
+                annotatedScore2 = AnnScore(sc2, detail)
 
                 op_list, cost = Comparison.annotated_scores_diff(
                     annotatedScore1, annotatedScore2

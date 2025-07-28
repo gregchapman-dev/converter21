@@ -3,6 +3,7 @@ import argparse
 import sys
 
 import converter21
+from musicdiff import DetailLevel
 from tests.diffutilities import DiffUtilities
 
 # ------------------------------------------------------------------------------
@@ -25,7 +26,8 @@ DiffUtilities.runDiffAll(
     inFmt='abc',
     outFmt='mei',
     outExt='mei',
-    convertInputToMeiUsingVerovioBeforeReading=True
+    convertInputToMeiUsingVerovioBeforeReading=True,
+    detail=DetailLevel.AllObjects | DetailLevel.Metadata  # no Style for ABC
 )
 
 print('done.')
