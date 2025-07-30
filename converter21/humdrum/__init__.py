@@ -30,6 +30,8 @@ from .humdrumfilebase import HumdrumFileBase, TokenPair
 from .humdrumfilestructure import HumdrumFileStructure
 from .humdrumfilecontent import HumdrumFileContent
 from .humdrumfile import HumdrumFile
+from .humdrumfilestream import HumdrumFileStream
+from .humdrumfileset import HumdrumFileSet
 
 from .humdrumtools import ToolTremolo
 

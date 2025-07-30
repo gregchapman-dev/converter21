@@ -633,6 +633,8 @@ class HumdrumFile(HumdrumFileContent):
 
         # pylint: disable=attribute-defined-outside-init
         self.m21Score: m21.stream.Score = m21.stream.Score()
+        self.m21Score.c21_parse_err = self.parseError  # type: ignore
+
         if self.numSyntaxErrorsFixed > 0:
             self.m21Score.c21_syntax_errors_fixed = self.numSyntaxErrorsFixed  # type: ignore
 

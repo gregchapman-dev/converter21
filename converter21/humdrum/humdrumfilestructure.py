@@ -48,6 +48,12 @@ class HumdrumFileStructure(HumdrumFileBase):
             return self.isValid
         return self.analyzeStructure()
 
+    def readStringNoRhythm(self, contents: str) -> bool:
+        # just like readString, but with no analyzeStructure
+        if not super().readString(contents):
+            return self.isValid
+        return True
+
     '''
     //////////////////////////////
     //

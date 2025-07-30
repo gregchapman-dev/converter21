@@ -15,7 +15,7 @@ from music21 import common
 from music21 import stream
 from music21.converter.subConverters import SubConverter
 
-from converter21.humdrum import HumdrumFile
+from converter21.humdrum import HumdrumFileSet
 from converter21.humdrum import HumdrumWriter
 
 class HumdrumConverter(SubConverter):
@@ -28,7 +28,7 @@ class HumdrumConverter(SubConverter):
 
     def __init__(self, **keywords) -> None:
         super().__init__(**keywords)
-        self.humdrumFile: HumdrumFile | None = None
+        self.humdrumFileSet: HumdrumFileSet | None = None
 
     # --------------------------------------------------------------------------
 
@@ -38,17 +38,16 @@ class HumdrumConverter(SubConverter):
         number: int | None = None,
         acceptSyntaxErrors: bool = False,
         **_keywords
-    ) -> stream.Score:
+    ) -> stream.Score | stream.Opus:
         '''
-        Create HumdrumFile object from a string, and create a music21 Stream from it.
+        Create HumdrumFileSet object from a string, and create a music21 Stream from it.
         '''
         # print("parsing krn string", file=sys.stderr)
         try:
-            hf = HumdrumFile(acceptSyntaxErrors=acceptSyntaxErrors)
-            hf.readString(dataString)
-            self.stream = hf.createMusic21Stream()
-            self.stream.c21_parse_err = hf.parseError  # type: ignore
-            self.humdrumFile = hf
+            hfs = HumdrumFileSet(acceptSyntaxErrors=acceptSyntaxErrors)
+            hfs.readString(dataString)
+            self.stream = hfs.createMusic21Stream()
+            self.humdrumFileSet = hfs
         except Exception as e:
             if not acceptSyntaxErrors:
                 raise e
@@ -67,18 +66,17 @@ class HumdrumConverter(SubConverter):
         number: int | None = None,
         acceptSyntaxErrors: bool = False,
         **_keywords
-    ) -> stream.Score:
+    ) -> stream.Score | stream.Opus:
         '''
-        Create HumdrumFile object from a file path, and create a music21 Stream from it.
+        Create HumdrumFileSet object from a file path, and create a music21 Stream from it.
         Note that normally, implementing parseData is sufficient, but Humdrum files
         may be utf-8 or latin-1, so we need to handle various text encodings ourselves.
         '''
         # print("parsing krn file", file=sys.stderr)
         try:
-            hf = HumdrumFile(fileName=filePath, acceptSyntaxErrors=acceptSyntaxErrors)
-            self.stream = hf.createMusic21Stream()
-            self.stream.c21_parse_err = hf.parseError  # type: ignore
-            self.humdrumFile = hf
+            hfs = HumdrumFileSet(fileName=filePath, acceptSyntaxErrors=acceptSyntaxErrors)
+            self.stream = hfs.createMusic21Stream()
+            self.humdrumFileSet = hfs
         except Exception as e:
             if not acceptSyntaxErrors:
                 raise e

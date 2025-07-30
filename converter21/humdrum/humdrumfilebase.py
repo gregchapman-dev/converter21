@@ -128,7 +128,7 @@ class HumdrumFileBase(HumHash):
         '''
         // m_filename: name of the file which was loaded.
         '''
-        # self._fileName: str = None # weirdly, appears not be set or used
+        self._fileName: str = ''
 
         self.acceptSyntaxErrors: bool = acceptSyntaxErrors
         self.numSyntaxErrorsFixed: int = 0
@@ -299,6 +299,7 @@ class HumdrumFileBase(HumHash):
         self._trackEnds = [[]]
         self._barlines = []
         self._segmentLevel = 0
+        self._fileName = ''
         self._ticksPerQuarterNote = -1
         self._idPrefix = ''
         self._strand1d = []
@@ -350,6 +351,45 @@ class HumdrumFileBase(HumHash):
         self.analyzeBaseFromLines()
         # print(funcName(), 'self.isValid =', self.isValid, file=sys.stderr)
         return self.isValid
+
+    @property
+    def fileName(self) -> str:
+        return self._fileName
+
+    @fileName.setter
+    def fileName(self, newName: str):
+        self._fileName = newName
+
+    @property
+    def segmentLevel(self) -> int:
+        return self._segmentLevel
+
+    @segmentLevel.setter
+    def segmentLevel(self, newLevel: int):
+        self._segmentLevel = newLevel
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumFileBase::setFilenameFromSegment -- Update filename based on any
+    //      !!!!SEGMENT: line at the top of the file.
+    '''
+    def setFileNameFromSegment(self) -> None:
+        for line in self.lines():
+            if line.isEmpty:
+                continue
+            if not line.isCommentUniversal:
+                continue
+            if not line.isUniversalReference:
+                continue
+            key: str = line.universalReferenceKey
+            if key != 'SEGMENT':
+                # consider segment levels as well...
+                continue
+            value: str = line.universalReferenceValue
+            if value:
+                self.fileName = value
+                break
 
     '''
     //////////////////////////////
