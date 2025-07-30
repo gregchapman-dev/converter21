@@ -13,9 +13,9 @@ from pathlib import Path
 
 import music21 as m21
 
+from converter21 import M21Utilities
 from converter21.humdrum import HumdrumFileStream
 from converter21.humdrum import HumdrumFile
-from converter21 import M21Utilities
 
 class HumdrumFileSet:
     def __init__(

@@ -20,12 +20,12 @@ __all__ = [
 import typing as t
 from enum import IntEnum, auto
 
-from .HumdrumConverter import HumdrumConverter
-from .MEIConverter import MEIConverter
-from .ABCConverter import ABCConverter
 from .shared import M21Utilities
 from .shared import StreamFreezer
 from .shared import StreamThawer
+from .HumdrumConverter import HumdrumConverter
+from .MEIConverter import MEIConverter
+from .ABCConverter import ABCConverter
 
 class Music21VersionException(Exception):
     # raised if the version of music21 is not recent enough
