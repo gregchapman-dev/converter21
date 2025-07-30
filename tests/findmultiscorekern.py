@@ -33,13 +33,17 @@ if __name__ == "__main__":
             except UnicodeError:
                 with open(pathstr, 'rt', encoding='utf-16') as f:
                     contents = f.read()
-
         contents = contents.split('\n')
         num_end_interps = 0
+        num_segments = 0
         for line in contents:
             if line.startswith('*-'):
                 num_end_interps += 1
+            if line.startswith('!!!!SEGMENT'):
+                num_segments += 1
         if num_end_interps > 1:
             print(f'{pathstr}: {num_end_interps} scores')
+        if num_segments > 1:
+            print(f'{pathstr}: {num_segments} SEGMENTS')
     print('done.')
 

@@ -58,6 +58,11 @@ class HumdrumFileContent(HumdrumFileStructure):
         # can be called from any client that wants notation support (e.g.
         # HumdrumFile.createM21Stream)
 
+        if not self.isStructureAnalyzed:
+            # we will end up here, for example, if someone (cough, HumdrumFileSet/Stream)
+            # did a minimal (HumdrumFileBase) analysis.
+            self.analyzeStructure()
+
         # Might be worth adding to HumdrumFileContent at some point
         # m_multirest = analyzeMultiRest(infile);
 

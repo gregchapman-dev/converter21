@@ -378,7 +378,7 @@ class HumdrumFileBase(HumHash):
         for line in self.lines():
             if line.isEmpty:
                 continue
-            if not line.isCommentUniversal:
+            if not line.isUniversalComment:
                 continue
             if not line.isUniversalReference:
                 continue

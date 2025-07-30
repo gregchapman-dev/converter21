@@ -745,6 +745,7 @@ class HumdrumFile(HumdrumFileContent):
         # have caused us to fix more syntax errors.
         if self.numSyntaxErrorsFixed > 0:
             self.m21Score.c21_syntax_errors_fixed = self.numSyntaxErrorsFixed  # type: ignore
+        self.m21Score.c21_parse_err = self.parseError  # type: ignore
         return self.m21Score
 
     def _prepareForSecondPass(self) -> None:
