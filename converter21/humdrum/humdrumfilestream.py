@@ -90,7 +90,7 @@ class HumdrumFileStream:
             if templine.startswith('**'):
                 if starstarFound:
                     self.newFileBuffer = templine
-                    # already found a **, so thi sone is define as a file
+                    # already found a **, so this one is defined as a file
                     # segment.  Exit from the loop and process the previous
                     # content, waiting until the next read to start with
                     # this line.
@@ -125,12 +125,6 @@ class HumdrumFileStream:
 
             if templine.startswith('*-'):
                 starminusFound = True
-
-            if (starminusFound or starstarFound) and templine[0] not in ('*', '!'):
-                if templine and templine[0] != ' ':
-                    # HumdrumFileStream.cpp has a bunch of m_filelist stuff
-                    # here, that doesn't currently apply.
-                    continue
 
             dataFound = True  # found something other than universal comments
 
