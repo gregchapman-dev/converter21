@@ -318,8 +318,8 @@ class DiffUtilities:
             results.flush()
             sys.exit(0)
         except Exception as e:
-            print(f'scoreOrOpus1 creation crash: {e}')
-            print(f'scoreOrOpus1 creation crash: {e}', file=results)
+            print(f': scoreOrOpus1 creation crash: {e}')
+            print(f': scoreOrOpus1 creation crash: {e}', file=results)
             results.flush()
             return False
 
