@@ -298,8 +298,8 @@ class DiffUtilities:
                 results.flush()
                 sys.exit(0)
             except Exception:
-                print('conversion to mei with verovio failed')
-                print('conversion to mei with verovio failed', file=results)
+                print(': conversion to mei with verovio failed')
+                print(': conversion to mei with verovio failed', file=results)
                 results.flush()
                 return False
 
@@ -310,8 +310,8 @@ class DiffUtilities:
         try:
             scoreOrOpus1 = m21.converter.parse(inputPath, format=inFmt, forceSource=True)
             if scoreOrOpus1 is None:
-                print('scoreOrOpus1 creation failure')
-                print('scoreOrOpus1 creation failure', file=results)
+                print(': scoreOrOpus1 creation failure')
+                print(': scoreOrOpus1 creation failure', file=results)
                 results.flush()
                 return False
         except KeyboardInterrupt:
@@ -324,22 +324,22 @@ class DiffUtilities:
             return False
 
         if not isinstance(scoreOrOpus1, (m21.stream.Score, m21.stream.Opus)):
-            print('scoreOrOpus1 is neither Score nor Opus')
-            print('scoreOrOpus1 is neither Score nor Opus', file=results)
+            print(': scoreOrOpus1 is neither Score nor Opus')
+            print(': scoreOrOpus1 is neither Score nor Opus', file=results)
             results.flush()
             return False
 
         if not scoreOrOpus1.elements:
             # empty score is valid result, but assume diff will be exact
             # (export of empty score fails miserably)
-            print('numDiffs = 0 (empty scoreOrOpus1)')
-            print('numDiffs = 0 (empty scoreOrOpus1)', file=results)
+            print(': numDiffs = 0 (empty scoreOrOpus1)')
+            print(': numDiffs = 0 (empty scoreOrOpus1)', file=results)
             results.flush()
             return True
 
         if not scoreOrOpus1.isWellFormedNotation():
-            print('scoreOrOpus1 not well formed')
-            print('scoreOrOpus1 not well formed', file=results)
+            print(': scoreOrOpus1 not well formed')
+            print(': scoreOrOpus1 not well formed', file=results)
             results.flush()
             return False
 
@@ -367,7 +367,7 @@ class DiffUtilities:
                 writePath = Path(tempfile.gettempdir())
                 writePath /= inputPath.name
                 writePath = writePath.with_suffix(f'.{uniqueInt}.mei')
-                print(f'Writing mei file with Verovio: {writePath}')
+                # print(f'Writing mei file with Verovio: {writePath}')
                 subprocess.run(
                     ['verovio', '-a', '-f', inFmt, '-t', 'mei', '-o',
                         str(writePath), str(inputPath)],
@@ -378,8 +378,8 @@ class DiffUtilities:
                 results.flush()
                 sys.exit(0)
             except Exception as e:
-                print(f'verovio crash: {e}')
-                print(f'verovio crash: {e}', file=results)
+                print(f': verovio crash: {e}')
+                print(f': verovio crash: {e}', file=results)
                 results.flush()
                 return False
 
@@ -397,16 +397,16 @@ class DiffUtilities:
                     scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
                 )
                 if not success:
-                    print('export failed')
-                    print('export failed', file=results)
+                    print(': export failed')
+                    print(': export failed', file=results)
                     results.flush()
                     return False
             except KeyboardInterrupt:
                 results.flush()
                 sys.exit(0)
             except Exception as e:
-                print(f'export crash: {e}')
-                print(f'export crash: {e}', file=results)
+                print(f': export crash: {e}')
+                print(f': export crash: {e}', file=results)
                 results.flush()
                 return False
 
@@ -416,34 +416,34 @@ class DiffUtilities:
             # compare the two music21 scores with musicdiff APIs:
             scoreOrOpus2 = m21.converter.parse(writePath, format=outFmt, forceSource=True)
             if scoreOrOpus2 is None:
-                print('scoreOrOpus2 creation failure')
-                print('scoreOrOpus2 creation failure', file=results)
+                print(': scoreOrOpus2 creation failure')
+                print(': scoreOrOpus2 creation failure', file=results)
                 results.flush()
                 return False
         except KeyboardInterrupt:
             results.flush()
             sys.exit(0)
         except Exception as e:
-            print(f'scoreOrOpus2 creation crash: {e}')
-            print(f'scoreOrOpus2 creation crash: {e}', file=results)
+            print(f': scoreOrOpus2 creation crash: {e}')
+            print(f': scoreOrOpus2 creation crash: {e}', file=results)
             results.flush()
             return False
 
         if not isinstance(scoreOrOpus2, (m21.stream.Score, m21.stream.Opus)):
-            print('scoreOrOpus2 is neither Score nor Opus')
-            print('scoreOrOpus2 is neither Score nor Opus', file=results)
+            print(': scoreOrOpus2 is neither Score nor Opus')
+            print(': scoreOrOpus2 is neither Score nor Opus', file=results)
             results.flush()
             return False
 
         if not scoreOrOpus2.elements:
-            print('scoreOrOpus2 was empty')
-            print('scoreOrOpus2 was empty', file=results)
+            print(': scoreOrOpus2 was empty')
+            print(': scoreOrOpus2 was empty', file=results)
             results.flush()
             return False  # empty scoreOrOpus2 is bad, because scoreOrOpus1 was not empty
 
         if not scoreOrOpus2.isWellFormedNotation():
-            print('scoreOrOpus2 not well formed')
-            print('scoreOrOpus2 not well formed', file=results)
+            print(': scoreOrOpus2 not well formed')
+            print(': scoreOrOpus2 not well formed', file=results)
             results.flush()
             return False
 
