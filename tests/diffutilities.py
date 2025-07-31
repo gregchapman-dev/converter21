@@ -278,9 +278,11 @@ class DiffUtilities:
         detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL
     ) -> bool:
         # returns True if the test passed (no musicdiff differences found)
-        print(f'{inputPath}: ', end='')
-        print(f'{inputPath}: ', end='', file=results)
+        print(f'{inputPath}', end='')
+        print(f'{inputPath}', end='', file=results)
         results.flush()
+
+        origInputPath: Path = inputPath
 
         if convertInputToMeiUsingVerovioBeforeReading:
             try:
@@ -293,6 +295,7 @@ class DiffUtilities:
                     capture_output=True
                 )
             except KeyboardInterrupt:
+                results.flush()
                 sys.exit(0)
             except Exception:
                 print('conversion to mei with verovio failed')
@@ -312,6 +315,7 @@ class DiffUtilities:
                 results.flush()
                 return False
         except KeyboardInterrupt:
+            results.flush()
             sys.exit(0)
         except Exception as e:
             print(f'scoreOrOpus1 creation crash: {e}')
@@ -371,6 +375,7 @@ class DiffUtilities:
                     capture_output=True
                 )
             except KeyboardInterrupt:
+                results.flush()
                 sys.exit(0)
             except Exception as e:
                 print(f'verovio crash: {e}')
@@ -397,6 +402,7 @@ class DiffUtilities:
                     results.flush()
                     return False
             except KeyboardInterrupt:
+                results.flush()
                 sys.exit(0)
             except Exception as e:
                 print(f'export crash: {e}')
@@ -415,6 +421,7 @@ class DiffUtilities:
                 results.flush()
                 return False
         except KeyboardInterrupt:
+            results.flush()
             sys.exit(0)
         except Exception as e:
             print(f'scoreOrOpus2 creation crash: {e}')
@@ -446,10 +453,29 @@ class DiffUtilities:
         score2List: list[m21.stream.Score] = DiffUtilities.getScoreList(scoreOrOpus2)
         DiffUtilities.padWithEmptyScores(score1List, score2List)
 
+        isMultiScore: bool = len(score1List) > 1
+
+        totalNumDiffs: int = 0
+
         for i, (sc1, sc2) in enumerate(zip(score1List, score2List)):
             # use musicdiff to compare the two music21 scores,
             # and return whether or not they were identical
             try:
+                if isMultiScore:
+                    if i == 0:
+                        # we already printed inputPath one time
+                        print(f' (score {i}): ', end='')
+                        print(f' (score {i}): ', end='', file=results)
+                    else:
+                        print(f'{origInputPath} (score {i}): ', end='')
+                        print(f'{origInputPath} (score {i}): ', end='', file=results)
+                else:
+                    # we already printed inputPath one time
+                    print(': ', end='')
+                    print(': ', end='', file=results)
+
+                results.flush()
+
                 annotatedScore1 = AnnScore(sc1, detail)
                 annotatedScore2 = AnnScore(sc2, detail)
 
@@ -457,6 +483,7 @@ class DiffUtilities:
                     annotatedScore1, annotatedScore2
                 )
                 numDiffs = len(op_list)
+                totalNumDiffs += numDiffs
                 print(f'numDiffs = {numDiffs}')
                 print(f'numDiffs = {numDiffs}', file=results)
                 results.flush()
@@ -479,16 +506,22 @@ class DiffUtilities:
                     print(textOut, file=results)
                     results.flush()
 
-                if numDiffs > 0:
-                    return False
-
             except KeyboardInterrupt:
+                results.flush()
                 sys.exit(0)
             except Exception as e:
                 print(f'musicdiff crashed: {e}')
                 print(f'musicdiff crashed: {e}', file=results)
                 results.flush()
                 return False
+
+        if isMultiScore:
+            print(f'{inputPath}: total numDiffs = {totalNumDiffs}')
+            print(f'{inputPath}: total numDiffs = {totalNumDiffs}', file=results)
+            results.flush()
+
+        if totalNumDiffs > 0:
+            return False
 
         return True
 
