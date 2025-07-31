@@ -42,7 +42,9 @@ class HumdrumFileStream:
     '''
     def read(self, infile: HumdrumFile) -> bool:
         # Read from self.lines into the next HumdrumFile.
-        buffer: str = self.newFileBuffer + '\n'
+        buffer: str = ''
+        if self.newFileBuffer:
+            buffer = self.newFileBuffer + '\n'
         self.newFileBuffer = ''
 
 
