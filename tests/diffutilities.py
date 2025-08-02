@@ -520,6 +520,9 @@ class DiffUtilities:
             print(f'{inputPath}: total numDiffs = {totalNumDiffs}', file=results)
             results.flush()
 
+        # one last flush() just to be sure...
+        results.flush()
+
         if totalNumDiffs > 0:
             return False
 
