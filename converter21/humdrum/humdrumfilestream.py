@@ -71,7 +71,6 @@ class HumdrumFileStream:
         foundUniversal: bool = False
         dataFound: bool = False
         starstarFound: bool = False
-        starminusFound: bool = False
 
         if self.eof():
             # no lines to read
@@ -124,9 +123,6 @@ class HumdrumFileStream:
                     self.universals = [templine]
                     foundUniversal = True
                 continue
-
-            if templine.startswith('*-'):
-                starminusFound = True
 
             dataFound = True  # found something other than universal comments
 

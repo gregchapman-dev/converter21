@@ -9815,7 +9815,10 @@ class HumdrumFile(HumdrumFileContent):
         if color:
             tempoOrDirection.style.color = color
         elif isProblem:
-            tempoOrDirection.style.color = 'red'
+            if isinstance(tempoOrDirection, m21.expressions.TextExpression):
+                # Latest verovio changed from 'P' to '⚠', and from 'red' to 'crimson'
+                tempoOrDirection.content = '⚠'
+            tempoOrDirection.style.color = 'crimson'
         elif isSic:
             tempoOrDirection.style.color = 'limegreen'
 
