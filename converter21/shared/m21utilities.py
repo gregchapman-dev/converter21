@@ -4074,8 +4074,11 @@ class M21Utilities:
             M21Utilities.assureXmlIdAndId(obj)
 
     @staticmethod
-    def fixupBadBeams(score: m21.stream.Score, inPlace=False) -> m21.stream.Score:
-        # must be a score; we will look for parts/measures/etc
+    def fixupBadBeams(
+        scoreOrOpus: m21.stream.Score | m21.stream.Opus,
+        inPlace=False
+    ) -> m21.stream.Score | m21.stream.Opus:
+        # must be a score or opus; we will expect parts/measures/etc
 
         # 1. Looks for continues that should be stops (given the Note
         # immediately following).  These are often seen in MusicXML, and while Finale
@@ -4085,10 +4088,19 @@ class M21Utilities:
         # because cross-part beams can do this legitimately.  To detect that properly
         # is possible, but would require looking at all voices in a measure stack
         # simultaneously.
+        # 3. Looks for single beams on notes that should be multiple beams (given the
+        # note or chord duration).  'start'/'continue'/'stop' is chosen based on previous
+        # (already fixed if necessary) note or chord's beam values.
 
-        fixme: m21.stream.Score = score
+        fixme: m21.stream.Score | m21.stream.Opus = scoreOrOpus
         if not inPlace:
-            fixme = deepcopy(score)
+            fixme = deepcopy(scoreOrOpus)
+
+        if isinstance(fixme, m21.stream.Opus):
+            for fixmeScore in fixme.scores:
+                # we already did a deepcopy if not inPlace, don't deepcopy again!
+                M21Utilities.fixupBadBeams(fixmeScore, inPlace=True)
+            return fixme
 
         parts: list[m21.stream.Part] = list(fixme[m21.stream.Part])
         for part in parts:
@@ -4126,6 +4138,8 @@ class M21Utilities:
                     for cs in removeList:
                         notesAndChords.remove(cs)
 
+                    # loop over notesAndChords, applying fix 1 and 2 (continues that should
+                    # be stops, and stops that should be continues)
                     for i in range(0, len(notesAndChords)):
                         thisNC: m21.note.NotRest = notesAndChords[i]
                         prevNC: m21.note.NotRest | None
@@ -4178,7 +4192,85 @@ class M21Utilities:
                             for beam in lastNCInScore.beams:
                                 if beam.type == 'continue':
                                     beam.type = 'stop'
-                    else:
+
+                    # loop over notesAndChords again, performing fix 3 (single beams
+                    # that should be multiple beams).
+                    for i in range(0, len(notesAndChords)):
+                        thisNC = notesAndChords[i]
+                        if i == 0:
+                            prevNC = lastNCInPrevVoice.get(voiceKey) or None
+                        else:
+                            prevNC = notesAndChords[i - 1]
+
+                        # In the "fix 3" loop we are fixing thisNC, and we might need to
+                        # look at prevNC to get the fix right.  prevNC is either None, or
+                        # has already had all three fixes applied as necessary.
+                        thisNumBeams: int = len(thisNC.beams)
+                        if thisNumBeams != 1:
+                            # nothing to fix (not a single beam)
+                            continue
+
+                        expectedNumBeams: int = M21Utilities.expectedBeamCount(thisNC.duration)
+                        if expectedNumBeams <= 1:
+                            # nothing to fix (single beam is not supposed to be multiple beams)
+                            continue
+
+                        # Let's fix this (single beam is supposed to be multiple beams)
+                        thisBeamType = thisNC.beams.getTypes()[0]
+                        prevNumBeams: int = 0
+                        if prevNC is not None:
+                            prevNumBeams = len(prevBeams)
+
+                        # Fill in thisNC's beams, with appropriate types.
+                        # Start with thisBeamType, and then modify to 'partial'
+                        # left or right, as appropriate
+                        thisBeams = m21.beam.Beams()
+                        thisBeams.fill(thisNC.duration.type, thisBeamType)
+                        thisNC.beams = thisBeams
+                        thisNumBeams = len(thisNC.beams)
+
+                        # Check for any beam that should be 'partial' (this left or
+                        # prev right). Note that we can't do this if thisType is
+                        # 'start'.  We'll have to check for thisNC's right 'partial'
+                        # when we see the next note/chord (i.e. when thisNC is prevNC).
+                        if not prevNumBeams:
+                            # nothing to check
+                            continue
+
+                        if thisBeamType not in ('continue', 'stop'):
+                            # thisNC 'start' will be checked on next note/chord, when
+                            # thisNC is prevNC.
+                            continue
+
+                        # check for thisNC left partial and prevNC right partial,
+                        # based on thisNumBeams and prevNumBeams.
+                        if t.TYPE_CHECKING:
+                            # because prevNumBeams != 0
+                            assert prevNC is not None
+                        prevBeams: m21.beam.Beams = prevNC.beams
+
+                        # compute non-negative thisNumLeftFacingPartials
+                        # or prevNumRightFacingPartials (never both).
+                        thisNumLeftFacingPartials: int = thisNumBeams - prevNumBeams
+                        prevNumRightFacingPartials: int = 0
+                        if thisNumLeftFacingPartials < 0:
+                            prevNumRightFacingPartials = -thisNumLeftFacingPartials
+                            thisNumLeftFacingPartials = 0
+
+                        if thisNumLeftFacingPartials > 0:
+                            endPartialIdx: int = thisNumBeams - 1
+                            startPartialIdx: int = endPartialIdx - thisNumLeftFacingPartials
+                            for pIdx in range(startPartialIdx, endPartialIdx + 1):
+                                thisBeams.beamsList[pIdx].type = 'partial'
+                                thisBeams.beamsList[pIdx].direction = 'left'
+                        elif prevNumRightFacingPartials > 0:
+                            endPartialIdx = prevNumBeams - 1
+                            startPartialIdx = endPartialIdx - prevNumRightFacingPartials
+                            for pIdx in range(startPartialIdx, endPartialIdx + 1):
+                                prevBeams.beamsList[pIdx].type = 'partial'
+                                prevBeams.beamsList[pIdx].direction = 'right'
+
+                    if meas is not measures[-1]:
                         # stash last voice note off to be fixed during processing of
                         # next measure (for this voice)
                         if notesAndChords:
@@ -4490,23 +4582,24 @@ class M21Utilities:
         return fixme
 
     @staticmethod
+    def expectedBeamCount(dur: m21.duration.Duration) -> int:
+        # code stolen (a bit) from m21.beam.Beams.naiveBeams()
+        if dur.type not in m21.beam.beamableDurationTypes:
+            return 0
+
+        # we have a beamable duration
+        return m21.beam.beamableDurationTypes.index(dur.type) + 1
+
+    @staticmethod
     def getNonIgnoredBeams(noteOrChord: m21.note.NotRest) -> m21.beam.Beams:
         # ignore ridiculous beams (higher beam numbers than are possible,
         # given the note duration)
-        def maxBeamNumExpected(dur: m21.duration.Duration) -> int:
-            # code stolen (a bit) from m21.beam.Beams.naiveBeams()
-            if dur.type not in m21.beam.beamableDurationTypes:
-                return 0
-            # we have a beamable duration
-            b = m21.beam.Beams()
-            b.fill(dur.type)
-            return len(b)
-
         output = m21.beam.Beams()
         if not noteOrChord.beams.beamsList:
             return output
 
-        maxBeamNum: int = maxBeamNumExpected(noteOrChord.duration)
+        # beam numbers are 1-based, so maxBeamNum is expectedNumBeams, not expectedNumBeams-1
+        maxBeamNum: int = M21Utilities.expectedBeamCount(noteOrChord.duration)
         for beam in noteOrChord.beams:
             if beam.number <= maxBeamNum:
                 output.append(beam)

@@ -7,12 +7,13 @@
 # Copyright:     (c) 2025 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-# import typing as t
+import typing as t
 import re
 from xml.etree.ElementTree import Element
 
 import music21 as m21
 
+from converter21.shared import M21Utilities
 from converter21.abc.abc2xml import getXmlDocs
 from converter21.abc.abc2xml import fixDoctype
 from converter21.abc.abc2xml import expand_abc_include
@@ -71,7 +72,10 @@ class AbcReader:
         if len(xmlStrs) == 1:
             # return a Score
             score = m21.converter.parseData(xmlStrs[0], fmt='musicxml')
+            if t.TYPE_CHECKING:
+                assert isinstance(score, m21.stream.Score)
             score.metadata.number = abcNumbers[0]
+            M21Utilities.fixupBadBeams(score)
             return score
 
         # return an Opus of Scores, with each score.metadata.number set to the
@@ -82,6 +86,7 @@ class AbcReader:
             score.metadata.number = numStr
             opus.coreAppend(score)
         opus.coreElementsChanged()
+        M21Utilities.fixupBadBeams(opus)
         return opus
 
     @staticmethod
@@ -109,4 +114,3 @@ class AbcReader:
                 if name == 'book':
                     # parentTitle
                     mf.attrib['name'] = 'humdrum:OPR'
-
