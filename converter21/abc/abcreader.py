@@ -75,7 +75,7 @@ class AbcReader:
             if t.TYPE_CHECKING:
                 assert isinstance(score, m21.stream.Score)
             score.metadata.number = abcNumbers[0]
-            M21Utilities.fixupBadBeams(score)
+            M21Utilities.fixupBadBeams(score, inPlace=True)
             return score
 
         # return an Opus of Scores, with each score.metadata.number set to the
@@ -86,7 +86,7 @@ class AbcReader:
             score.metadata.number = numStr
             opus.coreAppend(score)
         opus.coreElementsChanged()
-        M21Utilities.fixupBadBeams(opus)
+        M21Utilities.fixupBadBeams(opus, inPlace=True)
         return opus
 
     @staticmethod

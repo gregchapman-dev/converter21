@@ -4218,8 +4218,10 @@ class M21Utilities:
                         # Let's fix this (single beam is supposed to be multiple beams)
                         thisBeamType = thisNC.beams.getTypes()[0]
                         prevNumBeams: int = 0
+                        prevBeams: m21.beam.Beams | None = None
                         if prevNC is not None:
-                            prevNumBeams = len(prevBeams)
+                            prevBeams = prevNC.beams
+                            prevNumBeams = len(prevNC.beams)
 
                         # Fill in thisNC's beams, with appropriate types.
                         # Start with thisBeamType, and then modify to 'partial'
@@ -4244,10 +4246,6 @@ class M21Utilities:
 
                         # check for thisNC left partial and prevNC right partial,
                         # based on thisNumBeams and prevNumBeams.
-                        if t.TYPE_CHECKING:
-                            # because prevNumBeams != 0
-                            assert prevNC is not None
-                        prevBeams: m21.beam.Beams = prevNC.beams
 
                         # compute non-negative thisNumLeftFacingPartials
                         # or prevNumRightFacingPartials (never both).
