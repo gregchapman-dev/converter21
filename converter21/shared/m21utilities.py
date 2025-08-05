@@ -4257,13 +4257,13 @@ class M21Utilities:
 
                         if thisNumLeftFacingPartials > 0:
                             endPartialIdx: int = thisNumBeams - 1
-                            startPartialIdx: int = endPartialIdx - thisNumLeftFacingPartials
+                            startPartialIdx: int = (endPartialIdx - thisNumLeftFacingPartials) + 1
                             for pIdx in range(startPartialIdx, endPartialIdx + 1):
                                 thisBeams.beamsList[pIdx].type = 'partial'
                                 thisBeams.beamsList[pIdx].direction = 'left'
                         elif prevNumRightFacingPartials > 0:
                             endPartialIdx = prevNumBeams - 1
-                            startPartialIdx = endPartialIdx - prevNumRightFacingPartials
+                            startPartialIdx = (endPartialIdx - prevNumRightFacingPartials) + 1
                             for pIdx in range(startPartialIdx, endPartialIdx + 1):
                                 prevBeams.beamsList[pIdx].type = 'partial'
                                 prevBeams.beamsList[pIdx].direction = 'right'
