@@ -4298,8 +4298,8 @@ class M21Utilities:
                     b.type = 'partial'
                     b.direction = 'right'
 
-        # loop over them again, looking for 'stop' that should be 'partial'/'left' because
-        # there are fewer beams in the previous note
+        # loop over them again, looking for 'continue' that should be 'start', and 'stop'
+        # that should be 'partial'/'left' because there are fewer beams in the previous note
         for i, nc in enumerate(notesAndChords):
             if i == 0:
                 # first nc has no prevNC
@@ -4308,6 +4308,8 @@ class M21Utilities:
             prevNC: m21.note.NotRest = notesAndChords[i - 1]
             for beamNum in range(len(prevNC.beams) + 1, len(nc.beams) + 1):  # type: ignore
                 b: m21.beam.Beam = nc.beams.getByNumber(beamNum)  # type: ignore
+                if b.type == 'continue':
+                    b.type = 'start'
                 if b.type == 'stop':
                     b.type = 'partial'
                     b.direction = 'left'

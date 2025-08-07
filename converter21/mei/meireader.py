@@ -2828,8 +2828,8 @@ class MeiReader:
                     b.type = 'partial'
                     b.direction = 'right'
 
-        # loop over them again, looking for 'stop' that should be 'partial'/'left' because
-        # there are fewer beams in the previous note
+        # loop over them again, looking for 'continue' that should be 'start' (and 'stop'
+        # that should be 'partial'/'left') because there are fewer beams in the previous note
         for i, thing in enumerate(someThings):
             if not hasattr(thing, 'beams'):
                 continue
@@ -2851,6 +2851,8 @@ class MeiReader:
 
             for beamNum in range(len(prevThing.beams) + 1, len(thing.beams) + 1):  # type: ignore
                 b: beam.Beam = thing.beams.getByNumber(beamNum)  # type: ignore
+                if b.type == 'continue':
+                    b.type = 'start'
                 if b.type == 'stop':
                     b.type = 'partial'
                     b.direction = 'left'
