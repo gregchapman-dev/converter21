@@ -4126,63 +4126,96 @@ class M21Utilities:
                     notesAndChords: list[m21.note.NotRest] = list(voice[m21.note.NotRest])
 
                     # Remove any ChordSymbols (they are Chords that don't count)
-                    # and any grace notes (they don't participate in the non-grace-note
-                    # beaming).
                     removeList: list[m21.note.NotRest] = []
                     for nc in notesAndChords:
                         if isinstance(nc, m21.harmony.ChordSymbol):
-                            removeList.append(nc)
-                        elif nc.duration.isGrace:
                             removeList.append(nc)
 
                     for cs in removeList:
                         notesAndChords.remove(cs)
 
-                    # loop over notesAndChords, applying fix 1 and 2 (continues that should
-                    # be stops, and stops that should be continues)
-                    for i in range(0, len(notesAndChords)):
-                        thisNC: m21.note.NotRest = notesAndChords[i]
-                        prevNC: m21.note.NotRest | None
-                        if i == 0:
-                            prevNC = lastNCInPrevVoice.get(voiceKey) or None
-                        else:
-                            prevNC = notesAndChords[i - 1]
+                    # Pull out any beamed gracenotes into their own list(s).
+                    # Remove all grace notes from notesAndChords.
+                    removeList = []
+                    graceLists: list[list[m21.note.NotRest]] = [[]]
+                    prevNoteWasGrace: bool = False
+                    for nc in notesAndChords:
+                        if nc.duration.isGrace:
+                            if not prevNoteWasGrace:
+                                # make a new grace list (unless current grace list is empty,
+                                # in which case we can call that the new one)
+                                if graceLists[-1]:
+                                    graceLists.append([])
 
-                        # prevNC is the one we are fixing (based on beams in thisNC)
-                        if prevNC is None or not prevNC.beams:
-                            # nothing to fix
-                            continue
+                            # move grace note from notesAndChords to graceList
+                            graceLists[-1].append(nc)
+                            removeList.append(nc)
 
-                        prevBeam: m21.beam.Beam
-                        if not thisNC.beams:
-                            # thisNC has no beams. Any continues in prevNC.beams should be stops.
-                            for prevBeam in prevNC.beams:
-                                if prevBeam.type == 'continue':
-                                    prevBeam.type = 'stop'
+                            prevNoteWasGrace = True
                         else:
-                            # thisNC has beams.  Check any/all of prevNC's beams.
-                            for prevBeam in prevNC.beams:
-                                num: int = prevBeam.number
-                                if num not in thisNC.beams.getNumbers():
-                                    # no matching beam in thisNC, prevBeam must stop,
-                                    # not continue
+                            prevNoteWasGrace = False
+
+                    for cs in removeList:
+                        notesAndChords.remove(cs)
+
+                    # Make a list of lists to process: first must be notesAndChords, followed
+                    # by any grace note lists.
+                    notesLists: list[list[m21.note.NotRest]] = [notesAndChords]
+                    for graceList in graceLists:
+                        notesLists.append(graceList)
+
+                    for nAndCIdx, notesAndChords in enumerate(notesLists):
+                        isGraceNoteList: bool = True
+                        if nAndCIdx == 0:
+                            # we assume the first notesList is the non-grace-notes
+                            isGraceNoteList = False
+
+                        # loop over notesAndChords, applying fix 1 and 2 (continues that should
+                        # be stops, and stops that should be continues)
+                        for i in range(0, len(notesAndChords)):
+                            thisNC: m21.note.NotRest = notesAndChords[i]
+                            prevNC: m21.note.NotRest | None
+                            if i == 0 and not isGraceNoteList:
+                                prevNC = lastNCInPrevVoice.get(voiceKey) or None
+                            else:
+                                prevNC = notesAndChords[i - 1]
+
+                            # prevNC is the one we are fixing (based on beams in thisNC)
+                            if prevNC is None or not prevNC.beams:
+                                # nothing to fix
+                                continue
+
+                            prevBeam: m21.beam.Beam
+                            if not thisNC.beams:
+                                # thisNC has no beams. Any continues in prevNC.beams
+                                # should be stops.
+                                for prevBeam in prevNC.beams:
                                     if prevBeam.type == 'continue':
                                         prevBeam.type = 'stop'
-                                else:
-                                    # matching beam in thisNC; if it starts, prevBeam
-                                    # must stop, not continue.  If it stops, prevBeam
-                                    # must continue, not stop (two stops in a row
-                                    # is silly.)
-                                    thisBeam = thisNC.beams.getByNumber(num)
-                                    if thisBeam.type == 'start':
+                            else:
+                                # thisNC has beams.  Check any/all of prevNC's beams.
+                                for prevBeam in prevNC.beams:
+                                    num: int = prevBeam.number
+                                    if num not in thisNC.beams.getNumbers():
+                                        # no matching beam in thisNC, prevBeam must stop,
+                                        # not continue
                                         if prevBeam.type == 'continue':
                                             prevBeam.type = 'stop'
-                                    elif thisBeam.type == 'stop' and len(parts) == 1:
-                                        # WE CAN ONLY DO THIS IF THERE IS ONLY ONE PART.
-                                        # In cross-staff beaming, this code gets very
-                                        # confused and makes things worse.
-                                        if prevBeam.type == 'stop':
-                                            prevBeam.type = 'continue'
+                                    else:
+                                        # matching beam in thisNC; if it starts, prevBeam
+                                        # must stop, not continue.  If it stops, prevBeam
+                                        # must continue, not stop (two stops in a row
+                                        # is silly.)
+                                        thisBeam = thisNC.beams.getByNumber(num)
+                                        if thisBeam.type == 'start':
+                                            if prevBeam.type == 'continue':
+                                                prevBeam.type = 'stop'
+                                        elif thisBeam.type == 'stop' and len(parts) == 1:
+                                            # WE CAN ONLY DO THIS IF THERE IS ONLY ONE PART.
+                                            # In cross-staff beaming, this code gets very
+                                            # confused and makes things worse.
+                                            if prevBeam.type == 'stop':
+                                                prevBeam.type = 'continue'
 
                     if meas is measures[-1]:
                         # fix last note in score (in this voice)
@@ -4193,90 +4226,91 @@ class M21Utilities:
                                 if beam.type == 'continue':
                                     beam.type = 'stop'
 
-                    # loop over notesAndChords again, performing fix 3 (single beams
-                    # that should be multiple beams).
-                    for i in range(0, len(notesAndChords)):
-                        thisNC = notesAndChords[i]
-                        if i == 0:
-                            prevNC = lastNCInPrevVoice.get(voiceKey) or None
-                        else:
-                            prevNC = notesAndChords[i - 1]
-
-                        # In the "fix 3" loop we are fixing thisNC, and we might need to
-                        # look at prevNC to get the fix right.  prevNC is either None, or
-                        # has already had all three fixes applied as necessary.
-                        thisNumBeams: int = len(thisNC.beams)
-                        if thisNumBeams != 1:
-                            # nothing to fix (not a single beam)
-                            continue
-
-                        expectedNumBeams: int = M21Utilities.expectedBeamCount(thisNC.duration)
-                        if expectedNumBeams <= 1:
-                            # nothing to fix (single beam is not supposed to be multiple beams)
-                            continue
-
-                        # Let's fix this (single beam is supposed to be multiple beams)
-                        thisBeamType = thisNC.beams.getTypes()[0]
-                        prevNumBeams: int = 0
-                        prevBeams: m21.beam.Beams | None = None
-                        if prevNC is not None:
-                            prevBeams = prevNC.beams
-                            prevNumBeams = len(prevNC.beams)
-
-                        # Fill in thisNC's beams, with appropriate types.
-                        # Start with thisBeamType, and then modify to 'partial'
-                        # left or right, as appropriate
-                        thisBeams = m21.beam.Beams()
-                        thisBeams.fill(thisNC.duration.type, thisBeamType)
-                        thisNC.beams = thisBeams
-                        thisNumBeams = len(thisNC.beams)
-
-                        # Check for any beam that should be 'partial' (this left or
-                        # prev right). Note that we can't do this if thisType is
-                        # 'start'.  We'll have to check for thisNC's right 'partial'
-                        # when we see the next note/chord (i.e. when thisNC is prevNC).
-                        if not prevNumBeams:
-                            # nothing to check
-                            continue
-
-                        if thisBeamType not in ('continue', 'stop'):
-                            # thisNC 'start' will be checked on next note/chord, when
-                            # thisNC is prevNC.
-                            continue
-
-                        # check for thisNC left partial and prevNC right partial,
-                        # based on thisNumBeams and prevNumBeams.
-
-                        # compute non-negative thisNumLeftFacingPartials
-                        # or prevNumRightFacingPartials (never both).
-                        thisNumLeftFacingPartials: int = thisNumBeams - prevNumBeams
-                        prevNumRightFacingPartials: int = 0
-                        if thisNumLeftFacingPartials < 0:
-                            prevNumRightFacingPartials = -thisNumLeftFacingPartials
-                            thisNumLeftFacingPartials = 0
-
-                        if thisNumLeftFacingPartials > 0:
-                            endPartialIdx: int = thisNumBeams - 1
-                            startPartialIdx: int = (endPartialIdx - thisNumLeftFacingPartials) + 1
-                            for pIdx in range(startPartialIdx, endPartialIdx + 1):
-                                thisBeams.beamsList[pIdx].type = 'partial'
-                                thisBeams.beamsList[pIdx].direction = 'left'
-                        elif prevNumRightFacingPartials > 0:
-                            endPartialIdx = prevNumBeams - 1
-                            startPartialIdx = (endPartialIdx - prevNumRightFacingPartials) + 1
-                            for pIdx in range(startPartialIdx, endPartialIdx + 1):
-                                prevBeams.beamsList[pIdx].type = 'partial'
-                                prevBeams.beamsList[pIdx].direction = 'right'
+                    for notesAndChords in notesLists:
+                        # loop over all the notesLists again, performing fix 3 (single beams
+                        # that should be multiple beams).
+                        M21Utilities._fixSingleBeamsThatShouldBeMultiple(notesAndChords)
 
                     if meas is not measures[-1]:
-                        # stash last voice note off to be fixed during processing of
-                        # next measure (for this voice)
-                        if notesAndChords:
-                            lastNCInPrevVoice[voiceKey] = notesAndChords[-1]
-                        else:
-                            lastNCInPrevVoice.pop(voiceKey, None)
+                        if not isGraceNoteList:
+                            # stash last voice note off to be fixed (1 & 2, not 3) during
+                            # processing of next measure (for this voice)
+                            if notesAndChords:
+                                lastNCInPrevVoice[voiceKey] = notesAndChords[-1]
+                            else:
+                                lastNCInPrevVoice.pop(voiceKey, None)
 
         return fixme
+
+    @staticmethod
+    def _fixSingleBeamsThatShouldBeMultiple(notesAndChords: list[m21.note.NotRest]):
+        # find beamed groups that are bounded by single 'start' and 'stop'
+        beamedLists: list[list[m21.note.NotRest]] = []
+        inBeamedList: bool = False
+        for nc in notesAndChords:
+            if len(nc.beams) != 1:
+                inBeamedList = False
+                continue
+
+            if nc.beams.beamsList[0].type == 'start':
+                inBeamedList = True
+                beamedLists.append([nc])
+                continue
+
+            if inBeamedList:
+                beamedLists[-1].append(nc)
+                if nc.beams.beamsList[0].type == 'stop':
+                    inBeamedList = False
+
+        # fix any beamed groups to have the correct number (and shape) of beams
+        for beamedList in beamedLists:
+            M21Utilities._beamTogether(beamedList)
+
+    @staticmethod
+    def _beamTogether(notesAndChords: list[m21.note.NotRest]):
+        # notesAndChords must be all non-grace, or all grace (no mixture),
+        # and must not contain any Harmony/ChordSymbols. All the notes
+        # must be eighth notes or smaller.
+
+        # first, loop over them, fleshing out to simple multiple beams
+        # ('start', 'continue', ... 'continue', 'stop')
+        for i, nc in enumerate(notesAndChords):
+            if i == 0:
+                beamType = 'start'
+            else:
+                beamType = 'continue'
+            nc.beams.fill(nc.duration.type, beamType)
+        notesAndChords[-1].beams.setAll('stop')
+
+        # loop over them again, looking for 'continue' that should be 'stop', and 'start'
+        # that should be 'partial'/'right', because there are fewer beams in the next note.
+        for i, nc in enumerate(notesAndChords):
+            if i == len(notesAndChords) - 1:
+                # last nc has no nextNC
+                continue
+
+            nextNC: m21.note.NotRest = notesAndChords[i + 1]
+            for beamNum in range(len(nextNC.beams) + 1, len(nc.beams) + 1):
+                b: m21.beam.Beam = nc.beams.getByNumber(beamNum)
+                if b.type == 'continue':
+                    b.type = 'stop'
+                elif b.type == 'start':
+                    b.type = 'partial'
+                    b.direction = 'right'
+
+        # loop over them again, looking for 'stop' that should be 'partial'/'left' because
+        # there are fewer beams in the previous note
+        for i, nc in enumerate(notesAndChords):
+            if i == 0:
+                # first nc has no prevNC
+                continue
+
+            prevNC: m21.note.NotRest = notesAndChords[i - 1]
+            for beamNum in range(len(prevNC.beams) + 1, len(nc.beams) + 1):  # type: ignore
+                b: m21.beam.Beam = nc.beams.getByNumber(beamNum)  # type: ignore
+                if b.type == 'stop':
+                    b.type = 'partial'
+                    b.direction = 'left'
 
     @staticmethod
     def getRestDurationQL(rest: m21.note.Rest, container: m21.stream.Stream) -> OffsetQL:
