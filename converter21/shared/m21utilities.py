@@ -4217,23 +4217,26 @@ class M21Utilities:
                                             if prevBeam.type == 'stop':
                                                 prevBeam.type = 'continue'
 
-                    if meas is measures[-1]:
-                        # fix last note in score (in this voice)
-                        # (if its a continue it should be a stop)
-                        if notesAndChords:
-                            lastNCInScore: m21.note.NotRest = notesAndChords[-1]
-                            for beam in lastNCInScore.beams:
-                                if beam.type == 'continue':
-                                    beam.type = 'stop'
+                        if meas is measures[-1] and not isGraceNoteList:
+                            # fix last note in score (in this voice)
+                            # (if its a continue it should be a stop)
+                            if notesAndChords:
+                                lastNCInScore: m21.note.NotRest = notesAndChords[-1]
+                                for beam in lastNCInScore.beams:
+                                    if beam.type == 'continue':
+                                        beam.type = 'stop'
 
-                    for notesAndChords in notesLists:
+                    for ncIdx, notesAndChords in enumerate(notesLists):
+                        isGraceNoteList = True
+                        if ncIdx == 0:
+                            isGraceNoteList = False
+
                         # loop over all the notesLists again, performing fix 3 (single beams
                         # that should be multiple beams).
                         M21Utilities._fixSingleBeamsThatShouldBeMultiple(notesAndChords)
 
-                    if meas is not measures[-1]:
-                        if not isGraceNoteList:
-                            # stash last voice note off to be fixed (1 & 2, not 3) during
+                        if meas is not measures[-1] and not isGraceNoteList:
+                            # stash last non-grace voice note off to be fixed (1 & 2, not 3) during
                             # processing of next measure (for this voice)
                             if notesAndChords:
                                 lastNCInPrevVoice[voiceKey] = notesAndChords[-1]
