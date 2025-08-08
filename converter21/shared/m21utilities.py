@@ -4244,11 +4244,18 @@ class M21Utilities:
 
     @staticmethod
     def _fixSingleBeamsThatShouldBeMultiple(notesAndChords: list[m21.note.NotRest]):
-        # find beamed groups that are bounded by single 'start' and 'stop'
+        if not notesAndChords:
+            return
+
+        # find beamed groups that are bounded by single 'start' and 'stop', and have
+        # only single beams in all other notes.
         beamedLists: list[list[m21.note.NotRest]] = []
         inBeamedList: bool = False
         for nc in notesAndChords:
             if len(nc.beams) != 1:
+                if inBeamedList and len(nc.beams) > 1:
+                    # bail on this list, it has multiple beams
+                    beamedLists[-1] = []
                 inBeamedList = False
                 continue
 
@@ -4271,6 +4278,8 @@ class M21Utilities:
         # notesAndChords must be all non-grace, or all grace (no mixture),
         # and must not contain any Harmony/ChordSymbols. All the notes
         # must be eighth notes or smaller.
+        if not notesAndChords:
+            return
 
         # first, loop over them, fleshing out to simple multiple beams
         # ('start', 'continue', ... 'continue', 'stop')
