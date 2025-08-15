@@ -25,8 +25,7 @@ DiffUtilities.runDiffAll(
     listPath,
     inFmt='abc',
     outFmt='abc',
-    outExt='abc',
-    detail=DetailLevel.AllObjects | DetailLevel.Metadata  # no Style for ABC
+    outExt='abc'
 )
 
 print('done.')
