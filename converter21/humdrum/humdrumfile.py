@@ -3420,7 +3420,7 @@ class HumdrumFile(HumdrumFileContent):
                 tg.numScale
             )
             # start the tuplet
-            self._startTuplet(layerData, tokenIdx, newState.m21Tuplet, staffIndex, tremolo)
+            self._startTuplet(tgs, layerData, tokenIdx, newState.m21Tuplet, staffIndex, tremolo)
             newState.inTuplet = True
         elif newState.inTuplet and tg.tupletEnd:
             # end the tuplet
@@ -3745,6 +3745,7 @@ class HumdrumFile(HumdrumFileContent):
 
     def _startTuplet(
         self,
+        tgs: list[HumdrumBeamAndTuplet | None],
         layerData: list[HumdrumToken | FakeRestToken],
         startTokenIdx: int,
         tupletTemplate: m21.duration.Tuplet,
@@ -3852,16 +3853,17 @@ class HumdrumFile(HumdrumFileContent):
             elif self._hasBelowParameter(startTok, 'TUP'):
                 tuplet.placement = 'below'
 
+            # Here iohumdrum.cpp decides that if there are lyrics, tuplet should be
+            # forced above.  I will only do that if tuplet.placement is None (i.e.
+            # unspecified in the Humdrum file).
+            if tuplet.placement is None:
+                if ss.hasLyrics:
+                    tuplet.placement = 'above'
+
             # The staff might have suppressed tuplet brackets
             if ss.suppressTupletBracket or ss.suppressTupletNumber:
-                # if we're suppressing tuplet numbers, suppress the bracket
+                # if we're suppressing tuplet numbers, also suppress the bracket
                 tuplet.bracket = False
-
-            # Here iohumdrum.cpp decides that if there is a beam that covers exactly this tuplet,
-            # then we should suppress the tuplet's bracket.  This seems like an engraving decision,
-            # so I'm not going to do it here in the parser.
-    #         if self._shouldHideBeamBracket(tgs, layerData, startTokenIdx):
-    #             tuplet.bracket = False
 
             # local control of brackets (overrides staff-level tuplet bracket suppression)
             xbr: bool = self._hasTrueLayoutParameter(startTok, 'TUP', 'xbr')
@@ -3870,6 +3872,14 @@ class HumdrumFile(HumdrumFileContent):
                 tuplet.bracket = False
             if br:
                 tuplet.bracket = True
+
+            # Here iohumdrum.cpp decides that if there is a beam that covers exactly this tuplet,
+            # then we should suppress the tuplet's bracket.  This seems like an engraving decision,
+            # so I shouldn't do it.  However, this is causing some large diffs in my test scores,
+            # so I will do it, but only if tuplet.bracket is None (i.e. unspecified)
+            if tuplet.bracket is None:
+                if self._shouldHideBeamBracket(tgs, layerData, startTokenIdx):
+                    tuplet.bracket = False
 
             # The staff might have suppressed tuplet numbers (e.g. after a measure or two)
             if ss.suppressTupletNumber:
@@ -3889,6 +3899,59 @@ class HumdrumFile(HumdrumFileContent):
 #         newQuarterLength: HumNum = opFrac(startNote.duration.quarterLength)
 #         if newQuarterLength != originalQuarterLength:
 #             raise HumdrumInternalError('_startTuplet modified duration.quarterLength')
+
+    def _shouldHideBeamBracket(
+        self,
+        tgs: list[HumdrumBeamAndTuplet | None],
+        layerData: list[HumdrumToken | FakeRestToken],
+        layerIdx: int
+    ) -> bool:
+        startTok: HumdrumToken | FakeRestToken = layerData[layerIdx]
+        if startTok.isFakeRest:
+            raise HumdrumInternalError('FakeRestToken at start of tuplet')
+
+        if t.TYPE_CHECKING:
+            # We know because startTok.isFakeRest is False
+            assert isinstance(startTok, HumdrumToken)
+
+        if 'L' not in startTok.text:
+            return False
+
+        beamEdge: bool = False
+        tg = tgs[layerIdx]
+        if t.TYPE_CHECKING:
+            # we have completely filled in tgs by now
+            assert isinstance(tg, HumdrumBeamAndTuplet)
+
+        targetTup: int = tg.tupletStart
+        endTok: HumdrumToken | FakeRestToken | None = None
+        for i in range(layerIdx + 1, len(layerData)):
+            tg = tgs[i]
+            if t.TYPE_CHECKING:
+                # we have completely filled in tgs by now
+                assert isinstance(tg, HumdrumBeamAndTuplet)
+            if tg.tupletEnd == targetTup:
+                endTok = layerData[i]
+                break
+            if tg.beamStart:
+                beamEdge = True
+            if tg.beamEnd:
+                beamEdge = True
+
+        if endTok is None or endTok.isFakeRest:
+            return False
+
+        if t.TYPE_CHECKING:
+            # We know because we just checked for None and .isFakeRest
+            assert isinstance(endTok, HumdrumToken)
+
+        if beamEdge:
+            return False
+
+        if 'J' not in endTok.text:
+            return False
+
+        return True
 
     def _continueTuplet(
         self,
