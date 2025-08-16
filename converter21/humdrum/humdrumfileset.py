@@ -21,11 +21,13 @@ class HumdrumFileSet:
     def __init__(
         self,
         fileName: str | Path | None = None,
-        acceptSyntaxErrors: bool = False
+        acceptSyntaxErrors: bool = False,
+        verovioCompatibleImport: bool = False
     ) -> None:
         M21Utilities.adjustMusic21Behavior()
         self.humdrumFiles: list[HumdrumFile] = []
         self.acceptSyntaxErrors = acceptSyntaxErrors
+        self.verovioCompatibleImport = verovioCompatibleImport
         if fileName is not None:
             self.readFile(fileName)
 
@@ -56,10 +58,16 @@ class HumdrumFileSet:
         return len(self)
 
     def readAppendStream(self, hfStream: HumdrumFileStream) -> int:
-        hf: HumdrumFile = HumdrumFile(acceptSyntaxErrors=self.acceptSyntaxErrors)
+        hf: HumdrumFile = HumdrumFile(
+            acceptSyntaxErrors=self.acceptSyntaxErrors,
+            verovioCompatibleImport=self.verovioCompatibleImport
+        )
         while hfStream.read(hf):
             self.humdrumFiles.append(hf)
-            hf = HumdrumFile(acceptSyntaxErrors=self.acceptSyntaxErrors)
+            hf = HumdrumFile(
+                acceptSyntaxErrors=self.acceptSyntaxErrors,
+                verovioCompatibleImport=self.verovioCompatibleImport
+            )
         return len(self)
 
     def createMusic21Stream(self) -> m21.stream.Opus | m21.stream.Score:

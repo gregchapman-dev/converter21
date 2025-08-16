@@ -65,7 +65,8 @@ class HumdrumConverter(SubConverter):
         filePath: str | Path,
         number: int | None = None,
         acceptSyntaxErrors: bool = False,
-        **_keywords
+        verovioCompatibleImport: bool = False,
+        **keywords
     ) -> stream.Score | stream.Opus:
         '''
         Create HumdrumFileSet object from a file path, and create a music21 Stream from it.
@@ -74,7 +75,11 @@ class HumdrumConverter(SubConverter):
         '''
         # print("parsing krn file", file=sys.stderr)
         try:
-            hfs = HumdrumFileSet(fileName=filePath, acceptSyntaxErrors=acceptSyntaxErrors)
+            hfs = HumdrumFileSet(
+                fileName=filePath,
+                acceptSyntaxErrors=acceptSyntaxErrors,
+                verovioCompatibleImport=verovioCompatibleImport
+            )
             self.stream = hfs.createMusic21Stream()
             self.humdrumFileSet = hfs
         except Exception as e:
