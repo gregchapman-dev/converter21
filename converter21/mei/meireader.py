@@ -3056,6 +3056,11 @@ class MeiReader:
                         placement = bracketPlace
                     if placement is None and (numVisible is None or numVisible == 'true'):
                         placement = numPlace
+                    if placement is None and bracketPlace:
+                        # verovio sometimes sets bracketVisible to False (because there's
+                        # already a beam).  That's fine,  but if bracketPlace is the only
+                        # tuplet placement set, we should use it to set tuplet placement.
+                        placement = bracketPlace
                     if placement is not None:
                         newTuplet.placement = placement  # type: ignore
                     else:
