@@ -41,6 +41,10 @@ class DiffUtilities:
         print('music21 version:', VERSION_STR, file=sys.stderr)
         converter21.register()
 
+        verovioCompatibleImport: bool = (
+            writeUsingVerovio or convertInputToMeiUsingVerovioBeforeReading
+        )
+
         if convertInputToMeiUsingVerovioBeforeReading:
             if inFmt != 'humdrum':
                 raise Exception(
@@ -70,7 +74,8 @@ class DiffUtilities:
                 inputPath,
                 format=inFmt,
                 number=scoreNum,
-                forceSource=True
+                forceSource=True,
+                verovioCompatibleImport=verovioCompatibleImport
             )
 
         assert isinstance(scoreOrOpus1, (m21.stream.Score, m21.stream.Opus))
@@ -125,7 +130,12 @@ class DiffUtilities:
             subprocess.run(['bbdiff', str(inputPath), str(writePath)], check=False)
 
         print(f'Parsing written {outFmt} file: {writePath}')
-        scoreOrOpus2 = m21.converter.parse(writePath, format=outFmt, forceSource=True)
+        scoreOrOpus2 = m21.converter.parse(
+            writePath,
+            format=outFmt,
+            forceSource=True,
+            verovioCompatibleImport=verovioCompatibleImport
+        )
         assert isinstance(scoreOrOpus2, m21.stream.Score | m21.stream.Opus)
         assert scoreOrOpus2.isWellFormedNotation()
 
@@ -284,6 +294,10 @@ class DiffUtilities:
 
         origInputPath: Path = inputPath
 
+        verovioCompatibleImport: bool = (
+            writeUsingVerovio or convertInputToMeiUsingVerovioBeforeReading
+        )
+
         if convertInputToMeiUsingVerovioBeforeReading:
             try:
                 meiPath = Path(tempfile.gettempdir())
@@ -308,7 +322,12 @@ class DiffUtilities:
 
         # import into music21
         try:
-            scoreOrOpus1 = m21.converter.parse(inputPath, format=inFmt, forceSource=True)
+            scoreOrOpus1 = m21.converter.parse(
+                inputPath,
+                format=inFmt,
+                forceSource=True,
+                verovioCompatibleImport=verovioCompatibleImport
+            )
             if scoreOrOpus1 is None:
                 print(': scoreOrOpus1 creation failure')
                 print(': scoreOrOpus1 creation failure', file=results)
@@ -414,7 +433,12 @@ class DiffUtilities:
 
         try:
             # compare the two music21 scores with musicdiff APIs:
-            scoreOrOpus2 = m21.converter.parse(writePath, format=outFmt, forceSource=True)
+            scoreOrOpus2 = m21.converter.parse(
+                writePath,
+                format=outFmt,
+                forceSource=True,
+                verovioCompatibleImport=verovioCompatibleImport
+            )
             if scoreOrOpus2 is None:
                 print(': scoreOrOpus2 creation failure')
                 print(': scoreOrOpus2 creation failure', file=results)

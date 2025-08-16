@@ -115,7 +115,8 @@ class HumdrumFileBase(HumHash):
     def __init__(
         self,
         fileName: str | Path | None = None,
-        acceptSyntaxErrors: bool = False
+        acceptSyntaxErrors: bool = False,
+        verovioCompatibleImport: bool = False,
     ) -> None:
         super().__init__()  # initialize the HumHash fields
 
@@ -132,6 +133,8 @@ class HumdrumFileBase(HumHash):
 
         self.acceptSyntaxErrors: bool = acceptSyntaxErrors
         self.numSyntaxErrorsFixed: int = 0
+
+        self.verovioCompatibleImport = verovioCompatibleImport
 
         '''
         // m_segementlevel: segment level (e.g., work/movement)

@@ -35,9 +35,15 @@ class HumdrumFileContent(HumdrumFileStructure):
     def __init__(
         self,
         fileName: str | Path | None = None,
-        acceptSyntaxErrors: bool = False
+        acceptSyntaxErrors: bool = False,
+        verovioCompatibleImport: bool = False,
     ) -> None:
-        super().__init__(fileName, acceptSyntaxErrors)  # initialize the HumdrumFileBase fields
+        super().__init__(
+            fileName=fileName,
+            acceptSyntaxErrors=acceptSyntaxErrors,
+            verovioCompatibleImport=verovioCompatibleImport
+        )
+
         self._hasInformalBreaks: bool = False
         self._hasFormalBreaks: bool = False
 

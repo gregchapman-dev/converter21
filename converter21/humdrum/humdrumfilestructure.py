@@ -35,9 +35,14 @@ class HumdrumFileStructure(HumdrumFileBase):
     def __init__(
         self,
         fileName: str | Path | None = None,
-        acceptSyntaxErrors: bool = False
+        acceptSyntaxErrors: bool = False,
+        verovioCompatibleImport: bool = False,
     ) -> None:
-        super().__init__(fileName, acceptSyntaxErrors)
+        super().__init__(
+            fileName=fileName,
+            acceptSyntaxErrors=acceptSyntaxErrors,
+            verovioCompatibleImport=verovioCompatibleImport
+        )
         self._ticksPerQuarterNote: int = -1
         self._barlines: list[HumdrumLine] = []
         self._strand1d: list[TokenPair] = []

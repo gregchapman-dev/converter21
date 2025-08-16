@@ -484,12 +484,16 @@ class HumdrumFile(HumdrumFileContent):
     def __init__(
         self,
         fileName: str | Path | None = None,
-        acceptSyntaxErrors: bool = False
+        acceptSyntaxErrors: bool = False,
+        verovioCompatibleImport: bool = False,
     ) -> None:
         M21Utilities.adjustMusic21Behavior()
 
-        super().__init__(fileName, acceptSyntaxErrors)  # initialize the HumdrumFileBase fields
-
+        super().__init__(
+            fileName=fileName,
+            acceptSyntaxErrors=acceptSyntaxErrors,
+            verovioCompatibleImport=verovioCompatibleImport
+        )
 
         # The m21Score attribute will not exist until it is set up (in createMusic21Stream)
         # and it will not be None at that point.
@@ -3854,9 +3858,9 @@ class HumdrumFile(HumdrumFileContent):
                 tuplet.placement = 'below'
 
             # Here iohumdrum.cpp decides that if there are lyrics, tuplet should be
-            # forced above.  I will only do that if tuplet.placement is None (i.e.
-            # unspecified in the Humdrum file).
-            if tuplet.placement is None:
+            # forced above.  I will only do that if verovio-compatible Humdrum
+            # import is selected.
+            if self.verovioCompatibleImport:
                 if ss.hasLyrics:
                     tuplet.placement = 'above'
 
@@ -3873,11 +3877,13 @@ class HumdrumFile(HumdrumFileContent):
             if br:
                 tuplet.bracket = True
 
-            # Here iohumdrum.cpp decides that if there is a beam that covers exactly this tuplet,
-            # then we should suppress the tuplet's bracket.  This seems like an engraving decision,
-            # so I shouldn't do it.  However, this is causing some large diffs in my test scores,
-            # so I will do it, but only if tuplet.bracket is None (i.e. unspecified)
-            if tuplet.bracket is None:
+            # Here iohumdrum.cpp decides that if there is a beam that covers
+            # exactly this tuplet, then we should suppress the tuplet's bracket.
+            # This seems like an engraving decision, so I shouldn't do it.
+            # However, this is causing some large diffs in my test scores when
+            # comparing against Verovio, so I will do it, but only if Verovio
+            # compatible import is selected.
+            if self.verovioCompatibleImport:
                 if self._shouldHideBeamBracket(tgs, layerData, startTokenIdx):
                     tuplet.bracket = False
 
