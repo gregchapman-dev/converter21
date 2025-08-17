@@ -12,11 +12,11 @@ from converter21.humdrum import HumdrumWriter
 from tests.Utilities import CheckHumdrumFile, HumdrumFileTestResults
 
 # def test_ParticularFile():
-#     f = HumdrumFile('/Users/gregc/Documents/test/rds-scores/kern/R408_Web-w13p1-2m1-12.krn') # put particular file to test's full pathstr there
+#     f = HumdrumFile('/Users/gregc/Documents/test/teststuff/rds-scores/kern/R408_Web-w13p1-2m1-12.krn') # put particular file to test's full pathstr there
 #     assert (f.isValid)
 #
-#     results = HumdrumFileTestResults.fromFiles('/Users/gregc/Documents/test/rds-scores/kern/R408_Web-w13p1-2m1-12.krn',
-#                                                '/Users/gregc/Documents/test/rds-scores/kern/R408_Web-w13p1-2m1-12.json')
+#     results = HumdrumFileTestResults.fromFiles('/Users/gregc/Documents/test/teststuff/rds-scores/kern/R408_Web-w13p1-2m1-12.krn',
+#                                                '/Users/gregc/Documents/test/teststuff/rds-scores/kern/R408_Web-w13p1-2m1-12.json')
 #     CheckHumdrumFile(f, results)
 
 def test_getMergedSpineInfo():
@@ -143,59 +143,59 @@ def ReadAllTestFilesInFolder(folder: str):
 def test_HumdrumFile_read_all_test_files_from_humdrum_beethoven_piano_sonatas_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file
         in ~/Documents/test/humdrum_beethoven_piano_sonatas'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_beethoven_piano_sonatas')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum_beethoven_piano_sonatas')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_mazurkas_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file
         in ~/Documents/test/humdrum_chopin_mazurkas'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_chopin_mazurkas')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum_chopin_mazurkas')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_test_files_from_humdrum_joplin_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file
         in ~/Documents/test/humdrum_joplin'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_joplin')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum_joplin')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_test_files_from_humdrum_mozart_piano_sonatas_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file
         in ~/Documents/test/humdrum_mozart_piano_sonatas'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_mozart_piano_sonatas')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum_mozart_piano_sonatas')
 
 def test_HumdrumFile_read_all_test_files_from_humlib_FromFile():
     '''Test HumdrumFile('blah.krn') for every krn file
         in ~/Documents/test/humdrum_test_files_from_humlib'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_test_files_from_humlib')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum_test_files_from_humlib')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_humdrum_files_in_music21_corpus_FromFile():
     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
     in ~/Documents/test/humdrum_test_files_from_music21_corpus'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum_test_files_from_music21_corpus')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum_test_files_from_music21_corpus')
 
 # @pytest.mark.slow
 # def test_HumdrumFile_read_all_test_files_from_humdrum_chopin_first_editions_FromFile():
 #     '''Test HumdrumFile('blah.krn') for every krn file
 #         in ~/Documents/test/humdrum-chopin-first-editions'''
-#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/humdrum-chopin-first-editions')
+#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/humdrum-chopin-first-editions')
 
 #@pytest.mark.slow
 # def test_HumdrumFile_read_all_humdrum_files_in_jrp_scores_FromFile():
 #     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
 #     in ~/Documents/test/jrp-scores'''
-#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/jrp-scores')
+#     ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/jrp-scores')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_humdrum_files_in_rds_scores_FromFile():
     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
     in ~/Documents/test/rds-scores'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/rds-scores')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/rds-scores')
 
 @pytest.mark.slow
 def test_HumdrumFile_read_all_humdrum_files_in_tasso_scores_FromFile():
     '''Test HumdrumFile('blah.krn') against 'blah.json' for every krn file
     in ~/Documents/test/tasso-scores'''
-    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/tasso-scores')
+    ReadAllTestFilesInFolder('/Users/gregc/Documents/test/teststuff/tasso-scores')
 
 # add more tests for coverage...
