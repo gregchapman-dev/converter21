@@ -1116,6 +1116,7 @@ class M21Convert:
         spannerBundle: m21.spanner.SpannerBundle,
         isFirstNoteInChord: bool = False,
         isStandaloneNote: bool = True,
+        stemDirectionAlreadySet: bool = True,
         owner=None
     ) -> tuple[str, str, list[str]]:
         prefix: str = ''
@@ -1161,6 +1162,10 @@ class M21Convert:
             )
             stemStr = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21GeneralNote)
             sfOrSfzStr = M21Convert._getSfOrSfzFromM21GeneralNote(m21GeneralNote)
+        elif not stemDirectionAlreadySet:
+            # not standalone note (i.e. this note is in a chord) but enclosing chord did not
+            # have stemDirection set. We should set stemDirection from notes then.
+            stemStr = M21Convert._getHumdrumStemDirStringFromM21GeneralNote(m21GeneralNote)
 
         # isFirstNoteInChord is currently unused, but I suspect we'll need it at some point.
         # Make pylint happy (I can't just rename it with a '_' because callers use the param name.)
@@ -1458,6 +1463,7 @@ class M21Convert:
                 spannerBundle,
                 isFirstNoteInChord=(noteIdx == 0),
                 isStandaloneNote=False,
+                stemDirectionAlreadySet=bool(stemStr),
                 owner=owner
             )
 
