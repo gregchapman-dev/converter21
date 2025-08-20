@@ -25,6 +25,8 @@ class AbcReader:
     def __init__(self, dataString: str):
         self.abcString: str = dataString
         self.abcTuneByNumber: dict[str, str] = {}
+        self.numberForAbcTune: dict[str, str] = {}
+        self.abcTunesInDocumentOrder: list[str] = []
 
     def run(
         self,
@@ -45,19 +47,29 @@ class AbcReader:
             if not tunes and preamble:
                 tunes, preamble = ['1\n' + preamble], ''  # tune without X:
 
+            self.abcTunesInDocumentOrder = []
+
             for tune in tunes:
                 numberAndTuneRemainder: list[str] = tune.split('\n', 1)
                 numStr = numberAndTuneRemainder[0].strip()
-                self.abcTuneByNumber[numStr] = preamble + 'X:' + tune
+                fullTuneText: str = preamble + 'X:' + tune
+                self.abcTunesInDocumentOrder.append(fullTuneText)
+                self.abcTuneByNumber[numStr] = fullTuneText
+                self.numberForAbcTune[fullTuneText] = numStr
 
         if number is None:
-            # all the tunes in the ABC data
-            xmlDocs: list[Element] = getXmlDocs(self.abcString, num=1000 * 1000)
+            # all the tunes in the ABC data (in doc order)
+            xmlDocs: list[Element] = []
+            abcNumbers = []
+            for tune in self.abcTunesInDocumentOrder:
+                numStr = self.numberForAbcTune[tune]
+                xmlDocs.extend(getXmlDocs(self.abcTuneByNumber[numStr]))
+                abcNumbers.append(numStr)
+
             for xmlDoc in xmlDocs:
                 self.tweakXmlDoc(xmlDoc)
                 xmlStr: str = fixDoctype(xmlDoc)
                 xmlStrs.append(xmlStr)
-            abcNumbers = [str(key) for key in self.abcTuneByNumber]
         else:
             numStr = str(number)
             if numStr not in self.abcTuneByNumber:
