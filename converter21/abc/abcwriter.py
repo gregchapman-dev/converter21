@@ -13,6 +13,7 @@ import typing as t
 import music21 as m21
 from converter21.shared import M21Utilities
 from converter21.abc.xml2abc import vertaal as convertMusicXMLToABC
+from converter21.abc import AbcMetadata
 
 class AbcExportError(Exception):
     pass
@@ -69,6 +70,11 @@ class AbcWriter:
 
             # Now run that MusicXML through xml2abc.vertaal (MusicXML str -> ABC str)
             abcStr, _ = convertMusicXMLToABC(xmlStr)
+            abcStr = self.fixupAbcHeaderFields(
+                abcStr,
+                self._m21ScoreOrOpus.metadata,
+                None)
+
         else:  # it's an Opus
             if t.TYPE_CHECKING:
                 assert isinstance(self._m21ScoreOrOpus, m21.stream.Opus)
@@ -85,11 +91,14 @@ class AbcWriter:
                 if len(uniqueNums) != len(existingNums):
                     useExistingNums = False
 
-            nextNumber: int = 0
+            nextNumber: int | None = None
+            if not useExistingNums:
+                nextNumber = 0
+
             for score in self._m21ScoreOrOpus.scores:
-                if useExistingNums:
-                    nextNumber = score.metadata.number
-                else:
+                if not useExistingNums:
+                    if t.TYPE_CHECKING:
+                        assert nextNumber is not None
                     nextNumber += 1
 
                 # TODO: performance improvement - write to string
@@ -103,14 +112,72 @@ class AbcWriter:
 
                 scoreAbcStr: str
                 scoreAbcStr, _ = convertMusicXMLToABC(xmlStr)
+                scoreAbcStr = self.fixupAbcHeaderFields(
+                    scoreAbcStr,
+                    score.metadata,
+                    nextNumber)
 
                 if abcStr:
                     abcStr += '\n'
 
-                # remove the bad 'X:1' and replace with f'X:{number}'
-                if scoreAbcStr[:4] == 'X:1\n':
-                    abcStr += f'X:{nextNumber}\n'
-                abcStr += scoreAbcStr[4:]
+                abcStr += scoreAbcStr
 
         fp.write(abcStr)
         return True
+
+    _INFO_LINE_STARTS_TO_DELETE: tuple[str, ...] = (
+        'A',  # area (deprecated; we read 'A' but write 'O')
+        'B',  # book
+        'C',  # composer
+        'D',  # discography
+        'F',  # file URL
+        'G',  # group by
+        'H',  # history
+        'I:abc-creator',  # we will set this to 'converter21 vm.n'
+        'N',  # notes
+        'O',  # origin (location)
+        'R',  # rhythm
+        'S',  # source
+        'T',  # title
+        'W',  # words (untimed lyrics)
+        'X',  # reference number (tune number)
+        'Z',  # transcription
+    )
+
+    def fixupAbcHeaderFields(
+        self,
+        abcStr: str,
+        md: m21.metadata.Metadata,
+        xNumber: int | None
+    ) -> str:
+        # Strip out all the header fields that are metadata, and reconstruct
+        # them from md.
+
+        def shouldDelete(abcLine: str) -> bool:
+            for s in self._INFO_LINE_STARTS_TO_DELETE:
+                if abcLine.startswith(s):
+                    return True
+            return False
+
+        abcLines: list[str] = abcStr.split('\n')
+        _headerLines: list[str] = []  # debugging only
+
+        currIdx: int = 0
+        while True:
+            # inc or shrink loop
+            abcLine = abcLines[currIdx].strip()
+
+            if shouldDelete(abcLine):
+                _headerLines.append(abcLine)  # debugging only
+                # shrink (currIdx will point at next line)
+                del abcLines[currIdx]
+            else:
+                # inc (currIdx will point at next line)
+                currIdx += 1
+
+            if abcLine[0] == 'K':
+                break
+
+        newInfoLines: list[str] = AbcMetadata.m21MetadataToAbcInfoLines(md, xNumber)
+        allLines: list[str] = newInfoLines + abcLines
+        return '\n'.join(allLines)

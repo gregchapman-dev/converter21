@@ -8,5 +8,6 @@
 # License:      BSD, see license.txt
 # -----------------------------------------------------------------------------
 
+from .abcmetadata import AbcMetadata
 from .abcreader import AbcReader
 from .abcwriter import AbcWriter
