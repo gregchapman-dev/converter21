@@ -81,16 +81,16 @@ class AbcMetadata:
                 delim = ' '
             for val in vals:
                 if key == 'X' and not xAlreadyWritten:
-                    # Don't write non-integer X: value to ABC files 
+                    # Don't write non-integer X: value to ABC files
                     # (some folks put random stuff in metadata['number']).
                     # Also, only write at most one 'X:n'.
                     if not val.isdigit():
                         continue
-                    
+
                 output.append(f'{key}{delim}{val}')
                 if key == 'X':
                     xAlreadyWritten = True
-            
+
         # Order as: X, T, C, Z, O, all the rest
         # X is required, so if there is no X, make one up
         skipX: bool = False
@@ -144,6 +144,10 @@ class AbcMetadata:
         md.add('software', verStr)
 
         for hfKey, hfValue in infoFields.items():
+            if not hfValue:
+                # ignore metadata with no value(s)
+                continue
+
             if hfKey in ('K', 'L', 'M', 'Q', 'P', 'U'):
                 # header data that is not metadata
                 continue
