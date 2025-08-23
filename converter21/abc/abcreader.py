@@ -18,7 +18,7 @@ from converter21.shared import M21Utilities
 from converter21.abc import abc2xml
 from converter21.abc import AbcMetadata
 
-class ABCImportException(Exception):
+class AbcImportException(Exception):
     pass
 
 class AbcReader:
@@ -73,7 +73,7 @@ class AbcReader:
         else:
             numStr = str(number)
             if numStr not in self.abcTuneByNumber:
-                raise ABCImportException(
+                raise AbcImportException(
                     f'cannot find requested reference number in source file: {number}'
                 )
             abcNumbers = [numStr]
@@ -91,6 +91,11 @@ class AbcReader:
             score.metadata = AbcMetadata.abcInfoDictToMetadata(
                 self.headerFieldsByTuneNumber[abcNumbers[0]]
             )
+            mdNumbers = score.metadata['number']
+            if len(mdNumbers) == 1 and str(mdNumbers[0]) == '1':
+                # There's only one tune (len(xmlStrs) == 1), and it contained X:1,
+                # which is meaningless, so delete that metadata item.
+                score.metadata['number'] = None
             M21Utilities.fixupBadBeams(score, inPlace=True)
             return score
 
