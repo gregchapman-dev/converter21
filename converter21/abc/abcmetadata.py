@@ -29,6 +29,15 @@ class AbcMetadata:
             else:
                 infoDict[k] = [v]
 
+        def addMultilineValue(k: str, v: str):
+            lines: list[str] = v.split('\n')
+            valList = infoDict.get(k, None)
+            if valList is None:
+                infoDict[k] = []
+                valList = infoDict[k]
+            for line in lines:
+                valList.append(line)
+
         def addValueIfUnique(k: str, v: str):
             # doesn't add if value is already present
             if valList := infoDict.get(k, None):
@@ -49,10 +58,9 @@ class AbcMetadata:
                 # 'Z', 'Z:abc-transcription', etc)
                 infoChars: str = key[4:]
                 if infoChars in ('N', 'H', 'W', 'S', 'Z'):
-                    # We can't check for uniqueness because they might be multiline,
-                    # and might have two lines with identical text.  'Z' (with no
-                    # 'Z:abc-blah') I have seen with translation of lyrics!
-                    addValue(infoChars, value)
+                    # This value might be multiline, and needs to be split
+                    # into multiple (e.g.) 'N:'-prefixed lines
+                    addMultilineValue(infoChars, value)
                 else:
                     addValueIfUnique(infoChars, value)
             elif key == 'number':
@@ -144,8 +152,83 @@ class AbcMetadata:
             hfValues: list[str] = splitValues(hfValue)
             md.addCustom(mdKey, hfValues)
 
+        def addCustomValuesAsOneMultilineValue(
+            md: m21.metadata.Metadata,
+            mdKey: str,
+            hfValue: str
+        ):
+            addCustomValue(md, mdKey, hfValue)
+
         def splitValues(hfValue: str) -> list[str]:
             return hfValue.split('\n')
+
+        # Start by splitting out 'Z' and 'I' into separate entries for
+        # "no :abc" and all the different ":abc-whatever" names we see.
+        newInfoFields: dict[str, str] = {}
+        itemList = list(infoFields.items())
+        for hfKey, hfValue in itemList:
+            if hfKey in ('Z', 'I'):
+                vals = splitValues(hfValue)
+                for val in vals:
+                    abcNameAndValue = val.split(' ', 1)
+                    if len(abcNameAndValue) == 1:
+                        if hfKey == 'Z':
+                            # no space-delimited abcName, so just do 'Z'
+                            if newVal := newInfoFields.get('Z'):
+                                newVal = newVal + '\n' + val
+                            else:
+                                newInfoFields['Z'] = val
+                            continue
+
+                    abcName = abcNameAndValue[0]
+                    if not abcName.startswith('abc'):
+                        if hfKey == 'Z':
+                            # no parseable abcName, so just do 'Z'
+                            if newVal := newInfoFields.get('Z'):
+                                newVal = newVal + '\n' + val
+                            else:
+                                newInfoFields['Z'] = val
+                            continue
+                        if hfKey == 'I':
+                            # we ignore unparseable I: abcNames because there are a lot,
+                            # and they are generally not metadata.
+                            continue
+
+                    abcValue = abcNameAndValue[1]
+                    if hfKey == 'Z':
+                        if abcName == 'abc-transcription':
+                            if newVal := newInfoFields.get('Z:abc-transcription'):
+                                newVal = newVal + '\n' + abcValue
+                            else:
+                                newInfoFields['Z:abc-transcription'] = abcValue
+                        elif abcName == 'abc-edited-by':
+                            if newVal := newInfoFields.get('Z:abc-edited-by'):
+                                newVal = newVal + '\n' + abcValue
+                            else:
+                                newInfoFields['Z:abc-edited-by'] = abcValue
+                        elif abcName == 'abc-copyright':
+                            if newVal := newInfoFields.get('Z:abc-copyright'):
+                                newVal = newVal + '\n' + abcValue
+                            else:
+                                newInfoFields['Z:abc-copyright'] = abcValue
+                        else:
+                            if newVal := newInfoFields.get('Z:' + abcName):
+                                newVal = newVal + '\n' + abcValue
+                            else:
+                                newInfoFields['Z:' + abcName] = abcValue
+                    elif hfKey == 'I':
+                        # ignore everything but 'abc-creator'; lots of non-metadata in I:
+                        if abcName == 'abc-creator':
+                            if newVal := newInfoFields.get('I:abc-creator'):
+                                newVal = newVal + '\n' + abcValue
+                            else:
+                                newInfoFields['I:abc-creator'] = abcValue
+
+                # delete this entry from infoFields
+                del infoFields[hfKey]
+
+        # Add everything back in (split apart nicely)
+        infoFields.update(newInfoFields)
 
         md = m21.metadata.Metadata()
 
@@ -163,17 +246,24 @@ class AbcMetadata:
                 # header data that is not metadata
                 continue
 
-            if hfKey in ('N', 'H', 'W', 'R', 'G', 'P'):
+            if hfKey in ('N', 'H', 'W', 'S', 'Z'):
                 # There is no standard metadata key in music21 for these, so we
                 # make up a custom namespace:name such as 'abc:N', etc.
+                # These we treat as one metadata entry, with a multiline string.
                 # N = notes: such as references to other tunes which are similar,
                 #   details on how the original notation of the tune was converted
                 #   to abc, etc
                 # H = history: designed for multi-line notes, stories and anecdotes
                 # W = untimed lyrics: to be printed after the music, for example
+                addCustomValuesAsOneMultilineValue(md, 'abc:' + hfKey, hfValue)
+            elif hfKey in ('R', 'G', 'P'):
+                # There is no standard metadata key in music21 for these, so we
+                # make up a custom namespace:name such as 'abc:R', etc.
+                # These we split into individual one-line metadata entries.
                 # R = rhythm: an indication of the type of tune (e.g. hornpipe, double jig,
                 #   single jig, 48-bar polka, etc).
-                # G: grouping key (used for so many different things)
+                # G: grouping key (used for many different things)
+                # P: partmap (e.g. 'AABBAC')
                 addCustomValues(md, 'abc:' + hfKey, hfValue)
             elif hfKey == 'X':
                 if hfValue.isdigit():
@@ -199,42 +289,14 @@ class AbcMetadata:
                         addValue(md, 'localeOfComposition', val)
                     else:
                         addValue(md, 'countryOfComposition', val)
-            elif hfKey in ('I', 'Z'):
-                # These are prefixed with 'abc-something '
-                vals = splitValues(hfValue)
-                for val in vals:
-                    abcNameAndValue = val.split(' ', 1)
-                    if len(abcNameAndValue) == 1:
-                        if hfKey == 'Z':
-                            # no space-delimited abcName, so just do 'abc:Z'
-                            addCustomValue(md, 'abc:Z', val)
-                            continue
-
-                    abcName = abcNameAndValue[0]
-                    if not abcName.startswith('abc'):
-                        if hfKey == 'Z':
-                            # no parseable abcName, so just do 'abc:Z'
-                            addCustomValue(md, 'abc:Z', val)
-                            continue
-                        if hfKey == 'I':
-                            # we ignore unparseable I: abcNames because there are a lot,
-                            # and they are generally not metadata.
-                            continue
-
-                    abcValue = abcNameAndValue[1]
-                    if hfKey == 'Z':
-                        if abcName == 'abc-transcription':
-                            addValue(md, 'electronicEncoder', abcValue)
-                        elif abcName == 'abc-edited-by':
-                            addValue(md, 'electronicEditor', abcValue)
-                        elif abcName == 'abc-copyright':
-                            addValue(md, 'copyright', abcValue)
-                        else:
-                            addCustomValue(md, 'abc:Z:' + abcName, abcValue)
-                    elif hfKey == 'I':
-                        # ignore everything but 'abc-creator'; lots of non-metadata in I:
-                        if abcName == 'abc-creator':
-                            addValue(md, 'software', abcValue)
+            elif hfKey == 'I:abc-creator':
+                addValues(md, 'software', hfValue)
+            elif hfKey == 'Z:abc-transcription':
+                addValues(md, 'electronicEncoder', hfValue)
+            elif hfKey == 'Z:abc-edited-by':
+                addValues(md, 'electronicEditor', hfValue)
+            elif hfKey == 'Z:abc-copyright':
+                addValues(md, 'copyright', hfValue)
             else:
                 pass  # print(f'need to support {hfKey}')
 
