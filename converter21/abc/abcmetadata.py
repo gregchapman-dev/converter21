@@ -24,6 +24,12 @@ class AbcMetadata:
         infoDict: dict[str, list[str]] = {}
 
         def addValue(k: str, v: str):
+            if valList := infoDict.get(k, None):
+                valList.append(v)
+            else:
+                infoDict[k] = [v]
+
+        def addValueIfUnique(k: str, v: str):
             # doesn't add if value is already present
             if valList := infoDict.get(k, None):
                 if v not in valList:
@@ -42,30 +48,35 @@ class AbcMetadata:
                 # chars after 'abc:' is the info key (e.g. 'N', 'H', 'W',
                 # 'Z', 'Z:abc-transcription', etc)
                 infoChars: str = key[4:]
-                addValue(infoChars, value)
-
+                if infoChars in ('N', 'H', 'W', 'S', 'Z'):
+                    # We can't check for uniqueness because they might be multiline,
+                    # and might have two lines with identical text.  'Z' (with no
+                    # 'Z:abc-blah') I have seen with translation of lyrics!
+                    addValue(infoChars, value)
+                else:
+                    addValueIfUnique(infoChars, value)
             elif key == 'number':
                 addValueOnlyOnce('X', value)
             elif key == 'title':
-                addValue('T', value)
+                addValueIfUnique('T', value)
             elif key == 'composer':
-                addValue('C', value)
+                addValueIfUnique('C', value)
             elif key == 'parentTitle':
-                addValue('B', value)
+                addValueIfUnique('B', value)
             elif key == 'filePath':
                 # nope, this is the filePath that was parsed to produce md, not
                 # the filePath of the file we are writing.
                 pass
             elif key == 'humdrum:RTL':
-                addValue('D', value)
+                addValueIfUnique('D', value)
             elif key in ('localeOfComposition', 'countryOfComposition'):
-                addValue('O', value)
+                addValueIfUnique('O', value)
             elif key == 'electronicEncoder':
-                addValue('Z:abc-transcription', value)
+                addValueIfUnique('Z:abc-transcription', value)
             elif key == 'electronicEditor':
-                addValue('Z:abc-edited-by', value)
+                addValueIfUnique('Z:abc-edited-by', value)
             elif key == 'copyright':
-                addValue('Z:abc-copyright', value)
+                addValueIfUnique('Z:abc-copyright', value)
 
         # write our own I:abc-creator value (not from md)
         addValue('I:abc-creator', f'{SharedConstants._CONVERTER21_NAME_AND_VERSION}')
@@ -195,15 +206,15 @@ class AbcMetadata:
                     abcNameAndValue = val.split(' ', 1)
                     if len(abcNameAndValue) == 1:
                         if hfKey == 'Z':
-                            # no space-delimited abcName, so val is the encoder
-                            addValue(md, 'electronicEncoder', val)
+                            # no space-delimited abcName, so just do 'abc:Z'
+                            addCustomValue(md, 'abc:Z', val)
                             continue
 
                     abcName = abcNameAndValue[0]
                     if not abcName.startswith('abc'):
                         if hfKey == 'Z':
-                            # no parseable abcName, so val is the encoder
-                            addValue(md, 'electronicEncoder', val)
+                            # no parseable abcName, so just do 'abc:Z'
+                            addValue(md, 'abc:Z', val)
                             continue
                         if hfKey == 'I':
                             # we ignore unparseable I: abcNames because there are a lot,
