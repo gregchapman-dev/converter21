@@ -74,13 +74,23 @@ class AbcMetadata:
         output: list[str] = []
 
         def appendToOutput(key: str, vals: list[str]):
+            xAlreadyWritten: bool = False
             delim: str = ':'
             if len(key) > 1:
                 # e.g. key == 'Z:abc-transcription'
                 delim = ' '
             for val in vals:
+                if key == 'X' and not xAlreadyWritten:
+                    # Don't write non-integer X: value to ABC files 
+                    # (some folks put random stuff in metadata['number']).
+                    # Also, only write at most one 'X:n'.
+                    if not val.isdigit():
+                        continue
+                    
                 output.append(f'{key}{delim}{val}')
-
+                if key == 'X':
+                    xAlreadyWritten = True
+            
         # Order as: X, T, C, Z, O, all the rest
         # X is required, so if there is no X, make one up
         skipX: bool = False
@@ -151,7 +161,8 @@ class AbcMetadata:
                 # G: grouping key (used for so many different things)
                 addCustomValues(md, 'abc:' + hfKey, hfValue)
             elif hfKey == 'X':
-                addValue(md, 'number', hfValue)
+                if hfValue.isdigit():
+                    addValue(md, 'number', hfValue)
             elif hfKey == 'T':
                 addValues(md, 'title', hfValue)
             elif hfKey == 'C':
