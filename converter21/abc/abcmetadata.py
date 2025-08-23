@@ -148,11 +148,11 @@ class AbcMetadata:
                 # ignore metadata with no value(s)
                 continue
 
-            if hfKey in ('K', 'L', 'M', 'Q', 'P', 'U'):
+            if hfKey in ('K', 'L', 'M', 'Q', 'U'):
                 # header data that is not metadata
                 continue
 
-            if hfKey in ('N', 'H', 'W', 'R', 'G'):
+            if hfKey in ('N', 'H', 'W', 'R', 'G', 'P'):
                 # There is no standard metadata key in music21 for these, so we
                 # make up a custom namespace:name such as 'abc:N', etc.
                 # N = notes: such as references to other tunes which are similar,

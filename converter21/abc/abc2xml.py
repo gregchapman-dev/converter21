@@ -546,6 +546,7 @@ def splitHeaderVoices (abctext):
             ftype = mxm.metaMap.get ('W', 'W')  # respect the (user defined --meta) mapping of various ABC fields to XML meta data types
             c = mxm.metadata.get (ftype, '')
             mxm.metadata [ftype] = c + '\n' + field if c else field   # concatenate multiple info fields with new line as separator
+            mxm.header_fields_for_converter21[ftype] = mxm.metadata[ftype]
             continue                    # skip W: lyrics
         if x2[:2] == '+:':              # field continuation
             fln += ' ' + x2[2:]
