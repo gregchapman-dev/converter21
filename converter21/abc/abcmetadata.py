@@ -175,7 +175,7 @@ class AbcMetadata:
                         if hfKey == 'Z':
                             # no space-delimited abcName, so just do 'Z'
                             if newVal := newInfoFields.get('Z'):
-                                newVal = newVal + '\n' + val
+                                newInfoFields['Z'] = newVal + '\n' + val
                             else:
                                 newInfoFields['Z'] = val
                             continue
@@ -185,7 +185,7 @@ class AbcMetadata:
                         if hfKey == 'Z':
                             # no parseable abcName, so just do 'Z'
                             if newVal := newInfoFields.get('Z'):
-                                newVal = newVal + '\n' + val
+                                newInfoFields['Z'] = newVal + '\n' + val
                             else:
                                 newInfoFields['Z'] = val
                             continue
@@ -198,29 +198,29 @@ class AbcMetadata:
                     if hfKey == 'Z':
                         if abcName == 'abc-transcription':
                             if newVal := newInfoFields.get('Z:abc-transcription'):
-                                newVal = newVal + '\n' + abcValue
+                                newInfoFields['Z:abc-transcription'] = newVal + '\n' + abcValue
                             else:
                                 newInfoFields['Z:abc-transcription'] = abcValue
                         elif abcName == 'abc-edited-by':
                             if newVal := newInfoFields.get('Z:abc-edited-by'):
-                                newVal = newVal + '\n' + abcValue
+                                newInfoFields['Z:abc-edited-by'] = newVal + '\n' + abcValue
                             else:
                                 newInfoFields['Z:abc-edited-by'] = abcValue
                         elif abcName == 'abc-copyright':
                             if newVal := newInfoFields.get('Z:abc-copyright'):
-                                newVal = newVal + '\n' + abcValue
+                                newInfoFields['Z:abc-copyright'] = newVal + '\n' + abcValue
                             else:
                                 newInfoFields['Z:abc-copyright'] = abcValue
                         else:
                             if newVal := newInfoFields.get('Z:' + abcName):
-                                newVal = newVal + '\n' + abcValue
+                                newInfoFields['Z:' + abcName] = newVal + '\n' + abcValue
                             else:
                                 newInfoFields['Z:' + abcName] = abcValue
                     elif hfKey == 'I':
                         # ignore everything but 'abc-creator'; lots of non-metadata in I:
                         if abcName == 'abc-creator':
                             if newVal := newInfoFields.get('I:abc-creator'):
-                                newVal = newVal + '\n' + abcValue
+                                newInfoFields['I:abc-creator'] = newVal + '\n' + abcValue
                             else:
                                 newInfoFields['I:abc-creator'] = abcValue
 
