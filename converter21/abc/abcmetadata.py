@@ -214,7 +214,7 @@ class AbcMetadata:
                     if not abcName.startswith('abc'):
                         if hfKey == 'Z':
                             # no parseable abcName, so just do 'abc:Z'
-                            addValue(md, 'abc:Z', val)
+                            addCustomValue(md, 'abc:Z', val)
                             continue
                         if hfKey == 'I':
                             # we ignore unparseable I: abcNames because there are a lot,
