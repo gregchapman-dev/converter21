@@ -88,7 +88,7 @@ class AbcMetadata:
             appendToOutput('X', [str(xNumber)])
             skipX = True
         elif 'X' not in infoDict:
-            appendToOutput('X', '1')
+            appendToOutput('X', ['1'])
 
         theRestDict: dict[str, list[str]] = copy.copy(infoDict)
         for firstChar in 'XTCOZ':
