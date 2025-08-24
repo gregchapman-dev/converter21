@@ -918,6 +918,14 @@ class HumdrumFile(HumdrumFileContent):
             key = bibLine.referenceKey
             value = bibLine.referenceValue
 
+            # if key == 'abc', we need to reparse key and value so we get key == 'abc:N'
+            # or whatever.
+            if key == 'abc':
+                valueParts: list[str] = value.split(':', 1)
+                if len(valueParts) == 2:
+                    key = key + ':' + valueParts[0]
+                    value = valueParts[1].strip()
+
             # system-decoration and RDF** are referenceRecords, but should not
             # go in self._biblio, since they are not metadata.
             if key == 'system-decoration':
@@ -11007,9 +11015,12 @@ class HumdrumFile(HumdrumFileContent):
                 )
                 continue
 
-            # freeform key/value, put it in as custom (but with key prepended with
-            # 'raw:' to prevent possible overlap with music21 metadata uniqueName key).
-            m21Metadata.addCustom('raw:' + k, v)
+            if k.startswith('abc:'):
+                m21Metadata.addCustom(k, v)
+            else:
+                # freeform key/value, put it in as custom (but with key prepended with
+                # 'raw:' to prevent possible overlap with music21 metadata uniqueName key).
+                m21Metadata.addCustom('raw:' + k, v)
 
     def _prepartPartInstrumentInfo(self, partStartTok: HumdrumToken, staffNum: int) -> None:
         # staffNum is 1-based, but _staffStates is 0-based
