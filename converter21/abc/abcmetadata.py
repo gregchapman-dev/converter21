@@ -52,7 +52,16 @@ class AbcMetadata:
                 return
             infoDict[k] = [v]
 
+        # grab the title(s) first, so they go before any alternateTitle(s)
+        if titles := md['title']:
+            for t in titles:
+                addValueIfUnique('T', str(t))
+
         for key, value in md.all(returnSorted=False):
+            if key == 'title':
+                # we already did the titles above
+                continue
+
             if key.startswith('abc:'):
                 # chars after 'abc:' is the info key (e.g. 'N', 'H', 'W',
                 # 'Z', 'Z:abc-transcription', etc)
@@ -65,7 +74,7 @@ class AbcMetadata:
                     addValueIfUnique(infoChars, value)
             elif key == 'number':
                 addValueOnlyOnce('X', value)
-            elif key == 'title':
+            elif key == 'alternativeTitle':
                 addValueIfUnique('T', value)
             elif key == 'composer':
                 addValueIfUnique('C', value)
@@ -146,7 +155,12 @@ class AbcMetadata:
 
         def addValues(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
             hfValues: list[str] = splitValues(hfValue)
-            md.add(mdKey, hfValues)
+            if mdKey == 'title':
+                md.add('title', hfValues[0])
+                if len(hfValues) > 1:
+                    md.add('alternativeTitle', hfValues[1:])
+            else:
+                md.add(mdKey, hfValues)
 
         def addCustomValues(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
             hfValues: list[str] = splitValues(hfValue)
