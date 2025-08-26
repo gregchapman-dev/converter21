@@ -272,7 +272,9 @@ _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in
 
 class MeiReaderScore(t.TypedDict):
     scoreEl: Element
-    onlyScoreInMei: bool
+    uniqueAncestry: list[Element]
+    isOnlyScoreInMei: bool
+    meiElForScore: Element
     n: int | None
     xmlIds: list[str]
 
@@ -548,7 +550,9 @@ class MeiReader:
     #         self.stripParentInfo(childEl)
 
     @staticmethod
-    def _getParent(childEl: Element) -> Element | None:
+    def _getParent(childEl: Element | None) -> Element | None:
+        if childEl is None:
+            return None
         output = childEl.attrib.get('__mei_parent__', None)
         if t.TYPE_CHECKING:
             assert output is None or isinstance(output, Element)
@@ -574,7 +578,7 @@ class MeiReader:
                 if parentEl is None:
                     break
 
-                numScoreDescendants = len(list(parentEl.findall(f'.//{MEI_NS}score')))
+                numScoreDescendants = len(parentEl.findall(f'.//{MEI_NS}score'))
                 if numScoreDescendants > 1:
                     break
 
@@ -583,10 +587,30 @@ class MeiReader:
 
             return output
 
+        def getMeiElementForScore(scoreEl: Element) -> Element | None:
+            output: Element | None = None
+            el: Element | None = scoreEl
+            while True:
+                el = self._getParent(el)
+                if el is None:
+                    break
+                if el.tag == f'{MEI_NS}mei':
+                    output = el
+                    break
+            return output
+
         def appendReaderScore(scoreEl: Element):
             outputN: int | None = None
             outputXmlIds: list[str] = []
+            meiElForScore: Element | None = getMeiElementForScore(scoreEl)
+            if meiElForScore is None:
+                raise MeiValidityError(
+                    '<score> element is not contained within an ancestor <mei> element.'
+                )
+
             uniqueAncestry: list[Element] = getUniqueAncestryForScore(scoreEl)
+            isOnlyScoreInMei: bool = meiElForScore in uniqueAncestry
+
             for el in uniqueAncestry:
                 xmlId: str | None = el.get(_XMLID)
                 if xmlId is not None:
@@ -600,10 +624,11 @@ class MeiReader:
                     except Exception:
                         pass
 
-            onlyScoreInMei: bool = f'{MEI_NS}mei' in [el.tag for el in uniqueAncestry]
             readerScore: MeiReaderScore = {
                 'scoreEl': uniqueAncestry[0],
-                'onlyScoreInMei': onlyScoreInMei,
+                'uniqueAncestry': uniqueAncestry,
+                'isOnlyScoreInMei': isOnlyScoreInMei,
+                'meiElForScore': meiElForScore,
                 'n': outputN,
                 'xmlIds': outputXmlIds
             }
@@ -611,9 +636,9 @@ class MeiReader:
 
         subRoots: list[Element] = []
         if rootEl.tag == f'{MEI_NS}meiCorpus':
-            subRoots = rootEl.findall(f'.//{MEI_NS}mei')
+            subRoots = rootEl.findall(f'{MEI_NS}mei')
         elif rootEl.tag == f'{MEI_NS}mei':
-            # just the one <music> that's directly inside <mei>
+            # just the one <music> that's directly inside <mei>.
             musicEl: Element | None = rootEl.find(f'{MEI_NS}music')
             if musicEl is not None:
                 subRoots = [musicEl]
@@ -3120,21 +3145,21 @@ class MeiReader:
             from the MEI document.
         :rtype: :class:`music21.metadata.Metadata`
         '''
-
-        # 888 we need to know if we should look in all of meiHead, or just in whatever
-        # 888 work element matches one of the xmlIds.
-        meiHead: Element | None = self.documentRoot.find(f'.//{MEI_NS}meiHead')
+        meiEl: Element = readerScore['meiElForScore']
+        meiHead: Element | None = meiEl.find(f'{MEI_NS}meiHead')
         if meiHead is None:
             return m21.metadata.Metadata()
 
-        meiMetadataReader = MeiMetadataReader(meiHead)
+        meiMetadataReader = MeiMetadataReader(meiHead, readerScore)
         meiMetadataReader.processMetadata()
 
-        # We also need to look in music/back/div@type=textTranslation for any
-        # translations of vocal text.
-        back: Element | None = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}back')
-        if back is not None:
-            meiMetadataReader.processMusicBackElement(back)
+        # look for any <music> that contains <back> in the uniqueAncestry list
+        for el in readerScore['uniqueAncestry']:
+            if el.tag == '{MEI_NS}music':
+                back = el.find('{MEI_NS}back')
+                if back is not None:
+                    meiMetadataReader.processMusicBackElement(back)
+                    break
 
         return meiMetadataReader.m21Metadata
 

@@ -26,6 +26,7 @@ from .meielement import MeiElement
 from .meishared import MeiShared
 from .meimetadatareader import MeiMetadataReader
 from .meireader import MeiReader
+from .meireader import MeiReaderScore
 from .meireader import MEI_NS
 from .meireader import INVALID_XML_DOC
 from .meireader import WRONG_ROOT_ELEMENT

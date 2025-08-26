@@ -17,6 +17,7 @@ import music21 as m21
 from converter21.mei import MeiElementError
 from converter21.mei import MeiShared
 from converter21.mei import MeiElement
+from converter21.mei import MeiReaderScore
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
 
@@ -30,18 +31,24 @@ _MISSED_DATE = 'Unable to decipher an MEI date "{}". Leaving as str.'
 
 
 class MeiMetadataReader:
-    def __init__(self, meiHead: Element) -> None:
+    def __init__(
+        self,
+        meiHead: Element,
+        readerScore: MeiReaderScore
+    ) -> None:
         if meiHead.tag != f'{MEI_NS}meiHead':
             raise MeiElementError(
                 'MeiMetadataReader must be initialized with an <meiHead> element.'
             )
 
         self.meiHead: Element = meiHead
+        self.readerScore: MeiReaderScore = readerScore
         self.meiHeadElement: MeiElement = MeiElement(meiHead)
         self.madsAuthorityDataByID: dict[str, MeiElement] = {}
         self.m21Metadata: m21.metadata.Metadata = m21.metadata.Metadata()
 
     def processMetadata(self) -> None:
+        fullMeiHeadParse: bool = self.readerScore['isOnlyScoreInMei']
         self.madsAuthorityDataByID = self.gatherMADSAuthorityData()
 
         fileDescMD: m21.metadata.Metadata | None = None
@@ -51,11 +58,16 @@ class MeiMetadataReader:
         # Gather up separate metadata from each subElement of meiHead, then combine
         # them (e.g. use title from workList if it's there, else from fileDesc).
         for subEl in self.meiHeadElement.subElements:
-            if subEl.name.endswith('fileDesc'):
-                fileDescMD = self.processFileDesc(subEl)
-            elif subEl.name.endswith('encodingDesc'):
+            if fullMeiHeadParse:
+                if subEl.name.endswith('fileDesc'):
+                    fileDescMD = self.processFileDesc(subEl)
+                    continue
+
+            if subEl.name.endswith('encodingDesc'):
                 encodingDescMD = self.processEncodingDesc(subEl)
-            elif subEl.name.endswith('workList'):
+                continue
+
+            if subEl.name.endswith('workList'):
                 workListMD = self.processWorkList(subEl)
 
         self.m21Metadata = self.combineFileDescEncodingDescAndWorkListMetadata(
@@ -64,18 +76,21 @@ class MeiMetadataReader:
             workListMD
         )
 
-        # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
-        # entire <meiHead> element (in case someone wants to parse out more info than we do).
-        meiHeadXmlStr: str = tostring(self.meiHead, encoding='unicode')
-#         meiHeadElementStr: str = self.meiHeadElement.__repr__()
-        meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
-        self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
+        if fullMeiHeadParse:
+            # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
+            # entire <meiHead> element (in case someone wants to parse out more info than we do).
+            meiHeadXmlStr: str = tostring(self.meiHead, encoding='unicode')
+            meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
+            self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
 
     def gatherMADSAuthorityData(self) -> dict[str, MeiElement]:
         output: dict[str, MeiElement] = {}
         # We recurse to find all <mads> elements anywhere in <meiHead>.  Our writer puts
         # them in the main <work> element's <extMeta><madsCollection>, but others might
         # put them in <meiHead><extMeta><madsCollection>.  We'll find them all here.
+        # It's ok that we look everywhere, even though isOnlyScoreInMei might be False.
+        # That's because we then will only encode mads data for any composer-ish elements
+        # we actually parse (and that will be limited by isOnlyScoreInMei).
         madsElements: list[MeiElement] = self.meiHeadElement.findAll('mads', recurse=True)
         for mads in madsElements:
             madsID: str = mads.get('ID', '')
@@ -510,20 +525,46 @@ class MeiMetadataReader:
 
         return md
 
-    def processWorkList(self, workListElement: MeiElement) -> m21.metadata.Metadata:
+    def processWorkList(
+        self,
+        workListElement: MeiElement,
+    ) -> m21.metadata.Metadata:
         md = m21.metadata.Metadata()
 
         # Note that we only deal with top-level <work> elements in <workList>.
         # Nested <work>s are out-of-scope.
         works: list[MeiElement] = workListElement.findAll('work', recurse=False)
+        if not works:
+            return md
+
+        if self.readerScore['isOnlyScoreInMei'] is False:
+            # we need to only parse the one <work> that pertains to our readerScore
+            mainWork: MeiElement | None = None
+            for work in works:
+                workDataId: str = work.get('data', '')
+                if workDataId and workDataId in self.readerScore['xmlIds']:
+                    mainWork = work
+                    break
+
+            if not mainWork:
+                return md
+
+            # TODO: Here we might look for relationships etc, in case there are non-main
+            # TODO: work descriptions here (besides all the other 'main' works, that is)
+            # TODO: For now, don't bother (verovio doesn't write any when it converts from
+            # TODO: ABC to MEI).
+            allElements = mainWork.findAll('*', recurse=False)
+            for elem in allElements:
+                self.processMainWorkSubElement(elem, md)
+
+            return md
+
+        # Process all the works in the workList.
         mainWorks: list[MeiElement] = []
         parentWorks: list[MeiElement] = []
         groupWorks: list[MeiElement] = []
         collectionWorks: list[MeiElement] = []
         associatedWorks: list[MeiElement] = []
-
-        if not works:
-            return md
 
         # annotate the works, with 'parent'/'child', 'group'/'member', or
         # 'collection'/'member' links.
