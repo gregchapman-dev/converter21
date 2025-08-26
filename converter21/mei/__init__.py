@@ -5,7 +5,7 @@
 #
 # Authors:      Greg Chapman
 #
-# Copyright:    Copyright © 2021-2022 Greg Chapman
+# Copyright:    Copyright © 2021-2025 Greg Chapman
 # License:      BSD, see license.txt
 # -----------------------------------------------------------------------------
 '''
@@ -24,9 +24,9 @@ from .m21objectconvert import M21ObjectConvert
 
 from .meielement import MeiElement
 from .meishared import MeiShared
+from .meishared import MeiReaderScore
 from .meimetadatareader import MeiMetadataReader
 from .meireader import MeiReader
-from .meireader import MeiReaderScore
 from .meireader import MEI_NS
 from .meireader import INVALID_XML_DOC
 from .meireader import WRONG_ROOT_ELEMENT

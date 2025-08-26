@@ -7,6 +7,7 @@
 # Copyright:     (c) 2021-2023 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
+import typing as t
 from xml.etree.ElementTree import Element
 import re
 
@@ -19,6 +20,15 @@ environLocal = m21.environment.Environment('converter21.mei.meireader')
 
 _XMLID = '{http://www.w3.org/XML/1998/namespace}id'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
+
+class MeiReaderScore(t.TypedDict):
+    scoreEl: Element
+    uniqueAncestry: list[Element]
+    isOnlyScoreInMei: bool
+    meiElForScore: Element
+    n: int | None
+    xmlIds: list[str]
+
 
 class MeiShared:
     _EDITORIAL_ELEMENTS: tuple[str, ...] = (

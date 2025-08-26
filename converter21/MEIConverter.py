@@ -2,11 +2,11 @@
 # Name:          MEIConverter.py
 # Purpose:       A music21 subconverter for MEI files.
 #
-# Note:          This was copied verbatim from music21/converter/subConverters.py (by
+# Note:          This file was copied verbatim from music21/converter/subConverters.py (by
 #                Michael Scott Asato Cuthbert and Christopher Ariza), and then modified
 #                to live in converter21.
 #
-# Copyright:     (c) 2021-2023 Greg Chapman
+# Copyright:     (c) 2021-2025 Greg Chapman
 # License:       MIT, see LICENSE
 #
 # ------------------------------------------------------------------------------

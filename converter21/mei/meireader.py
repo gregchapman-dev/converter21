@@ -217,6 +217,7 @@ from converter21.mei import MeiInternalError
 
 from converter21.mei import M21ObjectConvert
 from converter21.mei import MeiShared
+from converter21.mei import MeiReaderScore
 from converter21.mei import MeiMetadataReader
 
 from converter21.shared import SharedConstants
@@ -269,15 +270,6 @@ _BAD_VERSE_NUMBER = 'Verse number must be an int (got "{}")'
 _EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} in favor of {}'
 _EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
 _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
-
-class MeiReaderScore(t.TypedDict):
-    scoreEl: Element
-    uniqueAncestry: list[Element]
-    isOnlyScoreInMei: bool
-    meiElForScore: Element
-    n: int | None
-    xmlIds: list[str]
-
 
 class MeiReader:
     '''

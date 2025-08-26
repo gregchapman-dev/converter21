@@ -4,7 +4,7 @@
 #
 # Authors:       Greg Chapman <gregc@mac.com>
 #
-# Copyright:     (c) 2023 Greg Chapman
+# Copyright:     (c) 2023-2025 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 
@@ -28,7 +28,6 @@ _XMLLANG = '{http://www.w3.org/XML/1998/namespace}lang'
 MEI_NS = '{http://www.music-encoding.org/ns/mei}'
 
 _MISSED_DATE = 'Unable to decipher an MEI date "{}". Leaving as str.'
-
 
 class MeiMetadataReader:
     def __init__(
@@ -542,6 +541,7 @@ class MeiMetadataReader:
             mainWork: MeiElement | None = None
             for work in works:
                 workDataId: str = work.get('data', '')
+                workDataId = MeiShared.removeOctothorpe(workDataId)
                 if workDataId and workDataId in self.readerScore['xmlIds']:
                     mainWork = work
                     break
@@ -557,6 +557,8 @@ class MeiMetadataReader:
             for elem in allElements:
                 self.processMainWorkSubElement(elem, md)
 
+            if self.readerScore['n'] is not None:
+                md.number = str(self.readerScore['n'])
             return md
 
         # Process all the works in the workList.
@@ -743,6 +745,9 @@ class MeiMetadataReader:
             allElements = work.findAll('*', recurse=False)
             for elem in allElements:
                 self.processMainWorkSubElement(elem, md)
+
+        if self.readerScore['n'] is not None:
+            md.number = str(self.readerScore['n'])
 
         return md
 
