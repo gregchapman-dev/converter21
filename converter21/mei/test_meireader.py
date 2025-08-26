@@ -80,11 +80,7 @@ class Test(unittest.TestCase):
                        <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0">
                        <music><score></score></music></mei>'''
 
-        documentRoot = ETree.fromstring(inputFile)
-        if isinstance(documentRoot, ETree.ElementTree):
-            documentRoot = documentRoot.getroot()
-
-        actual = MeiReader(documentRoot)
+        actual = MeiReader(inputFile)
         # NB: at first I did this:
         # self.assertIsInstance(actual.documentRoot, ETree.Element)
         # ... but that doesn't work since it might be a C-Element instead

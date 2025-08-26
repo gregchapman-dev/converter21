@@ -16,6 +16,7 @@ from .meiexceptions import MeiValidityError
 from .meiexceptions import MeiValueError
 from .meiexceptions import MeiAttributeError
 from .meiexceptions import MeiElementError
+from .meiexceptions import MeiImportError
 from .meiexceptions import MeiExportError
 from .meiexceptions import MeiInternalError
 

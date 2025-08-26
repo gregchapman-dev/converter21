@@ -30,3 +30,7 @@ class MeiInternalError(Exception):
 class MeiExportError(Exception):
     '''When an error occurs while converting to MEI.'''
     pass
+
+class MeiImportError(Exception):
+    '''When an error occurs while parsing MEI.'''
+    pass

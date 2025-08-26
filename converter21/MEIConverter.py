@@ -12,7 +12,6 @@
 # ------------------------------------------------------------------------------
 import typing as t
 import pathlib
-from xml.etree.ElementTree import fromstring, Element, ElementTree, ParseError
 
 from music21 import stream
 from music21 import common
@@ -20,10 +19,7 @@ from music21 import environment
 
 from music21.converter.subConverters import SubConverter
 
-from converter21.mei import MeiReader, MEI_NS, INVALID_XML_DOC, WRONG_ROOT_ELEMENT
-from converter21.mei import MeiValidityError
-from converter21.mei import MeiElementError
-from converter21.mei import MeiAttributeError
+from converter21.mei import MeiReader
 from converter21.mei import MeiWriter
 
 environLocal = environment.Environment('converter21.mei.meireader')
@@ -48,52 +44,14 @@ class MEIConverter(SubConverter):
 
         * dataString: The string with XML to convert.
 
-        * number: One-based score number within `<meiCorpus>`. Default is `None`.
+        * number: Score number. Default is `None`.  If there are any missing numbers
+            in the document to match against, number is interpreted as a 1-based
+            index into the scores found in document order.
 
         Returns the music21 objects corresponding to the MEI file.
         :raises: :exc:`MeiValidityError` when the MEI file is not valid XML.
         '''
-        if dataString.startswith('mei:'):
-            dataString = dataString[4:]
-
-        try:
-            documentRoot = fromstring(dataString)
-            if isinstance(documentRoot, ElementTree):
-                documentRoot = documentRoot.getroot()
-        except ParseError as parseErr:
-            environLocal.warn(
-                '\n\nERROR: Parsing the MEI document with ElementTree failed.')
-            environLocal.warn(f'We got the following error:\n{parseErr}')
-            raise MeiValidityError(INVALID_XML_DOC)
-
-        # Check for <meiCorpus>, and if present, make an Opus, read
-        # <meiCorpus><meiHead> into opus.metadata, and make an MeiReader
-        # for each enclosed <mei> element, putting the resulting score(s)
-        # into the Opus.
-        if documentRoot.tag == f'{MEI_NS}meiCorpus':
-            meiVersion: str = documentRoot.attrib.get('meiversion', '')
-            if not meiVersion:
-                raise MeiAttributeError('No @meiversion on root element.')
-
-            if number is None:
-                self.stream = stream.Opus()
-            meiRoots: list[Element] = documentRoot.findall(f'./{MEI_NS}mei')
-            for scoreIdx, meiRoot in enumerate(meiRoots):
-                if number is None:
-                    score = MeiReader(meiRoot, meiVersion).run()
-                    self.stream.append(score)
-                else:
-                    # we only want a particular score
-                    scoreNum: int = scoreIdx + 1
-                    if number == scoreNum:
-                        self.stream = MeiReader(meiRoot).run()
-                        break
-        elif documentRoot.tag == f'{MEI_NS}mei':
-            self.stream = MeiReader(documentRoot).run()
-        else:
-            # bad root tag
-            raise MeiElementError(WRONG_ROOT_ELEMENT.format(documentRoot.tag))
-
+        self.stream = MeiReader(dataString).run(number)
         output: stream.Stream = self.stream
 
         if t.TYPE_CHECKING:

@@ -174,7 +174,7 @@ tool.
 
 '''
 import typing as t
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element, fromstring, ElementTree, ParseError
 import re
 import html
 
@@ -212,6 +212,7 @@ from converter21.mei import MeiValidityError
 # from converter21.mei import MeiValueError
 from converter21.mei import MeiAttributeError
 from converter21.mei import MeiElementError
+from converter21.mei import MeiImportError
 from converter21.mei import MeiInternalError
 
 from converter21.mei import M21ObjectConvert
@@ -269,6 +270,13 @@ _EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} 
 _EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
 _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
 
+class MeiReaderScore(t.TypedDict):
+    scoreEl: Element
+    onlyScoreInMei: bool
+    n: int | None
+    xmlIds: list[str]
+
+
 class MeiReader:
     '''
     A :class:`MeiReader` instance manages the conversion of a MEI document into music21
@@ -276,20 +284,92 @@ class MeiReader:
 
     If ``theDocumentRoot`` does not have <mei> or <meiCorpus> as the root element, the
     class raises an :class:`MeiElementError`.
-    :param str theDocumentRoot: An Element containing the entire MEI file (parsed as XML).
-    :raises: :exc:`MeiElementError` when the root element is not <mei>
+    :param str dataString: a string containing the entire MEI file.
+    :raises: :exc:`MeiElementError` when the root element is not <mei> or <meiCorpus>
     '''
 
     def __init__(
         self,
-        theDocumentRoot: Element | None = None,
-        meiVersion: str | None = None  # None means look in theDocumentRoot
+        dataString: str = ''
     ) -> None:
         M21Utilities.adjustMusic21Behavior()
 
         #  The __init__() documentation doesn't isn't processed by Sphinx,
         #  so I put it at class level.
         environLocal.printDebug('*** initializing MeiReader')
+
+        # Check for <meiCorpus>, and if present, make an Opus, read
+        # <meiCorpus><meiHead> into opus.metadata, and make an MeiReader
+        # for each enclosed <mei> element, putting the resulting score(s)
+        # into the Opus.
+
+        # We're going to have to search for number (if not None).  It might be
+        # mei@n.  It also might be music@n if scores are grouped in multiple
+        # <music> elements, or it might be mdiv@n, if scores are in multiple
+        # <mdiv> elements inside <music>.  Or a combination of all of the above.
+        # Or if there are no consistent blah@n, then number-1 will be an index
+        # into all all the <score>s in document order.  Yuck.
+
+        # I think we should gather a list of <score> Elements that actually contain
+        # individual scores (i.e. not the <score>s in <incipit> et al, just the ones
+        # inside <mdiv>), along with the @n and @xml:id from the element that is the
+        # highest element that contains just that one <score>.  For example:
+
+        # <meiCorpus>
+        #   <mei n="12">
+        #     <music>
+        #       <mdiv>
+        #         <score/>
+        #       </mdiv>
+        #     </music>
+        #   </mei>
+        #   <mei>
+        #     <music>
+        #       <mdiv n="2000">
+        #         <score/>
+        #       </mdiv>
+        #       <mdiv n="2001">
+        #         <score/>
+        #       </mdiv>
+        #     </music>
+        #   </mei>
+        #   <mei>
+        #     <music>
+        #       <group>
+        #         <music n="1000">
+        #           <mdiv>
+        #             <score/>
+        #           </mdiv>
+        #           <mdiv n="1001">
+        #             <score/>
+        #           </mdiv>
+        #         <music/>
+        #         <music n="5">
+        #           <mdiv>
+        #             <score/>
+        #           </mdiv>
+        #         <music/>
+        #       </group>
+        #     </music>
+        #   </mei>
+        # </meiCorpus>
+
+        # The above MEI file would return 5 scores, numbered (in order),
+        # 12, 2000, 2001, 1000, 1001, 5.
+        if dataString.startswith('mei:'):
+            dataString = dataString[4:]
+
+        theDocumentRoot: Element | None = None
+        if dataString:
+            try:
+                theDocumentRoot = fromstring(dataString)
+                if isinstance(theDocumentRoot, ElementTree):
+                    theDocumentRoot = theDocumentRoot.getroot()
+            except ParseError as parseErr:
+                environLocal.warn(
+                    '\n\nERROR: Parsing the MEI document with ElementTree failed.')
+                environLocal.warn(f'We got the following error:\n{parseErr}')
+                raise MeiValidityError(INVALID_XML_DOC)
 
         self.initializeTagToFunctionTables()
 
@@ -301,11 +381,12 @@ class MeiReader:
             self.documentRoot = Element(f'{MEI_NS}mei')
             self.meiVersion = '5.0+CMN'
         else:
+            if theDocumentRoot.tag not in (f'{MEI_NS}meiCorpus', f'{MEI_NS}mei'):
+                # bad root tag
+                raise MeiElementError(WRONG_ROOT_ELEMENT.format(theDocumentRoot.tag))
+
             self.documentRoot = theDocumentRoot
-            if meiVersion:
-                self.meiVersion = meiVersion
-            else:
-                self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
+            self.meiVersion = self.documentRoot.attrib.get('meiversion', '')
             if not self.meiVersion:
                 raise MeiAttributeError('No @meiversion on root element.')
             if not (self.meiVersion[0] in ('5', '4')):
@@ -323,6 +404,22 @@ class MeiReader:
             if self.documentRoot.tag not in (f'{MEI_NS}mei', f'{MEI_NS}meiCorpus'):
                 # should never happen (see MEIConverter), but just in case.
                 raise MeiElementError(WRONG_ROOT_ELEMENT.format(self.documentRoot.tag))
+
+        self._addParentInfo(self.documentRoot)
+
+        # Here we gather the list of MeiReaderScores (all the <score> elements we
+        # will be interested in parsing).  self.gather is recursive, so we need
+        # to pass self.documentRoot here.
+        self.readerScores: list[MeiReaderScore] = self.gatherReaderScores(self.documentRoot)
+
+        # the rest of these class variables must be cleared between <score>s,
+        # so we put their initialization in a clear() API that can be called
+        # multiple times as necessary.
+        self.clear()
+
+    # pylint: disable=attribute-defined-outside-init
+
+    def clear(self) -> None:
 
         # This defaultdict stores extra, music21-specific attributes that we add to elements to
         # help importing. The key is an element's @xml:id, and the value is a regular dict with
@@ -440,49 +537,176 @@ class MeiReader:
             tuple[m21.base.Music21Object, m21.base.Music21Object, str]
         ] = []
 
-    def run(self) -> stream.Score:
+    def _addParentInfo(self, parentEl: Element):
+        for childEl in parentEl:
+            childEl.attrib['__mei_parent__'] = parentEl  # type: ignore
+            self._addParentInfo(childEl)
+
+    # def _stripParentInfo(self, parentEl: Element):
+    #     for childEl in parentEl:
+    #         childEl.attrib.pop('__mei_parent__', None)
+    #         self.stripParentInfo(childEl)
+
+    @staticmethod
+    def _getParent(childEl: Element) -> Element | None:
+        output = childEl.attrib.get('__mei_parent__', None)
+        if t.TYPE_CHECKING:
+            assert output is None or isinstance(output, Element)
+        return output
+
+    def gatherReaderScores(
+        self,
+        rootEl: Element,
+    ) -> list[MeiReaderScore]:
+        readerScores: list[MeiReaderScore] = []
+
+        def getUniqueAncestryForScore(scoreEl: Element) -> list[Element]:
+            # start at scoreEl, and work up until you see a parent that contains
+            # more than one score in its descendents (and don't put that parent
+            # in the list).
+            # These are the elements we will search for a unique n and all the xml:ids
+            # (which we will use to try to find the metadata for this score).
+            output: list[Element] = [scoreEl]
+
+            childEl: Element = scoreEl
+            while True:
+                parentEl: Element | None = self._getParent(childEl)
+                if parentEl is None:
+                    break
+
+                numScoreDescendants = len(list(parentEl.findall(f'.//{MEI_NS}score')))
+                if numScoreDescendants > 1:
+                    break
+
+                output.append(parentEl)
+                childEl = parentEl
+
+            return output
+
+        def appendReaderScore(scoreEl: Element):
+            outputN: int | None = None
+            outputXmlIds: list[str] = []
+            uniqueAncestry: list[Element] = getUniqueAncestryForScore(scoreEl)
+            for el in uniqueAncestry:
+                xmlId: str | None = el.get(_XMLID)
+                if xmlId is not None:
+                    outputXmlIds.append(xmlId)
+                if outputN is None:
+                    nStr: str | None = el.get('n')
+                    if nStr is None:
+                        continue
+                    try:
+                        outputN = int(nStr)
+                    except Exception:
+                        pass
+
+            onlyScoreInMei: bool = f'{MEI_NS}mei' in [el.tag for el in uniqueAncestry]
+            readerScore: MeiReaderScore = {
+                'scoreEl': uniqueAncestry[0],
+                'onlyScoreInMei': onlyScoreInMei,
+                'n': outputN,
+                'xmlIds': outputXmlIds
+            }
+            readerScores.append(readerScore)
+
+        subRoots: list[Element] = []
+        if rootEl.tag == f'{MEI_NS}meiCorpus':
+            subRoots = rootEl.findall(f'.//{MEI_NS}mei')
+        elif rootEl.tag == f'{MEI_NS}mei':
+            # just the one <music> that's directly inside <mei>
+            musicEl: Element | None = rootEl.find(f'{MEI_NS}music')
+            if musicEl is not None:
+                subRoots = [musicEl]
+        elif rootEl.tag == f'{MEI_NS}music':
+            # all <scores> found under mei/music (none from meiHead,
+            # where the incipits live)
+            subRoots = rootEl.findall(f'.//{MEI_NS}score')
+        elif rootEl.tag == f'{MEI_NS}score':
+            appendReaderScore(rootEl)
+
+        for subRoot in subRoots:
+            readerScores += self.gatherReaderScores(subRoot)
+
+        return readerScores
+
+    def readerScoreToM21Score(
+        self,
+        readerScore: MeiReaderScore
+    ) -> stream.Score:
+        self.clear()
+        self._ppAll(readerScore['scoreEl'])
+        theScore: stream.Score = self.scoreFromElement(readerScore['scoreEl'])
+        theScore.metadata = self.makeMetadata(readerScore)
+        return theScore
+
+    def _ppAll(self, scoreEl: Element):
+        self._ppSlurs(scoreEl)
+        self._ppTies(scoreEl)
+        self._ppBeams(scoreEl)
+        self._ppTuplets(scoreEl)
+        self._ppHairpins(scoreEl)
+
+        self._ppFermatas(scoreEl)
+        self._ppArpeggios(scoreEl)
+        self._ppOctaves(scoreEl)
+
+        self._ppTrills(scoreEl)
+        self._ppMordents(scoreEl)
+        self._ppTurns(scoreEl)
+
+        self._ppPedals(scoreEl)
+        self._ppDirsDynamsTempos(scoreEl)
+
+        self._ppConclude(scoreEl)
+
+    def run(self, number: int | None = None) -> stream.Score | stream.Opus:
         '''
         Run conversion of the internal MEI document to produce a music21 object.
 
         Returns a :class:`~music21.stream.Stream` subclass, depending on the MEI document.
         '''
+        # Perry Roland says: <mdiv> should be used for major sections, such as movements.
+        # The choice between the other methods depends on the metadata you want to have.
+        # Using <meiCorpus>, one can provide a complete header for each song.  This is
+        # useful if the songbook has been assembled from different sources and/or you want
+        # to maintain separate metadata for each piece, for example if you're encoding
+        # "Greatest Hits of 1985".  If on the other hand, the collection was created and
+        # intended to be performed as a group, for instance a song cycle like Die Schöne
+        # Müllerin, then <group><music><music>...</group> is the way to go.
 
-        environLocal.printDebug('*** pre-processing elements with startid/endid/plist/etc')
+        # We should be able to read all of those, even in combination.
 
-        self._ppSlurs()
-        self._ppTies()
-        self._ppBeams()
-        self._ppTuplets()
-        self._ppHairpins()
-
-        self._ppFermatas()
-        self._ppArpeggios()
-        self._ppOctaves()
-
-        self._ppTrills()
-        self._ppMordents()
-        self._ppTurns()
-
-        self._ppPedals()
-        self._ppDirsDynamsTempos()
-
-        self._ppConclude()
-
-        # This is a lie; we only process the first <score> element we see.
         environLocal.printDebug('*** processing <score> elements')
 
-        scoreElem: Element | None = self.documentRoot.find(f'.//{MEI_NS}music//{MEI_NS}score')
-        if scoreElem is None:
-            # no <score> found, return an empty Score
-            return stream.Score()
+        scoreOrOpus: m21.stream.Score | m21.stream.Opus | None = None
 
-        theScore: stream.Score = self.scoreFromElement(scoreElem)
+        if number is None:
+            if len(self.readerScores) == 1:
+                scoreOrOpus = self.readerScoreToM21Score(self.readerScores[0])
+            else:
+                scoreOrOpus = stream.Opus()
+                for readerScore in self.readerScores:
+                    score: m21.stream.Score = self.readerScoreToM21Score(readerScore)
+                    scoreOrOpus.coreAppend(score)
+                scoreOrOpus.coreElementsChanged()
+        else:
+            for readerScore in self.readerScores:
+                if readerScore['n'] == number:
+                    scoreOrOpus = self.readerScoreToM21Score(readerScore)
+                if scoreOrOpus is None:
+                    # try using number as a 1-based index
+                    idx: int = number - 1
+                    if idx not in range(0, len(self.readerScores)):
+                        raise MeiImportError(
+                            f'cannot find requested reference number in source file: {number}'
+                        )
+                    scoreOrOpus = self.readerScoreToM21Score(self.readerScores[idx])
 
-        environLocal.printDebug('*** preparing metadata')
-        theScore.metadata = self.makeMetadata()
-
-        return theScore
-
+        if scoreOrOpus is None:
+            raise MeiInternalError(
+                'could not produce a Score or Opus'
+            )
+        return scoreOrOpus
 
     # Static Utility Functions
     # -----------------------------------------------------------------------------
@@ -868,7 +1092,7 @@ class MeiReader:
 
     # "Preprocessing" Functions
     # -----------------------------------------------------------------------------
-    def _ppSlurs(self) -> None:
+    def _ppSlurs(self, scoreEl: Element) -> None:
         # noinspection PyShadowingNames
         '''
         Pre-processing helper for :func:`convertFromString` that handles slurs specified in <slur>
@@ -935,9 +1159,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing slurs')
         # pre-processing for <slur> tags
-        for eachSlur in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}slur'
-        ):
+        for eachSlur in scoreEl.iterfind(f'.//{MEI_NS}slur'):
             startId: str = MeiShared.removeOctothorpe(eachSlur.get('startid', ''))
             endId: str = MeiShared.removeOctothorpe(eachSlur.get('endid', ''))
             staffAttr: str = eachSlur.get('staff', '')
@@ -972,7 +1194,7 @@ class MeiReader:
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<slur>', '@startid or @endid')
                 )
 
-    def _ppTies(self) -> None:
+    def _ppTies(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles ties specified in <tie>
         elements. The input is a :class:`MeiReader` with data about the file currently being
@@ -996,8 +1218,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing ties')
 
-        for eachTie in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tie'):
+        for eachTie in scoreEl.iterfind(f'.//{MEI_NS}tie'):
             startId: str = MeiShared.removeOctothorpe(eachTie.get('startid', ''))
             endId: str = MeiShared.removeOctothorpe(eachTie.get('endid', ''))
             if startId and endId:
@@ -1017,7 +1238,7 @@ class MeiReader:
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<tie>', '@startid and @endid')
                 )
 
-    def _ppBeams(self) -> None:
+    def _ppBeams(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles beams specified
         in <beamSpan> elements. The input is a :class:`MeiReader` with data about
@@ -1045,8 +1266,7 @@ class MeiReader:
         environLocal.printDebug('*** pre-processing beams')
 
         # pre-processing for <beamSpan> elements
-        for eachBeam in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}beamSpan'):
+        for eachBeam in scoreEl.iterfind(f'.//{MEI_NS}beamSpan'):
             if eachBeam.get('startid', '') or eachBeam.get('endid', ''):
                 environLocal.warn(
                     _UNIMPLEMENTED_IMPORT_WITHOUT.format('<beamSpan>', '@startid and @endid')
@@ -1068,7 +1288,7 @@ class MeiReader:
                 if 'm21Beam' not in self.m21Attr[eachXmlid]:
                     self.m21Attr[eachXmlid]['m21Beam'] = 'continue'
 
-    def _ppTuplets(self) -> None:
+    def _ppTuplets(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles tuplets specified in
         <tupletSpan> elements. The input is a :class:`MeiReader` with data about the file
@@ -1099,8 +1319,7 @@ class MeiReader:
         tempStr: str
 
         # pre-processing <tupletSpan> tags
-        for eachTuplet in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tupletSpan'):
+        for eachTuplet in scoreEl.iterfind(f'.//{MEI_NS}tupletSpan'):
             if ((eachTuplet.get('startid') is None or eachTuplet.get('endid') is None)
                     and eachTuplet.get('plist') is None):
                 environLocal.warn(_UNIMPLEMENTED_IMPORT_WITHOUT.format('<tupletSpan>',
@@ -1189,7 +1408,7 @@ class MeiReader:
                 if tempStr:
                     self.m21Attr[endid]['m21TupletNumFormat'] = tempStr
 
-    def _ppHairpins(self) -> None:
+    def _ppHairpins(self, scoreEl: Element) -> None:
         # Hairpins can have any of @startid/@endid, @tstamp/@tstamp2,
         # @startid/@tstamp2, or @tstamp/@endid.  We process all of them
         # here, to create the DynamicWedge, put it in the spannerBundle,
@@ -1199,8 +1418,7 @@ class MeiReader:
         # @tstamp2.
         environLocal.printDebug('*** pre-processing hairpins')
 
-        for eachElem in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}hairpin'):
+        for eachElem in scoreEl.iterfind(f'.//{MEI_NS}hairpin'):
             startId: str = MeiShared.removeOctothorpe(eachElem.get('startid', ''))  # type: ignore
             endId: str = MeiShared.removeOctothorpe(eachElem.get('endid', ''))  # type: ignore
             form: str = eachElem.get('form', '')
@@ -1242,7 +1460,7 @@ class MeiReader:
             if staffNStr:
                 dw.meireader_staff = staffNStr  # type: ignore
 
-    def _ppFermatas(self) -> None:
+    def _ppFermatas(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles fermats specified
         in <fermata> elements. The input is a :class:`MeiReader` with data about
@@ -1269,8 +1487,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing fermatas')
 
-        for eachFermata in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}fermata'):
+        for eachFermata in scoreEl.iterfind(f'.//{MEI_NS}fermata'):
             startId: str | None = MeiShared.removeOctothorpe(eachFermata.get('startid', ''))
             if not startId:
                 # leave this alone, we'll handle it later in fermataFromElement
@@ -1289,7 +1506,7 @@ class MeiReader:
             if shape:
                 self.m21Attr[startId]['fermata_shape'] = shape
 
-    def _ppTrills(self) -> None:
+    def _ppTrills(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles trills specified in <trill>
         elements. The input is a :class:`MeiReader` with data about the file currently being
@@ -1313,8 +1530,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing trills')
 
-        for eachTrill in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}trill'):
+        for eachTrill in scoreEl.iterfind(f'.//{MEI_NS}trill'):
             startId: str = MeiShared.removeOctothorpe(eachTrill.get('startid', ''))  # type: ignore
             endId: str = MeiShared.removeOctothorpe(eachTrill.get('endid', ''))  # type: ignore
             tstamp2: str = eachTrill.get('tstamp2', '')
@@ -1374,7 +1590,7 @@ class MeiReader:
                 # we have to finish in trillFromElement, tell him about our TrillExtension
                 eachTrill.set('m21TrillExtension', thisIdLocal)
 
-    def _ppMordents(self) -> None:
+    def _ppMordents(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles mordents in <mordent>
         elements. The input is a :class:`MeiReader` with data about the file currently being
@@ -1398,8 +1614,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing mordents')
 
-        for eachMordent in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}mordent'):
+        for eachMordent in scoreEl.iterfind(f'.//{MEI_NS}mordent'):
             startId: str = MeiShared.removeOctothorpe(eachMordent.get('startid', ''))
             place: str = eachMordent.get('place', 'place_unspecified')
             form: str = eachMordent.get('form', '')
@@ -1426,7 +1641,7 @@ class MeiReader:
 
                 eachMordent.set('ignore_mordent_in_mordentFromElement', 'true')
 
-    def _ppTurns(self) -> None:
+    def _ppTurns(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles turns in <turn>
         elements. The input is a :class:`MeiReader` with data about the file currently being
@@ -1450,8 +1665,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing turns')
 
-        for eachTurn in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}turn'):
+        for eachTurn in scoreEl.iterfind(f'.//{MEI_NS}turn'):
             startId: str = MeiShared.removeOctothorpe(eachTurn.get('startid', ''))
             place: str = eachTurn.get('place', 'place_unspecified')
             form: str = eachTurn.get('form', '')
@@ -1486,7 +1700,7 @@ class MeiReader:
         ('22', 'below'): '22db',
     }
 
-    def _ppOctaves(self) -> None:
+    def _ppOctaves(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles ottavas specified in
         <octave> elements. The input is a :class:`MeiReader` with data about the file
@@ -1510,8 +1724,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing octaves')
 
-        for eachOctave in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}octave'):
+        for eachOctave in scoreEl.iterfind(f'.//{MEI_NS}octave'):
             startId: str = MeiShared.removeOctothorpe(eachOctave.get('startid', ''))
             endId: str = MeiShared.removeOctothorpe(eachOctave.get('endid', ''))
             amount: str = eachOctave.get('dis', '')
@@ -1563,7 +1776,7 @@ class MeiReader:
         ('true', 'nonarp'): 'non-arpeggio',   # arrow is ignored
     }
 
-    def _ppArpeggios(self) -> None:
+    def _ppArpeggios(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that handles arpeggios specified in
         <arpeg> elements. The input is a :class:`MeiReader` with data about the file
@@ -1587,8 +1800,7 @@ class MeiReader:
         '''
         environLocal.printDebug('*** pre-processing arpeggios')
 
-        for eachArpeg in self.documentRoot.iterfind(
-                f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}arpeg'):
+        for eachArpeg in scoreEl.iterfind(f'.//{MEI_NS}arpeg'):
             plistStr: str | None = eachArpeg.get('plist')
             plist: list[str] = []
             if plistStr:
@@ -1645,15 +1857,13 @@ class MeiReader:
                 # mark the element as handled, so we WON'T handle it later in arpegFromElement
                 eachArpeg.set('ignore_in_arpegFromElement', 'true')
 
-    def _ppPedals(self) -> None:
+    def _ppPedals(self, scoreEl: Element) -> None:
         if not M21Utilities.m21PedalMarksSupported():
             return
 
         environLocal.printDebug('*** pre-processing pedals')
 
-        pedals: list[Element] = self.documentRoot.findall(
-            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}pedal'
-        )
+        pedals: list[Element] = scoreEl.findall(f'.//{MEI_NS}pedal')
 
         # pylint: disable=no-member
 
@@ -1808,18 +2018,12 @@ class MeiReader:
                     eachPedal.set('m21PedalOverrideDir', overrideDirAttr)
         # pylint: enable=no-member
 
-    def _ppDirsDynamsTempos(self) -> None:
+    def _ppDirsDynamsTempos(self, scoreEl: Element) -> None:
         environLocal.printDebug('*** pre-processing dirs/dynams/tempos')
 
-        elems: list[Element] = self.documentRoot.findall(
-            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dir'
-        )
-        elems += self.documentRoot.findall(
-            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}dynam'
-        )
-        elems += self.documentRoot.findall(
-            f'.//{MEI_NS}music//{MEI_NS}score//{MEI_NS}tempo'
-        )
+        elems: list[Element] = scoreEl.findall(f'.//{MEI_NS}dir')
+        elems += scoreEl.findall(f'.//{MEI_NS}dynam')
+        elems += scoreEl.findall(f'.//{MEI_NS}tempo')
 
         for eachElem in elems:
             if eachElem.tag.endswith('dir'):
@@ -1899,7 +2103,7 @@ class MeiReader:
 
             eachElem.set(f'ignore_in_{lowerName}FromElement', 'true')
 
-    def _ppConclude(self) -> None:
+    def _ppConclude(self, scoreEl: Element) -> None:
         '''
         Pre-processing helper for :func:`convertFromString` that adds attributes from
         ``m21Attr`` to the appropriate elements in ``documentRoot``. The input is a
@@ -1925,7 +2129,7 @@ class MeiReader:
         environLocal.printDebug('*** concluding pre-processing')
 
         # conclude pre-processing by adding music21-specific attributes to their respective elements
-        for eachObject in self.documentRoot.iterfind('*//*'):
+        for eachObject in scoreEl.iterfind('*//*'):
             objXmlId: str | None = eachObject.get(_XMLID)
             # we have a defaultdict, so this "if" isn't strictly necessary; but without it, every
             # single element with an @xml:id creates a new, empty dict, which would consume a lot
@@ -2908,14 +3112,17 @@ class MeiReader:
                 if b.type == 'continue':
                     b.type = 'start'
 
-    def makeMetadata(self) -> m21.metadata.Metadata:
+    def makeMetadata(self, readerScore: MeiReaderScore) -> m21.metadata.Metadata:
         '''
-        Produce metadata objects for all the metadata stored in the MEI header.
+        Produce metadata objects for all the metadata for this readerScore.
 
-        :returns: A :class:`Metadata` object containing the metadata from the MEI document.
+        :returns: A :class:`Metadata` object containing the readerScore's metadata
+            from the MEI document.
         :rtype: :class:`music21.metadata.Metadata`
         '''
 
+        # 888 we need to know if we should look in all of meiHead, or just in whatever
+        # 888 work element matches one of the xmlIds.
         meiHead: Element | None = self.documentRoot.find(f'.//{MEI_NS}meiHead')
         if meiHead is None:
             return m21.metadata.Metadata()
