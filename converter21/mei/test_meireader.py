@@ -79,7 +79,6 @@ class Test(unittest.TestCase):
         inputFile = '''<?xml version="1.0" encoding="UTF-8"?>
                        <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0">
                        <music><score></score></music></mei>'''
-
         actual = MeiReader(inputFile)
         # NB: at first I did this:
         # self.assertIsInstance(actual.documentRoot, ETree.Element)
@@ -89,20 +88,24 @@ class Test(unittest.TestCase):
         self.assertIsInstance(actual.m21Attr, defaultdict)
         self.assertIsInstance(actual.spannerBundle, spanner.SpannerBundle)
 
+    def testInit3(self):
+        '''__init__(): an invalid XML file causes an MeiValidityError'''
+        inputFile = 'this is not an XML file'
+        self.assertRaises(meiexceptions.MeiValidityError, MeiReader, inputFile)
+        try:
+            MeiReader(inputFile)
+        except meiexceptions.MeiValidityError as theError:
+            self.assertEqual(meireader.INVALID_XML_DOC, theError.args[0])
+
     def testInit4(self):
         '''__init__(): a MusicXML file causes an MeiElementError'''
         inputFile = '''<?xml version="1.0" encoding="UTF-8"?>
                        <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
                                                        "http://www.musicxml.org/dtds/partwise.dtd">
                        <score-partwise meiversion="4.0"></score-partwise>'''
-
-        documentRoot = ETree.fromstring(inputFile)
-        if isinstance(documentRoot, ETree.ElementTree):
-            documentRoot = documentRoot.getroot()
-
-        self.assertRaises(meiexceptions.MeiElementError, MeiReader, documentRoot)
+        self.assertRaises(meiexceptions.MeiElementError, MeiReader, inputFile)
         try:
-            MeiReader(documentRoot)
+            MeiReader(inputFile)
         except meiexceptions.MeiElementError as theError:
             self.assertEqual(
                 meireader.WRONG_ROOT_ELEMENT.format('score-partwise'),
@@ -2773,11 +2776,7 @@ class Test(unittest.TestCase):
                 </section>
             </score></music></mei>
         '''
-        documentRoot = ETree.fromstring(meiSource)
-        if isinstance(documentRoot, ETree.ElementTree):
-            documentRoot = documentRoot.getroot()
-
-        testConv = MeiReader(documentRoot)
+        testConv = MeiReader(meiSource)
 
         actual = testConv.run()
 
