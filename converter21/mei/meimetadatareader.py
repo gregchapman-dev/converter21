@@ -746,7 +746,7 @@ class MeiMetadataReader:
             for elem in allElements:
                 self.processMainWorkSubElement(elem, md)
 
-        if self.readerScore['n'] is not None:
+        if self.readerScore['numScoresInFile'] > 1 and self.readerScore['n'] is not None:
             md.number = str(self.readerScore['n'])
 
         return md

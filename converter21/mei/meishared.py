@@ -28,6 +28,7 @@ class MeiReaderScore(t.TypedDict):
     meiElForScore: Element
     n: int | None
     xmlIds: list[str]
+    numScoresInFile: int
 
 
 class MeiShared:

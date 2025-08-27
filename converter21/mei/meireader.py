@@ -405,6 +405,10 @@ class MeiReader:
         # will be interested in parsing).  self.gather is recursive, so we need
         # to pass self.documentRoot here.
         self.readerScores: list[MeiReaderScore] = self.gatherReaderScores(self.documentRoot)
+        self.numScoresInFile: int = len(self.readerScores)
+
+        for readerScore in self.readerScores:
+            readerScore['numScoresInFile'] = self.numScoresInFile
 
         # the rest of these class variables must be cleared between <score>s,
         # so we put their initialization in a clear() API that can be called
@@ -622,7 +626,8 @@ class MeiReader:
                 'isOnlyScoreInMei': isOnlyScoreInMei,
                 'meiElForScore': meiElForScore,
                 'n': outputN,
-                'xmlIds': outputXmlIds
+                'xmlIds': outputXmlIds,
+                'numScoresInFile': 0  # will be filled in later
             }
             readerScores.append(readerScore)
 
