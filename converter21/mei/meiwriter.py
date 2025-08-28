@@ -9,7 +9,7 @@
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
-# import typing as t
+import typing as t
 from xml.etree.ElementTree import Element, ElementTree, indent
 
 import music21 as m21
@@ -20,6 +20,7 @@ from converter21.mei import MeiExportError
 from converter21.mei import MeiScore
 
 from converter21.shared import M21Utilities
+from converter21.shared import SharedConstants
 
 # For debug or unit test print, a simple way to get a string which is the current function name
 # with a colon appended.
@@ -33,20 +34,31 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 class MeiWriter:
     Debug: bool = False  # can be set to True for more debugging
 
-    def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
+    def __init__(
+        self,
+        obj: m21.prebase.ProtoM21Object,
+        makeNotation: bool,
+        meiVersion: str,
+        multipleScoresHostTag: str
+    ) -> None:
         M21Utilities.adjustMusic21Behavior()
 
         self._m21Object: m21.prebase.ProtoM21Object = obj
         self._m21ScoreOrOpus: m21.stream.Score | m21.stream.Opus | None = None
 
-        # default options (these can be set to non-default values by clients,
-        # as long as they do it before they call write())
+        self.makeNotation = makeNotation
 
-        # client can set to False if obj is a Score
-        self.makeNotation: bool = True
+        if meiVersion[0] not in ('4', '5'):
+            raise MeiExportError(
+                f'invalid meiVersion: {meiVersion}. Must start with "4" or "5".'
+            )
+        self.meiVersion = meiVersion
 
-        # client can set to '4' or '5' (or anything starting with '4' or '5')
-        self.meiVersion: str = '5'
+        if multipleScoresHostTag not in ('mei', 'mdiv', 'music'):
+            raise MeiExportError(
+                'multipleScoresHostTag must be "mei", "mdiv", or "music".'
+            )
+        self.multipleScoresHostTag = multipleScoresHostTag
 
     def write(self, fp) -> bool:
         if self.makeNotation:
@@ -61,7 +73,10 @@ class MeiWriter:
                     ' Score/Opus, and it is not.'
                 )
             if not self._m21Object.isWellFormedNotation():
-                print('Source obj is not well-formed; see isWellFormedNotation()', file=sys.stderr)
+                print(
+                    'Score/Opus is not well-formed; see Stream.isWellFormedNotation()',
+                    file=sys.stderr
+                )
 
             self._m21ScoreOrOpus = self._m21Object
         del self._m21Object  # everything after this uses self._m21ScoreOrOpus
@@ -82,8 +97,6 @@ class MeiWriter:
         else:
             scores = list(self._m21ScoreOrOpus.scores)
 
-        writeMeiCorpus: bool = len(scores) > 1
-
         # pylint: disable=line-too-long
         prefix: str
         if self.meiVersion.startswith('4'):
@@ -100,23 +113,45 @@ class MeiWriter:
 <?xml-model href="https://music-encoding.org/schema/5.1/mei-CMN.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
 '''
             )
-        else:
-            raise MeiExportError(
-                f'invalid meiVersion: {self.meiVersion}. Must start with \'4\' or \'5\'.'
-            )
+
         # pylint: enable=line-too-long
         fp.write(prefix)
 
         # where should we write xmlns/meiversion?
         meiVersion: str = self.meiVersion
-        if writeMeiCorpus:
+        multipleScores: bool = len(scores) > 1
+
+        if not multipleScores:
+            # single Score hosted in mei element (no matter what self.multipleScoresHostTag says)
+            meiScore: MeiScore = MeiScore(scores[0], meiVersion)
+            meiElement: Element = meiScore.makeMeiElement()
+            ElementTree(meiElement).write(fp, encoding='unicode')
+            fp.write('\n')
+            # clean up all the notes-to-self MeiScore wrote in the score.
+            meiScore.deannotateScore()
+            return True
+
+        # Multiple scores!
+        if t.TYPE_CHECKING:
+            assert isinstance(self._m21ScoreOrOpus, m21.stream.Opus)
+
+        # There are three MEI file possibilities:
+        #   (1) multiple 'mei'   (within top-level 'meiCorpus')
+        #   (2) multiple 'mdiv'  (within top-level 'mei'/'music')
+        #   (3) multiple 'music' (within top-level 'mei'/'music'/'group')
+        indentLevel: int = 0
+        indentSpace: str = '   '  # 3 spaces
+
+        if self.multipleScoresHostTag == 'mei':
             if meiVersion.startswith('5'):
                 fp.write(
-                    '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1+CMN">'
+                    '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei"'
+                    ' meiversion="5.1+CMN">'
                 )
             else:
                 fp.write(
-                    '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0.1">'
+                    '<meiCorpus xmlns="http://www.music-encoding.org/ns/mei"'
+                    ' meiversion="4.0.1">'
                 )
             fp.write('\n')
 
@@ -124,29 +159,149 @@ class MeiWriter:
             # Nothing for now, though.
 
             meiVersion = ''  # disable the xmlns/meiversion attributes in <mei> elements
+            indentLevel = 1
+            for score in scores:
+                meiScore = MeiScore(score, meiVersion)
+                meiElement = meiScore.makeMeiElement()
+                fp.write(indentSpace * indentLevel)
+                indent(meiElement, space=indentSpace, level=indentLevel)
+                ElementTree(meiElement).write(fp, encoding='unicode')
+                fp.write('\n')
+                # clean up all the notes-to-self MeiScore wrote in the score.
+                meiScore.deannotateScore()
+            return True
 
-        for score in scores:
+        # 'music' or 'mdiv'
+        # Big difference from 'mei' (that is common to 'music' and 'mdiv') is that
+        # we're rooted in 'mei', not 'meiCorpus', and the Opus metadata goes in
+        # mei/meiHead proper, and the score metadatas all go in their own 'work'
+        # element within mei/meiHead/workList.
+
+        # First we gather all the work-level metadata and the 'score'-level score data.
+        # Then we will write the MEI file appropriately using those pieces.
+        workElements: list[Element] = []
+        scoreElements: list[Element] = []
+
+        useExistingNums: bool = True
+        existingNums: list[str | None] = self._m21ScoreOrOpus.getNumbers()
+        existingNumInts: list[int] = []
+        # to use the existing numbers, there must be no Nones
+        for num in existingNums:
+            if num is None:
+                useExistingNums = False
+                break
+
+        # to use the existing numbers there must be no duplicates
+        if useExistingNums:
+            uniqueNums: list[str | None] = list(set(existingNums))
+            if len(uniqueNums) != len(existingNums):
+                useExistingNums = False
+
+        # to use the existing numbers, they must all be convertable to int
+        if useExistingNums:
+            try:
+                existingNumInts = [int(num) for num in existingNums]  # type: ignore
+            except Exception:
+                useExistingNums = False
+
+        nextNumber: int | None = None
+        if not useExistingNums:
+            nextNumber = 0
+
+        for scoreIdx, score in enumerate(scores):
+            if useExistingNums:
+                nextNumber = existingNumInts[scoreIdx]
+                if t.TYPE_CHECKING:
+                    assert nextNumber is not None
+            else:
+                if t.TYPE_CHECKING:
+                    assert nextNumber is not None
+                nextNumber += 1
+
             # Here we convert a music21 Score to an MeiScore. It's still all m21 objects, but
             # the object structure is MEI-like. For example:
             #   music21 scores are {Staff1(Measure1 .. MeasureN), Staff2(Measure1 .. MeasureN)}
             #   but MEI scores are {Measure1{Staff1, Staff2} .. MeasureN{Staff1, Staff2}}.
-            meiScore: MeiScore = MeiScore(score, meiVersion)
-
-            # Here we convert the MeiScore to an in-memory tree of Elements
-            meiElement: Element = meiScore.makeRootElement()
-            level: int = 0
-            if writeMeiCorpus:
-                level = 1
-            indent(meiElement, space='   ', level=level)
-            # Write to the output MEI XML file
-            fp.write('   ')
-            ElementTree(meiElement).write(fp, encoding='unicode')
-            fp.write('\n')
-
+            meiScore = MeiScore(score, meiVersion)
+            scoreEl: Element
+            workEl: Element
+            scoreEl, workEl = meiScore.makeScoreAndWorkElement(nextNumber)
+            workElements.append(workEl)
+            scoreElements.append(scoreEl)
             # clean up all the notes-to-self MeiScore wrote in the score.
             meiScore.deannotateScore()
 
-        if writeMeiCorpus:
-            fp.write('</meiCorpus>\n')
+        if meiVersion.startswith('5'):
+            fp.write(
+                '<mei xmlns="http://www.music-encoding.org/ns/mei"'
+                ' meiversion="5.1+CMN">'
+            )
+        else:
+            fp.write(
+                '<mei xmlns="http://www.music-encoding.org/ns/mei"'
+                ' meiversion="4.0.1">'
+            )
+        fp.write('\n')
+
+        # no Opus metadata for now, just get meiHead ready to receive a work per score.
+        fp.write(f'{indentSpace}<meiHead>\n')
+        fp.write(f'{indentSpace * 2}<fileDesc>\n')
+        fp.write(f'{indentSpace * 3}<titleStmt>\n')
+        fp.write(f'{indentSpace * 4}<title></title>\n')
+        fp.write(f'{indentSpace * 3}</titleStmt>\n')
+        fp.write(f'{indentSpace * 3}<pubStmt></pubStmt>\n')
+        fp.write(f'{indentSpace * 2}</fileDesc>\n')
+        fp.write(f'{indentSpace * 2}<encodingDesc>\n')
+        fp.write(f'{indentSpace * 3}<appInfo>\n')
+        fp.write(f'{indentSpace * 4}<application>\n')
+        fp.write(f'{indentSpace * 5}<name>{SharedConstants._CONVERTER21_NAME_AND_VERSION}</name>\n')
+        fp.write(f'{indentSpace * 4}</application>\n')
+        fp.write(f'{indentSpace * 3}</appInfo>\n')
+        fp.write(f'{indentSpace * 2}</encodingDesc>\n')
+        fp.write(f'{indentSpace * 2}<workList>\n')
+        indentLevel = 3
+        for workEl in workElements:
+            fp.write(indentSpace * indentLevel)
+            indent(workEl, space=indentSpace, level=indentLevel)
+            ElementTree(workEl).write(fp, encoding='unicode')
+            fp.write('\n')
+        fp.write(f'{indentSpace * 2}</workList>\n')
+        fp.write(f'{indentSpace}</meiHead>\n')
+        fp.write(f'{indentSpace}<music>\n')
+        if self.multipleScoresHostTag == 'mdiv':
+            fp.write(f'{indentSpace * 2}<body>\n')
+            # every score will follow: <mdiv><score> ... <mdiv><score ... <mdiv><score> etc
+        else:  # 'music'
+            fp.write(f'{indentSpace * 2}<group>\n')
+            # every score will follow: <music><mdiv><score> ... <music><mdiv><score> etc
+
+        for scoreEl in scoreElements:
+            if self.multipleScoresHostTag == 'mdiv':
+                fp.write(f'{indentSpace * 3}<mdiv>\n')
+                indentLevel = 4
+            else:  # 'music'
+                fp.write(f'{indentSpace * 3}<music>\n')
+                fp.write(f'{indentSpace * 4}<body>\n')
+                fp.write(f'{indentSpace * 5}<mdiv>\n')
+                indentLevel = 6
+
+            fp.write(indentSpace * indentLevel)
+            indent(scoreEl, space=indentSpace, level=indentLevel)
+            ElementTree(scoreEl).write(fp, encoding='unicode')
+            fp.write('\n')
+
+            if self.multipleScoresHostTag == 'mdiv':
+                fp.write(f'{indentSpace * 3}</mdiv>\n')
+            else:  # 'music'
+                fp.write(f'{indentSpace * 5}</mdiv>\n')
+                fp.write(f'{indentSpace * 4}</body>\n')
+                fp.write(f'{indentSpace * 3}</music>\n')
+
+        if self.multipleScoresHostTag == 'mdiv':
+            fp.write(f'{indentSpace * 2}</body>\n')
+        else:  # 'music'
+            fp.write(f'{indentSpace * 2}</group>\n')
+        fp.write(f'{indentSpace}</music>\n')
+        fp.write('</mei>\n')
 
         return True

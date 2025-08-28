@@ -151,32 +151,7 @@ class MeiScore:
 
         return output
 
-    def makeRootElement(self) -> Element:
-        tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
-        if self.meiVersion.startswith('4'):
-            tb.start('mei', {
-                'xmlns': 'http://www.music-encoding.org/ns/mei',
-                'meiversion': '4.0.1'
-            })
-        elif self.meiVersion.startswith('5'):
-            tb.start('mei', {
-                'xmlns': 'http://www.music-encoding.org/ns/mei',
-                'meiversion': '5.1+CMN'
-            })
-        elif not self.meiVersion:
-            # empty version means we already put in in <meiCorpus>
-            tb.start('mei', {})
-
-        # meiHead
-        self.metadata.makeRootElement(tb)
-
-        if self.metadata.mainWorkXmlId:
-            tb.start('music', {'decls': '#' + self.metadata.mainWorkXmlId})
-        else:
-            tb.start('music', {})
-        tb.start('body', {})
-        tb.start('mdiv', {})
-
+    def buildScoreElement(self, tb: TreeBuilder):
         tb.start('score', {})
         self.makeScoreDefElement(tb)
 
@@ -187,11 +162,16 @@ class MeiScore:
 
         tb.end('score')
 
-        tb.end('mdiv')
-        tb.end('body')
+    def makeScoreAndWorkElement(self, scoreNum: int) -> tuple[Element, Element]:
+        tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
+        self.buildScoreElement(tb)
+        scoreEl: Element = tb.close()
+        tb = TreeBuilder(insert_comments=True, insert_pis=True)
+        self.metadata.buildOneOfManyWorkElements(tb, scoreNum)
+        workEl: Element = tb.close()
+        return scoreEl, workEl
 
-        # There's one bit of metadata that goes in music/back/div@type="textTranslation":
-        # humdrum:HTX
+    def buildBackElement(self, tb: TreeBuilder):
         htxItems: list[MeiMetadataItem] = self.metadata.contents.get('HTX', [])
         if htxItems:
             allTheSameLanguage: bool
@@ -217,6 +197,47 @@ class MeiScore:
             tb.end('lg')
             tb.end('div')
             tb.end('back')
+
+    def makeBackElement(self) -> Element:
+        tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
+        self.buildBackElement(tb)
+        root: Element = tb.close()
+        return root
+
+    def makeMeiElement(self) -> Element:
+        tb: TreeBuilder = TreeBuilder(insert_comments=True, insert_pis=True)
+        if self.meiVersion.startswith('4'):
+            tb.start('mei', {
+                'xmlns': 'http://www.music-encoding.org/ns/mei',
+                'meiversion': '4.0.1'
+            })
+        elif self.meiVersion.startswith('5'):
+            tb.start('mei', {
+                'xmlns': 'http://www.music-encoding.org/ns/mei',
+                'meiversion': '5.1+CMN'
+            })
+        elif not self.meiVersion:
+            # empty version means we already put in in <meiCorpus>
+            tb.start('mei', {})
+
+        # meiHead
+        self.metadata.buildMeiHeadElement(tb)
+
+        if self.metadata.mainWorkXmlId:
+            tb.start('music', {'decls': '#' + self.metadata.mainWorkXmlId})
+        else:
+            tb.start('music', {})
+        tb.start('body', {})
+        tb.start('mdiv', {})
+
+        self.buildScoreElement(tb)
+
+        tb.end('mdiv')
+        tb.end('body')
+
+        # There's one bit of metadata that goes in music/back/div@type="textTranslation":
+        # humdrum:HTX
+        self.buildBackElement(tb)
 
         tb.end('music')
         tb.end('mei')

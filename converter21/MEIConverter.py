@@ -111,6 +111,7 @@ class MEIConverter(SubConverter):
         subformats=None,
         makeNotation=True,
         meiVersion='5',
+        multipleScoresHostTag='mdiv',
         **keywords
     ):
         if fp is None:
@@ -121,9 +122,7 @@ class MEIConverter(SubConverter):
         if not fp.suffix:
             fp = fp.with_suffix('.mei')
 
-        meiw = MeiWriter(obj)
-        meiw.makeNotation = makeNotation
-        meiw.meiVersion = meiVersion
+        meiw = MeiWriter(obj, makeNotation, meiVersion, multipleScoresHostTag)
 
         with open(fp, 'wt', encoding='utf-8') as f:
             meiw.write(f)

@@ -129,7 +129,7 @@ class MeiMetadata:
         # This element contains any <mads> elements that will end up in <work>/<extMeta>.
         self.madsCollection: MeiElement | None = None
 
-    def makeRootElement(self, tb: TreeBuilder):
+    def buildMeiHeadElement(self, tb: TreeBuilder):
         meiHead: MeiElement = MeiElement('meiHead')
         fileDesc: MeiElement = self.makeFileDescElement()
         encodingDesc: MeiElement | None = self.makeEncodingDescElement()
@@ -1500,8 +1500,18 @@ class MeiMetadata:
 
         return theLanguage, allTheSameLanguage
 
-    def makeWorkListElement(self) -> MeiElement | None:
-        # the main (encoded) work
+    def makeMainWorkElement(
+        self,
+        workNumber: int,
+        oneOfMany: bool = False,
+        parentWorkXmlId: str = '',
+        groupWorkXmlId: str = '',
+        associatedWorkXmlId: str = '',
+        collectionWorkXmlId: str = ''
+    ) -> MeiElement | None:
+        # the main (encoded) work, or one of many main (encoded) works
+        titleElements: list[MeiElement] = self.makeTitleElements()
+        composerElements: list[MeiElement] = self.makeComposerElements()
         catalogNumbers: list[MeiMetadataItem] = self.contents.get('SCA', [])
         catalogAbbrevNumbers: list[MeiMetadataItem] = self.contents.get('SCT', [])
         opusNumbers: list[MeiMetadataItem] = self.contents.get('OPS', [])
@@ -1527,6 +1537,396 @@ class MeiMetadata:
         performanceDates.extend(self.contents.get('MRD', []))
         performanceLocations: list[MeiMetadataItem] = self.contents.get('MLC', [])
 
+        if (not catalogNumbers
+                and not catalogAbbrevNumbers
+                and not opusNumbers
+                and not titleElements
+                and not creationDates
+                and not creationCountries
+                and not creationSettlements
+                and not creationRegions
+                and not creationLatLongs
+                and not composerElements
+                and not lyricists
+                and not librettists
+                and not dedicatees
+                and not funders
+                and not languages
+                and not histories
+                and not instrumentLists
+                and not forms
+                and not genres
+                and not modes
+                and not meters
+                and not styles
+                and not firstPerformanceDates
+                and not performanceDates
+                and not performanceLocations):
+            return None
+
+        theWork: MeiElement | None = None
+
+        if oneOfMany:
+            theWork = MeiElement(
+                'work',
+                {
+                    'xml:id': f'score{workNumber}',
+                    'n': str(workNumber),
+                    'type': 'encoded'
+                }
+            )
+        else:
+            self.mainWorkXmlId = f'work{workNumber}_encoded'
+            theWork = MeiElement(
+                'work',
+                {
+                    'xml:id': self.mainWorkXmlId,
+                    'type': 'encoded'
+                }
+            )
+
+        # <identifier>
+        for catalogNumber in catalogNumbers:
+            identifierElement = theWork.appendSubElement(
+                'identifier',
+                {
+                    'analog': 'humdrum:SCA'
+                }
+            )
+            identifierElement.text = catalogNumber.meiValue
+
+        for catalogAbbrevNumber in catalogAbbrevNumbers:
+            identifierElement = theWork.appendSubElement(
+                'identifier',
+                {
+                    'analog': 'humdrum:SCT'
+                }
+            )
+            identifierElement.text = catalogAbbrevNumber.meiValue
+
+        for opusNumber in opusNumbers:
+            identifierElement = theWork.appendSubElement(
+                'identifier',
+                {
+                    'analog': 'humdrum:OPS'
+                }
+            )
+            identifierElement.text = opusNumber.meiValue
+
+        # all <title>s
+        theWork.subElements.extend(titleElements)
+
+        # all <composer>s
+        theWork.subElements.extend(composerElements)
+
+        # <lyricist>
+        for lyricist in lyricists:
+            lyricistElement: MeiElement = theWork.appendSubElement('lyricist')
+            persName = lyricistElement.appendSubElement(
+                'persName',
+                {
+                    'analog': 'humdrum:LYR'
+                }
+            )
+            persName.text = lyricist.meiValue
+
+        # <librettist>
+        for librettist in librettists:
+            librettistElement: MeiElement = theWork.appendSubElement('librettist')
+            persName = librettistElement.appendSubElement(
+                'persName',
+                {
+                    'analog': 'humdrum:LIB'
+                }
+            )
+            persName.text = librettist.meiValue
+
+        # <funder>
+        for funder in funders:
+            funderElement: MeiElement = theWork.appendSubElement('funder')
+            persName = funderElement.appendSubElement(
+                'name',
+                {
+                    'analog': 'humdrum:OCO'
+                }
+            )
+            persName.text = funder.meiValue
+
+        # <creation>
+        if (creationDates
+                or creationCountries
+                or creationSettlements
+                or creationRegions
+                or creationLatLongs
+                or dedicatees):
+            creationElement: MeiElement = theWork.appendSubElement('creation')
+
+            for creationDate in creationDates:
+                dateElement: MeiElement = creationElement.appendSubElement(
+                    'date',
+                    {
+                        'analog': 'humdrum:ODT',
+                    }
+                )
+                dateElement.fillInIsodate(creationDate.value)
+                dateElement.text = creationDate.meiValue
+
+            for creationCountry in creationCountries:
+                countryElement: MeiElement = creationElement.appendSubElement(
+                    'country',
+                    {
+                        'analog': 'humdrum:OCY'
+                    }
+                )
+                countryElement.text = creationCountry.meiValue
+
+            for creationSettlement in creationSettlements:
+                settlementElement: MeiElement = creationElement.appendSubElement(
+                    'settlement',
+                    {
+                        'analog': 'humdrum:OPC'
+                    }
+                )
+                settlementElement.text = creationSettlement.meiValue
+
+            for creationRegion in creationRegions:
+                regionElement: MeiElement = creationElement.appendSubElement(
+                    'geogName',
+                    {
+                        'analog': 'humdrum:ARE'
+                    }
+                )
+                regionElement.text = creationRegion.meiValue
+
+            for creationLatLong in creationLatLongs:
+                regionElement = creationElement.appendSubElement(
+                    'geogName',
+                    {
+                        'type': 'coordinates',
+                        'analog': 'humdrum:ARL'
+                    }
+                )
+                regionElement.text = creationLatLong.meiValue
+
+            for dedicatee in dedicatees:
+                contributorElement = creationElement.appendSubElement(
+                    'dedicatee',
+                    {
+                        'analog': 'humdrum:ODE'
+                    }
+                )
+                contributorElement.text = dedicatee.meiValue
+
+        # <history>
+        if histories:
+            allTheSameLanguage: bool
+            theLanguage: str | None
+            theLanguage, allTheSameLanguage = MeiMetadata.getTextListLanguage(histories)
+            historyElement: MeiElement = theWork.appendSubElement('history')
+            attrib: dict[str, str] = {}
+            if allTheSameLanguage and theLanguage:
+                attrib['xml:lang'] = theLanguage
+            lgElement: MeiElement = historyElement.appendSubElement('lg', attrib)
+
+            for history in histories:
+                if t.TYPE_CHECKING:
+                    assert isinstance(history.value, m21.metadata.Text)
+                attrib = {'type': 'humdrum:HAO'}
+                if history.value.language and not allTheSameLanguage:
+                    attrib['xml:lang'] = history.value.language.lower()
+                # <l> can't take @analog, so use @type (says Perry)
+                lElement: MeiElement = lgElement.appendSubElement('l', attrib)
+                lElement.text = history.meiValue
+
+        # <langUsage>
+        if languages:
+            langUsageElement: MeiElement = theWork.appendSubElement('langUsage')
+            for lang in languages:
+                languageElement: MeiElement = langUsageElement.appendSubElement(
+                    'language',
+                    {
+                        'analog': 'humdrum:TXO'
+                    }
+                )
+                languageElement.text = lang.meiValue
+
+        # TODO: <perfMedium><perfResList>
+#             if instrumentLists:
+#                 perfMediumElement: MeiElement = theWork.appendSubElement('perfMedium')
+#                 if len(instrumentLists) == 1:
+#                     perfResListElement: MeiElement = perfMediumElement.appendSubElement(
+#                         'perfResList'
+#                     )
+#                     for instrument in instrumentLists[0].split(' '):
+#                         perfResElement: MeiElement = perfResListElement.appendSubElement(
+#                             'perfRes'
+#                         )
+#                         perfResElement.text = oh boy, what about counts
+#                     outerPerfResListElement: MeiElement = perfMediumElement.appendSubElement(
+#                         'perfResList'
+#                     )
+
+        # <classification>
+        if forms or genres or modes or meters or styles:
+            classificationElement: MeiElement = theWork.appendSubElement('classification')
+            termListElement: MeiElement = classificationElement.appendSubElement('termList')
+            for form in forms:
+                termElement: MeiElement = termListElement.appendSubElement(
+                    'term',
+                    {
+                        'label': 'form',
+                        'analog': 'humdrum:AFR'
+                    }
+                )
+                termElement.text = form.meiValue
+
+            for genre in genres:
+                termElement = termListElement.appendSubElement(
+                    'term',
+                    {
+                        'label': 'genre',
+                        'analog': 'humdrum:AGN'
+                    }
+                )
+                termElement.text = genre.meiValue
+
+            for mode in modes:
+                termElement = termListElement.appendSubElement(
+                    'term',
+                    {
+                        'label': 'mode',
+                        'analog': 'humdrum:AMD'
+                    }
+                )
+                termElement.text = mode.meiValue
+
+            for meter in meters:
+                termElement = termListElement.appendSubElement(
+                    'term',
+                    {
+                        'label': 'meter',
+                        'analog': 'humdrum:AMT'
+                    }
+                )
+                termElement.text = meter.meiValue
+
+            for style in styles:
+                termElement = termListElement.appendSubElement(
+                    'term',
+                    {
+                        'label': 'style',
+                        'analog': 'humdrum:AST'
+                    }
+                )
+                termElement.text = style.meiValue
+
+        # <expressionList>
+        expressionListElement: MeiElement | None = None
+        if firstPerformanceDates:
+            expressionListElement = theWork.appendSubElement('expressionList')
+
+            expressionElement: MeiElement = expressionListElement.appendSubElement(
+                'expression'
+            )
+            titleElement = expressionElement.appendSubElement('title')
+            titleElement.text = "First performance"
+            creationElement = expressionElement.appendSubElement('creation')
+            for firstPerformanceDate in firstPerformanceDates:
+                dateElement = creationElement.appendSubElement(
+                    'date',
+                    {
+                        'type': 'firstPerformance',
+                        'analog': 'humdrum:MPD'
+                    }
+                )
+                dateElement.fillInIsodate(firstPerformanceDate.value)
+                dateElement.text = firstPerformanceDate.meiValue
+
+        if performanceDates:
+            if expressionListElement is None:
+                expressionListElement = theWork.appendSubElement('expressionList')
+
+            for i, performanceDate in enumerate(performanceDates):
+                expressionElement = expressionListElement.appendSubElement(
+                    'expression'
+                )
+                titleElement = expressionElement.appendSubElement('title')
+                titleElement.text = 'Performance'
+                creationElement = expressionElement.appendSubElement('creation')
+
+                dateElement = creationElement.appendSubElement(
+                    'date',
+                    {
+                        'type': 'performance',
+                        'analog': 'humdrum:MDT'
+                    }
+                )
+                dateElement.fillInIsodate(performanceDate.value)
+                dateElement.text = performanceDate.meiValue
+
+                if i < len(performanceLocations):
+                    performanceLocation = performanceLocations[i]
+                    geogNameElement = creationElement.appendSubElement(
+                        'geogName',
+                        {
+                            'role': 'performanceLocation',
+                            'analog': 'humdrum:MLC'
+                        }
+                    )
+                    geogNameElement.text = performanceLocation.meiValue
+
+        # <relationList> (relations to the other works)
+        if parentWorkXmlId or groupWorkXmlId or associatedWorkXmlId or collectionWorkXmlId:
+            relationList = theWork.appendSubElement('relationList')
+            if parentWorkXmlId:
+                relationList.appendSubElement(
+                    'relation',
+                    {
+                        'rel': 'isPartOf',
+                        'type': 'isChildOfParent',
+                        'target': f'#{parentWorkXmlId}'
+                    }
+                )
+            if groupWorkXmlId:
+                relationList.appendSubElement(
+                    'relation',
+                    {
+                        'rel': 'isPartOf',
+                        'type': 'isMemberOfGroup',
+                        'target': f'#{groupWorkXmlId}'
+                    }
+                )
+            if associatedWorkXmlId:
+                relationList.appendSubElement(
+                    'relation',
+                    {
+                        'rel': 'isVersionOf',
+                        'type': 'isAssociatedWith',
+                        'target': f'#{associatedWorkXmlId}'
+                    }
+                )
+            if collectionWorkXmlId:
+                relationList.appendSubElement(
+                    'relation',
+                    {
+                        'rel': 'isPartOf',
+                        'type': 'isMemberOfCollection',
+                        'target': f'#{collectionWorkXmlId}'
+                    }
+                )
+
+        extMeta: MeiElement | None = self.makeExtMetaElementForWork()
+        if extMeta is not None:
+            theWork.subElements.append(extMeta)
+
+        return theWork
+
+    def buildOneOfManyWorkElements(self, tb: TreeBuilder, scoreNum: int):
+        mainWorkEl: MeiElement | None = self.makeMainWorkElement(scoreNum, oneOfMany=True)
+        if mainWorkEl is not None:
+            mainWorkEl.makeRootElement(tb)
+
+    def makeWorkListElement(self) -> MeiElement | None:
         # related works
         parentWorkTitles: list[MeiMetadataItem] = self.contents.get('OPR', [])
         groupWorkTitles: list[MeiMetadataItem] = self.contents.get('GTL', [])
@@ -1640,382 +2040,20 @@ class MeiMetadata:
                 )
                 titleElement.text = collectionWorkTitle.meiValue
 
-        titleElements: list[MeiElement] = self.makeTitleElements()
-        composerElements: list[MeiElement] = self.makeComposerElements()
-
         # the main (encoded) work
-        if (catalogNumbers
-                or catalogAbbrevNumbers
-                or opusNumbers
-                or titleElements
-                or creationDates
-                or creationCountries
-                or creationSettlements
-                or creationRegions
-                or creationLatLongs
-                or composerElements
-                or lyricists
-                or librettists
-                or dedicatees
-                or funders
-                or languages
-                or histories
-                or instrumentLists
-                or forms
-                or genres
-                or modes
-                or meters
-                or styles
-                or firstPerformanceDates
-                or performanceDates
-                or performanceLocations):
+        mainWorkElement: MeiElement | None = self.makeMainWorkElement(
+            workNumber,
+            oneOfMany=False,
+            parentWorkXmlId=parentWorkXmlId,
+            groupWorkXmlId=groupWorkXmlId,
+            associatedWorkXmlId=associatedWorkXmlId,
+            collectionWorkXmlId=collectionWorkXmlId
+        )
+        if mainWorkElement is not None:
             if workList is None:
                 workList = MeiElement('workList')
-
-            self.mainWorkXmlId = f'work{workNumber}_encoded'
+            workList.subElements.append(mainWorkElement)
             workNumber += 1
-
-            theWork = workList.appendSubElement(
-                'work',
-                {
-                    'xml:id': self.mainWorkXmlId,
-                    'type': 'encoded'
-                }
-            )
-
-            # <identifier>
-            for catalogNumber in catalogNumbers:
-                identifierElement = theWork.appendSubElement(
-                    'identifier',
-                    {
-                        'analog': 'humdrum:SCA'
-                    }
-                )
-                identifierElement.text = catalogNumber.meiValue
-
-            for catalogAbbrevNumber in catalogAbbrevNumbers:
-                identifierElement = theWork.appendSubElement(
-                    'identifier',
-                    {
-                        'analog': 'humdrum:SCT'
-                    }
-                )
-                identifierElement.text = catalogAbbrevNumber.meiValue
-
-            for opusNumber in opusNumbers:
-                identifierElement = theWork.appendSubElement(
-                    'identifier',
-                    {
-                        'analog': 'humdrum:OPS'
-                    }
-                )
-                identifierElement.text = opusNumber.meiValue
-
-            # all <title>s
-            theWork.subElements.extend(titleElements)
-
-            # all <composer>s
-            theWork.subElements.extend(composerElements)
-
-            # <lyricist>
-            for lyricist in lyricists:
-                lyricistElement: MeiElement = theWork.appendSubElement('lyricist')
-                persName = lyricistElement.appendSubElement(
-                    'persName',
-                    {
-                        'analog': 'humdrum:LYR'
-                    }
-                )
-                persName.text = lyricist.meiValue
-
-            # <librettist>
-            for librettist in librettists:
-                librettistElement: MeiElement = theWork.appendSubElement('librettist')
-                persName = librettistElement.appendSubElement(
-                    'persName',
-                    {
-                        'analog': 'humdrum:LIB'
-                    }
-                )
-                persName.text = librettist.meiValue
-
-            # <funder>
-            for funder in funders:
-                funderElement: MeiElement = theWork.appendSubElement('funder')
-                persName = funderElement.appendSubElement(
-                    'name',
-                    {
-                        'analog': 'humdrum:OCO'
-                    }
-                )
-                persName.text = funder.meiValue
-
-            # <creation>
-            if (creationDates
-                    or creationCountries
-                    or creationSettlements
-                    or creationRegions
-                    or creationLatLongs
-                    or dedicatees):
-                creationElement: MeiElement = theWork.appendSubElement('creation')
-
-                for creationDate in creationDates:
-                    dateElement: MeiElement = creationElement.appendSubElement(
-                        'date',
-                        {
-                            'analog': 'humdrum:ODT',
-                        }
-                    )
-                    dateElement.fillInIsodate(creationDate.value)
-                    dateElement.text = creationDate.meiValue
-
-                for creationCountry in creationCountries:
-                    countryElement: MeiElement = creationElement.appendSubElement(
-                        'country',
-                        {
-                            'analog': 'humdrum:OCY'
-                        }
-                    )
-                    countryElement.text = creationCountry.meiValue
-
-                for creationSettlement in creationSettlements:
-                    settlementElement: MeiElement = creationElement.appendSubElement(
-                        'settlement',
-                        {
-                            'analog': 'humdrum:OPC'
-                        }
-                    )
-                    settlementElement.text = creationSettlement.meiValue
-
-                for creationRegion in creationRegions:
-                    regionElement: MeiElement = creationElement.appendSubElement(
-                        'geogName',
-                        {
-                            'analog': 'humdrum:ARE'
-                        }
-                    )
-                    regionElement.text = creationRegion.meiValue
-
-                for creationLatLong in creationLatLongs:
-                    regionElement = creationElement.appendSubElement(
-                        'geogName',
-                        {
-                            'type': 'coordinates',
-                            'analog': 'humdrum:ARL'
-                        }
-                    )
-                    regionElement.text = creationLatLong.meiValue
-
-                for dedicatee in dedicatees:
-                    contributorElement = creationElement.appendSubElement(
-                        'dedicatee',
-                        {
-                            'analog': 'humdrum:ODE'
-                        }
-                    )
-                    contributorElement.text = dedicatee.meiValue
-
-            # <history>
-            if histories:
-                allTheSameLanguage: bool
-                theLanguage: str | None
-                theLanguage, allTheSameLanguage = MeiMetadata.getTextListLanguage(histories)
-                historyElement: MeiElement = theWork.appendSubElement('history')
-                attrib: dict[str, str] = {}
-                if allTheSameLanguage and theLanguage:
-                    attrib['xml:lang'] = theLanguage
-                lgElement: MeiElement = historyElement.appendSubElement('lg', attrib)
-
-                for history in histories:
-                    if t.TYPE_CHECKING:
-                        assert isinstance(history.value, m21.metadata.Text)
-                    attrib = {'type': 'humdrum:HAO'}
-                    if history.value.language and not allTheSameLanguage:
-                        attrib['xml:lang'] = history.value.language.lower()
-                    # <l> can't take @analog, so use @type (says Perry)
-                    lElement: MeiElement = lgElement.appendSubElement('l', attrib)
-                    lElement.text = history.meiValue
-
-            # <langUsage>
-            if languages:
-                langUsageElement: MeiElement = theWork.appendSubElement('langUsage')
-                for lang in languages:
-                    languageElement: MeiElement = langUsageElement.appendSubElement(
-                        'language',
-                        {
-                            'analog': 'humdrum:TXO'
-                        }
-                    )
-                    languageElement.text = lang.meiValue
-
-            # TODO: <perfMedium><perfResList>
-#             if instrumentLists:
-#                 perfMediumElement: MeiElement = theWork.appendSubElement('perfMedium')
-#                 if len(instrumentLists) == 1:
-#                     perfResListElement: MeiElement = perfMediumElement.appendSubElement(
-#                         'perfResList'
-#                     )
-#                     for instrument in instrumentLists[0].split(' '):
-#                         perfResElement: MeiElement = perfResListElement.appendSubElement(
-#                             'perfRes'
-#                         )
-#                         perfResElement.text = oh boy, what about counts
-#                     outerPerfResListElement: MeiElement = perfMediumElement.appendSubElement(
-#                         'perfResList'
-#                     )
-
-            # <classification>
-            if forms or genres or modes or meters or styles:
-                classificationElement: MeiElement = theWork.appendSubElement('classification')
-                termListElement: MeiElement = classificationElement.appendSubElement('termList')
-                for form in forms:
-                    termElement: MeiElement = termListElement.appendSubElement(
-                        'term',
-                        {
-                            'label': 'form',
-                            'analog': 'humdrum:AFR'
-                        }
-                    )
-                    termElement.text = form.meiValue
-
-                for genre in genres:
-                    termElement = termListElement.appendSubElement(
-                        'term',
-                        {
-                            'label': 'genre',
-                            'analog': 'humdrum:AGN'
-                        }
-                    )
-                    termElement.text = genre.meiValue
-
-                for mode in modes:
-                    termElement = termListElement.appendSubElement(
-                        'term',
-                        {
-                            'label': 'mode',
-                            'analog': 'humdrum:AMD'
-                        }
-                    )
-                    termElement.text = mode.meiValue
-
-                for meter in meters:
-                    termElement = termListElement.appendSubElement(
-                        'term',
-                        {
-                            'label': 'meter',
-                            'analog': 'humdrum:AMT'
-                        }
-                    )
-                    termElement.text = meter.meiValue
-
-                for style in styles:
-                    termElement = termListElement.appendSubElement(
-                        'term',
-                        {
-                            'label': 'style',
-                            'analog': 'humdrum:AST'
-                        }
-                    )
-                    termElement.text = style.meiValue
-
-            # <expressionList>
-            expressionListElement: MeiElement | None = None
-            if firstPerformanceDates:
-                expressionListElement = theWork.appendSubElement('expressionList')
-
-                expressionElement: MeiElement = expressionListElement.appendSubElement(
-                    'expression'
-                )
-                titleElement = expressionElement.appendSubElement('title')
-                titleElement.text = "First performance"
-                creationElement = expressionElement.appendSubElement('creation')
-                for firstPerformanceDate in firstPerformanceDates:
-                    dateElement = creationElement.appendSubElement(
-                        'date',
-                        {
-                            'type': 'firstPerformance',
-                            'analog': 'humdrum:MPD'
-                        }
-                    )
-                    dateElement.fillInIsodate(firstPerformanceDate.value)
-                    dateElement.text = firstPerformanceDate.meiValue
-
-            if performanceDates:
-                if expressionListElement is None:
-                    expressionListElement = theWork.appendSubElement('expressionList')
-
-                for i, performanceDate in enumerate(performanceDates):
-                    expressionElement = expressionListElement.appendSubElement(
-                        'expression'
-                    )
-                    titleElement = expressionElement.appendSubElement('title')
-                    titleElement.text = 'Performance'
-                    creationElement = expressionElement.appendSubElement('creation')
-
-                    dateElement = creationElement.appendSubElement(
-                        'date',
-                        {
-                            'type': 'performance',
-                            'analog': 'humdrum:MDT'
-                        }
-                    )
-                    dateElement.fillInIsodate(performanceDate.value)
-                    dateElement.text = performanceDate.meiValue
-
-                    if i < len(performanceLocations):
-                        performanceLocation = performanceLocations[i]
-                        geogNameElement = creationElement.appendSubElement(
-                            'geogName',
-                            {
-                                'role': 'performanceLocation',
-                                'analog': 'humdrum:MLC'
-                            }
-                        )
-                        geogNameElement.text = performanceLocation.meiValue
-
-            # <relationList> (relations to the other works)
-            if parentWorkXmlId or groupWorkXmlId or associatedWorkXmlId or collectionWorkXmlId:
-                relationList = theWork.appendSubElement('relationList')
-                if parentWorkXmlId:
-                    relationList.appendSubElement(
-                        'relation',
-                        {
-                            'rel': 'isPartOf',
-                            'type': 'isChildOfParent',
-                            'target': f'#{parentWorkXmlId}'
-                        }
-                    )
-                if groupWorkXmlId:
-                    relationList.appendSubElement(
-                        'relation',
-                        {
-                            'rel': 'isPartOf',
-                            'type': 'isMemberOfGroup',
-                            'target': f'#{groupWorkXmlId}'
-                        }
-                    )
-                if associatedWorkXmlId:
-                    relationList.appendSubElement(
-                        'relation',
-                        {
-                            'rel': 'isVersionOf',
-                            'type': 'isAssociatedWith',
-                            'target': f'#{associatedWorkXmlId}'
-                        }
-                    )
-                if collectionWorkXmlId:
-                    relationList.appendSubElement(
-                        'relation',
-                        {
-                            'rel': 'isPartOf',
-                            'type': 'isMemberOfCollection',
-                            'target': f'#{collectionWorkXmlId}'
-                        }
-                    )
-
-            extMeta: MeiElement | None = self.makeExtMetaElementForWork()
-            if extMeta is not None:
-                theWork.subElements.append(extMeta)
 
         return workList
 
