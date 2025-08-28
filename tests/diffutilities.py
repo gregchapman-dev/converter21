@@ -35,6 +35,7 @@ class DiffUtilities:
         outExt: str,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
+        exportMeiMultiScoreHostTag: str = 'mei',  # default to match old results
         detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL,
         scoreNum: int | None = None
     ):
@@ -120,9 +121,21 @@ class DiffUtilities:
             # Use Stream.write instead of Opus.write (which will incorrectly
             # split into multiple files, one per score)
             # success = scoreOrOpus1.write(fp=writePath, fmt=outFmt, makeNotation=False)
-            success = m21.stream.Stream.write(
-                scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
-            )
+            if outFmt == 'mei':
+                success = m21.stream.Stream.write(
+                    scoreOrOpus1,
+                    fp=writePath,
+                    fmt=outFmt,
+                    makeNotation=False,
+                    multipleScoresHostTag=exportMeiMultiScoreHostTag
+                )
+            else:
+                success = m21.stream.Stream.write(
+                    scoreOrOpus1,
+                    fp=writePath,
+                    fmt=outFmt,
+                    makeNotation=False
+                )
             assert success
 
         if inFmt == outFmt and inFmt != 'mxl':
@@ -224,6 +237,7 @@ class DiffUtilities:
         outExt: str,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
+        exportMeiMultiScoreHostTag: str = 'mei',  # default to match old results
         detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL
     ):
         # Generate a random integer between 1 and 1,000,000,000 (inclusive)
@@ -263,6 +277,7 @@ class DiffUtilities:
                                 uniqueInt,
                                 writeUsingVerovio,
                                 convertInputToMeiUsingVerovioBeforeReading,
+                                exportMeiMultiScoreHostTag,
                                 detail):
                             resultsf.flush()
                             print(file, file=goodf)
@@ -285,6 +300,7 @@ class DiffUtilities:
         uniqueInt: int,
         writeUsingVerovio: bool = False,
         convertInputToMeiUsingVerovioBeforeReading: bool = False,
+        exportMeiMultiScoreHostTag: str = 'mei',  # default to match old results
         detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL
     ) -> bool:
         # returns True if the test passed (no musicdiff differences found)
@@ -412,9 +428,21 @@ class DiffUtilities:
                 # Use Stream.write instead of Opus.write (which will incorrectly
                 # split into multiple files, one per score)
                 # success = scoreOrOpus1.write(fp=writePath, fmt=outFmt, makeNotation=False)
-                success = m21.stream.Stream.write(
-                    scoreOrOpus1, fp=writePath, fmt=outFmt, makeNotation=False
-                )
+                if outFmt == 'mei':
+                    success = m21.stream.Stream.write(
+                        scoreOrOpus1,
+                        fp=writePath,
+                        fmt=outFmt,
+                        makeNotation=False,
+                        multipleScoresHostTag=exportMeiMultiScoreHostTag
+                    )
+                else:
+                    success = m21.stream.Stream.write(
+                        scoreOrOpus1,
+                        fp=writePath,
+                        fmt=outFmt,
+                        makeNotation=False
+                    )
                 if not success:
                     print(': export failed')
                     print(': export failed', file=results)
