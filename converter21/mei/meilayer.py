@@ -152,9 +152,10 @@ class MeiLayer:
             layerLabel = self.m21Voice.c21_label  # type: ignore
 
         layerAttr: dict[str, str] = {}
-        xmlId: str = M21Utilities.getXmlId(self.m21Voice)
-        if xmlId:
-            layerAttr['xml:id'] = xmlId
+        # voice.id is a problem, it's always 1 or 2 or... and xml:id must be unique
+        # xmlId: str = M21Utilities.getXmlId(self.m21Voice)
+        # if xmlId:
+        #     layerAttr['xml:id'] = xmlId
         if layerNStr:
             layerAttr['n'] = layerNStr
 

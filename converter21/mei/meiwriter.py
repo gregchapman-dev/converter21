@@ -161,13 +161,21 @@ class MeiWriter:
 
             meiVersion = ''  # disable the xmlns/meiversion attributes in <mei> elements
             indentLevel = 1
-            for score in scores:
-                meiScore = MeiScore(score, meiVersion)
+            meiScores: list[MeiScore] = [MeiScore(score, meiVersion) for score in scores]
+            for meiScore in meiScores:
                 meiElement = meiScore.makeMeiElement()
                 fp.write(indentSpace * indentLevel)
                 indent(meiElement, space=indentSpace, level=indentLevel)
                 ElementTree(meiElement).write(fp, encoding='unicode')
                 fp.write('\n')
+
+            fp.write('</meiCorpus>\n')
+            fp.flush()
+
+            # Don't clean up until score elements completely generated, so
+            # memory (and thus xml:ids) don't get re-used in multiple
+            # scores in the MEI file.
+            for meiScore in meiScores:
                 # clean up all the notes-to-self MeiScore wrote in the score.
                 meiScore.deannotateScore()
             return True
@@ -209,7 +217,8 @@ class MeiWriter:
         if not useExistingNums:
             nextNumber = 0
 
-        for scoreIdx, score in enumerate(scores):
+        meiScores = [MeiScore(score, meiVersion) for score in scores]
+        for scoreIdx, meiScore in enumerate(meiScores):
             if useExistingNums:
                 nextNumber = existingNumInts[scoreIdx]
                 if t.TYPE_CHECKING:
@@ -223,7 +232,6 @@ class MeiWriter:
             # the object structure is MEI-like. For example:
             #   music21 scores are {Staff1(Measure1 .. MeasureN), Staff2(Measure1 .. MeasureN)}
             #   but MEI scores are {Measure1{Staff1, Staff2} .. MeasureN{Staff1, Staff2}}.
-            meiScore = MeiScore(score, meiVersion)
             scoreEl: Element
             workEl: Element
             scoreEl, workEl = meiScore.makeScoreAndWorkElement(nextNumber)
@@ -232,6 +240,11 @@ class MeiWriter:
 
             workElements.append(workEl)
             scoreElements.append(scoreEl)
+
+        # Don't clean up until score elements completely generated, so
+        # memory (and thus xml:ids) don't get re-used in multiple
+        # scores in the MEI file.
+        for meiScore in meiScores:
             # clean up all the notes-to-self MeiScore wrote in the score.
             meiScore.deannotateScore()
 
@@ -309,5 +322,7 @@ class MeiWriter:
             fp.write(f'{indentSpace * 2}</group>\n')
         fp.write(f'{indentSpace}</music>\n')
         fp.write('</mei>\n')
+
+        fp.flush()
 
         return True
