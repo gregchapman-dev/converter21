@@ -4027,6 +4027,7 @@ class M21Utilities:
     @staticmethod
     def assureAllXmlIds(s: m21.stream.Stream):
         pedalMarksSupported: bool = M21Utilities.m21PedalMarksSupported()
+        M21Utilities.assureXmlId(s)
         for obj in s.recurse():
             if pedalMarksSupported:
                 if isinstance(obj, m21.expressions.PedalMark):  # type: ignore

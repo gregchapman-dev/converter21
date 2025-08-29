@@ -1570,7 +1570,6 @@ class MeiMetadata:
             theWork = MeiElement(
                 'work',
                 {
-                    'xml:id': f'score{workNumber}',
                     'n': str(workNumber),
                     'type': 'encoded'
                 }

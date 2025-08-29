@@ -18,6 +18,7 @@ import music21 as m21
 from converter21.mei import MeiExportError
 # from converter21.mei import MeiInternalError
 from converter21.mei import MeiScore
+from converter21.mei import MeiShared
 
 from converter21.shared import M21Utilities
 from converter21.shared import SharedConstants
@@ -226,6 +227,9 @@ class MeiWriter:
             scoreEl: Element
             workEl: Element
             scoreEl, workEl = meiScore.makeScoreAndWorkElement(nextNumber)
+            dataId: str = M21Utilities.makeXmlIdFrom(id(scoreEl), self.multipleScoresHostTag)
+            workEl.attrib['data'] = '#' + dataId
+
             workElements.append(workEl)
             scoreElements.append(scoreEl)
             # clean up all the notes-to-self MeiScore wrote in the score.
@@ -275,12 +279,14 @@ class MeiWriter:
             fp.write(f'{indentSpace * 2}<group>\n')
             # every score will follow: <music><mdiv><score> ... <music><mdiv><score> etc
 
-        for scoreEl in scoreElements:
+        for workEl, scoreEl in zip(workElements, scoreElements):
+            nStr: str = workEl.attrib['n']
+            dataStr: str = MeiShared.removeOctothorpe(workEl.attrib['data'])
             if self.multipleScoresHostTag == 'mdiv':
-                fp.write(f'{indentSpace * 3}<mdiv>\n')
+                fp.write(f'{indentSpace * 3}<mdiv xml:id="{dataStr}" n="{nStr}">\n')
                 indentLevel = 4
             else:  # 'music'
-                fp.write(f'{indentSpace * 3}<music>\n')
+                fp.write(f'{indentSpace * 3}<music xml:id="{dataStr}" n="{nStr}">\n')
                 fp.write(f'{indentSpace * 4}<body>\n')
                 fp.write(f'{indentSpace * 5}<mdiv>\n')
                 indentLevel = 6

@@ -568,6 +568,9 @@ class MeiScore:
         for sp in list(self.m21Score[M21TemporarySpanner]):
             self.m21Score.remove(sp)
 
+        if hasattr(self.m21Score, 'xml_id'):
+            delattr(self.m21Score, 'xml_id')
+
         for obj in self.m21Score.recurse():
             # we don't put 'xml_id' in self.customM21AttrsToDelete, because
             # then every object would be in that dictionary.
