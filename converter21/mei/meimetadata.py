@@ -114,8 +114,12 @@ class MeiMetadata:
                 else:
                     currList.append(meiItem)
 
+        self.uniqueSuffix: str = M21Utilities.makeXmlIdFrom(id(m21Metadata), '')
         # The xml:id of the main work (the work that is actually encoded).
-        # This will be referenced in mdiv@decls (or maybe music@decls).
+        # This will be referenced in mdiv@decls (or maybe music@decls). It
+        # will be suffixed with self.uniqueSuffix, so that if there are multiple
+        # individual main works in the MEI file (e.g. <meiCorpus> will do this),
+        # they will have unique xml:ids.
         self.mainWorkXmlId: str = ''
 
         # Saved off state during makeRootElement (e.g. MeiElement trees that
@@ -1575,7 +1579,7 @@ class MeiMetadata:
                 }
             )
         else:
-            self.mainWorkXmlId = f'work{workNumber}_encoded'
+            self.mainWorkXmlId = f'work{workNumber}_encoded_{self.uniqueSuffix}'
             theWork = MeiElement(
                 'work',
                 {
@@ -1948,7 +1952,7 @@ class MeiMetadata:
             if workList is None:
                 workList = MeiElement('workList')
 
-            parentWorkXmlId = f'work{workNumber}_parent'
+            parentWorkXmlId = f'work{workNumber}_parent_{self.uniqueSuffix}'
             parentWork = workList.appendSubElement(
                 'work',
                 {
@@ -1972,7 +1976,7 @@ class MeiMetadata:
             if workList is None:
                 workList = MeiElement('workList')
 
-            groupWorkXmlId = f'work{workNumber}_group'
+            groupWorkXmlId = f'work{workNumber}_group_{self.uniqueSuffix}'
             groupWork = workList.appendSubElement(
                 'work',
                 {
@@ -1996,7 +2000,7 @@ class MeiMetadata:
             if workList is None:
                 workList = MeiElement('workList')
 
-            associatedWorkXmlId = f'work{workNumber}_associated'
+            associatedWorkXmlId = f'work{workNumber}_associated_{self.uniqueSuffix}'
             associatedWork = workList.appendSubElement(
                 'work',
                 {
@@ -2020,7 +2024,7 @@ class MeiMetadata:
             if workList is None:
                 workList = MeiElement('workList')
 
-            collectionWorkXmlId = f'work{workNumber}_collection'
+            collectionWorkXmlId = f'work{workNumber}_collection_{self.uniqueSuffix}'
             collectionWork = workList.appendSubElement(
                 'work',
                 {
