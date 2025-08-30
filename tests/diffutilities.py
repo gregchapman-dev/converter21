@@ -42,6 +42,11 @@ class DiffUtilities:
         print('music21 version:', VERSION_STR, file=sys.stderr)
         converter21.register()
 
+        if not inFmt:
+            # figure it out from inputPath's file extension
+            c = m21.converter.Converter()
+            inFmt = c.getFormatFromFileExtension(inputPath)
+
         verovioCompatibleImport: bool = (
             writeUsingVerovio or convertInputToMeiUsingVerovioBeforeReading
         )
@@ -65,7 +70,7 @@ class DiffUtilities:
             # pretend we were passed this mei input file
             inputPath = meiPath
             inFmt = 'mei'
-        else:
+        elif inFmt:
             print(f'Parsing {inFmt} file: {inputPath}')
 
         if inFmt == 'pickled':
@@ -304,6 +309,11 @@ class DiffUtilities:
         detail: DetailLevel | int = DEFAULT_DETAIL_LEVEL
     ) -> bool:
         # returns True if the test passed (no musicdiff differences found)
+        if not inFmt:
+            # figure it out from inputPath's file extension
+            c = m21.converter.Converter()
+            inFmt = c.getFormatFromFileExtension(inputPath)
+
         print(f'{inputPath}', end='')
         print(f'{inputPath}', end='', file=results)
         results.flush()
