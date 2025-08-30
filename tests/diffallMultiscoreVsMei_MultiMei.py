@@ -22,7 +22,7 @@ listPath: Path = Path(args.list_file)
 
 DiffUtilities.runDiffAll(
     listPath,
-    inFmt='mei',
+    inFmt='',
     outFmt='mei',
     outExt='mei',
     exportMeiMultiScoreHostTag='mei'
