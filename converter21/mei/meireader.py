@@ -574,7 +574,9 @@ class MeiReader:
                 if parentEl is None:
                     break
 
-                numScoreDescendants = len(parentEl.findall(f'.//{MEI_NS}score'))
+                # we search for music//score (not just score) so we don't confuse
+                # ourselves with incip/score (in meiHead), which doesn't count.
+                numScoreDescendants = len(parentEl.findall(f'.//{MEI_NS}music//{MEI_NS}score'))
                 if numScoreDescendants > 1:
                     break
 
