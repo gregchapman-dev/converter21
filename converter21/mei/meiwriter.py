@@ -118,6 +118,9 @@ class MeiWriter:
         # pylint: enable=line-too-long
         fp.write(prefix)
 
+        indentLevel: int = 0
+        indentSpace: str = '   '  # 3 spaces
+
         # where should we write xmlns/meiversion?
         meiVersion: str = self.meiVersion
         multipleScores: bool = len(scores) > 1
@@ -126,6 +129,8 @@ class MeiWriter:
             # single Score hosted in mei element (no matter what self.multipleScoresHostTag says)
             meiScore: MeiScore = MeiScore(scores[0], meiVersion)
             meiElement: Element = meiScore.makeMeiElement()
+            fp.write(indentSpace * indentLevel)
+            indent(meiElement, space=indentSpace, level=indentLevel)
             ElementTree(meiElement).write(fp, encoding='unicode')
             fp.write('\n')
             # clean up all the notes-to-self MeiScore wrote in the score.
@@ -140,9 +145,6 @@ class MeiWriter:
         #   (1) multiple 'mei'   (within top-level 'meiCorpus')
         #   (2) multiple 'mdiv'  (within top-level 'mei'/'music')
         #   (3) multiple 'music' (within top-level 'mei'/'music'/'group')
-        indentLevel: int = 0
-        indentSpace: str = '   '  # 3 spaces
-
         if self.multipleScoresHostTag == 'mei':
             if meiVersion.startswith('5'):
                 fp.write(
