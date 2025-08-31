@@ -778,6 +778,8 @@ class MeiMetadataReader:
             self.processClassification(element, md)
         elif element.name == 'expressionList':
             self.processExpressionList(element, md)
+        elif element.name == 'notesStmt':
+            self.processNotesStmt(element, 'humdrum:ONB', md)
 
     def processNotesStmt(
         self,
@@ -1463,7 +1465,7 @@ class MeiMetadataReader:
         mustBeString: bool = not M21Utilities.isUsableMetadataKey(
             md,
             analog,
-            includeHumdrumCustomKeys=False
+            includeCustomKeys=False
         )
 
         m21DateObj: m21.metadata.DatePrimitive | None

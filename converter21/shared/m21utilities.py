@@ -2639,6 +2639,18 @@ class M21Utilities:
         'mei:printedSourceCopyright',
     )
 
+    validAbcMetadataKeys: tuple[str, ...] = (
+        'abc:N',
+        'abc:H',
+        'abc:W',
+        'abc:S',
+        'abc:Z',
+        'abc:R',
+        'abc:G',
+        'abc:P',
+        'abc:F'
+    )
+
     @staticmethod
     def adjustRoleFromContext(role: str, context: str) -> str:
         if role == 'editor':
@@ -2762,34 +2774,40 @@ class M21Utilities:
     def isUsableMetadataKey(
         md: m21.metadata.Metadata,
         key: str,
-        includeHumdrumCustomKeys: bool = True
+        includeCustomKeys: bool = True
     ) -> bool:
         # returns true if key is a standard uniqueName, a standard namespaceName,
         # a non-standard namespaceName that we can convert into a standard
         # uniqueName/namespaceName (e.g. 'dcterm:title' can be converted to
-        # 'dcterms:title'), or a 'humdrum:XXX' name that we are willing to
-        # use as if it were a standard namespaceName (but is actually a custom
-        # key).
+        # 'dcterms:title'), or a 'humdrum:XXX'/'abc:Y'/'mei:whatever' name that
+        # we are willing to use as if it were a standard namespaceName (but is
+        # actually a custom key).
         if md._isStandardUniqueName(key):
             return True
         if md._isStandardNamespaceName(key):
             return True
         if key.startswith('humdrum:'):
-            if includeHumdrumCustomKeys:
+            if includeCustomKeys:
                 return True
-            else:
-                # is it standard?  Yes, if it maps to a uniqueName
-                uniqueName: str = (
-                    M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
-                        key[8:],
-                        ''
-                    )
+
+            # is it standard?  Yes, if it maps to a uniqueName
+            uniqueName: str = (
+                M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                    key[8:],
+                    ''
                 )
-                if uniqueName:
-                    # humdrum key that maps to uniqueName; always welcome
-                    return True
-                # custom humdrum key, and we've been asked not to include them
-                return False
+            )
+            if uniqueName:
+                # humdrum key that maps to uniqueName; always welcome
+                return True
+            # custom humdrum key, and we've been asked not to include them
+            return False
+
+        if key.startswith('mei:') and key in M21Utilities.validMeiMetadataKeys:
+            return includeCustomKeys
+
+        if key.startswith('abc:') and key in M21Utilities.validAbcMetadataKeys:
+            return includeCustomKeys
 
         # Let's see if we can make a standard namespaceName from it.
         if key.startswith('dcterm:'):
@@ -2819,10 +2837,11 @@ class M21Utilities:
         value: t.Any,
         other: dict[str, str] | None = None
     ):
-        # Note that we specifically support 'humdrum:XXX' keys that do not map
-        # to uniqueNames and 'mei:blahblah' keys (using them as custom keys).
-        # We also support a few alternative namespaces ('dc:' and 'dcterm:' for
-        # 'dcterms:' and 'marc:' for 'marcrel:').
+        # Note that we specifically support 'humdrum:XXX' keys that do not map to
+        # uniqueNames and 'mei:blahblah' and 'abc:Y' keys (using them as custom
+        # keys). We also support a few alternative namespaces ('dc:' and 'dcterm:'
+        # for 'dcterms:' and 'marc:' for 'marcrel:').
+        allDone: bool = False
         uniqueName: str | None = None
         if md._isStandardUniqueName(key):
             uniqueName = key
@@ -2837,9 +2856,11 @@ class M21Utilities:
                 M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
                 return
         elif key.startswith('mei:'):
-            if key in M21Utilities.validMeiMetadataKeys:
-                M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
-                return
+            M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
+            allDone = True
+        elif key.startswith('abc:'):
+            M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
+            allDone = True
         elif key.startswith('dcterm:'):
             key = key.replace('dcterm:', 'dcterms:')
             if md._isStandardNamespaceName(key):
@@ -2852,6 +2873,9 @@ class M21Utilities:
             key = key.replace('marc:', 'marcrel:')
             if md._isStandardNamespaceName(key):
                 uniqueName = md.namespaceNameToUniqueName(key)
+
+        if allDone:
+            return
 
         if isinstance(value, str):
             value = m21.metadata.Text(value)

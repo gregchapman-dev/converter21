@@ -13,6 +13,7 @@ import copy
 import music21 as m21
 
 from converter21.shared import SharedConstants
+from converter21.shared import M21Utilities
 
 class AbcMetadata:
 
@@ -148,30 +149,19 @@ class AbcMetadata:
         # takes info dict keyed by 'X', 'T', 'C', 'Z', 'I', etc
 
         def addValue(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
-            md.add(mdKey, hfValue)
-
-        def addCustomValue(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
-            md.addCustom(mdKey, hfValue)
+            M21Utilities.addIfNotADuplicate(md, mdKey, hfValue)
 
         def addValues(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
             hfValues: list[str] = splitValues(hfValue)
             if mdKey == 'title':
-                md.add('title', hfValues[0])
-                if len(hfValues) > 1:
-                    md.add('alternativeTitle', hfValues[1:])
+                for i, val in enumerate(hfValues):
+                    if i == 0:
+                        M21Utilities.addIfNotADuplicate(md, 'title', val)
+                        continue
+                    M21Utilities.addIfNotADuplicate(md, 'alternativeTitle', val)
             else:
-                md.add(mdKey, hfValues)
-
-        def addCustomValues(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
-            hfValues: list[str] = splitValues(hfValue)
-            md.addCustom(mdKey, hfValues)
-
-        def addCustomValuesAsOneMultilineValue(
-            md: m21.metadata.Metadata,
-            mdKey: str,
-            hfValue: str
-        ):
-            addCustomValue(md, mdKey, hfValue)
+                for val in hfValues:
+                    M21Utilities.addIfNotADuplicate(md, mdKey, val)
 
         def splitValues(hfValue: str) -> list[str]:
             return hfValue.split('\n')
@@ -269,8 +259,8 @@ class AbcMetadata:
                 #   to abc, etc
                 # H = history: designed for multi-line notes, stories and anecdotes
                 # W = untimed lyrics: to be printed after the music, for example
-                addCustomValuesAsOneMultilineValue(md, 'abc:' + hfKey, hfValue)
-            elif hfKey in ('R', 'G', 'P'):
+                addValue(md, 'abc:' + hfKey, hfValue)
+            elif hfKey in ('R', 'G', 'P', 'F'):
                 # There is no standard metadata key in music21 for these, so we
                 # make up a custom namespace:name such as 'abc:R', etc.
                 # These we split into individual one-line metadata entries.
@@ -278,7 +268,7 @@ class AbcMetadata:
                 #   single jig, 48-bar polka, etc).
                 # G: grouping key (used for many different things)
                 # P: partmap (e.g. 'AABBAC')
-                addCustomValues(md, 'abc:' + hfKey, hfValue)
+                addValues(md, 'abc:' + hfKey, hfValue)
             elif hfKey == 'X':
                 if hfValue.isdigit():
                     addValue(md, 'number', hfValue)
@@ -288,13 +278,11 @@ class AbcMetadata:
                 addValues(md, 'composer', hfValue)
             elif hfKey == 'B':  # 'book'
                 addValues(md, 'parentTitle', hfValue)
-            elif hfKey == 'F':  # file URL
-                addValues(md, 'filePath', hfValue)
             elif hfKey == 'D':  # discography
                 # instead of abc:D, we use Humdrum's existing recording title item
                 # Note that MEI import from verovio-translated ABC -> MEI will need
                 # to read abc:D and set it as humdrum:RTL in the music21 metadata.
-                addCustomValues(md, 'humdrum:RTL', hfValue)  # 'album title'
+                addValues(md, 'humdrum:RTL', hfValue)  # 'album title'
             elif hfKey in ('O', 'A'):
                 # 'A' is deprecated, we will read it, but write it as 'O'
                 vals = splitValues(hfValue)
