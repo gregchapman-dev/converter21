@@ -49,6 +49,8 @@ class MeiMetadataItem:
         self.uniqueName: str = ''
         self.humdrumRefKey: str = ''
         self.meiMetadataKey: str = ''
+        self.abcMetadataKey: str = ''
+
         if md._isStandardUniqueName(self.key):
             self.uniqueName = self.key
             self.humdrumRefKey = (
@@ -67,12 +69,19 @@ class MeiMetadataItem:
             if hdKey in M21Utilities.validHumdrumReferenceKeys:
                 self.humdrumRefKey = hdKey
         elif self.key.startswith('mei:'):
-            if self.key in M21Utilities.validMeiMetadataKeys:
+            if self.key in M21Utilities.standardMeiMetadataKeys:
                 self.meiMetadataKey = self.key
+        elif self.key.startswith('abc:'):
+            if self.key in M21Utilities.standardAbcMetadataKeys:
+                self.abcMetadataKey = self.key
 
         # self.isCustom is True if we don't have a uniqueName or humdrumRefKey or meiMetadataKey
+        # or abcMetadataKey
         self.isCustom: bool = (
-            not self.uniqueName and not self.humdrumRefKey and not self.meiMetadataKey
+            not self.uniqueName
+            and not self.humdrumRefKey
+            and not self.meiMetadataKey
+            and not self.abcMetadataKey
         )
 
         self.isContributor: bool = md._isContributorUniqueName(self.uniqueName)

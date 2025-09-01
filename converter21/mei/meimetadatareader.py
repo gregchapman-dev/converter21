@@ -1250,11 +1250,28 @@ class MeiMetadataReader:
         else:
             analog = element.get('analog', '')
 
+        # special maps: e.g. abc:H -> humdrum:HAO, etc
+        if analog in M21Utilities.abcMetadataKeyToM21MetadataPropertyName:
+            newAnalog: str = M21Utilities.abcMetadataKeyToM21MetadataPropertyName[analog]
+            if newAnalog:
+                analog = newAnalog
+
         if not M21Utilities.isUsableMetadataKey(md, analog):
             if defaultAnalog:
                 analog = defaultAnalog
             else:
                 return
+
+        if analog in ('abc:Z', 'abc:I'):
+            # check for text prefix that actually belongs in key (e.g. 'abc:Z:abc-transcription'
+            # or 'abc:Z:abc-edited-by or abc:I:abc-creator)
+            if text.startswith('abc-'):
+                splitText: list[str] = text.split(' ', 1)
+                if len(splitText) == 2:
+                    analog += ':' + splitText[0]
+                    text = splitText[1]
+                    if analog in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName:
+                        analog = M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName[analog]
 
         lang: str = element.get(_XMLLANG, '')
         if not lang:

@@ -2635,29 +2635,67 @@ class M21Utilities:
         'poet': 'LYR'
     }
 
-    validMeiMetadataKeys: tuple[str, ...] = (
+    standardMeiMetadataKeys: tuple[str, ...] = (
         'mei:printedSourceCopyright',
     )
 
+    abcMetadataKeyToM21MetadataPropertyName: dict[str, str] = {
+        'abc:B': 'parentTitle',  # book
+        'abc:C': 'composer',     # composer name
+        'abc:D': 'humdrum:RTL',  # discography
+        'abc:H': 'humdrum:HAO',  # history
+        'abc:T': 'title',        # title
+        'abc:X': 'number',       # reference number
+        'abc:O': 'countryOfComposition',  # origin
+        'abc:A': '',             # area (deprecated, we will read as if it was 'abc:O')
+        'abc:N': '',             # notes
+        'abc:W': '',             # untimed lyrics
+        'abc:Z': '',             # transcription (sometimes translated untimed lyrics)
+        'abc:R': '',             # rhythm
+        'abc:G': '',             # grouping text
+        'abc:P': '',             # parts
+        'abc:F': '',             # file URL
+        'abc:S': '',             # source
+    }
+
+    # the "standard" abc keys that we are willing to use in music21 metadata,
+    # because there is no standard music21 key (or humdrum or mei key) to use
+    # instead (M21PropertyName == '')
+    standardAbcMetadataKeys: tuple[str, ...] = (
+        # must match everything in abcMetadataKeyToM21MetadataPropertyName that
+        # has value == ''
+        'abc:A',  # area (deprecated, we will read as if it was 'abc:O')
+        'abc:N',  # notes
+        'abc:W',  # untimed lyrics
+        'abc:Z',  # transcription (sometimes translated untimed lyrics)
+        'abc:R',  # rhythm
+        'abc:G',  # grouping text
+        'abc:P',  # parts
+        'abc:F',  # file URL
+        'abc:S',  # source
+    )
+
+    m21MetadataPropertyNameToAbcMetadataKey: dict[str, str] = {
+        name: hdKey for (hdKey, name) in
+        abcMetadataKeyToM21MetadataPropertyName.items() if name != ''
+    }
+
+    validAbcMetadataKeys: tuple[str, ...] = tuple(
+        abcKey for abcKey in abcMetadataKeyToM21MetadataPropertyName
+    )
+
     abcMetadataKeysThatWantMultilineValues: tuple[str, ...] = (
-        'abc:N',
-        'abc:H',
-        'abc:W',
-        'abc:Z',
+        'abc:N',  # notes
+        'abc:W',  # untimed lyrics
+        'abc:Z',  # (sometimes) translated untimed lyrics
     )
 
-    abcMetadataKeysThatWantMultipleSingleLineValues: tuple[str, ...] = (
-        'abc:R',
-        'abc:G',
-        'abc:P',
-        'abc:F',
-        'abc:S',
-    )
-
-    validAbcMetadataKeys: tuple[str, ...] = (
-        abcMetadataKeysThatWantMultilineValues
-        + abcMetadataKeysThatWantMultipleSingleLineValues
-    )
+    complexAbcMetadataKeyToM21MetadataPropertyName: dict[str, str] = {
+        'abc:I:abc-creator': 'software',
+        'abc:Z:abc-transcription': 'electronicEncoder',
+        'abc:Z:abc-edited-by': 'electronicEditor',
+        'abc:Z:abc-copyright': 'copyright',
+    }
 
     @staticmethod
     def adjustRoleFromContext(role: str, context: str) -> str:
@@ -2811,10 +2849,10 @@ class M21Utilities:
             # custom humdrum key, and we've been asked not to include them
             return False
 
-        if key.startswith('mei:') and key in M21Utilities.validMeiMetadataKeys:
+        if key.startswith('mei:') and key in M21Utilities.standardMeiMetadataKeys:
             return includeCustomKeys
 
-        if key.startswith('abc:') and key in M21Utilities.validAbcMetadataKeys:
+        if key.startswith('abc:') and key in M21Utilities.standardAbcMetadataKeys:
             return includeCustomKeys
 
         # Let's see if we can make a standard namespaceName from it.

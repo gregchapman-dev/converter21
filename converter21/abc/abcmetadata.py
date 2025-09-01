@@ -66,35 +66,39 @@ class AbcMetadata:
             if key.startswith('abc:'):
                 # chars after 'abc:' is the info key (e.g. 'N', 'H', 'W',
                 # 'Z', 'Z:abc-transcription', etc)
+                if key not in M21Utilities.validAbcMetadataKeys:
+                    continue
+
                 infoChars: str = key[4:]
-                if infoChars in ('N', 'H', 'W', 'S', 'Z'):
+                if key in M21Utilities.abcMetadataKeysThatWantMultilineValues:
                     # This value might be multiline, and needs to be split
                     # into multiple (e.g.) 'N:'-prefixed lines
                     addMultilineValue(infoChars, value)
                 else:
                     addValueIfUnique(infoChars, value)
-            elif key == 'number':
-                addValueOnlyOnce('X', value)
             elif key == 'alternativeTitle':
+                # special case, not in the lookup tables
                 addValueIfUnique('T', value)
-            elif key == 'composer':
-                addValueIfUnique('C', value)
-            elif key == 'parentTitle':
-                addValueIfUnique('B', value)
-            elif key == 'filePath':
-                # nope, this is the filePath that was parsed to produce md, not
-                # the filePath of the file we are writing.
-                pass
-            elif key == 'humdrum:RTL':
-                addValueIfUnique('D', value)
-            elif key in ('localeOfComposition', 'countryOfComposition'):
+            elif key == 'localeOfComposition':
+                # special case, not in the lookup tables
                 addValueIfUnique('O', value)
             elif key == 'electronicEncoder':
+                # special case, not in the lookup tables
                 addValueIfUnique('Z:abc-transcription', value)
             elif key == 'electronicEditor':
+                # special case, not in the lookup tables
                 addValueIfUnique('Z:abc-edited-by', value)
             elif key == 'copyright':
+                # special case, not in the lookup tables
                 addValueIfUnique('Z:abc-copyright', value)
+            elif key in M21Utilities.m21MetadataPropertyNameToAbcMetadataKey:
+                # use the lookup tables
+                abcKey: str = M21Utilities.m21MetadataPropertyNameToAbcMetadataKey[key]
+                infoChar: str = abcKey[4:]
+                if infoChar == 'X':
+                    addValueOnlyOnce(infoChar, value)
+                else:
+                    addValueIfUnique(infoChar, value)
 
         # write our own I:abc-creator value (not from md)
         addValue('I:abc-creator', f'{SharedConstants._CONVERTER21_NAME_AND_VERSION}')
@@ -153,15 +157,8 @@ class AbcMetadata:
 
         def addValues(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
             hfValues: list[str] = splitValues(hfValue)
-            if mdKey == 'title':
-                for i, val in enumerate(hfValues):
-                    if i == 0:
-                        M21Utilities.addIfNotADuplicate(md, 'title', val)
-                        continue
-                    M21Utilities.addIfNotADuplicate(md, 'alternativeTitle', val)
-            else:
-                for val in hfValues:
-                    M21Utilities.addIfNotADuplicate(md, mdKey, val)
+            for val in hfValues:
+                M21Utilities.addIfNotADuplicate(md, mdKey, val)
 
         def splitValues(hfValue: str) -> list[str]:
             return hfValue.split('\n')
@@ -250,48 +247,50 @@ class AbcMetadata:
                 # header data that is not metadata
                 continue
 
-            mdAbcCustomKey: str = 'abc:' + hfKey
-            if mdAbcCustomKey in M21Utilities.abcMetadataKeysThatWantMultilineValues:
-                # There is no standard metadata key in music21 for these, so we
-                # make up a custom namespace:name such as 'abc:N', etc.
+            mdKey: str = 'abc:' + hfKey
+            if (mdKey not in M21Utilities.validAbcMetadataKeys
+                    and mdKey not in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName):
+                # it wasn't in our 'abc:*' lookup tables.  Skip it.
+                continue
+
+            if mdKey in M21Utilities.abcMetadataKeyToM21MetadataPropertyName:
+                newMdKey: str = M21Utilities.abcMetadataKeyToM21MetadataPropertyName[mdKey]
+                if newMdKey:
+                    # abc:x maps directly to a uniqueName (or non-standard but useful humdrum
+                    # or mei name), so we should use that instead.
+                    mdKey = newMdKey
+
+            # special 'abc:x:abc-something' keys (with their own lookup table)
+            if mdKey in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName:
+                mdKey = M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName[mdKey]
+
+            if mdKey in M21Utilities.abcMetadataKeysThatWantMultilineValues:
                 # These we treat as one metadata entry, with a multiline string.
-                addValue(md, mdAbcCustomKey, hfValue)
-            elif mdAbcCustomKey in M21Utilities.abcMetadataKeysThatWantMultipleSingleLineValues:
-                # There is no standard metadata key in music21 for these, so we
-                # make up a custom namespace:name such as 'abc:R', etc.
-                # These we split into individual one-line metadata entries.
-                addValues(md, mdAbcCustomKey, hfValue)
-            elif hfKey == 'X':
+                addValue(md, mdKey, hfValue)
+            elif mdKey == 'number':
+                # special case, must check for malformed 'X:non-numeric'
                 if hfValue.isdigit():
-                    addValue(md, 'number', hfValue)
-            elif hfKey == 'T':
-                addValues(md, 'title', hfValue)
-            elif hfKey == 'C':
-                addValues(md, 'composer', hfValue)
-            elif hfKey == 'B':  # 'book'
-                addValues(md, 'parentTitle', hfValue)
-            elif hfKey == 'D':  # discography
-                # instead of abc:D, we use Humdrum's existing recording title item
-                # Note that MEI import from verovio-translated ABC -> MEI will need
-                # to read abc:D and set it as humdrum:RTL in the music21 metadata.
-                addValues(md, 'humdrum:RTL', hfValue)  # 'album title'
-            elif hfKey in ('O', 'A'):
-                # 'A' is deprecated, we will read it, but write it as 'O'
+                    addValue(md, mdKey, hfValue)
+            elif mdKey in ('countryOfComposition', 'abc:A'):
+                # abc:O (origin) maps to 'countryOfComposition'.
+                # abc:A (area) is deprecated, but we can read it.
+                # special case: we try to detect if locale or country
                 vals = splitValues(hfValue)
                 for val in vals:
                     if ';' in val or ',' in val:
                         addValue(md, 'localeOfComposition', val)
                     else:
                         addValue(md, 'countryOfComposition', val)
-            elif hfKey == 'I:abc-creator':
-                addValues(md, 'software', hfValue)
-            elif hfKey == 'Z:abc-transcription':
-                addValues(md, 'electronicEncoder', hfValue)
-            elif hfKey == 'Z:abc-edited-by':
-                addValues(md, 'electronicEditor', hfValue)
-            elif hfKey == 'Z:abc-copyright':
-                addValues(md, 'copyright', hfValue)
+            elif mdKey == 'title':
+                # special case: first T is title, subsequent are alternativeTitle
+                vals = splitValues(hfValue)
+                for i, val in enumerate(vals):
+                    if i == 0:
+                        addValue(md, 'title', val)
+                    else:
+                        addValue(md, 'alternativeTitle', val)
             else:
-                pass  # print(f'need to support {hfKey}')
+                # everybody else
+                addValues(md, mdKey, hfValue)
 
         return md
