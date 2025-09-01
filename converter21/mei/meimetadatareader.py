@@ -1264,6 +1264,11 @@ class MeiMetadataReader:
             mdText = m21.metadata.Text(text, language=lang)
         else:
             mdText = m21.metadata.Text(text)
+
+        if analog in M21Utilities.abcMetadataKeysThatWantMultilineValues:
+            M21Utilities.appendToValue(md, analog, mdText)
+            return
+
         M21Utilities.addIfNotADuplicate(md, analog, mdText)
 
     def processLangUsage(self, element: MeiElement, md: m21.metadata.Metadata):

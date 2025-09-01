@@ -250,25 +250,17 @@ class AbcMetadata:
                 # header data that is not metadata
                 continue
 
-            if hfKey in ('N', 'H', 'W', 'S', 'Z'):
+            mdAbcCustomKey: str = 'abc:' + hfKey
+            if mdAbcCustomKey in M21Utilities.abcMetadataKeysThatWantMultilineValues:
                 # There is no standard metadata key in music21 for these, so we
                 # make up a custom namespace:name such as 'abc:N', etc.
                 # These we treat as one metadata entry, with a multiline string.
-                # N = notes: such as references to other tunes which are similar,
-                #   details on how the original notation of the tune was converted
-                #   to abc, etc
-                # H = history: designed for multi-line notes, stories and anecdotes
-                # W = untimed lyrics: to be printed after the music, for example
-                addValue(md, 'abc:' + hfKey, hfValue)
-            elif hfKey in ('R', 'G', 'P', 'F'):
+                addValue(md, mdAbcCustomKey, hfValue)
+            elif mdAbcCustomKey in M21Utilities.abcMetadataKeysThatWantMultipleSingleLineValues:
                 # There is no standard metadata key in music21 for these, so we
                 # make up a custom namespace:name such as 'abc:R', etc.
                 # These we split into individual one-line metadata entries.
-                # R = rhythm: an indication of the type of tune (e.g. hornpipe, double jig,
-                #   single jig, 48-bar polka, etc).
-                # G: grouping key (used for many different things)
-                # P: partmap (e.g. 'AABBAC')
-                addValues(md, 'abc:' + hfKey, hfValue)
+                addValues(md, mdAbcCustomKey, hfValue)
             elif hfKey == 'X':
                 if hfValue.isdigit():
                     addValue(md, 'number', hfValue)

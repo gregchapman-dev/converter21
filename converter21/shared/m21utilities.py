@@ -2639,16 +2639,24 @@ class M21Utilities:
         'mei:printedSourceCopyright',
     )
 
-    validAbcMetadataKeys: tuple[str, ...] = (
+    abcMetadataKeysThatWantMultilineValues: tuple[str, ...] = (
         'abc:N',
         'abc:H',
         'abc:W',
-        'abc:S',
         'abc:Z',
+    )
+
+    abcMetadataKeysThatWantMultipleSingleLineValues: tuple[str, ...] = (
         'abc:R',
         'abc:G',
         'abc:P',
-        'abc:F'
+        'abc:F',
+        'abc:S',
+    )
+
+    validAbcMetadataKeys: tuple[str, ...] = (
+        abcMetadataKeysThatWantMultilineValues
+        + abcMetadataKeysThatWantMultipleSingleLineValues
     )
 
     @staticmethod
@@ -2900,6 +2908,27 @@ class M21Utilities:
             if M21Utilities.mdValueEqual(val, value):
                 return
         md.add(uniqueName, value)
+
+    @staticmethod
+    def appendToValue(
+        md: m21.metadata.Metadata,
+        key: str,
+        value: t.Any
+    ):
+        if key not in M21Utilities.abcMetadataKeysThatWantMultilineValues:
+            return
+
+        # always custom (e.g. 'abc:W'), so always Text
+        oldValues: tuple[m21.metadata.ValueType, ...] = md.getCustom(key)
+        if oldValues:
+            newValStr: str = str(value)
+            oldStr: str = str(oldValues[0])
+            newStr: str = oldStr + '\n' + newValStr
+            newText = m21.metadata.Text(newStr)
+            newValues: tuple[m21.metadata.ValueType, ...] = (newText,) + oldValues[1:]
+            md.setCustom(key, newValues)
+        else:
+            md.setCustom(key, value)
 
     @staticmethod
     def addOtherMetadataAttrib(value: m21.metadata.ValueType, k: str, v: str):
