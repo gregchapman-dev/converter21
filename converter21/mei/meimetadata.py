@@ -267,7 +267,7 @@ class MeiMetadata:
             nsName: str | None = m21.metadata.Metadata.uniqueNameToNamespaceName(key)
             if nsName:
                 return nsName
-            return 'raw:' + key
+            return key
 
         notesStmt: MeiElement = MeiElement('notesStmt')
         for key, itemList in self.contents.items():
@@ -280,8 +280,14 @@ class MeiMetadata:
                 # only relevant to original parsed file, not to the file we are writing
                 continue
 
+            if key.startswith('humdrumraw:') or key.startswith('meiraw:'):
+                # from original parsed humdrum or mei file, no longer relevant
+                # (or we would have made up a better namespace during parse)
+                continue
+
             if not itemList:
                 continue
+
             # gather up the non-written values
             unwrittenItems: list[MeiMetadataItem] = []
             for item in itemList:
