@@ -1022,13 +1022,27 @@ class MeiMetadataReader:
 
                     contrib = m21.metadata.Contributor(name=name, role=role)
 
-            if contrib is None and analog.startswith('humdrum:'):
-                # we might need to convert to 'otherContributor'
-                hdKey: str = analog[8:]
-                if hdKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
-                    role = M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[hdKey]
-                    analog = 'otherContributor'
-                    contrib = m21.metadata.Contributor(name=name, role=role)
+            if contrib is None:
+                if analog.startswith('humdrum:'):
+                    # we might need to convert to 'otherContributor'
+                    hdKey: str = analog[8:]
+                    if hdKey in M21Utilities.humdrumReferenceKeyToM21OtherContributorRole:
+                        role = M21Utilities.humdrumReferenceKeyToM21OtherContributorRole[hdKey]
+                        analog = 'otherContributor'
+                        contrib = m21.metadata.Contributor(name=name, role=role)
+                elif analog.startswith('marcrel:'):
+                    # we should convert to 'otherContributor'
+                    tempUniqueName: str | None = (
+                        m21.metadata.Metadata.namespaceNameToUniqueName(analog)
+                    )
+                    if tempUniqueName:
+                        analog = tempUniqueName
+                        if analog == 'otherContributor' and (role or defaultRole):
+                            contrib = m21.metadata.Contributor(name=name, role=role or defaultRole)
+                        else:
+                            # we'll correctly add item below with the new analog/uniqueName
+                            # as the key
+                            pass
 
             if contrib is not None:
                 M21Utilities.addIfNotADuplicate(md, analog, contrib)

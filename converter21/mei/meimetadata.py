@@ -1973,6 +1973,10 @@ class MeiMetadata:
                 lang.hasBeenWritten = True
 
         # TODO: <perfMedium><perfResList>
+        # for now just mark them as written, so we don't put them in <notesStmt>
+        for instrumentList in instrumentLists:
+            instrumentList.hasBeenWritten = True
+
 #             if instrumentLists:
 #                 perfMediumElement: MeiElement = theWork.appendSubElement('perfMedium')
 #                 if len(instrumentLists) == 1:
