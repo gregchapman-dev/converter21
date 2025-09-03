@@ -101,6 +101,9 @@ class MeiMetadataItem:
             if version:
                 self.meiOtherAttribs['version'] = version
 
+        # state during write operation
+        self.hasBeenWritten: bool = False
+
 class MeiMetadata:
     def __init__(self, m21Metadata: m21.metadata.Metadata | None) -> None:
         self.m21Metadata: m21.metadata.Metadata | None = m21Metadata
@@ -115,6 +118,7 @@ class MeiMetadata:
                     meiItem.humdrumRefKey
                     or meiItem.uniqueName
                     or meiItem.meiMetadataKey
+                    or meiItem.abcMetadataKey
                     or meiItem.key
                 )
                 currList: list[MeiMetadataItem] | None = self.contents.get(key, None)
@@ -162,6 +166,12 @@ class MeiMetadata:
         if extMeta:
             meiHead.subElements.append(extMeta)
 
+        # we do this last, because it picks up all metadata items that haven't
+        # already landed in meiHead somewhere (and won't land in music/back, so
+        # that means every leftover except 'humdrum:HTX')
+        notesStmt: MeiElement = self.makeNotesStmt()
+        if not notesStmt.isEmpty():
+            fileDesc.subElements.append(notesStmt)
         meiHead.makeRootElement(tb)
 
     def anyExist(self, *args: str) -> bool:
@@ -243,6 +253,76 @@ class MeiMetadata:
 
         return fileDesc
 
+    def makeNotesStmt(self) -> MeiElement:
+        # notesStmt: an <annot> element will be added for any metadata item
+        # that hasn't already been written; this is the MusicXML <miscellaneous>
+        # of MEI metadata, with annot@analog holding the namespace name).
+        def makeAnalog(key: str) -> str:
+            if key.startswith('abc:'):
+                return key
+            if key.startswith('mei:'):
+                return key
+            if len(key) == 3 and key.isalpha() and key.isupper():
+                return 'humdrum:' + key
+            nsName: str | None = m21.metadata.Metadata.uniqueNameToNamespaceName(key)
+            if nsName:
+                return nsName
+            return 'raw:' + key
+
+        notesStmt: MeiElement = MeiElement('notesStmt')
+        for key, itemList in self.contents.items():
+            if key == 'HTX':
+                # These values have not yet been written, but will end up
+                # in music/back, so skip them here.
+                continue
+
+            if key in ('filePath', 'fileFormat', 'fileNumber', 'corpusFilePath'):
+                # only relevant to original parsed file, not to the file we are writing
+                continue
+
+            if not itemList:
+                continue
+            # gather up the non-written values
+            unwrittenItems: list[MeiMetadataItem] = []
+            for item in itemList:
+                if item.hasBeenWritten:
+                    continue
+                unwrittenItems.append(item)
+            if unwrittenItems:
+                annot: MeiElement = notesStmt.appendSubElement(
+                    'annot',
+                    {
+                        'analog': makeAnalog(key)
+                    }
+                )
+
+                # put each line of text in <l> subelement of <lg>
+                language, allTheSameLanguage = self.getTextListLanguage(unwrittenItems)
+                lineGroup = annot.appendSubElement('lg')
+                if allTheSameLanguage and language:
+                    lineGroup.attrib['xml:lang'] = language
+                for item in unwrittenItems:
+                    subLineGroup: MeiElement | None = None
+                    if len(unwrittenItems) > 1 and '\n' in item.meiValue:
+                        # make a sub-linegroup for this unwritten item's lines
+                        subLineGroup = lineGroup.appendSubElement('lg')
+                        if item.value.language and not allTheSameLanguage:
+                            subLineGroup.attrib['xml:lang'] = item.value.language.lower()
+                    if '\n' in item.meiValue:
+                        for itemText in item.meiValue.split('\n'):
+                            lg: MeiElement = subLineGroup or lineGroup
+                            itemLine: MeiElement = lg.appendSubElement('l')
+                            itemLine.text = itemText
+                    else:
+                        # we know we don't have a subLineGroup (because no '\n')
+                        line: MeiElement = lineGroup.appendSubElement('l')
+                        line.text = item.meiValue
+                        if item.value.language and not allTheSameLanguage:
+                            line.attrib['xml:lang'] = item.value.language.lower()
+                    item.hasBeenWritten = True
+
+        return notesStmt
+
     def makeDigitalSource(self) -> MeiElement | None:
         if not self.anyExist(
                 'EED', 'ENC', 'EEV', 'EFL', 'YEP', 'YER',
@@ -280,6 +360,7 @@ class MeiMetadata:
                 }
             )
             editorEl.text = editor.meiValue
+            editor.hasBeenWritten = True
 
         if encoders:
             respStmt: MeiElement = bibl.appendSubElement('respStmt')
@@ -294,6 +375,7 @@ class MeiMetadata:
                     }
                 )
                 persNameEl.text = encoder.meiValue
+                encoder.hasBeenWritten = True
 
         for version in versions:
             versionEl: MeiElement = bibl.appendSubElement(
@@ -304,6 +386,7 @@ class MeiMetadata:
                 }
             )
             versionEl.text = version.meiValue
+            version.hasBeenWritten = True
 
         for fileNumber in fileNumbers:
             fileNumberEl: MeiElement = bibl.appendSubElement(
@@ -315,6 +398,7 @@ class MeiMetadata:
                 }
             )
             fileNumberEl.text = fileNumber.meiValue
+            fileNumber.hasBeenWritten = True
 
         if publishers or releaseDates or encodingDates:
             imprint: MeiElement = bibl.appendSubElement('imprint')
@@ -326,6 +410,7 @@ class MeiMetadata:
                     }
                 )
                 publisherEl.text = publisher.meiValue
+                publisher.hasBeenWritten = True
 
             for releaseDate in releaseDates:
                 releaseDateEl: MeiElement = imprint.appendSubElement(
@@ -337,6 +422,7 @@ class MeiMetadata:
                 )
                 releaseDateEl.fillInIsodate(releaseDate.value)
                 releaseDateEl.text = releaseDate.meiValue
+                releaseDate.hasBeenWritten = True
 
             for encodingDate in encodingDates:
                 encodingDateEl: MeiElement = imprint.appendSubElement(
@@ -348,6 +434,7 @@ class MeiMetadata:
                 )
                 encodingDateEl.fillInIsodate(encodingDate.value)
                 encodingDateEl.text = encodingDate.meiValue
+                encodingDate.hasBeenWritten = True
 
         if copyrights or copyrightStatements or copyrightCountries:
             availability: MeiElement = bibl.appendSubElement('availability')
@@ -360,6 +447,7 @@ class MeiMetadata:
                     }
                 )
                 copyrightEl.text = cpyright.meiValue
+                cpyright.hasBeenWritten = True
 
             for copyrightStatement in copyrightStatements:
                 copyrightStatementEl: MeiElement = availability.appendSubElement(
@@ -370,6 +458,7 @@ class MeiMetadata:
                     }
                 )
                 copyrightStatementEl.text = copyrightStatement.meiValue
+                copyrightStatement.hasBeenWritten = True
 
             for copyrightCountry in copyrightCountries:
                 copyrightCountryEl: MeiElement = availability.appendSubElement(
@@ -380,6 +469,7 @@ class MeiMetadata:
                     }
                 )
                 copyrightCountryEl.text = copyrightCountry.meiValue
+                copyrightCountry.hasBeenWritten = True
 
         if notes:
             annot: MeiElement = bibl.appendSubElement('annot')
@@ -394,6 +484,7 @@ class MeiMetadata:
                 line.text = note.meiValue
                 if note.value.language and not allTheSameLanguage:
                     line.attrib['xml:lang'] = note.value.language.lower()
+                note.hasBeenWritten = True
 
         for textLanguage in textLanguages:
             textLanguageEl: MeiElement = bibl.appendSubElement(
@@ -403,6 +494,7 @@ class MeiMetadata:
                 }
             )
             textLanguageEl.text = textLanguage.meiValue
+            textLanguage.hasBeenWritten = True
 
         if bibl.isEmpty():
             # we check bibl because source is not empty: it contains bibl.
@@ -441,6 +533,7 @@ class MeiMetadata:
                 }
             )
             identifierEl.text = publisherCatalogNumber.meiValue
+            publisherCatalogNumber.hasBeenWritten = True
 
         if self.simpleTitleElement is None:
             self.simpleTitleElement = self.makeSimpleTitleElement()
@@ -458,6 +551,7 @@ class MeiMetadata:
                 }
             )
             editorEl.text = editor.meiValue
+            editor.hasBeenWritten = True
 
         if arrangers or orchestrators or translators or collectors:
             # arrangers could technically go outside <respStmt>, but
@@ -475,6 +569,7 @@ class MeiMetadata:
                     }
                 )
                 arrangerEl.text = arranger.meiValue
+                arranger.hasBeenWritten = True
 
             for orchestrator in orchestrators:
                 respEl = respStmt.appendSubElement('resp')
@@ -486,6 +581,7 @@ class MeiMetadata:
                     }
                 )
                 persNameEl.text = orchestrator.meiValue
+                orchestrator.hasBeenWritten = True
 
             for translator in translators:
                 respEl = respStmt.appendSubElement('resp')
@@ -497,6 +593,7 @@ class MeiMetadata:
                     }
                 )
                 persNameEl.text = translator.meiValue
+                translator.hasBeenWritten = True
 
             for collector in collectors:
                 respEl = respStmt.appendSubElement('resp')
@@ -508,6 +605,7 @@ class MeiMetadata:
                     }
                 )
                 persNameEl.text = collector.meiValue
+                collector.hasBeenWritten = True
 
         if publishers or datesPublished or locationsPublished:
             imprint: MeiElement = bibl.appendSubElement('imprint')
@@ -519,6 +617,8 @@ class MeiMetadata:
                     }
                 )
                 publisherEl.text = publisher.meiValue
+                publisher.hasBeenWritten = True
+
             for datePublished in datesPublished:
                 dateEl: MeiElement = imprint.appendSubElement(
                     'date',
@@ -529,6 +629,7 @@ class MeiMetadata:
                 )
                 dateEl.fillInIsodate(datePublished.value)
                 dateEl.text = datePublished.meiValue
+                datePublished.hasBeenWritten = True
 
             for locationPublished in locationsPublished:
                 geogNameEl: MeiElement = imprint.appendSubElement(
@@ -539,6 +640,7 @@ class MeiMetadata:
                     }
                 )
                 geogNameEl.text = locationPublished.meiValue
+                locationPublished.hasBeenWritten = True
 
         if printedSourceCopyrights:
             availability: MeiElement = bibl.appendSubElement('availability')
@@ -550,6 +652,7 @@ class MeiMetadata:
                     }
                 )
                 useRestrict.text = printedSourceCopyright.meiValue
+                printedSourceCopyright.hasBeenWritten = True
 
         for volumeName, volumeNumber in zip(volumeNames, volumeNumbers):
             relatedItem: MeiElement = bibl.appendSubElement(
@@ -566,6 +669,7 @@ class MeiMetadata:
                 }
             )
             titleElement.text = volumeName.meiValue
+            volumeName.hasBeenWritten = True
 
             biblScope: MeiElement = relBibl.appendSubElement(
                 'biblScope',
@@ -574,10 +678,16 @@ class MeiMetadata:
                 }
             )
             biblScope.text = volumeNumber.meiValue
+            volumeNumber.hasBeenWritten = True
 
-        if len(volumeNames) - len(volumeNumbers) > 0:
+        if len(volumeNumbers) - len(volumeNames) > 0:
             # we ignore any extra volume numbers, since a number without a name
             # isn't interesting.
+            for volumeNumber in volumeNumbers:
+                volumeNumber.hasBeenWritten = True
+
+        if len(volumeNames) - len(volumeNumbers) > 0:
+            # extra names, on the other hand, are interesting.
             for volumeName in volumeNames[len(volumeNumbers):]:
                 relatedItem = bibl.appendSubElement(
                     'relatedItem',
@@ -593,6 +703,7 @@ class MeiMetadata:
                     }
                 )
                 titleElement.text = volumeName.meiValue
+                volumeName.hasBeenWritten = True
 
         if bibl.isEmpty():
             return None
@@ -650,6 +761,7 @@ class MeiMetadata:
                     }
                 )
                 biblScope.text = trackNumbers[i].meiValue
+                trackNumbers[i].hasBeenWritten = True
 
             if (i < len(albumTitles)
                     or i < len(albumCatalogNumbers)
@@ -674,6 +786,7 @@ class MeiMetadata:
                         }
                     )
                     albumTitleEl.text = albumTitle.meiValue
+                    albumTitle.hasBeenWritten = True
 
                 if i < len(albumCatalogNumbers):
                     albumCatalogNumber: MeiMetadataItem = albumCatalogNumbers[i]
@@ -685,6 +798,7 @@ class MeiMetadata:
                         }
                     )
                     albumCatalogNumberEl.text = albumCatalogNumber.meiValue
+                    albumCatalogNumber.hasBeenWritten = True
 
                 if (i < len(ensembleNames)
                         or i < len(performerNames)
@@ -705,6 +819,7 @@ class MeiMetadata:
                             }
                         )
                         ensembleNameEl.text = ensembleName.meiValue
+                        ensembleName.hasBeenWritten = True
 
                     if i < len(performerNames):
                         performerName: MeiMetadataItem = performerNames[i]
@@ -717,6 +832,7 @@ class MeiMetadata:
                             }
                         )
                         performerNameEl.text = performerName.meiValue
+                        performerName.hasBeenWritten = True
 
                     if i < len(suspectedPerformerNames):
                         suspectedPerformerName: MeiMetadataItem = suspectedPerformerNames[i]
@@ -730,6 +846,7 @@ class MeiMetadata:
                             }
                         )
                         suspectedPerformerNameEl.text = suspectedPerformerName.meiValue
+                        suspectedPerformerName.hasBeenWritten = True
 
                     if i < len(producers):
                         producer: MeiMetadataItem = producers[i]
@@ -742,6 +859,7 @@ class MeiMetadata:
                             }
                         )
                         persNameEl.text = producer.meiValue
+                        producer.hasBeenWritten = True
 
                     if i < len(conductors):
                         conductor: MeiMetadataItem = conductors[i]
@@ -754,6 +872,7 @@ class MeiMetadata:
                             }
                         )
                         persNameEl.text = conductor.meiValue
+                        conductor.hasBeenWritten = True
 
                 if (i < len(manufacturers)
                         or i < len(releaseDates)
@@ -771,6 +890,7 @@ class MeiMetadata:
                             }
                         )
                         manufacturerEl.text = manufacturer.meiValue
+                        manufacturer.hasBeenWritten = True
 
                     if i < len(releaseDates):
                         releaseDate: MeiMetadataItem = releaseDates[i]
@@ -783,6 +903,7 @@ class MeiMetadata:
                         )
                         releaseDateEl.fillInIsodate(releaseDate.value)
                         releaseDateEl.text = releaseDate.meiValue
+                        releaseDate.hasBeenWritten = True
 
                     if i < len(recordingLocations):
                         recordingLocation: MeiMetadataItem = recordingLocations[i]
@@ -794,6 +915,7 @@ class MeiMetadata:
                             }
                         )
                         recordingLocationEl.text = recordingLocation.meiValue
+                        recordingLocation.hasBeenWritten = True
 
                     if i < len(recordingDates):
                         recordingDate: MeiMetadataItem = recordingDates[i]
@@ -806,6 +928,7 @@ class MeiMetadata:
                         )
                         recordingDateEl.fillInIsodate(recordingDate.value)
                         recordingDateEl.text = recordingDate.meiValue
+                        recordingDate.hasBeenWritten = True
 
         if biblStruct.isEmpty():
             return None
@@ -834,6 +957,7 @@ class MeiMetadata:
                 }
             )
             manuscriptNameEl.text = manuscriptName.meiValue
+            manuscriptName.hasBeenWritten = True
 
         for manuscriptName in moreManuscriptNames:
             manuscriptNameEl = bibl.appendSubElement(
@@ -843,6 +967,7 @@ class MeiMetadata:
                 }
             )
             manuscriptNameEl.text = manuscriptName.meiValue
+            manuscriptName.hasBeenWritten = True
 
         # do both again as <title>
         for manuscriptName in manuscriptNames:
@@ -853,6 +978,7 @@ class MeiMetadata:
                 }
             )
             manuscriptNameEl.text = manuscriptName.meiValue
+            manuscriptName.hasBeenWritten = True
 
         for manuscriptName in moreManuscriptNames:
             manuscriptNameEl = bibl.appendSubElement(
@@ -862,6 +988,7 @@ class MeiMetadata:
                 }
             )
             manuscriptNameEl.text = manuscriptName.meiValue
+            manuscriptName.hasBeenWritten = True
 
         for manuscriptLocation in manuscriptLocations:
             manuscriptLocationEl = bibl.appendSubElement(
@@ -871,6 +998,7 @@ class MeiMetadata:
                 }
             )
             manuscriptLocationEl.text = manuscriptLocation.meiValue
+            manuscriptLocation.hasBeenWritten = True
 
         for manuscriptOwner in manuscriptOwners:
             manuscriptOwnerEl = bibl.appendSubElement(
@@ -881,6 +1009,7 @@ class MeiMetadata:
                 }
             )
             manuscriptOwnerEl.text = manuscriptOwner.meiValue
+            manuscriptOwner.hasBeenWritten = True
 
         for editor in editors:
             editorEl = bibl.appendSubElement(
@@ -890,6 +1019,7 @@ class MeiMetadata:
                 }
             )
             editorEl.text = editor.meiValue
+            editor.hasBeenWritten = True
 
         for copyrightDate in copyrightDates:
             copyrightDateEl = bibl.appendSubElement(
@@ -901,6 +1031,7 @@ class MeiMetadata:
             )
             copyrightDateEl.fillInIsodate(copyrightDate.value)
             copyrightDateEl.text = copyrightDate.meiValue
+            copyrightDate.hasBeenWritten = True
 
         if acknowledgments:
             annot: MeiElement = bibl.appendSubElement(
@@ -920,6 +1051,7 @@ class MeiMetadata:
                 line.text = acknowledgment.meiValue
                 if acknowledgment.value.language and not allTheSameLanguage:
                     line.attrib['xml:lang'] = acknowledgment.value.language.lower()
+                acknowledgment.hasBeenWritten = True
 
         if bibl.isEmpty():
             return None
@@ -959,6 +1091,7 @@ class MeiMetadata:
 
             nameElement: MeiElement = composerElement.appendSubElement('persName')
             nameElement.text = composer.meiValue
+            composer.hasBeenWritten = True
 
             # adjust nameElement.name and nameElement.attrib as necessary
             if composer.value.role == 'composerCorporate':
@@ -1041,6 +1174,7 @@ class MeiMetadata:
                 }
             )
             nameElement.text = composer.meiValue
+            composer.hasBeenWritten = True
 
             # MADS-style authority records (personal info about a composer)
             if (composerBirthAndDeathDate is None
@@ -1079,6 +1213,7 @@ class MeiMetadata:
                 name.attrib['type'] = 'corporate'
             namePart: MeiElement = name.appendSubElement('namePart')
             namePart.text = composer.meiValue
+            composer.hasBeenWritten = True
 
             # composerAlias ('humdrum:COL') goes in <mads><variant>
             if composerAlias:
@@ -1092,6 +1227,7 @@ class MeiMetadata:
                 name = variant.appendSubElement('name')
                 namePart = name.appendSubElement('namePart')
                 namePart.text = composerAlias.meiValue
+                composerAlias.hasBeenWritten = True
 
             # extra info goes in <mads><personInfo>
             if (composerBirthAndDeathDate is not None
@@ -1139,18 +1275,22 @@ class MeiMetadata:
                                 }
                             )
                             deathDate.text = isodateDeath
+                        composerBirthAndDeathDate.hasBeenWritten = True
 
                 if composerBirthPlace is not None:
                     birthPlace: MeiElement = personInfo.appendSubElement('birthPlace')
                     birthPlace.text = composerBirthPlace.meiValue
+                    composerBirthPlace.hasBeenWritten = True
 
                 if composerDeathPlace is not None:
                     deathPlace: MeiElement = personInfo.appendSubElement('deathPlace')
                     deathPlace.text = composerDeathPlace.meiValue
+                    composerDeathPlace.hasBeenWritten = True
 
                 if composerNationality is not None:
                     nationality: MeiElement = personInfo.appendSubElement('nationality')
                     nationality.text = composerNationality.meiValue
+                    composerNationality.hasBeenWritten = True
 
         return output
 
@@ -1209,10 +1349,14 @@ class MeiMetadata:
 
         if bestTitle and bestMovementName and bestTitle.meiValue != bestMovementName.meiValue:
             titleElement.text = bestTitle.meiValue + ', ' + bestMovementName.meiValue
+            bestTitle.hasBeenWritten = True
+            bestMovementName.hasBeenWritten = True
         elif bestTitle:
             titleElement.text = bestTitle.meiValue
+            bestTitle.hasBeenWritten = True
         elif bestMovementName:
             titleElement.text = bestMovementName.meiValue
+            bestMovementName.hasBeenWritten = True
         return titleElement
 
     def makeTitleElements(self) -> list[MeiElement]:
@@ -1255,6 +1399,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = mainTitle.meiValue
+            mainTitle.hasBeenWritten = True
 
         # Then any movement name(s) (OMD).
         for movementName in movementNames:
@@ -1274,6 +1419,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = movementName.meiValue
+            movementName.hasBeenWritten = True
 
         # Then any number(s) (ONM).
         for plainNumber in plainNumbers:
@@ -1293,6 +1439,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = plainNumber.meiValue
+            plainNumber.hasBeenWritten = True
 
         # Then any movement number(s) (OMV).
         for movementNumber in movementNumbers:
@@ -1312,6 +1459,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = movementNumber.meiValue
+            movementNumber.hasBeenWritten = True
 
         # Then any opus number(s) (OPS).
         for opusNumber in opusNumbers:
@@ -1331,6 +1479,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = opusNumber.meiValue
+            opusNumber.hasBeenWritten = True
 
         # Then any act number(s) (OAC).
         for actNumber in actNumbers:
@@ -1350,6 +1499,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = actNumber.meiValue
+            actNumber.hasBeenWritten = True
 
         # Then any scene number(s) (OSC).
         for sceneNumber in sceneNumbers:
@@ -1369,6 +1519,7 @@ class MeiMetadata:
             else:
                 titlePart = untranslatedTitleElement.appendSubElement('titlePart', attrib)
             titlePart.text = sceneNumber.meiValue
+            sceneNumber.hasBeenWritten = True
 
         # Separately, any alternative titles (OTA) (no titleParts)
         for alternativeTitle in alternativeTitles:
@@ -1386,6 +1537,7 @@ class MeiMetadata:
             alternativeTitleEl = MeiElement('title', attrib)
             alternativeTitleEl.text = alternativeTitle.meiValue
             alternativeTitleElements.append(alternativeTitleEl)
+            alternativeTitle.hasBeenWritten = True
 
         # Separately, any popular titles (OTP) (no titleParts)
         for popularTitle in popularTitles:
@@ -1403,6 +1555,7 @@ class MeiMetadata:
             popularTitleEl = MeiElement('title', attrib)
             popularTitleEl.text = popularTitle.meiValue
             popularTitleElements.append(popularTitleEl)
+            popularTitle.hasBeenWritten = True
 
         # roll them all up into a list
         titleElements: list[MeiElement] = []
@@ -1429,8 +1582,10 @@ class MeiMetadata:
         for software in softwares:
             if software.meiValue == SharedConstants._CONVERTER21_NAME:
                 version = software.meiOtherAttribs.get('version', '')
-                if version == SharedConstants._CONVERTER21_VERSION:
+                if not version or version == SharedConstants._CONVERTER21_VERSION:
                     converter21AlreadyThere = True
+            elif software.meiValue == SharedConstants._CONVERTER21_NAME_AND_VERSION:
+                converter21AlreadyThere = True
 
         if (not encodingNotes
                 and not encodingWarnings
@@ -1461,6 +1616,7 @@ class MeiMetadata:
                 )
                 name = application.appendSubElement('name')
                 name.text = software.meiValue
+                software.hasBeenWritten = True
 
         if encodingNotes or encodingWarnings:
             editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
@@ -1480,6 +1636,7 @@ class MeiMetadata:
                     line.text = note.meiValue
                     if note.value.language and not allTheSameLanguage:
                         line.attrib['xml:lang'] = note.value.language.lower()
+                    note.hasBeenWritten = True
 
             if encodingWarnings:
                 language, allTheSameLanguage = self.getTextListLanguage(encodingWarnings)
@@ -1492,6 +1649,7 @@ class MeiMetadata:
                     line.text = warning.meiValue
                     if warning.value.language and not allTheSameLanguage:
                         line.attrib['xml:lang'] = warning.value.language.lower()
+                    warning.hasBeenWritten = True
 
         return encodingDesc
 
@@ -1606,6 +1764,7 @@ class MeiMetadata:
                 }
             )
             identifierElement.text = catalogNumber.meiValue
+            catalogNumber.hasBeenWritten = True
 
         for catalogAbbrevNumber in catalogAbbrevNumbers:
             identifierElement = theWork.appendSubElement(
@@ -1615,6 +1774,7 @@ class MeiMetadata:
                 }
             )
             identifierElement.text = catalogAbbrevNumber.meiValue
+            catalogAbbrevNumber.hasBeenWritten = True
 
         for opusNumber in opusNumbers:
             identifierElement = theWork.appendSubElement(
@@ -1624,6 +1784,7 @@ class MeiMetadata:
                 }
             )
             identifierElement.text = opusNumber.meiValue
+            opusNumber.hasBeenWritten = True
 
         # all <title>s
         theWork.subElements.extend(titleElements)
@@ -1641,6 +1802,7 @@ class MeiMetadata:
                 }
             )
             persName.text = lyricist.meiValue
+            lyricist.hasBeenWritten = True
 
         # <librettist>
         for librettist in librettists:
@@ -1652,6 +1814,7 @@ class MeiMetadata:
                 }
             )
             persName.text = librettist.meiValue
+            librettist.hasBeenWritten = True
 
         # <funder>
         for funder in funders:
@@ -1663,6 +1826,7 @@ class MeiMetadata:
                 }
             )
             persName.text = funder.meiValue
+            funder.hasBeenWritten = True
 
         # <creation>
         if (creationDates
@@ -1682,6 +1846,7 @@ class MeiMetadata:
                 )
                 dateElement.fillInIsodate(creationDate.value)
                 dateElement.text = creationDate.meiValue
+                creationDate.hasBeenWritten = True
 
             for creationCountry in creationCountries:
                 countryElement: MeiElement = creationElement.appendSubElement(
@@ -1691,6 +1856,7 @@ class MeiMetadata:
                     }
                 )
                 countryElement.text = creationCountry.meiValue
+                creationCountry.hasBeenWritten = True
 
             for creationSettlement in creationSettlements:
                 settlementElement: MeiElement = creationElement.appendSubElement(
@@ -1700,6 +1866,7 @@ class MeiMetadata:
                     }
                 )
                 settlementElement.text = creationSettlement.meiValue
+                creationSettlement.hasBeenWritten = True
 
             for creationRegion in creationRegions:
                 regionElement: MeiElement = creationElement.appendSubElement(
@@ -1709,6 +1876,7 @@ class MeiMetadata:
                     }
                 )
                 regionElement.text = creationRegion.meiValue
+                creationRegion.hasBeenWritten = True
 
             for creationLatLong in creationLatLongs:
                 regionElement = creationElement.appendSubElement(
@@ -1719,6 +1887,7 @@ class MeiMetadata:
                     }
                 )
                 regionElement.text = creationLatLong.meiValue
+                creationLatLong.hasBeenWritten = True
 
             for dedicatee in dedicatees:
                 contributorElement = creationElement.appendSubElement(
@@ -1728,6 +1897,7 @@ class MeiMetadata:
                     }
                 )
                 contributorElement.text = dedicatee.meiValue
+                dedicatee.hasBeenWritten = True
 
         # <history>
         if histories:
@@ -1749,6 +1919,14 @@ class MeiMetadata:
                 # <l> can't take @analog, so use @type (says Perry)
                 lElement: MeiElement = lgElement.appendSubElement('l', attrib)
                 lElement.text = history.meiValue
+                history.hasBeenWritten = True
+
+        if oneOfMany:
+            # this is the only place where main-work-specific notes can go
+            # (they would otherwise go in <meiHead><fileDesc>).
+            notesStmt: MeiElement = self.makeNotesStmt()
+            if not notesStmt.isEmpty():
+                theWork.subElements.append(notesStmt)
 
         # <langUsage>
         if languages:
@@ -1761,6 +1939,7 @@ class MeiMetadata:
                     }
                 )
                 languageElement.text = lang.meiValue
+                lang.hasBeenWritten = True
 
         # TODO: <perfMedium><perfResList>
 #             if instrumentLists:
@@ -1791,6 +1970,7 @@ class MeiMetadata:
                     }
                 )
                 termElement.text = form.meiValue
+                form.hasBeenWritten = True
 
             for genre in genres:
                 termElement = termListElement.appendSubElement(
@@ -1801,6 +1981,7 @@ class MeiMetadata:
                     }
                 )
                 termElement.text = genre.meiValue
+                genre.hasBeenWritten = True
 
             for mode in modes:
                 termElement = termListElement.appendSubElement(
@@ -1811,6 +1992,7 @@ class MeiMetadata:
                     }
                 )
                 termElement.text = mode.meiValue
+                mode.hasBeenWritten = True
 
             for meter in meters:
                 termElement = termListElement.appendSubElement(
@@ -1821,6 +2003,7 @@ class MeiMetadata:
                     }
                 )
                 termElement.text = meter.meiValue
+                meter.hasBeenWritten = True
 
             for style in styles:
                 termElement = termListElement.appendSubElement(
@@ -1831,6 +2014,7 @@ class MeiMetadata:
                     }
                 )
                 termElement.text = style.meiValue
+                style.hasBeenWritten = True
 
         # <expressionList>
         expressionListElement: MeiElement | None = None
@@ -1853,6 +2037,7 @@ class MeiMetadata:
                 )
                 dateElement.fillInIsodate(firstPerformanceDate.value)
                 dateElement.text = firstPerformanceDate.meiValue
+                firstPerformanceDate.hasBeenWritten = True
 
         if performanceDates:
             if expressionListElement is None:
@@ -1875,6 +2060,7 @@ class MeiMetadata:
                 )
                 dateElement.fillInIsodate(performanceDate.value)
                 dateElement.text = performanceDate.meiValue
+                performanceDate.hasBeenWritten = True
 
                 if i < len(performanceLocations):
                     performanceLocation = performanceLocations[i]
@@ -1886,6 +2072,13 @@ class MeiMetadata:
                         }
                     )
                     geogNameElement.text = performanceLocation.meiValue
+                    performanceLocation.hasBeenWritten = True
+
+        # we only wrote performanceLocations if there was also a performanceDate.
+        # Mark all of the performanceLocations as written, so we don't have them
+        # showing up randomly in <notesStmt>.
+        for performanceLocation in performanceLocations:
+            performanceLocation.hasBeenWritten = True
 
         # <relationList> (relations to the other works)
         if parentWorkXmlId or groupWorkXmlId or associatedWorkXmlId or collectionWorkXmlId:
@@ -1979,6 +2172,7 @@ class MeiMetadata:
                     }
                 )
                 titleElement.text = parentWorkTitle.meiValue
+                parentWorkTitle.hasBeenWritten = True
 
         # the group work
         if groupWorkTitles:
@@ -2003,6 +2197,7 @@ class MeiMetadata:
                     }
                 )
                 titleElement.text = groupWorkTitle.meiValue
+                groupWorkTitle.hasBeenWritten = True
 
         # the associated work
         if associatedWorkTitles:
@@ -2027,6 +2222,7 @@ class MeiMetadata:
                     }
                 )
                 titleElement.text = associatedWorkTitle.meiValue
+                associatedWorkTitle.hasBeenWritten = True
 
         # the collection work
         if collectionWorkTitles:
@@ -2051,6 +2247,7 @@ class MeiMetadata:
                     }
                 )
                 titleElement.text = collectionWorkTitle.meiValue
+                collectionWorkTitle.hasBeenWritten = True
 
         # the main (encoded) work
         mainWorkElement: MeiElement | None = self.makeMainWorkElement(
