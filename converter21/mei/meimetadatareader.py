@@ -1207,10 +1207,14 @@ class MeiMetadataReader:
         if not localDefaultLang:
             localDefaultLang = defaultLang
 
+        localDefaultAnalog: str = element.get('analog', '')
+        if not localDefaultAnalog:
+            localDefaultAnalog = defaultAnalog
+
         if element.text.strip():
             # This element might have straight text, and as such, is itself a
             # lineWithLanguage.
-            self.processLineWithLanguage(element, localDefaultLang, defaultAnalog, md)
+            self.processLineWithLanguage(element, localDefaultLang, localDefaultAnalog, md)
 
         for subElem in element.findAll('*', recurse=False):
             if subElem.name not in ('p', 'lg'):
@@ -1219,19 +1223,22 @@ class MeiMetadataReader:
                 # <p> can contain text.  It can also contain <lg>, so in that case,
                 # <p> is an element containing lines...
                 if subElem.text.strip():
-                    self.processLineWithLanguage(subElem, localDefaultLang, defaultAnalog, md)
+                    self.processLineWithLanguage(subElem, localDefaultLang, localDefaultAnalog, md)
                 self.processElementContainingParagraphsAndLineGroups(
                     subElem,
                     localDefaultLang,
-                    defaultAnalog,
+                    localDefaultAnalog,
                     md
                 )
             elif subElem.name == 'lg':
                 lgLang: str = subElem.get(_XMLLANG, '')
                 if not lgLang:
                     lgLang = localDefaultLang
+                lgAnalog: str = subElem.get('analog', '')
+                if not lgAnalog:
+                    lgAnalog = localDefaultAnalog
                 for lineEl in subElem.findAll('l', recurse=False):
-                    self.processLineWithLanguage(lineEl, lgLang, defaultAnalog, md)
+                    self.processLineWithLanguage(lineEl, lgLang, lgAnalog, md)
 
     def processLineWithLanguage(
         self,
