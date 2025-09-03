@@ -56,7 +56,7 @@ class MeiMetadataItem:
             self.humdrumRefKey = (
                 M21Utilities.m21MetadataPropertyUniqueNameToHumdrumReferenceKey.get(self.key, '')
             )
-            if self.uniqueName == 'otherContributor' and not self.humdrumRefKey:
+            if self.uniqueName == 'otherContributor':
                 if t.TYPE_CHECKING:
                     assert isinstance(self.value, m21.metadata.Contributor)
                 role: str = self.value.role
@@ -312,8 +312,9 @@ class MeiMetadata:
                     if len(unwrittenItems) > 1 and '\n' in item.meiValue:
                         # make a sub-linegroup for this unwritten item's lines
                         subLineGroup = lineGroup.appendSubElement('lg')
-                        if item.value.language and not allTheSameLanguage:
-                            subLineGroup.attrib['xml:lang'] = item.value.language.lower()
+                        itemLang: str | None = self.getLanguage(item.value)
+                        if itemLang and not allTheSameLanguage:
+                            subLineGroup.attrib['xml:lang'] = itemLang
                     if '\n' in item.meiValue:
                         for itemText in item.meiValue.split('\n'):
                             lg: MeiElement = subLineGroup or lineGroup
@@ -323,8 +324,9 @@ class MeiMetadata:
                         # we know we don't have a subLineGroup (because no '\n')
                         line: MeiElement = lineGroup.appendSubElement('l')
                         line.text = item.meiValue
-                        if item.value.language and not allTheSameLanguage:
-                            line.attrib['xml:lang'] = item.value.language.lower()
+                        itemLang = self.getLanguage(item.value)
+                        if itemLang and not allTheSameLanguage:
+                            line.attrib['xml:lang'] = itemLang
                     item.hasBeenWritten = True
 
         return notesStmt
@@ -347,6 +349,7 @@ class MeiMetadata:
 
         editors: list[MeiMetadataItem] = self.contents.get('EED', [])
         encoders: list[MeiMetadataItem] = self.contents.get('ENC', [])
+        otherContributors: list[MeiMetadataItem] = self.contents.get('otherContributor', [])
         versions: list[MeiMetadataItem] = self.contents.get('EEV', [])
         fileNumbers: list[MeiMetadataItem] = self.contents.get('EFL', [])
         publishers: list[MeiMetadataItem] = self.contents.get('YEP', [])
@@ -368,7 +371,7 @@ class MeiMetadata:
             editorEl.text = editor.meiValue
             editor.hasBeenWritten = True
 
-        if encoders:
+        if encoders or otherContributors:
             respStmt: MeiElement = bibl.appendSubElement('respStmt')
 
             for encoder in encoders:
@@ -382,6 +385,18 @@ class MeiMetadata:
                 )
                 persNameEl.text = encoder.meiValue
                 encoder.hasBeenWritten = True
+
+            for otherContributor in otherContributors:
+                respEl = respStmt.appendSubElement('resp')
+                respEl.text = otherContributor.value.role
+                nameEl: MeiElement = respStmt.appendSubElement(
+                    'name',
+                    {
+                        'analog': 'marcrel:CTB'
+                    }
+                )
+                nameEl.text = otherContributor.meiValue
+                otherContributor.hasBeenWritten = True
 
         for version in versions:
             versionEl: MeiElement = bibl.appendSubElement(
@@ -488,8 +503,9 @@ class MeiMetadata:
                 # <l> does not take @analog, so use @type instead (says Perry)
                 line = lineGroup.appendSubElement('l', {'type': 'humdrum:ONB'})
                 line.text = note.meiValue
-                if note.value.language and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = note.value.language.lower()
+                noteLang: str | None = self.getLanguage(note.value)
+                if noteLang and not allTheSameLanguage:
+                    line.attrib['xml:lang'] = noteLang
                 note.hasBeenWritten = True
 
         for textLanguage in textLanguages:
@@ -1055,8 +1071,9 @@ class MeiMetadata:
                 # <l> does not take @analog, so use @type instead (says Perry)
                 line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
                 line.text = acknowledgment.meiValue
-                if acknowledgment.value.language and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = acknowledgment.value.language.lower()
+                ackLang: str | None = self.getLanguage(acknowledgment.value)
+                if ackLang and not allTheSameLanguage:
+                    line.attrib['xml:lang'] = ackLang
                 acknowledgment.hasBeenWritten = True
 
         if bibl.isEmpty():
@@ -1315,8 +1332,8 @@ class MeiMetadata:
                 continue
 
             if requiredLanguage:
-                if (mmItem.value.language
-                        and mmItem.value.language.lower() == requiredLanguage.lower()):
+                itemLang: str | None = MeiMetadata.getLanguage(mmItem.value)
+                if (itemLang and itemLang == requiredLanguage.lower()):
                     bestName = mmItem
                     break
             else:
@@ -1660,18 +1677,25 @@ class MeiMetadata:
         return encodingDesc
 
     @staticmethod
+    def getLanguage(value: m21.metadata.ValueType) -> str | None:
+        if not isinstance(value, m21.metadata.Text):
+            return None
+        if value.language is not None:
+            return value.language.lower()
+        return None
+
+    @staticmethod
     def getTextListLanguage(textItems: list[MeiMetadataItem]) -> tuple[str | None, bool]:
         # returns tuple(theLanguage: str | None, allTheSameLanguage: bool)
         theLanguage: str | None = None
         allTheSameLanguage: bool = True
         for textItem in textItems:
-            if t.TYPE_CHECKING:
-                assert isinstance(textItem.value, m21.metadata.Text)
-            if theLanguage is None and textItem.value.language is not None:
-                theLanguage = textItem.value.language.lower()
+            itemLanguage: str | None = MeiMetadata.getLanguage(textItem.value)
+            if theLanguage is None and itemLanguage is not None:
+                theLanguage = itemLanguage
                 continue
-            if theLanguage is not None and textItem.value.language is not None:
-                if theLanguage != textItem.value.language.lower():
+            if theLanguage is not None and itemLanguage is not None:
+                if theLanguage != itemLanguage:
                     allTheSameLanguage = False
                     break
 
@@ -1920,8 +1944,9 @@ class MeiMetadata:
                 if t.TYPE_CHECKING:
                     assert isinstance(history.value, m21.metadata.Text)
                 attrib = {'type': 'humdrum:HAO'}
-                if history.value.language and not allTheSameLanguage:
-                    attrib['xml:lang'] = history.value.language.lower()
+                historyLang: str | None = self.getLanguage(history.value)
+                if historyLang and not allTheSameLanguage:
+                    attrib['xml:lang'] = historyLang
                 # <l> can't take @analog, so use @type (says Perry)
                 lElement: MeiElement = lgElement.appendSubElement('l', attrib)
                 lElement.text = history.meiValue
