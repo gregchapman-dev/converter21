@@ -280,9 +280,9 @@ class MeiMetadata:
                 # only relevant to original parsed file, not to the file we are writing
                 continue
 
-            if key.startswith('humdrumraw:') or key.startswith('meiraw:'):
-                # from original parsed humdrum or mei file, no longer relevant
-                # (or we would have made up a better namespace during parse)
+            if key.startswith('raw:') or key.startswith('humdrumraw:') or key.startswith('meiraw:'):
+                # from original parsed file, no longer relevant (or we would have made up a better
+                # namespace name during parse)
                 continue
 
             if not itemList:
