@@ -2887,26 +2887,11 @@ class M21Utilities:
         # uniqueNames and 'mei:blahblah' and 'abc:Y' keys (using them as custom
         # keys). We also support a few alternative namespaces ('dc:' and 'dcterm:'
         # for 'dcterms:' and 'marc:' for 'marcrel:').
-        allDone: bool = False
         uniqueName: str | None = None
         if md._isStandardUniqueName(key):
             uniqueName = key
         elif md._isStandardNamespaceName(key):
             uniqueName = md.namespaceNameToUniqueName(key)
-        elif key.startswith('humdrum:'):
-            uniqueName = M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
-                key[8:],
-                ''
-            )
-            if not uniqueName:
-                M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
-                return
-        elif key.startswith('mei:'):
-            M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
-            allDone = True
-        elif key.startswith('abc:'):
-            M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
-            allDone = True
         elif key.startswith('dcterm:'):
             key = key.replace('dcterm:', 'dcterms:')
             if md._isStandardNamespaceName(key):
@@ -2919,15 +2904,20 @@ class M21Utilities:
             key = key.replace('marc:', 'marcrel:')
             if md._isStandardNamespaceName(key):
                 uniqueName = md.namespaceNameToUniqueName(key)
+        elif key.startswith('humdrum:'):
+            uniqueName = M21Utilities.humdrumReferenceKeyToM21MetadataPropertyUniqueName.get(
+                key[8:],
+                ''
+            )
 
-        if allDone:
+        if not uniqueName:
+            M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
             return
 
+        # we have a uniqueName, so treat it as standard
         if isinstance(value, str):
             value = m21.metadata.Text(value)
-
-        if uniqueName:
-            value = md._convertValue(uniqueName, value)
+        value = md._convertValue(uniqueName, value)
 
         if other:
             for k, v in other.items():
@@ -2939,12 +2929,11 @@ class M21Utilities:
                 setattr(value, 'c21OtherAttribs', c21OtherAttribs)
                 setattr(value, k, v)
 
-        if uniqueName is None:
-            uniqueName = ''
-
         for val in md[uniqueName]:
             if M21Utilities.mdValueEqual(val, value):
+                # value is a duplicate, don't add it
                 return
+
         md.add(uniqueName, value)
 
     @staticmethod
