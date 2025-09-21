@@ -2877,12 +2877,7 @@ class M21Utilities:
         return False
 
     @staticmethod
-    def addIfNotADuplicate(
-        md: m21.metadata.Metadata,
-        key: str,
-        value: t.Any,
-        other: dict[str, str] | None = None
-    ):
+    def getUniqueName(md: m21.metadata.Metadata, key: str) -> str:
         # Note that we specifically support 'humdrum:XXX' keys that do not map to
         # uniqueNames and 'mei:blahblah' and 'abc:Y' keys (using them as custom
         # keys). We also support a few alternative namespaces ('dc:' and 'dcterm:'
@@ -2909,7 +2904,20 @@ class M21Utilities:
                 key[8:],
                 ''
             )
+        return uniqueName or ''
 
+    @staticmethod
+    def addIfNotADuplicate(
+        md: m21.metadata.Metadata,
+        key: str,
+        value: t.Any,
+        other: dict[str, str] | None = None
+    ):
+        # Note that we specifically support 'humdrum:XXX' keys that do not map to
+        # uniqueNames and 'mei:blahblah' and 'abc:Y' keys (using them as custom
+        # keys). We also support a few alternative namespaces ('dc:' and 'dcterm:'
+        # for 'dcterms:' and 'marc:' for 'marcrel:').
+        uniqueName: str = M21Utilities.getUniqueName(md, key)
         if not uniqueName:
             M21Utilities.addCustomIfNotADuplicate(md, key, value, other)
             return
@@ -2942,17 +2950,33 @@ class M21Utilities:
         key: str,
         value: t.Any
     ):
-        # always custom (e.g. 'abc:W'), so always Text
-        oldValues: tuple[m21.metadata.ValueType, ...] = md.getCustom(key)
+        uniqueName: str = M21Utilities.getUniqueName(md, key)
+        if uniqueName:
+            # gotta check if values are Text (bail if not)
+            if m21.metadata.properties.UNIQUE_NAME_TO_VALUE_TYPE[uniqueName] != m21.metadata.Text:
+                return
+
+        oldValues: tuple[m21.metadata.ValueType, ...]
+        if uniqueName:
+            oldValues = md[uniqueName]
+        else:
+            oldValues = md.getCustom(key)
+
         if oldValues:
             newValStr: str = str(value)
             oldStr: str = str(oldValues[0])
             newStr: str = oldStr + '\n' + newValStr
             newText = m21.metadata.Text(newStr)
             newValues: tuple[m21.metadata.ValueType, ...] = (newText,) + oldValues[1:]
-            md.setCustom(key, newValues)
+            if uniqueName:
+                md[uniqueName] = newValues
+            else:
+                md.setCustom(key, newValues)
         else:
-            md.setCustom(key, value)
+            if uniqueName:
+                md[uniqueName] = value
+            else:
+                md.setCustom(key, value)
 
     @staticmethod
     def addOtherMetadataAttrib(value: m21.metadata.ValueType, k: str, v: str):
