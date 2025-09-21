@@ -314,7 +314,7 @@ class MeiMetadata:
                         lg.attrib['xml:lang'] = itemLang
                     for itemText in item.meiValue.split('\n'):
                         line: MeiElement = lg.appendSubElement('l')
-                        line.text = itemText
+                        line.text = itemText.strip()
                     item.hasBeenWritten = True
 
         return notesStmt
@@ -494,7 +494,7 @@ class MeiMetadata:
                     lineGroup.attrib['xml:lang'] = noteLang
                 for noteText in note.meiValue.split('\n'):
                     line = lineGroup.appendSubElement('l')
-                    line.text = noteText
+                    line.text = noteText.strip()
                 note.hasBeenWritten = True
 
         for textLanguage in textLanguages:
@@ -1063,7 +1063,7 @@ class MeiMetadata:
                     lineGroup.attrib['xml:lang'] = ackLang
                 for ackText in acknowledgment.meiValue.split('\n'):
                     line = lineGroup.appendSubElement('l')
-                    line.text = ackText
+                    line.text = ackText.strip()
                 acknowledgment.hasBeenWritten = True
 
         if bibl.isEmpty():
@@ -1642,7 +1642,7 @@ class MeiMetadata:
                     lineGroup.attrib['xml:lang'] = noteLang
                 for noteText in note.meiValue.split('\n'):
                     line: MeiElement = lineGroup.appendSubElement('l')
-                    line.text = noteText
+                    line.text = noteText.strip()
                 note.hasBeenWritten = True
 
             for warning in encodingWarnings:
@@ -1653,7 +1653,7 @@ class MeiMetadata:
                     lineGroup.attrib['xml:lang'] = warnLang
                 for warnText in warning.meiValue.split('\n'):
                     line = lineGroup.appendSubElement('l')
-                    line.text = warnText
+                    line.text = warnText.strip()
                 warning.hasBeenWritten = True
 
         return encodingDesc
@@ -1927,7 +1927,7 @@ class MeiMetadata:
                 lgElement: MeiElement = historyElement.appendSubElement('lg', attrib)
                 for historyText in history.meiValue.split('\n'):
                     lElement: MeiElement = lgElement.appendSubElement('l')
-                    lElement.text = historyText
+                    lElement.text = historyText.strip()
                 history.hasBeenWritten = True
 
         if oneOfMany:
