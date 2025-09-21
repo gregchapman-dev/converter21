@@ -2964,10 +2964,10 @@ class M21Utilities:
 
         if oldValues:
             newValStr: str = str(value)
-            oldStr: str = str(oldValues[0])
+            oldStr: str = str(oldValues[-1])
             newStr: str = oldStr + '\n' + newValStr
             newText = m21.metadata.Text(newStr)
-            newValues: tuple[m21.metadata.ValueType, ...] = (newText,) + oldValues[1:]
+            newValues: tuple[m21.metadata.ValueType, ...] = oldValues[:-1] + (newText,)
             if uniqueName:
                 md[uniqueName] = newValues
             else:
