@@ -2942,9 +2942,6 @@ class M21Utilities:
         key: str,
         value: t.Any
     ):
-        if key not in M21Utilities.abcMetadataKeysThatWantMultilineValues:
-            return
-
         # always custom (e.g. 'abc:W'), so always Text
         oldValues: tuple[m21.metadata.ValueType, ...] = md.getCustom(key)
         if oldValues:

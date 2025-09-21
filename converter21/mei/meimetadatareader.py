@@ -1229,7 +1229,9 @@ class MeiMetadataReader:
         if element.text.strip():
             # This element might have straight text, and as such, is itself a
             # lineWithLanguage.
-            self.processLineWithLanguage(element, localDefaultLang, localDefaultAnalog, md)
+            self.processLineWithLanguage(
+                element, localDefaultLang, localDefaultAnalog, md, forceNewItem=True
+            )
 
         for subElem in element.findAll('*', recurse=False):
             if subElem.name not in ('p', 'lg'):
@@ -1246,9 +1248,11 @@ class MeiMetadataReader:
 
             if subElem.name == 'p':
                 # <p> can contain text.  It can also contain <lg>, so in that case,
-                # <p> is an element containing lines...
+                # <p> is an element containing linegroups...
                 if subElem.text.strip():
-                    self.processLineWithLanguage(subElem, lgLang, lgAnalog, md)
+                    self.processLineWithLanguage(
+                        subElem, lgLang, lgAnalog, md, forceNewItem=True
+                    )
                 self.processElementContainingParagraphsAndLineGroups(
                     subElem,
                     lgLang,
@@ -1257,8 +1261,10 @@ class MeiMetadataReader:
                 )
             elif subElem.name == 'lg':
                 # recurse=True so we find all the <l> even in sub-<lg> within this <lg>
-                for lineEl in subElem.findAll('l', recurse=True):
-                    self.processLineWithLanguage(lineEl, lgLang, lgAnalog, md)
+                for i, lineEl in enumerate(subElem.findAll('l', recurse=True)):
+                    self.processLineWithLanguage(
+                        lineEl, lgLang, lgAnalog, md, forceNewItem=(i == 0)
+                    )
 
     def processLineWithLanguage(
         self,
@@ -1266,8 +1272,14 @@ class MeiMetadataReader:
         defaultLang: str,
         defaultAnalog: str,
         md: m21.metadata.Metadata,
+        forceNewItem: bool = False
     ):
-        text: str = element.text.strip()
+        # Sometimes MEI has multiple text lines within a single element. We don't want
+        # all those XML pretty-print tabs.
+        strippedLines: list[str] = []
+        for line in element.text.split('\n'):
+            strippedLines.append(line.strip())
+        text: str = '\n'.join(strippedLines)
         if not text:
             return
 
@@ -1283,11 +1295,16 @@ class MeiMetadataReader:
             if newAnalog:
                 analog = newAnalog
 
-        if not M21Utilities.isUsableMetadataKey(md, analog):
-            if defaultAnalog:
-                analog = defaultAnalog
-            else:
-                return
+        if M21Utilities.isUsableMetadataKey(md, analog):
+            # usable analog on <l> or <p>, make a new md item
+            # (unless analog is one we know wants multi-line value)
+            forceNewItem = True
+        elif defaultAnalog:
+            analog = defaultAnalog
+        else:
+            # We have no idea what sort of metadata item this is supposed to be.
+            # Skip it.
+            return
 
         if analog in ('abc:Z', 'abc:I'):
             # check for text prefix that actually belongs in key (e.g. 'abc:Z:abc-transcription'
@@ -1300,6 +1317,9 @@ class MeiMetadataReader:
                     if analog in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName:
                         analog = M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName[analog]
 
+        if analog in M21Utilities.abcMetadataKeysThatWantMultilineValues:
+            forceNewItem = False
+
         lang: str = element.get(_XMLLANG, '')
         if not lang:
             lang = defaultLang
@@ -1309,7 +1329,7 @@ class MeiMetadataReader:
         else:
             mdText = m21.metadata.Text(text)
 
-        if analog in M21Utilities.abcMetadataKeysThatWantMultilineValues:
+        if not forceNewItem:
             M21Utilities.appendToValue(md, analog, mdText)
             return
 
