@@ -5,7 +5,7 @@
 #
 # Authors:       Greg Chapman <gregc@mac.com>
 #
-# Copyright:     (c) 2023 Greg Chapman
+# Copyright:     (c) 2023-2025 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
 import sys
@@ -295,38 +295,26 @@ class MeiMetadata:
                     continue
                 unwrittenItems.append(item)
             if unwrittenItems:
+                language, allTheSameLanguage = self.getTextListLanguage(unwrittenItems)
                 annot: MeiElement = notesStmt.appendSubElement(
                     'annot',
                     {
                         'analog': makeAnalog(key)
                     }
                 )
-
-                # put each line of text in <l> subelement of <lg>
-                language, allTheSameLanguage = self.getTextListLanguage(unwrittenItems)
-                lineGroup = annot.appendSubElement('lg')
                 if allTheSameLanguage and language:
-                    lineGroup.attrib['xml:lang'] = language
+                    annot.attrib['xml:lang'] = language
+
+                # put each unwritten item in <lg>, with one or more <l> elements,
+                # one per '\n'-delimited line of text.
                 for item in unwrittenItems:
-                    subLineGroup: MeiElement | None = None
-                    if len(unwrittenItems) > 1 and '\n' in item.meiValue:
-                        # make a sub-linegroup for this unwritten item's lines
-                        subLineGroup = lineGroup.appendSubElement('lg')
-                        itemLang: str | None = self.getLanguage(item.value)
-                        if itemLang and not allTheSameLanguage:
-                            subLineGroup.attrib['xml:lang'] = itemLang
-                    if '\n' in item.meiValue:
-                        for itemText in item.meiValue.split('\n'):
-                            lg: MeiElement = subLineGroup or lineGroup
-                            itemLine: MeiElement = lg.appendSubElement('l')
-                            itemLine.text = itemText
-                    else:
-                        # we know we don't have a subLineGroup (because no '\n')
-                        line: MeiElement = lineGroup.appendSubElement('l')
-                        line.text = item.meiValue
-                        itemLang = self.getLanguage(item.value)
-                        if itemLang and not allTheSameLanguage:
-                            line.attrib['xml:lang'] = itemLang
+                    lg: MeiElement = annot.appendSubElement('lg')
+                    itemLang = self.getLanguage(item.value)
+                    if itemLang and not allTheSameLanguage:
+                        lg.attrib['xml:lang'] = itemLang
+                    for itemText in item.meiValue.split('\n'):
+                        line: MeiElement = lg.appendSubElement('l')
+                        line.text = itemText
                     item.hasBeenWritten = True
 
         return notesStmt
@@ -494,18 +482,19 @@ class MeiMetadata:
 
         if notes:
             annot: MeiElement = bibl.appendSubElement('annot')
+            annot.attrib['analog'] = 'humdrum:ONB'
             language, allTheSameLanguage = self.getTextListLanguage(notes)
-            lineGroup: MeiElement = annot.appendSubElement('lg')
             if allTheSameLanguage and language:
-                lineGroup.attrib['xml:lang'] = language
+                annot.attrib['xml:lang'] = language
 
             for note in notes:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                line = lineGroup.appendSubElement('l', {'type': 'humdrum:ONB'})
-                line.text = note.meiValue
+                lineGroup: MeiElement = annot.appendSubElement('lg')
                 noteLang: str | None = self.getLanguage(note.value)
                 if noteLang and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = noteLang
+                    lineGroup.attrib['xml:lang'] = noteLang
+                for noteText in note.meiValue.split('\n'):
+                    line = lineGroup.appendSubElement('l')
+                    line.text = noteText
                 note.hasBeenWritten = True
 
         for textLanguage in textLanguages:
@@ -1059,21 +1048,22 @@ class MeiMetadata:
             annot: MeiElement = bibl.appendSubElement(
                 'annot',
                 {
+                    'analog': 'humdrum:SMA',
                     'type': 'manuscriptAccessAcknowledgment',
                 }
             )
             language, allTheSameLanguage = self.getTextListLanguage(acknowledgments)
-            lineGroup: MeiElement = annot.appendSubElement('lg')
             if allTheSameLanguage and language:
-                lineGroup.attrib['xml:lang'] = language
+                annot.attrib['xml:lang'] = language
 
             for acknowledgment in acknowledgments:
-                # <l> does not take @analog, so use @type instead (says Perry)
-                line = lineGroup.appendSubElement('l', {'type': 'humdrum:SMA'})
-                line.text = acknowledgment.meiValue
+                lineGroup: MeiElement = annot.appendSubElement('lg')
                 ackLang: str | None = self.getLanguage(acknowledgment.value)
                 if ackLang and not allTheSameLanguage:
-                    line.attrib['xml:lang'] = ackLang
+                    lineGroup.attrib['xml:lang'] = ackLang
+                for ackText in acknowledgment.meiValue.split('\n'):
+                    line = lineGroup.appendSubElement('l')
+                    line.text = ackText
                 acknowledgment.hasBeenWritten = True
 
         if bibl.isEmpty():
@@ -1644,35 +1634,27 @@ class MeiMetadata:
         if encodingNotes or encodingWarnings:
             editorialDecl: MeiElement = encodingDesc.appendSubElement('editorialDecl')
             p: MeiElement = editorialDecl.appendSubElement('p')
+            for note in encodingNotes:
+                # <lg> does not take @analog, so use @type instead (says Perry)
+                lineGroup: MeiElement = p.appendSubElement('lg', {'type': 'humdrum:RNB'})
+                noteLang: str | None = self.getLanguage(note.value)
+                if noteLang:
+                    lineGroup.attrib['xml:lang'] = noteLang
+                for noteText in note.meiValue.split('\n'):
+                    line: MeiElement = lineGroup.appendSubElement('l')
+                    line.text = noteText
+                note.hasBeenWritten = True
 
-            language: str | None
-            allTheSameLanguage: bool
-            line: MeiElement
-            if encodingNotes:
-                language, allTheSameLanguage = self.getTextListLanguage(encodingNotes)
-                lineGroup: MeiElement = p.appendSubElement('lg')
-                if allTheSameLanguage and language:
-                    lineGroup.attrib['xml:lang'] = language
-                for note in encodingNotes:
-                    # <l> does not take @analog, so use @type instead (says Perry)
-                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:RNB'})
-                    line.text = note.meiValue
-                    if note.value.language and not allTheSameLanguage:
-                        line.attrib['xml:lang'] = note.value.language.lower()
-                    note.hasBeenWritten = True
-
-            if encodingWarnings:
-                language, allTheSameLanguage = self.getTextListLanguage(encodingWarnings)
-                lineGroup = p.appendSubElement('lg')
-                if allTheSameLanguage and language:
-                    lineGroup.attrib['xml:lang'] = language
-                for warning in encodingWarnings:
-                    # <l> does not take @analog, so use @type instead (says Perry)
-                    line = lineGroup.appendSubElement('l', {'type': 'humdrum:RWB'})
-                    line.text = warning.meiValue
-                    if warning.value.language and not allTheSameLanguage:
-                        line.attrib['xml:lang'] = warning.value.language.lower()
-                    warning.hasBeenWritten = True
+            for warning in encodingWarnings:
+                # <lg> does not take @analog, so use @type instead (says Perry)
+                lineGroup = p.appendSubElement('lg', {'type': 'humdrum:RWB'})
+                warnLang: str | None = self.getLanguage(warning.value)
+                if warnLang:
+                    lineGroup.attrib['xml:lang'] = warnLang
+                for warnText in warning.meiValue.split('\n'):
+                    line = lineGroup.appendSubElement('l')
+                    line.text = warnText
+                warning.hasBeenWritten = True
 
         return encodingDesc
 
@@ -1931,25 +1913,21 @@ class MeiMetadata:
 
         # <history>
         if histories:
-            allTheSameLanguage: bool
-            theLanguage: str | None
-            theLanguage, allTheSameLanguage = MeiMetadata.getTextListLanguage(histories)
             historyElement: MeiElement = theWork.appendSubElement('history')
-            attrib: dict[str, str] = {}
-            if allTheSameLanguage and theLanguage:
-                attrib['xml:lang'] = theLanguage
-            lgElement: MeiElement = historyElement.appendSubElement('lg', attrib)
-
+            historyElement.attrib['analog'] = 'humdrum:HAO'
             for history in histories:
                 if t.TYPE_CHECKING:
                     assert isinstance(history.value, m21.metadata.Text)
-                attrib = {'type': 'humdrum:HAO'}
+                # put each history item in <lg>, with one or more <l> elements,
+                # one per '\n'-delimited line of history item text.
+                attrib: dict[str, str] = {}
                 historyLang: str | None = self.getLanguage(history.value)
-                if historyLang and not allTheSameLanguage:
+                if historyLang:
                     attrib['xml:lang'] = historyLang
-                # <l> can't take @analog, so use @type (says Perry)
-                lElement: MeiElement = lgElement.appendSubElement('l', attrib)
-                lElement.text = history.meiValue
+                lgElement: MeiElement = historyElement.appendSubElement('lg', attrib)
+                for historyText in history.meiValue.split('\n'):
+                    lElement: MeiElement = lgElement.appendSubElement('l')
+                    lElement.text = historyText
                 history.hasBeenWritten = True
 
         if oneOfMany:

@@ -307,10 +307,11 @@ class MeiMetadataReader:
                 M21Utilities.addIfNotADuplicate(md, analog, text)
             elif subEl.name == 'annot':
                 defaultLang: str = subEl.get(_XMLLANG, '')
-                defaultAnalog: str = ''
-                if subEl.get('type', '') == 'manuscriptAccessAcknowledgment':
-                    defaultAnalog = 'humdrum:SMA'
-                else:
+                defaultAnalog: str = subEl.get('analog', '')
+                if not defaultAnalog:
+                    if subEl.get('type', '') == 'manuscriptAccessAcknowledgment':
+                        defaultAnalog = 'humdrum:SMA'
+                if not defaultAnalog:
                     defaultAnalog = 'humdrum:ONB'
 
                 self.processElementContainingParagraphsAndLineGroups(
@@ -1233,25 +1234,30 @@ class MeiMetadataReader:
         for subElem in element.findAll('*', recurse=False):
             if subElem.name not in ('p', 'lg'):
                 continue
+
+            lgLang: str = subElem.get(_XMLLANG, '')
+            if not lgLang:
+                lgLang = localDefaultLang
+            lgAnalog: str = subElem.get('analog', '')
+            if not lgAnalog:
+                lgAnalog = subElem.get('type', '')
+            if not lgAnalog:
+                lgAnalog = localDefaultAnalog
+
             if subElem.name == 'p':
                 # <p> can contain text.  It can also contain <lg>, so in that case,
                 # <p> is an element containing lines...
                 if subElem.text.strip():
-                    self.processLineWithLanguage(subElem, localDefaultLang, localDefaultAnalog, md)
+                    self.processLineWithLanguage(subElem, lgLang, lgAnalog, md)
                 self.processElementContainingParagraphsAndLineGroups(
                     subElem,
-                    localDefaultLang,
-                    localDefaultAnalog,
+                    lgLang,
+                    lgAnalog,
                     md
                 )
             elif subElem.name == 'lg':
-                lgLang: str = subElem.get(_XMLLANG, '')
-                if not lgLang:
-                    lgLang = localDefaultLang
-                lgAnalog: str = subElem.get('analog', '')
-                if not lgAnalog:
-                    lgAnalog = localDefaultAnalog
-                for lineEl in subElem.findAll('l', recurse=False):
+                # recurse=True so we find all the <l> even in sub-<lg> within this <lg>
+                for lineEl in subElem.findAll('l', recurse=True):
                     self.processLineWithLanguage(lineEl, lgLang, lgAnalog, md)
 
     def processLineWithLanguage(
@@ -1265,11 +1271,11 @@ class MeiMetadataReader:
         if not text:
             return
 
-        analog: str
-        if element.name == 'l':
+        analog: str = element.get('analog', '')
+        if not analog and element.name in ('l', 'lg', 'p'):
+            # l, lg, and p don't officially have @analog (although we will read it
+            # if it's there). We look in @type instead.
             analog = element.get('type', '')
-        else:
-            analog = element.get('analog', '')
 
         # special maps: e.g. abc:H -> humdrum:HAO, etc
         if analog in M21Utilities.abcMetadataKeyToM21MetadataPropertyName:
