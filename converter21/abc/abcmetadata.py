@@ -108,8 +108,9 @@ class AbcMetadata:
                 else:
                     addValueIfUnique(infoChar, value)
 
-        # write our own I:abc-creator value (not from md)
+        # write our own I:abc-creator and I:abc-version value (not from md)
         addValue('I:abc-creator', f'{SharedConstants._CONVERTER21_NAME_AND_VERSION}')
+        addValue('I:abc-version', '2.1')
 
         # sort the lines into output in the preferred order
         output: list[str] = []
