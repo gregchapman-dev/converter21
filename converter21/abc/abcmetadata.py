@@ -17,8 +17,15 @@ from converter21.shared import M21Utilities
 
 class AbcMetadata:
 
+    complexAbcInfoKeys: list[str] = [
+        # these are the M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName keys
+        # with the leading 'abc:' stripped off.  e.g. 'abc:I:abc-creator' becomes
+        # 'I:abc-creator'.
+        key[4:] for key in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName
+    ]
+
     @staticmethod
-    def m21MetadataToAbcInfoLines(md: m21.metadata.Metadata, xNumber: int | None) -> list[str]:
+    def m21MetadataToAbcHeaderLines(md: m21.metadata.Metadata, xNumber: int | None) -> list[str]:
         # infoDict is slightly different from mxm.header_fields_for_converter21
         # Here values per key are represented by a list, instead of a space-
         # delimited string.
@@ -149,148 +156,124 @@ class AbcMetadata:
         return output
 
     @staticmethod
-    def abcInfoDictToMetadata(infoFields: dict[str, str]) -> m21.metadata.Metadata:
-        # takes info dict keyed by 'X', 'T', 'C', 'Z', 'I', etc
+    def abcHeaderLinesToM21Metadata(headerLines: list[str]) -> m21.metadata.Metadata:
+        # takes initial lines of tune, ending with first 'K:'
+        def mergeContinuationLines(headerLines: list[str]) -> list[str]:
+            output: list[str] = []
+            for hLine in headerLines:
+                if hLine.startswith('+:'):
+                    # append the rest of the '+:' line to the previous line
+                    if not output:
+                        # file started with continuation line, weird...
+                        continue
+                    output[-1] += ' ' + hLine[2:]
+                else:
+                    output.append(hLine)
+            return output
 
-        def addValue(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
-            M21Utilities.addIfNotADuplicate(md, mdKey, hfValue)
+        def processMetadataItem(
+            md: m21.metadata.Metadata,
+            mdKey: str,
+            mdValue: str,
+            mdKeyOfCurrentMultilineValue: str
+        ) -> str:
+            # returns new value of mdKeyOfCurrentMultilineValue
 
-        def addValues(md: m21.metadata.Metadata, mdKey: str, hfValue: str):
-            hfValues: list[str] = splitValues(hfValue)
-            for val in hfValues:
-                M21Utilities.addIfNotADuplicate(md, mdKey, val)
+            # some validation and key munging
+            if mdKey == 'number' and not mdValue.isdigit():
+                return mdKeyOfCurrentMultilineValue
 
-        def splitValues(hfValue: str) -> list[str]:
-            return hfValue.split('\n')
+            if mdKey in ('countryOfComposition', 'abc:A'):
+                if ';' in mdValue or ',' in mdValue:
+                    mdKey = 'localeOfComposition'
+                else:
+                    mdKey = 'countryOfComposition'
 
-        # Start by splitting out 'Z' and 'I' into separate entries for
-        # "no :abc" and all the different ":abc-whatever" names we see.
-        newInfoFields: dict[str, str] = {}
-        itemList = list(infoFields.items())
-        for hfKey, hfValue in itemList:
-            if hfKey in ('Z', 'I'):
-                vals = splitValues(hfValue)
-                for val in vals:
-                    abcNameAndValue = val.split(' ', 1)
-                    if len(abcNameAndValue) == 1:
-                        if hfKey == 'Z':
-                            # no space-delimited abcName, so just do 'Z'
-                            if newVal := newInfoFields.get('Z'):
-                                newInfoFields['Z'] = newVal + '\n' + val
-                            else:
-                                newInfoFields['Z'] = val
-                            continue
+            if mdKey == 'title':
+                if md['title']:
+                    # special case: first T is title, subsequent are alternativeTitle
+                    mdKey = 'alternativeTitle'
 
-                    abcName = abcNameAndValue[0]
-                    if not abcName.startswith('abc'):
-                        if hfKey == 'Z':
-                            # no parseable abcName, so just do 'Z'
-                            if newVal := newInfoFields.get('Z'):
-                                newInfoFields['Z'] = newVal + '\n' + val
-                            else:
-                                newInfoFields['Z'] = val
-                            continue
-                        if hfKey == 'I':
-                            # we ignore unparseable I: abcNames because there are a lot,
-                            # and they are generally not metadata.
-                            continue
+            # handle multi-line continuations, etc
+            if mdKey == mdKeyOfCurrentMultilineValue and mdValue:
+                M21Utilities.appendToValue(md, mdKey, mdValue)
+            elif mdKey == mdKeyOfCurrentMultilineValue and not mdValue:
+                # break off current multiline value (but otherwise
+                # ignore the empty value)
+                mdKeyOfCurrentMultilineValue = ''
+            else:  # mdKey != mdKeyOfCurrentMultilineValue
+                # break off any current multiline value and create new
+                # other-keyed item
+                mdKeyOfCurrentMultilineValue = ''
+                M21Utilities.addIfNotADuplicate(md, mdKey, mdValue)
+                if mdKey in M21Utilities.abcMetadataKeysThatWantMultilineValues:
+                    mdKeyOfCurrentMultilineValue = mdKey
 
-                    abcValue = abcNameAndValue[1]
-                    if hfKey == 'Z':
-                        if abcName == 'abc-transcription':
-                            if newVal := newInfoFields.get('Z:abc-transcription'):
-                                newInfoFields['Z:abc-transcription'] = newVal + '\n' + abcValue
-                            else:
-                                newInfoFields['Z:abc-transcription'] = abcValue
-                        elif abcName == 'abc-edited-by':
-                            if newVal := newInfoFields.get('Z:abc-edited-by'):
-                                newInfoFields['Z:abc-edited-by'] = newVal + '\n' + abcValue
-                            else:
-                                newInfoFields['Z:abc-edited-by'] = abcValue
-                        elif abcName == 'abc-copyright':
-                            if newVal := newInfoFields.get('Z:abc-copyright'):
-                                newInfoFields['Z:abc-copyright'] = newVal + '\n' + abcValue
-                            else:
-                                newInfoFields['Z:abc-copyright'] = abcValue
-                        else:
-                            if newVal := newInfoFields.get('Z:' + abcName):
-                                newInfoFields['Z:' + abcName] = newVal + '\n' + abcValue
-                            else:
-                                newInfoFields['Z:' + abcName] = abcValue
-                    elif hfKey == 'I':
-                        # ignore everything but 'abc-creator'; lots of non-metadata in I:
-                        if abcName == 'abc-creator':
-                            if newVal := newInfoFields.get('I:abc-creator'):
-                                newInfoFields['I:abc-creator'] = newVal + '\n' + abcValue
-                            else:
-                                newInfoFields['I:abc-creator'] = abcValue
+            return mdKeyOfCurrentMultilineValue
 
-                # delete this entry from infoFields
-                del infoFields[hfKey]
-
-        # Add everything back in (split apart nicely)
-        infoFields.update(newInfoFields)
+        headerLines = mergeContinuationLines(headerLines)
 
         md = m21.metadata.Metadata()
+        mdKeyOfCurrentMultilineValue: str = ''
 
-        # music21 is already in the md.software list, add converter21, and then
-        # we will add any I:abc-creator we happen to see as well.
-        verStr: str = SharedConstants._CONVERTER21_NAME_AND_VERSION
-        md.add('software', verStr)
-
-        for hfKey, hfValue in infoFields.items():
-            if not hfValue:
-                # ignore metadata with no value(s)
+        mdKey: str
+        for hLine in headerLines:
+            if not hLine:
+                mdKeyOfCurrentMultilineValue = ''
                 continue
 
-            if hfKey in ('K', 'L', 'M', 'Q', 'U'):
-                # header data that is not metadata
+            if hLine.startswith('%%metadata:'):
+                # TODO: handle custom metadata
                 continue
 
-            mdKey: str = 'abc:' + hfKey
-            if (mdKey not in M21Utilities.validAbcMetadataKeys
-                    and mdKey not in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName):
-                # it wasn't in our 'abc:*' lookup tables.  Skip it.
+            if hLine[0] in ('%', 'K', 'L', 'M', 'Q', 'U'):
+                # header line that is not metadata
+                mdKeyOfCurrentMultilineValue = ''
                 continue
 
-            if mdKey in M21Utilities.abcMetadataKeyToM21MetadataPropertyName:
-                newMdKey: str = M21Utilities.abcMetadataKeyToM21MetadataPropertyName[mdKey]
-                if newMdKey:
-                    # abc:x maps directly to a uniqueName (or non-standard but useful humdrum
-                    # or mei name), so we should use that instead.
-                    mdKey = newMdKey
+            if hLine[0] in ('Z', 'I'):
+                # check for complex name (e.g. 'Z:abc-edited-by' or 'I:abc-creator')
+                complexNameProcessed: bool = False
+                for complexName in AbcMetadata.complexAbcInfoKeys:
+                    if hLine.startswith(complexName + ' '):
+                        abcInfoKeyAndValue = hLine.split(' ', 1)
+                        if len(abcInfoKeyAndValue) == 1:
+                            # fall through to normal (non-complex) case
+                            break
+                        # handle the complex info key case
+                        mdKey = 'abc:' + abcInfoKeyAndValue[0]
+                        mdValue = abcInfoKeyAndValue[1].strip()
+                        mdKey = M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName.get(
+                            mdKey, mdKey
+                        )
 
-            # special 'abc:x:abc-something' keys (with their own lookup table)
-            if mdKey in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName:
-                mdKey = M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName[mdKey]
+                        mdKeyOfCurrentMultilineValue = processMetadataItem(
+                            md, mdKey, mdValue, mdKeyOfCurrentMultilineValue
+                        )
+                        complexNameProcessed = True
+                        break
 
-            if mdKey in M21Utilities.abcMetadataKeysThatWantMultilineValues:
-                # These we treat as one metadata entry, with a multiline string.
-                addValue(md, mdKey, hfValue)
-            elif mdKey == 'number':
-                # special case, must check for malformed 'X:non-numeric'
-                if hfValue.isdigit():
-                    addValue(md, mdKey, hfValue)
-            elif mdKey in ('countryOfComposition', 'abc:A'):
-                # abc:O (origin) maps to 'countryOfComposition'.
-                # abc:A (area) is deprecated, but we can read it.
-                # special case: we try to detect if locale or country
-                vals = splitValues(hfValue)
-                for val in vals:
-                    if ';' in val or ',' in val:
-                        addValue(md, 'localeOfComposition', val)
-                    else:
-                        addValue(md, 'countryOfComposition', val)
-            elif mdKey == 'title':
-                # special case: first T is title, subsequent are alternativeTitle
-                vals = splitValues(hfValue)
-                for i, val in enumerate(vals):
-                    if i == 0:
-                        addValue(md, 'title', val)
-                    else:
-                        addValue(md, 'alternativeTitle', val)
-            else:
-                # everybody else
-                addValues(md, mdKey, hfValue)
+                if complexNameProcessed:
+                    continue
+
+            # normal (non-complex) case (e.g. Z:, C:, etc)
+            abcInfoKeyAndValue = hLine.split(':', 1)
+            if len(abcInfoKeyAndValue) == 1:
+                # no colon?! skip this info line.
+                mdKeyOfCurrentMultilineValue = ''
+                continue
+
+            mdKey = 'abc:' + abcInfoKeyAndValue[0]
+            if mdKey not in M21Utilities.abcMetadataKeyToM21MetadataPropertyName:
+                # non-metadata info line, skip it.
+                mdKeyOfCurrentMultilineValue = ''
+                continue
+            newKey: str = M21Utilities.abcMetadataKeyToM21MetadataPropertyName[mdKey]
+            if newKey:
+                mdKey = newKey
+            mdValue = abcInfoKeyAndValue[1].strip()
+            mdKeyOfCurrentMultilineValue = processMetadataItem(
+                md, mdKey, mdValue, mdKeyOfCurrentMultilineValue
+            )
 
         return md

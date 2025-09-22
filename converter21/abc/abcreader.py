@@ -9,8 +9,6 @@
 # ------------------------------------------------------------------------------
 import typing as t
 import re
-import copy
-# from xml.etree.ElementTree import Element
 
 import music21 as m21
 
@@ -25,9 +23,9 @@ class AbcReader:
     def __init__(self, dataString: str):
         self.abcString: str = dataString
         self.abcTuneByNumber: dict[str, str] = {}
+        self.abcTuneHeaderLinesByNumber: dict[str, list[str]] = {}
         self.numberForAbcTune: dict[str, str] = {}
         self.abcTunesInDocumentOrder: list[str] = []
-        self.headerFieldsByTuneNumber: dict[str, dict[str, str]] = {}
 
     def run(
         self,
@@ -35,6 +33,17 @@ class AbcReader:
     ) -> m21.stream.Score | m21.stream.Part | m21.stream.Opus:
         # convert abc data to musicxml data and then import
         # _that_ into music21.
+
+        def truncateAfter(lines: list[str], after: str) -> list[str]:
+            lastIdx: int = -1
+            for i, theLine in enumerate(lines):
+                if theLine.startswith(after):
+                    lastIdx = i
+                    break
+            if lastIdx != -1:
+                return lines[:lastIdx + 1]
+            return lines
+
         xmlStrs: list[str] = []
         numStr: str
         if not self.abcTuneByNumber:
@@ -56,6 +65,9 @@ class AbcReader:
                 self.abcTunesInDocumentOrder.append(fullTuneText)
                 self.abcTuneByNumber[numStr] = fullTuneText
                 self.numberForAbcTune[fullTuneText] = numStr
+                self.abcTuneHeaderLinesByNumber[numStr] = truncateAfter(
+                    fullTuneText.split('\n'), 'K:'
+                )
 
         abcNumbers: list[str] = []
         if number is None:
@@ -65,9 +77,6 @@ class AbcReader:
                 numStr = self.numberForAbcTune[tune]
                 abcNumbers.append(numStr)
                 xmlDoc = abc2xml.getXmlDocs(self.abcTuneByNumber[numStr])[0]
-                self.headerFieldsByTuneNumber[numStr] = copy.copy(
-                    abc2xml.mxm.header_fields_for_converter21
-                )
                 xmlStr: str = abc2xml.fixDoctype(xmlDoc)
                 xmlStrs.append(xmlStr)
         else:
@@ -78,9 +87,6 @@ class AbcReader:
                 )
             abcNumbers = [numStr]
             xmlDoc = abc2xml.getXmlDocs(self.abcTuneByNumber[numStr])[0]
-            self.headerFieldsByTuneNumber[numStr] = copy.copy(
-                abc2xml.mxm.header_fields_for_converter21
-            )
             xmlStrs = [abc2xml.fixDoctype(xmlDoc)]
 
         if len(xmlStrs) == 1:
@@ -88,8 +94,8 @@ class AbcReader:
             score = m21.converter.parseData(xmlStrs[0], fmt='musicxml')
             if t.TYPE_CHECKING:
                 assert isinstance(score, m21.stream.Score)
-            score.metadata = AbcMetadata.abcInfoDictToMetadata(
-                self.headerFieldsByTuneNumber[abcNumbers[0]]
+            score.metadata = AbcMetadata.abcHeaderLinesToM21Metadata(
+                self.abcTuneHeaderLinesByNumber[abcNumbers[0]]
             )
             mdNumbers = score.metadata['number']
             if len(mdNumbers) == 1 and str(mdNumbers[0]) == '1':
@@ -106,12 +112,14 @@ class AbcReader:
             score = m21.converter.parseData(xmlStr)
             if t.TYPE_CHECKING:
                 assert isinstance(score, m21.stream.Score)
-            score.metadata = AbcMetadata.abcInfoDictToMetadata(
-                self.headerFieldsByTuneNumber[numStr]
+            score.metadata = AbcMetadata.abcHeaderLinesToM21Metadata(
+                self.abcTuneHeaderLinesByNumber[numStr]
             )
             opus.coreAppend(score)
         opus.coreElementsChanged()
         M21Utilities.fixupBadBeams(opus, inPlace=True)
-        # if self.preambleHeaderFields:
-        #     opus.metadata = AbcMetadata.abcInfoDictToMetadata(opus, self.preambleHeaderFields)
+        # if self.preambleHeaderLines:
+        #     opus.metadata = AbcMetadata.abcHeaderLinesToM21Metadata(
+        #         opus, self.preambleHeaderLines
+        #     )
         return opus

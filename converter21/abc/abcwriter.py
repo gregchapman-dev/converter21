@@ -178,6 +178,6 @@ class AbcWriter:
             if abcLine[0] == 'K':
                 break
 
-        newInfoLines: list[str] = AbcMetadata.m21MetadataToAbcInfoLines(md, xNumber)
+        newInfoLines: list[str] = AbcMetadata.m21MetadataToAbcHeaderLines(md, xNumber)
         allLines: list[str] = newInfoLines + abcLines
         return '\n'.join(allLines)

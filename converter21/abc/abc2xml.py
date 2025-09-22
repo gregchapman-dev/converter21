@@ -546,7 +546,6 @@ def splitHeaderVoices (abctext):
             ftype = mxm.metaMap.get ('W', 'W')  # respect the (user defined --meta) mapping of various ABC fields to XML meta data types
             c = mxm.metadata.get (ftype, '')
             mxm.metadata [ftype] = c + '\n' + field if c else field   # concatenate multiple info fields with new line as separator
-            mxm.header_fields_for_converter21[ftype] = mxm.metadata[ftype]
             continue                    # skip W: lyrics
         if x2[:2] == '+:':              # field continuation
             fln += ' ' + x2[2:]
@@ -933,7 +932,6 @@ class MusicXml:
         s.tabStaff = ''     # == pid (part ID) for a tab staff
         s.edo = 12          # tuning
         s.mus53 = mOpt      # musescore playable edo53
-        s.header_fields_for_converter21 = {}
 
     def getAlter (s, acc):
         regacc = {'=':'0', '_':'-1', '__':'-2', '^':'1', '^^':'2'}
@@ -1965,8 +1963,6 @@ class MusicXml:
 
     def doHeaderField (s, fld, attrmap):
         type, value = fld.t[0], fld.t[1].replace ('%5d',']')    # restore closing brackets (see splitHeaderVoices)
-        c21val = s.header_fields_for_converter21.get(type, '')
-        s.header_fields_for_converter21[type] = c21val + '\n' + value if c21val else value
         if not value:    # skip empty field
             return
         if type == 'M':
