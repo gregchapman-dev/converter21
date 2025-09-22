@@ -26,9 +26,6 @@ class AbcMetadata:
 
     @staticmethod
     def m21MetadataToAbcHeaderLines(md: m21.metadata.Metadata, xNumber: int | None) -> list[str]:
-        # infoDict is slightly different from mxm.header_fields_for_converter21
-        # Here values per key are represented by a list, instead of a space-
-        # delimited string.
         infoDict: dict[str, list[str]] = {}
 
         def addValue(k: str, v: str):
@@ -43,6 +40,10 @@ class AbcMetadata:
             if valList is None:
                 infoDict[k] = []
                 valList = infoDict[k]
+            else:
+                # we need an empty line to indicate the transition between two
+                # multi-line values.
+                valList.append('')
             for line in lines:
                 valList.append(line)
 
