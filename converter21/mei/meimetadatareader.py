@@ -1297,7 +1297,6 @@ class MeiMetadataReader:
 
         if M21Utilities.isUsableMetadataKey(md, analog):
             # usable analog on <l> or <p>, make a new md item
-            # (unless analog is one we know wants multi-line value)
             forceNewItem = True
         elif defaultAnalog:
             analog = defaultAnalog
@@ -1316,9 +1315,6 @@ class MeiMetadataReader:
                     text = splitText[1]
                     if analog in M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName:
                         analog = M21Utilities.complexAbcMetadataKeyToM21MetadataPropertyName[analog]
-
-        if analog in M21Utilities.abcMetadataKeysThatWantMultilineValues:
-            forceNewItem = False
 
         lang: str = element.get(_XMLLANG, '')
         if not lang:
