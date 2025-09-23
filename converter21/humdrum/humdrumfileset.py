@@ -79,6 +79,11 @@ class HumdrumFileSet:
         if not scores:
             return m21.stream.Score()
         if len(scores) == 1:
+            # here we remove any number=1 metadata because it's the
+            # only score, so score # 1 in the file is meaningless.
+            numbers: tuple[m21.metadata.Text, ...] = scores[0].metadata['number']
+            if len(numbers) == 1 and str(numbers[0]) == '1':
+                scores[0].metadata['number'] = None
             return scores[0]
 
         opusNumSyntaxErrorsFixed: int = 0
