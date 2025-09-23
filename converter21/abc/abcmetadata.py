@@ -311,6 +311,13 @@ class AbcMetadata:
                 if complexNameProcessed:
                     continue
 
+            if len(hLine) < 2:
+                continue
+            if hLine[1] != ':':
+                continue
+            if 'abc:' + hLine[0] not in M21Utilities.validAbcMetadataKeys:
+                continue
+
             # normal (non-complex) case (e.g. Z:, C:, etc)
             abcInfoKeyAndValue = hLine.split(':', 1)
             if len(abcInfoKeyAndValue) == 1:

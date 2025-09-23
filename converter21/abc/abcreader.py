@@ -34,16 +34,6 @@ class AbcReader:
         # convert abc data to musicxml data and then import
         # _that_ into music21.
 
-        def truncateAfter(lines: list[str], after: str) -> list[str]:
-            lastIdx: int = -1
-            for i, theLine in enumerate(lines):
-                if theLine.startswith(after):
-                    lastIdx = i
-                    break
-            if lastIdx != -1:
-                return lines[:lastIdx + 1]
-            return lines
-
         xmlStrs: list[str] = []
         numStr: str
         if not self.abcTuneByNumber:
@@ -65,9 +55,7 @@ class AbcReader:
                 self.abcTunesInDocumentOrder.append(fullTuneText)
                 self.abcTuneByNumber[numStr] = fullTuneText
                 self.numberForAbcTune[fullTuneText] = numStr
-                self.abcTuneHeaderLinesByNumber[numStr] = truncateAfter(
-                    fullTuneText.split('\n'), 'K:'
-                )
+                self.abcTuneHeaderLinesByNumber[numStr] = fullTuneText.split('\n')
 
         abcNumbers: list[str] = []
         if number is None:
