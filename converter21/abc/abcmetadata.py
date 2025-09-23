@@ -7,8 +7,9 @@
 # Copyright:     (c) 2025 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
-# import typing as t
+import typing as t
 import copy
+import re
 
 import music21 as m21
 
@@ -28,13 +29,15 @@ class AbcMetadata:
     def m21MetadataToAbcHeaderLines(md: m21.metadata.Metadata, xNumber: int | None) -> list[str]:
         infoDict: dict[str, list[str]] = {}
 
-        def addValue(k: str, v: str):
+        def addValue(k: str, v: t.Any):
+            v = str(v)
             if valList := infoDict.get(k, None):
                 valList.append(v)
             else:
                 infoDict[k] = [v]
 
-        def addMultilineValue(k: str, v: str):
+        def addMultilineValue(k: str, v: t.Any):
+            v = str(v)
             lines: list[str] = v.split('\n')
             valList = infoDict.get(k, None)
             if valList is None:
@@ -47,7 +50,8 @@ class AbcMetadata:
             for line in lines:
                 valList.append(line)
 
-        def addValueIfUnique(k: str, v: str):
+        def addValueIfUnique(k: str, v: t.Any):
+            v = str(v)
             # doesn't add if value is already present
             if valList := infoDict.get(k, None):
                 if v not in valList:
@@ -55,18 +59,23 @@ class AbcMetadata:
             else:
                 infoDict[k] = [v]
 
-        def addValueOnlyOnce(k: str, v: str):
+        def addValueOnlyOnce(k: str, v: t.Any):
+            v = str(v)
             if infoDict.get(k, None):
                 # already have one
                 return
             infoDict[k] = [v]
 
+        def spacesToUnderscores(s: str) -> str:
+            output: str = re.sub(' ', '_', s)
+            return output
+
         # grab the title(s) first, so they go before any alternateTitle(s)
         if titles := md['title']:
-            for t in titles:
-                addValueIfUnique('T', str(t))
+            for title in titles:
+                addValueIfUnique('T', str(title))
 
-        for key, value in md.all(returnSorted=False):
+        for key, value in md.all(returnSorted=False, returnPrimitives=True):
             if key == 'title':
                 # we already did the titles above
                 continue
@@ -107,6 +116,22 @@ class AbcMetadata:
                     addValueOnlyOnce(infoChar, value)
                 else:
                     addValueIfUnique(infoChar, value)
+            else:
+                # metadata that ABC has no official place to put.  We write it as:
+                # %%metadata:key value (key is uniqueName or customName)
+                if (key.startswith('raw:')
+                        or key.startswith('meiraw:')
+                        or key.startswith('humdrumraw:')):
+                    # from original parsed file, no longer relevant (or we would have
+                    # made up a better namespace name during parse)
+                    continue
+                if key in ('filePath', 'fileFormat', 'fileNumber', 'corpusFilePath'):
+                    # only relevant to original parsed file, not to the file we are writing
+                    continue
+
+                if key == 'otherContributor':
+                    key += f':{spacesToUnderscores(value.role)}'
+                addValueIfUnique('%%metadata:' + key, value)
 
         # write our own I:abc-creator and I:abc-version value (not from md)
         addValue('I:abc-creator', f'{SharedConstants._CONVERTER21_NAME_AND_VERSION}')
@@ -119,7 +144,8 @@ class AbcMetadata:
             xAlreadyWritten: bool = False
             delim: str = ':'
             if len(key) > 1:
-                # e.g. key == 'Z:abc-transcription'
+                # e.g. key == 'Z:abc-transcription' or '%%metadata:suspectedComposer'
+                # or '%%metadata:mei:printedSourceCopyright'
                 delim = ' '
             for val in vals:
                 if key == 'X' and not xAlreadyWritten:
@@ -173,19 +199,28 @@ class AbcMetadata:
                     output.append(hLine)
             return output
 
+        def underscoresToSpaces(s: str) -> str:
+            output: str = re.sub('_', ' ', s)
+            return output
+
         def processMetadataItem(
             md: m21.metadata.Metadata,
             mdKey: str,
-            mdValue: str,
+            mdValue: str | m21.metadata.Contributor,
             mdKeyOfCurrentMultilineValue: str
         ) -> str:
             # returns new value of mdKeyOfCurrentMultilineValue
 
             # some validation and key munging
-            if mdKey == 'number' and not mdValue.isdigit():
-                return mdKeyOfCurrentMultilineValue
+            if mdKey == 'number':
+                if t.TYPE_CHECKING:
+                    assert isinstance(mdValue, str)
+                if not mdValue.isdigit():
+                    return mdKeyOfCurrentMultilineValue
 
             if mdKey in ('countryOfComposition', 'abc:A'):
+                if t.TYPE_CHECKING:
+                    assert isinstance(mdValue, str)
                 if ';' in mdValue or ',' in mdValue:
                     mdKey = 'localeOfComposition'
                 else:
@@ -219,6 +254,8 @@ class AbcMetadata:
         mdKeyOfCurrentMultilineValue: str = ''
 
         mdKey: str
+        mdValue: str | m21.metadata.Contributor
+
         for hLine in headerLines:
             if not hLine:
                 mdKeyOfCurrentMultilineValue = ''
@@ -226,6 +263,26 @@ class AbcMetadata:
 
             if hLine.startswith('%%metadata:'):
                 # TODO: handle custom metadata
+                hLine = hLine[11:]
+                keyAndValue = hLine.split(' ', 1)
+                if len(keyAndValue) == 1:
+                    # no space between key and value! skip it.
+                    continue
+
+                mdKey = keyAndValue[0]
+                mdValue = keyAndValue[1]
+                if mdKey.startswith('otherContributor:'):
+                    # set up a ContributorValue with the appropriate role
+                    role: str = mdKey.split(':', 1)[1]
+                    role = underscoresToSpaces(role)
+                    newValue = m21.metadata.Contributor(name=mdValue, role=role)
+                    mdValue = newValue
+                    mdKey = 'otherContributor'
+
+                mdKeyOfCurrentMultilineValue = processMetadataItem(
+                    md, mdKey, mdValue, mdKeyOfCurrentMultilineValue
+                )
+
                 continue
 
             if hLine[0] in ('%', 'K', 'L', 'M', 'Q', 'U'):
