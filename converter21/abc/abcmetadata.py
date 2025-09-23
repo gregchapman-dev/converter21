@@ -31,13 +31,12 @@ class AbcMetadata:
 
         def addValue(k: str, v: t.Any):
             v = str(v)
-            if valList := infoDict.get(k, None):
-                valList.append(v)
+            if '\n' in v:
+                addMultilineValue(k, v)
             else:
-                infoDict[k] = [v]
+                addValueIfUnique(k, v)
 
-        def addMultilineValue(k: str, v: t.Any):
-            v = str(v)
+        def addMultilineValue(k: str, v: str):
             lines: list[str] = v.split('\n')
             valList = infoDict.get(k, None)
             if valList is None:
@@ -50,8 +49,7 @@ class AbcMetadata:
             for line in lines:
                 valList.append(line)
 
-        def addValueIfUnique(k: str, v: t.Any):
-            v = str(v)
+        def addValueIfUnique(k: str, v: str):
             # doesn't add if value is already present
             if valList := infoDict.get(k, None):
                 if v not in valList:
@@ -73,7 +71,7 @@ class AbcMetadata:
         # grab the title(s) first, so they go before any alternateTitle(s)
         if titles := md['title']:
             for title in titles:
-                addValueIfUnique('T', str(title))
+                addValue('T', title)
 
         for key, value in md.all(returnSorted=False, returnPrimitives=True):
             if key == 'title':
@@ -87,27 +85,22 @@ class AbcMetadata:
                     continue
 
                 infoChars: str = key[4:]
-                if key in M21Utilities.abcMetadataKeysThatWantMultilineValues:
-                    # This value might be multiline, and needs to be split
-                    # into multiple (e.g.) 'N:'-prefixed lines
-                    addMultilineValue(infoChars, value)
-                else:
-                    addValueIfUnique(infoChars, value)
+                addValue(infoChars, value)
             elif key == 'alternativeTitle':
                 # special case, not in the lookup tables
-                addValueIfUnique('T', value)
+                addValue('T', value)
             elif key == 'localeOfComposition':
                 # special case, not in the lookup tables
-                addValueIfUnique('O', value)
+                addValue('O', value)
             elif key == 'electronicEncoder':
                 # special case, not in the lookup tables
-                addValueIfUnique('Z:abc-transcription', value)
+                addValue('Z:abc-transcription', value)
             elif key == 'electronicEditor':
                 # special case, not in the lookup tables
-                addValueIfUnique('Z:abc-edited-by', value)
+                addValue('Z:abc-edited-by', value)
             elif key == 'copyright':
                 # special case, not in the lookup tables
-                addValueIfUnique('Z:abc-copyright', value)
+                addValue('Z:abc-copyright', value)
             elif key in M21Utilities.m21MetadataPropertyNameToAbcMetadataKey:
                 # use the lookup tables
                 abcKey: str = M21Utilities.m21MetadataPropertyNameToAbcMetadataKey[key]
@@ -115,7 +108,7 @@ class AbcMetadata:
                 if infoChar == 'X':
                     addValueOnlyOnce(infoChar, value)
                 else:
-                    addValueIfUnique(infoChar, value)
+                    addValue(infoChar, value)
             else:
                 # metadata that ABC has no official place to put.  We write it as:
                 # %%metadata:key value (key is uniqueName or customName)
@@ -128,10 +121,14 @@ class AbcMetadata:
                 if key in ('filePath', 'fileFormat', 'fileNumber', 'corpusFilePath'):
                     # only relevant to original parsed file, not to the file we are writing
                     continue
+                if key == 'software':
+                    # ABC doesn't care about all the software, just the abc-creator,
+                    # which is handled separately.
+                    continue
 
                 if key == 'otherContributor':
                     key += f':{spacesToUnderscores(value.role)}'
-                addValueIfUnique('%%metadata:' + key, value)
+                addValue('%%metadata:' + key, value)
 
         # write our own I:abc-creator and I:abc-version value (not from md)
         addValue('I:abc-creator', f'{SharedConstants._CONVERTER21_NAME_AND_VERSION}')
@@ -169,7 +166,7 @@ class AbcMetadata:
             appendToOutput('X', ['1'])
 
         theRestDict: dict[str, list[str]] = copy.copy(infoDict)
-        for firstChar in 'XTCOZ':
+        for firstChar in 'XTCOZN':
             if firstChar == 'X' and skipX:
                 continue
             for key, vals in infoDict.items():
@@ -203,7 +200,7 @@ class AbcMetadata:
             output: str = re.sub('_', ' ', s)
             return output
 
-        def processMetadataItem(
+        def addMetadataItem(
             md: m21.metadata.Metadata,
             mdKey: str,
             mdValue: str | m21.metadata.Contributor,
@@ -240,11 +237,10 @@ class AbcMetadata:
                 mdKeyOfCurrentMultilineValue = ''
             else:  # mdKey != mdKeyOfCurrentMultilineValue
                 # break off any current multiline value and create new
-                # other-keyed item
+                # other-keyed item (that might be the start of a multiline value)
                 mdKeyOfCurrentMultilineValue = ''
                 M21Utilities.addIfNotADuplicate(md, mdKey, mdValue)
-                if mdKey in M21Utilities.abcMetadataKeysThatWantMultilineValues:
-                    mdKeyOfCurrentMultilineValue = mdKey
+                mdKeyOfCurrentMultilineValue = mdKey
 
             return mdKeyOfCurrentMultilineValue
 
@@ -279,7 +275,7 @@ class AbcMetadata:
                     mdValue = newValue
                     mdKey = 'otherContributor'
 
-                mdKeyOfCurrentMultilineValue = processMetadataItem(
+                mdKeyOfCurrentMultilineValue = addMetadataItem(
                     md, mdKey, mdValue, mdKeyOfCurrentMultilineValue
                 )
 
@@ -306,7 +302,7 @@ class AbcMetadata:
                             mdKey, mdKey
                         )
 
-                        mdKeyOfCurrentMultilineValue = processMetadataItem(
+                        mdKeyOfCurrentMultilineValue = addMetadataItem(
                             md, mdKey, mdValue, mdKeyOfCurrentMultilineValue
                         )
                         complexNameProcessed = True
@@ -331,7 +327,7 @@ class AbcMetadata:
             if newKey:
                 mdKey = newKey
             mdValue = abcInfoKeyAndValue[1].strip()
-            mdKeyOfCurrentMultilineValue = processMetadataItem(
+            mdKeyOfCurrentMultilineValue = addMetadataItem(
                 md, mdKey, mdValue, mdKeyOfCurrentMultilineValue
             )
 

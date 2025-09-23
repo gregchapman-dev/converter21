@@ -2647,8 +2647,8 @@ class M21Utilities:
         'abc:T': 'title',        # title
         'abc:X': 'number',       # reference number
         'abc:O': 'countryOfComposition',  # origin
+        'abc:N': 'humdrum:ONB',  # notes
         'abc:A': '',             # area (deprecated, we will read as if it was 'abc:O')
-        'abc:N': '',             # notes
         'abc:W': '',             # untimed lyrics
         'abc:Z': '',             # transcription (sometimes translated untimed lyrics)
         'abc:R': '',             # rhythm
@@ -2665,7 +2665,6 @@ class M21Utilities:
         # must match everything in abcMetadataKeyToM21MetadataPropertyName that
         # has value == ''
         'abc:A',  # area (deprecated, we will read as if it was 'abc:O')
-        'abc:N',  # notes
         'abc:W',  # untimed lyrics
         'abc:Z',  # transcription (sometimes translated untimed lyrics)
         'abc:R',  # rhythm
@@ -2682,12 +2681,6 @@ class M21Utilities:
 
     validAbcMetadataKeys: tuple[str, ...] = tuple(
         abcKey for abcKey in abcMetadataKeyToM21MetadataPropertyName
-    )
-
-    abcMetadataKeysThatWantMultilineValues: tuple[str, ...] = (
-        'abc:N',  # notes
-        'abc:W',  # untimed lyrics
-        'abc:Z',  # (sometimes) translated untimed lyrics
     )
 
     complexAbcMetadataKeyToM21MetadataPropertyName: dict[str, str] = {
