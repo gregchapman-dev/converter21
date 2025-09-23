@@ -730,6 +730,15 @@ class MeiReader:
             raise MeiInternalError(
                 'could not produce a Score or Opus'
             )
+
+        if len(self.readerScores) == 1:
+            # here we remove any number=1 metadata because it's the
+            # only score, so score # 1 in the file is meaningless.
+            if scoreOrOpus.metadata is not None:
+                nums: tuple[m21.metadata.Text, ...] = scoreOrOpus.metadata['number']
+                if len(nums) == 1 and str(nums[0]) == '1':
+                    scoreOrOpus.metadata['number'] = None
+
         return scoreOrOpus
 
     # Static Utility Functions
