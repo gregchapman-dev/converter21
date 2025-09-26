@@ -37,6 +37,17 @@ Named arguments:
 ## API usage:
 Call converter21.register() to get music21 to use converter21's alternate Humdrum and MEI converters in your own code.
 
+## Example corpus shell script
+
+Here's an exmaple shell script for showing how to use this resource to convert all files in one directory (repalce `<directory_name>` with your real directory name) from one format (here `.mxl`) to another (here `.krn`).
+```
+#!/bin/bash
+for f in <directory_name>/*.mxl; do
+  echo "Converting $f → ${f%.mxl}.krn"
+  python3 -m converter21 -f musicxml -t humdrum "$f" "${f%.mxl}.krn"
+done
+```
+
 ## License
 The MIT License (MIT)
 Copyright (c) 2021-2025 Greg Chapman
