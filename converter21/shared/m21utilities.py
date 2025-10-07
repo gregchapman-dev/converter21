@@ -2906,6 +2906,14 @@ class M21Utilities:
         value: t.Any,
         other: dict[str, str] | None = None
     ):
+        # This is specifically for MEI files created by verovio from ABC files.
+        # Verovio puts @analog="abc:H" or whatever, and we need to turn that
+        # back into a uniqueName, or a standard humdrum key, or whatever,
+        # before running it through our usual code paths.
+        if key in M21Utilities.abcMetadataKeyToM21MetadataPropertyName:
+            if M21Utilities.abcMetadataKeyToM21MetadataPropertyName[key]:
+                key = M21Utilities.abcMetadataKeyToM21MetadataPropertyName[key]
+
         # Note that we specifically support 'humdrum:XXX' keys that do not map to
         # uniqueNames and 'mei:blahblah' and 'abc:Y' keys (using them as custom
         # keys). We also support a few alternative namespaces ('dc:' and 'dcterm:'
