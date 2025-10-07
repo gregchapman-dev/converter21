@@ -312,10 +312,13 @@ class AbcMetadata:
                     continue
 
             if len(hLine) < 2:
+                mdKeyOfCurrentMultilineValue = ''
                 continue
             if hLine[1] != ':':
+                mdKeyOfCurrentMultilineValue = ''
                 continue
             if 'abc:' + hLine[0] not in M21Utilities.validAbcMetadataKeys:
+                mdKeyOfCurrentMultilineValue = ''
                 continue
 
             # normal (non-complex) case (e.g. Z:, C:, etc)
