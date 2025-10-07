@@ -286,3 +286,20 @@ class MeiShared:
                     text += el.tail
 
         return text, styleDict
+
+    @staticmethod
+    def stripMultiLineText(text: str) -> str:
+        if not text:
+            return ''
+        strippedLines: list[str] = []
+        for line in text.split('\n'):
+            strippedLines.append(line.strip())
+        hasText: bool = False
+        for strippedLine in strippedLines:
+            if strippedLine:
+                hasText = True
+                break
+        if not hasText:
+            return ''
+        output: str = '\n'.join(strippedLines)
+        return output

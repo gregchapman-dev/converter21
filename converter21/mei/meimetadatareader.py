@@ -79,7 +79,7 @@ class MeiMetadataReader:
             # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
             # entire <meiHead> element (in case someone wants to parse out more info than we do).
             meiHeadXmlStr: str = tostring(self.meiHead, encoding='unicode')
-            meiHeadXmlStr = meiHeadXmlStr.strip()  # strips off any trailing \n and spaces
+            meiHeadXmlStr = MeiShared.stripMultiLineText(meiHeadXmlStr)
             self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
 
     def gatherMADSAuthorityData(self) -> dict[str, MeiElement]:
@@ -181,7 +181,7 @@ class MeiMetadataReader:
         subEls: list[MeiElement] = element.findAll('*', recurse=False)
         if not subEls:
             # just get the text, and call it an original document title
-            text: str = element.text.strip()
+            text: str = MeiShared.stripMultiLineText(element.text)
             if text:
                 M21Utilities.addIfNotADuplicate(md, 'humdrum:YOR', text)
             return
@@ -254,7 +254,7 @@ class MeiMetadataReader:
                         if (biblScope.get('type', '') == 'volumeNumber'
                                 or biblScope.get('analog', '') == 'humdrum:OVM'):
                             text, _styleDict = MeiShared.textFromElem(biblScope)
-                            text = text.strip()
+                            text = MeiShared.stripMultiLineText(text)
                             if not text:
                                 continue
                             M21Utilities.addIfNotADuplicate(md, 'humdrum:OVM', text)
@@ -265,7 +265,7 @@ class MeiMetadataReader:
                         analog = 'humdrum:TXL'
                     else:
                         continue
-                text = subEl.text.strip()
+                text = MeiShared.stripMultiLineText(subEl.text)
                 if not text:
                     continue
                 M21Utilities.addIfNotADuplicate(md, analog, text)
@@ -295,7 +295,9 @@ class MeiMetadataReader:
                         analog = 'humdrum:EEV'
                     else:
                         continue
-                text = subEl.text.strip()
+                text = MeiShared.stripMultiLineText(subEl.text)
+                if not text:
+                    continue
                 M21Utilities.addIfNotADuplicate(md, analog, text)
             elif subEl.name == 'extent':
                 analog = subEl.get('analog', '')
@@ -303,7 +305,9 @@ class MeiMetadataReader:
                     # don't process unless analog is usable; the text format
                     # is very specific.
                     continue
-                text = subEl.text.strip()
+                text = MeiShared.stripMultiLineText(subEl.text)
+                if not text:
+                    continue
                 M21Utilities.addIfNotADuplicate(md, analog, text)
             elif subEl.name == 'annot':
                 defaultLang: str = subEl.get(_XMLLANG, '')
@@ -323,7 +327,7 @@ class MeiMetadataReader:
 
     def processAvailability(self, element: MeiElement, md: m21.metadata.Metadata, sourceType: str):
         for useRestrict in element.findAll('useRestrict', recurse=False):
-            text: str = useRestrict.text.strip()
+            text: str = MeiShared.stripMultiLineText(useRestrict.text)
             if not text:
                 continue
 
@@ -381,7 +385,7 @@ class MeiMetadataReader:
             return
 
         for subEl in element.findAll('biblScope', recurse=False):
-            text: str = subEl.text.strip()
+            text: str = MeiShared.stripMultiLineText(subEl.text)
             if not text:
                 continue
 
@@ -421,7 +425,7 @@ class MeiMetadataReader:
                         analog = 'humdrum:PPP'
                     else:
                         continue
-                text: str = subEl.text.strip()
+                text: str = MeiShared.stripMultiLineText(subEl.text)
                 if not text:
                     continue
                 M21Utilities.addIfNotADuplicate(md, analog, text)
@@ -464,7 +468,7 @@ class MeiMetadataReader:
         defaultAnalog: str,
         md: m21.metadata.Metadata
     ):
-        text: str = element.text.strip()
+        text: str = MeiShared.stripMultiLineText(element.text)
         if not text:
             return
 
@@ -481,7 +485,7 @@ class MeiMetadataReader:
         defaultRole: str = ''
         for subEl in element.findAll('*', recurse=False):
             if subEl.name == 'resp':
-                defaultRole = subEl.text.strip()
+                defaultRole = MeiShared.stripMultiLineText(subEl.text)
             elif subEl.name in ('name', 'persName', 'corpName'):
                 # defaultRole will be overridden by @role, if present
                 # if name element has @analog, that will override everything.
@@ -509,7 +513,7 @@ class MeiMetadataReader:
                     name: MeiElement | None = application.findFirst('name', recurse=False)
                     if name is None:
                         continue
-                    appName: str = name.text.strip()
+                    appName: str = MeiShared.stripMultiLineText(name.text)
                     if not appName:
                         continue
                     other: dict[str, str] = {}
@@ -801,7 +805,7 @@ class MeiMetadataReader:
         text: str
         _styleDict: dict[str, str]
         text, _styleDict = MeiShared.textFromElem(element)
-        text = text.strip()
+        text = MeiShared.stripMultiLineText(text)
         if not text:
             return
 
@@ -843,7 +847,7 @@ class MeiMetadataReader:
         mads: MeiElement | None = self.getMadsAuthorityDataForElement(element)
 
         name: str = element.text
-        name = name.strip()
+        name = MeiShared.stripMultiLineText(name)
         if name:
             # <composer>name</composer>
             if not M21Utilities.isUsableMetadataKey(md, analog):
@@ -867,7 +871,7 @@ class MeiMetadataReader:
             for nameEl in nameEls:
                 _styleDict: dict[str, str]
                 name, _styleDict = MeiShared.textFromElem(nameEl)
-                name = name.strip()
+                name = MeiShared.stripMultiLineText(name)
                 if name:
                     analog = nameEl.get('analog', '')
                     typeStr = nameEl.get('type', '')
@@ -910,7 +914,7 @@ class MeiMetadataReader:
                     namePart: MeiElement | None = nameEl.findFirst('namePart', recurse=False)
                     if namePart is not None:
                         name: str = namePart.text
-                        name = name.strip()
+                        name = MeiShared.stripMultiLineText(name)
                         if name:
                             M21Utilities.addIfNotADuplicate(md, 'humdrum:COL', name)
 
@@ -924,8 +928,8 @@ class MeiMetadataReader:
             nationalityEl: MeiElement | None = personInfo.findFirst('nationality', recurse=False)
             if birthDateEl is not None and deathDateEl is not None:
                 # add 'humdrum:CDT' metadata item
-                birthIsoDate: str = birthDateEl.text.strip()
-                deathIsoDate: str = deathDateEl.text.strip()
+                birthIsoDate: str = MeiShared.stripMultiLineText(birthDateEl.text)
+                deathIsoDate: str = MeiShared.stripMultiLineText(deathDateEl.text)
                 if birthIsoDate and deathIsoDate:
                     m21BirthDatePrimitive: m21.metadata.DatePrimitive | None = (
                         M21Utilities.m21DatePrimitiveFromIsoDate(birthIsoDate)
@@ -950,19 +954,19 @@ class MeiMetadataReader:
 
             if birthPlaceEl is not None:
                 # add 'humdrum:CBL' metadata item
-                name = birthPlaceEl.text.strip()
+                name = MeiShared.stripMultiLineText(birthPlaceEl.text)
                 if name:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:CBL', name)
 
             if deathPlaceEl is not None:
                 # add 'humdrum:CDL' metadata item
-                name = deathPlaceEl.text.strip()
+                name = MeiShared.stripMultiLineText(deathPlaceEl.text)
                 if name:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:CDL', name)
 
             if nationalityEl is not None:
                 # add 'humdrum:CNT' metadata item
-                name = nationalityEl.text.strip()
+                name = MeiShared.stripMultiLineText(nationalityEl.text)
                 if name:
                     M21Utilities.addIfNotADuplicate(md, 'humdrum:CNT', name)
 
@@ -981,7 +985,7 @@ class MeiMetadataReader:
         role: str = ''
 
         name: str = element.text
-        name = name.strip()
+        name = MeiShared.stripMultiLineText(name)
         if name:
             # <element>name</element>
             if not M21Utilities.isUsableMetadataKey(md, analog):
@@ -1058,7 +1062,7 @@ class MeiMetadataReader:
             for nameEl in nameEls:
                 _styleDict: dict[str, str]
                 name, _styleDict = MeiShared.textFromElem(nameEl)
-                name = name.strip()
+                name = MeiShared.stripMultiLineText(name)
                 if name:
                     analog = nameEl.get('analog', '')
                     names.append(name)
@@ -1157,7 +1161,7 @@ class MeiMetadataReader:
 
         if context == 'mainWork' or context.startswith('source'):
             for country in countries:
-                text: str = country.text.strip()
+                text: str = MeiShared.stripMultiLineText(country.text)
                 if not text:
                     continue
                 analog = country.get('analog', '')
@@ -1166,7 +1170,7 @@ class MeiMetadataReader:
                 M21Utilities.addIfNotADuplicate(md, analog, text)
 
             for settlement in settlements:
-                text = settlement.text.strip()
+                text = MeiShared.stripMultiLineText(settlement.text)
                 if not text:
                     continue
                 analog = settlement.get('analog', '')
@@ -1175,7 +1179,7 @@ class MeiMetadataReader:
                 M21Utilities.addIfNotADuplicate(md, analog, text)
 
         for geogName in geogNames:
-            text = geogName.text.strip()
+            text = MeiShared.stripMultiLineText(geogName.text)
             if not text:
                 continue
             analog = geogName.get('analog', '')
@@ -1199,7 +1203,7 @@ class MeiMetadataReader:
 
         if context == 'mainWork' or context.startswith('source'):
             for dedicatee in dedicatees:
-                text = dedicatee.text.strip()
+                text = MeiShared.stripMultiLineText(dedicatee.text)
                 if not text:
                     continue
                 analog = dedicatee.get('analog', '')
@@ -1226,7 +1230,7 @@ class MeiMetadataReader:
         if not localDefaultAnalog:
             localDefaultAnalog = defaultAnalog
 
-        if element.text.strip():
+        if MeiShared.stripMultiLineText(element.text):
             # This element might have straight text, and as such, is itself a
             # lineWithLanguage.
             self.processLineWithLanguage(
@@ -1249,7 +1253,7 @@ class MeiMetadataReader:
             if subElem.name == 'p':
                 # <p> can contain text.  It can also contain <lg>, so in that case,
                 # <p> is an element containing linegroups...
-                if subElem.text.strip():
+                if MeiShared.stripMultiLineText(subElem.text):
                     self.processLineWithLanguage(
                         subElem, lgLang, lgAnalog, md, forceNewItem=True
                     )
@@ -1276,10 +1280,7 @@ class MeiMetadataReader:
     ):
         # Sometimes MEI has multiple text lines within a single element. We don't want
         # all those XML pretty-print tabs.
-        strippedLines: list[str] = []
-        for line in element.text.split('\n'):
-            strippedLines.append(line.strip())
-        text: str = '\n'.join(strippedLines)
+        text: str = MeiShared.stripMultiLineText(element.text)
         if not text:
             return
 
@@ -1333,7 +1334,7 @@ class MeiMetadataReader:
 
     def processLangUsage(self, element: MeiElement, md: m21.metadata.Metadata):
         for language in element.findAll('language', recurse=False):
-            text: str = language.text.strip()
+            text: str = MeiShared.stripMultiLineText(language.text)
             if not text:
                 continue
 
@@ -1345,7 +1346,7 @@ class MeiMetadataReader:
     def processClassification(self, element: MeiElement, md: m21.metadata.Metadata):
         for termList in element.findAll('termList', recurse=False):
             for term in termList.findAll('term', recurse=False):
-                text: str = term.text.strip()
+                text: str = MeiShared.stripMultiLineText(term.text)
                 if not text:
                     continue
 
@@ -1393,7 +1394,7 @@ class MeiMetadataReader:
         else:
             text, _ = MeiShared.textFromElem(elem)
 
-        text = text.strip()
+        text = MeiShared.stripMultiLineText(text)
         if text:
             skipIt: bool = False
             typeStr: str = elem.get('type', '')
@@ -1583,7 +1584,7 @@ class MeiMetadataReader:
 
         # If nothing else is present (and parseable), go for dateEl.text.
         # If _that_ is present, but not parseable, warn, and return it as a str.
-        text: str = dateEl.text.strip()
+        text: str = MeiShared.stripMultiLineText(dateEl.text)
         if text:
             m21DateObj = M21Utilities.m21DatePrimitiveFromString(text)
             if m21DateObj is None:
