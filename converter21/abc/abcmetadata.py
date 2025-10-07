@@ -27,7 +27,7 @@ class AbcMetadata:
 
     @staticmethod
     def m21MetadataToAbcHeaderLines(md: m21.metadata.Metadata, xNumber: int | None) -> list[str]:
-        infoDict: dict[str, list[str]] = {}
+        infoDict: dict[str, list[str | list[str]]] = {}
 
         def addValue(k: str, v: t.Any):
             v = str(v)
@@ -42,12 +42,7 @@ class AbcMetadata:
             if valList is None:
                 infoDict[k] = []
                 valList = infoDict[k]
-            else:
-                # we need an empty line to indicate the transition between two
-                # multi-line values.
-                valList.append('')
-            for line in lines:
-                valList.append(line)
+            valList.append(lines)
 
         def addValueIfUnique(k: str, v: str):
             # doesn't add if value is already present
@@ -137,24 +132,41 @@ class AbcMetadata:
         # sort the lines into output in the preferred order
         output: list[str] = []
 
-        def appendToOutput(key: str, vals: list[str]):
+        def appendToOutput(key: str, vals: list[str | list[str]]):
             xAlreadyWritten: bool = False
             delim: str = ':'
             if len(key) > 1:
                 # e.g. key == 'Z:abc-transcription' or '%%metadata:suspectedComposer'
                 # or '%%metadata:mei:printedSourceCopyright'
                 delim = ' '
-            for val in vals:
-                if key == 'X' and not xAlreadyWritten:
-                    # Don't write non-integer X: value to ABC files
-                    # (some folks put random stuff in metadata['number']).
-                    # Also, only write at most one 'X:n'.
-                    if not val.isdigit():
-                        continue
+            for valIdx, val in enumerate(vals):
+                valLinesList: list[str]
+                if isinstance(val, str):
+                    valLinesList = [val]
+                else:
+                    valLinesList = val
 
-                output.append(f'{key}{delim}{val}')
-                if key == 'X':
-                    xAlreadyWritten = True
+                # if non-first value of key, add keyed blank line
+                # to delimit the two values, so the reader can
+                # tell the difference between (e.g.) two single
+                # line values, and a two-line value.
+                if valIdx > 0:
+                    if delim == ' ':
+                        output.append(f'{key}')
+                    else:
+                        output.append(f'{key}{delim}')
+
+                for valLine in valLinesList:
+                    if key == 'X' and not xAlreadyWritten:
+                        # Don't write non-integer X: value to ABC files
+                        # (some folks put random stuff in metadata['number']).
+                        # Also, only write at most one 'X:n'.
+                        if not valLine.isdigit():
+                            continue
+
+                    output.append(f'{key}{delim}{valLine}')
+                    if key == 'X':
+                        xAlreadyWritten = True
 
         # Order as: X, T, C, Z, O, all the rest
         # X is required, so if there is no X, make one up
@@ -165,7 +177,7 @@ class AbcMetadata:
         elif 'X' not in infoDict:
             appendToOutput('X', ['1'])
 
-        theRestDict: dict[str, list[str]] = copy.copy(infoDict)
+        theRestDict: dict[str, list[str | list[str]]] = copy.copy(infoDict)
         for firstChar in 'XTCOZN':
             if firstChar == 'X' and skipX:
                 continue
@@ -262,8 +274,9 @@ class AbcMetadata:
                 hLine = hLine[11:]
                 keyAndValue = hLine.split(' ', 1)
                 if len(keyAndValue) == 1:
-                    # no space between key and value! skip it.
-                    continue
+                    # blank line, we need to see this as a delimiter between (possibly)
+                    # multi-line items with the same key
+                    keyAndValue = [keyAndValue[0], '']
 
                 mdKey = keyAndValue[0]
                 mdValue = keyAndValue[1]
