@@ -303,11 +303,16 @@ class AbcMetadata:
                 # check for complex name (e.g. 'Z:abc-edited-by' or 'I:abc-creator')
                 complexNameProcessed: bool = False
                 for complexName in AbcMetadata.complexAbcInfoKeys:
-                    if hLine.startswith(complexName + ' '):
+                    if hLine.startswith(complexName):
                         abcInfoKeyAndValue = hLine.split(' ', 1)
                         if len(abcInfoKeyAndValue) == 1:
-                            # fall through to normal (non-complex) case
+                            # blank line, we need to see this as a delimiter between (possibly)
+                            # multi-line items with the same key.  Set complexNameProcessed to
+                            # True because that's all this line means.
+                            mdKeyOfCurrentMultilineValue = ''
+                            complexNameProcessed = True
                             break
+
                         # handle the complex info key case
                         mdKey = 'abc:' + abcInfoKeyAndValue[0]
                         mdValue = abcInfoKeyAndValue[1].strip()
