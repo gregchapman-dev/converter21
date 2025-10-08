@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+from musicdiff import DetailLevel
+
 from tests.diffutilities import DiffUtilities
 
 # ------------------------------------------------------------------------------
@@ -19,5 +21,6 @@ DiffUtilities.runShowDiff(
     inFmt='musicxml',
     outFmt='abc',
     outExt='abc',
-    scoreNum=int(args.num) if args.num is not None else None
+    scoreNum=int(args.num) if args.num is not None else None,
+    detail=DetailLevel.AllObjects | DetailLevel.Metadata  # no Style for ABC
 )

@@ -170,11 +170,11 @@ class DiffUtilities:
             else:
                 print(f'comparing the two scores at index: {i}')
             score_lin1 = AnnScore(
-                sc1, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+                sc1, detail
             )
             print(f'loaded imported {inFmt} score')
             score_lin2 = AnnScore(
-                sc2, DetailLevel.AllObjects | DetailLevel.Style | DetailLevel.Metadata
+                sc2, detail
             )
             print(f'loaded exported {outFmt} score')
 
