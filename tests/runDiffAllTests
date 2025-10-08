@@ -54,13 +54,13 @@ osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do scr
 # Compare Humdrum import vs ABC export/reimport (fileList18)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallHumImportVsABCExport.py ~/Documents/test/teststuff/fileList18.txt"'
 
-# Compare multiscore import vs MEI export to multiple <mei> (fileList19)
+# Compare multiscore import vs MEI export to multiple mei (fileList19)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMultiscoreVsMei_MultiMei.py ~/Documents/test/teststuff/fileList19.txt"'
 
-# Compare multiscore import vs MEI export to multiple <mdiv> (fileList20)
+# Compare multiscore import vs MEI export to multiple mdiv (fileList20)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMultiscoreVsMei_MultiMdiv.py ~/Documents/test/teststuff/fileList20.txt"'
 
-# Compare multiscore import vs MEI export to multiple <music> (fileList21)
+# Compare multiscore import vs MEI export to multiple music (fileList21)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMultiscoreVsMei_MultiMusic.py ~/Documents/test/teststuff/fileList21.txt"'
 
 # Compare MEI v4 import vs MEI export/reimport (fileListMei)
