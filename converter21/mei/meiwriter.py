@@ -62,6 +62,18 @@ class MeiWriter:
         self.multipleScoresHostTag = multipleScoresHostTag
 
     def write(self, fp) -> bool:
+        # First: We like to modify the input stream (e.g. fixing durations, etc), so we need to
+        # make a copy of the input stream before we start.
+        if isinstance(self._m21Object, m21.stream.Stream):
+            # before deepcopying, fix up any complex hidden rests (so the input score can be
+            # visualized).  This should have been done by whoever created the input score,
+            # but let's at least fix it up now.
+            M21Utilities.fixupComplexHiddenRests(self._m21Object, inPlace=True)
+            self._m21Object = self._m21Object.coreCopyAsDerivation('MEIWriter.write')
+
+        # Second: turn the object into a well-formed Score/Opus (someone might have passed in a
+        # single note, for example).  This code is swiped from music21 v7's musicxml exporter.
+        # The hope is that someday it will become an API in music21 that every exporter can call.
         if self.makeNotation:
             if isinstance(self._m21Object, m21.stream.Opus):
                 self._m21ScoreOrOpus = M21Utilities.makeWellFormedOpus(self._m21Object)
@@ -82,8 +94,11 @@ class MeiWriter:
             self._m21ScoreOrOpus = self._m21Object
         del self._m21Object  # everything after this uses self._m21ScoreOrOpus
 
-        # Check that all parts (in all scores) have the same number of measures, and
-        # that each measure with the same index has the same offset across parts.
+        # Third: deal with various duration problems (we see this e.g. after import of a
+        # Photoscore-generated MusicXML file)
+        M21Utilities.fixupBadDurations(self._m21ScoreOrOpus, inPlace=True)
+
+        # Check that all parts (in all scores) have the same number of measures.
         err: str = M21Utilities.reportUnwritableScore(
             self._m21ScoreOrOpus,
             checkMeasureCounts=True,

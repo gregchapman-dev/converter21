@@ -79,7 +79,7 @@ class DiffUtilities:
             scoreOrOpus1 = m21.converter.parse(
                 inputPath,
                 format=inFmt,
-                number=scoreNum,
+                # number=scoreNum,
                 forceSource=True,
                 verovioCompatibleImport=verovioCompatibleImport
             )
@@ -152,10 +152,17 @@ class DiffUtilities:
             writePath,
             format=outFmt,
             forceSource=True,
+            number=scoreNum,
             verovioCompatibleImport=verovioCompatibleImport
         )
         assert isinstance(scoreOrOpus2, m21.stream.Score | m21.stream.Opus)
         assert scoreOrOpus2.isWellFormedNotation()
+
+        if scoreNum is not None and isinstance(scoreOrOpus1, m21.stream.Opus):
+            # pull the appropriate score out of the input Opus
+            theScore: m21.stream.Score | None = scoreOrOpus1.getScoreByNumber(str(scoreNum))
+            assert isinstance(theScore, m21.stream.Score)
+            scoreOrOpus1 = theScore
 
         # Some converters can read/write Score or Opus (full of scores).
         # So we make lists 1 and 2 of scores, and loop over them, comparing.

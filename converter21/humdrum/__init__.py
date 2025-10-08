@@ -49,4 +49,5 @@ from .gridslice import GridSlice
 from .gridmeasure import GridMeasure
 
 from .humgrid import HumGrid
+from .humdrumwriter import ScoreWriter
 from .humdrumwriter import HumdrumWriter

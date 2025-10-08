@@ -80,7 +80,7 @@ class HumdrumConverter(SubConverter):
                 acceptSyntaxErrors=acceptSyntaxErrors,
                 verovioCompatibleImport=verovioCompatibleImport
             )
-            self.stream = hfs.createMusic21Stream()
+            self.stream = hfs.createMusic21Stream(number=number)
             self.humdrumFileSet = hfs
         except Exception as e:
             if not acceptSyntaxErrors:

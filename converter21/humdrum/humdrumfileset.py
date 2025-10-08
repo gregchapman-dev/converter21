@@ -70,21 +70,39 @@ class HumdrumFileSet:
             )
         return len(self)
 
-    def createMusic21Stream(self) -> m21.stream.Opus | m21.stream.Score:
+    def createMusic21Stream(self, number: int | None = None) -> m21.stream.Opus | m21.stream.Score:
         # if there is only one Score (the usual case), we don't wrap it in an Opus.
+
+        if number is not None:
+            theRightHF: HumdrumFile | None = None
+            # search for '!!!ONM: 3' or somesuch
+            for hf in self.humdrumFiles:
+                onmValue: str = hf.getGlobalReferenceValueForKey('ONM')
+                try:
+                    if int(onmValue) == number:
+                        theRightHF = hf
+                        break
+                except Exception:
+                    pass
+            if theRightHF is None:
+                return m21.stream.Score()
+            return theRightHF.createMusic21Stream()
+
+        # OK, there is no number requested, return all the humdrumfiles.
         scores: list[m21.stream.Score] = []
         for hf in self.humdrumFiles:
             scores.append(hf.createMusic21Stream())
 
         if not scores:
             return m21.stream.Score()
+
         if len(scores) == 1:
             # here we remove any number=1 metadata because it's the
             # only score, so score # 1 in the file is meaningless.
-            if scores[0].metadata is not None:
-                nums: tuple[m21.metadata.Text, ...] = scores[0].metadata['number']
-                if len(nums) == 1 and str(nums[0]) == '1':
-                    scores[0].metadata['number'] = None
+            nums: tuple[m21.metadata.Text, ...] = scores[0].metadata['number']
+            if len(nums) == 1 and str(nums[0]) == '1':
+                scores[0].metadata['number'] = None
+
             return scores[0]
 
         opusNumSyntaxErrorsFixed: int = 0

@@ -64,51 +64,19 @@ class PendingOttavaOrPedalStop:
         self.tokenString: str = tokenString
         self.timestamp: HumNum = opFrac(timestamp)
 
-class HumdrumWriter:
-    Debug: bool = False  # can be set to True for more debugging
+class ScoreWriter:
+    def __init__(self, score: m21.stream.Score, ownerWriter) -> None:
+        self.ownerWriter: HumdrumWriter = ownerWriter
 
-    # '<>' are not considered reservable, they are hard-coded to below/above, and
-    # used as such without coordination here.
-    # '@' is not considered reservable (damn) because we use it in tremolos
-    # (e.g. '@16@' and '@@32@@')
-    _reservableRDFKernSignifiers: str = 'ijZVNl!+|'
+        self._m21Score: m21.stream.Score = score
 
-    _m21EditorialStyleToHumdrumEditorialStyle: dict[str, str] = {
-        # m21 editorial style: RDF definition string we will write
-        'parentheses': 'paren',
-        'bracket': 'bracket',
-    }
-    _humdrumEditorialStyleToFavoriteSignifier: dict[str, str] = {
-        'paren': 'i',
-        'bracket': 'j',
-    }
-    _humdrumEditorialStyleToRDFDefinitionString: dict[str, str] = {
-        'paren': 'editorial accidental (paren)',
-        'bracket': 'editorial accidental (bracket)',
-    }
+        # score.spannerBundle is an expensive operation (recurses through the whole score),
+        # so stash the result here, rather than calling it again and again.
+        self.spannerBundle: m21.spanner.SpannerBundle = self._m21Score.spannerBundle
 
-    def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
-        M21Utilities.adjustMusic21Behavior()
-
-        self._m21Object: m21.prebase.ProtoM21Object = obj
-        self._m21Score: m21.stream.Score | None = None
         self.customM21AttrsToDelete: dict[m21.base.Music21Object, list[str]] = {}
-        self.spannerBundle: m21.spanner.SpannerBundle | None = None
         self._scoreData: ScoreData | None = None
         self.staffCounts: list[int] = []  # indexed by partIndex
-
-        # default options (these can be set to non-default values by clients,
-        # as long as they do it before they call write())
-        # client can set to False if obj is a Score
-        self.makeNotation: bool = True
-        # client can set to True to add a recip spine
-        self.addRecipSpine: bool = False
-        # client can set to False if they want to keep the '@32@'-style
-        # bowed tremolos, and the '@@16@@'-style fingered tremolos
-        self.expandTremolos: bool = True
-        # can be set to True for debugging output
-        self.VoiceDebug: bool = False
-
         self._reservedRDFKernSignifiers: str = ''  # set by property, so we can vet it
         self._assignedRDFKernSignifiers: str = ''  # set internally
 
@@ -123,7 +91,7 @@ class HumdrumWriter:
 
         # private data, computed along the way...
         self._forceRecipSpine: bool = False  # set to true sometimes in figured bass, harmony code
-        self._hasTremolo: bool = False       # has fingered or bowed tremolo(s) that need expanding
+        self._hasTremolo: bool = False  # has fingered or bowed tremolo(s) that need expanding
         # current state of *tuplet/*Xtuplet (partIndex, staffIndex)
         self._tupletsSuppressed: dict[int, dict[int, bool]] = {}
         # current state of *brackettup/*Xbrackettup
@@ -171,8 +139,610 @@ class HumdrumWriter:
         # Here we stash the tempoLayout and '*MMnnn' that represent the initial tempo.
         # These will be written early on, and the tempo they came from will be marked to
         # be ignored during normal object export.
-        self._firstTempoLayout: str = ''
-        self._firstMMTokenStr: str = ''
+        self.firstTempoLayout: str = ''
+        self.firstMMTokenStr: str = ''
+
+    def write(self, fp) -> bool:
+        # set up firstTempoLayout ('!!LO:TX:omd:t=something') for use when emitting
+        # the first time signature (might have no text if there is none).
+        parts: tuple[m21.stream.Part, ...] = tuple(self._m21Score.parts)
+        if parts:
+            topmostPart: m21.stream.Part = parts[0]
+            startingTempos: list[m21.tempo.TempoIndication] = list(
+                topmostPart[m21.tempo.TempoIndication].getElementsByOffsetInHierarchy(0.)
+            )
+            if startingTempos:
+                startingTempo: m21.tempo.TempoIndication = startingTempos[0]
+                mmTokenStr: str = ''  # e.g. '*MM128'
+                tempoText: str = ''  # e.g. '[eighth]=82','Andantino [eighth]=82'
+                mmTokenStr, tempoText = (
+                    M21Convert.getMMTokenAndTempoTextFromM21TempoIndication(startingTempo)
+                )
+                self.firstTempoLayout = '!!LO:TX:omd:t=' + tempoText
+                self.firstMMTokenStr = mmTokenStr
+                startingTempo.humdrum_tempo_already_handled = True  # type: ignore
+                M21Utilities.extendCustomM21Attributes(
+                    self.customM21AttrsToDelete,
+                    startingTempo,
+                    ['humdrum_tempo_already_handled']
+                )
+            else:
+                self.firstTempoLayout = '!!LO:TX:omd:t='
+
+        # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
+        # 1. convert self._m21Score to HumGrid
+        # 2. convert HumGrid to HumdrumFile
+        # 3. write HumdrumFile to fp
+
+        # Tool_musicxml2hum::convert loops over the parts, doing prepareVoiceMapping
+        # on each one, then calls reindexVoices.
+
+        status: bool = True
+        outgrid: HumGrid = HumGrid()
+
+        status = status and self._stitchParts(outgrid)
+        if not status:
+            return status
+
+        if self._scoreData is None:
+            raise HumdrumInternalError('stitchParts failed, but returned True')
+
+#         outgrid.removeRedundantClefChanges() # don't do this; not our business
+#         outgrid.removeSibeliusIncipit()
+
+        # transfer verse counts from staves to HumGrid:
+        for p, partData in enumerate(self._scoreData.parts):
+            for s, staffData in enumerate(partData.staves):
+                verseCount: int = staffData.verseCount
+                outgrid.setVerseCount(p, s, verseCount)
+
+        # transfer harmony counts from parts to HumGrid:
+        for p, partData in enumerate(self._scoreData.parts):
+            if partData.hasHarmony:
+                outgrid.setHarmonyPresent(p)
+
+        # transfer dynamics boolean for part to HumGrid
+        for p, partData in enumerate(self._scoreData.parts):
+            if partData.hasDynamics:
+                outgrid.setDynamicsPresent(p)
+
+        # transfer figured bass boolean for part to HumGrid
+#       for (int p=0; p<(int)partdata.size(); p++) {
+#           bool fbstate = partdata[p].hasFiguredBass();
+#           if (fbstate) {
+#           outdata.setFiguredBassPresent(p);
+#           break;
+#           }
+#       }
+
+        if self.ownerWriter.addRecipSpine or self._forceRecipSpine:
+            outgrid.enableRecipSpine()
+
+        # print(f'outgrid={outgrid}', file=sys.stderr)
+
+        outfile: HumdrumFile = HumdrumFile()
+        outgrid.transferTokens(outfile)
+
+        self._addHeaderRecords(outfile)
+        self._addFooterRecords(outfile)
+        # self._addMeasureOneNumber(outfile)
+
+        for hline in outfile.lines():
+            hline.createLineFromTokens()
+
+#         chord.run(outfile) # makes sure each note in the chord has the right stuff on it?
+
+        # client can disable tremolo expansion by setting self.ownerWriter.expandTremolos to False
+        if self._hasTremolo and self.ownerWriter.expandTremolos:
+            # tremolos have been inserted as single tokens (or token pairs) that describe
+            # the tremolo (e.g. with '@@16@@' or '@32@').  This needs to be expanded into
+            # all the actual notes in the tremolo, surrounded by *tremolo/*Xtremolo to tell
+            # parsers to look for spelled-out tremolos here.
+            tremolo = ToolTremolo(outfile)
+            tremolo.processFile()
+
+        # TODO: Here's where we would do the Humdrum-land transpositions (if necessary)
+        # TODO: ... the trick is that we need to know exactly which parts/staves to
+        # TODO: ... translate, and only the music21 Score knows that. So this can't be
+        # TODO: ... a HumdrumFile or HumdrumFileUtilities function, it has to be here.
+        # TODO: ... Or it can be in HumdrumFile{Utilities}, but it needs to take instructions
+        # TODO: ... about which parts/staves to translate (which we would compute here).
+        # if self._hasTranspositions:
+        #     self.transposeToConcertPitch(outfile)
+
+        outfile.write(fp)
+        self.deannotateScore()
+
+        return status
+
+    @property
+    def reservedRDFKernSignifiers(self) -> str:
+        return self._reservedRDFKernSignifiers
+
+    @reservedRDFKernSignifiers.setter
+    def reservedRDFKernSignifiers(self, newReservedRDFKernSignifiers: str) -> None:
+        if newReservedRDFKernSignifiers is None:
+            self._reservedRDFKernSignifiers = ''
+            return
+
+        if not isinstance(newReservedRDFKernSignifiers, str):
+            raise TypeError('reservedRDFKernSignifiers must be of type str')
+
+        badSignifiers: str = ''
+        for ch in newReservedRDFKernSignifiers:
+            if ch not in HumdrumWriter._reservableRDFKernSignifiers:
+                badSignifiers += ch
+
+        if badSignifiers:
+            raise ValueError(
+                f'The following signifier chars are not reservable: \'{badSignifiers}\'.\n'
+                + f'Reservable signifier chars are \'{HumdrumWriter._reservableRDFKernSignifiers}\''
+            )
+
+        self._reservedRDFKernSignifiers = newReservedRDFKernSignifiers
+
+    def deannotateScore(self):
+        for obj, customAttrs in self.customM21AttrsToDelete.items():
+            for customAttr in customAttrs:
+                if hasattr(obj, customAttr):
+                    delattr(obj, customAttr)
+
+        # all done, let go of these references to music21 objects.
+        self.customM21AttrsToDelete = {}
+
+    '''
+    //////////////////////////////
+    //
+    // Tool_musicxml2hum::stitchParts -- Merge individual parts into a
+    //     single score sequence.
+    '''
+    def _stitchParts(self, outgrid: HumGrid) -> bool:
+        # First, count parts (and each part's measures)
+        partCount: int = len(self._m21Score.parts)
+        if partCount == 0:
+            return False
+
+        self._scoreData = ScoreData(self)
+
+        self.staffCounts = self._scoreData.getStaffCounts()
+        # The measure counts are equal across all Parts
+        # (reportUnwritableScore checked that fact)
+        firstPart: m21.stream.Part | None = self._m21Score.parts.first()
+        if t.TYPE_CHECKING:
+            assert firstPart is not None
+        measureCount = len(firstPart.getElementsByClass(m21.stream.Measure))
+
+        # Now insert each measure into the HumGrid across those parts/staves
+        status: bool = True
+        for m in range(0, measureCount):
+            status = status and self._insertMeasure(outgrid, m)
+
+        self._finishLastPendingOttavaOrPedalStops(outgrid)
+        self._moveBreaksToEndOfPreviousMeasure(outgrid)
+        self._insertRepeatBracketSlices(outgrid)
+        self._insertPartNames(outgrid)
+
+        return status
+
+    '''
+    //////////////////////////////
+    //
+    // Tool_musicxml2hum::insertMeasure --
+    '''
+    def _insertMeasure(self, outgrid: HumGrid, mIndex: int) -> bool:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
+        gm: GridMeasure = outgrid.appendMeasure()
+
+        measureDatas: list[MeasureData] = []
+        sevents: list[list[SimultaneousEvents]] = []
+
+        for p, part in enumerate(self._scoreData.parts):
+            for s, staff in enumerate(part.staves):
+                xmeasure: MeasureData = staff.measures[mIndex]
+                measureDatas.append(xmeasure)
+                if p == 0 and s == 0:
+                    gm.duration = xmeasure.duration
+                    gm.timestamp = xmeasure.startTime
+                    gm.timeSigDur = xmeasure.timeSigDur
+                # self._checkForDummyRests(xmeasure) # handled in MeasureData
+                sevents.append(xmeasure.sortedEvents)
+                if p == 0 and s == 0:
+                    # only checking number of first barline
+                    gm.measureNumberString = xmeasure.measureNumberString  # might be '124a'
+
+                # styles, on the other hand, need to be checked in every staff
+                gm.leftBarlineStylePerStaff.append(xmeasure.leftBarlineStyle)
+                gm.rightBarlineStylePerStaff.append(xmeasure.rightBarlineStyle)
+                gm.measureStylePerStaff.append(xmeasure.measureStyle)
+                gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
+                gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
+
+                # repeat brackets
+                gm.inRepeatBracket = xmeasure.inRepeatBracket
+                gm.startsRepeatBracket = xmeasure.startsRepeatBracket
+                gm.stopsRepeatBracket = xmeasure.stopsRepeatBracket
+                gm.repeatBracketName = xmeasure.repeatBracketName
+                if gm.inRepeatBracket:
+                    outgrid.hasRepeatBrackets = True
+
+        curTime: list[HumNum] = [opFrac(-1)] * len(measureDatas)
+        measureDurs: list[HumNum | None] = [None] * len(measureDatas)
+        curIndex: list[int] = [0] * len(measureDatas)
+        nextTime: HumNum = opFrac(-1)
+
+        tsDur: HumNum = opFrac(-1)
+        for ps, mdata in enumerate(measureDatas):
+            events: list[EventData] = mdata.events
+            # Keep track of hairpin endings that should be attached
+            # the the previous note (and doubling the ending marker
+            # to indicate that the timestamp of the ending is at the
+            # end rather than the start of the note.
+            #   I think this is a no-op for music21 input. --gregc
+
+            if self.ownerWriter.VoiceDebug:
+                for event in events:
+                    print('!!ELEMENT: ', end='', file=sys.stderr)
+                    print(f'\tTIME:  {event.startTime}', end='', file=sys.stderr)
+                    print(f'\tSTi:   {event.staffIndex}', end='', file=sys.stderr)
+                    print(f'\tVi:    {event.voiceIndex}', end='', file=sys.stderr)
+                    print(f'\tDUR:   {event.duration}', end='', file=sys.stderr)
+                    print(f'\tTOKEN: {event.kernTokenString()}',
+                                end='', file=sys.stderr)
+                    print(f'\tNAME:  {event.name}', end='', file=sys.stderr)
+                    print('', file=sys.stderr)  # line feed (one line per event)
+                print('======================================', file=sys.stderr)
+
+            if sevents[ps]:
+                curTime[ps] = sevents[ps][curIndex[ps]].startTime
+            else:
+                curTime[ps] = tsDur
+            if nextTime < 0:
+                nextTime = curTime[ps]
+            elif curTime[ps] < nextTime:
+                nextTime = curTime[ps]
+
+            measureDurs[ps] = mdata.duration
+        # end of loop over parts' staves' measures at measure # mIndex
+
+        allEnd: bool = False
+        nowEvents: list[SimultaneousEvents] = []
+#         nowPartStaves: list[int] = []
+        status: bool = True
+
+        # Q: I believe the following loop is trying to process nowEvents for each "now" in
+        # Q: ... time order.  But it doesn't actually get time order right, so instead I
+        # Q: ... made sure that any MeasureData's sortedEvents are actually sorted by time
+        # Q: ... instead of just binned by time (with the bins not necessarily in order).
+        # Q: ... I did this by using a sorted list (with no duplicates) instead of a set
+        # Q: ... in MeasureData._sortEvents().
+        # Q: ... Things come out here in time order now, but I'm still confused by this loop,
+        # Q: ... so I don't dare simplify it yet (by assuming that sortedEvents are in order).
+        processTime: HumNum = nextTime
+        while not allEnd:
+            nowEvents = []
+#             nowPartStaves = []
+            allEnd = True
+            processTime = nextTime
+            nextTime = opFrac(-1)
+            for ps in reversed(range(0, len(measureDatas))):
+                if curIndex[ps] >= len(sevents[ps]):
+                    continue
+
+                if sevents[ps][curIndex[ps]].startTime == processTime:
+                    thing: SimultaneousEvents = sevents[ps][curIndex[ps]]
+                    nowEvents.append(thing)
+#                     nowPartStaves.append(ps)
+                    curIndex[ps] += 1
+
+                if curIndex[ps] < len(sevents[ps]):
+                    allEnd = False
+                    if nextTime < 0 or sevents[ps][curIndex[ps]].startTime < nextTime:
+                        nextTime = sevents[ps][curIndex[ps]].startTime
+            # end reversed loop over parts
+            status = status and self._convertNowEvents(gm, nowEvents, processTime)
+        # end loop over slices (i.e. events in the measure across all partstaves)
+
+        if self._currentDynamics:
+            self._addUnassociatedDynamics(gm, self._currentDynamics)
+            self._currentDynamics = []
+
+        if self._currentTexts:
+            self._addUnassociatedTexts(gm, self._currentTexts)
+            self._currentTexts = []
+
+        if self._currentRehearsalMarks:
+            self._addUnassociatedRehearsalMarks(gm, self._currentRehearsalMarks)
+            self._currentRehearsalMarks = []
+
+        if self._currentOttavasOrPedalMarks:
+            self._addUnassociatedOttavasOrPedalMarks(gm, self._currentOttavasOrPedalMarks)
+            self._currentOttavasOrPedalMarks = []
+
+        if self._currentPedalTransitions:
+            self._addUnassociatedPedalTransitions(gm, self._currentPedalTransitions)
+            self._currentPedalTransitions = []
+
+        if self._currentTempos:
+            self._addUnassociatedTempos(gm, self._currentTempos)
+            self._currentTempos = []
+
+        if self._currentHarmonies:
+            self._addUnassociatedHarmonies(gm, self._currentHarmonies)
+            self._currentHarmonies = []
+
+        return status
+
+    '''
+    //////////////////////////////
+    //
+    // moveBreaksToEndOfPreviousMeasure --
+    '''
+    @staticmethod
+    def _moveBreaksToEndOfPreviousMeasure(outgrid: HumGrid) -> None:
+        for m in range(1, len(outgrid.measures)):
+            gm: GridMeasure = outgrid.measures[m]
+            gmlast: GridMeasure = outgrid.measures[m - 1]
+            if gm is None or gmlast is None:
+                continue
+
+            if not gm.slices:
+                # empty measure
+                return
+
+            startTime: HumNum = gm.slices[0].timestamp
+            for sliceIdx, gridSlice in enumerate(gm.slices):
+                time2: HumNum = gridSlice.timestamp
+                if time2 > startTime:
+                    break
+
+                if not gridSlice.isGlobalComment:
+                    continue
+
+                voice0: GridVoice | None = gridSlice.parts[0].staves[0].voices[0]
+                if voice0 is None:
+                    continue
+                token: HumdrumToken | None = voice0.token
+                if token is None:
+                    continue
+
+                if token.text in ('!!LO:LB:g=z', '!!LO:PB:g=z'):
+                    gmlast.slices.append(gridSlice)
+                    gm.slices.pop(sliceIdx)
+                    # there can be only one break, so quit the slice loop now.
+                    break
+
+    @staticmethod
+    def _insertRepeatBracketSlices(outgrid: HumGrid) -> None:
+        if not outgrid.hasRepeatBrackets:
+            return
+
+        def incrementName(sectionName: str) -> str:
+            # 'A' ... 'Z', 'AA' ... 'ZZ', 'AAA' .. 'ZZZ', etc
+            if not sectionName or sectionName[0] not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                raise HumdrumInternalError('invalid section name generated')
+
+            oldFirstChar: str = sectionName[0]
+            for c in sectionName[1:]:
+                if c != oldFirstChar:
+                    raise HumdrumInternalError('invalid section name generated')
+
+            # wraparound case
+            if oldFirstChar == 'Z':
+                # 'Z' -> 'AA', 'ZZ' -> 'AAA', etc
+                return 'A' * (len(sectionName) + 1)
+
+            # regular case
+            newFirstChar: str = chr(ord(oldFirstChar) + 1)
+            return newFirstChar * len(sectionName)
+
+        def startBracket(
+            sectionName: str,
+            bracketName: str,
+            fallbackNumber: int,  # use then increment if bracketName is not str(int)
+            gm: GridMeasure,
+        ) -> int:
+            bracketNumber: int
+            try:
+                bracketNumber = int(bracketName)
+            except ValueError:
+                bracketNumber = fallbackNumber
+
+            ScoreWriter._insertSectionNameSlice(gm, f'*>{sectionName}{bracketNumber}')
+            return bracketNumber + 1
+
+        def startSection(
+            sectionName: str,
+            gm: GridMeasure
+        ) -> None:
+            ScoreWriter._insertSectionNameSlice(gm, f'*>{sectionName}')
+
+        # the suffix of a bracket's section name in a Humdrum file must be numeric
+        # if the bracket name is not numeric, just use 1, 2, 3 instead (it ain't
+        # right, but it's better than no bracket at all).
+        fallbackNumber: int = 1
+        currSectionName: str = 'A'
+        state: RepeatBracketState = RepeatBracketState.NoEndings
+
+        for m, gm in enumerate(outgrid.measures):
+            if m == 0:
+                # Since we know there are repeat brackets, we must start section A
+                # before anything, or *>A1 will not be recognized as an ending
+                # emit '*>A' (where A is currSectionName)
+                startSection(currSectionName, gm)
+
+            if state == RepeatBracketState.NoEndings and not gm.inRepeatBracket:
+                # this is almost always true: we're not currently within repeat
+                # brackets and this measure isn't in one either.  Get out quick
+                # to avoid the state machine gauntlet.
+                continue
+
+            # state machine
+            if state == RepeatBracketState.NoEndings:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # start the first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # start the first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a start/stop,
+                    # even though there was no start.
+                    # start the first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # illegal, but we will treat it like a start,
+                    # even though there was no start.
+                    # start the first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, 1, gm
+                    )
+                    state = RepeatBracketState.InBracket
+#               else:  # not gm.inRepeatBracket
+#                   # This won't happen, we already handled it before the state machine code.
+#                   state = RepeatBracketState.NoEndings
+
+            elif state == RepeatBracketState.InBracket:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a stopsRepeatBracket
+                    # say it's finished
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # illegal, but we will fake a stop to make it legal.
+                    # InBracket + stopsRepeatBracket -> FinishedBracket
+                    # FinishedBracket + startsRepeatBracket does:
+                    # start a bracket, and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # say it's finished
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # say it's still not finished
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket:
+                    # illegal, but we will fake a stop to make it legal.
+                    # InBracket + stopsRepeatBracket -> FinishedBracket
+                    # FinishedBracket + not inRepeatBracket does:
+                    # start the next section, these endings are done
+                    currSectionName = incrementName(currSectionName)
+                    startSection(currSectionName, gm)
+                    state = RepeatBracketState.NoEndings
+
+            elif state == RepeatBracketState.FinishedBracket:
+                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
+                    # start a non-first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.startsRepeatBracket:
+                    # start a non-first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                elif gm.stopsRepeatBracket:
+                    # illegal, but we will treat it like a start/stop,
+                    # even though there was no start.
+                    # start a non-first bracket and say it's finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.FinishedBracket
+                elif gm.inRepeatBracket:
+                    # illegal, but we will treat it like a start,
+                    # even though there was no start.
+                    # start a non-first bracket and say it's not finished
+                    fallbackNumber = startBracket(
+                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
+                    )
+                    state = RepeatBracketState.InBracket
+                else:  # not gm.inRepeatBracket:
+                    # start the next section, these endings are done
+                    currSectionName = incrementName(currSectionName)
+                    startSection(currSectionName, gm)
+                    state = RepeatBracketState.NoEndings
+
+    '''
+    //////////////////////////////
+    //
+    // Tool_musicxml2hum::insertPartNames --
+    '''
+    def _insertPartNames(self, outgrid: HumGrid) -> None:
+        if t.TYPE_CHECKING:
+            assert isinstance(self._scoreData, ScoreData)
+
+        hasAbbr: bool = False
+        hasName: bool = False
+
+        for partData in self._scoreData.parts:
+            if partData.partName:
+                hasName = True
+                break
+
+        for partData in self._scoreData.parts:
+            if partData.partAbbrev:
+                hasAbbr = True
+                break
+
+        if not hasAbbr and not hasName:
+            return
+
+        gm: GridMeasure
+        if not outgrid.measures:
+            gm = GridMeasure(outgrid)
+            outgrid.measures.append(gm)
+        else:
+            gm = outgrid.measures[0]
+
+        # We do abbreviation first, since addLabelAbbrToken and addLabelToken put the
+        # token as early in the measure as possible, so the order will be reversed.
+        maxStaff: int
+        s: int
+        v: int
+        if hasAbbr:
+            for p, partData in enumerate(self._scoreData.parts):
+                partAbbr: str = partData.partAbbrev
+                if not partAbbr:
+                    continue
+                abbr: str = "*I'" + partAbbr
+                maxStaff = outgrid.staffCount(p)
+                s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
+                v = 0  # voice 0
+                gm.addLabelAbbrToken(abbr, 0, p, s, v, self.staffCounts)
+
+        if hasName:
+            for p, partData in enumerate(self._scoreData.parts):
+                partName: str = partData.partName
+                if not partName:
+                    continue
+                if 'MusicXML' in partName:
+                    # ignore Finale dummy part names
+                    continue
+                if 'Part_' in partName:
+                    # ignore SharpEye dummy part names
+                    continue
+                if 'Unnamed' in partName:
+                    # ignore Sibelius dummy part names
+                    continue
+                iname: str = '*I"' + partName
+                maxStaff = outgrid.staffCount(p)
+                s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
+                v = 0  # voice 0
+                gm.addLabelToken(iname, 0, p, s, v, self.staffCounts)
 
     def tupletsSuppressed(
         self,
@@ -240,285 +810,69 @@ class HumdrumWriter:
 
         partTupletBracketsSuppressed[staffIndex] = value
 
-    def _chosenSignifierForRDFDefinition(
+    def storePendingOttavaOrPedalStops(
         self,
-        rdfDefinition: str | tuple[tuple[str, str | None], ...],
-        favoriteSignifier: str
-    ) -> str:
-        chosenSignifier: str | None = None
-        # if we've already chosen a signifier, just return that
-        chosenSignifier = self._rdfKernSignifierLookup.get(rdfDefinition, None)
-        if chosenSignifier is not None:
-            return chosenSignifier
+        stops: list[str],
+        timestamp: HumNum,
+        partIndex: int,
+        staffIndex: int,
+    ):
+        if self.pendingOttavaOrPedalStopsForPartAndStaff.get(partIndex, None) is None:
+            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex] = {}
+        if self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex].get(staffIndex, None) is None:
+            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex][staffIndex] = []
 
-        # if we can get the favorite, choose it
-        if (favoriteSignifier not in self.reservedRDFKernSignifiers
-                and favoriteSignifier not in self._assignedRDFKernSignifiers):
-            chosenSignifier = favoriteSignifier
-            self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
-            self._assignedRDFKernSignifiers += chosenSignifier
-        else:
-            # choose an unreserved, unassigned signifier
-            for ch in self._reservableRDFKernSignifiers:
-                if ch in self.reservedRDFKernSignifiers:
-                    continue
-                if ch in self._assignedRDFKernSignifiers:
-                    continue
-                chosenSignifier = ch
-                self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
-                self._assignedRDFKernSignifiers += chosenSignifier
-                break
-            else:
-                # if we couldn't find an unreserved, unassigned signifier, go ahead
-                # and choose a reserved one (but print out a warning).
-                for ch in self._reservableRDFKernSignifiers:
-                    if ch in self._assignedRDFKernSignifiers:
-                        continue
-                    chosenSignifier = ch
-                    self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
-                    self._assignedRDFKernSignifiers += chosenSignifier
-                    print('Too many reserved RDF signifiers for this score, '
-                            f'using reserved signifier \'{chosenSignifier}\' '
-                            f'for \'{rdfDefinition}\'', file=sys.stderr)
-                    break
+        for stop in stops:
+            pendingOttavaOrPedalStop = PendingOttavaOrPedalStop(stop, timestamp)
+            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex][staffIndex].append(
+                pendingOttavaOrPedalStop
+            )
 
-        if not chosenSignifier:
-            # shouldn't ever happen
-            raise HumdrumInternalError('Ran out of RDF signifier chars')
-
-        return chosenSignifier
-
-    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
-        humdrumStyle: str = self._m21EditorialStyleToHumdrumEditorialStyle.get(editorialStyle, '')
-        if not humdrumStyle:
-            print(f'Unrecognized music21 editorial accidental style \'{editorialStyle}\': '
-                    'treating as parentheses.',
-                    file=sys.stderr)
-            humdrumStyle = 'paren'
-
-        rdfDefinition: str = self._humdrumEditorialStyleToRDFDefinitionString[humdrumStyle]
-        favoriteSignifier: str = self._humdrumEditorialStyleToFavoriteSignifier[humdrumStyle]
-        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
-
-    def reportCaesuraToOwner(self) -> str:
-        rdfDefinition: str = 'caesura'
-        favoriteSignifier: str = 'Z'
-        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
-
-    def reportCueSizeToOwner(self) -> str:
-        rdfDefinition: str = 'cue size'
-        favoriteSignifier: str = '!'
-        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
-
-    def reportNoteColorToOwner(self, color: str) -> str:
-        # 'marked note, color=hotpink'
-        rdfDefinition: tuple[tuple[str, str | None], ...] = (
-            ('marked note', None),
-            ('color', color),
+    def popPendingOttavaOrPedalStopsAtTime(
+        self,
+        partIndex: int,
+        staffIndex: int,
+        timestamp: HumNum
+    ) -> list[str]:
+        output: list[str] = []
+        stopsForPart: dict[int, list[PendingOttavaOrPedalStop]] | None = (
+            self.pendingOttavaOrPedalStopsForPartAndStaff.get(partIndex, None)
         )
-        favoriteSignifier: str = 'i'
-        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+        if not stopsForPart:
+            return output
 
-    def reportLinkedSlurToOwner(self) -> str:
-        rdfDefinition: str = 'linked'
-        favoriteSignifier: str = 'N'
-        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+        stopsForStaff: list[PendingOttavaOrPedalStop] | None = stopsForPart.get(staffIndex, None)
+        if not stopsForStaff:
+            return output
 
-    @property
-    def reservedRDFKernSignifiers(self) -> str:
-        return self._reservedRDFKernSignifiers
+        removeList: list[PendingOttavaOrPedalStop] = []
+        for stop in stopsForStaff:
+            if stop.timestamp == timestamp:
+                output.append(stop.tokenString)
+                removeList.append(stop)
 
-    @reservedRDFKernSignifiers.setter
-    def reservedRDFKernSignifiers(self, newReservedRDFKernSignifiers: str) -> None:
-        if newReservedRDFKernSignifiers is None:
-            self._reservedRDFKernSignifiers = ''
+        for removeThis in removeList:
+            stopsForStaff.remove(removeThis)
+
+        return output
+
+    def _finishLastPendingOttavaOrPedalStops(self, outgrid: HumGrid):
+        if not outgrid.measures:
             return
 
-        if not isinstance(newReservedRDFKernSignifiers, str):
-            raise TypeError('reservedRDFKernSignifiers must be of type str')
+        outgm: GridMeasure = outgrid.measures[-1]
 
-        badSignifiers: str = ''
-        for ch in newReservedRDFKernSignifiers:
-            if ch not in self._reservableRDFKernSignifiers:
-                badSignifiers += ch
-
-        if badSignifiers:
-            raise ValueError(
-                f'The following signifier chars are not reservable: \'{badSignifiers}\'.\n'
-                + f'Reservable signifier chars are \'{self._reservableRDFKernSignifiers}\''
-            )
-
-        self._reservedRDFKernSignifiers = newReservedRDFKernSignifiers
-
-    def write(self, fp) -> bool:
-        # First: HumdrumWriter.write likes to modify the input stream (e.g. transposing to
-        # concert pitch, fixing durations, etc), so we need to make a copy of the input
-        # stream before we start.
-        if isinstance(self._m21Object, m21.stream.Stream):
-            # before deepcopying, fix up any complex hidden rests (so the input score can be
-            # visualized).  This should have been done by whoever created the input score,
-            # but let's at least fix it up now.
-            M21Utilities.fixupComplexHiddenRests(self._m21Object, inPlace=True)
-            self._m21Object = self._m21Object.coreCopyAsDerivation('HumdrumWriter.write')
-
-        # Second: turn the object into a well-formed Score (someone might have passed in a single
-        # note, for example).  This code is swiped from music21 v7's musicxml exporter.  The hope
-        # is that someday it will become an API in music21 that every exporter can call.
-        if self.makeNotation:
-            self._m21Score = M21Utilities.makeScoreFromObject(self._m21Object)
-        else:
-            if not isinstance(self._m21Object, m21.stream.Score):
-                raise HumdrumExportError(
-                    'Since makeNotation=False, source obj must be a music21 Score, and it is not.'
-                )
-            if not self._m21Object.isWellFormedNotation():
-                print('Source obj is not well-formed; see isWellFormedNotation()', file=sys.stderr)
-            self._m21Score = self._m21Object
-        del self._m21Object  # everything after this uses self._m21Score
-
-        # Third: deal with various duration problems (we see this e.g. after import of a
-        # Photoscore-generated MusicXML file)
-        M21Utilities.fixupBadDurations(self._m21Score, inPlace=True)
-
-        # score.spannerBundle is an expensive operation (recurses through the whole score),
-        # so stash the result somewhere, rather than calling it again and again.
-        self.spannerBundle = self._m21Score.spannerBundle
-
-        # set up _firstTempoLayout ('!!LO:TX:omd:t=something') for use when emitting
-        # the first time signature (might have no text if there is none).
-        parts: tuple[m21.stream.Part, ...] = tuple(self._m21Score.parts)
-        if parts:
-            topmostPart: m21.stream.Part = parts[0]
-            startingTempos: list[m21.tempo.TempoIndication] = list(
-                topmostPart[m21.tempo.TempoIndication].getElementsByOffsetInHierarchy(0.)
-            )
-            if startingTempos:
-                startingTempo: m21.tempo.TempoIndication = startingTempos[0]
-                mmTokenStr: str = ''  # e.g. '*MM128'
-                tempoText: str = ''  # e.g. '[eighth]=82','Andantino [eighth]=82'
-                mmTokenStr, tempoText = (
-                    M21Convert.getMMTokenAndTempoTextFromM21TempoIndication(startingTempo)
-                )
-                self._firstTempoLayout = '!!LO:TX:omd:t=' + tempoText
-                self._firstMMTokenStr = mmTokenStr
-                startingTempo.humdrum_tempo_already_handled = True  # type: ignore
-                M21Utilities.extendCustomM21Attributes(
-                    self.customM21AttrsToDelete,
-                    startingTempo,
-                    ['humdrum_tempo_already_handled']
-                )
-            else:
-                self._firstTempoLayout = '!!LO:TX:omd:t='
-
-        # The rest is based on Tool_musicxml2hum::convert(ostream& out, xml_document& doc)
-        # 1. convert self._m21Score to HumGrid
-        # 2. convert HumGrid to HumdrumFile
-        # 3. write HumdrumFile to fp
-
-        # Tool_musicxml2hum::convert loops over the parts, doing prepareVoiceMapping
-        # on each one, then calls reindexVoices.
-
-        status: bool = True
-        outgrid: HumGrid = HumGrid()
-
-        status = status and self._stitchParts(outgrid, self._m21Score)
-        if not status:
-            return status
-
-        if self._scoreData is None:
-            raise HumdrumInternalError('stitchParts failed, but returned True')
-
-#         outgrid.removeRedundantClefChanges() # don't do this; not our business
-#         outgrid.removeSibeliusIncipit()
-
-        # transfer verse counts from staves to HumGrid:
-        for p, partData in enumerate(self._scoreData.parts):
-            for s, staffData in enumerate(partData.staves):
-                verseCount: int = staffData.verseCount
-                outgrid.setVerseCount(p, s, verseCount)
-
-        # transfer harmony counts from parts to HumGrid:
-        for p, partData in enumerate(self._scoreData.parts):
-            if partData.hasHarmony:
-                outgrid.setHarmonyPresent(p)
-
-        # transfer dynamics boolean for part to HumGrid
-        for p, partData in enumerate(self._scoreData.parts):
-            if partData.hasDynamics:
-                outgrid.setDynamicsPresent(p)
-
-        # transfer figured bass boolean for part to HumGrid
-#       for (int p=0; p<(int)partdata.size(); p++) {
-#           bool fbstate = partdata[p].hasFiguredBass();
-#           if (fbstate) {
-#           outdata.setFiguredBassPresent(p);
-#           break;
-#           }
-#       }
-
-        if self.addRecipSpine or self._forceRecipSpine:
-            outgrid.enableRecipSpine()
-
-        # print(f'outgrid={outgrid}', file=sys.stderr)
-
-        outfile: HumdrumFile = HumdrumFile()
-        outgrid.transferTokens(outfile)
-
-        self._addHeaderRecords(outfile)
-        self._addFooterRecords(outfile)
-        # self._addMeasureOneNumber(outfile)
-
-        for hline in outfile.lines():
-            hline.createLineFromTokens()
-
-#         chord.run(outfile) # makes sure each note in the chord has the right stuff on it?
-
-        # client can disable tremolo expansion by setting self.expandTremolos to False
-        if self._hasTremolo and self.expandTremolos:
-            # tremolos have been inserted as single tokens (or token pairs) that describe
-            # the tremolo (e.g. with '@@16@@' or '@32@').  This needs to be expanded into
-            # all the actual notes in the tremolo, surrounded by *tremolo/*Xtremolo to tell
-            # parsers to look for spelled-out tremolos here.
-            tremolo = ToolTremolo(outfile)
-            tremolo.processFile()
-
-        # TODO: Here's where we would do the Humdrum-land transpositions (if necessary)
-        # TODO: ... the trick is that we need to know exactly which parts/staves to
-        # TODO: ... translate, and only the music21 Score knows that. So this can't be
-        # TODO: ... a HumdrumFile or HumdrumFileUtilities function, it has to be here.
-        # TODO: ... Or it can be in HumdrumFile{Utilities}, but it needs to take instructions
-        # TODO: ... about which parts/staves to translate (which we would compute here).
-        # if self._hasTranspositions:
-        #     self.transposeToConcertPitch(outfile)
-
-        self._printResult(fp, outfile)
-
-        self.deannotateScore()
-
-        return status
-
-    def deannotateScore(self):
-        for obj, customAttrs in self.customM21AttrsToDelete.items():
-            for customAttr in customAttrs:
-                if hasattr(obj, customAttr):
-                    delattr(obj, customAttr)
-
-        # all done, let go of these references to music21 objects.
-        self.customM21AttrsToDelete = {}
-
-    '''
-    //////////////////////////////
-    //
-    // Tool_musicxml2hum::printResult -- filter out
-    //      some item if not necessary:
-    //
-    // MuseScore calls everything "Piano" by default, so suppress
-    // this instrument name if there is only one **kern spine in
-    // the file.
-    '''
-    @staticmethod
-    def _printResult(fp, outfile: HumdrumFile) -> None:
-        outfile.write(fp)
+        # iterate over all the pending stops
+        for pindex in self.pendingOttavaOrPedalStopsForPartAndStaff:
+            for sindex in self.pendingOttavaOrPedalStopsForPartAndStaff[pindex]:
+                for pended in self.pendingOttavaOrPedalStopsForPartAndStaff[pindex][sindex]:
+                    # timestamp doesn't matter, it's last call
+                    outgm.addOttavaOrPedalTokensBefore(
+                        [pended.tokenString],
+                        None,
+                        pindex,
+                        sindex
+                    )
 
     '''
     //////////////////////////////
@@ -911,7 +1265,7 @@ class HumdrumWriter:
                 staffNums.append(staffNum)
 
             # 2. now the subgroup (adds more text to output)
-            output, newStaffNums = HumdrumWriter._appendRecursiveDecoString(output, subgroup)
+            output, newStaffNums = ScoreWriter._appendRecursiveDecoString(output, subgroup)
             staffNumsProcessed: set[int] = set(newStaffNums)  # for speed of "in" checking
             staffNumsToProcess = set(num for num in staffNumsToProcess
                                             if num not in staffNumsProcessed)
@@ -940,48 +1294,6 @@ class HumdrumWriter:
                 output[staffData.m21PartStaff] = staffNumber
         return output
 
-    '''
-    //////////////////////////////
-    //
-    // Tool_musicxml2hum::stitchParts -- Merge individual parts into a
-    //     single score sequence.
-    '''
-    def _stitchParts(self, outgrid: HumGrid, score: m21.stream.Score) -> bool:
-        # First, count parts (and each part's measures)
-        partCount: int = len(score.parts)
-        if partCount == 0:
-            return False
-
-        err: str = M21Utilities.reportUnwritableScore(
-            score,
-            checkMeasureCounts=True,
-            checkMeasureOffsets=True
-        )
-        if err:
-            raise HumdrumExportError(err)
-
-        self._scoreData = ScoreData(score, self)
-
-        self.staffCounts = self._scoreData.getStaffCounts()
-        # The measure counts are equal across all Parts
-        # (reportUnwritableScore checked that fact)
-        firstPart: m21.stream.Part | None = score.parts.first()
-        if t.TYPE_CHECKING:
-            assert firstPart is not None
-        measureCount = len(firstPart.getElementsByClass(m21.stream.Measure))
-
-        # Now insert each measure into the HumGrid across those parts/staves
-        status: bool = True
-        for m in range(0, measureCount):
-            status = status and self._insertMeasure(outgrid, m)
-
-        self._finishLastPendingOttavaOrPedalStops(outgrid)
-        self._moveBreaksToEndOfPreviousMeasure(outgrid)
-        self._insertRepeatBracketSlices(outgrid)
-        self._insertPartNames(outgrid)
-
-        return status
-
     @staticmethod
     def _fillAllVoicesInSlice(gridSlice: GridSlice, string: str) -> None:
         durationZero: HumNum = opFrac(0)
@@ -990,7 +1302,7 @@ class HumdrumWriter:
             for staff in part.staves:
                 if staff is None:
                     raise HumdrumInternalError(
-                        'staff is None in HumdrumWriter._fillAllVoicesInSlice'
+                        'staff is None in ScoreWriter._fillAllVoicesInSlice'
                     )
 
                 voiceCount: int = len(staff.voices)
@@ -1006,7 +1318,7 @@ class HumdrumWriter:
                         gv.token = HumdrumToken(string)
                     else:
                         raise HumdrumInternalError(
-                            'gv.token is not None in HumdrumWriter._fillAllVoicesInSlice'
+                            'gv.token is not None in ScoreWriter._fillAllVoicesInSlice'
                         )
 
     @staticmethod
@@ -1023,428 +1335,8 @@ class HumdrumWriter:
         )
 
         sectionNameSlice.initializeBySlice(firstDataSlice)
-        HumdrumWriter._fillAllVoicesInSlice(sectionNameSlice, string)
+        ScoreWriter._fillAllVoicesInSlice(sectionNameSlice, string)
         outgm.slices.insert(firstDataIdx, sectionNameSlice)
-
-    @staticmethod
-    def _insertRepeatBracketSlices(outgrid: HumGrid) -> None:
-        if not outgrid.hasRepeatBrackets:
-            return
-
-        def incrementName(sectionName: str) -> str:
-            # 'A' ... 'Z', 'AA' ... 'ZZ', 'AAA' .. 'ZZZ', etc
-            if not sectionName or sectionName[0] not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
-                raise HumdrumInternalError('invalid section name generated')
-
-            oldFirstChar: str = sectionName[0]
-            for c in sectionName[1:]:
-                if c != oldFirstChar:
-                    raise HumdrumInternalError('invalid section name generated')
-
-            # wraparound case
-            if oldFirstChar == 'Z':
-                # 'Z' -> 'AA', 'ZZ' -> 'AAA', etc
-                return 'A' * (len(sectionName) + 1)
-
-            # regular case
-            newFirstChar: str = chr(ord(oldFirstChar) + 1)
-            return newFirstChar * len(sectionName)
-
-        def startBracket(
-            sectionName: str,
-            bracketName: str,
-            fallbackNumber: int,  # use then increment if bracketName is not str(int)
-            gm: GridMeasure,
-        ) -> int:
-            bracketNumber: int
-            try:
-                bracketNumber = int(bracketName)
-            except ValueError:
-                bracketNumber = fallbackNumber
-
-            HumdrumWriter._insertSectionNameSlice(gm, f'*>{sectionName}{bracketNumber}')
-            return bracketNumber + 1
-
-        def startSection(
-            sectionName: str,
-            gm: GridMeasure
-        ) -> None:
-            HumdrumWriter._insertSectionNameSlice(gm, f'*>{sectionName}')
-
-        # the suffix of a bracket's section name in a Humdrum file must be numeric
-        # if the bracket name is not numeric, just use 1, 2, 3 instead (it ain't
-        # right, but it's better than no bracket at all).
-        fallbackNumber: int = 1
-        currSectionName: str = 'A'
-        state: RepeatBracketState = RepeatBracketState.NoEndings
-
-        for m, gm in enumerate(outgrid.measures):
-            if m == 0:
-                # Since we know there are repeat brackets, we must start section A
-                # before anything, or *>A1 will not be recognized as an ending
-                # emit '*>A' (where A is currSectionName)
-                startSection(currSectionName, gm)
-
-            if state == RepeatBracketState.NoEndings and not gm.inRepeatBracket:
-                # this is almost always true: we're not currently within repeat
-                # brackets and this measure isn't in one either.  Get out quick
-                # to avoid the state machine gauntlet.
-                continue
-
-            # state machine
-            if state == RepeatBracketState.NoEndings:
-                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
-                    # start the first bracket and say it's finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, 1, gm
-                    )
-                    state = RepeatBracketState.FinishedBracket
-                elif gm.startsRepeatBracket:
-                    # start the first bracket and say it's not finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, 1, gm
-                    )
-                    state = RepeatBracketState.InBracket
-                elif gm.stopsRepeatBracket:
-                    # illegal, but we will treat it like a start/stop,
-                    # even though there was no start.
-                    # start the first bracket and say it's finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, 1, gm
-                    )
-                    state = RepeatBracketState.FinishedBracket
-                elif gm.inRepeatBracket:
-                    # illegal, but we will treat it like a start,
-                    # even though there was no start.
-                    # start the first bracket and say it's not finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, 1, gm
-                    )
-                    state = RepeatBracketState.InBracket
-#               else:  # not gm.inRepeatBracket
-#                   # This won't happen, we already handled it before the state machine code.
-#                   state = RepeatBracketState.NoEndings
-
-            elif state == RepeatBracketState.InBracket:
-                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
-                    # illegal, but we will treat it like a stopsRepeatBracket
-                    # say it's finished
-                    state = RepeatBracketState.FinishedBracket
-                elif gm.startsRepeatBracket:
-                    # illegal, but we will fake a stop to make it legal.
-                    # InBracket + stopsRepeatBracket -> FinishedBracket
-                    # FinishedBracket + startsRepeatBracket does:
-                    # start a bracket, and say it's not finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
-                    )
-                    state = RepeatBracketState.InBracket
-                elif gm.stopsRepeatBracket:
-                    # say it's finished
-                    state = RepeatBracketState.FinishedBracket
-                elif gm.inRepeatBracket:
-                    # say it's still not finished
-                    state = RepeatBracketState.InBracket
-                else:  # not gm.inRepeatBracket:
-                    # illegal, but we will fake a stop to make it legal.
-                    # InBracket + stopsRepeatBracket -> FinishedBracket
-                    # FinishedBracket + not inRepeatBracket does:
-                    # start the next section, these endings are done
-                    currSectionName = incrementName(currSectionName)
-                    startSection(currSectionName, gm)
-                    state = RepeatBracketState.NoEndings
-
-            elif state == RepeatBracketState.FinishedBracket:
-                if gm.startsRepeatBracket and gm.stopsRepeatBracket:
-                    # start a non-first bracket and say it's finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
-                    )
-                    state = RepeatBracketState.FinishedBracket
-                elif gm.startsRepeatBracket:
-                    # start a non-first bracket and say it's not finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
-                    )
-                    state = RepeatBracketState.InBracket
-                elif gm.stopsRepeatBracket:
-                    # illegal, but we will treat it like a start/stop,
-                    # even though there was no start.
-                    # start a non-first bracket and say it's finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
-                    )
-                    state = RepeatBracketState.FinishedBracket
-                elif gm.inRepeatBracket:
-                    # illegal, but we will treat it like a start,
-                    # even though there was no start.
-                    # start a non-first bracket and say it's not finished
-                    fallbackNumber = startBracket(
-                        currSectionName, gm.repeatBracketName, fallbackNumber, gm
-                    )
-                    state = RepeatBracketState.InBracket
-                else:  # not gm.inRepeatBracket:
-                    # start the next section, these endings are done
-                    currSectionName = incrementName(currSectionName)
-                    startSection(currSectionName, gm)
-                    state = RepeatBracketState.NoEndings
-
-    '''
-    //////////////////////////////
-    //
-    // moveBreaksToEndOfPreviousMeasure --
-    '''
-    @staticmethod
-    def _moveBreaksToEndOfPreviousMeasure(outgrid: HumGrid) -> None:
-        for m in range(1, len(outgrid.measures)):
-            gm: GridMeasure = outgrid.measures[m]
-            gmlast: GridMeasure = outgrid.measures[m - 1]
-            if gm is None or gmlast is None:
-                continue
-
-            if not gm.slices:
-                # empty measure
-                return
-
-            startTime: HumNum = gm.slices[0].timestamp
-            for sliceIdx, gridSlice in enumerate(gm.slices):
-                time2: HumNum = gridSlice.timestamp
-                if time2 > startTime:
-                    break
-
-                if not gridSlice.isGlobalComment:
-                    continue
-
-                voice0: GridVoice | None = gridSlice.parts[0].staves[0].voices[0]
-                if voice0 is None:
-                    continue
-                token: HumdrumToken | None = voice0.token
-                if token is None:
-                    continue
-
-                if token.text in ('!!LO:LB:g=z', '!!LO:PB:g=z'):
-                    gmlast.slices.append(gridSlice)
-                    gm.slices.pop(sliceIdx)
-                    # there can be only one break, so quit the slice loop now.
-                    break
-
-    '''
-    //////////////////////////////
-    //
-    // Tool_musicxml2hum::insertPartNames --
-    '''
-    def _insertPartNames(self, outgrid: HumGrid) -> None:
-        if t.TYPE_CHECKING:
-            assert isinstance(self._scoreData, ScoreData)
-
-        hasAbbr: bool = False
-        hasName: bool = False
-
-        for partData in self._scoreData.parts:
-            if partData.partName:
-                hasName = True
-                break
-
-        for partData in self._scoreData.parts:
-            if partData.partAbbrev:
-                hasAbbr = True
-                break
-
-        if not hasAbbr and not hasName:
-            return
-
-        gm: GridMeasure
-        if not outgrid.measures:
-            gm = GridMeasure(outgrid)
-            outgrid.measures.append(gm)
-        else:
-            gm = outgrid.measures[0]
-
-        # We do abbreviation first, since addLabelAbbrToken and addLabelToken put the
-        # token as early in the measure as possible, so the order will be reversed.
-        maxStaff: int
-        s: int
-        v: int
-        if hasAbbr:
-            for p, partData in enumerate(self._scoreData.parts):
-                partAbbr: str = partData.partAbbrev
-                if not partAbbr:
-                    continue
-                abbr: str = "*I'" + partAbbr
-                maxStaff = outgrid.staffCount(p)
-                s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
-                v = 0  # voice 0
-                gm.addLabelAbbrToken(abbr, 0, p, s, v, self.staffCounts)
-
-        if hasName:
-            for p, partData in enumerate(self._scoreData.parts):
-                partName: str = partData.partName
-                if not partName:
-                    continue
-                if 'MusicXML' in partName:
-                    # ignore Finale dummy part names
-                    continue
-                if 'Part_' in partName:
-                    # ignore SharpEye dummy part names
-                    continue
-                if 'Unnamed' in partName:
-                    # ignore Sibelius dummy part names
-                    continue
-                iname: str = '*I"' + partName
-                maxStaff = outgrid.staffCount(p)
-                s = maxStaff - 1  # put it in last staff (which is first on the Humdrum line)
-                v = 0  # voice 0
-                gm.addLabelToken(iname, 0, p, s, v, self.staffCounts)
-
-    '''
-    //////////////////////////////
-    //
-    // Tool_musicxml2hum::insertMeasure --
-    '''
-    def _insertMeasure(self, outgrid: HumGrid, mIndex: int) -> bool:
-        if t.TYPE_CHECKING:
-            assert isinstance(self._scoreData, ScoreData)
-
-        gm: GridMeasure = outgrid.appendMeasure()
-
-        measureDatas: list[MeasureData] = []
-        sevents: list[list[SimultaneousEvents]] = []
-
-        for p, part in enumerate(self._scoreData.parts):
-            for s, staff in enumerate(part.staves):
-                xmeasure: MeasureData = staff.measures[mIndex]
-                measureDatas.append(xmeasure)
-                if p == 0 and s == 0:
-                    gm.duration = xmeasure.duration
-                    gm.timestamp = xmeasure.startTime
-                    gm.timeSigDur = xmeasure.timeSigDur
-                # self._checkForDummyRests(xmeasure) # handled in MeasureData
-                sevents.append(xmeasure.sortedEvents)
-                if p == 0 and s == 0:
-                    # only checking number of first barline
-                    gm.measureNumberString = xmeasure.measureNumberString  # might be '124a'
-
-                # styles, on the other hand, need to be checked in every staff
-                gm.leftBarlineStylePerStaff.append(xmeasure.leftBarlineStyle)
-                gm.rightBarlineStylePerStaff.append(xmeasure.rightBarlineStyle)
-                gm.measureStylePerStaff.append(xmeasure.measureStyle)
-                gm.fermataStylePerStaff.append(xmeasure.fermataStyle)
-                gm.rightBarlineFermataStylePerStaff.append(xmeasure.rightBarlineFermataStyle)
-
-                # repeat brackets
-                gm.inRepeatBracket = xmeasure.inRepeatBracket
-                gm.startsRepeatBracket = xmeasure.startsRepeatBracket
-                gm.stopsRepeatBracket = xmeasure.stopsRepeatBracket
-                gm.repeatBracketName = xmeasure.repeatBracketName
-                if gm.inRepeatBracket:
-                    outgrid.hasRepeatBrackets = True
-
-        curTime: list[HumNum] = [opFrac(-1)] * len(measureDatas)
-        measureDurs: list[HumNum | None] = [None] * len(measureDatas)
-        curIndex: list[int] = [0] * len(measureDatas)
-        nextTime: HumNum = opFrac(-1)
-
-        tsDur: HumNum = opFrac(-1)
-        for ps, mdata in enumerate(measureDatas):
-            events: list[EventData] = mdata.events
-            # Keep track of hairpin endings that should be attached
-            # the the previous note (and doubling the ending marker
-            # to indicate that the timestamp of the ending is at the
-            # end rather than the start of the note.
-            #   I think this is a no-op for music21 input. --gregc
-
-            if self.VoiceDebug:
-                for event in events:
-                    print('!!ELEMENT: ', end='', file=sys.stderr)
-                    print(f'\tTIME:  {event.startTime}', end='', file=sys.stderr)
-                    print(f'\tSTi:   {event.staffIndex}', end='', file=sys.stderr)
-                    print(f'\tVi:    {event.voiceIndex}', end='', file=sys.stderr)
-                    print(f'\tDUR:   {event.duration}', end='', file=sys.stderr)
-                    print(f'\tTOKEN: {event.kernTokenString()}',
-                                end='', file=sys.stderr)
-                    print(f'\tNAME:  {event.name}', end='', file=sys.stderr)
-                    print('', file=sys.stderr)  # line feed (one line per event)
-                print('======================================', file=sys.stderr)
-
-            if sevents[ps]:
-                curTime[ps] = sevents[ps][curIndex[ps]].startTime
-            else:
-                curTime[ps] = tsDur
-            if nextTime < 0:
-                nextTime = curTime[ps]
-            elif curTime[ps] < nextTime:
-                nextTime = curTime[ps]
-
-            measureDurs[ps] = mdata.duration
-        # end of loop over parts' staves' measures at measure # mIndex
-
-        allEnd: bool = False
-        nowEvents: list[SimultaneousEvents] = []
-#         nowPartStaves: list[int] = []
-        status: bool = True
-
-        # Q: I believe the following loop is trying to process nowEvents for each "now" in
-        # Q: ... time order.  But it doesn't actually get time order right, so instead I
-        # Q: ... made sure that any MeasureData's sortedEvents are actually sorted by time
-        # Q: ... instead of just binned by time (with the bins not necessarily in order).
-        # Q: ... I did this by using a sorted list (with no duplicates) instead of a set
-        # Q: ... in MeasureData._sortEvents().
-        # Q: ... Things come out here in time order now, but I'm still confused by this loop,
-        # Q: ... so I don't dare simplify it yet (by assuming that sortedEvents are in order).
-        processTime: HumNum = nextTime
-        while not allEnd:
-            nowEvents = []
-#             nowPartStaves = []
-            allEnd = True
-            processTime = nextTime
-            nextTime = opFrac(-1)
-            for ps in reversed(range(0, len(measureDatas))):
-                if curIndex[ps] >= len(sevents[ps]):
-                    continue
-
-                if sevents[ps][curIndex[ps]].startTime == processTime:
-                    thing: SimultaneousEvents = sevents[ps][curIndex[ps]]
-                    nowEvents.append(thing)
-#                     nowPartStaves.append(ps)
-                    curIndex[ps] += 1
-
-                if curIndex[ps] < len(sevents[ps]):
-                    allEnd = False
-                    if nextTime < 0 or sevents[ps][curIndex[ps]].startTime < nextTime:
-                        nextTime = sevents[ps][curIndex[ps]].startTime
-            # end reversed loop over parts
-            status = status and self._convertNowEvents(gm, nowEvents, processTime)
-        # end loop over slices (i.e. events in the measure across all partstaves)
-
-        if self._currentDynamics:
-            self._addUnassociatedDynamics(gm, self._currentDynamics)
-            self._currentDynamics = []
-
-        if self._currentTexts:
-            self._addUnassociatedTexts(gm, self._currentTexts)
-            self._currentTexts = []
-
-        if self._currentRehearsalMarks:
-            self._addUnassociatedRehearsalMarks(gm, self._currentRehearsalMarks)
-            self._currentRehearsalMarks = []
-
-        if self._currentOttavasOrPedalMarks:
-            self._addUnassociatedOttavasOrPedalMarks(gm, self._currentOttavasOrPedalMarks)
-            self._currentOttavasOrPedalMarks = []
-
-        if self._currentPedalTransitions:
-            self._addUnassociatedPedalTransitions(gm, self._currentPedalTransitions)
-            self._currentPedalTransitions = []
-
-        if self._currentTempos:
-            self._addUnassociatedTempos(gm, self._currentTempos)
-            self._currentTempos = []
-
-        if self._currentHarmonies:
-            self._addUnassociatedHarmonies(gm, self._currentHarmonies)
-            self._currentHarmonies = []
-
-        return status
 
     '''
     //////////////////////////////
@@ -1631,17 +1523,17 @@ class HumdrumWriter:
 
         if hasTimeSig:
             # first tempo layout goes before first timesig line
-            if self._firstTempoLayout and nowTime == 0.:
-                outgm.appendGlobalLayout(self._firstTempoLayout, nowTime)
+            if self.firstTempoLayout and nowTime == 0.:
+                outgm.appendGlobalLayout(self.firstTempoLayout, nowTime)
                 # appendGlobalLayout only needs to happen once
-                self._firstTempoLayout = ''
+                self.firstTempoLayout = ''
 
             self._addTimeSigLine(outgm, timeSigs, nowTime, hasMeterSig)
 
             # first *MMnnn goes after first timesig line
-            if self._firstMMTokenStr and nowTime == 0.:
-                self._addTempoTokenLine(outgm, self._firstMMTokenStr, nowTime)
-                self._firstMMTokenStr = ''
+            if self.firstMMTokenStr and nowTime == 0.:
+                self._addTempoTokenLine(outgm, self.firstMMTokenStr, nowTime)
+                self.firstMMTokenStr = ''
 
         self._addGraceLines(outgm, graceAfter, nowTime)
     # pylint: enable=no-member
@@ -2132,71 +2024,6 @@ class HumdrumWriter:
             for event in events:
                 self._addEvent(outSlice, outgm, event, nowTime)
 
-    def storePendingOttavaOrPedalStops(
-        self,
-        stops: list[str],
-        timestamp: HumNum,
-        partIndex: int,
-        staffIndex: int,
-    ):
-        if self.pendingOttavaOrPedalStopsForPartAndStaff.get(partIndex, None) is None:
-            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex] = {}
-        if self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex].get(staffIndex, None) is None:
-            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex][staffIndex] = []
-
-        for stop in stops:
-            pendingOttavaOrPedalStop = PendingOttavaOrPedalStop(stop, timestamp)
-            self.pendingOttavaOrPedalStopsForPartAndStaff[partIndex][staffIndex].append(
-                pendingOttavaOrPedalStop
-            )
-
-    def popPendingOttavaOrPedalStopsAtTime(
-        self,
-        partIndex: int,
-        staffIndex: int,
-        timestamp: HumNum
-    ) -> list[str]:
-        output: list[str] = []
-        stopsForPart: dict[int, list[PendingOttavaOrPedalStop]] | None = (
-            self.pendingOttavaOrPedalStopsForPartAndStaff.get(partIndex, None)
-        )
-        if not stopsForPart:
-            return output
-
-        stopsForStaff: list[PendingOttavaOrPedalStop] | None = stopsForPart.get(staffIndex, None)
-        if not stopsForStaff:
-            return output
-
-        removeList: list[PendingOttavaOrPedalStop] = []
-        for stop in stopsForStaff:
-            if stop.timestamp == timestamp:
-                output.append(stop.tokenString)
-                removeList.append(stop)
-
-        for removeThis in removeList:
-            stopsForStaff.remove(removeThis)
-
-        return output
-
-    def _finishLastPendingOttavaOrPedalStops(self, outgrid: HumGrid):
-        if not outgrid.measures:
-            return
-
-        outgm: GridMeasure = outgrid.measures[-1]
-
-        # iterate over all the pending stops
-        for pindex in self.pendingOttavaOrPedalStopsForPartAndStaff:
-            for sindex in self.pendingOttavaOrPedalStopsForPartAndStaff[pindex]:
-                for pended in self.pendingOttavaOrPedalStopsForPartAndStaff[pindex][sindex]:
-                    # timestamp doesn't matter, it's last call
-                    outgm.addOttavaOrPedalTokensBefore(
-                        [pended.tokenString],
-                        None,
-                        pindex,
-                        sindex
-                    )
-
-
     '''
     //////////////////////////////
     //
@@ -2235,7 +2062,7 @@ class HumdrumWriter:
         if '@' in tokenString:
             self._hasTremolo = True
 
-        if self.Debug:
+        if HumdrumWriter.Debug:
             print(f'!!TOKEN: {tokenString}', end='\t', file=sys.stderr)
             print(f'TS: {event.startTime}', end='\t', file=sys.stderr)
             print(f'DUR: {event.duration}', end='\t', file=sys.stderr)
@@ -3319,3 +3146,201 @@ class HumdrumWriter:
         # removed).  join() will rejoin those words with a single space
         # (specified here as ' ') between them.
         return ' '.join(text.split())
+
+    def _chosenSignifierForRDFDefinition(
+        self,
+        rdfDefinition: str | tuple[tuple[str, str | None], ...],
+        favoriteSignifier: str
+    ) -> str:
+        chosenSignifier: str | None = None
+        # if we've already chosen a signifier, just return that
+        chosenSignifier = self._rdfKernSignifierLookup.get(rdfDefinition, None)
+        if chosenSignifier is not None:
+            return chosenSignifier
+
+        # if we can get the favorite, choose it
+        if (favoriteSignifier not in self.reservedRDFKernSignifiers
+                and favoriteSignifier not in self._assignedRDFKernSignifiers):
+            chosenSignifier = favoriteSignifier
+            self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
+            self._assignedRDFKernSignifiers += chosenSignifier
+        else:
+            # choose an unreserved, unassigned signifier
+            for ch in HumdrumWriter._reservableRDFKernSignifiers:
+                if ch in self.reservedRDFKernSignifiers:
+                    continue
+                if ch in self._assignedRDFKernSignifiers:
+                    continue
+                chosenSignifier = ch
+                self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
+                self._assignedRDFKernSignifiers += chosenSignifier
+                break
+            else:
+                # if we couldn't find an unreserved, unassigned signifier, go ahead
+                # and choose a reserved one (but print out a warning).
+                for ch in HumdrumWriter._reservableRDFKernSignifiers:
+                    if ch in self._assignedRDFKernSignifiers:
+                        continue
+                    chosenSignifier = ch
+                    self._rdfKernSignifierLookup[rdfDefinition] = chosenSignifier
+                    self._assignedRDFKernSignifiers += chosenSignifier
+                    print('Too many reserved RDF signifiers for this score, '
+                            f'using reserved signifier \'{chosenSignifier}\' '
+                            f'for \'{rdfDefinition}\'', file=sys.stderr)
+                    break
+
+        if not chosenSignifier:
+            # shouldn't ever happen
+            raise HumdrumInternalError('Ran out of RDF signifier chars')
+
+        return chosenSignifier
+
+    def reportEditorialAccidentalToOwner(self, editorialStyle: str) -> str:
+        humdrumStyle: str = HumdrumWriter._m21EditorialStyleToHumdrumEditorialStyle.get(
+            editorialStyle, ''
+        )
+        if not humdrumStyle:
+            print(f'Unrecognized music21 editorial accidental style \'{editorialStyle}\': '
+                    'treating as parentheses.',
+                    file=sys.stderr)
+            humdrumStyle = 'paren'
+
+        rdfDefinition: str = HumdrumWriter._humdrumEditorialStyleToRDFDefinitionString[
+            humdrumStyle
+        ]
+        favoriteSignifier: str = HumdrumWriter._humdrumEditorialStyleToFavoriteSignifier[
+            humdrumStyle
+        ]
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+    def reportCaesuraToOwner(self) -> str:
+        rdfDefinition: str = 'caesura'
+        favoriteSignifier: str = 'Z'
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+    def reportCueSizeToOwner(self) -> str:
+        rdfDefinition: str = 'cue size'
+        favoriteSignifier: str = '!'
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+    def reportNoteColorToOwner(self, color: str) -> str:
+        # 'marked note, color=hotpink'
+        rdfDefinition: tuple[tuple[str, str | None], ...] = (
+            ('marked note', None),
+            ('color', color),
+        )
+        favoriteSignifier: str = 'i'
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+    def reportLinkedSlurToOwner(self) -> str:
+        rdfDefinition: str = 'linked'
+        favoriteSignifier: str = 'N'
+        return self._chosenSignifierForRDFDefinition(rdfDefinition, favoriteSignifier)
+
+
+class HumdrumWriter:
+    Debug: bool = False  # can be set to True for more debugging
+
+    # '<>' are not considered reservable, they are hard-coded to below/above, and
+    # used as such without coordination here.
+    # '@' is not considered reservable (damn) because we use it in tremolos
+    # (e.g. '@16@' and '@@32@@')
+    _reservableRDFKernSignifiers: str = 'ijZVNl!+|'
+
+    _m21EditorialStyleToHumdrumEditorialStyle: dict[str, str] = {
+        # m21 editorial style: RDF definition string we will write
+        'parentheses': 'paren',
+        'bracket': 'bracket',
+    }
+    _humdrumEditorialStyleToFavoriteSignifier: dict[str, str] = {
+        'paren': 'i',
+        'bracket': 'j',
+    }
+    _humdrumEditorialStyleToRDFDefinitionString: dict[str, str] = {
+        'paren': 'editorial accidental (paren)',
+        'bracket': 'editorial accidental (bracket)',
+    }
+
+    def __init__(self, obj: m21.prebase.ProtoM21Object) -> None:
+        M21Utilities.adjustMusic21Behavior()
+
+        self._m21Object: m21.prebase.ProtoM21Object = obj
+        self._m21ScoreOrOpus: m21.stream.Score | m21.stream.Opus | None = None
+        self.scoreWriters: list[ScoreWriter] = []
+
+        self.VoiceDebug: bool = False  # can be set to True for debugging output
+
+        # default options (these can be set to non-default values by clients,
+        # as long as they do it before they call write())
+        # client can set to False if obj is a Score
+        self.makeNotation: bool = True
+        # client can set to True to add a recip spine
+        self.addRecipSpine: bool = False
+        # client can set to False if they want to keep the '@32@'-style
+        # bowed tremolos, and the '@@16@@'-style fingered tremolos
+        self.expandTremolos: bool = True
+
+    def write(self, fp) -> bool:
+        # First: We like to modify the input stream (e.g. fixing durations, etc), so we need to
+        # make a copy of the input stream before we start.
+        if isinstance(self._m21Object, m21.stream.Stream):
+            # before deepcopying, fix up any complex hidden rests (so the input score can be
+            # visualized).  This should have been done by whoever created the input score,
+            # but let's at least fix it up now.
+            M21Utilities.fixupComplexHiddenRests(self._m21Object, inPlace=True)
+            self._m21Object = self._m21Object.coreCopyAsDerivation('HumdrumWriter.write')
+
+        # Second: turn the object into a well-formed Score/Opus (someone might have passed in a
+        # single note, for example).  This code is swiped from music21 v7's musicxml exporter.
+        # The hope is that someday it will become an API in music21 that every exporter can call.
+        if self.makeNotation:
+            if isinstance(self._m21Object, m21.stream.Opus):
+                self._m21ScoreOrOpus = M21Utilities.makeWellFormedOpus(self._m21Object)
+            else:
+                self._m21ScoreOrOpus = M21Utilities.makeScoreFromObject(self._m21Object)
+        else:
+            if not isinstance(self._m21Object, (m21.stream.Score, m21.stream.Opus)):
+                raise HumdrumExportError(
+                    'Since makeNotation=False, source obj must be a music21'
+                    ' Score/Opus, and it is not.'
+                )
+            if not self._m21Object.isWellFormedNotation():
+                print(
+                    'Score/Opus is not well-formed; see Stream.isWellFormedNotation()',
+                    file=sys.stderr
+                )
+
+            self._m21ScoreOrOpus = self._m21Object
+        del self._m21Object  # everything after this uses self._m21ScoreOrOpus
+
+        # Third: deal with various duration problems (we see this e.g. after import of a
+        # Photoscore-generated MusicXML file)
+        M21Utilities.fixupBadDurations(self._m21ScoreOrOpus, inPlace=True)
+
+        # Check that all parts (in all scores) have the same number of measures, and
+        # that each measure with the same index has the same offset across parts.
+        err: str = M21Utilities.reportUnwritableScore(
+            self._m21ScoreOrOpus,
+            checkMeasureCounts=True,
+            checkMeasureOffsets=True
+        )
+        if err:
+            raise HumdrumExportError(err)
+
+        score: m21.stream.Score
+        scores: list[m21.stream.Score]
+        if isinstance(self._m21ScoreOrOpus, m21.stream.Score):
+            scores = [self._m21ScoreOrOpus]
+        else:
+            scores = list(self._m21ScoreOrOpus.scores)
+
+        for score in scores:
+            self.scoreWriters.append(ScoreWriter(score, self))
+
+        status: bool = True
+        for sw in self.scoreWriters:
+            status = status and sw.write(fp)
+            if not status:
+                return status
+
+        return status

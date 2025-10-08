@@ -17,7 +17,6 @@ import sys
 import music21 as m21
 from music21.common.misc import flattenList
 
-from converter21.humdrum import HumdrumInternalError
 from converter21.humdrum import EventData
 from converter21.humdrum import PartData
 
@@ -33,18 +32,17 @@ funcName = lambda n=0: sys._getframe(n + 1).f_code.co_name + ':'  # pragma no co
 # TODO: pass StaffGroup into PartData() so we have another source of partName/partAbbrev
 
 class ScoreData:
-    def __init__(self, score: m21.stream.Score, ownerWriter) -> None:
-        from converter21.humdrum import HumdrumWriter
-        self.ownerWriter: HumdrumWriter = ownerWriter
+    def __init__(self, ownerWriter) -> None:
+        from converter21.humdrum import ScoreWriter
+        self.ownerWriter: ScoreWriter = ownerWriter
 
-        if not isinstance(score, m21.stream.Score):
-            raise HumdrumInternalError('ScoreData must be initialized with a music21 Score object')
-
-        self.m21Score: m21.stream.Score = score
-        self.spannerBundle: m21.spanner.SpannerBundle = ownerWriter.spannerBundle
+        self.m21Score: m21.stream.Score = self.ownerWriter._m21Score
+        self.spannerBundle: m21.spanner.SpannerBundle = (
+            ownerWriter.spannerBundle
+        )
 
         self.humdrumStartingStaffNumsByPartPtr: dict[int, int] = {}
-        for idx, m21Part in enumerate(list(score.parts)):
+        for idx, m21Part in enumerate(list(self.m21Score.parts)):
             self.humdrumStartingStaffNumsByPartPtr[id(m21Part)] = idx + 1  # staffNums are 1-based
 
         self.parts: list[PartData] = []
@@ -94,8 +92,8 @@ class ScoreData:
                 partsWithMoreThanOneStaff[-1].append(partStaff)
                 groupedParts.append(partStaff)
 
-        scorePartsStillToProcess = list(score.parts)
-        for part in score.parts:  # includes PartStaffs, too
+        scorePartsStillToProcess = list(self.m21Score.parts)
+        for part in self.m21Score.parts:  # includes PartStaffs, too
             if part not in scorePartsStillToProcess:
                 # we already processed this due to a staff group
                 continue

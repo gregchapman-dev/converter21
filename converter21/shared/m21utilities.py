@@ -4455,256 +4455,270 @@ class M21Utilities:
         return rest.duration.quarterLength
 
     @staticmethod
-    def fixupBadDurations(score: m21.stream.Score, inPlace: bool = False) -> m21.stream.Score:
-        # must be a score; we will look for parts/measures/etc
-
-        # 1. Looks for parts that have different numbers of measures.  Appends
-        #       empty measures (filled with appropriate duration hidden rests)
-        #       to the short parts to equalize them.
-        # NOPE 2. Looks for simultaneous measures where one or more have missing timesigs.
-        #       Copies the timesig from one measure to the other simultaneous measures.
-        # 3. Looks for whole measure rests (duration=4.0) where that whole rest is
-        #       longer than the measure should be (according to the timesig).
-        #       Shrinks that whole rest to the appropriate duration, but leaves it
-        #       _looking_ like a whole rest.
-        # 4. Looks for overlapping GeneralNotes in Voice (or in top level of Measure).
-        #       Removes the overlap by sliding the second GeneralNote (and following
-        #       GeneralNotes) later (which will extend the Measure).
-        # 5. Looks for multi-part measures that have different durations (perhaps due
-        #       to step 4).  Appends invisible rests to the short part-measures to
-        #       equalize them.
-        # 6. Looks for overlapping/underlapping measures in a Part (perhaps due to
-        #       previous steps). Re-inserts each measure at the end offset of the
-        #       previous measure.
-        # 7. Looks for hidden rests with complex (unprintable) durations (e.g. 1.25QL).
-        #       Splits them into rests that could be printed if they weren't hidden
-        #       (e.g. split 1.25QL hidden rest into 1.0QL and 0.25QL).
-
-        fixme: m21.stream.Score = score
+    def fixupBadDurations(
+        scoreOrOpus: m21.stream.Score | m21.stream.Opus,
+        inPlace: bool = False
+    ) -> m21.stream.Score | m21.stream.Opus:
+        # must be a score or opus; we will look for parts/measures/etc
+        fixme: m21.stream.Score | m21.stream.Opus = scoreOrOpus
         if not inPlace:
-            fixme = deepcopy(score)
+            fixme = deepcopy(scoreOrOpus)
 
-        # Build up a list of measureStacks
-        parts: list[m21.stream.Part] = list(fixme[m21.stream.Part])
-        numParts: int = len(parts)
-        partMeterStreams: list[m21.stream.Stream] = []
-        for p in range(0, numParts):
-            partMeterStreams.append(
-                parts[p].getTimeSignatures(
-                    searchContext=False,
-                    returnDefault=False,
-                    recurse=True,
-                    sortByCreationTime=False
-                )
-            )
-        partMeasures: list[list[m21.stream.Measure]] = [
-            list(part[m21.stream.Measure]) for part in parts
-        ]
-        numMeasuresInParts: list[int] = [
-            len(partMeasures[partIdx]) for partIdx in range(0, numParts)
-        ]
-        maxMeasuresInPart: int = 0
-        for nm in numMeasuresInParts:
-            maxMeasuresInPart = max(maxMeasuresInPart, nm)
+        scores: list[m21.stream.Score]
+        if isinstance(fixme, m21.stream.Score):
+            scores = [fixme]
+        else:
+            scores = list(fixme.scores)
 
-        # Step 1: check for parts with too few measures
-        measureStacks: list[list[m21.stream.Measure]] = []
-        for msIdx in range(0, maxMeasuresInPart):
-            measureStacks.append([])
-            for partIdx in range(0, numParts):
-                if msIdx >= numMeasuresInParts[partIdx]:
-                    # step 1: append an empty measure (with a full-measure hidden rest)
-                    print(
-                        f'Appending empty measure {msIdx} to part {partIdx}',
-                        file=sys.stderr
+        for score in scores:
+            # 1. Looks for parts that have different numbers of measures.  Appends
+            #       empty measures (filled with appropriate duration hidden rests)
+            #       to the short parts to equalize them.
+            # NOPE 2. Looks for simultaneous measures where one or more have missing timesigs.
+            #       Copies the timesig from one measure to the other simultaneous measures.
+            # 3. Looks for whole measure rests (duration=4.0) where that whole rest is
+            #       longer than the measure should be (according to the timesig).
+            #       Shrinks that whole rest to the appropriate duration, but leaves it
+            #       _looking_ like a whole rest.
+            # 4. Looks for overlapping GeneralNotes in Voice (or in top level of Measure).
+            #       Removes the overlap by sliding the second GeneralNote (and following
+            #       GeneralNotes) later (which will extend the Measure).
+            # 5. Looks for multi-part measures that have different durations (perhaps due
+            #       to step 4).  Appends invisible rests to the short part-measures to
+            #       equalize them.
+            # 6. Looks for overlapping/underlapping measures in a Part (perhaps due to
+            #       previous steps). Re-inserts each measure at the end offset of the
+            #       previous measure.
+            # 7. Looks for hidden rests with complex (unprintable) durations (e.g. 1.25QL).
+            #       Splits them into rests that could be printed if they weren't hidden
+            #       (e.g. split 1.25QL hidden rest into 1.0QL and 0.25QL).
+
+
+            # Build up a list of measureStacks
+            parts: list[m21.stream.Part] = list(score[m21.stream.Part])
+            numParts: int = len(parts)
+            partMeterStreams: list[m21.stream.Stream] = []
+            for p in range(0, numParts):
+                partMeterStreams.append(
+                    parts[p].getTimeSignatures(
+                        searchContext=False,
+                        returnDefault=False,
+                        recurse=True,
+                        sortByCreationTime=False
                     )
-                    emptyMeas = m21.stream.Measure()
-                    # put it in the score
-                    parts[partIdx].append(emptyMeas)
-                    # now that it's in the part, we can put the rest in it,
-                    # and then figure out its duration.
-                    hiddenRest: m21.note.Rest = m21.note.Rest()
-                    hiddenRest.style.hideObjectOnPrint = True
-                    emptyMeas.append(hiddenRest)
-                    tsContext = hiddenRest.getContextByClass(m21.meter.TimeSignature)
-                    if tsContext:
-                        hiddenRest.duration.quarterLength = tsContext.barDuration.quarterLength
-
-                    # put it in the partMeasures array
-                    partMeasures[partIdx][msIdx] = emptyMeas
-
-                measureStacks[msIdx].append(partMeasures[partIdx][msIdx])
-
-        # Step 2: I have seen scores that have a timesig in one part, but not the other.
-        # Fix that first.
-        # for msIdx, mStack in enumerate(measureStacks):
-        #     theTimeSig: m21.meter.TimeSignature | None = None
-        #     timesigs: list[m21.meter.TimeSignature | None] = []
-        #     for partIdx, meas in enumerate(mStack):
-        #         timesigAtZero: m21.meter.TimeSignature | None = (
-        #             M21Utilities.getTimeSigFromStartOfStream(meas)
-        #         )
-        #         if msIdx == 0:
-        #             # first measure: if no timesig in measure, we can also
-        #             # check offset 0 in the enclosing part
-        #             if timesigAtZero is None:
-        #                 timesigAtZero = M21Utilities.getTimeSigFromStartOfStream(parts[partIdx])
-        #         timesigs.append(timesigAtZero)
-        #         if timesigs[-1] is not None and theTimeSig is None:
-        #             theTimeSig = timesigs[-1]
-        #
-        #     if theTimeSig is None:
-        #         # if none of the stacked measures have a timesig, it's OK.
-        #         continue
-        #
-        #     for partIdx, timesig in enumerate(timesigs):
-        #         if timesig is None:
-        #             myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
-        #             myTS.style.hideObjectOnPrint = True
-        #             print(
-        #                 f'Inserting hidden timesig {myTS}'
-        #                 f' at start of measure {msIdx}, in part {partIdx}'
-        #             )
-        #             mStack[partIdx].insert(0, myTS)
-
-        # Step 3: check for whole measure (non-hidden) rests that have too long duration
-        #   (e.g. 4 quarter notes when the timesig says 3/4). Too short is OK, we'll pad
-        #   the measure out later with hidden rests if necessary.  Fix the rest duration,
-        #   and then the enclosing stream durations (voice if present and measure).  These
-        #   are not hidden rests, so set the rest.duration correctly as visual duration 4.0,
-        #   gestural duration from timesig (so they still look like whole rests).  Or maybe
-        #   just set rest.fullMeasure = True (and quarterLength is from timesig and is linked).
-
-        for partIdx, part in enumerate(parts):
-            for meas in partMeasures[partIdx]:
-                timesig = M21Utilities.getTimeSigFromStartOfStream(meas)
-                # if timesig is None:
-                #     timesig = meas.getContextByClass(m21.meter.TimeSignature)
-
-                voices: list[m21.stream.Voice | m21.stream.Measure] = list(
-                    meas[m21.stream.Voice]
                 )
-                # treat the measure as a voice
-                voices.append(meas)
+            partMeasures: list[list[m21.stream.Measure]] = [
+                list(part[m21.stream.Measure]) for part in parts
+            ]
+            numMeasuresInParts: list[int] = [
+                len(partMeasures[partIdx]) for partIdx in range(0, numParts)
+            ]
+            maxMeasuresInPart: int = 0
+            for nm in numMeasuresInParts:
+                maxMeasuresInPart = max(maxMeasuresInPart, nm)
 
-                recomputeMeasureDuration: bool = False
-                for voice in voices:
-                    # get all general notes except ChordSymbols and such
-                    gnList: list[m21.note.GeneralNote] = list(
-                        voice.getElementsByClass(m21.note.GeneralNote)
-                        .getElementsNotOfClass(m21.harmony.Harmony)
+            # Step 1: check for parts with too few measures
+            measureStacks: list[list[m21.stream.Measure]] = []
+            for msIdx in range(0, maxMeasuresInPart):
+                measureStacks.append([])
+                for partIdx in range(0, numParts):
+                    if msIdx >= numMeasuresInParts[partIdx]:
+                        # step 1: append an empty measure (with a full-measure hidden rest)
+                        print(
+                            f'Appending empty measure {msIdx} to part {partIdx}',
+                            file=sys.stderr
+                        )
+                        emptyMeas = m21.stream.Measure()
+                        # put it in the score
+                        parts[partIdx].append(emptyMeas)
+                        # now that it's in the part, we can put the rest in it,
+                        # and then figure out its duration.
+                        hiddenRest: m21.note.Rest = m21.note.Rest()
+                        hiddenRest.style.hideObjectOnPrint = True
+                        emptyMeas.append(hiddenRest)
+                        tsContext = hiddenRest.getContextByClass(m21.meter.TimeSignature)
+                        if tsContext:
+                            hiddenRest.duration.quarterLength = tsContext.barDuration.quarterLength
+
+                        # put it in the partMeasures array
+                        partMeasures[partIdx][msIdx] = emptyMeas
+
+                    measureStacks[msIdx].append(partMeasures[partIdx][msIdx])
+
+            # Step 2: I have seen scores that have a timesig in one part, but not the other.
+            # Fix that first.
+            # for msIdx, mStack in enumerate(measureStacks):
+            #     theTimeSig: m21.meter.TimeSignature | None = None
+            #     timesigs: list[m21.meter.TimeSignature | None] = []
+            #     for partIdx, meas in enumerate(mStack):
+            #         timesigAtZero: m21.meter.TimeSignature | None = (
+            #             M21Utilities.getTimeSigFromStartOfStream(meas)
+            #         )
+            #         if msIdx == 0:
+            #             # first measure: if no timesig in measure, we can also
+            #             # check offset 0 in the enclosing part
+            #             if timesigAtZero is None:
+            #                 timesigAtZero = M21Utilities.getTimeSigFromStartOfStream(
+            #                     parts[partIdx]
+            #                 )
+            #         timesigs.append(timesigAtZero)
+            #         if timesigs[-1] is not None and theTimeSig is None:
+            #             theTimeSig = timesigs[-1]
+            #
+            #     if theTimeSig is None:
+            #         # if none of the stacked measures have a timesig, it's OK.
+            #         continue
+            #
+            #     for partIdx, timesig in enumerate(timesigs):
+            #         if timesig is None:
+            #             myTS: m21.meter.TimeSignature = deepcopy(theTimeSig)
+            #             myTS.style.hideObjectOnPrint = True
+            #             print(
+            #                 f'Inserting hidden timesig {myTS}'
+            #                 f' at start of measure {msIdx}, in part {partIdx}'
+            #             )
+            #             mStack[partIdx].insert(0, myTS)
+
+            # Step 3: check for whole measure (non-hidden) rests that have too long duration
+            #   (e.g. 4 quarter notes when the timesig says 3/4). Too short is OK, we'll pad
+            #   the measure out later with hidden rests if necessary.  Fix the rest duration,
+            #   and then the enclosing stream durations (voice if present and measure).  These
+            #   are not hidden rests, so set the rest.duration correctly as visual duration 4.0,
+            #   gestural duration from timesig (so they still look like whole rests).  Or maybe
+            #   just set rest.fullMeasure = True (and quarterLength is from timesig and is linked).
+
+            for partIdx, part in enumerate(parts):
+                for meas in partMeasures[partIdx]:
+                    timesig = M21Utilities.getTimeSigFromStartOfStream(meas)
+                    # if timesig is None:
+                    #     timesig = meas.getContextByClass(m21.meter.TimeSignature)
+
+                    voices: list[m21.stream.Voice | m21.stream.Measure] = list(
+                        meas[m21.stream.Voice]
                     )
+                    # treat the measure as a voice
+                    voices.append(meas)
 
-                    if len(gnList) != 1:
-                        # more than one note/rest, skip to next voice
+                    recomputeMeasureDuration: bool = False
+                    for voice in voices:
+                        # get all general notes except ChordSymbols and such
+                        gnList: list[m21.note.GeneralNote] = list(
+                            voice.getElementsByClass(m21.note.GeneralNote)
+                            .getElementsNotOfClass(m21.harmony.Harmony)
+                        )
+
+                        if len(gnList) != 1:
+                            # more than one note/rest, skip to next voice
+                            continue
+
+                        if isinstance(gnList[0], m21.note.Rest):
+                            rest: m21.note.Rest = gnList[0]
+                            restQL: OffsetQL = rest.duration.quarterLength
+                            if restQL == 4.0:
+                                if timesig is None:
+                                    # try looking in the meterStream
+                                    measOffset: OffsetQL = meas.getOffsetInHierarchy(score)
+                                    timesig = M21Utilities.getActiveTimeSigFromMeterStream(
+                                        measOffset, partMeterStreams[partIdx]
+                                    )
+                                    if timesig is None:
+                                        timesig = m21.meter.TimeSignature('4/4')
+                                barQL: OffsetQL = timesig.barDuration.quarterLength
+                                if restQL > barQL:
+                                    rest.duration.linked = False
+                                    rest.duration.quarterLength = barQL
+                                    # shorten the voice as well (if not the measure)
+                                    if voice is not meas:
+                                        voice.duration.quarterLength = barQL
+                                    recomputeMeasureDuration = True
+
+                    if recomputeMeasureDuration:
+                        # recompute measure duration from highestTime
+                        meas._cache['HighestTime'] = None  # force recomputation of meas.highestTime
+                        meas.duration.quarterLength = meas.highestTime
+
+            # Step 4: check for overlapping GeneralNotes
+            for msIdx, mStack in enumerate(measureStacks):
+                for partIdx, meas in enumerate(mStack):
+                    voices = list(
+                        meas[m21.stream.Voice]
+                    )
+                    # treat the measure as a voice
+                    voices.append(meas)
+
+                    for voice in voices:
+                        prevGN: m21.note.GeneralNote | None = None
+                        # do not recurse!
+                        gnList = list(
+                            voice.getElementsByClass(m21.note.GeneralNote)
+                            .getElementsNotOfClass(m21.harmony.Harmony)
+                        )
+                        for gn in gnList:
+                            # check for overlapping GeneralNotes. If found, reinsert
+                            # second note at end of first note.
+                            if prevGN is not None:
+                                if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
+                                    newOffset: OffsetQL = opFrac(
+                                        prevGN.offset + prevGN.quarterLength
+                                    )
+                                    print(
+                                        f'Moving {gn} from {gn.offset} to {newOffset}'
+                                        f' in measure {msIdx}, part {partIdx}',
+                                        file=sys.stderr
+                                    )
+                                    voice.remove(gn)
+                                    voice.insert(newOffset, gn)
+
+                            prevGN = gn
+
+            # Step 5: check each stack for equal duration measures
+            for msIdx, mStack in enumerate(measureStacks):
+                maxDurationInStack: OffsetQL = 0
+                for meas in mStack:
+                    maxDurationInStack = max(maxDurationInStack, meas.quarterLength)
+                for partIdx, meas in enumerate(mStack):
+                    if meas.quarterLength < maxDurationInStack:
+                        # append a hidden rest (we'll split it if necessary in step 7)
+                        addQL: OffsetQL = opFrac(maxDurationInStack - meas.quarterLength)
+                        print(
+                            f'Appending {addQL}QL space to measure {msIdx}, part {partIdx}',
+                            file=sys.stderr
+                        )
+                        hiddenRest = m21.note.Rest(quarterLength=addQL)
+                        hiddenRest.style.hideObjectOnPrint = True
+                        hasVoices: bool = False
+                        for voice in meas.voices:
+                            hasVoices = True
+                            myRest: m21.note.Rest = deepcopy(hiddenRest)
+                            voice.append(myRest)
+                        if not hasVoices:
+                            meas.append(hiddenRest)
+                        meas.duration.quarterLength = maxDurationInStack
+
+            # Step 6: check for overlapping/underlapping measures (perhaps caused by previous
+            # steps). If you find an overlapping/underlapping measure in a part, stop checking
+            # and just re-insert every measure after that.
+            for partIdx, part in enumerate(parts):
+                reinserting: bool = False
+                prevMeas: m21.stream.Measure | None = None
+                for meas in partMeasures[partIdx]:
+                    if prevMeas is None:
+                        prevMeas = meas
                         continue
 
-                    if isinstance(gnList[0], m21.note.Rest):
-                        rest: m21.note.Rest = gnList[0]
-                        restQL: OffsetQL = rest.duration.quarterLength
-                        if restQL == 4.0:
-                            if timesig is None:
-                                # try looking in the meterStream
-                                measOffset: OffsetQL = meas.getOffsetInHierarchy(fixme)
-                                timesig = M21Utilities.getActiveTimeSigFromMeterStream(
-                                    measOffset, partMeterStreams[partIdx]
-                                )
-                                if timesig is None:
-                                    timesig = m21.meter.TimeSignature('4/4')
-                            barQL: OffsetQL = timesig.barDuration.quarterLength
-                            if restQL > barQL:
-                                rest.duration.linked = False
-                                rest.duration.quarterLength = barQL
-                                # shorten the voice as well (if not the measure)
-                                if voice is not meas:
-                                    voice.duration.quarterLength = barQL
-                                recomputeMeasureDuration = True
+                    prevMeasEnd: OffsetQL = opFrac(prevMeas.offset + prevMeas.quarterLength)
+                    if not reinserting:
+                        if prevMeasEnd != meas.offset:
+                            reinserting = True
 
-                if recomputeMeasureDuration:
-                    # recompute measure duration from highestTime
-                    meas._cache['HighestTime'] = None  # force recomputation of meas.highestTime
-                    meas.duration.quarterLength = meas.highestTime
+                    if reinserting:
+                        part.remove(meas)
+                        part.insert(prevMeasEnd, meas)
 
-        # Step 4: check for overlapping GeneralNotes
-        for msIdx, mStack in enumerate(measureStacks):
-            for partIdx, meas in enumerate(mStack):
-                voices = list(
-                    meas[m21.stream.Voice]
-                )
-                # treat the measure as a voice
-                voices.append(meas)
-
-                for voice in voices:
-                    prevGN: m21.note.GeneralNote | None = None
-                    # do not recurse!
-                    gnList = list(
-                        voice.getElementsByClass(m21.note.GeneralNote)
-                        .getElementsNotOfClass(m21.harmony.Harmony)
-                    )
-                    for gn in gnList:
-                        # check for overlapping GeneralNotes. If found, reinsert
-                        # second note at end of first note.
-                        if prevGN is not None:
-                            if opFrac(gn.offset - prevGN.offset) < prevGN.quarterLength:
-                                newOffset: OffsetQL = opFrac(prevGN.offset + prevGN.quarterLength)
-                                print(
-                                    f'Moving {gn} from {gn.offset} to {newOffset}'
-                                    f' in measure {msIdx}, part {partIdx}',
-                                    file=sys.stderr
-                                )
-                                voice.remove(gn)
-                                voice.insert(newOffset, gn)
-
-                        prevGN = gn
-
-        # Step 5: check each stack for equal duration measures
-        for msIdx, mStack in enumerate(measureStacks):
-            maxDurationInStack: OffsetQL = 0
-            for meas in mStack:
-                maxDurationInStack = max(maxDurationInStack, meas.quarterLength)
-            for partIdx, meas in enumerate(mStack):
-                if meas.quarterLength < maxDurationInStack:
-                    # append a hidden rest (we'll split it if necessary in step 7)
-                    addQL: OffsetQL = opFrac(maxDurationInStack - meas.quarterLength)
-                    print(
-                        f'Appending {addQL}QL space to measure {msIdx}, part {partIdx}',
-                        file=sys.stderr
-                    )
-                    hiddenRest = m21.note.Rest(quarterLength=addQL)
-                    hiddenRest.style.hideObjectOnPrint = True
-                    hasVoices: bool = False
-                    for voice in meas.voices:
-                        hasVoices = True
-                        myRest: m21.note.Rest = deepcopy(hiddenRest)
-                        voice.append(myRest)
-                    if not hasVoices:
-                        meas.append(hiddenRest)
-                    meas.duration.quarterLength = maxDurationInStack
-
-        # Step 6: check for overlapping/underlapping measures (perhaps caused by previous
-        # steps). If you find an overlapping/underlapping measure in a part, stop checking
-        # and just re-insert every measure after that.
-        for partIdx, part in enumerate(parts):
-            reinserting: bool = False
-            prevMeas: m21.stream.Measure | None = None
-            for meas in partMeasures[partIdx]:
-                if prevMeas is None:
                     prevMeas = meas
-                    continue
 
-                prevMeasEnd: OffsetQL = opFrac(prevMeas.offset + prevMeas.quarterLength)
-                if not reinserting:
-                    if prevMeasEnd != meas.offset:
-                        reinserting = True
-
-                if reinserting:
-                    part.remove(meas)
-                    part.insert(prevMeasEnd, meas)
-
-                prevMeas = meas
-
-        # Step 7: check for hidden rests that need splitting (possibly caused by previous steps)
-        M21Utilities.fixupComplexHiddenRests(fixme, inPlace=True)
+            # Step 7: check for hidden rests that need splitting (possibly caused by previous steps)
+            M21Utilities.fixupComplexHiddenRests(score, inPlace=True)
 
         return fixme
 
