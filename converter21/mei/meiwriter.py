@@ -96,8 +96,7 @@ class MeiWriter:
 
         # Third: deal with various duration problems (we see this e.g. after import of a
         # Photoscore-generated MusicXML file)
-        # Caused interesting issues, so don't do this
-        # M21Utilities.fixupBadDurations(self._m21ScoreOrOpus, inPlace=True)
+        M21Utilities.fixupBadDurations(self._m21ScoreOrOpus, inPlace=True)
 
         # Check that all parts (in all scores) have the same number of measures.
         err: str = M21Utilities.reportUnwritableScore(
