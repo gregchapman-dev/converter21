@@ -19,5 +19,6 @@ DiffUtilities.runShowDiff(
     inFmt='humdrum',
     outFmt='mei',
     outExt='mei',
+    exportMeiMultiScoreHostTag = 'mdiv',
     scoreNum=int(args.num) if args.num is not None else None
 )

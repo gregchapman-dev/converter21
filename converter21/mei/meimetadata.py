@@ -1720,32 +1720,34 @@ class MeiMetadata:
         performanceDates.extend(self.contents.get('MRD', []))
         performanceLocations: list[MeiMetadataItem] = self.contents.get('MLC', [])
 
-        if (not catalogNumbers
-                and not catalogAbbrevNumbers
-                and not opusNumbers
-                and not titleElements
-                and not creationDates
-                and not creationCountries
-                and not creationSettlements
-                and not creationRegions
-                and not creationLatLongs
-                and not composerElements
-                and not lyricists
-                and not librettists
-                and not dedicatees
-                and not funders
-                and not languages
-                and not histories
-                and not instrumentLists
-                and not forms
-                and not genres
-                and not modes
-                and not meters
-                and not styles
-                and not firstPerformanceDates
-                and not performanceDates
-                and not performanceLocations):
-            return None
+        # We can't bail early, since otherwise we will miss all those annots for the
+        # unwritten metadata items.
+        # if (not catalogNumbers
+        #         and not catalogAbbrevNumbers
+        #         and not opusNumbers
+        #         and not titleElements
+        #         and not creationDates
+        #         and not creationCountries
+        #         and not creationSettlements
+        #         and not creationRegions
+        #         and not creationLatLongs
+        #         and not composerElements
+        #         and not lyricists
+        #         and not librettists
+        #         and not dedicatees
+        #         and not funders
+        #         and not languages
+        #         and not histories
+        #         and not instrumentLists
+        #         and not forms
+        #         and not genres
+        #         and not modes
+        #         and not meters
+        #         and not styles
+        #         and not firstPerformanceDates
+        #         and not performanceDates
+        #         and not performanceLocations):
+        #     return None
 
         theWork: MeiElement | None = None
 
