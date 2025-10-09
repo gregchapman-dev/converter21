@@ -99,9 +99,11 @@ class HumdrumFileSet:
         if len(scores) == 1:
             # here we remove any number=1 metadata because it's the
             # only score, so score # 1 in the file is meaningless.
-            nums: tuple[m21.metadata.Text, ...] = scores[0].metadata['number']
-            if len(nums) == 1 and str(nums[0]) == '1':
-                scores[0].metadata['number'] = None
+            md: m21.metadata.Metadata | None = scores[0].metadata
+            if md is not None:
+                nums: tuple[m21.metadata.Text, ...] = md['number']
+                if len(nums) == 1 and str(nums[0]) == '1':
+                    md['number'] = None
 
             return scores[0]
 
