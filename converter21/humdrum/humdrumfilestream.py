@@ -110,7 +110,7 @@ class HumdrumFileStream:
                     and templine[4] != '!'
                     and not dataFound
                     and not templine.startswith('!!!!filter:')
-                    and not templine.startswith('!!!SEGMENT:')):
+                    and not templine.startswith('!!!!SEGMENT:')):
                 # This is a universal comment.  Should it be appended
                 # to the list or should the current list be erased and
                 # this record placed into the first entry?

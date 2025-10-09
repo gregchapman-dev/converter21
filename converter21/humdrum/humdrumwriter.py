@@ -880,6 +880,10 @@ class ScoreWriter:
     // Tool_musicxml2hum::addFooterRecords --
     '''
     def _addFooterRecords(self, outfile: HumdrumFile) -> None:
+        systemDecoration: str = self._getSystemDecoration()
+        if systemDecoration and systemDecoration != 's1':
+            outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
+
         for definition, signifier in self._rdfKernSignifierLookup.items():
             rdfLine = f'!!!RDF**kern: {signifier} = '
             if isinstance(definition, tuple):  # it's a tuple of k/v pairs (tuples)
@@ -915,15 +919,31 @@ class ScoreWriter:
     }
 
     def _addHeaderRecords(self, outfile: HumdrumFile) -> None:
-        systemDecoration: str = self._getSystemDecoration()
-        if systemDecoration and systemDecoration != 's1':
-            outfile.appendLine('!!!system-decoration: ' + systemDecoration, asGlobalToken=True)
-
         if t.TYPE_CHECKING:
             assert isinstance(self._m21Score, m21.stream.Score)
 
         m21Metadata: m21.metadata.Metadata = self._m21Score.metadata
 #        print('metadata = \n', m21Metadata.all(), file=sys.stderr)
+
+        # insert '!!!!SEGMENTn: filename' as first line (where n is m21Metadata['number'])
+        atLine: int = 0
+        segmentLine: str = '!!!!SEGMENT'
+        mdNumbers: tuple[m21.metadata.ValueType, ...] = ()
+        if m21Metadata is not None:
+            mdNumbers = m21Metadata['number']
+
+        if len(mdNumbers) == 1:
+            nStr = str(mdNumbers[0])
+            segmentLine += nStr + ':'
+        else:
+            segmentLine += ':'
+
+        if outfile.fileName:
+            segmentLine += ' ' + outfile.fileName
+
+        outfile.insertLine(0, segmentLine, asGlobalToken=True)
+        atLine += 1  # subsequent insertions go just after the !!!!SEGMENT line
+
         if m21Metadata is None:
             return
 
@@ -986,7 +1006,6 @@ class ScoreWriter:
         ] = returnAndRemoveAllItemsWithUniqueName(allItems, 'copyright')
 
         hdKeyWithoutIndexToCurrentIndex: dict = {}
-        atLine: int = 0
 
         hdKeyWithoutIndex: str | None
         refLineStr: str | None
@@ -1006,7 +1025,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdTitleItems:
             hdKeyWithoutIndex = (
@@ -1022,7 +1041,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdAlternateTitleItems:
             hdKeyWithoutIndex = (
@@ -1038,7 +1057,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdPopularTitleItems:
             hdKeyWithoutIndex = (
@@ -1054,7 +1073,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdParentTitleItems:
             hdKeyWithoutIndex = (
@@ -1070,7 +1089,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdGroupTitleItems:
             hdKeyWithoutIndex = (
@@ -1086,7 +1105,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdMovementNameItems:
             hdKeyWithoutIndex = (
@@ -1103,7 +1122,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdMovementNumberItems:
             hdKeyWithoutIndex = (
@@ -1119,7 +1138,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         for uniqueName, value in mdCopyrightItems:
             hdKeyWithoutIndex = (
@@ -1135,7 +1154,7 @@ class ScoreWriter:
             )
             if refLineStr is not None:
                 outfile.insertLine(atLine, refLineStr, asGlobalToken=True)
-            atLine += 1
+                atLine += 1
 
         # what's left in allItems goes at the bottom of the file
         for uniqueName, value in allItems:
