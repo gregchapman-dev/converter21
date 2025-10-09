@@ -1930,13 +1930,6 @@ class MeiMetadata:
                     lElement.text = historyText.strip()
                 history.hasBeenWritten = True
 
-        if oneOfMany:
-            # this is the only place where main-work-specific notes can go
-            # (they would otherwise go in <meiHead><fileDesc>).
-            notesStmt: MeiElement = self.makeNotesStmt()
-            if not notesStmt.isEmpty():
-                theWork.subElements.append(notesStmt)
-
         # <langUsage>
         if languages:
             langUsageElement: MeiElement = theWork.appendSubElement('langUsage')
@@ -2132,6 +2125,15 @@ class MeiMetadata:
                         'target': f'#{collectionWorkXmlId}'
                     }
                 )
+
+        if oneOfMany:
+            # this is the only place where main-work-specific notes can go
+            # (they would otherwise go in <meiHead><fileDesc>).  This is
+            # where all the unwritten metadata items go, though, so it has
+            # to go last (extMeta doesn't count, that's just the madsCollection).
+            notesStmt: MeiElement = self.makeNotesStmt()
+            if not notesStmt.isEmpty():
+                theWork.subElements.append(notesStmt)
 
         extMeta: MeiElement | None = self.makeExtMetaElementForWork()
         if extMeta is not None:
