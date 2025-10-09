@@ -465,7 +465,7 @@ class HumdrumLine(HumHash):
         if not self.isUniversalReference:
             return ''
 
-        return _getKeyAndValue(self.text[4:])[0]
+        return _getKeyAndValue(self.text[4:])[1]
 
     '''
     //////////////////////////////
