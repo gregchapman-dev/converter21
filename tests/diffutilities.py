@@ -606,6 +606,7 @@ class DiffUtilities:
 
         # print(f'op_list = {op_list}', file=sys.stderr)
 
+        counts['part'] = 0
         counts['measure'] = 0
         counts['voice'] = 0
         counts['note'] = 0
@@ -623,8 +624,11 @@ class DiffUtilities:
         counts['staffgroup'] = 0
 
         for op in op_list:
+            # part
+            if op[0] in ('inspart', 'delpart'):
+                counts['part'] += 1
             # measure
-            if op[0] in ('insbar', 'delbar'):
+            elif op[0] in ('insbar', 'delbar'):
                 counts['measure'] += 1
             # voice
             elif op[0] in ('voiceins', 'voicedel'):
