@@ -64,7 +64,10 @@ class AbcReader:
             for tune in self.abcTunesInDocumentOrder:
                 numStr = self.numberForAbcTune[tune]
                 abcNumbers.append(numStr)
-                xmlDoc = abc2xml.getXmlDocs(self.abcTuneByNumber[numStr])[0]
+                xmlDoc = abc2xml.getXmlDocs(
+                    self.abcTuneByNumber[numStr],
+                    rOpt=True
+                )[0]
                 xmlStr: str = abc2xml.fixDoctype(xmlDoc)
                 xmlStrs.append(xmlStr)
         else:
@@ -74,7 +77,10 @@ class AbcReader:
                     f'cannot find requested reference number in source file: {number}'
                 )
             abcNumbers = [numStr]
-            xmlDoc = abc2xml.getXmlDocs(self.abcTuneByNumber[numStr])[0]
+            xmlDoc = abc2xml.getXmlDocs(
+                self.abcTuneByNumber[numStr],
+                rOpt=True
+            )[0]
             xmlStrs = [abc2xml.fixDoctype(xmlDoc)]
 
         if len(xmlStrs) == 1:
