@@ -833,7 +833,7 @@ class stringAlloc:
 
 class MusicXml:
     typeMap = {1:'long', 2:'breve', 4:'whole', 8:'half', 16:'quarter', 32:'eighth', 64:'16th', 128:'32nd', 256:'64th'}
-    dynaMap = {'p':1,'pp':1,'ppp':1,'pppp':1,'f':1,'ff':1,'fff':1,'ffff':1,'mp':1,'mf':1,'sfz':1}
+    dynaMap = {'p':1,'pp':1,'ppp':1,'pppp':1,'f':1,'ff':1,'fff':1,'ffff':1,'mp':1,'mf':1, 'sf':1, 'sfp':1, 'sfpp':1, 'fp':1, 'rf':1, 'rfz':1, 'sfz':1, 'sffz':1, 'fz':1, 'pf':1, 'sfzp':1}
     tempoMap = {'larghissimo':40, 'moderato':104, 'adagissimo':44, 'allegretto':112, 'lentissimo':48, 'allegro':120, 'largo':56,
             'vivace':168, 'adagio':59, 'vivo':180, 'lento':62, 'presto':192, 'larghetto':66, 'allegrissimo':208, 'adagietto':76,
             'vivacissimo':220, 'andante':88, 'prestissimo':240, 'andantino':96}

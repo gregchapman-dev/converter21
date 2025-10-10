@@ -69,7 +69,17 @@ dynamics_map = {    # for direction/direction-type/dynamics/
     'ffff': '!ffff!',
     'mp':   '!mp!',
     'mf':   '!mf!',
+    'sf':   '!sf!',
+    'sfp':  '!sfp!',
+    'sfpp': '!sfpp!',
+    'fp':   '!fp!',
+    'rf':   '!rf!',
+    'rfz':  '!rfz!',
     'sfz':  '!sfz!',
+    'sffz': '!sffz!',
+    'fz':   '!fz!',
+    'pf':   '!pf!',
+    'sfzp': '!sfzp!',
 }
 
 percSvg = '''%%beginsvg
