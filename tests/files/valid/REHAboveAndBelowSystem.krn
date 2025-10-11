@@ -1,4 +1,3 @@
-!!!filter: extract -s 2 | rid -d
 **kern	**kern	**kern	**kern
 *I"Bass	*I"Tenor	*I"Alto	*I"Soprano
 *clefF4	*clefGv2	*clefG2	*clefG2
