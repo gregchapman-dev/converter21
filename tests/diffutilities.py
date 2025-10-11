@@ -112,7 +112,7 @@ class DiffUtilities:
             writePath = writePath.with_suffix('.mei')
             print(f'Writing mei file with Verovio: {writePath}')
             subprocess.run(
-                ['verovio', '-a', '-t', 'mei', '-o', str(writePath), str(inputPath)],
+                ['verovio', '-a', '-f', inFmt, '-t', 'mei', '-o', str(writePath), str(inputPath)],
                 check=True,
                 capture_output=True
             )
@@ -337,7 +337,7 @@ class DiffUtilities:
                 meiPath /= inputPath.name
                 meiPath = meiPath.with_suffix(f'.{uniqueInt}.mei')
                 subprocess.run(
-                    ['verovio', '-a', '-t', 'mei', '-o', str(meiPath), str(inputPath)],
+                    ['verovio', '-a', '-f', inFmt, '-t', 'mei', '-o', str(meiPath), str(inputPath)],
                     check=True,
                     capture_output=True
                 )
