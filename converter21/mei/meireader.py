@@ -479,7 +479,7 @@ class MeiReader:
         # MEI chord ties are weird.  If the chord is tied, it means that any note in the
         # chord that is the same as a subsequent note (or a note in a subsequent chord)
         # in the layer, is tied to said note.  This is tricky to implement: We stash off
-        # any tied chord we see in the self.pendingTiedChords dictionary (keyed by voice.id).
+        # any tied chord we see in the self.pendingTiedChords dictionary (keyed by layer@n).
         # This Voice/layer, and the matching Voice/layer in the next Measure are the only
         # places we will search for the ends of these note ties. A tie can be tied to any
         # note (in the layer) at any offset in either the measure containing the tie start,
@@ -6598,18 +6598,15 @@ class MeiReader:
         # make the Voice
         theVoice: stream.Voice = stream.Voice()
 
-        # try to set the Voice's "id" attribute
         nStr: str = elem.get('n', '')
-        if nStr:
-            theVoice.id = nStr
-        else:
+        if not nStr:
             if not overrideN:
                 raise MeiAttributeError(_MISSING_VOICE_ID)
-            theVoice.id = overrideN
+            nStr = overrideN
 
         # Some (nested) processing needs to know what voice we are in
         # We will clear this before returning from layerFromElement.
-        self.currVoiceId = theVoice.id
+        self.currVoiceId = nStr
 
         # Remove any pendingTiedChord for this voice id that has searched in two measures
         # for tied notes.
