@@ -10,7 +10,11 @@
 # ------------------------------------------------------------------------------
 import sys
 import typing as t
+
 import music21 as m21
+from music21.musicxml import helpers
+from music21.musicxml.m21ToXml import ScoreExporter
+
 from converter21.shared import M21Utilities
 from converter21.abc.xml2abc import vertaal as convertMusicXMLToABC
 from converter21.abc import AbcMetadata
@@ -35,6 +39,14 @@ class AbcWriter:
         # Always assume 2.1 for now.
         # self.abcVersion: str = '2.1'
 
+    @staticmethod
+    def scoreToMusicXmlString(score: m21.stream.Score, makeNotation: bool) -> str:
+        scoreExporter = ScoreExporter(score, makeNotation=makeNotation)
+        scoreExporter.parse()
+        output: str = scoreExporter.xmlHeader().decode('utf-8')  # very small encode/decode
+        output += helpers.dumpString(scoreExporter.xmlRoot, noCopy=True)
+        return output
+
     def write(self, fp) -> bool:
         if self.makeNotation:
             if isinstance(self._m21Object, m21.stream.Opus):
@@ -58,15 +70,7 @@ class AbcWriter:
 
         # Now convert to MusicXML
         if isinstance(self._m21ScoreOrOpus, m21.stream.Score):
-            xmlFp = self._m21ScoreOrOpus.write(
-                fmt='musicxml', fp=None, makeNotation=self.makeNotation
-            )
-            if xmlFp is None:
-                raise AbcExportError(
-                    'Export to temporary MusicXML file failed.'
-                )
-            with open(xmlFp, 'r', encoding='utf8') as xmlFpOut:
-                xmlStr = xmlFpOut.read()
+            xmlStr = self.scoreToMusicXmlString(self._m21ScoreOrOpus, self.makeNotation)
 
             # Now run that MusicXML through xml2abc.vertaal (MusicXML str -> ABC str)
             abcStr, _ = convertMusicXMLToABC(xmlStr)
@@ -101,14 +105,7 @@ class AbcWriter:
                         assert nextNumber is not None
                     nextNumber += 1
 
-                # TODO: performance improvement - write to string
-                xmlFp = score.write(fmt='musicxml', fp=None, makeNotation=self.makeNotation)
-                if xmlFp is None:
-                    raise AbcExportError(
-                        'Export to temporary MusicXML file failed.'
-                    )
-                with open(xmlFp, 'r', encoding='utf8') as xmlFpOut:
-                    xmlStr = xmlFpOut.read()
+                xmlStr = self.scoreToMusicXmlString(score, self.makeNotation)
 
                 scoreAbcStr: str
                 scoreAbcStr, _ = convertMusicXMLToABC(xmlStr)
