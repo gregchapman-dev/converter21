@@ -2952,10 +2952,6 @@ class M21Utilities:
         value: t.Any
     ):
         uniqueName: str = M21Utilities.getUniqueName(md, key)
-        if uniqueName:
-            # gotta check if values are Text (bail if not)
-            if m21.metadata.properties.UNIQUE_NAME_TO_VALUE_TYPE[uniqueName] != m21.metadata.Text:
-                return
 
         oldValues: tuple[m21.metadata.ValueType, ...]
         if uniqueName:
