@@ -4641,10 +4641,11 @@ class MeiReader:
         if len(text) == 2 and text[0] == '\u00a0':
             text = text[1]
 
-        fontStyle = styleDict.get('fontStyle', None)
-        fontWeight = styleDict.get('fontWeight', None)
-        fontFamily = styleDict.get('fontFamily', None)
-        justify = styleDict.get('justify', None)
+        fontStyle: str | None = styleDict.get('fontStyle', None)
+        fontWeight: str | None = styleDict.get('fontWeight', None)
+        fontFamily: str | None = styleDict.get('fontFamily', None)
+        justify: str | None = styleDict.get('justify', None)
+        color: str | None = styleDict.get('color', None)
 
         if wordPos is None:
             # no wordPos? Last chance is to use trailing and leading hyphens (applyRaw=False)
@@ -4661,6 +4662,9 @@ class MeiReader:
             output.style.fontFamily = fontFamily  # type: ignore
         if justify is not None:
             output.style.justify = justify  # type: ignore
+
+        if color is not None:
+            output.style.color = color
 
         return output
 
