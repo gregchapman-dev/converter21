@@ -2772,11 +2772,9 @@ class HumdrumFile(HumdrumFileContent):
         return False
 
     def _handleColorInterp(self, measureIndex: int, token: HumdrumToken) -> None:
-        # TODO: *color (spine color)
-        # if '*color:' not in token.text:
-        #     return
-        # self.setSpineColorFromColorInterpToken(token)
-        return  # _handleColorInterp needs implementation
+        if '*color:' not in token.text:
+            return
+        self.setSpineColorFromColorInterpToken(token)
 
     def _handleClefChange(
         self,
@@ -7975,7 +7973,7 @@ class HumdrumFile(HumdrumFileContent):
             if t.TYPE_CHECKING:
                 # tok is not None because i is in range
                 assert isinstance(tok, HumdrumToken)
-            if not tok.isDataType('**color'):
+            if not tok.isDataType('**color') and not tok.isDataType('**coloR'):
                 continue
 
             tokRes: HumdrumToken | None = tok.nullResolution
@@ -7983,6 +7981,11 @@ class HumdrumFile(HumdrumFileContent):
                 output = tokRes.text
                 if output == '.':
                     output = ''
+                # We will implement this when we see one (verovio does this, and
+                # I'm not sure it's implemented correctly; I think none of these
+                # no-rest colors are even applied to notes)
+                # if tok.isDataType('**coloR'):
+                #     output += 'NOREST'
             break
 
         return output
@@ -8112,9 +8115,6 @@ class HumdrumFile(HumdrumFileContent):
 
             vtexts: list[str] = []
             vtoks: list[HumdrumToken] = []
-            vcolor: str = ''
-            ftrack: int = fieldTok.track
-            fstrack: int = fieldTok.subTrack
 
             if isSilbe:
                 value: str = fieldTok.text
@@ -8127,12 +8127,10 @@ class HumdrumFile(HumdrumFileContent):
                 value = value.replace(r'\o3', 'ö')
                 vtexts.append(value)
                 vtoks.append(fieldTok)
-                vcolor = self._spineColor[ftrack][fstrack]
             else:
                 # not silbe
                 vtexts.append(fieldTok.text)
                 vtoks.append(fieldTok)
-                vcolor = self._spineColor[ftrack][fstrack]
 
             if isVVdata:
                 self._splitSyllableBySpaces(vtexts)
@@ -8145,8 +8143,10 @@ class HumdrumFile(HumdrumFileContent):
 
                 # parent Lyric (will contain multiple component Lyrics if elisions present)
                 verse: m21.note.Lyric = m21.note.Lyric()
-                if vcolor:
-                    verse.style.color = vcolor
+
+                color: str | None = vtoken.getValueString('auto', 'color')
+                if color:
+                    verse.style.color = color
 
                 verse.number = verseNum
                 if verseLabel:
@@ -12570,10 +12570,10 @@ class HumdrumFile(HumdrumFileContent):
                     # we're done looking for associated lyrics spines
                     break
 
-                if token.isDataType('**text') \
-                        or token.isDataType('**silbe') \
-                        or token.dataType.text.startswith('**vdata') \
-                        or token.dataType.text.startswith('**vvdata'):
+                if (token.isDataType('**text')
+                        or token.isDataType('**silbe')
+                        or token.dataType.text.startswith('**vdata')
+                        or token.dataType.text.startswith('**vvdata')):
                     self._staffStates[i].hasLyrics = True
 
     def _prepareScoreLayerTokens(self) -> None:

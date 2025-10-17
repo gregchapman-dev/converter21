@@ -73,6 +73,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         # m_multirest = analyzeMultiRest(infile);
 
         self.analyzeBreaks()
+        self.analyzeVerseColor()
         self.analyzeSlurs()
         self.analyzePhrasings()
         self.analyzeKernTies()
@@ -985,6 +986,58 @@ class HumdrumFileContent(HumdrumFileStructure):
     '''
     //////////////////////////////
     //
+    // HumdrumInput::analyzeVerseColor -- Calculate color of lyric text from *color:
+    //    interpretations.
+    '''
+    def analyzeVerseColor(self) -> None:
+        lyricStartTokens: list[HumdrumToken] = self.spineStartListOfType(
+            ['**text', '**silbe', '**vdata', '**vvdata']
+        )
+
+        for startTok in lyricStartTokens:
+            self.analyzeVerseColorForSpine(startTok)
+
+    def analyzeVerseColorForSpine(self, startTok: HumdrumToken):
+        # Only checking primary spine (no spine splits)
+        current: HumdrumToken | None = startTok
+        color: str = ''
+        while current is not None:
+            if current.isInterpretation:
+                m = re.search(r'^\*color:\s*([^\s]+)', current.text)
+                if m is not None:
+                    color = m.group(1)
+                    if color == 'auto':
+                        # '*color: auto' means go back to default
+                        color = ''
+                elif current.text.startswith('*color:'):
+                    # *color: with no following string means go back to default
+                    color = ''
+            if not color:
+                # move to next token in spine
+                current = current.nextToken0
+                continue
+            if not current.isData:
+                # move to next token in spine
+                current = current.nextToken0
+                continue
+            if current.isNull:
+                # move to next token in spine
+                current = current.nextToken0
+                continue
+
+            # override with !LO:LY:color (if present)
+            localColor: str = current.layoutParameter('LY', 'color')
+            if localColor:
+                current.setValue('auto', 'color', localColor)
+            else:
+                current.setValue('auto', 'color', color)
+
+            # move to next token in spine
+            current = current.nextToken0
+
+    '''
+    //////////////////////////////
+    //
     // HumdrumFileContent::analyzeRestPositions -- Calculate the vertical position
     //    of rests on staves with two layers.
     '''
@@ -1791,7 +1844,11 @@ class HumdrumFileContent(HumdrumFileStructure):
 
     '''
     def initializeSpineColor(self) -> None:
-        self._spineColor = [[''] * MAXCOLORSUBTRACK] * (self.maxTrack + 1)
+        for _t in range(0, self.maxTrack + 1):
+            self._spineColor.append([])
+            for _s in range(0, MAXCOLORSUBTRACK):
+                self._spineColor[-1].append('')
+
         for line in self.lines():
             if line.isData:
                 break
@@ -1822,7 +1879,7 @@ class HumdrumFileContent(HumdrumFileStructure):
                     # copy it to subtrack 0 as well
                     self._spineColor[ctrack][0] = m.group(1)
                 elif strack == 0:
-                    # copy it to all subtracks
+                    # copy it to all other subtracks
                     for z in range(1, MAXCOLORSUBTRACK):
                         self._spineColor[ctrack][z] = m.group(1)
 
