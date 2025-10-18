@@ -8116,8 +8116,11 @@ class HumdrumFile(HumdrumFileContent):
             vtexts: list[str] = []
             vtoks: list[HumdrumToken] = []
 
+            value: str = fieldTok.getValueString('auto', 'text')
+            if not value:
+                value = fieldTok.text
+            value = value.strip()
             if isSilbe:
-                value: str = fieldTok.text
                 value = value.replace('|', '')
                 value = value.replace('u2', 'ü')
                 value = value.replace('a2', 'ä')
@@ -8125,12 +8128,10 @@ class HumdrumFile(HumdrumFileContent):
                 value = value.replace(r'\u3', 'ü')
                 value = value.replace(r'\a3', 'ä')
                 value = value.replace(r'\o3', 'ö')
-                vtexts.append(value)
-                vtoks.append(fieldTok)
-            else:
-                # not silbe
-                vtexts.append(fieldTok.text)
-                vtoks.append(fieldTok)
+            value = re.sub(r'\s+-$', '-', value)  # trailing space before hyphen
+            value = re.sub(r'-\s+$', '', value)  # leading space after hyphen
+            vtexts.append(value)
+            vtoks.append(fieldTok)
 
             if isVVdata:
                 self._splitSyllableBySpaces(vtexts)
@@ -12627,6 +12628,10 @@ class HumdrumFile(HumdrumFileContent):
             elif startTok.isDataType('**mens'):
                 staffIndex += 1
                 self._hasMensSpine = True
+#             elif startTok.isDataType('**text'):
+#                 self._analyzeTextInterpretation(startTok)
+#             elif startTok.isDataType('**silbe'):
+#                 self._analyzeTextInterpretation(startTok)
             # Only mxhm/harte-style harmony for now
 #             elif startTok.isDataType('**harm'):
 #                 self._hasHarmonySpine = True
@@ -12648,6 +12653,121 @@ class HumdrumFile(HumdrumFileContent):
                     self._staffStates[staffIndex].figuredBassState = +1
                     self._staffStates[staffIndex].isStaffWithFiguredBass = True
 
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::analyzeTextInterpretation --  deals with automatic
+    //     styling of elisions/spaces as well as word extension.
+    //
+    // *elision  = Display spaces in **text tokens as elisions (default).
+    // *Xelision = Do not display spaces as elisions.
+    // *worex    = Display word extension for melismas after ending of works.
+    // *Xworex   = Do not display word extension.
+    //
+    // *worex/*Xelision override any explicit word extenders ("_" character)
+    // after ending syllable of words.
+    '''
+    def _analyzeTextInterpretation(self, startTok: HumdrumToken):
+        current: HumdrumToken | None = startTok
+        lastEnd: HumdrumToken | None = None
+        melismaNoteCount: int = 0
+        spacesAreElisions: bool = True  # default is that they are elisions
+        foundWorex: bool = False
+        useWorex: bool = False  # use encoded "_" character for line extension
+        while current is not None:
+            if current.isInterpretation:
+                if current.text == '*elision':
+                    spacesAreElisions = True
+                elif current.text == '*Xelision':
+                    spacesAreElisions = False
+                elif current.text == '*worex':
+                    foundWorex = True
+                    useWorex = True
+                elif current.text == '*Xworex':
+                    foundWorex = True
+                    useWorex = False
+
+            if not current.isData:
+                current = current.nextToken0
+                continue
+
+            # current is a data token at this point.
+
+            if current.isNull:
+                # Keep track of any notes that are not attached to a text syllable
+                melismaNoteCount += self.hasParallelNote(current)
+                current = current.nextToken0
+                continue
+
+            # current is some sort of syllable at this point.
+
+            if foundWorex:
+                # Check for automatic addition or suppression of word extension lines.
+                if lastEnd is not None and (
+                        lastEnd.text[-1] == '_' or re.search(r'[^-]$', lastEnd.text)):
+                    # The last syllable is the end of a word so decide whether or
+                    # not to add/suppress line extension based on melisma note count.
+                    if melismaNoteCount:
+                        if useWorex and lastEnd.text:
+                            # force a word extender
+                            if lastEnd.text[-1] != '_':
+                                lastEnd.setValue('auto', 'text', lastEnd.text + '_')
+                        else:
+                            # suppress any word extender
+                            if lastEnd.text and lastEnd.text[-1] == '_':
+                                lastEnd.setValue('auto', 'text', lastEnd.text[:-1])
+                    melismaNoteCount = 0
+                    lastEnd = None
+
+                if current.text[-1] == '_' or re.search(r'[^-]$', current.text):
+                    # This syllable is the end of a word, so reset the melisma count.
+                    melismaNoteCount = 0
+                    lastEnd = current
+                else:
+                    lastEnd = None
+
+            # Check for elision styling.
+            if not spacesAreElisions:  # this seems backward
+                if ' ' not in current.text:
+                    current = current.nextToken0
+                    continue
+                text: str = re.sub(' ', '&#160;', current.text)
+                current.setValue('auto', 'text', text)
+
+            current = current.nextToken0
+
+    '''
+    //////////////////////////////
+    //
+    // HumdrumInput::hasParallelNote -- Go backwards on the line and count
+    //   any note attack (or tied note) on the first staff-like spine (track)
+    //   found to the left.  If there is a spine split in the text and or
+    //   **kern data, then this algorithm needs to be refined further.
+    '''
+    @staticmethod
+    def hasParallelNote(token: HumdrumToken) -> int:
+        current: HumdrumToken | None = token
+        track: int = -1
+
+        while current is not None:
+            current = current.previousFieldToken
+            if current is None:
+                break
+
+            if current.isStaffDataType:
+                ctrack: int | None = current.track
+                if ctrack is None:
+                    return 0
+                if track < 0:
+                    track = ctrack
+                if track != ctrack:
+                    return 0
+                if current.isNull:
+                    continue
+                if current.isNote:
+                    return 1
+
+        return 0
 
     @staticmethod
     def _getLoColor(token: HumdrumToken, ns2: str) -> str:
