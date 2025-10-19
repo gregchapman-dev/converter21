@@ -73,7 +73,7 @@ class HumdrumFileContent(HumdrumFileStructure):
         # m_multirest = analyzeMultiRest(infile);
 
         self.analyzeBreaks()
-        self.analyzeVerseColor()
+        self.analyzeVerseStyle()
         self.analyzeSlurs()
         self.analyzePhrasings()
         self.analyzeKernTies()
@@ -989,19 +989,20 @@ class HumdrumFileContent(HumdrumFileStructure):
     // HumdrumInput::analyzeVerseColor -- Calculate color of lyric text from *color:
     //    interpretations.
     '''
-    def analyzeVerseColor(self) -> None:
+    def analyzeVerseStyle(self) -> None:
         lyricStartTokens: list[HumdrumToken] = self.spineStartListOfType(
             ['**text', '**silbe', '**vdata', '**vvdata']
         )
 
         for startTok in lyricStartTokens:
-            self.analyzeVerseColorForSpine(startTok)
+            self.analyzeVerseStyleForSpine(startTok)
 
-    def analyzeVerseColorForSpine(self, startTok: HumdrumToken):
+    def analyzeVerseStyleForSpine(self, startTok: HumdrumToken):
         # Only checking primary spine (no spine splits)
         current: HumdrumToken | None = startTok
         color: str = ''
         while current is not None:
+            # First, figure out current color, based on *color changes
             if current.isInterpretation:
                 m = re.search(r'^\*color:\s*([^\s]+)', current.text)
                 if m is not None:
@@ -1012,25 +1013,47 @@ class HumdrumFileContent(HumdrumFileStructure):
                 elif current.text.startswith('*color:'):
                     # *color: with no following string means go back to default
                     color = ''
-            if not color:
-                # move to next token in spine
-                current = current.nextToken0
-                continue
-            if not current.isData:
-                # move to next token in spine
-                current = current.nextToken0
-                continue
-            if current.isNull:
-                # move to next token in spine
+
+            # Now, we look at !LO:LY values and set style.color and style.fontStyle
+            # (but only if non-null verse data)
+            if not current.isData or current.isNull:
+                # Nothing to set here, move to next token in spine
                 current = current.nextToken0
                 continue
 
-            # override with !LO:LY:color (if present)
+            # override currently active *color with !LO:LY:color (if present)
             localColor: str = current.layoutParameter('LY', 'color')
             if localColor:
                 current.setValue('auto', 'color', localColor)
             else:
                 current.setValue('auto', 'color', color)
+
+            # pick up any italic/bold stylishness as well (from !LO:LY:iB et al)
+            italic: bool = False
+            bold: bool = False
+            if current.getBooleanLayoutParameter('LY', 'i'):  # italic
+                italic = True
+            if current.getBooleanLayoutParameter('LY', 'B'):  # bold
+                bold = True
+            if current.getBooleanLayoutParameter('LY', 'bi'):  # bold-italic
+                bold = True
+                italic = True
+            if current.getBooleanLayoutParameter('LY', 'ib'):  # bold-italic
+                bold = True
+                italic = True
+            if current.getBooleanLayoutParameter('LY', 'Bi'):  # bold-italic
+                bold = True
+                italic = True
+            if current.getBooleanLayoutParameter('LY', 'iB'):  # bold-italic
+                bold = True
+                italic = True
+
+            if bold and italic:
+                current.setValue('auto', 'fontStyle', 'bold-italic')
+            elif italic:
+                current.setValue('auto', 'fontStyle', 'italic')
+            elif bold:
+                current.setValue('auto', 'fontStyle', 'bold')
 
             # move to next token in spine
             current = current.nextToken0

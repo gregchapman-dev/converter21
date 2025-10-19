@@ -8144,15 +8144,20 @@ class HumdrumFile(HumdrumFileContent):
 
                 # parent Lyric (will contain multiple component Lyrics if elisions present)
                 verse: m21.note.Lyric = m21.note.Lyric()
+                if t.TYPE_CHECKING:
+                    assert isinstance(verse.style, m21.style.TextStylePlacement)
 
                 color: str | None = vtoken.getValueString('auto', 'color')
                 if color:
                     verse.style.color = color
 
+                fontStyle: str | None = vtoken.getValueString('auto', 'fontStyle')
+                if fontStyle:
+                    verse.style.fontStyle = M21Convert.m21FontStyleFromFontStyle(fontStyle)
+
                 verse.number = verseNum
                 if verseLabel:
                     verse.identifier = verseLabel
-
 
                 if isVdata or isVVdata:
                     # do not parse text content as lyrics
