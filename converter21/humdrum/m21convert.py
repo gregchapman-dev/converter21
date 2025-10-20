@@ -1798,6 +1798,48 @@ class M21Convert:
         return output
 
     @staticmethod
+    def lyricLayoutParameterFromM21Lyric(lyric: m21.note.Lyric) -> str:
+        if not lyric.hasStyleInformation:
+            return ''
+
+        style = lyric.style
+        if t.TYPE_CHECKING:
+            assert isinstance(style, m21.style.TextStylePlacement)
+
+        styleString: str = ''
+        colorString: str = ''
+
+        italic: bool = False
+        bold: bool = False
+
+        if style.fontStyle is not None:
+            if style.fontStyle == 'italic':
+                italic = True
+            elif style.fontStyle == 'bold':
+                bold = True
+            elif style.fontStyle == 'bolditalic':
+                bold = True
+                italic = True
+
+        if style.fontWeight is not None and style.fontWeight == 'bold':
+            bold = True
+
+        if italic and bold:
+            styleString = ':Bi'
+        elif italic:
+            styleString = ':i'
+        elif bold:
+            styleString = ':B'
+
+        if style.color:
+            colorString = f':color={style.color}'
+
+        if styleString or colorString:
+            output: str = '!LO:LY' + styleString + colorString
+            return output
+        return ''
+
+    @staticmethod
     def textLayoutParameterFromM21TextExpression(
         textExpression: m21.expressions.TextExpression
     ) -> str:

@@ -988,6 +988,64 @@ class GridMeasure:
             if verseLabel is not None:
                 newStaff.sides.setVerse(i, verseLabel)
 
+    def addVerseLayouts(
+        self,
+        associatedSlice: GridSlice,
+        partIndex: int,
+        staffIndex: int,
+        verseLayouts: list[HumdrumToken | None]
+    ) -> None:
+        # add these verse labels just before this associatedSlice
+        if len(self.slices) == 0:
+            # something strange happened: expecting at least one item in measure.
+            # associatedSlice is supposed to already be in the measure.
+            return
+
+        associatedSliceIdx: int | None = None
+        if associatedSlice is None:
+            # place at end of measure (associate with imaginary slice just off the end)
+            associatedSliceIdx = len(self.slices)
+        else:
+            # find owning line (associatedSlice)
+            foundIt: bool = False
+            for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
+                gridSlice: GridSlice = self.slices[associatedSliceIdx]
+                if gridSlice is associatedSlice:
+                    foundIt = True
+                    break
+            if not foundIt:
+                # cannot find owning line (a.k.a. associatedSlice is not in this GridMeasure)
+                return
+
+        # see if the previous slice is a LocalLayout slice we can use
+        prevIdx: int = associatedSliceIdx - 1
+        prevSlice: GridSlice = self.slices[prevIdx]
+        if prevSlice.isLocalLayoutSlice:
+            prevStaff: GridStaff = prevSlice.parts[partIndex].staves[staffIndex]
+            if prevStaff.sides.verseCount == 0:
+                for i, verseLayout in enumerate(verseLayouts):
+                    if verseLayout is not None:
+                        prevStaff.sides.setVerse(i, verseLayout)
+                return
+
+        # if we get here, we couldn't use the previous slice, so we need to insert
+        # a new LocalLayout slice to use, just before the associated slice.
+        insertPoint: int = associatedSliceIdx
+        newSlice: GridSlice
+
+        if associatedSlice is not None:
+            newSlice = GridSlice(self, associatedSlice.timestamp, SliceType.Layouts)
+            newSlice.initializeBySlice(associatedSlice)
+            self.slices.insert(insertPoint, newSlice)
+        else:
+            newSlice = GridSlice(self, self.timestamp + self.duration, SliceType.Layouts)
+            newSlice.initializeBySlice(self.slices[-1])
+            self.slices.append(newSlice)
+
+        newStaff: GridStaff = newSlice.parts[partIndex].staves[staffIndex]
+        for i, verseLayout in enumerate(verseLayouts):
+            if verseLayout is not None:
+                newStaff.sides.setVerse(i, verseLayout)
 
     def addLayoutParameterAtTime(
         self,

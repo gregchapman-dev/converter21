@@ -3107,13 +3107,19 @@ class ScoreWriter:
                     verses.append(None)
                 verses[number - 1] = lyric
 
-        # now, in number order (with maybe some empty slots)
+        # labels, in number order (with maybe some empty slots)
         vLabelTokens: list[HumdrumToken | None] = [None] * len(verses)
         thereAreVerseLabels: bool = False
+
+        # layout tokens, in number order (with maybe some empty slots)
+        vLayoutTokens: list[HumdrumToken | None] = [None] * len(verses)
+        thereAreVerseLayouts: bool = False
 
         for i, verse in enumerate(verses):
             verseText: str = ''
             verseLabel: str = ''
+            verseLayoutParam: str = ''
+
             if verse is not None:
                 # rawText handles elisions as well as syllabic-based hyphens
                 verseText = self._cleanSpaces(verse.rawText)
@@ -3131,6 +3137,13 @@ class ScoreWriter:
                     # we expect it to be set to str.  We cast to str, just in case.
                     verseLabel = str(verse.identifier)
 
+                # get a style dictionary for this verse
+                verseLayoutParam = M21Convert.lyricLayoutParameterFromM21Lyric(verse)
+
+            if verseLayoutParam:
+                vLayoutTokens[i] = HumdrumToken(verseLayoutParam)
+                thereAreVerseLayouts = True
+
             if verseLabel:
                 vLabelTokens[i] = HumdrumToken('*v:' + verseLabel)
                 thereAreVerseLabels = True
@@ -3146,6 +3159,11 @@ class ScoreWriter:
         # if there are any verse labels, add them in a new slice just before this one
         if thereAreVerseLabels:
             outgm.addVerseLabels(outSlice, partIndex, staffIndex, vLabelTokens)
+
+        # if there are any verse layouts, add them in a new slice, after the verse
+        # label slice (if present) and just before this one.
+        if thereAreVerseLayouts:
+            outgm.addVerseLayouts(outSlice, partIndex, staffIndex, vLayoutTokens)
 
         return staff.sides.verseCount
 
