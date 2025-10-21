@@ -63,6 +63,9 @@ osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do scr
 # Compare multiscore import vs MEI export to multiple music (fileList21)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMultiscoreVsMei_MultiMusic.py ~/Documents/test/teststuff/fileList21.txt"'
 
+# Compare MEI import vs Humdrum export/reimport (fileList22)
+osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsHumExport.py ~/Documents/test/teststuff/fileList22.txt"'
+
 # Compare MEI v4 import vs MEI export/reimport (fileListMei)
 osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd ~/Documents/Code/converter21; python3 tests/diffallMeiImportVsMeiExport.py ~/Documents/test/teststuff/fileListMei.txt"'
 
