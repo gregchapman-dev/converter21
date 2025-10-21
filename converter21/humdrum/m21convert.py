@@ -1802,12 +1802,30 @@ class M21Convert:
         if not lyric.hasStyleInformation:
             return ''
 
+        placementString: str = ''
+        styleString: str = ''
+        justString: str = ''
+        colorString: str = ''
+
         style = lyric.style
         if t.TYPE_CHECKING:
             assert isinstance(style, m21.style.TextStylePlacement)
 
-        styleString: str = ''
-        colorString: str = ''
+        if style.placement is not None:
+            if style.placement == 'above':
+                placementString = ':a'
+            elif style.placement == 'below':
+                if style and style.alignVertical == 'middle':
+                    placementString = ':c'
+                else:
+                    placementString = ':b'
+
+        # style.absoluteY overrides style.placement
+        if style.absoluteY is not None:
+            if style.absoluteY > 0.0:
+                placementString = ':a'
+            else:
+                placementString = ':b'
 
         italic: bool = False
         bold: bool = False
@@ -1831,12 +1849,18 @@ class M21Convert:
         elif bold:
             styleString = ':B'
 
+        if style.justify == 'right':
+            justString = ':rj'
+        elif style.justify == 'center':
+            justString = ':cj'
+
         if style.color:
             colorString = f':color={style.color}'
 
-        if styleString or colorString:
-            output: str = '!LO:LY' + styleString + colorString
+        if placementString or styleString or justString or colorString:
+            output: str = '!LO:LY' + placementString + styleString + justString + colorString
             return output
+
         return ''
 
     @staticmethod
