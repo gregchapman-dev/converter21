@@ -1055,6 +1055,18 @@ class HumdrumFileContent(HumdrumFileStructure):
             elif bold:
                 current.setValue('auto', 'fontStyle', 'bold')
 
+            if current.getBooleanLayoutParameter('LY', 'rj'):
+                current.setValue('auto', 'justify', 'right')
+            elif current.getBooleanLayoutParameter('LY', 'cj'):
+                current.setValue('auto', 'justify', 'center')
+
+            if current.getBooleanLayoutParameter('LY', 'a'):
+                current.setValue('auto', 'placement', 'above')
+            elif current.getBooleanLayoutParameter('LY', 'b'):
+                current.setValue('auto', 'placement', 'below')
+            elif current.getBooleanLayoutParameter('LY', 'c'):
+                current.setValue('auto', 'placement', 'center')
+
             # move to next token in spine
             current = current.nextToken0
 

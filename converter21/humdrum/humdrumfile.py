@@ -8155,6 +8155,17 @@ class HumdrumFile(HumdrumFileContent):
                 if fontStyle:
                     verse.style.fontStyle = M21Convert.m21FontStyleFromFontStyle(fontStyle)
 
+                justify: str | None = vtoken.getValueString('auto', 'justify')
+                if justify in ('center', 'right'):
+                    verse.style.justify = justify
+
+                placement: str | None = vtoken.getValueString('auto', 'placement')
+                if placement in ('above', 'below'):
+                    verse.style.placement = placement
+                elif placement == 'center':
+                    verse.style.placement = 'below'
+                    verse.style.alignVertical = 'middle'
+
                 verse.number = verseNum
                 if verseLabel:
                     verse.identifier = verseLabel
