@@ -7,6 +7,7 @@
 # Copyright:     (c) 2025 Greg Chapman
 # License:       MIT, see LICENSE
 # ------------------------------------------------------------------------------
+import sys
 import typing as t
 import re
 
@@ -19,8 +20,13 @@ from converter21.abc import AbcMetadata
 class AbcImportException(Exception):
     pass
 
+LIMIT_NEEDED: int = 10000
+
 class AbcReader:
     def __init__(self, dataString: str):
+        limit: int = sys.getrecursionlimit()
+        if limit < LIMIT_NEEDED:
+            sys.setrecursionlimit(LIMIT_NEEDED)
         self.abcString: str = dataString
         self.abcTuneByNumber: dict[str, str] = {}
         self.abcTuneHeaderLinesByNumber: dict[str, list[str]] = {}
