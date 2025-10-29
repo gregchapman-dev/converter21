@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# coding=latin-1
 '''
 Copyright (C) 2012-2025: W.G. Vree
 Contributions: M. Tarenskeen, N. Liberg, Paul Villiger, Janus Meuris, Larry Myerscough,
@@ -19,7 +20,7 @@ try:    import xml.etree.cElementTree as E
 except: import xml.etree.ElementTree as E
 import os, sys, types, re, math
 
-VERSION = 167
+VERSION = 172
 
 python3 = sys.version_info.major > 2
 if python3:
@@ -148,6 +149,7 @@ class Note:
     def __init__ (s, dur=0, n=None):
         s.tijd = 0      # the time in XML division units
         s.dur = dur     # duration of a note in XML divisions
+        s.type = ''     # xml note type (for values see Parser.note_type)
         s.fact = None   # time modification for tuplet notes (num, div)
         s.tup = ['']    # start(s) and/or stop(s) of tuplet
         s.tupabc = ''   # abc tuplet string to issue before note
@@ -159,11 +161,14 @@ class Note:
         s.lyrs = {}     # {number -> syllabe}
         s.tab = None    # (string number, fret number)
         s.ntdec = ''    # !string!, !courtesy!
+        s.xmlstf = 1    # xml staff number
+        s.xmlvce = 1    # xml voice number
 
 class Elem:
-    def __init__ (s, string):
+    def __init__ (s, string, stf = -1):
         s.tijd = 0      # the time in XML division units
         s.str = string  # any abc string that is not a note
+        s.xmlstf = stf
 
 class Counter:
     def inc (s, key, voice): s.counters [key][voice] = s.counters [key].get (voice, 0) + 1
@@ -171,13 +176,13 @@ class Counter:
         tups = list( zip (vnums.keys (), len (vnums) * [0]))
         s.counters = {'note': dict (tups), 'nopr': dict (tups), 'nopt': dict (tups)}
     def getv (s, key, voice): return s.counters[key][voice]
-    def prcnt (s, ip):  # print summary of all non zero counters
+    def prcnt (s, ip, wev = False):  # print summary of all non zero counters
         for iv in s.counters ['note']:
             if s.getv ('nopr', iv) != 0:
                 info ( 'part %d, voice %d has %d skipped non printable notes' % (ip, iv, s.getv ('nopr', iv)))
             if s.getv ('nopt', iv) != 0:
                 info ( 'part %d, voice %d has %d notes without pitch' % (ip, iv, s.getv ('nopt', iv)))
-            if s.getv ('note', iv) == 0: # no real notes counted in this voice
+            if s.getv ('note', iv) == 0 and not wev: # no real notes counted in this voice
                 info ( 'part %d, skipped empty voice %d' % (ip, iv))
 
 class Music:
@@ -187,6 +192,7 @@ class Music:
         s.gMaten = []           # [voices,.. for all measures in a part]
         s.gLyrics = []          # [{num: (abc_lyric_string, melis)},.. for all measures in a part]
         s.vnums = {}            # all used voice id's in a part (xml voice id's == numbers)
+        s.wev = options.wev     # output empty voices
         s.cnt = Counter ()      # global counter object
         s.vceCnt = 1            # the global voice count over all parts
         s.lastnote = None       # the last real note record inserted in s.voices
@@ -260,7 +266,7 @@ class Music:
                 s.lastnote.before += [d]
         s.lastnote.ns.append (note.ntdec + noot)
 
-    def addBar (s, lbrk, m): # linebreak, measure data
+    def addBar (s, lbrk, m, balken, isSib): # linebreak, measure data, staff allocations
         if m.mdur and s.maxtime > m.mdur: info ('measure %d in part %d longer than metre' % (m.ixm+1, m.ixp+1))
         s.tijd = s.maxtime              # the time of the bar lines inserted here
         for v in s.vnums:
@@ -284,7 +290,7 @@ class Music:
             if m.attr:                  # insert signatures at front of buffer
                 s.insertElem (v, '%s' % m.attr)
             s.appendElem (v, ' %s' % m.rline)   # insert current barline record at time maxtime
-            s.voices[v] = sortMeasure (s.voices[v], m)  # make all times consistent
+            s.voices[v] = sortMeasure (s.voices[v], m, balken, isSib, v)  # make all times consistent
             lyrs = s.lyrics[v]          # [{number: sylabe}, .. for all notes]
             lyrdict = {}                # {number: (abc_lyric_string, melis)} for this voice
             nums = [num for d in lyrs for num in d.keys ()] # the lyrics numbers in this measure
@@ -308,8 +314,8 @@ class Music:
         if s.jscript or isSib: vnum_keys.sort ()
         lvc = min (vnum_keys or [1])	# lowest xml voice number of this part
         for iv in vnum_keys:
-            if s.cnt.getv ('note', iv) == 0:    # no real notes counted in this voice
-                continue            # skip empty voices
+            if s.cnt.getv ('note', iv) == 0 and not s.wev:  # no real notes counted in this voice
+                continue            # skip empty voices if s.wev is false (with empty voices)
             if abcOut.denL: unitL = abcOut.denL # take the unit length from the -d option
             else:           unitL = compUnitLength (iv, s.gMaten, divs) # compute the best unit length for this voice
             abcOut.cmpL.append (unitL)  # remember for header output
@@ -353,7 +359,7 @@ class Music:
             s.vceCnt += 1           # count voices over all parts
         s.gMaten = []               # reset the follwing instance vars for each part
         s.gLyrics = []
-        s.cnt.prcnt (ip+1)          # print summary of skipped items in this part
+        s.cnt.prcnt (ip+1, s.wev)          # print summary of skipped items in this part
         return vvmap
 
 class ABCoutput:
@@ -494,8 +500,11 @@ def simplify (a, b):    # divide a and b by their greatest common divisor
     return x // a, y // a
 
 def abcdur (nx, divs, uL):      # convert an musicXML duration d to abc units with L:1/uL
-    if nx.dur == 0: return ''   # when called for elements without duration
+    if nx.dur == 0 and not nx.grace:
+        return ''   # when called for elements without duration
     num, den = simplify (uL * nx.dur, divs * 4) # L=1/8 -> uL = 8 units
+    if nx.grace:    # nx.type = whole, half, quarter, .. == 1,2,4, .. for {AA} and 2,4,8, .. for {A}
+        num, den = simplify (16, nx.type or uL)
     if nx.fact:                 # apply tuplet time modification
         numfac, denfac = nx.fact
         num, den = simplify (num * numfac, den * denfac)
@@ -671,48 +680,70 @@ def outVoice (measure, divs, im, ip, unitL, rebeam, metrum):    # note/elem obje
     while vs.find ('!8va(!!8va)!') >= 0: vs = vs.replace ('!8va(!!8va)!','')    # remove empty ottava's
     return vs
 
-def sortMeasure (voice, m):
+def elemToNewVoice (nx, balken, balkvce, lastStaffChange, v, vtijd):
+    curstf = balken [balkvce]
+    if nx.xmlstf > 0 and nx.xmlstf != curstf:   # staff change needed
+        lastStaffChange = (len (v), curstf)     # (index in v of this change element e, current staff)
+        dstaff = nx.xmlstf - curstf     # relative new staff number
+        balken [balkvce] = nx.xmlstf    # the new staff for this voice
+        e = Elem ('[I:staff %+d]' % dstaff)
+        e.tijd = vtijd
+        v.append (e)  # insert a staff change before the note or Elem (nx)
+    else: lastStaffChange = ()  # reset when no change was needed for nx
+    v.append (nx)
+    return lastStaffChange
+
+def sortMeasure (voice, m, balken, isSib, balkvce):
     voice.sort (key=lambda o: o.tijd)   # sort on time
-    time = 0
-    v = []
+    vtijd = 0
+    v = []                             # new sorted voice
     rs = []                            # holds rests in between notes
+    ixl = 0                            # index in v of last note
+    lastStaffChange = ()               # (index in v of change, change value)
     for i, nx in enumerate (voice):    # establish sequentiality
-        if nx.tijd > time and chkbug (nx.tijd - time, m):
-            v.append (Note (nx.tijd - time, 'x'))   # fill hole with invisble rest
+        if nx.tijd > vtijd and chkbug (nx.tijd - vtijd, m):
+            v.append (Note (nx.tijd - vtijd, 'x'))   # fill hole with invisble rest
             rs.append (len (v) - 1)
         if isinstance (nx, Elem):
-            if nx.tijd < time: nx.tijd = time # shift elems without duration to where they fit
-            v.append (nx)
-            time = nx.tijd
+            if nx.tijd < vtijd: nx.tijd = vtijd # shift elems without duration to where they fit
+            elemToNewVoice (nx, balken, balkvce, lastStaffChange, v, vtijd)
+            vtijd = nx.tijd
             continue
-        if nx.tijd < time:                  # overlapping element
+        balkvce = nx.xmlvce + (100 * nx.xmlstf) if isSib else nx.xmlvce
+        if nx.tijd < vtijd:                  # overlapping element
             if nx.ns[0] == 'z': continue    # discard overlapping rest
-            if v[-1].tijd <= nx.tijd:       # we can do something
-                if v[-1].ns[0] == 'z':      # shorten rest
-                    v[-1].dur = nx.tijd - v[-1].tijd
-                    if v[-1].dur == 0: del v[-1]        # nothing left
+            if v[ixl].tijd <= nx.tijd:      # we can do something
+                if v[ixl].ns[0] == 'z':     # shorten rest
+                    v[ixl].dur = nx.tijd - v[ixl].tijd
+                    if v[ixl].dur == 0:
+                        del v[ixl]          # nothing left
+                        if lastStaffChange: # also delete possible staff change element
+                            iv, cstf = lastStaffChange  # caused by the (now deleted) rest
+                            del v[iv]
+                            balken [balkvce] = cstf
                     info ('overlap in part %d, measure %d: rest shortened' % (m.ixp+1, m.ixm+1))
                 else:                       # make a chord of overlap
-                    v[-1].ns += nx.ns
+                    v[ixl].ns += nx.ns
                     info ('overlap in part %d, measure %d: added chord' % (m.ixp+1, m.ixm+1))
-                    nx.dur = (nx.tijd + nx.dur) - time  # the remains
+                    nx.dur = (nx.tijd + nx.dur) - vtijd # the remains
                     if nx.dur <= 0: continue            # nothing left
-                    nx.tijd = time          # append remains
+                    nx.tijd = vtijd         # append remains
             else:                           # give up
                 info ('overlapping notes in one voice! part %d, measure %d, note %s discarded' % (m.ixp+1, m.ixm+1, isinstance (nx, Note) and nx.ns or nx.str))
                 continue
-        v.append (nx)
+        lastStaffChange = elemToNewVoice (nx, balken, balkvce, lastStaffChange, v, vtijd)
         if isinstance (nx, Note):
+            ixl = len (v) - 1               # remember index of last note
             if nx.ns [0] in 'zx':
                 rs.append (len (v) - 1)     # remember rests between notes
             elif len (rs):
                 if nx.beam and not nx.grace:    # copy beam into rests
                     for j in rs: v[j].beam = nx.beam
                 rs = []                     # clear rests on each note
-        time = nx.tijd + nx.dur
+        vtijd = nx.tijd + nx.dur
     #   when a measure contains no elements and no forwards -> no incTime -> s.maxtime = 0 -> right barline
-    #   is inserted at time == 0 (in addbar) and is only element in the voice when sortMeasure is called
-    if time == 0: info ('empty measure in part %d, measure %d, it should contain at least a rest to advance the time!' % (m.ixp+1, m.ixm+1))
+    #   is inserted at vtijd == 0 (in addbar) and is only element in the voice when sortMeasure is called
+    if vtijd == 0: info ('empty measure in part %d, measure %d, it should contain at least a rest to advance the time!' % (m.ixp+1, m.ixm+1))
     return v
 
 def getPartlist (ps):   # correct part-list (from buggy xml-software)
@@ -909,12 +940,14 @@ class Parser:
         'sharp':3, 'sharp-up':4 }
     edomap = { 'flat-down':-8, 'flat-up':-3, 'natural-down':-2, 'natural-up':2, 'sharp-down':3, 'sharp-up':8 }
     edomix = { 'flat-down':-4, 'flat-up':-2, 'natural-down':-1, 'natural-up':1, 'sharp-down':2, 'sharp-up':4 }
+    note_type = { 'whole':1, 'half':2, 'quarter':4, 'eighth':8, '16th':16, '32nd':32, '64th':64 }
 
     def __init__ (s, options):
         # unfold repeats, number of chars per line, credit filter level, volta option
         s.slurBuf = {}    # dict of open slurs keyed by slur number
         s.dirStk = {}     # {direction-type + number -> (type, voice | time)} dict for proper closing
         s.ingrace = 0     # marks a sequence of grace notes
+        s.grcNotes = []   # notes in current grace sequence
         s.msc = Music (options)  # global music data abstraction
         s.unfold = options.u    # turn unfolding repeats on
         s.ctf = options.c       # credit text filter level
@@ -959,7 +992,7 @@ class Parser:
             type1, v1, note1, grace1 = s.slurBuf [n]
             if type2 != type1:              # slur complete, now check the voice
                 if v2 == v1:                # begins and ends in the same voice: keep it
-                    if type1 == 'start' and (not grace1 or not stopgrace):  # normal slur: start before stop and no grace slur
+                    if type1 == 'start':    # start before stop
                         note1.before = ['('] + note1.before # keep left-right order!
                         note2.after += ')'
                     # no else: don't bother with reversed stave spanning slurs
@@ -1128,6 +1161,8 @@ class Parser:
         note = Note ()
         v = int (n.findtext ('voice', '1'))
         xmlstaff = int (n.findtext ('staff', '1'))
+        note.xmlvce = v
+        note.xmlstf = xmlstaff
         if s.isSib: v += 100 * xmlstaff  # repair bug in Sibelius
         chord = n.find ('chord') != None
         p = n.findtext ('pitch/step') or n.findtext ('unpitched/display-step')
@@ -1139,8 +1174,10 @@ class Parser:
             note.fact = (int (numer), int (denom))
         note.tup = [x.get ('type') for x in n.findall ('notations/tuplet')]
         dur = n.findtext ('duration')
+        note.type = s.note_type.get (n.findtext ('type', ''), 0)
         grc = n.find ('grace')
         note.grace = grc != None
+        if note.grace and not chord: s.grcNotes.append (note)
         note.before, note.after = [], '' # strings with ABC stuff that goes before or after a note/chord
         if note.grace and not s.ingrace: # open a grace sequence
             s.ingrace = 1
@@ -1148,6 +1185,8 @@ class Parser:
             if grc.get ('slash') == 'yes': note.before += ['/'] # acciaccatura
         stopgrace = not note.grace and s.ingrace
         if stopgrace:                   # close the grace sequence
+            if len (s.grcNotes) == 1: s.grcNotes [0].type *= 2  # L == 1/8 for {A} or 1/16 for {AA..}
+            s.grcNotes = []
             s.ingrace = 0
             s.msc.lastnote.after += '}' # close grace on lastenote.after
         if dur == None or note.grace: dur = 0
@@ -1196,12 +1235,7 @@ class Parser:
                 s.stemDir [v] = stemdir
                 s.msc.appendElem (v, '[I:stemdir %s]' % stemdir)
         if chord: s.msc.addChord (note, noot)
-        else:
-            if s.curStf [v] != xmlstaff:    # the note should go to another staff
-                dstaff = xmlstaff - s.curStf [v]    # relative new staff number
-                s.curStf [v] = xmlstaff     # remember the new staff for this voice
-                s.msc.appendElem (v, '[I:staff %+d]' % dstaff)  # insert a move before the note
-            s.msc.appendNote (v, note, noot)
+        else:     s.msc.appendNote (v, note, noot)
         for slur in n.findall ('notations/slur'):   # s.msc.lastnote points to the last real note/chord inserted above
             s.matchSlur (slur.get ('type'), slur.get ('number'), v, s.msc.lastnote, note.grace, stopgrace) # match slur definitions
 
@@ -1279,11 +1313,8 @@ class Parser:
             else:
                 voices = s.stfMap[n]            # clef change to all voices of staff n
                 for v in voices:
-                    if n != s.curStf [v]:       # voice is not at its home staff n
-                        dstaff = n - s.curStf [v]
-                        s.curStf [v] = n        # reset current staff at start of measure to home position
-                        s.msc.appendElem (v, '[I:staff %+d]' % dstaff)
-                    s.msc.appendElem (v, '[K:%s]' % cs)
+                    elem = Elem ('[K:%s]' % cs, n)  # n == staff of clef, for possible staff change in sortMeasure
+                    s.msc.appendObj (v, elem, 0)
 
     def findVoice (s, i, es):
         stfnum = int (es[i].findtext ('staff',1))   # directions belong to a staff
@@ -1344,13 +1375,19 @@ class Parser:
         t = e.find ('sound')        # there are many possible attributes for sound
         if t != None:
             minst = t.find ('midi-instrument')
-            if minst:
+            if minst != None:
                 prg = t.findtext ('midi-instrument/midi-program')
                 chn = t.findtext ('midi-instrument/midi-channel')
                 vids = [v for v, id in s.vceInst.items () if id == minst.get ('id')]
                 if vids: vs = vids [0]          # direction for the indentified voice, not the staff
                 parm, inst = ('program', str (int (prg) - 1)) if prg else ('channel', chn)
                 if inst and abcOut.volpan > 0: s.msc.appendElem (vs, '[I:MIDI= %s %s]' % (parm, inst))
+            scinst = t.find ('instrument-change/score-instrument') # musescore
+            if scinst != None:
+                instid = scinst.get ('id')  # xml ID of the score-instrument
+                chn, prg, vol, pan = s.instMid [s.msr.ixp][instid]  # midi values for the ID
+                _, vs, _ = s.findVoice (i, es)  # voice of the next note in the current measure
+                if abcOut.volpan > 0: s.msc.appendElem (vs, '[I:MIDI= %s %s]' % ('program', prg -1))
             tempo = t.get ('tempo') # look for tempo attribute
             if tempo:
                 tempo = '%.0f' % float (tempo) # hope it is a number and insert in voice 1
@@ -1559,6 +1596,28 @@ class Parser:
             s.vce2stf [v] = stf # reverse map
             s.curStf [v] = stf  # current staff of XML voice v
 
+    def emptyStaves (s, part, maten):   # fill each empty staves with an invisible rest in a new voice
+        def addRestToMsre (stf, vce, maat):
+            dvs = part.findtext ('.//divisions', '1')   # duration of the invisible rest
+            xs = '<backup><duration>%s</duration></backup>' % dvs
+            newbck = E.fromstring (xs)
+            xs = '<note print-object="no"><rest measure="yes"/><duration>%s</duration>' % dvs
+            xs += '<voice>%d</voice><staff>%d</staff></note>' % (vce, stf)  # new voice in empty staff
+            newrest = E.fromstring (xs) # invisible rest
+            for i, e in enumerate (maat):   # search for the first note
+                if e.tag == 'note': break;
+            newbck.tail = e.tail    # rest and backup get the same indent as the note
+            newrest.tail = e.tail
+            maat.insert (i, newbck) # insert before i, i now points to newbck
+            maat.insert (i, newrest)    # newrest goes before  newbck
+            s.msc.wev = True        # show empty staves
+        if s.vce2stf == {}: return  # empty part
+        vmax = max (s.vce2stf.keys ())  # new voicenumbers > vmax
+        estfs = [stf for stf, vlst in s.stfMap.items () if vlst == []]  # all empty staves
+        for i, stf in enumerate (estfs):
+            addRestToMsre (stf, vmax + i + 1, maten [0])
+        s.locStaffMap (part, maten) # update s.stfMap, s.vsc2stf and s.curStf
+
     def addStaffMap (s, vvmap): # vvmap: xml voice number -> global abc voice number
         part = [] # default: brace on staffs of one part
         for stf, voices in sorted (s.stfMap.items ()):  # s.stfMap has xml staff and voice numbers
@@ -1613,6 +1672,7 @@ class Parser:
         for ip, p in enumerate (parts):
             maten = p.findall ('measure')
             s.locStaffMap (p, maten)        # {voice -> staff} for this part
+            s.emptyStaves (p, maten)        # fill empty staves with new voices containing an invisible rest
             s.drumNotes = {}    # (xml voice, abc note) -> (midi note, note head)
             s.clefOct = {}      # xml staff number -> current clef-octave-change
             s.curClef = {}      # xml staff number -> current abc clef
@@ -1646,7 +1706,7 @@ class Parser:
                         dt = int (e.findtext ('duration'))
                         if chkbug (dt, s.msr): s.msc.incTime (dt)
                     elif e.tag == 'print':  lbrk = s.doPrint (e)
-                s.msc.addBar (lbrk, s.msr)
+                s.msc.addBar (lbrk, s.msr, s.curStf, s.isSib)
                 s.maatRecs.append (s.msr);
                 if herhaal == 1:
                     herhaalMaat = im
@@ -1720,6 +1780,7 @@ if __name__ == '__main__':
     parser.add_option ("--temp", action="store", type="int", help="temperament for microtonal accidentals (0,1,2)", dest='temp', default=0)
     parser.add_option ("--rbm", action="store_true", help="re-beam all measures", dest='rbm', default=False)
     parser.add_option ("--nbr", action="store_true", help="do not introdude broken rhythm", dest='nbr', default=False)
+    parser.add_option ("--wev", action="store_true", help="with empty voices", dest='wev', default=False)
     options, args = parser.parse_args ()
     if options.n < 0: parser.error ('only values >= 0')
     if options.b < 0: parser.error ('only values >= 0')
