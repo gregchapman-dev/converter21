@@ -10036,7 +10036,7 @@ class HumdrumFile(HumdrumFileContent):
         if color:
             tempoOrDirection.style.color = color
         elif isProblem:
-            tempoOrDirection.style.color = 'red'
+            tempoOrDirection.style.color = 'crimson'
         elif isSic:
             tempoOrDirection.style.color = 'limegreen'
 
