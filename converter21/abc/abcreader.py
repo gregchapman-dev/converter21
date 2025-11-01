@@ -20,6 +20,7 @@ from converter21.abc import AbcMetadata
 class AbcImportException(Exception):
     pass
 
+
 LIMIT_NEEDED: int = 10000
 
 class AbcReader:
