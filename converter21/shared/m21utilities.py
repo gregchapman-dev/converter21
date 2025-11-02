@@ -5000,25 +5000,34 @@ class M21Utilities:
         # music21 style (color that is not standard color name) must be '#rrggbb' or '#aarrggbb'
         # (because of the assumptions music21 makes when writing to MusicXML).  Anything else we
         # must convert to '#rrggbb' or '#aarrggbb'.
-        if color.startswith('#'):
+        if color.startswith('#') and all(c in string.hexdigits for c in color[1:]):
             if len(color) == 7:
-                # check for '#rrggbb'
-                if all(c in string.hexdigits for c in color[1:]):
-                    style.color = color
+                # '#rrggbb' (no conversion/re-ordering necessary)
+                style.color = color
                 return
             if len(color) == 9:
-                # check for '#aarrggbb'
-                if all(c in string.hexdigits for c in color[1:]):
-                    style.color = color
+                # '#rrggbbaa' (that's the order for MEI and Humdrum)
+                # put aa first (#aarrggbb is the correct order for music21/MusicXML)
+                r: str = color[1:2]
+                g: str = color[3:2]
+                b: str = color[5:2]
+                a: str = color[7:2]
+                style.color = '#' + a + r + g + b
                 return
             if len(color) == 4:
-                # check for '#rgb' (and convert to '#rrggbb')
-                if all(c in string.hexdigits for c in color[1:]):
-                    r: str = color[1]
-                    g: str = color[2]
-                    b: str = color[3]
-                    style.color = '#' + r + r + g + g + b + b
+                # '#rgb' (convert to '#rrggbb')
+                r = color[1]
+                g = color[2]
+                b = color[3]
+                style.color = '#' + r + r + g + g + b + b
                 return
+            if len(color) == 5:
+                # #rgba (convert to #aarrggbb, the correct order for music21/MusicXML)
+                r = color[1]
+                g = color[2]
+                b = color[3]
+                a = color[4]
+                style.color = '#' + a + a + r + r + g + g + b + b
             return
 
         try:
@@ -5057,7 +5066,8 @@ class M21Utilities:
                 style.color = webcolors.rgb_to_hex(rgbIntQuadruplet[:-1])
                 if t.TYPE_CHECKING:
                     assert isinstance(style.color, str)
-                style.color += hex(rgbIntQuadruplet[3])[2:]
+                # AARRGGBB is the order for music21/MusicXML
+                style.color = hex(rgbIntQuadruplet[3])[2:] + style.color
                 return
 
             if color.startswith('hsl('):
