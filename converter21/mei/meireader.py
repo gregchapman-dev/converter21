@@ -1044,11 +1044,15 @@ class MeiReader:
             return artics
 
         # We have an articElem; we can do any stylistic things that are in
-        # attributes of articElem. For now, just placement = 'above' or 'below'.
+        # attributes of articElem. For now, just placement = 'above' or 'below'
+        # and color.
         place: str = articElem.get('place', '')
+        color: str = articElem.get('color', '')
         for artic in artics:
             if place in ('above', 'below'):
                 artic.placement = place  # type: ignore
+            if color:
+                M21Utilities.setColor(artic.style, color)
 
         return artics
 
@@ -4547,6 +4551,9 @@ class MeiReader:
                 displayStatus = True
                 displayStyle = 'bracket'
 
+        # 4. color?
+        color: str | None = elem.get('color')
+
         if accidStr is None:
             return None
 
@@ -4556,6 +4563,10 @@ class MeiReader:
             accidental.displayLocation = displayLocation
         if displayStyle:
             accidental.displayStyle = displayStyle
+
+        if color:
+            M21Utilities.setColor(accidental.style, color)
+
         return accidental
 
     def sylFromElement(
@@ -4664,7 +4675,7 @@ class MeiReader:
             output.style.justify = justify  # type: ignore
 
         if color is not None:
-            output.style.color = color
+            M21Utilities.setColor(output.style, color)
 
         return output
 
@@ -5061,6 +5072,14 @@ class MeiReader:
                 theNote.articulations.append(subElement)
             elif isinstance(subElement, m21.pitch.Accidental):
                 theAccidObj = subElement
+                if theAccidObj.hasStyleInformation:
+                    # music21 doesn't (yet) use accid.style, it uses
+                    # note.accidentalStyle instead.
+                    if t.TYPE_CHECKING:
+                        assert isinstance(theNote.style, m21.style.NoteStyle)
+                    if theNote.style.accidentalStyle is None:
+                        theNote.style.accidentalStyle = m21.style.Style()
+                    theNote.style.accidentalStyle.color = theAccidObj.style.color
             elif isinstance(subElement, note.Lyric):
                 if theNote.lyrics is None:
                     theNote.lyrics = []
@@ -5179,7 +5198,7 @@ class MeiReader:
 
         colorStr: str | None = elem.get('color')
         if colorStr is not None:
-            theNote.style.color = colorStr
+            M21Utilities.setColor(theNote.style, colorStr)
 
         headShape: str | None = elem.get('head.shape')
         if headShape is not None:
@@ -5377,7 +5396,7 @@ class MeiReader:
 
         colorStr: str | None = elem.get('color')
         if colorStr is not None:
-            theRest.style.color = colorStr
+            M21Utilities.setColor(theRest.style, colorStr)
 
         # tuplets
         if elem.get('m21TupletNum') is not None:
@@ -5818,7 +5837,7 @@ class MeiReader:
 
         colorStr: str | None = elem.get('color')
         if colorStr is not None:
-            theChord.style.color = colorStr
+            M21Utilities.setColor(theChord.style, colorStr)
 
         stemDirStr: str | None = elem.get('stem.dir')
         if stemDirStr is not None:
@@ -8153,7 +8172,7 @@ class MeiReader:
             rehObj.style._absoluteY = te.style._absoluteY
             rehObj.style._enclosure = te.style._enclosure
             rehObj.style.fontRepresentation = te.style.fontRepresentation
-            rehObj.style.color = te.style.color
+            M21Utilities.setColor(rehObj.style, te.style.color)
             rehObj.style.units = te.style.units
             rehObj.style.hideObjectOnPrint = te.style.hideObjectOnPrint
             rehObj.style.dashLength = te.style.dashLength
@@ -8558,7 +8577,7 @@ class MeiReader:
         if fontFamily:
             te.style.fontFamily = fontFamily
         if color:
-            te.style.color = color
+            M21Utilities.setColor(te.style, color)
         if justify:
             te.style.justify = justify
 

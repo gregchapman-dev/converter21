@@ -19,8 +19,12 @@ import typing as t
 from fractions import Fraction
 from copy import copy, deepcopy
 
+import string
 import pickle
 import zlib
+import colorsys
+
+import webcolors  # type: ignore  # no typing in module
 
 import music21 as m21
 from music21.common.types import OffsetQL, OffsetQLIn, StepName
@@ -1967,8 +1971,8 @@ class M21Utilities:
         return None
 
     @staticmethod
-    def edtfNestedDateRangeFromString(string: str) -> dict[str, str]:
-        dateStrings: list[str] = string.split('-')
+    def edtfNestedDateRangeFromString(theString: str) -> dict[str, str]:
+        dateStrings: list[str] = theString.split('-')
         if len(dateStrings) != 2:
             return {}
 
@@ -2172,19 +2176,19 @@ class M21Utilities:
 
     @staticmethod
     def m21DatePrimitiveFromString(
-        string: str
+        theString: str
     ) -> m21.metadata.DatePrimitive | None:
-        if not string:
+        if not theString:
             return None
 
         # if it looks like an isodate (contains too many '-'s) give up
-        if string.count('-') > 1:
+        if theString.count('-') > 1:
             return None
 
         # check for a zeit date range that is too complicated for DateBetween (needs
         # a range of DatePrimitives, not a range of Dates).
-        if string.count('-') == 1:
-            for dateStr in string.split('-'):
+        if theString.count('-') == 1:
+            for dateStr in theString.split('-'):
                 if ('~' in dateStr[0:1]
                         or '?' in dateStr[0:1]
                         or '>' in dateStr[0:1]
@@ -2194,30 +2198,30 @@ class M21Utilities:
 
         typeNeeded: t.Type = m21.metadata.DateSingle
         relativeType: str = ''
-        if '<' in string[0:1]:  # this avoids string[0] crash on empty string
+        if '<' in theString[0:1]:  # this avoids theString[0] crash on empty string
             typeNeeded = m21.metadata.DateRelative
-            string = string.replace('<', '')
+            theString = theString.replace('<', '')
             relativeType = 'before'
-        elif '>' in string[0:1]:  # this avoids string[0] crash on empty string
+        elif '>' in theString[0:1]:  # this avoids theString[0] crash on empty string
             typeNeeded = m21.metadata.DateRelative
-            string = string.replace('>', '')
+            theString = theString.replace('>', '')
             relativeType = 'after'
 
-        dateStrings: list[str] = [string]  # if we don't split it, this is what we will parse
+        dateStrings: list[str] = [theString]  # if we don't split it, this is what we will parse
         for divider in M21Utilities._dateDividerSymbols:
-            if divider in string:
+            if divider in theString:
                 if divider == '|':
                     typeNeeded = m21.metadata.DateSelection
                     # split on all '|'s
-                    dateStrings = string.split(divider)
+                    dateStrings = theString.split(divider)
                 else:
                     typeNeeded = m21.metadata.DateBetween
                     # split only at first divider
-                    dateStrings = string.split(divider, 1)
+                    dateStrings = theString.split(divider, 1)
                 # we assume there is only one type of divider present
                 break
 
-        del string  # to make sure we never look at it again in this method
+        del theString  # to make sure we never look at it again in this method
 
         singleRelevance: str = ''
         if typeNeeded == m21.metadata.DateSingle:
@@ -2477,11 +2481,11 @@ class M21Utilities:
 
     @staticmethod
     def m21DatePrimitiveRangeFromString(
-        string: str
+        theString: str
     ) -> tuple[m21.metadata.DatePrimitive | None, m21.metadata.DatePrimitive | None]:
         startDatePrimitive: m21.metadata.DatePrimitive | None = None
         endDatePrimitive: m21.metadata.DatePrimitive | None = None
-        dateStrings: list[str] = string.split('-')
+        dateStrings: list[str] = theString.split('-')
         if len(dateStrings) != 2:
             return None, None
 
@@ -4763,6 +4767,316 @@ class M21Utilities:
             if beam.number <= maxBeamNum:
                 output.append(beam)
         return output
+
+    COLOR_NAMES_TO_HEX: dict[str, str] = {
+        "aliceblue": "#f0f8ff",
+        "antiquewhite": "#faebd7",
+        "aqua": "#00ffff",
+        "aquamarine": "#7fffd4",
+        "azure": "#f0ffff",
+        "beige": "#f5f5dc",
+        "bisque": "#ffe4c4",
+        "black": "#000000",
+        "blanchedalmond": "#ffebcd",
+        "blue": "#0000ff",
+        "blueviolet": "#8a2be2",
+        "brown": "#a52a2a",
+        "burlywood": "#deb887",
+        "cadetblue": "#5f9ea0",
+        "chartreuse": "#7fff00",
+        "chocolate": "#d2691e",
+        "coral": "#ff7f50",
+        "cornflowerblue": "#6495ed",
+        "cornsilk": "#fff8dc",
+        "crimson": "#dc143c",
+        "cyan": "#00ffff",
+        "darkblue": "#00008b",
+        "darkcyan": "#008b8b",
+        "darkgoldenrod": "#b8860b",
+        "darkgray": "#a9a9a9",
+        "darkgrey": "#a9a9a9",
+        "darkgreen": "#006400",
+        "darkkhaki": "#bdb76b",
+        "darkmagenta": "#8b008b",
+        "darkolivegreen": "#556b2f",
+        "darkorange": "#ff8c00",
+        "darkorchid": "#9932cc",
+        "darkred": "#8b0000",
+        "darksalmon": "#e9967a",
+        "darkseagreen": "#8fbc8f",
+        "darkslateblue": "#483d8b",
+        "darkslategray": "#2f4f4f",
+        "darkslategrey": "#2f4f4f",
+        "darkturquoise": "#00ced1",
+        "darkviolet": "#9400d3",
+        "deeppink": "#ff1493",
+        "deepskyblue": "#00bfff",
+        "dimgray": "#696969",
+        "dimgrey": "#696969",
+        "dodgerblue": "#1e90ff",
+        "firebrick": "#b22222",
+        "floralwhite": "#fffaf0",
+        "forestgreen": "#228b22",
+        "fuchsia": "#ff00ff",
+        "gainsboro": "#dcdcdc",
+        "ghostwhite": "#f8f8ff",
+        "gold": "#ffd700",
+        "goldenrod": "#daa520",
+        "gray": "#808080",
+        "grey": "#808080",
+        "green": "#008000",
+        "greenyellow": "#adff2f",
+        "honeydew": "#f0fff0",
+        "hotpink": "#ff69b4",
+        "indianred": "#cd5c5c",
+        "indigo": "#4b0082",
+        "ivory": "#fffff0",
+        "khaki": "#f0e68c",
+        "lavender": "#e6e6fa",
+        "lavenderblush": "#fff0f5",
+        "lawngreen": "#7cfc00",
+        "lemonchiffon": "#fffacd",
+        "lightblue": "#add8e6",
+        "lightcoral": "#f08080",
+        "lightcyan": "#e0ffff",
+        "lightgoldenrodyellow": "#fafad2",
+        "lightgray": "#d3d3d3",
+        "lightgrey": "#d3d3d3",
+        "lightgreen": "#90ee90",
+        "lightpink": "#ffb6c1",
+        "lightsalmon": "#ffa07a",
+        "lightseagreen": "#20b2aa",
+        "lightskyblue": "#87cefa",
+        "lightslategray": "#778899",
+        "lightslategrey": "#778899",
+        "lightsteelblue": "#b0c4de",
+        "lightyellow": "#ffffe0",
+        "lime": "#00ff00",
+        "limegreen": "#32cd32",
+        "linen": "#faf0e6",
+        "magenta": "#ff00ff",
+        "maroon": "#800000",
+        "mediumaquamarine": "#66cdaa",
+        "mediumblue": "#0000cd",
+        "mediumorchid": "#ba55d3",
+        "mediumpurple": "#9370db",
+        "mediumseagreen": "#3cb371",
+        "mediumslateblue": "#7b68ee",
+        "mediumspringgreen": "#00fa9a",
+        "mediumturquoise": "#48d1cc",
+        "mediumvioletred": "#c71585",
+        "midnightblue": "#191970",
+        "mintcream": "#f5fffa",
+        "mistyrose": "#ffe4e1",
+        "moccasin": "#ffe4b5",
+        "navajowhite": "#ffdead",
+        "navy": "#000080",
+        "oldlace": "#fdf5e6",
+        "olive": "#808000",
+        "olivedrab": "#6b8e23",
+        "orange": "#ffa500",
+        "orangered": "#ff4500",
+        "orchid": "#da70d6",
+        "palegoldenrod": "#eee8aa",
+        "palegreen": "#98fb98",
+        "paleturquoise": "#afeeee",
+        "palevioletred": "#db7093",
+        "papayawhip": "#ffefd5",
+        "peachpuff": "#ffdab9",
+        "peru": "#cd853f",
+        "pink": "#ffc0cb",
+        "plum": "#dda0dd",
+        "powderblue": "#b0e0e6",
+        "purple": "#800080",
+        "red": "#ff0000",
+        "rosybrown": "#bc8f8f",
+        "royalblue": "#4169e1",
+        "saddlebrown": "#8b4513",
+        "salmon": "#fa8072",
+        "sandybrown": "#f4a460",
+        "seagreen": "#2e8b57",
+        "seashell": "#fff5ee",
+        "sienna": "#a0522d",
+        "silver": "#c0c0c0",
+        "skyblue": "#87ceeb",
+        "slateblue": "#6a5acd",
+        "slategray": "#708090",
+        "slategrey": "#708090",
+        "snow": "#fffafa",
+        "springgreen": "#00ff7f",
+        "steelblue": "#4682b4",
+        "tan": "#d2b48c",
+        "teal": "#008080",
+        "thistle": "#d8bfd8",
+        "tomato": "#ff6347",
+        "turquoise": "#40e0d0",
+        "violet": "#ee82ee",
+        "wheat": "#f5deb3",
+        "white": "#ffffff",
+        "whitesmoke": "#f5f5f5",
+        "yellow": "#ffff00",
+        "yellowgreen": "#9acd32",
+    }
+
+    @staticmethod
+    def setColor(style: m21.style.Style, color: str | None):
+        def parseTriplet(color: str, prefix: str) -> tuple[str, str, str]:
+            # Note: we don't return None, we raise ValueError instead
+            pattern: str = (
+                prefix
+                + r'\(([\d]+%?)\s*,\s*'
+                + r'([\d]+%?)\s*,\s*'
+                + r'([\d]+%?)\)'
+            )
+            m = re.search(pattern, color)
+            if m is None:
+                raise ValueError
+            return m.group(1), m.group(2), m.group(3)
+
+        def parseQuadruplet(color: str, prefix: str) -> tuple[str, str, str, str]:
+            # Note: we don't return None, we raise ValueError instead
+            pattern: str = (
+                prefix
+                + r'\(([\d]+%?)\s*,\s*'
+                + r'([\d]+%?)\s*,\s*'
+                + r'([\d]+%?)\s*,\s*'
+                + r'([\d]+%?)\)'
+            )
+            m = re.search(pattern, color)
+            if m is None:
+                raise ValueError
+            return m.group(1), m.group(2), m.group(3), m.group(4)
+
+        def hslGetValues(hslStrTriplet: tuple[str, str, str]) -> tuple[float, float, float]:
+            # assumption: we got the input from parseTriplet (above)
+            # Note: we don't return None, we raise ValueError instead
+            hue: int
+            sat: int
+            light: int
+
+            if hslStrTriplet is None:
+                raise ValueError
+            if hslStrTriplet[0].endswith('%'):
+                raise ValueError
+            if not hslStrTriplet[1].endswith('%'):
+                raise ValueError
+            if not hslStrTriplet[2].endswith('%'):
+                raise ValueError
+
+            hue = int(hslStrTriplet[0])
+            if hue < 0:
+                hue = 0
+            elif hue > 360:
+                hue = 360
+            sat = int(hslStrTriplet[1][:-1])
+            if sat < 0:
+                sat = 0
+            elif sat > 100:
+                sat = 100
+            light = int(hslStrTriplet[2][:-1])
+            if light < 0:
+                light = 0
+            elif light > 100:
+                light = 100
+
+            # convert to range 0.0-1.0
+            hueFloat: float = float(hue) / 360.0
+            satFloat: float = float(sat) / 100.0
+            lightFloat: float = float(light) / 100.0
+
+
+            return hueFloat, satFloat, lightFloat
+
+        # color == '' or color is None?  Set style.color to None.
+        if not color:
+            style.color = None
+            return
+
+        # color is standard color name (e.g. 'limegreen')?  That works as is.
+        if color in M21Utilities.COLOR_NAMES_TO_HEX:
+            style.color = color
+            return
+
+        # music21 style (color that is not standard color name) must be '#rrggbb' or '#aarrggbb'
+        # (because of the assumptions music21 makes when writing to MusicXML).  Anything else we
+        # must convert to '#rrggbb' or '#aarrggbb'.
+        if color.startswith('#'):
+            if len(color) == 7:
+                # check for '#rrggbb'
+                if all(c in string.hexdigits for c in color[1:]):
+                    style.color = color
+                return
+            if len(color) == 9:
+                # check for '#aarrggbb'
+                if all(c in string.hexdigits for c in color[1:]):
+                    style.color = color
+                return
+            if len(color) == 4:
+                # check for '#rgb' (and convert to '#rrggbb')
+                if all(c in string.hexdigits for c in color[1:]):
+                    r: str = color[1]
+                    g: str = color[2]
+                    b: str = color[3]
+                    style.color = '#' + r + r + g + g + b + b
+                return
+            return
+
+        try:
+            if color.startswith('rgb('):
+                rgbStrTriplet = parseTriplet(color, 'rgb')
+                if (rgbStrTriplet[0].endswith('%')
+                        and rgbStrTriplet[1].endswith('%')
+                        and rgbStrTriplet[2].endswith('%')):
+                    style.color = webcolors.rgb_percent_to_hex(rgbStrTriplet)
+                    return
+                rgbIntTriplet: tuple[int, int, int] = (
+                    int(rgbStrTriplet[0]),
+                    int(rgbStrTriplet[1]),
+                    int(rgbStrTriplet[2]),
+                )
+                style.color = webcolors.rgb_to_hex(rgbIntTriplet)
+                return
+
+            if color.startswith('rgba('):
+                rgbStrQuadruplet = parseQuadruplet(color, 'rgba')
+                if (rgbStrQuadruplet[0].endswith('%')
+                        and rgbStrQuadruplet[1].endswith('%')
+                        and rgbStrQuadruplet[2].endswith('%')
+                        and rgbStrQuadruplet[3].endswith('%')):
+                    style.color = webcolors.rgb_percent_to_hex(rgbStrQuadruplet[:-1])
+                    if t.TYPE_CHECKING:
+                        assert isinstance(style.color, str)
+                    style.color += hex(int(rgbStrQuadruplet[3][:-1]))[2:]
+                    return
+                rgbIntQuadruplet: tuple[int, int, int, int] = (
+                    int(rgbStrQuadruplet[0]),
+                    int(rgbStrQuadruplet[1]),
+                    int(rgbStrQuadruplet[2]),
+                    int(rgbStrQuadruplet[3]),
+                )
+                style.color = webcolors.rgb_to_hex(rgbIntQuadruplet[:-1])
+                if t.TYPE_CHECKING:
+                    assert isinstance(style.color, str)
+                style.color += hex(rgbIntQuadruplet[3])[2:]
+                return
+
+            if color.startswith('hsl('):
+                hslStrTriplet = parseTriplet(color, 'hsl')
+                hue, sat, light = hslGetValues(hslStrTriplet)
+                rgbFloatTriplet = colorsys.hls_to_rgb(float(hue), float(light), float(sat))
+                rInt: int = int(round(rgbFloatTriplet[0] * 255.0))
+                gInt: int = int(round(rgbFloatTriplet[1] * 255.0))
+                bInt: int = int(round(rgbFloatTriplet[2] * 255.0))
+                style.color = webcolors.rgb_to_hex((rInt, gInt, bInt))
+                return
+
+            if color.startswith('hsla('):
+                return  # hStr, sStr, lStr, aStr = parseQuadruplet(color, 'hsla')
+
+        except Exception:
+            pass
+
+        return
 
     @staticmethod
     def reportUnwritableScore(
