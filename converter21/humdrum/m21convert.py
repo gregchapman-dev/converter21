@@ -1106,7 +1106,8 @@ class M21Convert:
     @staticmethod
     def _getColorFromGeneralNote(m21GeneralNote: m21.note.GeneralNote) -> str | None:
         if m21GeneralNote.hasStyleInformation:
-            return m21GeneralNote.style.color  # e.g. None, 'hotpink', '#00FF00', etc
+            # e.g. None, 'hotpink', '#00FF00', etc
+            return M21Utilities.getColor(m21GeneralNote.style)
         return None
 
     @staticmethod
@@ -1788,8 +1789,8 @@ class M21Convert:
             elif style.justify == 'center':
                 justString = ':cj'
 
-            if style.color:
-                colorString = f':color={style.color}'
+            if tempColor := M21Utilities.getColor(style):
+                colorString = f':color={tempColor}'
 
         output: str = (
             '!LO:TX' + placementString + styleString + justString + colorString
@@ -1854,8 +1855,8 @@ class M21Convert:
         elif style.justify == 'center':
             justString = ':cj'
 
-        if style.color:
-            colorString = f':color={style.color}'
+        if tempColor := M21Utilities.getColor(style):
+            colorString = f':color={tempColor}'
 
         if placementString or styleString or justString or colorString:
             output: str = '!LO:LY' + placementString + styleString + justString + colorString
@@ -1945,8 +1946,8 @@ class M21Convert:
             elif style.justify == 'center':
                 justString = ':cj'
 
-            if style.color:
-                colorString = f':color={style.color}'
+            if tempColor := M21Utilities.getColor(style):
+                colorString = f':color={tempColor}'
 
             if style.enclosure:
                 if style.enclosure == m21.style.Enclosure.SQUARE:

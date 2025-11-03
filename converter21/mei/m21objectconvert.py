@@ -148,8 +148,8 @@ class M21ObjectConvert:
         if style is not None:
             if style.hideObjectOnPrint:
                 attr['visible'] = 'false'
-            if style.color:
-                attr['color'] = style.color
+            if tempColor := M21Utilities.getColor(style):
+                attr['color'] = tempColor
             if isinstance(style, m21.style.NoteStyle):
                 if style.noteSize == 'cue':
                     attr['cue'] = 'true'
@@ -1624,8 +1624,8 @@ class M21ObjectConvert:
             if style.justify:
                 meiJustify = style.justify
 
-            if style.color:
-                meiColor = style.color
+            if tempColor := M21Utilities.getColor(style):
+                meiColor = tempColor
 
             if style.enclosure is not None:
                 meiRend = M21ObjectConvert.m21EnclosureToMeiRend(style.enclosure)

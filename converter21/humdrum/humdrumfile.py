@@ -7525,7 +7525,7 @@ class HumdrumFile(HumdrumFileContent):
 
         color: str = token.layoutParameter('S', 'color', slurIndex)
         if color:
-            slur.style.color = color
+            M21Utilities.setColor(slur.style, color)
 
     @staticmethod
     def _checkIfSlurIsInvisible(token: HumdrumToken, number: int) -> bool:
@@ -7678,7 +7678,7 @@ class HumdrumFile(HumdrumFileContent):
             note.name = m21PitchName
 
         if isBadPitched:
-            note.style.color = '#c41414'
+            M21Utilities.setColor(note.style, '#c41414')
 
         # TODO: editorial and cautionary accidentals (partially implemented)
         # needs some work (and a revisiting of the iohumdrum.cpp code)
@@ -7930,12 +7930,12 @@ class HumdrumFile(HumdrumFileContent):
     ) -> None:
         spineColor: str = self._getSpineColor(token)
         if spineColor:
-            note.style.color = spineColor
+            M21Utilities.setColor(note.style, spineColor)
 
         # also check for marked notes (the marked color will override spine color)
         for i, mark in enumerate(self._signifiers.noteMarks):
             if mark in tstring:
-                note.style.color = self._signifiers.noteColors[i]
+                M21Utilities.setColor(note.style, self._signifiers.noteColors[i])
                 if self._signifiers.noteDirs[i]:
                     # (e.g. rds-scores: R129_Jan-w30p11m124-127.krn)
                     pass  # TODO: note-associated text
@@ -8149,7 +8149,7 @@ class HumdrumFile(HumdrumFileContent):
 
                 color: str | None = vtoken.getValueString('auto', 'color')
                 if color:
-                    verse.style.color = color
+                    M21Utilities.setColor(verse.style, color)
 
                 fontStyle: str | None = vtoken.getValueString('auto', 'fontStyle')
                 if fontStyle:
@@ -8329,7 +8329,7 @@ class HumdrumFile(HumdrumFileContent):
         output: str = tokenStr
         for textMark, textColor in zip(self._signifiers.textMarks, self._signifiers.textColors):
             if textMark in tokenStr:
-                verse.style.color = textColor
+                M21Utilities.setColor(verse.style, textColor)
 
                 # remove mark character from text (so that it does not display)
                 output = re.sub(textMark, '', output)
@@ -8796,7 +8796,7 @@ class HumdrumFile(HumdrumFileContent):
             m21sf.style.absoluteY = None
 
             if dcolor:
-                m21sf.style.color = dcolor
+                M21Utilities.setColor(m21sf.style, dcolor)
 
             if justification == 1:
                 m21sf.style.justify = 'right'
@@ -8982,7 +8982,7 @@ class HumdrumFile(HumdrumFileContent):
                 m21Dynamic.style.absoluteY = None
 
                 if dcolor:
-                    m21Dynamic.style.color = dcolor
+                    M21Utilities.setColor(m21Dynamic.style, dcolor)
                 if justification == 1:
                     m21Dynamic.style.justify = 'right'
                 elif justification == 2:
@@ -9157,7 +9157,7 @@ class HumdrumFile(HumdrumFileContent):
 
             color = self._getLoColor(dynTok, 'HP')
             if color:
-                m21Hairpin.style.color = color
+                M21Utilities.setColor(m21Hairpin.style, color)
 
             # Now I need to put the start and end "notes" into the Crescendo spanner.
             # This is instead of all the timestamp stuff C++ code does.
@@ -9907,14 +9907,14 @@ class HumdrumFile(HumdrumFileContent):
                     tempo.placement = placement  # type: ignore
 
         if color:
-            tempoOrDirection.style.color = color
+            M21Utilities.setColor(tempoOrDirection.style, color)
         elif isProblem:
             if isinstance(tempoOrDirection, m21.expressions.TextExpression):
                 # Latest verovio changed from 'P' to '⚠', and from 'red' to 'crimson'
                 tempoOrDirection.content = '⚠'
-            tempoOrDirection.style.color = 'crimson'
+            M21Utilities.setColor(tempoOrDirection.style, 'crimson')
         elif isSic:
-            tempoOrDirection.style.color = 'limegreen'
+            M21Utilities.setColor(tempoOrDirection.style, 'limegreen')
 
         if bold and italic:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
@@ -10034,11 +10034,11 @@ class HumdrumFile(HumdrumFileContent):
                     tempo.placement = placement  # type: ignore
 
         if color:
-            tempoOrDirection.style.color = color
+            M21Utilities.setColor(tempoOrDirection.style, color)
         elif isProblem:
-            tempoOrDirection.style.color = 'crimson'
+            M21Utilities.setColor(tempoOrDirection.style, 'crimson')
         elif isSic:
-            tempoOrDirection.style.color = 'limegreen'
+            M21Utilities.setColor(tempoOrDirection.style, 'limegreen')
 
         if bold and italic:
             tempoOrDirection.style.fontStyle = M21Convert.m21FontStyleFromFontStyle('bold-italic')
@@ -10187,7 +10187,7 @@ class HumdrumFile(HumdrumFileContent):
             mm.style._absoluteY = defaultStyle._absoluteY
             mm.style._enclosure = defaultStyle._enclosure
             mm.style.fontRepresentation = defaultStyle.fontRepresentation
-            mm.style.color = defaultStyle.color
+            M21Utilities.setColor(mm.style, defaultStyle.color)
             mm.style.units = defaultStyle.units
             mm.style.hideObjectOnPrint = defaultStyle.hideObjectOnPrint
 
@@ -10761,11 +10761,11 @@ class HumdrumFile(HumdrumFileContent):
                 # so while we have the same style if/elif here as Verovio, we just grab
                 # whatever color we can find.
                 if color and not enclColor:
-                    reh.style.color = color
+                    M21Utilities.setColor(reh.style, color)
                 elif not color and enclColor:
-                    reh.style.color = enclColor
+                    M21Utilities.setColor(reh.style, enclColor)
                 elif color and enclColor:
-                    reh.style.color = color
+                    M21Utilities.setColor(reh.style, color)
 
                 if encl == 'box':
                     reh.style.enclosure = m21.style.Enclosure.SQUARE

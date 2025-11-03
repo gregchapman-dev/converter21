@@ -5079,7 +5079,10 @@ class MeiReader:
                         assert isinstance(theNote.style, m21.style.NoteStyle)
                     if theNote.style.accidentalStyle is None:
                         theNote.style.accidentalStyle = m21.style.Style()
-                    theNote.style.accidentalStyle.color = theAccidObj.style.color
+                    M21Utilities.setColor(
+                        theNote.style.accidentalStyle,
+                        M21Utilities.getColor(theAccidObj.style)
+                    )
             elif isinstance(subElement, note.Lyric):
                 if theNote.lyrics is None:
                     theNote.lyrics = []
@@ -8172,7 +8175,10 @@ class MeiReader:
             rehObj.style._absoluteY = te.style._absoluteY
             rehObj.style._enclosure = te.style._enclosure
             rehObj.style.fontRepresentation = te.style.fontRepresentation
-            M21Utilities.setColor(rehObj.style, te.style.color)
+            M21Utilities.setColor(
+                rehObj.style,
+                M21Utilities.getColor(te.style)
+            )
             rehObj.style.units = te.style.units
             rehObj.style.hideObjectOnPrint = te.style.hideObjectOnPrint
             rehObj.style.dashLength = te.style.dashLength
