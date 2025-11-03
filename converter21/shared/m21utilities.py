@@ -4920,6 +4920,10 @@ class M21Utilities:
 
     @staticmethod
     def setColor(style: m21.style.Style, color: str | None):
+        # assumes incoming color is from MEI or Humdrum (where we assume ordering
+        # of RGB-with-alpha as RGBA, which is opposite to music21 where we need ARGB).
+        # If this gets more complex, we'll need to pass in the incoming color order
+        # as a separate parameter.
         def parseTriplet(color: str, prefix: str) -> tuple[str, str, str]:
             # Note: we don't return None, we raise ValueError instead
             pattern: str = (
@@ -4940,12 +4944,23 @@ class M21Utilities:
                 + r'\(([\d]+%?)\s*,\s*'
                 + r'([\d]+%?)\s*,\s*'
                 + r'([\d]+%?)\s*,\s*'
-                + r'([\d]+%?)\)'
+                + r'(.+)\)'  # this is alpha, which can be 0.0-1.0 or 0%-100%
             )
             m = re.search(pattern, color)
             if m is None:
                 raise ValueError
             return m.group(1), m.group(2), m.group(3), m.group(4)
+
+        def addAlphaString(colorHex: str, alphaStr: str) -> str:
+            # parses alphaStr = '0.0'-'1.0' or '0%'-'100%',
+            # adding alpha hex (00-FF) at start of colorHex.
+            # This will raise exceptions for malformed alphaStr
+            alphaInt: int
+            if alphaStr.endswith('%'):
+                alphaInt = int(round(float(alphaStr[:-1]) / 100.0))
+            else:
+                alphaInt = int(round(float(alphaStr) * 255.0))
+            return '#' + hex(alphaInt)[2:] + colorHex[1:]
 
         def hslGetValues(hslStrTriplet: tuple[str, str, str]) -> tuple[float, float, float]:
             # assumption: we got the input from parseTriplet (above)
@@ -5008,10 +5023,10 @@ class M21Utilities:
             if len(color) == 9:
                 # '#rrggbbaa' (that's the order for MEI and Humdrum)
                 # put aa first (#aarrggbb is the correct order for music21/MusicXML)
-                r: str = color[1:2]
-                g: str = color[3:2]
-                b: str = color[5:2]
-                a: str = color[7:2]
+                r: str = color[1:3]
+                g: str = color[3:5]
+                b: str = color[5:7]
+                a: str = color[7:9]
                 style.color = '#' + a + r + g + b
                 return
             if len(color) == 4:
@@ -5050,24 +5065,22 @@ class M21Utilities:
                 rgbStrQuadruplet = parseQuadruplet(color, 'rgba')
                 if (rgbStrQuadruplet[0].endswith('%')
                         and rgbStrQuadruplet[1].endswith('%')
-                        and rgbStrQuadruplet[2].endswith('%')
-                        and rgbStrQuadruplet[3].endswith('%')):
+                        and rgbStrQuadruplet[2].endswith('%')):
                     style.color = webcolors.rgb_percent_to_hex(rgbStrQuadruplet[:-1])
                     if t.TYPE_CHECKING:
                         assert isinstance(style.color, str)
-                    style.color += hex(int(rgbStrQuadruplet[3][:-1]))[2:]
+                    style.color = addAlphaString(style.color, rgbStrQuadruplet[3])
                     return
-                rgbIntQuadruplet: tuple[int, int, int, int] = (
+
+                rgbIntTriplet = (
                     int(rgbStrQuadruplet[0]),
                     int(rgbStrQuadruplet[1]),
                     int(rgbStrQuadruplet[2]),
-                    int(rgbStrQuadruplet[3]),
                 )
-                style.color = webcolors.rgb_to_hex(rgbIntQuadruplet[:-1])
+                style.color = webcolors.rgb_to_hex(rgbIntTriplet)
                 if t.TYPE_CHECKING:
                     assert isinstance(style.color, str)
-                # AARRGGBB is the order for music21/MusicXML
-                style.color = hex(rgbIntQuadruplet[3])[2:] + style.color
+                style.color = addAlphaString(style.color, rgbStrQuadruplet[3])
                 return
 
             if color.startswith('hsl('):
@@ -5081,12 +5094,51 @@ class M21Utilities:
                 return
 
             if color.startswith('hsla('):
-                return  # hStr, sStr, lStr, aStr = parseQuadruplet(color, 'hsla')
+                hslStrQuadruplet = parseQuadruplet(color, 'hsla')
+                hue, sat, light = hslGetValues(hslStrQuadruplet[:-1])
+                rgbFloatTriplet = colorsys.hls_to_rgb(float(hue), float(light), float(sat))
+                rInt = int(round(rgbFloatTriplet[0] * 255.0))
+                gInt = int(round(rgbFloatTriplet[1] * 255.0))
+                bInt = int(round(rgbFloatTriplet[2] * 255.0))
+                style.color = webcolors.rgb_to_hex((rInt, gInt, bInt))
+                if t.TYPE_CHECKING:
+                    assert isinstance(style.color, str)
+                style.color = addAlphaString(style.color, hslStrQuadruplet[3])
+                return
 
         except Exception:
-            pass
+            raise  # for testing.  pass later.
 
         return
+
+    @staticmethod
+    def getColor(style: m21.style.Style) -> str | None:
+        # music21 Style contains color which is either name or #rrggbb or #aarrggbb.
+        # If it is #aarrggbb, we return #rrggbbaa, because we are assuming this is
+        # for the purpose of writing to MEI or Humdrum file.  If this gets more
+        # complicated, we will need to request a particular order via another parameter.
+        color: str | None = style.color
+        if not color:
+            return None
+
+        # color is standard color name (e.g. 'limegreen')?  That works as is.
+        if color in M21Utilities.COLOR_NAMES_TO_HEX:
+            return color
+
+        if color.startswith('#') and all(c in string.hexdigits for c in color[1:]):
+            if len(color) == 9:
+                a: str = color[1:3]
+                r: str = color[3:5]
+                g: str = color[5:7]
+                b: str = color[7:9]
+                color = '#' + r + g + b + a
+                return color
+
+            if len(color) == 7:
+                return color
+
+        # invalid style.color, don't propagate it
+        return None
 
     @staticmethod
     def reportUnwritableScore(
