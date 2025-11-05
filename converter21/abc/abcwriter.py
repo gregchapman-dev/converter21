@@ -73,7 +73,7 @@ class AbcWriter:
             xmlStr = self.scoreToMusicXmlString(self._m21ScoreOrOpus, self.makeNotation)
 
             # Now run that MusicXML through xml2abc.vertaal (MusicXML str -> ABC str)
-            abcStr, _ = convertMusicXMLToABC(xmlStr)
+            abcStr, _ = convertMusicXMLToABC(xmlStr, wev=1)
             abcStr = self.fixupAbcHeaderFields(
                 abcStr,
                 self._m21ScoreOrOpus.metadata,
@@ -108,7 +108,7 @@ class AbcWriter:
                 xmlStr = self.scoreToMusicXmlString(score, self.makeNotation)
 
                 scoreAbcStr: str
-                scoreAbcStr, _ = convertMusicXMLToABC(xmlStr)
+                scoreAbcStr, _ = convertMusicXMLToABC(xmlStr, wev=1)
                 scoreAbcStr = self.fixupAbcHeaderFields(
                     scoreAbcStr,
                     score.metadata,
