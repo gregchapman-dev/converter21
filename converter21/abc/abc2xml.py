@@ -21,7 +21,7 @@ try:    import xml.etree.cElementTree as E
 except: import xml.etree.ElementTree as E
 import types, sys, os, re, datetime
 
-VERSION = 264
+VERSION = 266
 
 python3 = sys.version_info[0] > 2
 lmap = lambda f, xs: list (map (f, xs))   # eager map for python 3
@@ -681,8 +681,10 @@ def doMaat (t):             # t is a Group() result -> the measure is in t[0]
 
 def doGrace (t):        # t is a Group() result -> the grace sequence is in t[0]
     convertChord (t[0]) # a grace sequence may have chords
-    for nt in t[0]:     # flag all notes within the grace sequence
-        if nt.name == 'note': nt.grace = 1 # set grace attribute
+    grcNts = [nt for nt in t[0] if nt.name == 'note']
+    numNts = len ([nt for nt in grcNts if not getattr (nt, 'chord', '')]) # exclude chord notes
+    for nt in grcNts:   # flag all notes within the grace sequence
+        if nt.name == 'note': nt.grace = numNts # grace attribute = number of grace notes
     return t[0]         # ungroup the parse result
 #--------------------
 # musicXML generation
@@ -792,7 +794,7 @@ def splitHeaderVoices (abctext):
             mxm.metadata [ftype] = c + '\n' + field if c else field   # concatenate multiple info fields with new line as separator
             continue                    # skip W: lyrics
         if x2[:2] == '+:':              # field continuation
-            fln += ' ' + x2[2:]
+            fln += ' ' + x2[2:]         # continuation is considered to add a space
             continue
         ro = r2.match (x2)              # single field on a line
         if ro:                          # field -> inline_field, escape all ']'
@@ -1292,7 +1294,7 @@ class MusicXml:
         return decos
 
     def mkNote (s, n, lev):
-        isgrace = getattr (n, 'grace', '')
+        isgrace = getattr (n, 'grace', 0)
         ischord = getattr (n, 'chord', '')
         if s.ntup >= 0 and not isgrace and not ischord:
             s.ntup -= 1                 # count tuplet notes only on non-chord, non grace notes
@@ -1302,6 +1304,9 @@ class MusicXml:
         if s.intrem: nnum += nnum       # double duration of tremolo duplets
         if nden == 0: nden = 1          # occurs with illegal ABC like: "A2 1". Now interpreted as A2/1
         num, den = simplify (nnum * s.unitLcur[0], nden * s.unitLcur[1])  # normalised with unit length
+        if isgrace > 0:
+            unitNum, unitDen = (1, 16) if isgrace > 1 else (1, 8)   # in ABC grace notes have fixed unit length
+            num, den = simplify (nnum * unitNum, nden * unitDen)
         if den > 64:    # limit denominator to 64
             num = int (round (64 * float (num) / den))  # scale note to num/64
             num, den  = simplify (max ([num, 1]), 64)   # smallest num == 1
@@ -1316,12 +1321,11 @@ class MusicXml:
         if num == 3 and noMsrRest: ndot = 1; den = den // 2 # look for dotted notes
         if num == 7 and noMsrRest: ndot = 2; den = den // 4
         nt = E.Element ('note')
-        if isgrace:                     # a grace note (and possibly a chord note)
+        if isgrace > 0:                 # a grace note (and possibly a chord note)
             grace = E.Element ('grace')
             if s.acciatura: grace.set ('slash', 'yes'); s.acciatura = 0
             addElem (nt, grace, lev + 1)
             dvs = rdvs = 0              # no (real) duration for a grace note
-            if den <= 16: den = 32      # not longer than 1/8 for a grace note
         if s.gcue_on:                   # insert cue tag
             cue = E.Element ('cue')
             addElem (nt, cue, lev + 1)
