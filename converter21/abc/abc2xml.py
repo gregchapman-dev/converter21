@@ -21,7 +21,7 @@ try:    import xml.etree.cElementTree as E
 except: import xml.etree.ElementTree as E
 import types, sys, os, re, datetime
 
-VERSION = 266
+VERSION = 268
 
 python3 = sys.version_info[0] > 2
 lmap = lambda f, xs: list (map (f, xs))   # eager map for python 3
@@ -540,10 +540,11 @@ class pObj (object):    # every relevant parse result is converted into a pObj
         return '(' + s.name + ' ' +','.join (xs) + ')'
 
 def detectBeamBreak (line, loc, t):
-    xs = line[G.prevloc:loc+1]    # string between previous and current note match
+    xs = line[G.prevloc:loc+1]  # string between previous and current note match
     xs = xs.lstrip ()           # first note match starts on a space!
-    xs = re.sub (r'"[^"]*"','',xs)  # remove chords and annotations (because: may contain spaces)
-    G.prevloc = loc               # location in string 'line' of current note match
+    xs = re.sub (r'"[^"]*"', '', xs)  # remove chords and annotations (because: may contain spaces)
+    xs = re.sub (r'\[[^]]:[^]]*]', '', xs)  # remove inline fields as well
+    G.prevloc = loc             # location in string 'line' of current note match
     b = pObj ('bbrk', [' ' in xs])  # space somewhere between two notes -> beambreak
     t.insert (0, b)             # insert beambreak as a nested parse result
 
@@ -711,6 +712,15 @@ def addElem (parent, child, level):
         parent.text = '\n' + level * indent * ' '
     parent.append (child)
     child.tail = '\n' + (level-1) * indent * ' '
+
+def delElem (parent, child):    # child must be one of the parent's children
+    last_elm = list (parent) [-1]
+    parent.remove (child)
+    if child == last_elm:       # correct the tail (indent) when child was the last element
+        elms = list (parent)
+        if elms:                # child was not the only element in parent
+            last_elm = elms [-1]
+            last_elm.tail = child.tail  # keep the indent from deleted child
 
 def addElemT (parent, tag, text, level):
     e = E.Element (tag)
@@ -1172,9 +1182,9 @@ class MusicXml:
         s.metadata = {}     # {metadata-type -> string}
         s.lyrdash = {}      # {lyric number -> 1 if dash between syllables}
         s.usrSyms = s.uSyms # user defined symbols
-        s.prevNote = None   # xml element of previous beamed note to correct beams (start, continue)
+        s.prevNote = [None, None]   # xml element of previous beamed note to correct beams (start, continue)
         s.prevLyric = {}    # xml element of previous lyric to add/correct extend type (start, continue)
-        s.grcbbrk = False   # remember any bbrk in a grace sequence
+        s.grcbrk = False    # remember beambreak before grace sequence
         s.linebrk = 0       # 1 if next measure should start with a line break
         s.nextdecos = []    # decorations for the next note
         s.prevmsre = None   # the previous measure
@@ -1603,36 +1613,47 @@ class MusicXml:
             s.prevLyric [i] = lyrel # for extension (melisma) on the next note
 
     def doBeams (s, n, nt, den, lev):
-        if hasattr (n, 'chord') or hasattr (n, 'grace'):
-            s.grcbbrk = s.grcbbrk or n.bbrk.t[0]    # remember if there was any bbrk in or before a grace sequence
-            return
-        bbrk = s.grcbbrk or n.bbrk.t[0] or den < 32
-        s.grcbbrk = False
-        if s.prevNote == None:  pbm = None
-        else:               pbm = s.prevNote.find ('beam')
-        bm = E.Element ('beam', number='1')
-        bm.text = 'begin'
-        if pbm != None:
-            if bbrk:
+        def closeBeam (grcIx):
+            pbm = s.prevNote [grcIx].find ('beam')
+            if pbm != None:
                 if pbm.text == 'begin':
-                    s.prevNote.remove (pbm)
+                    delElem (s.prevNote [grcIx], pbm)
                 elif pbm.text == 'continue':
                     pbm.text = 'end'
-                s.prevNote = None
-            else: bm.text = 'continue'
-        if den >= 32 and n.name != 'rest':
-            addElem (nt, bm, lev)
-            s.prevNote = nt
+            s.prevNote [grcIx] = None
+        if hasattr (n, 'chord'): return # chord do not contain real beam breaks
+        grcIx = 1 if hasattr (n, 'grace') else 0    # track grace sequence separately
+        firstnote = s.prevNote [grcIx] == None
+        bbrk = n.bbrk.t[0] or (den < 32 and not firstnote)
+        if grcIx == 0 and s.grcbrk: # beam break before grace sequence
+            bbrk = 1
+            s.grcbrk = False        # only valid once
+        if grcIx == 0 and s.prevNote [1] != None:   # normal note after grace sequence
+            closeBeam (1)           # close/remove beam in previous grace sequence
+        if firstnote:
+            pbm = None
+            s.grcbrk = True if grcIx and n.bbrk.t[0] else False # on first grace note
+        else:
+            pbm = s.prevNote [grcIx].find ('beam')
+        bm = E.Element ('beam', number='2' if grcIx else '1')
+        bm.text = 'begin'
+        if pbm != None:
+            if bbrk: closeBeam (grcIx)
+            else:    bm.text = 'continue'
+        if n.name != 'rest':
+            if den >= 32: addElem (nt, bm, lev)
+            s.prevNote [grcIx] = nt
 
     def stopBeams (s):
-        if s.prevNote == None: return
-        pbm = s.prevNote.find ('beam')
-        if pbm != None:
-            if pbm.text == 'begin':
-                s.prevNote.remove (pbm)
-            elif pbm.text == 'continue':
-                pbm.text = 'end'
-        s.prevNote = None
+        for grcIx in [0, 1]:
+            if s.prevNote [grcIx] == None: continue
+            pbm = s.prevNote [grcIx].find ('beam')
+            if pbm != None:
+                if pbm.text == 'begin':
+                    delElem (s.prevNote [grcIx], pbm)
+                elif pbm.text == 'continue':
+                    pbm.text = 'end'
+            s.prevNote [grcIx] = None
 
     def staffDecos (s, decos, maat, lev):
         gstaff = s.gStaffNums.get (s.vid, 0)        # staff number of the current voice
@@ -2350,8 +2371,7 @@ class MusicXml:
                 addElem (misc, mf, lev + 1)
         if mf != 0: addElem (parent, misc, lev)
 
-    def parse (s, abc_string, rOpt=False, bOpt=False, fOpt=False, mOpt=False):
-        abctext = abc_string.replace ('[I:staff ','[I:staff')  # avoid false beam breaks
+    def parse (s, abctext, rOpt=False, bOpt=False, fOpt=False, mOpt=False):
         s.reset (fOpt, mOpt)
         s.edo = scanEdo (abctext)   # look for fractional/integer accidentals
         if s.mus53: # redefine accidentals to those that are playable by musescore
