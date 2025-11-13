@@ -107,12 +107,10 @@ class ScoreWriter:
 
         # First elements of ottava/pedalmark tuple are part index, staff index, isStart
         self._currentOttavasOrPedalMarks: list[
-            # tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
-            tuple[int, int, bool, m21.spanner.Spanner]
+            tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
         ] = []
         # First elements of pedalbounce/pedalgap tuple are part index, staff index
-        # self._currentPedalTransitions: list[tuple[int, int, m21.expressions.PedalTransition]]
-        self._currentPedalTransitions: list[tuple[int, int, m21.base.Music21Object]] = []
+        self._currentPedalObjects: list[tuple[int, int, m21.expressions.PedalObject]] = []
 
         # Dynamics are at part level in Humdrum files. But... dynamics also can be placed
         # above/below/between any of the staves in the part via things like !LO:DY:b=2, so
@@ -460,9 +458,9 @@ class ScoreWriter:
             self._addUnassociatedOttavasOrPedalMarks(gm, self._currentOttavasOrPedalMarks)
             self._currentOttavasOrPedalMarks = []
 
-        if self._currentPedalTransitions:
-            self._addUnassociatedPedalTransitions(gm, self._currentPedalTransitions)
-            self._currentPedalTransitions = []
+        if self._currentPedalObjects:
+            self._addUnassociatedPedalObjects(gm, self._currentPedalObjects)
+            self._currentPedalObjects = []
 
         if self._currentTempos:
             self._addUnassociatedTempos(gm, self._currentTempos)
@@ -1488,9 +1486,8 @@ class ScoreWriter:
                 elif isinstance(m21Obj, m21.harmony.ChordSymbol):
                     self._currentHarmonies.append((pindex, m21Obj))
                     zeroDurEvent.reportHarmonyToOwner()
-                elif (M21Utilities.m21PedalMarksSupported()
-                        and isinstance(m21Obj, m21.expressions.PedalTransition)):  # type: ignore
-                    self._currentPedalTransitions.append((pindex, sindex, m21Obj))
+                elif (isinstance(m21Obj, m21.expressions.PedalObject)):
+                    self._currentPedalObjects.append((pindex, sindex, m21Obj))
 #                 elif 'FiguredBass' in m21Obj.classes:
 #                     self._currentFiguredBass.append(m21Obj)
                 elif isinstance(m21Obj, m21.note.GeneralNote):
@@ -1510,9 +1507,9 @@ class ScoreWriter:
                     # check for ottava/pedal start/stop and emit them:
                     # *ped, or *Xped, or *8va, or *X8va, aut cetera
                     if zeroDurEvent.isOttavaOrPedalMarkStartOrStop():
-                        starts: list[m21.spanner.Ottava  # type: ignore
+                        starts: list[m21.spanner.Ottava
                             | m21.expressions.PedalMark]
-                        stops: list[m21.spanner.Ottava  # type: ignore
+                        stops: list[m21.spanner.Ottava
                             | m21.expressions.PedalMark]
                         starts, stops = zeroDurEvent.getOttavaOrPedalMarkStartsStops(
                             asSpanners=True
@@ -2630,38 +2627,37 @@ class ScoreWriter:
                 rehMark
             )
 
-    def _addUnassociatedPedalTransitions(
+    def _addUnassociatedPedalObjects(
         self,
         outgm: GridMeasure,
-        extraPedalTransitions: list[
-            tuple[int, int, m21.base.Music21Object]  # m21.expressions.PedalTransition]
+        extraPedalObjects: list[
+            tuple[int, int, m21.expressions.PedalObject]
         ]
     ) -> None:
-        if not extraPedalTransitions:
+        if not extraPedalObjects:
             # we shouldn't have been called
             return
 
-        pedalTransitions: list[
-            # tuple[int, int, m21.expressions.PedalTransition, list[str], HumNum]
-            tuple[int, int, m21.base.Music21Object, list[str], HumNum]
+        pedalObjects: list[
+            tuple[int, int, m21.expressions.PedalObject, list[str], HumNum]
         ] = []
 
-        for partIndex, staffIndex, pedalTransition in extraPedalTransitions:
-            pedalTransitions.append((
+        for partIndex, staffIndex, pedalObject in extraPedalObjects:
+            pedalObjects.append((
                 partIndex,
                 staffIndex,
-                pedalTransition,
-                M21Convert.getKernTokenStringsFromM21PedalTransition(pedalTransition),
-                pedalTransition.getOffsetInHierarchy(self._m21Score)
+                pedalObject,
+                M21Convert.getKernTokenStringsFromM21PedalObject(pedalObject),
+                pedalObject.getOffsetInHierarchy(self._m21Score)
             ))
 
-        for partIndex, staffIndex, pedalTransition, kerntoks, offset in pedalTransitions:
+        for partIndex, staffIndex, pedalObject, kerntoks, offset in pedalObjects:
             outSlice: GridSlice | None
             outSlice, _ = self._produceOutputSliceForUnassociatedM21Object(
                 outgm,
                 partIndex,
                 None,
-                pedalTransition,
+                pedalObject,
                 offset
             )
             outgm.addOttavaOrPedalTokensBefore(
@@ -2675,8 +2671,7 @@ class ScoreWriter:
         self,
         outgm: GridMeasure,
         extraOttavaOrPedalMarks: list[
-            # tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
-            tuple[int, int, bool, m21.spanner.Spanner]
+            tuple[int, int, bool, m21.spanner.Ottava | m21.expressions.PedalMark]
         ]
     ) -> None:
         if not extraOttavaOrPedalMarks:

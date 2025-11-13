@@ -1895,9 +1895,6 @@ class MeiReader:
                 eachArpeg.set('ignore_in_arpegFromElement', 'true')
 
     def _ppPedals(self, scoreEl: Element) -> None:
-        if not M21Utilities.m21PedalMarksSupported():
-            return
-
         environLocal.printDebug('*** pre-processing pedals')
 
         pedals: list[Element] = scoreEl.findall(f'.//{MEI_NS}pedal')
@@ -1906,7 +1903,7 @@ class MeiReader:
 
         # currentOpenPedalSpanners is keyed by staffAttr, and there is only one
         # open PedalMark per staffAttr
-        currentOpenPedalSpanners: dict[str, m21.expressions.PedalMark | None] = {}  # type: ignore
+        currentOpenPedalSpanners: dict[str, m21.expressions.PedalMark | None] = {}
 
         for eachPedal in pedals:
             # Because we are mapping individual <pedal> elements to the start or end
@@ -1928,7 +1925,7 @@ class MeiReader:
 
             overrideDirAttr: str = ''
 
-            pm: m21.expressions.PedalMark | None = None  # type: ignore
+            pm: m21.expressions.PedalMark | None = None
             thisIdLocal: str = ''
 
             if dirAttr in ('down', 'half'):
@@ -1942,7 +1939,7 @@ class MeiReader:
                     # end this spanner
                     currentOpenPedalSpanners[staffAttr] = None
                 else:
-                    pm = m21.expressions.PedalMark()  # type: ignore
+                    pm = m21.expressions.PedalMark()
                     # make sure the pedal mark spanner ends up in the right m21Part.
                     pm.meireader_staff = staffAttr  # type: ignore
 
@@ -1964,7 +1961,7 @@ class MeiReader:
                     currentOpenPedalSpanners[staffAttr] = None
                 else:
                     # up happened before down in the document; that's ok.
-                    pm = m21.expressions.PedalMark()  # type: ignore
+                    pm = m21.expressions.PedalMark()
                     # make sure the pedal mark spanner ends up in the right m21Part.
                     pm.meireader_staff = staffAttr  # type: ignore
 
@@ -1993,7 +1990,7 @@ class MeiReader:
                     # the bounce will be down, as it should be.
                     environLocal.warn('bad pedal bounce (with pedal up); treated as pedal down')
                     overrideDirAttr = 'down'
-                    pm = m21.expressions.PedalMark()  # type: ignore
+                    pm = m21.expressions.PedalMark()
                     # make sure the pedal mark spanner ends up in the right m21Part.
                     pm.meireader_staff = staffAttr  # type: ignore
 
@@ -2577,12 +2574,7 @@ class MeiReader:
         elem: Element,
         obj: note.GeneralNote,
     ):
-        if not M21Utilities.m21PedalMarksSupported():
-            return
-
-        # pylint: disable=no-member
-
-        # on on generalnote, we allow three pedals: a pedal start, a single pedal bounce or gap
+        # on generalnote, we allow three pedals: a pedal start, a single pedal bounce or gap
         # start or end, and a pedal end.  If we need more than that, I'll eat my hat.  Or modify
         # this code (and the code in _ppPedals).
         localIdsAndDirs: list[tuple[str, str]] = []
@@ -2613,15 +2605,14 @@ class MeiReader:
                 return
 
             if t.TYPE_CHECKING:
-                assert isinstance(sp, m21.expressions.PedalMark)  # type: ignore
-            pm: m21.expressions.PedalMark = sp  # type: ignore
+                assert isinstance(sp, m21.expressions.PedalMark)
+            pm: m21.expressions.PedalMark = sp
 
             output: tuple[
                 str,
                 tuple[OffsetQL | None, int | None, OffsetQL | None],
-                # m21.expressions.PedalMark | m21.expressions.PedalTransition
-                t.Any
-                | m21.spanner.SpannerAnchor | None
+                m21.expressions.PedalMark | m21.expressions.PedalObject
+                | spanner.SpannerAnchor | None
             ] = self.getPedalObject(
                 pm,
                 obj,
@@ -2633,7 +2624,6 @@ class MeiReader:
                 elem.get('m21PedalPlace', '')
             )
             assert output == ('', (-1., None, None), None)
-        # pylint: disable=no-member
 
     def addOttavas(
         self,
@@ -7930,12 +7920,8 @@ class MeiReader:
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
-        # expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
-        m21.base.Music21Object | None
+        expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
     ]:
-        if not M21Utilities.m21PedalMarksSupported():
-            return ('', (-1., None, None), None)
-
         # returns (staffNStr, (offset, None, None), te)
         if elem.get('ignore_in_pedalFromElement') == 'true':
             return ('', (-1., None, None), None)
@@ -7954,7 +7940,7 @@ class MeiReader:
             return ('', (-1., None, None), None)
 
         if t.TYPE_CHECKING:
-            assert isinstance(pm, m21.expressions.PedalMark)  # type: ignore
+            assert isinstance(pm, m21.expressions.PedalMark)
 
         dirAttr: str = elem.get('dir', '')
         override: str = elem.get('m21PedalOverrideDir', '')
@@ -7964,8 +7950,7 @@ class MeiReader:
         output: tuple[
             str,
             tuple[OffsetQL | None, int | None, OffsetQL | None],
-            # expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
-            m21.base.Music21Object | None
+            expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
         ] = self.getPedalObject(
             pm,
             None,
@@ -7979,52 +7964,23 @@ class MeiReader:
 
         return output
 
-    PEDAL_FORM_MAP: dict[str, dict[str, str]] = {}
-    if M21Utilities.m21PedalMarksSupported():
-        PEDAL_FORM_MAP = {  # type: ignore
-            'line': {
-                'startForm': m21.expressions.PedalForm.VerticalLine,  # type: ignore
-                'continueLine': m21.expressions.PedalLine.Line,  # type: ignore
-                'bounceUp': m21.expressions.PedalForm.SlantedLine,  # type: ignore
-                'bounceDown': m21.expressions.PedalForm.SlantedLine,  # type: ignore
-                'endForm': m21.expressions.PedalForm.VerticalLine,  # type: ignore
-            },
-            'pedline': {
-                'startForm': m21.expressions.PedalForm.PedalName,  # type: ignore
-                'continueLine': m21.expressions.PedalLine.Line,  # type: ignore
-                'bounceUp': m21.expressions.PedalForm.SlantedLine,  # type: ignore
-                'bounceDown': m21.expressions.PedalForm.SlantedLine,  # type: ignore
-                'endForm': m21.expressions.PedalForm.VerticalLine,  # type: ignore
-            },
-            'pedstar': {
-                'startForm': m21.expressions.PedalForm.PedalName,  # type: ignore
-                'continueLine': m21.expressions.PedalLine.NoLine,  # type: ignore
-                'bounceUp': m21.expressions.PedalForm.Star,  # type: ignore
-                'bounceDown': m21.expressions.PedalForm.PedalName,  # type: ignore
-                'endForm': m21.expressions.PedalForm.Star,  # type: ignore
-            },
-            'altpedstar': {
-                'startForm': m21.expressions.PedalForm.PedalName,  # type: ignore
-                'continueLine': m21.expressions.PedalLine.NoLine,  # type: ignore
-                'bounceUp': m21.expressions.PedalForm.NoMark,  # type: ignore
-                'bounceDown': m21.expressions.PedalForm.PedalName,  # type: ignore
-                'endForm': m21.expressions.PedalForm.Star,  # type: ignore
-            }
-        }
+    PEDAL_FORM_MAP: dict[str, m21.expressions.PedalForm] = {
+        'line': m21.expressions.PedalForm.Line,
+        'pedline': m21.expressions.PedalForm.SymbolLine,
+        'pedstar': m21.expressions.PedalForm.Symbol,
+        'altpedstar': m21.expressions.PedalForm.SymbolAlt
+    }
 
-    PEDAL_TYPE_MAP: dict[str, str] = {}
-    if M21Utilities.m21PedalMarksSupported():
-        PEDAL_TYPE_MAP = {  # type: ignore
-            'sustain': m21.expressions.PedalType.Sustain,  # type: ignore
-            'sostenuto': m21.expressions.PedalType.Sostenuto,  # type: ignore
-            'soft': m21.expressions.PedalType.Soft,  # type: ignore
-            'silent': m21.expressions.PedalType.Silent  # type: ignore
-        }
+    PEDAL_TYPE_MAP: dict[str, m21.expressions.PedalType] = {
+        'sustain': m21.expressions.PedalType.Sustain,
+        'sostenuto': m21.expressions.PedalType.Sostenuto,
+        'soft': m21.expressions.PedalType.Soft,
+        'silent': m21.expressions.PedalType.Silent
+    }
 
     def getPedalObject(
         self,
-        # pm: m21.expressions.PedalMark,
-        pm: m21.spanner.Spanner,
+        pm: m21.expressions.PedalMark,
         obj: m21.base.Music21Object | None,  # from @startid
         tstampAttr: str,                     # '' if there was a @startid
         staffAttr: str,
@@ -8035,12 +7991,8 @@ class MeiReader:
     ) -> tuple[
         str,
         tuple[OffsetQL | None, int | None, OffsetQL | None],
-        # expressions.PedalMark | expressions.PedalTransition | spanner.SpannerAnchor | None
-        t.Any | None
+        expressions.PedalMark | expressions.PedalObject | spanner.SpannerAnchor | None
     ]:
-        if not M21Utilities.m21PedalMarksSupported():
-            return '', (-1., None, None), None
-
         # obj (from @startid) or @tstamp is required.
         if obj is None and not tstampAttr:
             environLocal.warn('missing @tstamp/@startid in <pedal> element')
@@ -8064,14 +8016,10 @@ class MeiReader:
             # We are starting the pm spanner.  Set up the pm with all the appropriate
             # stuff from the attributes.
             if funcAttr and funcAttr in self.PEDAL_TYPE_MAP:
-                pm.pedalType = self.PEDAL_TYPE_MAP[funcAttr]  # type: ignore
+                pm.pedalType = self.PEDAL_TYPE_MAP[funcAttr]
 
             if formAttr and formAttr in self.PEDAL_FORM_MAP:
-                pm.startForm = self.PEDAL_FORM_MAP[formAttr]['startForm']  # type: ignore
-                pm.continueLine = self.PEDAL_FORM_MAP[formAttr]['continueLine']  # type: ignore
-                pm.bounceUp = self.PEDAL_FORM_MAP[formAttr]['bounceUp']  # type: ignore
-                pm.bounceDown = self.PEDAL_FORM_MAP[formAttr]['bounceDown']  # type: ignore
-                pm.endForm = self.PEDAL_FORM_MAP[formAttr]['endForm']  # type: ignore
+                pm.pedalForm = self.PEDAL_FORM_MAP[formAttr]
 
             if placeAttr in ('above', 'below'):
                 pm.placement = placeAttr  # type: ignore
@@ -9717,7 +9665,7 @@ class MeiReader:
                     sp.fill(thePartList[partIdx])
                 continue
 
-            if M21Utilities.m21PedalMarksSupported() and isinstance(sp, m21.expressions.PedalMark):
+            if isinstance(sp, m21.expressions.PedalMark):
                 elList: list[m21.base.Music21Object] = sp.getSpannedElements()
                 for el in elList:
                     sp.spannerStorage.remove(el)

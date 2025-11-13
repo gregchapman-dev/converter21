@@ -469,9 +469,7 @@ class StaffStateVariables:
         '''
         self.mostRecentlySeenClefTok: HumdrumToken | None = None
         self.currentM21KeySig: m21.key.KeySignature | m21.key.Key | None = None
-        # pylint: disable=no-member
-        self.currentPedalMark: m21.expressions.PedalMark | None = None  # type: ignore
-        # pylint: enable=no-member
+        self.currentPedalMark: m21.expressions.PedalMark | None = None
 
     def printState(self, prefix: str) -> None:
         print(f'{prefix}hasLyrics: {self.hasLyrics}', file=sys.stderr)
@@ -2651,9 +2649,6 @@ class HumdrumFile(HumdrumFileContent):
     ) -> bool:
         insertedIntoVoice: bool = False
 
-        if not M21Utilities.m21PedalMarksSupported():
-            return insertedIntoVoice
-
         if token.text not in ('*ped', '*Xped'):
             return insertedIntoVoice
 
@@ -2677,17 +2672,18 @@ class HumdrumFile(HumdrumFileContent):
             # pedal down
             if ss.currentPedalMark is not None:
                 # pedal is already down, just insert a bounce here
-                pedalBounce = m21.expressions.PedalBounce()  # type: ignore
+                pedalBounce = m21.expressions.PedalBounce()
                 if not bounceBefore:
                     # bounce is just 'Ped.', not '*Ped.'
-                    pedalBounce.overrideBounceUp = m21.expressions.PedalForm.NoMark  # type: ignore
+                    ss.currentPedalMark.pedalForm = m21.expressions.PedalForm.SymbolAlt
                 measure.coreInsert(pedalOffsetInMeasure, pedalBounce)
                 ss.currentPedalMark.addSpannedElements(pedalBounce)
             else:
                 # pedal is not down, start a new PedalMark spanner with a SpannerAnchor
                 anchor = m21.spanner.SpannerAnchor()
                 measure.coreInsert(pedalOffsetInMeasure, anchor)
-                ss.currentPedalMark = m21.expressions.PedalMark()  # type: ignore
+                ss.currentPedalMark = m21.expressions.PedalMark()
+                ss.currentPedalMark.pedalForm = m21.expressions.PedalForm.Symbol
                 ss.currentPedalMark.addSpannedElements(anchor)
                 measure.coreInsert(pedalOffsetInMeasure, ss.currentPedalMark)
             insertedIntoVoice = True

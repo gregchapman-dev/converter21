@@ -4128,15 +4128,13 @@ class M21Utilities:
 
     @staticmethod
     def assureAllXmlIds(s: m21.stream.Stream):
-        pedalMarksSupported: bool = M21Utilities.m21PedalMarksSupported()
         M21Utilities.assureXmlId(s)
         for obj in s.recurse():
-            if pedalMarksSupported:
-                if isinstance(obj, m21.expressions.PedalMark):  # type: ignore
-                    # each pedalmark turns into two <pedal> elements,
-                    # so we can't easily generate xml:id for them both.
-                    # Skip it for now.
-                    continue
+            if isinstance(obj, m21.expressions.PedalMark):
+                # each pedalmark turns into two <pedal> elements,
+                # so we can't easily generate xml:id for them both.
+                # Skip it for now.
+                continue
 
             M21Utilities.assureXmlId(obj)
             # if it's a chord (and not a chord symbol), put an xmlid on all the notes
@@ -5199,20 +5197,14 @@ class M21Utilities:
             customAttrs[obj] = []
         customAttrs[obj].extend(newAttrs)
 
-    _m21PedalMarksSupportedCached: bool | None = None
-    @staticmethod
-    def m21PedalMarksSupported() -> bool:
-        # Note that we can't just look for expressions.PedalMark
-        # because my initial implementation (which we do not
-        # support) also had expressions.PedalMark (music21 v9.7).
-        # expressions.PedalTransition is unique to the new implementation.
-        # And for now, always return False, because music21 still has
-        # two of my PRs pending, and I don't know for sure that the
-        # PedalTransition check will be correct when they are finally
-        # taken.
-        if M21Utilities._m21PedalMarksSupportedCached is None:
-            M21Utilities._m21PedalMarksSupportedCached = (
-                # hasattr(m21.expressions, 'PedalTransition')
-                False
-            )
-        return M21Utilities._m21PedalMarksSupportedCached
+#     _m21PedalMarksSupportedCached: bool | None = None
+#     @staticmethod
+#     def m21PedalMarksSupported() -> bool:
+#         # PedalMarks are supported as of music21 v9.7, which we now
+#         # require, so this always returns True (and we don't need to
+#         # call it).
+#         if M21Utilities._m21PedalMarksSupportedCached is None:
+#             M21Utilities._m21PedalMarksSupportedCached = (
+#                 True
+#             )
+#         return M21Utilities._m21PedalMarksSupportedCached
