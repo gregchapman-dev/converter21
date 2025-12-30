@@ -1,0 +1,17 @@
+Changes since 3.5.0:
+    Add import/export of ABC files.
+    All: Add support for import/export of multi-score files <-> music21 Opus
+        Note: MEI supports three different ways to store multiple scores in an
+        MEI file: multiple <mei> elements (in <meiCorpus>), multiple <mdiv> 
+        elements, and multiple <music> elements.  We can read/write all three.  
+        By default we write multiple <mdiv> elements, but you can ask for the
+        other choices, by specifying multipleScoresHostTag='music' or 'mei' on
+        the write() call.  
+        Note: music21's myOpus.write() will generally write multiple files, so
+        if you want a multi-score output file, call music21.stream.write(myOpus)
+        instead.
+    All import/export: Add support for PedalMarks.
+    Humdrum/MEI import/export: Support styled lyrics
+    Humdrum/MEI import/export: Better color support (notes, lyrics, etc)
+    Humdrum import: stem direction fixes
+    
