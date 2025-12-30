@@ -1,13 +1,17 @@
+# git checkout develop
+# git merge any other branches that should go in this release
+
+# Edit setup.py and converter21/shared/sharedconstants.py
+# to change version number and maybe dependencies.
+# MAYBE README, too, if dependencies changed.
+# bbedit setup.py README.md
+# git add setup.py README.md
+# git commit
+# git push origin
+
 # git checkout main
 # git merge develop
 # Fix any conflicts, add, commit, push to origin
-
-# FIRST edit setup.py and converter21/shared/sharedconstants.py
-# to change version number and maybe dependencies.
-# MAYBE README, too, if dependencies changed.
-# git add setup.py README etc
-# git commit
-# git push origin
 
 # Clean up previous stuff:
 rm -r __pycache__
