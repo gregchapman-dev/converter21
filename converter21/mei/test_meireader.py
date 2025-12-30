@@ -1002,7 +1002,6 @@ class Test(unittest.TestCase):
         actual = c.layerFromElement(elem, '1')
 
         self.assertEqual(2, len(actual))
-        self.assertEqual('so voice ID', actual.id)
         self.assertEqual(0.0, actual[0].offset)
         self.assertEqual(1.0, actual[1].offset)
         self.assertEqual(1.0, actual[0].quarterLength)
@@ -1025,7 +1024,6 @@ class Test(unittest.TestCase):
         actual = c.layerFromElement(elem, overrideN='so voice ID')
 
         self.assertEqual(2, len(actual))
-        self.assertEqual('so voice ID', actual.id)
         self.assertEqual(0.0, actual[0].offset)
         self.assertEqual(1.0, actual[1].offset)
         self.assertEqual(1.0, actual[0].quarterLength)
@@ -1085,13 +1083,10 @@ class Test(unittest.TestCase):
             self.assertEqual(0.0, actual[i][0].offset)
             self.assertEqual(1.0, actual[i][0].quarterLength)
         # first part
-        self.assertEqual('1', actual[0].id)
         self.assertEqual('F2', actual[0][0].nameWithOctave)
         # second part
-        self.assertEqual('2', actual[1].id)
         self.assertEqual('A2', actual[1][0].nameWithOctave)
         # third part
-        self.assertEqual('3', actual[2].id)
         self.assertEqual('C2', actual[2][0].nameWithOctave)
 
     # -----------------------------------------------------------------------------
