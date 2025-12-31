@@ -1,11 +1,16 @@
 gregc/moreMusicSiteFixes:
-    Initial tie work is here.  The rest of this has been merged into develop.
+    Initial tie work is here.  The rest of this has been merged into main v4.0.0.
 
-develop:
+main (v4.0.0):
+    Add ABC import/export (including Opus support)
+    Humdrum/MEI import/export: 
+        add Opus support (three options with MEI)
+        Support styled lyrics
+        Better color support
+    All: support PedalMarks
+    Humdrum import: stem direction fixes
     Merged gregc/spannerAnchorFixes:
         Fix MEI export of SpannerAnchors, so it doesn't cause gaps to be exported.
-        Release this as soon as gregc/moreAccurateSpannerStartStop PR is accepted
-            in music21.
 
 main (v3.5.0):
     Merged gregc/moreNotation:
