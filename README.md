@@ -105,7 +105,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The ABC reader/writer in this software uses [abc2xml.py](https://wim.vree.org/svgParse/abc2xml.html) and [xml2abc.py](https://wim.vree.org/svgParse/xml2abc.html), which 
-uses the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>):
+use the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>):
 
 Copyright (C) 2012-2025: Willem G. Vree
 

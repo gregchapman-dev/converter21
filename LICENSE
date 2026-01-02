@@ -61,3 +61,17 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The ABC reader/writer in this software uses abc2xml.py and xml2abc.py, which 
+use the Lesser GNU General Public Licence:
+
+Copyright (C) 2012-2025: Willem G. Vree
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the Lesser GNU General Public License as published by the Free 
+Software Foundation;
+
+This program is distributed in the hope that it will be useful, but WITHOUT 
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the Lesser GNU General Public Licence for more 
+details. <http://www.gnu.org/licenses/lgpl.html>
