@@ -227,11 +227,17 @@ from converter21.shared import M21StaffGroupDescriptionTree
 
 Music21ObjectOrTwo: TypeAlias = Music21Object | tuple[Music21Object, Music21Object]
 
+# MeasureItem contains a Music21Object found in a <layer> but must be inserted at
+# the appropriate offset in the Measure (not the layer's Voice).  For example, Clefs,
+# TimeSignatures, and KeySignatures.
+MeasureItem: TypeAlias = tuple[OffsetQL, Music21Object]
+
 StaffItem: TypeAlias = tuple[
     str,
     tuple[OffsetQL | None, int | None, OffsetQL | None],
     Music21Object
 ]
+
 FromElementType: TypeAlias = Music21ObjectOrTwo | StaffItem | str | None
 
 environLocal = environment.Environment('converter21.mei.meireader')
@@ -6571,7 +6577,7 @@ class MeiReader:
         self,
         elem: Element,
         overrideN: str
-    ) -> stream.Voice:
+    ) -> list[MeasureItem]:
         '''
         <layer> An independent stream of events on a staff.
 
@@ -6692,7 +6698,18 @@ class MeiReader:
         #     if removeThisOne is not None:
         #         theLayer.pop(removeThisOne)
 
+        measureItems: list[MeasureItem] = []
+        lastObjInVoice: Music21Object | None = None
         for obj in theLayer:
+            if isinstance(obj, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
+                # make a MeasureItem for it instead of appending to Voice (offset will be
+                # offset+dur of lastObjInVoice)
+                offset: OffsetQL = 0.
+                if lastObjInVoice is not None:
+                    offset = opFrac(lastObjInVoice.offset + lastObjInVoice.duration.quarterLength)
+                measureItems.append((offset, obj))
+                continue
+
             # Check for dir/dynam/tempo attached to the obj.
             # If there, append them first, then the obj, so
             # they all get the same offset (since dir/dynam/tempo
@@ -6708,11 +6725,14 @@ class MeiReader:
                         theVoice.coreAppend(each)
 
             theVoice.coreAppend(obj)
+            lastObjInVoice = obj
 
         theVoice.coreElementsChanged()
         self.currVoiceId = ''
 
-        return theVoice
+        measureItems.append((0., theVoice))
+
+        return measureItems
 
     def appChoiceLayerChildrenFromElement(
         self,
@@ -6968,7 +6988,7 @@ class MeiReader:
     def staffFromElement(
         self,
         elem: Element,
-    ) -> list[Music21Object]:
+    ) -> list[MeasureItem]:
         '''
         <staff> A group of equidistant horizontal lines on which notes are placed in order to
         represent pitch or a grouping element for individual 'strands' of notes, rests, etc.
@@ -7010,6 +7030,13 @@ class MeiReader:
         - MEI.text: div
         - MEI.usersymbols: anchoredText curve line symbol
         '''
+        def findVoice(measureItems: list[MeasureItem]) -> stream.Voice:
+            # raise if there is no Voice; there must be one.
+            for mi in measureItems:
+                if isinstance(mi[1], stream.Voice):
+                    return mi[1]
+            raise MeiInternalError('No Voice generated for <layer>')
+
         # mapping from tag name to our converter function (currently empty)
         layerTagName: str = f'{MEI_NS}layer'
         tagToFunction: dict[str, t.Callable[
@@ -7035,7 +7062,7 @@ class MeiReader:
                 nextBreak = self.nextBreak
                 self.nextBreak = None
 
-        layers: list[Music21Object] = []
+        measureItems: list[MeasureItem] = []
 
         # track the @n values given to layerFromElement()
         currentNValue: str = '1'
@@ -7043,13 +7070,14 @@ class MeiReader:
         # iterate all immediate children
         for eachTag in elem.iterfind('*'):
             if layerTagName == eachTag.tag:
-                layers.append(self.layerFromElement(
+                measureItems.extend(self.layerFromElement(
                     eachTag, overrideN=currentNValue
                 ))
-                currentNValue = f'{int(layers[-1].id) + 1}'  # inefficient, but we need a string
+                currentVoice: stream.Voice = findVoice(measureItems)
+                currentNValue = f'{int(currentVoice.id) + 1}'  # inefficient, but we need a string
             elif eachTag.tag in tagToFunction:
                 # NB: this won't be tested until there's something in tagToFunction
-                layers.append(
+                measureItems.append(
                     tagToFunction[eachTag.tag](eachTag)
                 )
             elif eachTag.tag not in _IGNORE_UNPROCESSED:
@@ -7057,9 +7085,9 @@ class MeiReader:
 
         if nextBreak is not None:
             # return the page/system break as the first element of the list
-            return [nextBreak] + layers
+            return [(0., nextBreak)] + measureItems
 
-        return layers
+        return measureItems
 
     def _correctMRestDurs(
         self,
@@ -8789,24 +8817,19 @@ class MeiReader:
                     raise MeiElementError(_STAFF_MUST_HAVE_N)
 
                 self.staffNumberForNotes = nStr
-                measureList = self.staffFromElement(eachElem)
+                measureList: list[MeasureItem] = self.staffFromElement(eachElem)
                 self.staffNumberForNotes = ''
 
                 meas: stream.Measure
                 meas = stream.Measure(number=measureNum or 0)
 
-                # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
-                # if it starts with obj, Measure() will get confused and append everything,
-                # including Voices, and that will be all wrong.  This by-hand approach
-                # (insert(0) everything) will work until such time as we generate top-level
-                # objects in the measure that are not at offset 0, and at that point we will
-                # need to return object offsets with each object, so we can insert them
-                # appropriately.
-                for measureObj in measureList:
-                    if isinstance(measureObj, m21.spanner.Spanner):
-                        meas.append(measureObj)
+                for measureItem in measureList:
+                    offsetInMeasure: OffsetQL = measureItem[0]
+                    obj: Music21Object = measureItem[1]
+                    if isinstance(obj, m21.spanner.Spanner):
+                        meas.append(obj)
                     else:
-                        meas.insert(0, measureObj)
+                        meas.insert(offsetInMeasure, obj)
 
                 staves[nStr] = meas
 
