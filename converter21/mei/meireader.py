@@ -2256,8 +2256,8 @@ class MeiReader:
                     # result is list[FromElementType], append all elements to processed
                     for eachObject in result:
                         processed.append(eachObject)
-                elif result is None or isinstance(result, str):
-                    # None is ignored, of course, and str is unexpected/ignored here
+                elif result is None:
+                    # None is ignored
                     pass
                 else:
                     # result is some other FromElementType, append to processed
