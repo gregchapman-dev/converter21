@@ -174,6 +174,7 @@ tool.
 
 '''
 import typing as t
+from typing import TypeAlias
 from xml.etree.ElementTree import Element, fromstring, ElementTree, ParseError
 import re
 import html
@@ -224,6 +225,15 @@ from converter21.shared import SharedConstants
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupDescriptionTree
 
+Music21ObjectOrTwo: TypeAlias = Music21Object | tuple[Music21Object, Music21Object]
+
+StaffItem: TypeAlias = tuple[
+    str,
+    tuple[OffsetQL | None, int | None, OffsetQL | None],
+    Music21Object
+]
+FromElementType: TypeAlias = Music21ObjectOrTwo | StaffItem | str | None
+
 environLocal = environment.Environment('converter21.mei.meireader')
 
 DENOM_LIMIT = 768
@@ -270,6 +280,7 @@ _BAD_VERSE_NUMBER = 'Verse number must be an int (got "{}")'
 _EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} in favor of {}'
 _EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
 _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
+
 
 class MeiReader:
     '''
@@ -2182,10 +2193,10 @@ class MeiReader:
         elements: t.Iterable[Element],
         mapping: dict[str, t.Callable[
             [Element],
-            t.Any]
+            list[FromElementType]]
         ],
         callerTag: str,
-    ) -> list[t.Any]:
+    ) -> list[FromElementType]:
         # noinspection PyShadowingNames
         '''
         From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each
@@ -2234,17 +2245,22 @@ class MeiReader:
         >>> c._processEmbeddedElements(elements, mapping, 'doctest2')
         [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
         '''
-        processed: list[t.Any] = []
+        processed: list[FromElementType] = []
 
         for eachElem in elements:
             if eachElem.tag in mapping:
-                result: Music21Object | tuple[Music21Object, ...] | list[Music21Object] | None = (
+                result: FromElementType | list[FromElementType] = (
                     mapping[eachElem.tag](eachElem)
                 )
                 if isinstance(result, list):
+                    # result is list[FromElementType], append all elements to processed
                     for eachObject in result:
                         processed.append(eachObject)
-                elif result is not None:
+                elif result is None or isinstance(result, str):
+                    # None is ignored, of course, and str is unexpected/ignored here
+                    pass
+                else:
+                    # result is some other FromElementType, append to processed
                     processed.append(result)
             elif eachElem.tag not in _IGNORE_UNPROCESSED:
                 environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
@@ -6155,7 +6171,7 @@ class MeiReader:
     def beamFromElement(
         self,
         elem: Element,
-    ) -> t.Sequence[Music21Object]:
+    ) -> list[Music21Object]:
         '''
         <beam> A container for a series of explicitly beamed events that begins and ends entirely
                within a measure.
@@ -6235,11 +6251,16 @@ class MeiReader:
         - MEI.mensural: ligature mensur proport
         - MEI.shared: clefGrp custos keySig pad
         '''
-        beamedStuff: list[Music21Object] = self._processEmbeddedElements(
+        beamedStuff: list[Music21Object] = []
+
+        for beamedThing in self._processEmbeddedElements(
             elem.findall('*'),
             self.beamChildrenTagToFunction,
             elem.tag,
-        )
+        ):
+            if t.TYPE_CHECKING:
+                assert isinstance(beamedThing, Music21Object)
+            beamedStuff.append(beamedThing)
 
         self.beamTogether(beamedStuff)
         self.applyBreaksecs(beamedStuff)
@@ -6254,11 +6275,11 @@ class MeiReader:
         <bTrem> contains one <note> or <chord> (or editorial elements that resolve to a single
         note or chord)
         '''
-        bTremStuff: list[Music21Object] = self._processEmbeddedElements(
+        bTremStuff = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.findall('*'),
             self.bTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         if len(bTremStuff) != 1:
             raise MeiElementError('<bTrem> without exactly one note or chord within')
@@ -6295,11 +6316,11 @@ class MeiReader:
         <fTrem> contains two <note>s or two <chord>s or one of each (or editorial elements that
         resolve to two <note>s or two <chord>s or one of each)
         '''
-        fTremStuff: list[Music21Object] = self._processEmbeddedElements(
+        fTremStuff = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.findall('*'),
             self.fTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         if len(fTremStuff) != 2:
             raise MeiElementError(
@@ -6486,11 +6507,11 @@ class MeiReader:
         # iterate all immediate children (set self.inTupletCount so we know to ignore
         # any @tuplet attributes)
         self.inTupletCount += 1
-        tupletMembers: list[Music21Object] = self._processEmbeddedElements(
+        tupletMembers = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.findall('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
-        )
+        ))
         self.inTupletCount -= 1
 
         # "tuplet-ify" the duration of everything held within
@@ -6642,11 +6663,11 @@ class MeiReader:
                 )
 
         # iterate all immediate children
-        theLayer: list[Music21Object] = self._processEmbeddedElements(
+        theLayer = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.layerChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         # adjust the <layer>'s elements for possible tuplets
         self._guessTuplets(theLayer)
@@ -6702,11 +6723,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.layerChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6715,41 +6736,28 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.layerChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
     def appChoiceStaffItemsFromElement(
         self,
         elem: Element,
-    ) -> list[
-        tuple[
-            str,
-            tuple[OffsetQL | None, int | None, OffsetQL | None],
-            Music21Object
-        ]
-    ]:
+    ) -> list[StaffItem]:
         chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
         # iterate all immediate children
-        theList: list[
-            tuple[
-                str,
-                tuple[OffsetQL | None, int | None, OffsetQL | None],
-                Music21Object
-            ]
-        ] = (
-            self._processEmbeddedElements(
-                chosen.iterfind('*'),
-                self.staffItemsTagToFunction,
-                chosen.tag)
-        )
+        theList = t.cast(list[StaffItem], self._processEmbeddedElements(
+            chosen.iterfind('*'),
+            self.staffItemsTagToFunction,
+            chosen.tag
+        ))
 
         return theList
 
@@ -6757,26 +6765,14 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[
-        tuple[
-            str,
-            tuple[OffsetQL | None, int | None, OffsetQL | None],
-            Music21Object
-        ]
+        StaffItem
     ]:
         # iterate all immediate children
-        theList: list[
-            tuple[
-                str,
-                tuple[OffsetQL | None, int | None, OffsetQL | None],
-                Music21Object
-            ]
-        ] = (
-            self._processEmbeddedElements(
-                elem.iterfind('*'),
-                self.staffItemsTagToFunction,
-                elem.tag
-            )
-        )
+        theList = t.cast(list[StaffItem], self._processEmbeddedElements(
+            elem.iterfind('*'),
+            self.staffItemsTagToFunction,
+            elem.tag
+        ))
 
         return theList
 
@@ -6789,11 +6785,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.noteChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6802,11 +6798,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.noteChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6819,11 +6815,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.chordChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6832,11 +6828,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.chordChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6849,11 +6845,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.beamChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6862,11 +6858,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.beamChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6879,11 +6875,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.tupletChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6892,11 +6888,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6909,11 +6905,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.bTremChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6922,11 +6918,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.bTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6939,11 +6935,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.fTremChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6952,11 +6948,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.fTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
