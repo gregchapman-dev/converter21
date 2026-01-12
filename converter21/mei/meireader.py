@@ -486,6 +486,9 @@ class MeiReader:
         # This only contains clefs that were introduced in this layer/staff/measure.
         self.currentClefPerStaffLayer: dict[str, dict[str, m21.clef.Clef | None]] = {}
 
+        # The expected duraion of the current measure.
+        self.expectedMeasureDuration: OffsetQL = 4.0
+
         # The voice.id we are currently importing notes/chords/rests into.
         self.currVoiceId: str = ''
 
@@ -4842,7 +4845,6 @@ class MeiReader:
         self,
         elem: Element,
         optionalDots: int | None = None,
-        usePlaceHolderDuration: bool = False  # True during mRest/mSpace processing
     ) -> m21.duration.Duration:
         # wasDefault: bool = False
         durFloat: float | None = 0.0
@@ -4852,59 +4854,56 @@ class MeiReader:
         foundDots: bool = False
         foundDurGes: bool = False
         foundDotsGes: bool = False
-        if usePlaceHolderDuration:
-            durFloat = self._qlDurationFromAttr('measureDurationPlaceHolder')
-            numDots = 0
+
+        if elem.get('dur'):
+            durFloat = self._qlDurationFromAttr(elem.get('dur'))
+            if durFloat is None:
+                # @dur value was not found in self._DUR_ATTR_DICT
+                raise MeiAttributeError(f'dur attribute has illegal value: "{elem.get("dur")}"')
+
+        if elem.get('dur.ges'):
+            foundDurGes = True
+            durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
+            if durGesFloat is None:
+                # @dur.ges value was not found in self._DUR_ATTR_DICT
+                raise MeiAttributeError('dur.ges attribute has illegal value: "{attr}"')
+
+        if elem.get('dots'):
+            foundDots = True
+
+        if optionalDots is not None:
+            numDots = optionalDots
         else:
-            if elem.get('dur'):
-                durFloat = self._qlDurationFromAttr(elem.get('dur'))
-                if durFloat is None:
-                    # @dur value was not found in self._DUR_ATTR_DICT
-                    raise MeiAttributeError(f'dur attribute has illegal value: "{elem.get("dur")}"')
+            numDots = int(elem.get('dots', 0))
 
-            if elem.get('dur.ges'):
-                foundDurGes = True
-                durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
-                if durGesFloat is None:
-                    # @dur.ges value was not found in self._DUR_ATTR_DICT
-                    raise MeiAttributeError('dur.ges attribute has illegal value: "{attr}"')
+        dotsGesStr: str = elem.get('dots.ges', '')
+        if dotsGesStr:
+            foundDotsGes = True
+            numDotsGes = int(dotsGesStr)
 
-            if elem.get('dots'):
-                foundDots = True
+        if foundDots and foundDurGes and not foundDotsGes:
+            environLocal.warn(
+                'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
+                'assuming gestural duration is @dur.ges with zero dots.  It is recommended'
+                'that you specify @dots.ges explicitly.'
+            )
 
-            if optionalDots is not None:
-                numDots = optionalDots
-            else:
-                numDots = int(elem.get('dots', 0))
-
-            dotsGesStr: str = elem.get('dots.ges', '')
-            if dotsGesStr:
-                foundDotsGes = True
-                numDotsGes = int(dotsGesStr)
-
-            if foundDots and foundDurGes and not foundDotsGes:
-                environLocal.warn(
-                    'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
-                    'assuming gestural duration is @dur.ges with zero dots.  It is recommended'
-                    'that you specify @dots.ges explicitly.'
-                )
-
-            # if no dur.ges and no dots.ges, try for dur.ppq (but not if we're in a tuplet,
-            # because when in a tuplet, dur.ppq is just the tupletized duration, not really
-            # a gestural duration).
-            if not foundDurGes and not foundDotsGes and not self.inTupletCount:
-                durPPQStr: str = elem.get('dur.ppq', '')
-                if durPPQStr:
-                    durPPQ: int | None = None
-                    try:
-                        durPPQ = int(durPPQStr)
-                    except Exception:
-                        pass
-                    if durPPQ is not None:
-                        ppq: int | None = self.getPPQ(self.staffNumberForNotes)
-                        if ppq:
-                            durGesFloat = float(durPPQ) / float(ppq)
-                            numDotsGes = 0  # None would make us use numDots, which is wrong
+        # if no dur.ges and no dots.ges, try for dur.ppq (but not if we're in a tuplet,
+        # because when in a tuplet, dur.ppq is just the tupletized duration, not really
+        # a gestural duration).
+        if not foundDurGes and not foundDotsGes and not self.inTupletCount:
+            durPPQStr: str = elem.get('dur.ppq', '')
+            if durPPQStr:
+                durPPQ: int | None = None
+                try:
+                    durPPQ = int(durPPQStr)
+                except Exception:
+                    pass
+                if durPPQ is not None:
+                    ppq: int | None = self.getPPQ(self.staffNumberForNotes)
+                    if ppq:
+                        durGesFloat = float(durPPQ) / float(ppq)
+                        numDotsGes = 0  # None would make us use numDots, which is wrong
 
         if durFloat == 0.0:
             # @dur was missing
@@ -5318,7 +5317,7 @@ class MeiReader:
     def restFromElement(
         self,
         elem: Element,
-        usePlaceHolderDuration: bool = False  # True if called from mRestFromElement
+        useMeasureDuration: bool = False  # True if called from mRestFromElement
     ) -> note.Rest:
         '''
         <rest/> is a non-sounding event found in the source being transcribed
@@ -5371,9 +5370,11 @@ class MeiReader:
         elif elem.get('tuplet', '').startswith('i'):
             self.inTupletCount += 1
 
-        theDuration: m21.duration.Duration = (
-            self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
-        )
+        theDuration: m21.duration.Duration
+        if useMeasureDuration:
+            theDuration = m21.duration.Duration(quarterLength=self.expectedMeasureDuration)
+        else:
+            theDuration = self.durationFromAttributes(elem)
 
 #         # Check if rest duration is a whole note, and that's longer than activeMeter.
 #         # If so, make gestural duration equal to activeMeter.
@@ -5498,11 +5499,6 @@ class MeiReader:
         In MEI 2013: pg.375 (389 in PDF) (MEI.cmn module)
 
         This is a function wrapper for :func:`restFromElement`.
-
-        .. note:: If the <mRest> element does not have a @dur attribute, it will have a
-            very small placeholder duration. This must be fixed later, so the :class:`Rest`
-            object returned from this method is given the :attr:`m21wasMRest` attribute,
-            set to True.
         '''
         # NOTE: keep this in sync with mSpaceFromElement()
         theRest: m21.note.Rest
@@ -5517,14 +5513,13 @@ class MeiReader:
                     theRest.duration.linked = False
                     theRest.duration.quarterLength = measureDur
         else:
-            theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
-            theRest.m21wasMRest = True  # type: ignore
+            theRest = self.restFromElement(elem, useMeasureDuration=True)
         return theRest
 
     def spaceFromElement(
         self,
         elem: Element,
-        usePlaceHolderDuration: bool = False  # True when called from mSpaceFromElement
+        useMeasureDuration: bool = False  # True when called from mSpaceFromElement
     ) -> note.Rest:
         '''
         <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that
@@ -5547,9 +5542,11 @@ class MeiReader:
         elif elem.get('tuplet', '').startswith('i'):
             self.inTupletCount += 1
 
-        theDuration: m21.duration.Duration = (
-            self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
-        )
+        if useMeasureDuration:
+            theDuration = m21.duration.Duration(quarterLength=self.expectedMeasureDuration)
+        else:
+            theDuration = self.durationFromAttributes(elem)
+
         theSpace: note.Rest = note.Rest(duration=theDuration)
         theSpace.style.hideObjectOnPrint = True
 
@@ -5604,10 +5601,6 @@ class MeiReader:
         In MEI 2013: pg.377 (391 in PDF) (MEI.cmn module)
 
         This is a function wrapper for :func:`spaceFromElement`.
-
-        .. note:: If the <mSpace> element does not have a @dur attribute, it will have a very
-            small placeholder duration. This must be fixed later, so the :class:`Rest` object
-            returned from this method is given the :attr:`m21wasMRest` attribute, set to True.
         '''
         # NOTE: keep this in sync with mRestFromElement()
         theSpace: m21.note.Rest
@@ -5622,8 +5615,7 @@ class MeiReader:
                     theSpace.duration.linked = False
                     theSpace.duration.quarterLength = measureDur
         else:
-            theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
-            theSpace.m21wasMRest = True  # type: ignore
+            theSpace = self.spaceFromElement(elem, useMeasureDuration=True)
 
         return theSpace
 
@@ -7088,57 +7080,6 @@ class MeiReader:
             return [(0., nextBreak)] + measureItems
 
         return measureItems
-
-    def _correctMRestDurs(
-        self,
-        staves: dict[str, stream.Measure | bar.Repeat],
-        targetQL: OffsetQL
-    ):
-        '''
-        Helper function for measureFromElement(), not intended to be used elsewhere. It's a
-        separate function only (1) to reduce duplication, and (2) to improve testability.
-
-        Iterate the imported objects of <layer> elements in the <staff> elements in a <measure>,
-        detecting those with the "m21wasMRest" attribute and setting their duration to
-        "targetLength."
-
-        The "staves" argument should be a dictionary where the values are Measure objects with
-        at least one Voice object inside.
-
-        The "targetQL" argument should be the duration of the measure.
-
-        Nothing is returned; the duration of affected objects is modified in-place.
-        '''
-        targetQLNeedsSplit: bool = not M21Utilities.isPowerOfTwoWithDots(targetQL)
-
-        for eachMeasure in staves.values():
-            if not isinstance(eachMeasure, stream.Measure):
-                continue
-
-            for eachVoice in eachMeasure:
-                if not isinstance(eachVoice, stream.Stream):
-                    continue
-
-                modifiedRestDurationInVoice: bool = False
-                correctionOffset: OffsetQL = 0.
-                for eachObject in eachVoice:
-                    if correctionOffset != 0:
-                        # Anything after an mRest needs its offset corrected.
-                        # What could that be, you ask?  How about a clef change
-                        # at the end of an mRest measure?
-                        newOffset = opFrac(eachObject.offset + correctionOffset)
-                        eachVoice.setElementOffset(eachObject, newOffset)
-
-                    if hasattr(eachObject, 'm21wasMRest'):
-                        correctionOffset = (
-                            opFrac(correctionOffset + (targetQL - eachObject.quarterLength))
-                        )
-                        eachObject.duration.quarterLength = targetQL
-                        modifiedRestDurationInVoice = True
-                        del eachObject.m21wasMRest
-
-                if modifiedRestDurationInVoice and targetQLNeedsSplit:
-                    M21Utilities.splitComplexRestDurations(eachVoice)
 
     def _makeBarlines(
         self,
@@ -9032,18 +8973,17 @@ class MeiReader:
                         clonedObj: Music21Object = deepcopy(eachObj)
                         staveN.insert(eachOffset, clonedObj)
 
-        # Compute expectedMeasureDuration.  This is either the maximum staff duration seen
+        # Compute self.expectedMeasureDuration.  This is either the maximum staff duration seen
         # in the measure (if we've seen any staffs), or the duration implied by the current
         # time signature (if we've seen a time signature), or 4.0 (assume the missing time
         # signature would have been 4/4).
-        expectedMeasureDuration: OffsetQL
         if (maxBarDuration != 0.0
                 and maxBarDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
-            expectedMeasureDuration = maxBarDuration
+            self.expectedMeasureDuration = maxBarDuration
         elif self.activeMeter is not None:
-            expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
+            self.expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
         else:
-            expectedMeasureDuration = 4.0
+            self.expectedMeasureDuration = 4.0
 
         # create invisible-rest-filled measures for expected parts that had no <staff> tag
         # in this <measure>
@@ -9052,29 +8992,27 @@ class MeiReader:
                 restVoice = stream.Voice()
                 self.padVoiceWithInvisibleRests(
                     restVoice,
-                    expectedMeasureDuration
+                    self.expectedMeasureDuration
                 )
                 restVoice.id = '1'
                 staves[eachN] = stream.Measure([restVoice], number=measureNum or 0)
 
-        self._correctMRestDurs(staves, expectedMeasureDuration)
-
-        # Fill out all voices with invisible rests to match expectedMeasureDuration.
+        # Fill out all voices with invisible rests to match self.expectedMeasureDuration.
         for eachN, measure in staves.items():
             if not isinstance(measure, m21.stream.Measure):
                 continue
             for voice in measure.voices:
-                if voice.duration.quarterLength < expectedMeasureDuration:
+                if voice.duration.quarterLength < self.expectedMeasureDuration:
                     if voice.duration.quarterLength != 0:
                         # don't bother warning for voices that (e.g.) have only a Clef.
                         environLocal.warn(
                             f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
-                            f'is short by {expectedMeasureDuration - voice.duration.quarterLength} '
+                            f'is short by {self.expectedMeasureDuration - voice.duration.quarterLength} '
                             'quarter notes; assuming this was a missing <space> at the end.'
                         )
                     self.padVoiceWithInvisibleRests(
                         voice,
-                        expectedMeasureDuration - voice.duration.quarterLength
+                        self.expectedMeasureDuration - voice.duration.quarterLength
                     )
 
         # assign left and right barlines
