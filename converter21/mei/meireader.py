@@ -486,9 +486,6 @@ class MeiReader:
         # This only contains clefs that were introduced in this layer/staff/measure.
         self.currentClefPerStaffLayer: dict[str, dict[str, m21.clef.Clef | None]] = {}
 
-        # The expected duraion of the current measure.
-        self.expectedMeasureDuration: OffsetQL = 4.0
-
         # The voice.id we are currently importing notes/chords/rests into.
         self.currVoiceId: str = ''
 
@@ -5372,7 +5369,7 @@ class MeiReader:
 
         theDuration: m21.duration.Duration
         if useMeasureDuration:
-            theDuration = m21.duration.Duration(quarterLength=self.expectedMeasureDuration)
+            theDuration = m21.duration.Duration(quarterLength=self.getMeasureDuration())
         else:
             theDuration = self.durationFromAttributes(elem)
 
@@ -5543,7 +5540,7 @@ class MeiReader:
             self.inTupletCount += 1
 
         if useMeasureDuration:
-            theDuration = m21.duration.Duration(quarterLength=self.expectedMeasureDuration)
+            theDuration = m21.duration.Duration(quarterLength=self.getMeasureDuration())
         else:
             theDuration = self.durationFromAttributes(elem)
 
@@ -8977,13 +8974,7 @@ class MeiReader:
         # in the measure (if we've seen any staffs), or the duration implied by the current
         # time signature (if we've seen a time signature), or 4.0 (assume the missing time
         # signature would have been 4/4).
-        if (maxBarDuration != 0.0
-                and maxBarDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
-            self.expectedMeasureDuration = maxBarDuration
-        elif self.activeMeter is not None:
-            self.expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
-        else:
-            self.expectedMeasureDuration = 4.0
+        expectedMeasureDuration = self.getMeasureDuration(observedDuration=maxBarDuration)
 
         # create invisible-rest-filled measures for expected parts that had no <staff> tag
         # in this <measure>
@@ -8992,27 +8983,27 @@ class MeiReader:
                 restVoice = stream.Voice()
                 self.padVoiceWithInvisibleRests(
                     restVoice,
-                    self.expectedMeasureDuration
+                    expectedMeasureDuration
                 )
                 restVoice.id = '1'
                 staves[eachN] = stream.Measure([restVoice], number=measureNum or 0)
 
-        # Fill out all voices with invisible rests to match self.expectedMeasureDuration.
+        # Fill out all voices with invisible rests to match expectedMeasureDuration.
         for eachN, measure in staves.items():
             if not isinstance(measure, m21.stream.Measure):
                 continue
             for voice in measure.voices:
-                if voice.duration.quarterLength < self.expectedMeasureDuration:
+                if voice.duration.quarterLength < expectedMeasureDuration:
                     if voice.duration.quarterLength != 0:
                         # don't bother warning for voices that (e.g.) have only a Clef.
                         environLocal.warn(
                             f'measure {measure.measureNumberWithSuffix()}: staff {eachN} duration '
-                            f'is short by {self.expectedMeasureDuration - voice.duration.quarterLength} '
+                            f'is short by {expectedMeasureDuration - voice.duration.quarterLength} '
                             'quarter notes; assuming this was a missing <space> at the end.'
                         )
                     self.padVoiceWithInvisibleRests(
                         voice,
-                        self.expectedMeasureDuration - voice.duration.quarterLength
+                        expectedMeasureDuration - voice.duration.quarterLength
                     )
 
         # assign left and right barlines
@@ -9041,6 +9032,16 @@ class MeiReader:
         self.currentClefPerStaffLayer = {}
 
         return staves
+
+    def getMeasureDuration(self, observedDuration: OffsetQL = 0.0):
+        if (observedDuration != 0.0
+                and observedDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
+            return observedDuration
+
+        if self.activeMeter is not None:
+            return self.activeMeter.barDuration.quarterLength
+
+        return 4.0
 
     @staticmethod
     def padVoiceWithInvisibleRests(voice: m21.stream.Voice, addedDuration: OffsetQL):
