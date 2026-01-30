@@ -267,13 +267,31 @@ class M21ObjectConvert:
 
         M21ObjectConvert._addStylisticAttributes(obj, attr)
 
-        if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
-            attr.pop('visible', None)  # remove @visible="false", since <space> is always invisible
-            tb.start('space', attr)
-            tb.end('space')
+        if obj.duration.type == 'complex' and M21ObjectConvert.isMeasureDuration(obj):
+            # mRest or mSpace is the only way to encode this duration
+            if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
+                attr.pop('visible', None)  # remove @visible="false" for <mSpace>
+                tb.start('mSpace', attr)
+                tb.end('mSpace')
+            else:
+                tb.start('mRest', attr)
+                tb.end('mRest')
         else:
-            tb.start('rest', attr)
-            tb.end('rest')
+            if obj.hasStyleInformation and obj.style.hideObjectOnPrint:
+                attr.pop('visible', None)  # remove @visible="false" for <space>
+                tb.start('space', attr)
+                tb.end('space')
+            else:
+                tb.start('rest', attr)
+                tb.end('rest')
+
+    @staticmethod
+    def isMeasureDuration(obj: m21.base.Music21Object) -> bool:
+        timesig: m21.meter.TimeSignature | None = obj.getContextByClass(m21.meter.TimeSignature)
+        measureDur: OffsetQL = 4.0
+        if timesig is not None:
+            measureDur = opFrac(4.0 * timesig.numerator / timesig.denominator)
+        return obj.quarterLength == measureDur
 
     @staticmethod
     def meiLocToM21DisplayName(
