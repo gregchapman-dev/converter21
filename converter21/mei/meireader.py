@@ -8970,7 +8970,7 @@ class MeiReader:
                         clonedObj: Music21Object = deepcopy(eachObj)
                         staveN.insert(eachOffset, clonedObj)
 
-        # Compute self.expectedMeasureDuration.  This is either the maximum staff duration seen
+        # Compute expectedMeasureDuration.  This is either the maximum staff duration seen
         # in the measure (if we've seen any staffs), or the duration implied by the current
         # time signature (if we've seen a time signature), or 4.0 (assume the missing time
         # signature would have been 4/4).
