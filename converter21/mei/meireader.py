@@ -174,6 +174,7 @@ tool.
 
 '''
 import typing as t
+from typing import TypeAlias
 from xml.etree.ElementTree import Element, fromstring, ElementTree, ParseError
 import re
 import html
@@ -224,6 +225,21 @@ from converter21.shared import SharedConstants
 from converter21.shared import M21Utilities
 from converter21.shared import M21StaffGroupDescriptionTree
 
+Music21ObjectOrTwo: TypeAlias = Music21Object | tuple[Music21Object, Music21Object]
+
+# MeasureItem contains a Music21Object found in a <layer> but must be inserted at
+# the appropriate offset in the Measure (not the layer's Voice).  For example, Clefs,
+# TimeSignatures, and KeySignatures.
+MeasureItem: TypeAlias = tuple[OffsetQL, Music21Object]
+
+StaffItem: TypeAlias = tuple[
+    str,
+    tuple[OffsetQL | None, int | None, OffsetQL | None],
+    Music21Object
+]
+
+FromElementType: TypeAlias = Music21ObjectOrTwo | StaffItem | str | None
+
 environLocal = environment.Environment('converter21.mei.meireader')
 
 DENOM_LIMIT = 768
@@ -270,6 +286,7 @@ _BAD_VERSE_NUMBER = 'Verse number must be an int (got "{}")'
 _EXTRA_KEYSIG_IN_STAFFDEF = 'Multiple keys specified in <staffdef>, ignoring {} in favor of {}'
 _EXTRA_METERSIG_IN_STAFFDEF = 'Multiple meters specified in <staffdef> ignoring {} in favor of {}'
 _EXTRA_CLEF_IN_STAFFDEF = 'Multiple clefs specified in <staffdef> ignoring {} in favor of {}'
+
 
 class MeiReader:
     '''
@@ -2182,10 +2199,10 @@ class MeiReader:
         elements: t.Iterable[Element],
         mapping: dict[str, t.Callable[
             [Element],
-            t.Any]
+            list[FromElementType]]
         ],
         callerTag: str,
-    ) -> list[t.Any]:
+    ) -> list[FromElementType]:
         # noinspection PyShadowingNames
         '''
         From an iterable of MEI ``elements``, use functions in the ``mapping`` to convert each
@@ -2234,17 +2251,22 @@ class MeiReader:
         >>> c._processEmbeddedElements(elements, mapping, 'doctest2')
         [<music21.note.Note D>, <music21.note.Note E>, <music21.note.Note E>, <music21.note.Note D>]
         '''
-        processed: list[t.Any] = []
+        processed: list[FromElementType] = []
 
         for eachElem in elements:
             if eachElem.tag in mapping:
-                result: Music21Object | tuple[Music21Object, ...] | list[Music21Object] | None = (
+                result: FromElementType | list[FromElementType] = (
                     mapping[eachElem.tag](eachElem)
                 )
                 if isinstance(result, list):
+                    # result is list[FromElementType], append all elements to processed
                     for eachObject in result:
                         processed.append(eachObject)
-                elif result is not None:
+                elif result is None:
+                    # None is ignored
+                    pass
+                else:
+                    # result is some other FromElementType, append to processed
                     processed.append(result)
             elif eachElem.tag not in _IGNORE_UNPROCESSED:
                 environLocal.warn(_UNPROCESSED_SUBELEMENT.format(eachElem.tag, callerTag))
@@ -4820,7 +4842,6 @@ class MeiReader:
         self,
         elem: Element,
         optionalDots: int | None = None,
-        usePlaceHolderDuration: bool = False  # True during mRest/mSpace processing
     ) -> m21.duration.Duration:
         # wasDefault: bool = False
         durFloat: float | None = 0.0
@@ -4830,59 +4851,56 @@ class MeiReader:
         foundDots: bool = False
         foundDurGes: bool = False
         foundDotsGes: bool = False
-        if usePlaceHolderDuration:
-            durFloat = self._qlDurationFromAttr('measureDurationPlaceHolder')
-            numDots = 0
+
+        if elem.get('dur'):
+            durFloat = self._qlDurationFromAttr(elem.get('dur'))
+            if durFloat is None:
+                # @dur value was not found in self._DUR_ATTR_DICT
+                raise MeiAttributeError(f'dur attribute has illegal value: "{elem.get("dur")}"')
+
+        if elem.get('dur.ges'):
+            foundDurGes = True
+            durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
+            if durGesFloat is None:
+                # @dur.ges value was not found in self._DUR_ATTR_DICT
+                raise MeiAttributeError('dur.ges attribute has illegal value: "{attr}"')
+
+        if elem.get('dots'):
+            foundDots = True
+
+        if optionalDots is not None:
+            numDots = optionalDots
         else:
-            if elem.get('dur'):
-                durFloat = self._qlDurationFromAttr(elem.get('dur'))
-                if durFloat is None:
-                    # @dur value was not found in self._DUR_ATTR_DICT
-                    raise MeiAttributeError(f'dur attribute has illegal value: "{elem.get("dur")}"')
+            numDots = int(elem.get('dots', 0))
 
-            if elem.get('dur.ges'):
-                foundDurGes = True
-                durGesFloat = self._qlDurationFromAttr(elem.get('dur.ges'))
-                if durGesFloat is None:
-                    # @dur.ges value was not found in self._DUR_ATTR_DICT
-                    raise MeiAttributeError('dur.ges attribute has illegal value: "{attr}"')
+        dotsGesStr: str = elem.get('dots.ges', '')
+        if dotsGesStr:
+            foundDotsGes = True
+            numDotsGes = int(dotsGesStr)
 
-            if elem.get('dots'):
-                foundDots = True
+        if foundDots and foundDurGes and not foundDotsGes:
+            environLocal.warn(
+                'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
+                'assuming gestural duration is @dur.ges with zero dots.  It is recommended'
+                'that you specify @dots.ges explicitly.'
+            )
 
-            if optionalDots is not None:
-                numDots = optionalDots
-            else:
-                numDots = int(elem.get('dots', 0))
-
-            dotsGesStr: str = elem.get('dots.ges', '')
-            if dotsGesStr:
-                foundDotsGes = True
-                numDotsGes = int(dotsGesStr)
-
-            if foundDots and foundDurGes and not foundDotsGes:
-                environLocal.warn(
-                    'Ambiguous absence of @dots.ges in the presence of @dur.ges and @dots: '
-                    'assuming gestural duration is @dur.ges with zero dots.  It is recommended'
-                    'that you specify @dots.ges explicitly.'
-                )
-
-            # if no dur.ges and no dots.ges, try for dur.ppq (but not if we're in a tuplet,
-            # because when in a tuplet, dur.ppq is just the tupletized duration, not really
-            # a gestural duration).
-            if not foundDurGes and not foundDotsGes and not self.inTupletCount:
-                durPPQStr: str = elem.get('dur.ppq', '')
-                if durPPQStr:
-                    durPPQ: int | None = None
-                    try:
-                        durPPQ = int(durPPQStr)
-                    except Exception:
-                        pass
-                    if durPPQ is not None:
-                        ppq: int | None = self.getPPQ(self.staffNumberForNotes)
-                        if ppq:
-                            durGesFloat = float(durPPQ) / float(ppq)
-                            numDotsGes = 0  # None would make us use numDots, which is wrong
+        # if no dur.ges and no dots.ges, try for dur.ppq (but not if we're in a tuplet,
+        # because when in a tuplet, dur.ppq is just the tupletized duration, not really
+        # a gestural duration).
+        if not foundDurGes and not foundDotsGes and not self.inTupletCount:
+            durPPQStr: str = elem.get('dur.ppq', '')
+            if durPPQStr:
+                durPPQ: int | None = None
+                try:
+                    durPPQ = int(durPPQStr)
+                except Exception:
+                    pass
+                if durPPQ is not None:
+                    ppq: int | None = self.getPPQ(self.staffNumberForNotes)
+                    if ppq:
+                        durGesFloat = float(durPPQ) / float(ppq)
+                        numDotsGes = 0  # None would make us use numDots, which is wrong
 
         if durFloat == 0.0:
             # @dur was missing
@@ -5296,7 +5314,7 @@ class MeiReader:
     def restFromElement(
         self,
         elem: Element,
-        usePlaceHolderDuration: bool = False  # True if called from mRestFromElement
+        useMeasureDuration: bool = False  # True if called from mRestFromElement
     ) -> note.Rest:
         '''
         <rest/> is a non-sounding event found in the source being transcribed
@@ -5349,9 +5367,11 @@ class MeiReader:
         elif elem.get('tuplet', '').startswith('i'):
             self.inTupletCount += 1
 
-        theDuration: m21.duration.Duration = (
-            self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
-        )
+        theDuration: m21.duration.Duration
+        if useMeasureDuration:
+            theDuration = m21.duration.Duration(quarterLength=self.getMeasureDuration())
+        else:
+            theDuration = self.durationFromAttributes(elem)
 
 #         # Check if rest duration is a whole note, and that's longer than activeMeter.
 #         # If so, make gestural duration equal to activeMeter.
@@ -5476,11 +5496,6 @@ class MeiReader:
         In MEI 2013: pg.375 (389 in PDF) (MEI.cmn module)
 
         This is a function wrapper for :func:`restFromElement`.
-
-        .. note:: If the <mRest> element does not have a @dur attribute, it will have a
-            very small placeholder duration. This must be fixed later, so the :class:`Rest`
-            object returned from this method is given the :attr:`m21wasMRest` attribute,
-            set to True.
         '''
         # NOTE: keep this in sync with mSpaceFromElement()
         theRest: m21.note.Rest
@@ -5495,14 +5510,13 @@ class MeiReader:
                     theRest.duration.linked = False
                     theRest.duration.quarterLength = measureDur
         else:
-            theRest = self.restFromElement(elem, usePlaceHolderDuration=True)
-            theRest.m21wasMRest = True  # type: ignore
+            theRest = self.restFromElement(elem, useMeasureDuration=True)
         return theRest
 
     def spaceFromElement(
         self,
         elem: Element,
-        usePlaceHolderDuration: bool = False  # True when called from mSpaceFromElement
+        useMeasureDuration: bool = False  # True when called from mSpaceFromElement
     ) -> note.Rest:
         '''
         <space>  A placeholder used to fill an incomplete measure, layer, etc. most often so that
@@ -5525,9 +5539,11 @@ class MeiReader:
         elif elem.get('tuplet', '').startswith('i'):
             self.inTupletCount += 1
 
-        theDuration: m21.duration.Duration = (
-            self.durationFromAttributes(elem, usePlaceHolderDuration=usePlaceHolderDuration)
-        )
+        if useMeasureDuration:
+            theDuration = m21.duration.Duration(quarterLength=self.getMeasureDuration())
+        else:
+            theDuration = self.durationFromAttributes(elem)
+
         theSpace: note.Rest = note.Rest(duration=theDuration)
         theSpace.style.hideObjectOnPrint = True
 
@@ -5582,10 +5598,6 @@ class MeiReader:
         In MEI 2013: pg.377 (391 in PDF) (MEI.cmn module)
 
         This is a function wrapper for :func:`spaceFromElement`.
-
-        .. note:: If the <mSpace> element does not have a @dur attribute, it will have a very
-            small placeholder duration. This must be fixed later, so the :class:`Rest` object
-            returned from this method is given the :attr:`m21wasMRest` attribute, set to True.
         '''
         # NOTE: keep this in sync with mRestFromElement()
         theSpace: m21.note.Rest
@@ -5600,8 +5612,7 @@ class MeiReader:
                     theSpace.duration.linked = False
                     theSpace.duration.quarterLength = measureDur
         else:
-            theSpace = self.spaceFromElement(elem, usePlaceHolderDuration=True)
-            theSpace.m21wasMRest = True  # type: ignore
+            theSpace = self.spaceFromElement(elem, useMeasureDuration=True)
 
         return theSpace
 
@@ -6155,7 +6166,7 @@ class MeiReader:
     def beamFromElement(
         self,
         elem: Element,
-    ) -> t.Sequence[Music21Object]:
+    ) -> list[Music21Object]:
         '''
         <beam> A container for a series of explicitly beamed events that begins and ends entirely
                within a measure.
@@ -6235,11 +6246,16 @@ class MeiReader:
         - MEI.mensural: ligature mensur proport
         - MEI.shared: clefGrp custos keySig pad
         '''
-        beamedStuff: list[Music21Object] = self._processEmbeddedElements(
+        beamedStuff: list[Music21Object] = []
+
+        for beamedThing in self._processEmbeddedElements(
             elem.findall('*'),
             self.beamChildrenTagToFunction,
             elem.tag,
-        )
+        ):
+            if t.TYPE_CHECKING:
+                assert isinstance(beamedThing, Music21Object)
+            beamedStuff.append(beamedThing)
 
         self.beamTogether(beamedStuff)
         self.applyBreaksecs(beamedStuff)
@@ -6254,11 +6270,11 @@ class MeiReader:
         <bTrem> contains one <note> or <chord> (or editorial elements that resolve to a single
         note or chord)
         '''
-        bTremStuff: list[Music21Object] = self._processEmbeddedElements(
+        bTremStuff = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.findall('*'),
             self.bTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         if len(bTremStuff) != 1:
             raise MeiElementError('<bTrem> without exactly one note or chord within')
@@ -6295,11 +6311,11 @@ class MeiReader:
         <fTrem> contains two <note>s or two <chord>s or one of each (or editorial elements that
         resolve to two <note>s or two <chord>s or one of each)
         '''
-        fTremStuff: list[Music21Object] = self._processEmbeddedElements(
+        fTremStuff = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.findall('*'),
             self.fTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         if len(fTremStuff) != 2:
             raise MeiElementError(
@@ -6486,11 +6502,11 @@ class MeiReader:
         # iterate all immediate children (set self.inTupletCount so we know to ignore
         # any @tuplet attributes)
         self.inTupletCount += 1
-        tupletMembers: list[Music21Object] = self._processEmbeddedElements(
+        tupletMembers = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.findall('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
-        )
+        ))
         self.inTupletCount -= 1
 
         # "tuplet-ify" the duration of everything held within
@@ -6550,7 +6566,7 @@ class MeiReader:
         self,
         elem: Element,
         overrideN: str
-    ) -> stream.Voice:
+    ) -> list[MeasureItem]:
         '''
         <layer> An independent stream of events on a staff.
 
@@ -6642,11 +6658,11 @@ class MeiReader:
                 )
 
         # iterate all immediate children
-        theLayer: list[Music21Object] = self._processEmbeddedElements(
+        theLayer = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.layerChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         # adjust the <layer>'s elements for possible tuplets
         self._guessTuplets(theLayer)
@@ -6671,7 +6687,18 @@ class MeiReader:
         #     if removeThisOne is not None:
         #         theLayer.pop(removeThisOne)
 
+        measureItems: list[MeasureItem] = []
+        lastObjInVoice: Music21Object | None = None
         for obj in theLayer:
+            if isinstance(obj, (m21.clef.Clef, m21.meter.TimeSignature, m21.key.KeySignature)):
+                # make a MeasureItem for it instead of appending to Voice (offset will be
+                # offset+dur of lastObjInVoice)
+                offset: OffsetQL = 0.
+                if lastObjInVoice is not None:
+                    offset = opFrac(lastObjInVoice.offset + lastObjInVoice.duration.quarterLength)
+                measureItems.append((offset, obj))
+                continue
+
             # Check for dir/dynam/tempo attached to the obj.
             # If there, append them first, then the obj, so
             # they all get the same offset (since dir/dynam/tempo
@@ -6687,11 +6714,14 @@ class MeiReader:
                         theVoice.coreAppend(each)
 
             theVoice.coreAppend(obj)
+            lastObjInVoice = obj
 
         theVoice.coreElementsChanged()
         self.currVoiceId = ''
 
-        return theVoice
+        measureItems.append((0., theVoice))
+
+        return measureItems
 
     def appChoiceLayerChildrenFromElement(
         self,
@@ -6702,11 +6732,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.layerChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6715,41 +6745,28 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.layerChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
     def appChoiceStaffItemsFromElement(
         self,
         elem: Element,
-    ) -> list[
-        tuple[
-            str,
-            tuple[OffsetQL | None, int | None, OffsetQL | None],
-            Music21Object
-        ]
-    ]:
+    ) -> list[StaffItem]:
         chosen: Element | None = MeiShared.chooseSubElement(elem)
         if chosen is None:
             return []
 
         # iterate all immediate children
-        theList: list[
-            tuple[
-                str,
-                tuple[OffsetQL | None, int | None, OffsetQL | None],
-                Music21Object
-            ]
-        ] = (
-            self._processEmbeddedElements(
-                chosen.iterfind('*'),
-                self.staffItemsTagToFunction,
-                chosen.tag)
-        )
+        theList = t.cast(list[StaffItem], self._processEmbeddedElements(
+            chosen.iterfind('*'),
+            self.staffItemsTagToFunction,
+            chosen.tag
+        ))
 
         return theList
 
@@ -6757,26 +6774,14 @@ class MeiReader:
         self,
         elem: Element,
     ) -> list[
-        tuple[
-            str,
-            tuple[OffsetQL | None, int | None, OffsetQL | None],
-            Music21Object
-        ]
+        StaffItem
     ]:
         # iterate all immediate children
-        theList: list[
-            tuple[
-                str,
-                tuple[OffsetQL | None, int | None, OffsetQL | None],
-                Music21Object
-            ]
-        ] = (
-            self._processEmbeddedElements(
-                elem.iterfind('*'),
-                self.staffItemsTagToFunction,
-                elem.tag
-            )
-        )
+        theList = t.cast(list[StaffItem], self._processEmbeddedElements(
+            elem.iterfind('*'),
+            self.staffItemsTagToFunction,
+            elem.tag
+        ))
 
         return theList
 
@@ -6789,11 +6794,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.noteChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6802,11 +6807,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.noteChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6819,11 +6824,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.chordChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6832,11 +6837,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.chordChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6849,11 +6854,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.beamChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6862,11 +6867,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.beamChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6879,11 +6884,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.tupletChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6892,11 +6897,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.tupletChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6909,11 +6914,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.bTremChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6922,11 +6927,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.bTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6939,11 +6944,11 @@ class MeiReader:
             return []
 
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             chosen.iterfind('*'),
             self.fTremChildrenTagToFunction,
             chosen.tag,
-        )
+        ))
 
         return theList
 
@@ -6952,11 +6957,11 @@ class MeiReader:
         elem: Element,
     ) -> list[Music21Object]:
         # iterate all immediate children
-        theList: list[Music21Object] = self._processEmbeddedElements(
+        theList = t.cast(list[Music21Object], self._processEmbeddedElements(
             elem.iterfind('*'),
             self.fTremChildrenTagToFunction,
             elem.tag,
-        )
+        ))
 
         return theList
 
@@ -6972,7 +6977,7 @@ class MeiReader:
     def staffFromElement(
         self,
         elem: Element,
-    ) -> list[Music21Object]:
+    ) -> list[MeasureItem]:
         '''
         <staff> A group of equidistant horizontal lines on which notes are placed in order to
         represent pitch or a grouping element for individual 'strands' of notes, rests, etc.
@@ -7014,6 +7019,13 @@ class MeiReader:
         - MEI.text: div
         - MEI.usersymbols: anchoredText curve line symbol
         '''
+        def findVoice(measureItems: list[MeasureItem]) -> stream.Voice:
+            # raise if there is no Voice; there must be one.
+            for mi in measureItems:
+                if isinstance(mi[1], stream.Voice):
+                    return mi[1]
+            raise MeiInternalError('No Voice generated for <layer>')
+
         # mapping from tag name to our converter function (currently empty)
         layerTagName: str = f'{MEI_NS}layer'
         tagToFunction: dict[str, t.Callable[
@@ -7039,7 +7051,7 @@ class MeiReader:
                 nextBreak = self.nextBreak
                 self.nextBreak = None
 
-        layers: list[Music21Object] = []
+        measureItems: list[MeasureItem] = []
 
         # track the @n values given to layerFromElement()
         currentNValue: str = '1'
@@ -7047,13 +7059,14 @@ class MeiReader:
         # iterate all immediate children
         for eachTag in elem.iterfind('*'):
             if layerTagName == eachTag.tag:
-                layers.append(self.layerFromElement(
+                measureItems.extend(self.layerFromElement(
                     eachTag, overrideN=currentNValue
                 ))
-                currentNValue = f'{int(layers[-1].id) + 1}'  # inefficient, but we need a string
+                currentVoice: stream.Voice = findVoice(measureItems)
+                currentNValue = f'{int(currentVoice.id) + 1}'  # inefficient, but we need a string
             elif eachTag.tag in tagToFunction:
                 # NB: this won't be tested until there's something in tagToFunction
-                layers.append(
+                measureItems.append(
                     tagToFunction[eachTag.tag](eachTag)
                 )
             elif eachTag.tag not in _IGNORE_UNPROCESSED:
@@ -7061,60 +7074,9 @@ class MeiReader:
 
         if nextBreak is not None:
             # return the page/system break as the first element of the list
-            return [nextBreak] + layers
+            return [(0., nextBreak)] + measureItems
 
-        return layers
-
-    def _correctMRestDurs(
-        self,
-        staves: dict[str, stream.Measure | bar.Repeat],
-        targetQL: OffsetQL
-    ):
-        '''
-        Helper function for measureFromElement(), not intended to be used elsewhere. It's a
-        separate function only (1) to reduce duplication, and (2) to improve testability.
-
-        Iterate the imported objects of <layer> elements in the <staff> elements in a <measure>,
-        detecting those with the "m21wasMRest" attribute and setting their duration to
-        "targetLength."
-
-        The "staves" argument should be a dictionary where the values are Measure objects with
-        at least one Voice object inside.
-
-        The "targetQL" argument should be the duration of the measure.
-
-        Nothing is returned; the duration of affected objects is modified in-place.
-        '''
-        targetQLNeedsSplit: bool = not M21Utilities.isPowerOfTwoWithDots(targetQL)
-
-        for eachMeasure in staves.values():
-            if not isinstance(eachMeasure, stream.Measure):
-                continue
-
-            for eachVoice in eachMeasure:
-                if not isinstance(eachVoice, stream.Stream):
-                    continue
-
-                modifiedRestDurationInVoice: bool = False
-                correctionOffset: OffsetQL = 0.
-                for eachObject in eachVoice:
-                    if correctionOffset != 0:
-                        # Anything after an mRest needs its offset corrected.
-                        # What could that be, you ask?  How about a clef change
-                        # at the end of an mRest measure?
-                        newOffset = opFrac(eachObject.offset + correctionOffset)
-                        eachVoice.setElementOffset(eachObject, newOffset)
-
-                    if hasattr(eachObject, 'm21wasMRest'):
-                        correctionOffset = (
-                            opFrac(correctionOffset + (targetQL - eachObject.quarterLength))
-                        )
-                        eachObject.duration.quarterLength = targetQL
-                        modifiedRestDurationInVoice = True
-                        del eachObject.m21wasMRest
-
-                if modifiedRestDurationInVoice and targetQLNeedsSplit:
-                    M21Utilities.splitComplexRestDurations(eachVoice)
+        return measureItems
 
     def _makeBarlines(
         self,
@@ -8793,24 +8755,19 @@ class MeiReader:
                     raise MeiElementError(_STAFF_MUST_HAVE_N)
 
                 self.staffNumberForNotes = nStr
-                measureList = self.staffFromElement(eachElem)
+                measureList: list[MeasureItem] = self.staffFromElement(eachElem)
                 self.staffNumberForNotes = ''
 
                 meas: stream.Measure
                 meas = stream.Measure(number=measureNum or 0)
 
-                # We can't pass measureList to Measure() because it's a mixture of obj/Voice, and
-                # if it starts with obj, Measure() will get confused and append everything,
-                # including Voices, and that will be all wrong.  This by-hand approach
-                # (insert(0) everything) will work until such time as we generate top-level
-                # objects in the measure that are not at offset 0, and at that point we will
-                # need to return object offsets with each object, so we can insert them
-                # appropriately.
-                for measureObj in measureList:
-                    if isinstance(measureObj, m21.spanner.Spanner):
-                        meas.append(measureObj)
+                for measureItem in measureList:
+                    offsetInMeasure: OffsetQL = measureItem[0]
+                    obj: Music21Object = measureItem[1]
+                    if isinstance(obj, m21.spanner.Spanner):
+                        meas.append(obj)
                     else:
-                        meas.insert(0, measureObj)
+                        meas.insert(offsetInMeasure, obj)
 
                 staves[nStr] = meas
 
@@ -9017,14 +8974,7 @@ class MeiReader:
         # in the measure (if we've seen any staffs), or the duration implied by the current
         # time signature (if we've seen a time signature), or 4.0 (assume the missing time
         # signature would have been 4/4).
-        expectedMeasureDuration: OffsetQL
-        if (maxBarDuration != 0.0
-                and maxBarDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
-            expectedMeasureDuration = maxBarDuration
-        elif self.activeMeter is not None:
-            expectedMeasureDuration = self.activeMeter.barDuration.quarterLength
-        else:
-            expectedMeasureDuration = 4.0
+        expectedMeasureDuration = self.getMeasureDuration(observedDuration=maxBarDuration)
 
         # create invisible-rest-filled measures for expected parts that had no <staff> tag
         # in this <measure>
@@ -9037,8 +8987,6 @@ class MeiReader:
                 )
                 restVoice.id = '1'
                 staves[eachN] = stream.Measure([restVoice], number=measureNum or 0)
-
-        self._correctMRestDurs(staves, expectedMeasureDuration)
 
         # Fill out all voices with invisible rests to match expectedMeasureDuration.
         for eachN, measure in staves.items():
@@ -9084,6 +9032,16 @@ class MeiReader:
         self.currentClefPerStaffLayer = {}
 
         return staves
+
+    def getMeasureDuration(self, observedDuration: OffsetQL = 0.0):
+        if (observedDuration != 0.0
+                and observedDuration != self._qlDurationFromAttr('measureDurationPlaceHolder')):
+            return observedDuration
+
+        if self.activeMeter is not None:
+            return self.activeMeter.barDuration.quarterLength
+
+        return 4.0
 
     @staticmethod
     def padVoiceWithInvisibleRests(voice: m21.stream.Voice, addedDuration: OffsetQL):

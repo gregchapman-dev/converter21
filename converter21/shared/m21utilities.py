@@ -5105,7 +5105,7 @@ class M21Utilities:
                 return
 
         except Exception:
-            raise  # for testing.  pass later.
+            pass  # raise (for testing)
 
         return
 

@@ -1,12 +1,14 @@
 # converter21
-A music21-extending converter package that contains alternate music21 Humdrum and MEI converters (a Humdrum parser/writer, and a MEI parser/writer).  converter21 is also a command line tool for conversion between various music notation file formats.
+A music21-extending converter package that contains music21 extensions that read/write Humdrum, MEI, and ABC files.  converter21 is also a command line tool for conversion between many music notation file formats.
 
 The Humdrum portion of this software is derived/translated from the C++ code in [humlib](https://github.com/craigsapp/humlib), by Craig Stuart Sapp.
 
 The core of the MEI parsing portion of this software was based on the MEI converter in [music21](https://github.com/cuthbertlab/music21), by Michael Scott Asato Cuthbert.
 
+The ABC portion of this software uses [abc2xml.py](https://wim.vree.org/svgParse/abc2xml.html) and [xml2abc.py](https://wim.vree.org/svgParse/xml2abc.html), by Willem G. Vree.
+
 ## Setup
-Requires Python 3.10 or later.  Depends on [music21](https://pypi.org/project/music21) v9.9.1, which should also be configured (instructions [here](https://www.music21.org/music21docs/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://pypi.org/project/musicdiff), but converter21 itself does not.
+Requires Python 3.10 or later.  Depends on [music21](https://github.com/cuthbertlab/music21) v9.9.1, which should also be configured (instructions [here](https://www.music21.org/music21docs/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://github.com/gregchapman-dev/musicdiff), but converter21 itself does not.
 
 ## Command line tool usage:
 ```
@@ -39,7 +41,7 @@ Call converter21.register() to get music21 to use converter21's alternate Humdru
 
 ## License
 The MIT License (MIT)
-Copyright (c) 2021-2025 Greg Chapman
+Copyright (c) 2021-2026 Greg Chapman
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -77,7 +79,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The core of the MEI parsing portion of this software was based on the MEI parser
 in [music21](https://github.com/cuthbertLab/music21), which uses the BSD 3-Clause License:
 
-Copyright (c) 2006-2025 Michael Scott Asato Cuthbert
+Copyright (c) 2006-2026 Michael Scott Asato Cuthbert
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -101,3 +103,17 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The ABC reader/writer in this software uses [abc2xml.py](https://wim.vree.org/svgParse/abc2xml.html) and [xml2abc.py](https://wim.vree.org/svgParse/xml2abc.html), which 
+use the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>):
+
+Copyright (C) 2012-2025: Willem G. Vree
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the Lesser GNU General Public License as published by the Free 
+Software Foundation;
+
+This program is distributed in the hope that it will be useful, but WITHOUT 
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>) for more 
+details.
