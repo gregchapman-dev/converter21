@@ -647,7 +647,7 @@ class DiffUtilities:
                             'insspace',
                             'delspace'):
                 counts['space'] += 1
-            elif op.name == 'graceedit'):
+            elif op.name == 'graceedit':
                 counts['gracenote'] += 1
             elif op.name in ('lyricins',
                             'lyricdel',
