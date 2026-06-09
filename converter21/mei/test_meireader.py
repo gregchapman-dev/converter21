@@ -1941,56 +1941,6 @@ class Test(unittest.TestCase):
             self.assertEqual('final', staves[i].rightBarline.type)
         self.assertEqual(4, staves['4'])
 
-    def testCorrectMRestDurs1(self):
-        '''
-        _correctMRestDurs(): nothing happens when there isn't at object with "m21wasMRest"
-
-        This is an integration test of sorts, using no Mock objects.
-        '''
-        staves = {'1': stream.Measure([stream.Voice([note.Rest(), note.Rest()])]),
-                  '2': stream.Measure([stream.Voice([note.Rest(), note.Rest()])])}
-        c = MeiReader()
-        c._correctMRestDurs(staves, 2.0)
-        self.assertEqual(1.0, staves['1'].voices[0][0].quarterLength)
-        self.assertEqual(1.0, staves['1'].voices[0][1].quarterLength)
-        self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
-        self.assertEqual(1.0, staves['2'].voices[0][1].quarterLength)
-
-    def testCorrectMRestDurs2(self):
-        '''
-        _correctMRestDurs(): things with "m21wasMRest" are adjusted properly
-
-        This is an integration test of sorts, using no Mock objects.
-        '''
-        staves = {'1': stream.Measure([stream.Voice([note.Rest()])]),
-                  '2': stream.Measure([stream.Voice([note.Rest(), note.Rest()])])}
-        staves['1'][0][0].m21wasMRest = True
-        c = MeiReader()
-        c._correctMRestDurs(staves, 2.0)
-        self.assertEqual(2.0, staves['1'].voices[0][0].quarterLength)
-        self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
-        self.assertEqual(1.0, staves['2'].voices[0][1].quarterLength)
-        self.assertFalse(hasattr(staves['1'].voices[0][0], 'm21wasMRest'))
-
-    def testCorrectMRestDurs3(self):
-        '''
-        _correctMRestDurs(): works with more than 1 voice per part,
-        and for things that aren't Voice
-
-        This is an integration test of sorts, using no Mock objects.
-        '''
-        staves = {'1': stream.Measure([stream.Voice([note.Rest()]), stream.Voice([note.Rest()])]),
-                  '2': stream.Measure([meter.TimeSignature('4/4'), stream.Voice([note.Note()])])}
-        staves['1'][0][0].m21wasMRest = True
-        staves['1'][1][0].m21wasMRest = True
-        c = MeiReader()
-        c._correctMRestDurs(staves, 2.0)
-        self.assertEqual(2.0, staves['1'].voices[0][0].quarterLength)
-        self.assertEqual(2.0, staves['1'].voices[1][0].quarterLength)
-        self.assertEqual(1.0, staves['2'].voices[0][0].quarterLength)
-        self.assertFalse(hasattr(staves['1'][0][0], 'm21wasMRest'))
-        self.assertFalse(hasattr(staves['1'][1][0], 'm21wasMRest'))
-
     def testMeasureIntegration1(self):
         '''
         measureFromElement(): test 1

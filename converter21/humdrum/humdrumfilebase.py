@@ -48,7 +48,7 @@ class TokenPair:
         return self._first
 
     @first.setter
-    def first(self, newFirst: HumdrumToken) -> None:
+    def first(self, newFirst: HumdrumToken | None) -> None:
         self._first = newFirst
 
     @property
@@ -56,7 +56,7 @@ class TokenPair:
         return self._last
 
     @last.setter
-    def last(self, newLast: HumdrumToken) -> None:
+    def last(self, newLast: HumdrumToken | None) -> None:
         self._last = newLast
 
     # the following two properties are used for sorting (sort by line index, then by field index)

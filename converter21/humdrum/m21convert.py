@@ -714,7 +714,7 @@ class M21Convert:
 
             if not badKeySig:
                 m21KeySig = m21.key.KeySignature()
-                m21KeySig.alteredPitches = alteredPitches
+                m21KeySig.alteredPitches = alteredPitches  # type: ignore
                 return m21KeySig  # there's no m21Key that will match a non-standard key sig
 
 

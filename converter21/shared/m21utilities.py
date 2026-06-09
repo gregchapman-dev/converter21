@@ -2930,7 +2930,11 @@ class M21Utilities:
         # we have a uniqueName, so treat it as standard
         if isinstance(value, str):
             value = m21.metadata.Text(value)
-        value = md._convertValue(uniqueName, value)
+        if hasattr(md, 'convertValue'):
+            # new name in music21 v10
+            value = md.convertValue(uniqueName, value)
+        else:
+            value = md._convertValue(uniqueName, value)
 
         if other:
             for k, v in other.items():
@@ -3794,6 +3798,11 @@ class M21Utilities:
 
     @staticmethod
     def updatePitches(cs: m21.harmony.ChordSymbol):
+        def ensureOctaves(pitches: list[m21.pitch.Pitch]):
+            for p in pitches:
+                if p.octave is None:
+                    p.octave = p.implicitOctave
+
         # fix bug in cs._updatePitches (it doesn't know about 'augmented' ninths)
         def adjustOctaves(cs, pitches):
             from music21 import pitch, chord
@@ -3847,6 +3856,7 @@ class M21Utilities:
             if self._overrides['bass'] not in pitches:
                 pitches.append(self._overrides['bass'])
 
+        ensureOctaves(pitches)
         pitches = adjustOctaves(self, pitches)
 
         if self._overrides['root'].name != self._overrides['bass'].name:
@@ -3869,6 +3879,8 @@ class M21Utilities:
             if t.TYPE_CHECKING:
                 assert inversionNum is not None
             for p in pitches[0:inversionNum]:
+                if t.TYPE_CHECKING:
+                    assert p.octave is not None  # because ensureOctaves above
                 p.octave = p.octave + 1
                 # Repeat if 9th/11th/13th chord in 4th inversion or greater
                 if inversionNum > 3:
@@ -3881,17 +3893,23 @@ class M21Utilities:
             # self.bass(bassPitch)
             for p in pitches:
                 if p.diatonicNoteNum < self._overrides['bass'].diatonicNoteNum:
+                    if t.TYPE_CHECKING:
+                        assert p.octave is not None  # because ensureOctaves above
                     p.octave = p.octave + 1
 
         while self._hasPitchAboveC4(pitches):
-            for thisPitch in pitches:
-                thisPitch.octave -= 1
+            for p in pitches:
+                if t.TYPE_CHECKING:
+                    assert p.octave is not None  # because ensureOctaves above
+                p.octave -= 1
 
         # but if this has created pitches below lowest note (the A 3 octaves below middle C)
         # on a standard piano, we're going to have to bump all the octaves back up
         while self._hasPitchBelowA1(pitches):
-            for thisPitch in pitches:
-                thisPitch.octave += 1
+            for p in pitches:
+                if t.TYPE_CHECKING:
+                    assert p.octave is not None  # because ensureOctaves above
+                p.octave += 1
 
         self.pitches = tuple(pitches)
         self.sortDiatonicAscending(inPlace=True)
