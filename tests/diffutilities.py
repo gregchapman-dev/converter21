@@ -143,7 +143,7 @@ class DiffUtilities:
                 )
             assert success
 
-        if inFmt == outFmt and inFmt != 'mxl':
+        if inFmt == outFmt and not str(inputPath).endswith('mxl') and not str(ouputPath).endswith('mxl'):
             # compare with bbdiff:
             subprocess.run(['bbdiff', str(inputPath), str(writePath)], check=False)
 
