@@ -14,6 +14,7 @@ import music21 as m21
 from musicdiff import Visualization
 from musicdiff.annotation import AnnScore, AnnMetadataItem, AnnExtra
 from musicdiff import Comparison
+from musicdiff.comparison import DiffOperation
 from musicdiff import DetailLevel
 
 import converter21
@@ -143,7 +144,7 @@ class DiffUtilities:
                 )
             assert success
 
-        if inFmt == outFmt and not str(inputPath).endswith('mxl') and not str(ouputPath).endswith('mxl'):
+        if inFmt == outFmt and not str(inputPath).endswith('mxl') and not str(writePath).endswith('mxl'):
             # compare with bbdiff:
             subprocess.run(['bbdiff', str(inputPath), str(writePath)], check=False)
 
@@ -545,35 +546,51 @@ class DiffUtilities:
 
                 results.flush()
 
-                annotatedScore1 = AnnScore(sc1, detail)
-                annotatedScore2 = AnnScore(sc2, detail)
+                detailList: list[DetailLevel | int] = [
+                    detail & ~DetailLevel.Voicing,
+                    detail | DetailLevel.Voicing
+                ]
 
-                op_list, cost = Comparison.annotated_scores_diff(
-                    annotatedScore1, annotatedScore2
-                )
-                numDiffs = len(op_list)
-                totalNumDiffs += numDiffs
-                print(f'numDiffs = {numDiffs}')
-                print(f'numDiffs = {numDiffs}', file=results)
-                results.flush()
-                if numDiffs > 0:
-                    summ: str = '\t' + DiffUtilities.oplistSummary(op_list)
-                    print(summ)
-                    print(summ, file=results)
+                for d in range(0, 2):
+                    thisDetail = detailList[d]
+                    if d == 0:
+                        print('(with Voicing) ', end='')
+                        print('(with Voicing) ', end='', file=results)
+                    else:
+                        print('(without Voicing) ', end='')
+                        print('(without Voicing) ', end='', file=results)
 
-                # print OMR-NED dict even if there are no diffs
-                omrnedOut: dict = Visualization.get_omr_ned_output(
-                    cost, annotatedScore1, annotatedScore2
-                )
-                jsonStr: str = json.dumps(omrnedOut)
-                print(jsonStr)
-                print(jsonStr, file=results)
+                    annotatedScore1 = AnnScore(sc1, detail)
+                    annotatedScore2 = AnnScore(sc2, detail)
 
-                textOut: str = Visualization.get_text_output(sc1, sc2, op_list)
-                if textOut:
-                    print(textOut)
-                    print(textOut, file=results)
+                    op_list: list[DiffOperation]
+                    cost: int
+                    op_list, cost = Comparison.annotated_scores_diff(
+                        annotatedScore1, annotatedScore2
+                    )
+                    numDiffs = len(op_list)
+                    totalNumDiffs += numDiffs
+                    print(f'numDiffs = {numDiffs}')
+                    print(f'numDiffs = {numDiffs}', file=results)
                     results.flush()
+                    if numDiffs > 0:
+                        summ: str = '\t' + DiffUtilities.oplistSummary(op_list)
+                        print(summ)
+                        print(summ, file=results)
+
+                    # print OMR-NED dict even if there are no diffs
+                    omrnedOut: dict = Visualization.get_omr_ned_output(
+                        cost, annotatedScore1, annotatedScore2
+                    )
+                    jsonStr: str = json.dumps(omrnedOut)
+                    print(jsonStr)
+                    print(jsonStr, file=results)
+
+                    textOut: str = Visualization.get_text_output(sc1, sc2, op_list)
+                    if textOut:
+                        print(textOut)
+                        print(textOut, file=results)
+                        results.flush()
 
             except KeyboardInterrupt:
                 results.flush()
@@ -599,7 +616,7 @@ class DiffUtilities:
 
     @staticmethod
     def oplistSummary(
-        op_list: list[tuple[str, t.Any, t.Any]],
+        op_list: list[DiffOperation],
     ) -> str:
         output: str = ''
         counts: dict = {}
