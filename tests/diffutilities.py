@@ -531,37 +531,47 @@ class DiffUtilities:
             # use musicdiff to compare the two music21 scores,
             # and return whether or not they were identical
             try:
-                if isMultiScore:
-                    if i == 0:
-                        # we already printed inputPath one time
-                        print(f' (score {i}): ', end='')
-                        print(f' (score {i}): ', end='', file=results)
-                    else:
-                        print(f'{origInputPath} (score {i}): ', end='')
-                        print(f'{origInputPath} (score {i}): ', end='', file=results)
-                else:
-                    # we already printed inputPath one time
-                    print(': ', end='')
-                    print(': ', end='', file=results)
-
-                results.flush()
-
                 detailList: list[DetailLevel | int] = [
                     detail & ~DetailLevel.Voicing,
                     detail | DetailLevel.Voicing
                 ]
 
                 for d in range(0, 2):
-                    thisDetail = detailList[d]
-                    if d == 0:
-                        print('(with Voicing) ', end='')
-                        print('(with Voicing) ', end='', file=results)
-                    else:
-                        print('(without Voicing) ', end='')
-                        print('(without Voicing) ', end='', file=results)
+                    thisDetail: DetailLevel | int = detailList[d]
 
-                    annotatedScore1 = AnnScore(sc1, detail)
-                    annotatedScore2 = AnnScore(sc2, detail)
+                    if isMultiScore:
+                        if i == 0:
+                            if d == 0:
+                                # we already printed inputPath one time
+                                print(f' (score {i}) (without Voicing): ', end='')
+                                print(f' (score {i}) (without Voicing): ', end='',
+                                    file=results)
+                            else:
+                                print(f'{origInputPath}  (score {i}) (with Voicing): ', end='')
+                                print(f'{origInputPath}  (score {i}) (with Voicing): ', end='',
+                                    file=results)
+                        else:
+                            if d == 0:
+                                print(f'{origInputPath} (score {i}) (without Voicing): ', end='')
+                                print(f'{origInputPath} (score {i}) (without Voicing): ', end='',
+                                    file=results)
+                            else:
+                                print(f'{origInputPath} (score {i}) (with Voicing): ', end='')
+                                print(f'{origInputPath} (score {i}) (with Voicing): ', end='',
+                                    file=results)
+                    else:
+                        if d == 0:
+                            # we already printed inputPath one time
+                            print(' (without Voicing): ', end='')
+                            print(' (without Voicing): ', end='', file=results)
+                        else:
+                            print(f'{origInputPath} (with Voicing): ', end='')
+                            print(f'{origInputPath} (with Voicing): ', end='', file=results)
+
+                    results.flush()
+
+                    annotatedScore1 = AnnScore(sc1, thisDetail)
+                    annotatedScore2 = AnnScore(sc2, thisDetail)
 
                     op_list: list[DiffOperation]
                     cost: int
