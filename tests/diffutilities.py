@@ -576,6 +576,9 @@ class DiffUtilities:
                     annotatedScore1 = AnnScore(sc1, thisDetail)
                     annotatedScore2 = AnnScore(sc2, thisDetail)
 
+                    versenames1: str = annotatedScore1.check_lyric_verse_names()
+                    versenames2: str = annotatedScore2.check_lyric_verse_names()
+
                     op_list: list[DiffOperation]
                     cost: int
                     op_list, cost = Comparison.annotated_scores_diff(
@@ -590,6 +593,15 @@ class DiffUtilities:
                         summ: str = '\t' + DiffUtilities.oplistSummary(op_list)
                         print(summ)
                         print(summ, file=results)
+
+                    if versenames1:
+                        msg1: str = 'score1 ' + versenames1
+                        print(msg1)
+                        print(msg1, file=results)
+                    if versenames2:
+                        msg2: str = 'score2 ' + versenames2
+                        print(msg2)
+                        print(msg2, file=results)
 
                     # print OMR-NED dict even if there are no diffs
                     omrnedOut: dict = Visualization.get_omr_ned_output(
