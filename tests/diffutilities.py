@@ -14,6 +14,7 @@ import music21 as m21
 from musicdiff import Visualization
 from musicdiff.annotation import AnnScore, AnnMetadataItem, AnnExtra
 from musicdiff import Comparison
+from musicdiff.comparison import DiffOperation
 from musicdiff import DetailLevel
 
 import converter21
@@ -143,7 +144,7 @@ class DiffUtilities:
                 )
             assert success
 
-        if inFmt == outFmt and inFmt != 'mxl':
+        if inFmt == outFmt and not str(inputPath).endswith('mxl') and not str(writePath).endswith('mxl'):
             # compare with bbdiff:
             subprocess.run(['bbdiff', str(inputPath), str(writePath)], check=False)
 
@@ -530,50 +531,76 @@ class DiffUtilities:
             # use musicdiff to compare the two music21 scores,
             # and return whether or not they were identical
             try:
-                if isMultiScore:
-                    if i == 0:
-                        # we already printed inputPath one time
-                        print(f' (score {i}): ', end='')
-                        print(f' (score {i}): ', end='', file=results)
+                detailList: list[DetailLevel | int] = [
+                    detail & ~DetailLevel.Voicing,
+                    detail | DetailLevel.Voicing
+                ]
+
+                for d in range(0, 2):
+                    thisDetail: DetailLevel | int = detailList[d]
+
+                    if isMultiScore:
+                        if i == 0:
+                            if d == 0:
+                                # we already printed inputPath one time
+                                print(f' (score {i}) (without Voicing): ', end='')
+                                print(f' (score {i}) (without Voicing): ', end='',
+                                    file=results)
+                            else:
+                                print(f'{origInputPath}  (score {i}) (with Voicing): ', end='')
+                                print(f'{origInputPath}  (score {i}) (with Voicing): ', end='',
+                                    file=results)
+                        else:
+                            if d == 0:
+                                print(f'{origInputPath} (score {i}) (without Voicing): ', end='')
+                                print(f'{origInputPath} (score {i}) (without Voicing): ', end='',
+                                    file=results)
+                            else:
+                                print(f'{origInputPath} (score {i}) (with Voicing): ', end='')
+                                print(f'{origInputPath} (score {i}) (with Voicing): ', end='',
+                                    file=results)
                     else:
-                        print(f'{origInputPath} (score {i}): ', end='')
-                        print(f'{origInputPath} (score {i}): ', end='', file=results)
-                else:
-                    # we already printed inputPath one time
-                    print(': ', end='')
-                    print(': ', end='', file=results)
+                        if d == 0:
+                            # we already printed inputPath one time
+                            print(' (without Voicing): ', end='')
+                            print(' (without Voicing): ', end='', file=results)
+                        else:
+                            print(f'{origInputPath} (with Voicing): ', end='')
+                            print(f'{origInputPath} (with Voicing): ', end='', file=results)
 
-                results.flush()
-
-                annotatedScore1 = AnnScore(sc1, detail)
-                annotatedScore2 = AnnScore(sc2, detail)
-
-                op_list, cost = Comparison.annotated_scores_diff(
-                    annotatedScore1, annotatedScore2
-                )
-                numDiffs = len(op_list)
-                totalNumDiffs += numDiffs
-                print(f'numDiffs = {numDiffs}')
-                print(f'numDiffs = {numDiffs}', file=results)
-                results.flush()
-                if numDiffs > 0:
-                    summ: str = '\t' + DiffUtilities.oplistSummary(op_list)
-                    print(summ)
-                    print(summ, file=results)
-
-                # print OMR-NED dict even if there are no diffs
-                omrnedOut: dict = Visualization.get_omr_ned_output(
-                    cost, annotatedScore1, annotatedScore2
-                )
-                jsonStr: str = json.dumps(omrnedOut)
-                print(jsonStr)
-                print(jsonStr, file=results)
-
-                textOut: str = Visualization.get_text_output(sc1, sc2, op_list)
-                if textOut:
-                    print(textOut)
-                    print(textOut, file=results)
                     results.flush()
+
+                    annotatedScore1 = AnnScore(sc1, thisDetail)
+                    annotatedScore2 = AnnScore(sc2, thisDetail)
+
+                    op_list: list[DiffOperation]
+                    cost: int
+                    op_list, cost = Comparison.annotated_scores_diff(
+                        annotatedScore1, annotatedScore2
+                    )
+                    numDiffs = len(op_list)
+                    totalNumDiffs += numDiffs
+                    print(f'numDiffs = {numDiffs}')
+                    print(f'numDiffs = {numDiffs}', file=results)
+                    results.flush()
+                    if numDiffs > 0:
+                        summ: str = '\t' + DiffUtilities.oplistSummary(op_list)
+                        print(summ)
+                        print(summ, file=results)
+
+                    # print OMR-NED dict even if there are no diffs
+                    omrnedOut: dict = Visualization.get_omr_ned_output(
+                        cost, annotatedScore1, annotatedScore2
+                    )
+                    jsonStr: str = json.dumps(omrnedOut)
+                    print(jsonStr)
+                    print(jsonStr, file=results)
+
+                    textOut: str = Visualization.get_text_output(sc1, sc2, op_list)
+                    if textOut:
+                        print(textOut)
+                        print(textOut, file=results)
+                        results.flush()
 
             except KeyboardInterrupt:
                 results.flush()
@@ -599,7 +626,7 @@ class DiffUtilities:
 
     @staticmethod
     def oplistSummary(
-        op_list: list[tuple[str, t.Any, t.Any]],
+        op_list: list[DiffOperation],
     ) -> str:
         output: str = ''
         counts: dict = {}
@@ -625,16 +652,16 @@ class DiffUtilities:
 
         for op in op_list:
             # part
-            if op[0] in ('inspart', 'delpart'):
+            if op.name in ('inspart', 'delpart'):
                 counts['part'] += 1
             # measure
-            elif op[0] in ('insbar', 'delbar'):
+            elif op.name in ('insbar', 'delbar'):
                 counts['measure'] += 1
             # voice
-            elif op[0] in ('voiceins', 'voicedel'):
+            elif op.name in ('voiceins', 'voicedel'):
                 counts['voice'] += 1
             # note
-            elif op[0] in ('noteins',
+            elif op.name in ('noteins',
                             'notedel',
                             'pitchnameedit',
                             'inspitch',
@@ -643,61 +670,58 @@ class DiffUtilities:
                             'dotins',
                             'dotdel'):
                 counts['note'] += 1
-            elif op[0] in ('editspace',
+            elif op.name in ('editspace',
                             'insspace',
                             'delspace'):
                 counts['space'] += 1
-            elif op[0] in ('graceedit', 'graceslashedit'):
+            elif op.name == 'graceedit':
                 counts['gracenote'] += 1
-            elif op[0] in ('lyricins',
+            elif op.name in ('lyricins',
                             'lyricdel',
-                            'lyricsub',
                             'lyricedit',
-                            'lyricnumedit',
                             'lyricidedit',
                             'lyricoffsetedit',
                             'lyricstyleedit'):
                 counts['lyric'] += 1
-            elif op[0] in ('editstyle',
+            elif op.name in ('editstyle',
                            'editnoteshape',
                            'editnoteheadfill',
                            'editnoteheadparenthesis'):
                 counts['notestyle'] += 1
-            elif op[0] in ('editstemdirection'):
+            elif op.name in ('editstemdirection'):
                 counts['stemdirection'] += 1
             # beam
-            elif op[0] in ('insbeam',
+            elif op.name in ('insbeam',
                             'delbeam',
                             'editbeam'):
                 counts['beam'] += 1
             # accidental
-            elif op[0] in ('accidentins',
+            elif op.name in ('accidentins',
                             'accidentdel',
                             'accidentedit'):
                 counts['accidental'] += 1
             # tuplet
-            elif op[0] in ('instuplet',
+            elif op.name in ('instuplet',
                             'deltuplet',
                             'edittuplet'):
                 counts['tuplet'] += 1
             # tie
-            elif op[0] in ('tieins',
+            elif op.name in ('tieins',
                             'tiedel'):
                 counts['tie'] += 1
             # expression
-            elif op[0] in ('insexpression',
+            elif op.name in ('insexpression',
                             'delexpression',
                             'editexpression'):
                 counts['expression'] += 1
             # articulation
-            elif op[0] in ('insarticulation',
+            elif op.name in ('insarticulation',
                             'delarticulation',
                             'editarticulation'):
                 counts['articulation'] += 1
             # staffgroup
-            elif op[0] in ('staffgrpins',
+            elif op.name in ('staffgrpins',
                             'staffgrpdel',
-                            'staffgrpsub',
                             'staffgrpnameedit',
                             'staffgrpabbreviationedit',
                             'staffgrpsymboledit',
@@ -705,74 +729,57 @@ class DiffUtilities:
                             'staffgrppartindicesedit'):
                 counts['staffgroup'] += 1
             # metadata
-            elif op[0] == 'mditemdel':
-                assert isinstance(op[1], AnnMetadataItem)
-                key = 'MD:' + op[1].key
+            elif op.name == 'mditemdel':
+                assert isinstance(op.obj1, AnnMetadataItem)
+                key = 'MD:' + op.obj1.key
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1
-            elif op[0] == 'mditemins':
-                assert isinstance(op[2], AnnMetadataItem)
-                key = 'MD:' + op[2].key
+            elif op.name == 'mditemins':
+                assert isinstance(op.obj2, AnnMetadataItem)
+                key = 'MD:' + op.obj2.key
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1
-            elif op[0] == 'mditemsub':
-                assert isinstance(op[1], AnnMetadataItem)
-                assert isinstance(op[2], AnnMetadataItem)
-                if op[1].key != op[2].key:
-                    key = 'MD:' + op[1].key + '!=' + op[2].key
-                else:
-                    key = 'MD:' + op[1].key
+            elif op.name == 'mditemvalueedit':
+                assert isinstance(op.obj1, AnnMetadataItem)
+                assert isinstance(op.obj2, AnnMetadataItem)
+                key = 'MD:' + op.obj1.key
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1
-            elif op[0] == 'mditemkeyedit':
-                assert isinstance(op[1], AnnMetadataItem)
-                assert isinstance(op[2], AnnMetadataItem)
-                key = 'MD:' + op[1].key + '!=' + op[2].key
+            elif op.name == 'extradel':
+                # op.obj1 only
+                assert isinstance(op.obj1, AnnExtra)
+                key = op.obj1.kind
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1
-            elif op[0] == 'mditemvalueedit':
-                assert isinstance(op[1], AnnMetadataItem)
-                assert isinstance(op[2], AnnMetadataItem)
-                key = 'MD:' + op[1].key
+            elif op.name == 'extrains':
+                # op.obj2 only
+                assert isinstance(op.obj2, AnnExtra)
+                key = op.obj2.kind
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1
-            elif op[0] == 'extradel':
-                # op[1] only
-                assert isinstance(op[1], AnnExtra)
-                key = op[1].kind
-                if counts.get(key, None) is None:
-                    counts[key] = 0
-                counts[key] += 1
-            elif op[0] == 'extrains':
-                # op[2] only
-                assert isinstance(op[2], AnnExtra)
-                key = op[2].kind
-                if counts.get(key, None) is None:
-                    counts[key] = 0
-                counts[key] += 1
-            elif op[0] in ('extrasub',
+            elif op.name in ('extrasub',
                            'extracontentedit',
                            'extrasymboledit',
                            'extrainfoedit',
                            'extraoffsetedit',
                            'extradurationedit'):
-                # op[1] and op[2]
-                assert isinstance(op[1], AnnExtra)
-                assert isinstance(op[2], AnnExtra)
-                key = op[1].kind
+                # op.obj1 and op.obj2
+                assert isinstance(op.obj1, AnnExtra)
+                assert isinstance(op.obj2, AnnExtra)
+                key = op.obj1.kind
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1
-            elif op[0] == 'extrastyleedit':
-                # op[1] and op[2]
-                assert isinstance(op[1], AnnExtra)
-                assert isinstance(op[2], AnnExtra)
-                key = op[1].kind + ':style'
+            elif op.name == 'extrastyleedit':
+                # op.obj1 and op.obj2
+                assert isinstance(op.obj1, AnnExtra)
+                assert isinstance(op.obj2, AnnExtra)
+                key = op.obj1.kind + ':style'
                 if counts.get(key, None) is None:
                     counts[key] = 0
                 counts[key] += 1

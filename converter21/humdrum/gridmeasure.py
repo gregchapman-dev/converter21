@@ -498,7 +498,7 @@ class GridMeasure:
             # associatedSlice is supposed to already be in the measure.
             return
 
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         # find owning line (associatedSlice)
         foundIt: bool = False
         for associatedSliceIdx in range(len(self.slices) - 1, -1, -1):
@@ -556,7 +556,7 @@ class GridMeasure:
             return
 
         # add this '*ped' or '*X8va' or... string just before this associatedSlice
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
@@ -942,7 +942,7 @@ class GridMeasure:
             # associatedSlice is supposed to already be in the measure.
             return
 
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
@@ -1001,7 +1001,7 @@ class GridMeasure:
             # associatedSlice is supposed to already be in the measure.
             return
 
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
@@ -1095,7 +1095,7 @@ class GridMeasure:
             # associatedSlice is supposed to already be in the measure.
             return
 
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
@@ -1209,7 +1209,7 @@ class GridMeasure:
             # associatedSlice is supposed to already be in the measure
             return
 
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)
@@ -1262,7 +1262,7 @@ class GridMeasure:
             # associatedSlice is supposed to already be in the measure
             return
 
-        associatedSliceIdx: int | None = None
+        associatedSliceIdx: int
         if associatedSlice is None:
             # place at end of measure (associate with imaginary slice just off the end)
             associatedSliceIdx = len(self.slices)

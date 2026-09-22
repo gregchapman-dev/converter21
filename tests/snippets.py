@@ -1,20 +1,32 @@
 from fractions import Fraction
+from xml.etree import ElementTree as ETree
 import music21 as m21
 print(m21.__version__)
 
 # test PR #1240
-restVoice = m21.stream.Voice()
-positionedRest = m21.note.Rest()
-positionedRest.duration = m21.duration.Duration(Fraction(1, 3))
-restVoice.insert(Fraction(11, 3), positionedRest)
-restVoice.makeRests(inPlace=True,
-                    hideRests=True)
+# restVoice = m21.stream.Voice()
+# positionedRest = m21.note.Rest()
+# positionedRest.duration = m21.duration.Duration(Fraction(1, 3))
+# restVoice.insert(Fraction(11, 3), positionedRest)
+# restVoice.makeRests(inPlace=True,
+#                     hideRests=True)
+#
+# for i, rest in enumerate(restVoice.notesAndRests):
+#     print(f'rest[{i}] = {rest}')
+#     print(f'rest[{i}].duration = {rest.duration}')
+#     print(f'rest[{i}] tuplets = {rest.duration.tuplets}')
+#     print(f'rest[{i}] components = {rest.duration.components}')
+inputXML = '''<layer xmlns="http://www.music-encoding.org/ns/mei">
+                  <note pname="F" oct="2" dur="4" />
+                  <note pname="E" oct="2" accid="f" dur="4" />
+                  <imaginary awesome="true" />
+              </layer>'''
+elem = ETree.fromstring(inputXML)
 
-for i, rest in enumerate(restVoice.notesAndRests):
-    print(f'rest[{i}] = {rest}')
-    print(f'rest[{i}].duration = {rest.duration}')
-    print(f'rest[{i}] tuplets = {rest.duration.tuplets}')
-    print(f'rest[{i}] components = {rest.duration.components}')
+c = MeiReader()
+actual = c.layerFromElement(elem, overrideN='so voice ID')
+
+self.assertEqual(2, len(actual))
 
 print('')
 

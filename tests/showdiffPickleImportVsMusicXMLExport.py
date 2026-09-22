@@ -18,8 +18,8 @@ args = parser.parse_args()
 DiffUtilities.runShowDiff(
     inputPath=Path(args.input_file),
     inFmt='pickled',
-    outFmt='mei',
-    outExt='mei',
+    outFmt='musicxml',
+    outExt='musicxml',
     detail=DetailLevel.Signatures | DetailLevel.NotesAndRests| DetailLevel.NoteStaffPosition,
     scoreNum=int(args.num) if args.num is not None else None
 )
