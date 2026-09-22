@@ -8,7 +8,7 @@ The core of the MEI parsing portion of this software was based on the MEI conver
 The ABC portion of this software uses [abc2xml.py](https://wim.vree.org/svgParse/abc2xml.html) and [xml2abc.py](https://wim.vree.org/svgParse/xml2abc.html), by Willem G. Vree.
 
 ## Setup
-Requires Python 3.10 or later.  Depends on [music21](https://github.com/cuthbertlab/music21) v9.9.1, which should also be configured (instructions [here](https://www.music21.org/music21docs/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://github.com/gregchapman-dev/musicdiff), but converter21 itself does not.
+Requires Python 3.12 or later.  Depends on [music21](https://github.com/cuthbertlab/music21) v10.5.0, which should also be configured (instructions [here](https://www.music21.org/music21docs/usersGuide/usersGuide_01_installing.html)) to display a musical score (e.g. with Musescore). Some of the tests depend on [musicdiff](https://github.com/gregchapman-dev/musicdiff), but converter21 itself does not.
 
 ## Command line tool usage:
 ```
@@ -104,16 +104,16 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-The ABC reader/writer in this software uses [abc2xml.py](https://wim.vree.org/svgParse/abc2xml.html) and [xml2abc.py](https://wim.vree.org/svgParse/xml2abc.html), which 
+The ABC reader/writer in this software uses [abc2xml.py](https://wim.vree.org/svgParse/abc2xml.html) and [xml2abc.py](https://wim.vree.org/svgParse/xml2abc.html), which
 use the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>):
 
 Copyright (C) 2012-2025: Willem G. Vree
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the Lesser GNU General Public License as published by the Free 
+the terms of the Lesser GNU General Public License as published by the Free
 Software Foundation;
 
-This program is distributed in the hope that it will be useful, but WITHOUT 
+This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>) for more 
+FOR A PARTICULAR PURPOSE. See the [Lesser GNU General Public Licence](<http://www.gnu.org/licenses/lgpl.html>) for more
 details.

@@ -11,7 +11,7 @@
 import setuptools
 
 # must be kept up to date with converter21/shared/sharedconstants.py:_CONVERTER21_VERSION et al
-converter21version = '4.0.1'
+converter21version = '4.0.2'
 
 if __name__ == '__main__':
     setuptools.setup(
@@ -58,10 +58,10 @@ if __name__ == '__main__':
 
         packages=setuptools.find_packages(),
 
-        python_requires='>=3.10',
+        python_requires='>=3.12',
 
         install_requires=[
-            'music21>=9.9.1',
+            'music21>=10.5.0',
         ],
 
         project_urls={
