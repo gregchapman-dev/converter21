@@ -173,8 +173,6 @@ class DiffUtilities:
 
         for i, (sc1, sc2) in enumerate(zip(score1List, score2List)):
             # compare the two music21 scores with musicdiff APIs:
-            detail = detail | DetailLevel.LyricIdentifiers  # always compare Lyric ids
-
             if len(score1List) == 1:
                 print('comparing the two scores')
             else:
@@ -533,7 +531,6 @@ class DiffUtilities:
             # use musicdiff to compare the two music21 scores,
             # and return whether or not they were identical
             try:
-                detail = detail | DetailLevel.LyricIdentifiers  # always compare Lyric ids
                 detailList: list[DetailLevel | int] = [
                     detail & ~DetailLevel.Voicing,
                     detail | DetailLevel.Voicing
