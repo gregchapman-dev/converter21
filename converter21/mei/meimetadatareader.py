@@ -10,7 +10,7 @@
 
 # import typing as t
 from xml.etree.ElementTree import Element, tostring
-# import re
+import copy
 
 import music21 as m21
 
@@ -78,7 +78,13 @@ class MeiMetadataReader:
         if fullMeiHeadParse:
             # Add a single 'meiraw:meiHead' metadata element, that contains the raw XML of the
             # entire <meiHead> element (in case someone wants to parse out more info than we do).
-            meiHeadXmlStr: str = tostring(self.meiHead, encoding='unicode')
+            # Unfortunately, tostring makes a mess out of the @__mei_parent__
+            # attributes we added during parse, so we have to remove those
+            # before calling tostring.
+            tmpMeiHead: Element = copy.deepcopy(self.meiHead)
+            for el in tmpMeiHead.iter():
+                el.attrib.pop('__mei_parent__', None)
+            meiHeadXmlStr: str = tostring(tmpMeiHead, encoding='unicode')
             meiHeadXmlStr = MeiShared.stripMultiLineText(meiHeadXmlStr)
             self.m21Metadata.addCustom('meiraw:meiHead', meiHeadXmlStr)
 

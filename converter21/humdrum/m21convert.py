@@ -3515,6 +3515,9 @@ class M21Convert:
         elif uniqueName.startswith('humdrum:'):
             uniqueName = uniqueName[8:]
             isNonRawHumdrum = True
+        elif uniqueName.startswith('meiraw:'):
+            # we don't export meiraw:meiHead to Humdrum
+            return None
 
         hdKey: str | None = None
         valueStr = M21Utilities.m21MetadataValueToString(value, isRaw)

@@ -1157,6 +1157,7 @@ class ScoreWriter:
         # what's left in allItems goes at the bottom of the file
         for uniqueName, value in allItems:
             if (uniqueName.startswith('humdrumraw:')
+                    or uniqueName.startswith('meiraw:')
                     or uniqueName.startswith('humdrum:')
                     or uniqueName.startswith('raw:')):
                 refLineStr = M21Convert.m21MetadataItemToHumdrumReferenceLineStr(
