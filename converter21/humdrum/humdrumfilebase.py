@@ -1056,7 +1056,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
             if not seenFirstExInterp and not line.isExclusiveInterpretation:
                 if not self.acceptSyntaxErrors:
                     return self.setParseError(
-                        f'Error on line: {i+1}:\n'
+                        f'Error on line: {i + 1}:\n'
                         + 'Data found before exclusive interpretation\n'
                         + f'LINE: {line.text}'
                     )
@@ -1092,7 +1092,7 @@ nextTokenIdx = {nextTokenIdx}, nextLine.tokenCount = {nextLine.tokenCount}'''
                         + f'Line is: {line.text}'
                     )
                     if i > 0:
-                        err += f'\nPrevious line is {self._lines[i-1].text}'
+                        err += f'\nPrevious line is {self._lines[i - 1].text}'
                     return self.setParseError(err)
 
                 # fix it instead
